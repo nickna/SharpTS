@@ -303,13 +303,14 @@ public partial class RuntimeEmitter
 
         // Emit $IHasFields interface for unified property access
         // Must come before $Object which implements it
-        EmitHasFieldsInterface(moduleBuilder, runtime);
+        EmitHasFieldsInterface(moduleBuilder, runtime.ObjectFields);
+        runtime.ObjectFields.CompleteEmission();
         EmitCompactObjectRecordInterface(moduleBuilder, runtime.Records);
 
         // Emit $Object class for standalone object support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
         EmitTSObjectClass(moduleBuilder, runtime.ObjectStorage,
-            new ObjectStorageInputs(runtime.IHasFieldsInterface,
+            new ObjectStorageInputs(runtime.ObjectFields.Interface,
                 new ObjectReadInputs(runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.TryGetGetter,
                     runtime.DescriptorStorage.GetPropertyDescriptor, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!,
                     runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.FunctionValues.Type,
@@ -321,8 +322,8 @@ public partial class RuntimeEmitter
         {
             runtime.Records.BeginScalarEmission();
             var recordContract = new RecordStorageContractInputs(
-                runtime.IHasFieldsInterface, runtime.IHasFieldsFieldsGetter,
-                runtime.IHasFieldsGetProperty, runtime.IHasFieldsSetProperty, runtime.IHasFieldsHasProperty);
+                runtime.ObjectFields.Interface, runtime.ObjectFields.FieldsGetter,
+                runtime.ObjectFields.GetProperty, runtime.ObjectFields.SetProperty, runtime.ObjectFields.HasProperty);
             EmitJsonScalarRecordClass(moduleBuilder, runtime.Records, recordContract, features.JsonScalarRecordShapes);
             EmitCompactObjectRecordClasses(moduleBuilder, runtime.Records, recordContract,
                 runtime.Sentinels.UndefinedInstance, features.CompactObjectRecordShapes, features.CompactObjectRecordSelfFields);

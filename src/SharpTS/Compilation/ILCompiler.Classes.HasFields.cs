@@ -71,10 +71,10 @@ public partial class ILCompiler
         );
 
         // Map methods to interface slots
-        typeBuilder.DefineMethodOverride(fieldsGetter, _runtime.IHasFieldsFieldsGetter);
-        typeBuilder.DefineMethodOverride(getPropertyMethod, _runtime.IHasFieldsGetProperty);
-        typeBuilder.DefineMethodOverride(setPropertyMethod, _runtime.IHasFieldsSetProperty);
-        typeBuilder.DefineMethodOverride(hasPropertyMethod, _runtime.IHasFieldsHasProperty);
+        typeBuilder.DefineMethodOverride(fieldsGetter, _runtime.ObjectFields.FieldsGetter);
+        typeBuilder.DefineMethodOverride(getPropertyMethod, _runtime.ObjectFields.GetProperty);
+        typeBuilder.DefineMethodOverride(setPropertyMethod, _runtime.ObjectFields.SetProperty);
+        typeBuilder.DefineMethodOverride(hasPropertyMethod, _runtime.ObjectFields.HasProperty);
 
         // Store stubs for later body emission
         _classes.HasFieldsStubs[className] = new HasFieldsMethodStubs
@@ -958,11 +958,11 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brtrue, skipLabel);
         il.Emit(OpCodes.Ldloc, prototypeLocal);
-        il.Emit(OpCodes.Isinst, _runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, _runtime.ObjectFields.Interface);
         il.Emit(OpCodes.Brfalse, skipLabel);
         il.Emit(OpCodes.Ldloc, prototypeLocal);
-        il.Emit(OpCodes.Castclass, _runtime.IHasFieldsInterface);
-        il.Emit(OpCodes.Callvirt, _runtime.IHasFieldsFieldsGetter);
+        il.Emit(OpCodes.Castclass, _runtime.ObjectFields.Interface);
+        il.Emit(OpCodes.Callvirt, _runtime.ObjectFields.FieldsGetter);
         il.Emit(OpCodes.Stloc, prototypeFieldsLocal);
         il.Emit(OpCodes.Ldloc, prototypeFieldsLocal);
         il.Emit(OpCodes.Brfalse, skipLabel);

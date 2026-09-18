@@ -77,7 +77,7 @@ public sealed class EmittedInvocationRuntimeTests
             if (p.Name == "CheckCancellationMethod") return null;
             if (p.Name == "TypedArrays") return typedArrays;
             if (p.Name == key) return selected ? null : key == "NodeStreams" ? new EmittedNodeStreamRuntime(hasAbortSignal: false) : Activator.CreateInstance(p.ParameterType, nonPublic: true);
-            return (p.Name! switch { "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(p.Name!)!.GetValue(runtime) });
+            return (p.Name! switch { "IHasFieldsInterface" => runtime.ObjectFields.Interface, "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(p.Name!)!.GetValue(runtime) });
         }
         var helper = typeof(RuntimeEmitter).GetMethod(helperName, Members)!;
         var constructor = helper.GetParameters().Last().ParameterType.GetConstructors(Members).Single();

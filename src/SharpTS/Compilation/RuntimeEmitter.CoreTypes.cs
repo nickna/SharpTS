@@ -151,7 +151,7 @@ public partial class RuntimeEmitter
     /// Implemented by $Object and user-defined classes to provide a standard way
     /// to access fields without reflection.
     /// </summary>
-    private void EmitHasFieldsInterface(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitHasFieldsInterface(ModuleBuilder moduleBuilder, EmittedObjectFieldRuntime objectFields)
     {
         // Define interface: public interface $IHasFields
         var typeBuilder = moduleBuilder.DefineType(
@@ -206,12 +206,12 @@ public partial class RuntimeEmitter
 
         // Create the interface type
         var interfaceType = typeBuilder.CreateType()!;
-        runtime.IHasFieldsInterface = interfaceType;
+        objectFields.Interface = interfaceType;
 
         // Get the actual methods from the created type (not the MethodBuilder refs)
-        runtime.IHasFieldsFieldsGetter = interfaceType.GetMethod("get_Fields")!;
-        runtime.IHasFieldsGetProperty = interfaceType.GetMethod("GetProperty")!;
-        runtime.IHasFieldsSetProperty = interfaceType.GetMethod("SetProperty")!;
-        runtime.IHasFieldsHasProperty = interfaceType.GetMethod("HasProperty")!;
+        objectFields.FieldsGetter = interfaceType.GetMethod("get_Fields")!;
+        objectFields.GetProperty = interfaceType.GetMethod("GetProperty")!;
+        objectFields.SetProperty = interfaceType.GetMethod("SetProperty")!;
+        objectFields.HasProperty = interfaceType.GetMethod("HasProperty")!;
     }
 }

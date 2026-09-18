@@ -432,6 +432,17 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Required `ObjectFields` owns the baked `$IHasFields` interface and its four methods.
+The scoped emitter receives only the module and owner; completion follows the
+original interface-emission point before object storage and record implementations.
+The same interface and method handles feed class emitters and existing narrow input
+records for property dispatch, conversion, enumeration and record storage. Checked
+reads, single declarations and completion guards make the per-output protocol
+explicit. Tests cover early availability, reuse, method signatures and order,
+dictionary identity, guest mutation through the interface, class and record programs,
+and standalone/hosted output. Local builders, class/shape registries, reflection caches
+and the existing object components remain in the complete ownership audit.
+
 Required `UnionValues` owns the emitted `$IUnionType` interface and its object-valued
 `Value` getter. Its emitter receives only the module and owner; completion follows
 the original interface-emission point before dependent declarations. Checked reads,

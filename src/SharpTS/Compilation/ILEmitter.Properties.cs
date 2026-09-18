@@ -1011,10 +1011,10 @@ public partial class ILEmitter
             var processValueTemp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, processValueTemp);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.Process.GetObject);
-            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.IHasFieldsInterface);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.ObjectFields.Interface);
             IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
             IL.Emit(OpCodes.Ldloc, processValueTemp);
-            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.IHasFieldsSetProperty);
+            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ObjectFields.SetProperty);
             IL.Emit(OpCodes.Ldloc, processValueTemp); // expression result
             SetStackUnknown();
             return;

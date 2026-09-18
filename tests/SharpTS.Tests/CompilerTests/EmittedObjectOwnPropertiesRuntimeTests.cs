@@ -157,7 +157,7 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 "IsExtensible" => runtime.ObjectState.IsExtensible,
                 "GetProperty" => runtime.ObjectRead.Property,
-                _ => (name switch { "BoundTSFunctionType" => runtime.FunctionBindings.BoundType, "TSFunctionType" => runtime.FunctionValues.Type, _ => (name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, _ => (name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => (name switch { "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime) }) }) }) })
+                _ => (name switch { "BoundTSFunctionType" => runtime.FunctionBindings.BoundType, "TSFunctionType" => runtime.FunctionValues.Type, _ => (name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, _ => (name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => (name switch { "IHasFieldsInterface" => runtime.ObjectFields.Interface, "IHasFieldsHasProperty" => runtime.ObjectFields.HasProperty, "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime) }) }) }) })
             };
         }
         return ctor.Invoke(ctor.GetParameters().Select(Value).ToArray());

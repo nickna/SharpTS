@@ -49,6 +49,7 @@ public class EmittedJsonDependencyTests
             if (parameter.Name == "InvokeValue") return runtime.Invocation.Value;
             if (parameter.Name == "InvokeMethodValue") return runtime.Invocation.Method;
             if (parameter.Name == "InvokeMethodValue0") return runtime.Invocation.Method0;
+            if (parameter.Name == "IHasFieldsInterface") return runtime.ObjectFields.Interface;
             if (parameter.Name == "UndefinedType") return runtime.Sentinels.UndefinedType;
             if (parameter.Name == "UndefinedInstance") return runtime.Sentinels.UndefinedInstance;
             var property = typeof(EmittedRuntime).GetProperty(parameter.Name!);

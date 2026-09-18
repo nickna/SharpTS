@@ -383,12 +383,12 @@ public partial class RuntimeEmitter
 
         // if (arg1 is $IHasFields hf) intervalObj = hf.GetProperty("interval")
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, runtime.ObjectFields.Interface);
         il.Emit(OpCodes.Brfalse, notHasFieldsLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Castclass, runtime.ObjectFields.Interface);
         il.Emit(OpCodes.Ldstr, "interval");
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsGetProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectFields.GetProperty);
         il.Emit(OpCodes.Stloc, intervalObjLocal);
         il.Emit(OpCodes.Br, haveValueLabel);
 

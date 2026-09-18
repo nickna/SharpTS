@@ -2560,12 +2560,12 @@ public partial class RuntimeEmitter
         // present without invoking any getter.
         var notIHasFieldsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Isinst, runtime.ObjectFields.Interface);
         il.Emit(OpCodes.Brfalse, notIHasFieldsLabel);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Castclass, runtime.ObjectFields.Interface);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsHasProperty);
+        il.Emit(OpCodes.Callvirt, runtime.ObjectFields.HasProperty);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.MarkLabel(notIHasFieldsLabel);
 
