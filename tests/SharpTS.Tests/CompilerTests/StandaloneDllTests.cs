@@ -3708,6 +3708,120 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> IteratorHelpersPrograms =>
+    [
+        new object[]
+        {
+            "helpers_lazy_pipeline",
+            "let calls=0;const it=Iterator.from([1,2,3,4]).map((x:any)=>{calls++;return x*3;}).filter((x:any)=>x>3).take(2);console.log(calls);console.log(it.toArray().join(\",\"),calls);\n",
+            "0\n6,9 3\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "helpers_callback_indices",
+            "const seen:any[]=[];console.log(Iterator.from([4,5,6]).map((x:any,i:any)=>x+i).filter((x:any,i:any)=>{seen.push(i);return x>4;}).toArray().join(\",\"),seen.join(\",\"));\n",
+            "6,8 0,1,2\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "helpers_flat_map",
+            "console.log(Iterator.from([1,2,3]).flatMap((x:any)=>x===2?[]:[x,x+10]).toArray().join(\",\"));\n",
+            "1,11,3,13\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "helpers_reduce",
+            "console.log(Iterator.from([1,2,3]).reduce((a:any,b:any)=>a+b),Iterator.from([1,2,3]).reduce((a:any,b:any)=>a+b,10));try{Iterator.from([]).reduce((a:any,b:any)=>a+b);}catch(e){console.log(e.name);}\n",
+            "6 16\nTypeError\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "helpers_short_circuit",
+            "let calls=0;console.log(Iterator.from([1,2,3]).some((x:any)=>{calls++;return x===2;}),calls);calls=0;console.log(Iterator.from([1,2,3]).every((x:any)=>{calls++;return x<2;}),calls);console.log(Iterator.from([1,2,3]).find((x:any)=>x>1));\n",
+            "true 2\nfalse 2\n2\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "helpers_next_sent",
+            "function* g(){const x=yield 1;yield x;return 9;}const it:any=Iterator.from(g());const a=it.next();const b=it.next(7);const c=it.next();console.log(a.value,b.value,c.value,c.done);\n",
+            "1 7 9 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "helpers_live_array",
+            "const a=[1,2];console.log(a.values().map((x:any,i:any)=>{if(i===0)a.push(3);return x*2;}).toArray().join(\",\"));\n",
+            "2,4,6\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "helpers_callback_validation",
+            "try{const it:any=Iterator.from([1]);it.map(null);console.log(\"accepted\");}catch(e){console.log(e.name);}\n",
+            "TypeError\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "helpers_for_each_values_control",
+            "const seen:any[]=[];Iterator.from([4,5]).forEach((x:any,i:any)=>seen.push(x+i));console.log(seen.join(\",\"));\n",
+            "4,6\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "helpers_positive_limits_control",
+            "console.log(Iterator.from([1,2,3]).take(0).toArray().length,Iterator.from([1,2,3]).drop(0).toArray().join(\",\"));\n",
+            "0 1,2,3\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "helpers_direct_close_control",
+            "const source:any={closed:0,return(){this.closed++;return {done:true};}};console.log(source.return().done,source.closed);\n",
+            "true 1\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(IteratorHelpersPrograms))]
+    public void Isolated_IteratorHelpers_PreservesLazyAndEagerIteration(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"iterator_helpers_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> IteratorCollectionPrograms =>
     [
         new object[]

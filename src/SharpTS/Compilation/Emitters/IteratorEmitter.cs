@@ -21,35 +21,35 @@ public sealed class IteratorEmitter : ITypeEmitterStrategy
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorMap);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.Map);
                 return true;
 
             case "filter":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorFilter);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.Filter);
                 return true;
 
             case "take":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
                 EmitIntArg(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorTake);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.Take);
                 return true;
 
             case "drop":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
                 EmitIntArg(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorDrop);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.Drop);
                 return true;
 
             case "flatMap":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorFlatMap);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.FlatMap);
                 return true;
 
             case "reduce":
@@ -69,41 +69,41 @@ public sealed class IteratorEmitter : ITypeEmitterStrategy
                     il.Emit(OpCodes.Ldnull);
                     il.Emit(OpCodes.Ldc_I4_0); // hasInitial = false
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorReduce);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.Reduce);
                 return true;
 
             case "toArray":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorToArray);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.ToArray);
                 return true;
 
             case "forEach":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorForEach);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.ForEach);
                 return true;
 
             case "some":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorSome);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.Some);
                 return true;
 
             case "every":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorEvery);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.Every);
                 return true;
 
             case "find":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorFind);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.Find);
                 return true;
 
             case "next":
@@ -121,7 +121,7 @@ public sealed class IteratorEmitter : ITypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorNext);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.Next);
                 return true;
 
             default:

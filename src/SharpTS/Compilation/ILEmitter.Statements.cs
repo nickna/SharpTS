@@ -3088,7 +3088,7 @@ public partial class ILEmitter
 
         // Stack has the iterator source — normalize to IEnumerator<object>
         EmitBoxIfNeeded(f.Iterable);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.NormalizeToEnumerator);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorHelpers.NormalizeToEnumerator);
 
         var enumLocal = IL.DeclareLocal(_ctx.Types.IEnumerator);
         IL.Emit(OpCodes.Stloc, enumLocal);

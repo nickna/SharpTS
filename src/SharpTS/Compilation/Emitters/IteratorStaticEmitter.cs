@@ -25,7 +25,7 @@ public sealed class IteratorStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorFrom);
+                il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.From);
                 return true;
 
             default:

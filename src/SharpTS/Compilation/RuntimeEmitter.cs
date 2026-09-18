@@ -759,7 +759,7 @@ public partial class RuntimeEmitter
                     runtime.Invocation,
                     runtime.IteratorRecords.InvokeNext,
                     runtime.IteratorCollection.ToList,
-                    runtime.NormalizeToEnumerator,
+                    runtime.IteratorHelpers.NormalizeToEnumerator,
                     runtime.ObjectRead,
                     runtime.RequirePromise(),
                     runtime.RuntimeType,
