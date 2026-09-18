@@ -432,6 +432,21 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Optional `ProxyConstruction` owns the ordinary and revocable factory
+declarations. The original Proxy feature gate starts and completes this component
+and records the same soft runtime requirement. Missing/null/duplicate declarations
+and post-completion writes are rejected; failed completion can be repaired.
+The scoped factories and argument validation take five explicit metadata inputs:
+undefined and Symbol types, the undefined instance, exception wrapper and TypeError
+constructor. Tests cover absent/present/reused emission, independent supplied
+metadata, invalid arguments, target identity, revocation and runtime deployment.
+Generated signatures, method order and instructions remain unchanged. Proxy uses
+late binding and needs SharpTS.dll under normal deployment; forcing `--standalone`
+continues to suppress copying that DLL and emits the existing warning. Original
+type-checking rejection and constructor-timeout observations remain separately
+tracked, with unchanged sources, Node expectations and execution deadlines.
+Shared reflection helpers and local builders remain in the full ownership audit.
+
 Required `Strings` also owns the shared symbol-protocol dispatch declaration.
 Its scoped emitter receives the destination, owner and seven metadata inputs,
 including an explicitly optional RegExp type. The existing string completion

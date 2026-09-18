@@ -15547,4 +15547,172 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> ProxyConstructionPrograms =>
+    [
+        new object[]
+        {
+            "plain_control",
+            "console.log(\"plain\");\n",
+            "plain\n",
+            false,
+            false,
+        },
+        new object[]
+        {
+            "ordinary_identity",
+            "const target:any={value:3};const proxy:any=new Proxy(target,{});proxy.value=8;console.log(target.value,proxy.value,proxy===target);\n",
+            "8 8 false\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "get_receiver",
+            "const target:any={value:4};let observed:any;const proxy:any=new Proxy(target,{get(t:any,k:any,r:any){observed=r;return Reflect.get(t,k,r);}});console.log(proxy.value,observed===proxy);\n",
+            "4 true\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "set_receiver",
+            "const target:any={value:4};let observed:any;const proxy:any=new Proxy(target,{set(t:any,k:any,v:any,r:any){observed=r;t[k]=v+1;return true;}});proxy.value=8;console.log(target.value,observed===proxy);\n",
+            "9 true\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "primitive_target",
+            "const values:any[]=[null,undefined,1,true,\"x\",Symbol(\"s\"),1n];for(const value of values){try{new Proxy(value,{});console.log(\"accepted\");}catch(e){console.log(e instanceof TypeError);}}\n",
+            "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "primitive_handler",
+            "const values:any[]=[null,undefined,1,true,\"x\",Symbol(\"s\"),1n];for(const value of values){try{new Proxy({},value);console.log(\"accepted\");}catch(e){console.log(e instanceof TypeError);}}\n",
+            "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "revocable_target",
+            "const values:any[]=[null,undefined,1,true,\"x\",Symbol(\"s\"),1n];for(const value of values){try{Proxy.revocable(value,{});console.log(\"accepted\");}catch(e){console.log(e instanceof TypeError);}}\n",
+            "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "revocable_handler",
+            "const values:any[]=[null,undefined,1,true,\"x\",Symbol(\"s\"),1n];for(const value of values){try{Proxy.revocable({},value);console.log(\"accepted\");}catch(e){console.log(e instanceof TypeError);}}\n",
+            "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "revocation",
+            "const pair:any=Proxy.revocable({value:7},{});console.log(pair.proxy.value);console.log(pair.revoke()===undefined,pair.revoke()===undefined);try{console.log(pair.proxy.value);}catch(e){console.log(e instanceof TypeError);}\n",
+            "7\ntrue true\ntrue\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "revocable_shape",
+            "const pair:any=Proxy.revocable({value:7},{});console.log(Object.keys(pair).join(\",\"),typeof pair.revoke,typeof pair.proxy);\n",
+            "proxy,revoke function object\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "aliased_revocable",
+            "const make:any=Proxy.revocable;const pair:any=make({value:9},{});console.log(pair.proxy.value);pair.revoke();try{console.log(pair.proxy.value);}catch(e){console.log(e instanceof TypeError);}\n",
+            "9\ntrue\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "nested_proxy",
+            "const first:any=new Proxy({value:5},{});const second:any=new Proxy(first,{});console.log(second.value);second.value=10;console.log(first.value);\n",
+            "5\n10\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "hosted_factory",
+            "export function create(target:any,handler:any){return new Proxy(target,handler);}\n",
+            "",
+            true,
+            true,
+        },
+        new object[]
+        {
+            "hosted_revocable",
+            "export function create(target:any,handler:any){return Proxy.revocable(target,handler);}\n",
+            "",
+            true,
+            true,
+        },
+        new object[]
+        {
+            "function_direct_control",
+            "const proxy:any=new Proxy(function(a:number,b:number){return a+b;},{apply(t:any,r:any,args:any[]){return args[0]+args[1]+1;}});console.log(typeof proxy,proxy(2,3));\n",
+            "function 6\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "class_constructor_control",
+            "class Value{value:number;constructor(n:number){this.value=n;}}console.log(new Value(8).value);\n",
+            "8\n",
+            false,
+            false,
+        },
+        new object[]
+        {
+            "dynamic_constructor_control",
+            "class Value{value:number;constructor(n:number){this.value=n;}}const make:any=Value;console.log(new make(8).value);\n",
+            "8\n",
+            false,
+            false,
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ProxyConstructionPrograms))]
+    public void Isolated_ProxyConstruction_PreservesFactoriesValidationAndDeployment(
+        string name, string source, string expected, bool hosted, bool requiresRuntime)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"proxy_construction_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var deployment = requiresRuntime ? "" : " --standalone";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{deployment}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        var runtimePath = tempDir.GetPath("SharpTS.dll");
+        Assert.Equal(requiresRuntime, File.Exists(runtimePath));
+        if (requiresRuntime)
+            Assert.Equal(
+                System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(typeof(RuntimeEmitter).Assembly.Location)),
+                System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(runtimePath)));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }

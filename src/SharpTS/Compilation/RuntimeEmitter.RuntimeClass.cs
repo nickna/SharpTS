@@ -2986,7 +2986,13 @@ public partial class RuntimeEmitter
         if (_features.UsesProxy)
         {
             runtime.RequireSharpTSRuntime("Proxy");
-            EmitProxyMethods(typeBuilder, runtime);
+            runtime.BeginProxyConstructionEmission();
+            var proxies = runtime.RequireProxyConstruction();
+            EmitProxyMethods(typeBuilder, proxies,
+                new ProxyConstructionInputs(runtime.Sentinels.UndefinedType, runtime.Symbols.Type,
+                    runtime.Sentinels.UndefinedInstance, runtime.Errors.CreateException,
+                    runtime.Errors.TypeErrorConstructor));
+            proxies.CompleteEmission();
         }
         // AbortController/AbortSignal methods were moved earlier (above
         // EmitGetProperty) — its dict-receiver branch dispatches to the
