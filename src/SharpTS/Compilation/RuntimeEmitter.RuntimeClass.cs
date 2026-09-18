@@ -739,7 +739,8 @@ public partial class RuntimeEmitter
 
         // Define the event-subscription registry (field + two helper methods). Must be
         // emitted while we still hold the cctor IL generator so the field gets initialized.
-        EmitEventSubscriptionHelpers(typeBuilder, runtime, cctorIL);
+        EmitEventSubscriptionHelpers(typeBuilder, runtime.EventSubscriptions, cctorIL);
+        runtime.EventSubscriptions.CompleteEmission();
 
         // Eagerly populate the prototype singletons so cross-prototype-chain
         // walks (e.g. `delete Number.prototype.toString; n.toString` should

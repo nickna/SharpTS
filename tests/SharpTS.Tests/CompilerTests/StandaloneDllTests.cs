@@ -15003,4 +15003,96 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> EventSubscriptionPrograms =>
+    [
+        new object[]
+        {
+            "exit_add",
+            "@DotNetType(\"System.AppDomain\")\ndeclare class AppDomain {\n static readonly currentDomain: AppDomain;\n addEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n removeEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n}\nconst domain=AppDomain.currentDomain;const handler=(sender:any,args:any)=>console.log(\"exit\");domain.addEventListener(\"ProcessExit\",handler);console.log(\"wired\");\n",
+            "wired\nexit\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "exit_duplicate",
+            "@DotNetType(\"System.AppDomain\")\ndeclare class AppDomain {\n static readonly currentDomain: AppDomain;\n addEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n removeEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n}\nconst domain=AppDomain.currentDomain;const handler=(sender:any,args:any)=>console.log(\"exit\");domain.addEventListener(\"ProcessExit\",handler);domain.addEventListener(\"ProcessExit\",handler);console.log(\"wired\");\n",
+            "wired\nexit\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "exit_remove",
+            "@DotNetType(\"System.AppDomain\")\ndeclare class AppDomain {\n static readonly currentDomain: AppDomain;\n addEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n removeEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n}\nconst domain=AppDomain.currentDomain;const handler=(sender:any,args:any)=>console.log(\"exit\");domain.addEventListener(\"ProcessExit\",handler);domain.removeEventListener(\"ProcessExit\",handler);domain.removeEventListener(\"ProcessExit\",handler);console.log(\"wired\");\n",
+            "wired\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "exit_readd",
+            "@DotNetType(\"System.AppDomain\")\ndeclare class AppDomain {\n static readonly currentDomain: AppDomain;\n addEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n removeEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n}\nconst domain=AppDomain.currentDomain;const handler=(sender:any,args:any)=>console.log(\"exit\");domain.addEventListener(\"ProcessExit\",handler);domain.removeEventListener(\"ProcessExit\",handler);domain.addEventListener(\"ProcessExit\",handler);console.log(\"wired\");\n",
+            "wired\nexit\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "exit_distinct",
+            "@DotNetType(\"System.AppDomain\")\ndeclare class AppDomain {\n static readonly currentDomain: AppDomain;\n addEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n removeEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n}\nconst domain=AppDomain.currentDomain;const a=(sender:any,args:any)=>console.log(\"a\");const b=(sender:any,args:any)=>console.log(\"b\");domain.addEventListener(\"ProcessExit\",a);domain.addEventListener(\"ProcessExit\",b);domain.removeEventListener(\"ProcessExit\",a);console.log(\"wired\");\n",
+            "wired\nb\n",
+            false,
+            true,
+        },
+        new object[]
+        {
+            "exit_dynamic",
+            "@DotNetType(\"System.AppDomain\")\ndeclare class AppDomain {\n static readonly currentDomain: AppDomain;\n addEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n removeEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n}\nconst domain=AppDomain.currentDomain;const handler=(sender:any,args:any)=>console.log(\"exit\");const name:string=\"ProcessExit\";domain.addEventListener(name,handler);console.log(\"wired\");\n",
+            "wired\nexit\n",
+            false,
+            false,
+        },
+        new object[]
+        {
+            "hosted_add",
+            "@DotNetType(\"System.AppDomain\")\ndeclare class AppDomain {\n static readonly currentDomain: AppDomain;\n addEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n removeEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n}\nexport function wire():number{const domain=AppDomain.currentDomain;const handler=(sender:any,args:any)=>console.log(\"exit\");domain.addEventListener(\"ProcessExit\",handler);return 1;}\n",
+            "",
+            true,
+            true,
+        },
+        new object[]
+        {
+            "hosted_remove",
+            "@DotNetType(\"System.AppDomain\")\ndeclare class AppDomain {\n static readonly currentDomain: AppDomain;\n addEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n removeEventListener(name:string,handler:(sender:any,args:any)=>void):void;\n}\nexport function wire():number{const domain=AppDomain.currentDomain;const handler=(sender:any,args:any)=>console.log(\"exit\");domain.addEventListener(\"ProcessExit\",handler);domain.removeEventListener(\"ProcessExit\",handler);return 1;}\n",
+            "",
+            true,
+            true,
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(EventSubscriptionPrograms))]
+    public void Isolated_EventSubscriptions_PreserveHandlerIdentityAndDeployment(
+        string name, string source, string expected, bool hosted, bool standalone)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"event_subscriptions_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var isolation = standalone ? " --standalone" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify{isolation}{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        // The dynamic-name bridge loads SharpTS by name; deployment is checked separately.
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }
