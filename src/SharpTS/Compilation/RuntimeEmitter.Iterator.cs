@@ -604,7 +604,7 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Stfld, iteratorField);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
-        ctorIl.Emit(OpCodes.Call, runtime.GetIteratorNextMethod);
+        ctorIl.Emit(OpCodes.Call, runtime.IteratorRecords.NextMethod);
         ctorIl.Emit(OpCodes.Stfld, nextField);
         // this._current = null
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -662,7 +662,7 @@ public partial class RuntimeEmitter
         moveNextIl.Emit(OpCodes.Ldfld, iteratorField);
         moveNextIl.Emit(OpCodes.Ldarg_0);
         moveNextIl.Emit(OpCodes.Ldfld, nextField);
-        moveNextIl.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNext);
+        moveNextIl.Emit(OpCodes.Call, runtime.IteratorRecords.InvokeNext);
         moveNextIl.Emit(OpCodes.Stloc, resultLocal);
 
         // var done = GetIteratorDone(result);  -- DIRECT CALL
@@ -709,7 +709,7 @@ public partial class RuntimeEmitter
         mwsIl.Emit(OpCodes.Ldarg_0);
         mwsIl.Emit(OpCodes.Ldfld, nextField);
         mwsIl.Emit(OpCodes.Ldarg_1);               // sent value
-        mwsIl.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNextWithSent);
+        mwsIl.Emit(OpCodes.Call, runtime.IteratorRecords.InvokeNextWithSent);
         mwsIl.Emit(OpCodes.Stloc, mwsResultLocal);
 
         mwsIl.Emit(OpCodes.Ldloc, mwsResultLocal);
@@ -763,7 +763,12 @@ public partial class RuntimeEmitter
     private void EmitIteratorMethodsBasic(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Basic iterator protocol helpers - needed by $IteratorWrapper
-        EmitCapturedIteratorMethods(typeBuilder, runtime);
+        EmitCapturedIteratorMethods(
+            typeBuilder,
+            runtime.IteratorRecords,
+            new CapturedIteratorInputs(runtime.UndefinedType, runtime.Symbols, runtime.ObjectRead, runtime.Invocation, runtime.Errors)
+        );
+        runtime.IteratorRecords.CompleteEmission();
         EmitGetIteratorDone(typeBuilder, runtime);
         EmitGetIteratorValue(typeBuilder, runtime);
         EmitInvokeIteratorNext(typeBuilder, runtime);
@@ -1631,12 +1636,12 @@ public partial class RuntimeEmitter
         // Capture next once when acquiring this iterator, before any call can
         // replace it. Both collection helpers must preserve the iterator record.
         il.Emit(OpCodes.Ldloc, iteratorLocal);
-        il.Emit(OpCodes.Call, runtime.GetIteratorNextMethod);
+        il.Emit(OpCodes.Call, runtime.IteratorRecords.NextMethod);
         il.Emit(OpCodes.Stloc, nextMethodLocal);
         il.MarkLabel(collectLoopLabel);
         il.Emit(OpCodes.Ldloc, iteratorLocal);
         il.Emit(OpCodes.Ldloc, nextMethodLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeCapturedIteratorNext);
+        il.Emit(OpCodes.Call, runtime.IteratorRecords.InvokeNext);
         il.Emit(OpCodes.Stloc, iterationResultLocal);
         il.Emit(OpCodes.Ldloc, iterationResultLocal);
         il.Emit(OpCodes.Call, runtime.GetIteratorDone);

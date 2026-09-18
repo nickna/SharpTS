@@ -330,6 +330,15 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `IteratorRecords` owns captured-next lookup and invocation metadata.
+Its three declarations complete together immediately after their original
+basic-iterator emission call. The helper receives the owner and exact
+Undefined/Symbol/ObjectRead/Invocation/Error dependencies, including explicit
+error construction. `RequireIteratorObject` remains an emitted public method
+and a local construction handle; its unused holder store is removed. Captured
+callable identity, receiver/sent-value handling, object-result validation and
+the original method order are preserved.
+
 Optional `AsyncGenerators` owns the async generator interface. Its optional
 `Continuations` and `FromSync` children independently own async-generator
 continuation/result helpers and the async-from-sync adapter. The interface

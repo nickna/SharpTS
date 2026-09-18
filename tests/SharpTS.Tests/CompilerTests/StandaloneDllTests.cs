@@ -3708,6 +3708,96 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> IteratorRecordPrograms =>
+    [
+        new object[]
+        {
+            "record_capture_getter",
+            "let reads=0;const it:any={i:0,[Symbol.iterator](){return this;},get next(){reads++;return function(){this.i++;return {value:this.i,done:this.i>3};};}};console.log([...it].join(\",\"),reads);\n",
+            "1,2,3 1\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "record_capture_mutation",
+            "const it:any={i:0,[Symbol.iterator](){return this;},next(){this.i++;if(this.i===1)this.next=()=>({value:99,done:true});return {value:this.i,done:this.i>3};}};console.log([...it].join(\",\"));\n",
+            "1,2,3\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "record_sent_forwarding",
+            "let i=0;const it:any={[Symbol.iterator](){return this;},next(sent:any){console.log(arguments.length,sent===undefined,this===it);if(i++===0)return {value:2,done:false};return {value:sent+1,done:true};}};function* values(){return yield* it;}const g:any=values();const a=g.next();const b=g.next(8);console.log(a.value,a.done,b.value,b.done);\n",
+            "1 true true\n1 false true\n2 false 9 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "record_iterator_object_validation",
+            "const value:any={[Symbol.iterator](){return 3;}};try{for(const x of value)console.log(x);}catch(e:any){console.log(e.name);}\n",
+            "TypeError\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "record_result_object_validation",
+            "const value:any={[Symbol.iterator](){return this;},next(){return 3;}};try{for(const x of value)console.log(x);}catch(e:any){console.log(e.name);}\n",
+            "TypeError\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "record_next_callable_validation",
+            "const value:any={[Symbol.iterator](){return this;},next:3};try{for(const x of value)console.log(x);}catch(e:any){console.log(e.name);}\n",
+            "TypeError\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "record_async_capture",
+            "const it:any={i:0,[Symbol.iterator](){return this;},next(){this.i++;if(this.i===1)this.next=()=>({value:99,done:true});return {value:this.i,done:this.i>3};}};async function run(){let s=\"\";for await(const n of it)s+=n+\",\";console.log(s);}run();\n",
+            "1,2,3,\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "record_destructure_cleanup",
+            "function* values(){try{yield 2;yield 3;}finally{console.log(\"closed\");}}const [a]=values();console.log(a);\n",
+            "closed\n2\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(IteratorRecordPrograms))]
+    public void Isolated_IteratorRecord_PreservesCapturedNextValidationAndSentValues(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"iterator_record_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> AsyncGeneratorPrograms =>
     [
         new object[]
