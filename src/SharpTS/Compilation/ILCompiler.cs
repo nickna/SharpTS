@@ -1146,7 +1146,7 @@ public partial class ILCompiler
     private void InitializeTypedInterop()
     {
         _unionGenerator = new UnionTypeGenerator(_typeMapper);
-        _unionGenerator.UnionTypeInterface = _runtime.IUnionTypeInterface;
+        _unionGenerator.UnionTypeInterface = _runtime.UnionValues.Interface;
         _typeMapper.SetClassBuilders(_classes.Builders);
         _typeMapper.SetUnionGenerator(_unionGenerator);
     }

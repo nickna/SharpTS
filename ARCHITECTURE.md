@@ -432,6 +432,17 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Required `UnionValues` owns the emitted `$IUnionType` interface and its object-valued
+`Value` getter. Its emitter receives only the module and owner; completion follows
+the original interface-emission point before dependent declarations. Checked reads,
+single declarations and completion guards keep the protocol specific to one output.
+The union generator receives that output's interface, and the typeof helper receives
+the exact interface/getter pair through its existing inputs. Generated union layouts,
+conversions and recursive typeof behavior remain unchanged. Tests cover interface
+identity, emitter reuse, wrapped primitive/null/undefined values, typed union programs
+and standalone/hosted output. Generator dictionaries and shared reflection caches
+remain part of the complete construction and shared-infrastructure audit.
+
 Required `Sentinels` owns the distinct `$Undefined` and `$LexicalUninitialized`
 singleton types and fields. Both helpers receive only the module and this owner.
 They publish the baked declarations once; temporary builders remain local.

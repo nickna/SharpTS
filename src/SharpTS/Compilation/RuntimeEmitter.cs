@@ -178,7 +178,8 @@ public partial class RuntimeEmitter
         EmitThrownValueExceptionType(moduleBuilder, runtime.Errors, runtime.StringCoercion);
 
         // Emit IUnionType marker interface first (union types need to implement this)
-        EmitIUnionTypeInterface(moduleBuilder, runtime);
+        EmitIUnionTypeInterface(moduleBuilder, runtime.UnionValues);
+        runtime.UnionValues.CompleteEmission();
 
         // Emit a tiny dedicated type holding the thread-static `_currentArguments` slot
         // that $TSFunction.Invoke publishes so JS `arguments` capture can see caller

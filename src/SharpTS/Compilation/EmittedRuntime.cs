@@ -305,9 +305,8 @@ public class EmittedRuntime
     /// <summary>Required console metadata, emitted for every compilation.</summary>
     public EmittedConsoleRuntime Console { get; } = new();
 
-    // Union type marker interface (for fast union type detection)
-    public Type IUnionTypeInterface { get; set; } = null!;
-    public MethodInfo IUnionTypeValueGetter { get; set; } = null!;
+    /// <summary>Required union-value interface declarations for this compilation.</summary>
+    public EmittedUnionRuntime UnionValues { get; } = new();
 
     // Type coercion methods
     /// <summary>Required display and language string-conversion declarations.</summary>

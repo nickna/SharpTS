@@ -14524,4 +14524,87 @@ public class StandaloneDllTests
     }
 
 
+    public static IEnumerable<object[]> UnionValuePrograms =>
+    [
+        new object[]
+        {
+            "scalar_parameters",
+            "function show(value:number|string){console.log(typeof value,String(value));}show(3);show(\"text\");\n",
+            "number 3\nstring text\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "union_returns",
+            "function choose(flag:boolean):number|string{return flag?7:\"seven\";}const a=choose(true);const b=choose(false);console.log(typeof a,a,typeof b,b);\n",
+            "number 7 string seven\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "nullable_union",
+            "function show(value:number|null|undefined){console.log(typeof value,value===null,value===undefined);}show(4);show(null);show(undefined);\n",
+            "number false false\nobject true false\nundefined false true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "union_arrays",
+            "const values:(number|string)[]=[1,\"two\",3];for(const value of values){console.log(typeof value,String(value));}console.log(values.map(value=>typeof value).join(\",\"));\n",
+            "number 1\nstring two\nnumber 3\nnumber,string,number\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "union_objects",
+            "function show(value:number|{value:number}){if(typeof value===\"number\"){console.log(\"number\",value);}else{console.log(\"object\",value.value);}}show(2);show({value:5});\n",
+            "number 2\nobject 5\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "union_async",
+            "async function choose(flag:boolean):Promise<number|string>{await Promise.resolve(0);return flag?4:\"four\";}Promise.all([choose(true),choose(false)]).then(values=>{for(const value of values){console.log(typeof value,String(value));}});\n",
+            "number 4\nstring four\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "union_boolean",
+            "function show(value:number|string|boolean){console.log(typeof value,String(value));}show(5);show(\"five\");show(true);show(false);\n",
+            "number 5\nstring five\nboolean true\nboolean false\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(UnionValuePrograms))]
+    public void Isolated_UnionValues_PreserveClassificationAndTypedValues(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"union_values_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
 }
