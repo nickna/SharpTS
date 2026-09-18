@@ -1160,7 +1160,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
         il.Emit(OpCodes.Ldloc, iterableLocal);
         il.Emit(OpCodes.Ldsfld, runtime.Symbols.AsyncIterator);
-        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+        il.Emit(OpCodes.Call, runtime.IteratorProtocol.Function);
         il.Emit(OpCodes.Stloc, asyncIteratorFnLocal);
 
         // GetMethod treats null and undefined as an absent async method, so
@@ -1196,7 +1196,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
             // Call InvokeIteratorNext(asyncIterator) which returns a Promise/Task
             il.Emit(OpCodes.Ldloc, asyncIteratorLocal);
-            il.Emit(OpCodes.Call, runtime.InvokeIteratorNext);
+            il.Emit(OpCodes.Call, runtime.IteratorProtocol.InvokeNext);
 
             // The result should be a Task/Promise - await it.
             // Store as object first, then check if it's a $TSPromise or Task.
@@ -1251,14 +1251,14 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
             // Check if done: use GetIteratorDone
             il.Emit(OpCodes.Ldloc, resultLocal);
-            il.Emit(OpCodes.Call, runtime.GetIteratorDone);
+            il.Emit(OpCodes.Call, runtime.IteratorProtocol.Done);
             il.Emit(OpCodes.Brtrue, endLabel);
 
             // Assign to loop variable (value via GetIteratorValue)
             EmitStoreLoopVariable(loopVarLocal, varName, () =>
             {
                 il.Emit(OpCodes.Ldloc, resultLocal);
-                il.Emit(OpCodes.Call, runtime.GetIteratorValue);
+                il.Emit(OpCodes.Call, runtime.IteratorProtocol.Value);
             });
 
             EmitStatement(f.Body);

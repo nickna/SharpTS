@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required iterator lookup, result, close and dynamic protocol declarations.</summary>
+    public EmittedIteratorProtocolRuntime IteratorProtocol { get; } = new();
+
+
     /// <summary>Required custom-iterator adapter declarations for this compilation.</summary>
     public EmittedIteratorWrapperRuntime IteratorWrappers { get; } = new();
 
@@ -391,10 +395,6 @@ public class EmittedRuntime
     // Invocation methods
     public MethodBuilder GetSuperMethod { get; set; } = null!;
 
-    // Dynamic JS iterator-protocol bridge (.next()/.return()) for any-typed
-    // receivers that are bare IEnumerator<object> — array .values()/.keys()/
-    // .entries() return these. See EmitIteratorProtocolCall.
-    public MethodBuilder IteratorProtocolCall { get; set; } = null!;
 
     // Function methods (bind/call/apply)
 
@@ -570,12 +570,6 @@ public class EmittedRuntime
 
 
     // Iterator protocol helper methods
-    public MethodBuilder GetIteratorFunction { get; set; } = null!;              // Returns iterator function or $Undefined when absent
-    public MethodBuilder InvokeIteratorNext { get; set; } = null!;              // Calls next() on iterator (no sent value)
-    public MethodBuilder InvokeIteratorNextWithSent { get; set; } = null!;      // Calls next(sent) forwarding resume value (#503)
-    public MethodBuilder GetIteratorDone { get; set; } = null!;                 // Extracts done from result
-    public MethodBuilder GetIteratorValue { get; set; } = null!;                // Extracts value from result
-    public MethodBuilder IteratorClose { get; set; } = null!;                   // IteratorClose(iterator, preserveThrowCompletion)
     public MethodBuilder IterateToList { get; set; } = null!;                   // Converts any iterable to List<object>
     public MethodBuilder IterateIntoList { get; set; } = null!;
 

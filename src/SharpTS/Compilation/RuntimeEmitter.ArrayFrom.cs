@@ -99,7 +99,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(inspectIteratorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+        il.Emit(OpCodes.Call, runtime.IteratorProtocol.Function);
         il.Emit(OpCodes.Stloc, iteratorFnLocal);
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
         il.Emit(OpCodes.Brfalse, arrayLikePathLabel);

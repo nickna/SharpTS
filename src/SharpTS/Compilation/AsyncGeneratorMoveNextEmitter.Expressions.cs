@@ -249,13 +249,13 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         // if (result.done) the delegation is finished.
         _il.Emit(OpCodes.Ldloc, asyncResultLocal);
-        _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorDone);
+        _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Done);
         _il.Emit(OpCodes.Brtrue, asyncLoopEnd);
 
         // <>2__current = result.value
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldloc, asyncResultLocal);
-        _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorValue);
+        _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
 
         // Re-yield the delegated value to our own consumer: suspend at the re-yield state and return true.

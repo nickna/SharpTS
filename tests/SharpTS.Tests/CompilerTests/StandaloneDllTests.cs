@@ -3708,6 +3708,128 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> IteratorProtocolPrograms =>
+    [
+        new object[]
+        {
+            "protocol_result_accessors",
+            "let trace=\"\";const it:any={i:0,[Symbol.iterator](){return this;},next(){this.i++;const n=this.i;return {get done(){trace+=\"d\"+n+\",\";return n>2;},get value(){trace+=\"v\"+n+\",\";return n;}};}};let sum=0;for(const n of it)sum+=n;console.log(sum,trace);\n",
+            "3 d1,v1,d2,v2,d3,\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "protocol_done_coercion",
+            "const it:any={i:0,[Symbol.iterator](){return this;},next(){this.i++;return {value:this.i,done:this.i===1?0:\"yes\"};}};let sum=0;for(const n of it)sum+=n;console.log(sum);\n",
+            "1\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "protocol_symbol_getter",
+            "let reads=0;const it:any={i:0,next(){this.i++;return {value:this.i,done:this.i>2};}};Object.defineProperty(it,Symbol.iterator,{get(){reads++;return function(){return this;};}});console.log([...it].join(\",\"),reads);\n",
+            "1,2 1\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "protocol_close_break",
+            "const it:any={[Symbol.iterator](){return this;},next(){return {value:3,done:false};},return(){console.log(\"closed\",this===it,arguments.length);return {};}};for(const n of it){console.log(n);break;}\n",
+            "3\nclosed true 0\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "protocol_close_throw_precedence",
+            "const it:any={[Symbol.iterator](){return this;},next(){return {value:3,done:false};},return(){throw new Error(\"close\");}};try{for(const n of it)throw new Error(\"body\");}catch(e:any){console.log(e.message);}\n",
+            "body\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "protocol_close_invalid_result",
+            "const it:any={[Symbol.iterator](){return this;},next(){return {value:3,done:false};},return(){return 3;}};try{for(const n of it)break;console.log(\"accepted\");}catch(e:any){console.log(e.name);}\n",
+            "TypeError\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "protocol_dynamic_array_next",
+            "const it:any=[4,5].values();const a=it.next();const b=it.next();const c=it.next();console.log(a.value,a.done,b.value,b.done,c.value===undefined,c.done);\n",
+            "4 false 5 false true true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "protocol_dynamic_generator",
+            "function* values(){const v=yield 1;console.log(v===undefined);return 2;}const it:any=values();const a=it.next();console.log(a.value,a.done);const b=it.next();console.log(b.value,b.done);\n",
+            "1 false\ntrue\n2 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "protocol_bare_generator_return",
+            "function* values(){try{yield 4;}finally{console.log(\"closed\");}}const it:any=values();it.next();const result=it.return();console.log(result.value===undefined,result.done);\n",
+            "closed\ntrue true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "protocol_descriptor_overlay",
+            "const it:any={i:0,[Symbol.iterator](){return this;},next(){this.i++;const r={value:this.i,done:this.i>2};if(this.i===1)Object.defineProperty(r,\"value\",{value:8});return r;}};let text=\"\";for(const n of it)text+=n+\",\";console.log(text);\n",
+            "8,2,\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "protocol_null_iterator_validation",
+            "const value:any={[Symbol.iterator]:null};try{for(const n of value)console.log(n);console.log(\"accepted\");}catch(e:any){console.log(e.name);}\n",
+            "TypeError\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "protocol_stream_alias_control",
+            "import {Readable} from \"stream\";async function run(){const stream=Readable.from([1,2,3]);let total=0;for await(const n of stream)total+=n;console.log(total);}run();\n",
+            "6\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(IteratorProtocolPrograms))]
+    public void Isolated_IteratorProtocol_PreservesLookupResultsClosingAndDynamicCalls(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"iterator_protocol_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> IteratorWrapperPrograms =>
     [
         new object[]

@@ -330,6 +330,16 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Required `IteratorProtocol` owns iterator lookup, next invocation, result
+reading, close and dynamic protocol-call declarations. Its early dynamic-call
+declaration stays available before the basic iterator helpers; the component
+completes after their original emission sequence. Nine helpers receive exact
+owner/peer inputs. Compact-result readers receive the selected shape set,
+shape dictionary and descriptor flag explicitly, preserving materialization
+and descriptor guards. Optional NodeStreams lookup stays nullable. The
+write-only InvokeIteratorNextWithSent holder store is removed while its
+generated public method, local handle, signature and IL remain unchanged.
+
 Required `IteratorWrappers` owns the custom-iterator adapter type, constructor
 and sent-value method. It completes immediately after the original wrapper
 emission call, which receives the owner and exact captured-next/result-helper

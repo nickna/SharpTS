@@ -640,7 +640,7 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(arguments[i]);
                 IL.Emit(OpCodes.Stelem_Ref);
             }
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorProtocolCall);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorProtocol.Call);
             SetStackUnknown();
             return;
         }

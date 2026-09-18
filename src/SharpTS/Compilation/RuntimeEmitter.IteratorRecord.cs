@@ -5,13 +5,22 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitCompactIteratorResultRead(ILGenerator il, EmittedRuntime runtime, string key)
+    private readonly record struct CompactIteratorResultInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedRecordStorageRuntime Records,
+        IReadOnlySet<string> IteratorResultShapes,
+        IReadOnlyDictionary<string, JsonSerializationShape.Record> Shapes,
+        bool UsesDynamicPropertyDescriptors
+    );
+
+
+    private void EmitCompactIteratorResultRead(ILGenerator il, CompactIteratorResultInputs inputs, string key)
     {
-        foreach (string fingerprint in _features.CompactObjectRecordIteratorResultShapes.Order(StringComparer.Ordinal))
+        foreach (string fingerprint in inputs.IteratorResultShapes.Order(StringComparer.Ordinal))
         {
-            if (!runtime.Records.CompactTypes.TryGetValue(fingerprint, out var type))
+            if (!inputs.Records.CompactTypes.TryGetValue(fingerprint, out var type))
                 continue;
-            var shape = _features.CompactObjectRecordShapes[fingerprint];
+            var shape = inputs.Shapes[fingerprint];
             int index = shape.Fields.Select((field, slot) => (field, slot))
                 .Single(pair => pair.field.Key == key).slot;
             var fallback = il.DefineLabel();
@@ -24,16 +33,16 @@ public partial class RuntimeEmitter
             // Always guard observable records, regardless of other uses of the
             // same shape. Descriptors can overlay a record without materializing.
             il.Emit(OpCodes.Ldloc, exact);
-            il.Emit(OpCodes.Call, runtime.Records.CompactIsMaterializedGetters[fingerprint]);
+            il.Emit(OpCodes.Call, inputs.Records.CompactIsMaterializedGetters[fingerprint]);
             il.Emit(OpCodes.Brtrue, fallback);
-            if (_features.UsesDynamicPropertyDescriptors)
+            if (inputs.UsesDynamicPropertyDescriptors)
             {
                 il.Emit(OpCodes.Ldloc, exact);
-                il.Emit(OpCodes.Call, runtime.DescriptorStorage.HasPropertyDescriptors);
+                il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
                 il.Emit(OpCodes.Brtrue, fallback);
             }
             il.Emit(OpCodes.Ldloc, exact);
-            il.Emit(OpCodes.Ldfld, runtime.Records.CompactValueFields[(fingerprint, index)]);
+            il.Emit(OpCodes.Ldfld, inputs.Records.CompactValueFields[(fingerprint, index)]);
             if (key == "value") il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(fallback);
