@@ -15218,4 +15218,71 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> EnumReversePrograms =>
+    [
+        new object[]
+        {
+            "dynamic",
+            "enum Direction {North=1,South=4,West=7}let key:number=4;console.log(Direction[key]);key=7;console.log(Direction[key]);\n",
+            "",
+            "South\nWest\n",
+            false,
+        },
+        new object[]
+        {
+            "duplicate",
+            "enum Values {First=1,Last=1,Other=2}let key:number=1;console.log(Values[key],Values[1]);\n",
+            "",
+            "Last Last\n",
+            false,
+        },
+        new object[]
+        {
+            "module",
+            "import {Values} from \"./lib.ts\";let key:number=3;console.log(Values[key],Values.First);\n",
+            "export enum Values {First=2,Second=3}\n",
+            "Second 2\n",
+            false,
+        },
+        new object[]
+        {
+            "function_any",
+            "enum Values {First=2,Second=3}function read(key:any):string{return Values[key];}console.log(read(3),read(2));\n",
+            "",
+            "Second First\n",
+            false,
+        },
+        new object[]
+        {
+            "hosted_literal",
+            "enum Values {First=2,Second=3}export function read():string{return Values[3];}\n",
+            "",
+            "",
+            true,
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(EnumReversePrograms))]
+    public void Isolated_EnumReverse_PreservesLookupAndDeployment(
+        string name, string source, string librarySource, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        if (librarySource.Length != 0) tempDir.CreateFile("lib.ts", librarySource);
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"enum_reverse_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }

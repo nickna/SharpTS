@@ -2594,7 +2594,8 @@ public partial class RuntimeEmitter
         // Math.* adapters moved earlier (before EmitObjectGetOwnPropertyDescriptor)
         // so gOPD's Math singleton synth can produce identity-stable
         // `desc.value === Math.X` descriptors.
-        EmitGetEnumMemberName(typeBuilder, runtime);
+        EmitGetEnumMemberName(typeBuilder, runtime.Enums);
+        runtime.Enums.CompleteEmission();
         EmitConcatTemplate(typeBuilder, runtime.Templates, runtime.StringCoercion.StringifyCoerce);
         EmitInvokeTaggedTemplate(typeBuilder, runtime.Templates,
             runtime.ObjectState.Freeze, runtime.Invocation.Value, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);

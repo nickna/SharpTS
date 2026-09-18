@@ -409,8 +409,8 @@ public class EmittedRuntime
 
     // Exception methods
 
-    // Utility methods
-    public MethodBuilder GetEnumMemberName { get; set; } = null!;
+    /// <summary>Required enum reverse-lookup metadata for this compilation.</summary>
+    public EmittedEnumRuntime Enums { get; } = new();
 
     /// <summary>Required Math singleton, numeric adapters and exact summation declarations.</summary>
     public EmittedMathRuntime Math { get; } = new();

@@ -1275,7 +1275,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldstr, values[i]);
                 IL.Emit(OpCodes.Stelem_Ref);
             }
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetEnumMemberName);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Enums.GetMemberName);
             SetStackType(StackType.String);
             return;
         }

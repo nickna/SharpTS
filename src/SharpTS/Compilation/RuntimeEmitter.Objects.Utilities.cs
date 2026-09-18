@@ -1267,7 +1267,7 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private void EmitGetEnumMemberName(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetEnumMemberName(TypeBuilder typeBuilder, EmittedEnumRuntime enums)
     {
         var method = typeBuilder.DefineMethod(
             "GetEnumMemberName",
@@ -1275,7 +1275,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.Double, _types.DoubleArray, _types.StringArray]
         );
-        runtime.GetEnumMemberName = method;
+        enums.GetMemberName = method;
 
         var il = method.GetILGenerator();
         // Simple linear search through keys to find matching value
