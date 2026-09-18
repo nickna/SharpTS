@@ -432,14 +432,17 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
-Required `ReflectedMethods` owns method lookup, the weak receiver/name cache,
-unwrapped reflection invocation and the staged `$MethodCallable` wrapper. The
-original cache field and static initialization stay in place. Callable type,
-constructor and Invoke shell remain available before the runtime helpers; late
-finalization emits Invoke and creates the type before completing the owner.
-Five helpers receive the owner, with explicit error metadata for unwrapping.
-Tests preserve overload selection, stable wrappers, cache isolation, exception
-identity, Invoke/Call fallback behavior and standalone crypto/event dispatch.
+Required `ReflectedMethods` owns method lookup, parent-method lookup, the weak
+receiver/name cache, unwrapped reflection invocation and the staged
+`$MethodCallable` wrapper. The original cache field and static initialization stay
+in place. Callable type, constructor and Invoke shell remain available before the
+runtime helpers; late finalization emits Invoke and creates the type before
+completing the owner. Six helpers receive the owner, with explicit error metadata
+for unwrapping and the function constructor for parent-method wrappers. Parent
+lookup keeps its original emission point, hierarchy search and fresh-wrapper
+behavior. Tests preserve overload selection, stable cached wrappers, cache
+isolation, exception identity, inherited lookup, generator and async super values, Invoke/Call
+fallback behavior and standalone crypto/event dispatch.
 
 Required `FunctionIntrospection` owns function-property lookup and constructor
 capability declarations. Both bodies are emitted at their original separate

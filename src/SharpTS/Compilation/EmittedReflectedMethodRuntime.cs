@@ -17,6 +17,13 @@ public sealed class EmittedReflectedMethodRuntime
         internal set => SetHandle(ref _toPascalCase, value);
     }
 
+    private MethodBuilder? _superMethod;
+    public MethodBuilder SuperMethod
+    {
+        get => Require(_superMethod);
+        internal set => SetHandle(ref _superMethod, value);
+    }
+
     private MethodBuilder? _findMethod;
     public MethodBuilder FindMethod
     {
@@ -106,6 +113,7 @@ public sealed class EmittedReflectedMethodRuntime
     {
         EnsureMutable();
         _ = ToPascalCase;
+        _ = SuperMethod;
         _ = FindMethod;
         _ = Cache;
         _ = CallableType;

@@ -82,7 +82,7 @@ public partial class AsyncArrowMoveNextEmitter
         }
 
         _il.Emit(OpCodes.Ldstr, s.Method?.Lexeme ?? "constructor");
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetSuperMethod);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ReflectedMethods.SuperMethod);
         SetStackUnknown();
     }
 }

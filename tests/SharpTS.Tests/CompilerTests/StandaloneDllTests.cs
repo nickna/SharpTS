@@ -3708,6 +3708,104 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> SuperMethodPrograms =>
+    [
+        new object[]
+        {
+            "super_direct",
+            "class A { value(x:number){return \"A\"+x;} } class B extends A { value(x:number){return super.value(x)+\"B\";} } console.log(new B().value(3),new A().value(4));\n",
+            "A3B A4\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "super_receiver",
+            "class A { label=\"parent\";value(){return this.label;} } class B extends A {label=\"child\";read(){return super.value();}} console.log(new B().read());\n",
+            "child\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "super_arguments",
+            "let log=\"\";function arg(n:number){log+=n;return n;}class A {sum(a:number,b:number){return a+b;}}class B extends A {read(){return super.sum(arg(1),arg(2));}}console.log(new B().read(),log);\n",
+            "3 12\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "super_method_value",
+            "class A {value(x:number){return x+2;}} class B extends A {read(){const fn=super.value;return fn(4);}}console.log(new B().read());\n",
+            "6\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "super_optional_features",
+            "class A {value(){return 5;}}class B extends A {read(){return super.value();}}console.log(new B().read(),new Set([1,2]).size,Buffer.from(\"ok\").toString());\n",
+            "5 2 ok\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "super_async_value_control",
+            "class A {value(x:number){return x+2;}}class B extends A {async read(){const first=super.value;await Promise.resolve(0);const second=super.value;return first(3)+second(4);}}new B().read().then(v=>console.log(v));\n",
+            "11\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "super_generator_value_control",
+            "class A {value(x:number){return x+2;}}class B extends A {*read(){const first=super.value;yield first(1);const second=super.value;yield second(2);return second(3);}}const g=new B().read();console.log(g.next().value,g.next().value,g.next().value);\n",
+            "3 4 5\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "super_async_generator_value_control",
+            "class A {value(x:number){return x+2;}}class B extends A {async *read(){await Promise.resolve(0);const method=super.value;yield method(1);yield method(2);}}(async()=>{for await(const v of new B().read())console.log(v);})();\n",
+            "3\n4\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "super_declared_parent_control",
+            "class A {value(){return \"grandparent\";}}class B extends A {value(){return super.value();}}class C extends B {read(){return super.value();}}console.log(new C().read());\n",
+            "grandparent\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(SuperMethodPrograms))]
+    public void Isolated_SuperMethods_PreserveParentLookupAndCapturedReceivers(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"super_method_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> ArrayDestructuringPrograms =>
     [
         new object[]
