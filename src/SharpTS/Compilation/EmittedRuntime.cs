@@ -229,13 +229,11 @@ public class EmittedRuntime
     /// </summary>
     public Dictionary<SharpTS.Parsing.Expr.RegexLiteral, FieldBuilder>? RegexHoistFields { get; set; }
 
-    // The emitted $Undefined singleton class
-    public Type UndefinedType { get; set; } = null!;
-    public FieldInfo UndefinedInstance { get; set; } = null!;
+    /// <summary>Required undefined and lexical-initialization sentinels for this compilation.</summary>
+    public EmittedSentinelRuntime Sentinels { get; } = new();
 
-    // Internal sentinel for captured let/const storage before initialization.
-    public Type LexicalUninitializedType { get; set; } = null!;
-    public FieldInfo LexicalUninitializedInstance { get; set; } = null!;
+    /// <summary>Temporary forwarding accessor while remaining consumers move to Sentinels.</summary>
+    public FieldInfo UndefinedInstance => Sentinels.UndefinedInstance;
 
 
     // The emitted TSNamespace class

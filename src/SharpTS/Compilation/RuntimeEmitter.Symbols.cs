@@ -123,7 +123,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, disposeMethodLocal);
         il.Emit(OpCodes.Brfalse, noDisposeLabel);
         il.Emit(OpCodes.Ldloc, disposeMethodLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, noDisposeLabel);
 
         // Invoke the dispose method with resource as the context

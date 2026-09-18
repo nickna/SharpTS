@@ -295,7 +295,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg, arg);
             il.Emit(OpCodes.Brfalse, useDefault);
             il.Emit(OpCodes.Ldarg, arg);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brtrue, useDefault);
             il.Emit(OpCodes.Ldarg, arg);
             il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);

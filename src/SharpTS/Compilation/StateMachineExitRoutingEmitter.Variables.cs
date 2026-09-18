@@ -68,7 +68,7 @@ public abstract partial class StateMachineExitRoutingEmitter
             // $Undefined sentinel (used for both omitted and explicit undefined) fires.
             IL.Emit(OpCodes.Ldarg_0);
             IL.Emit(OpCodes.Ldfld, field);
-            IL.Emit(OpCodes.Isinst, Ctx!.Runtime!.UndefinedType);
+            IL.Emit(OpCodes.Isinst, Ctx!.Runtime!.Sentinels.UndefinedType);
             IL.Emit(OpCodes.Brtrue, applyDefault);
             IL.Emit(OpCodes.Br, skipDefault);
 

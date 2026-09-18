@@ -193,7 +193,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 IL.Emit(OpCodes.Stfld, displayField);
                 _ctx.EmitMarkTopLevelLexicalInitialized(IL, v.Name.Lexeme);
@@ -231,7 +231,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                     IL.Emit(OpCodes.Stsfld, staticField);
                 }
                 _ctx.EmitMarkTopLevelLexicalInitialized(IL, v.Name.Lexeme);
@@ -267,7 +267,7 @@ public partial class ILEmitter
             }
             else
             {
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
             }
             IL.Emit(OpCodes.Stfld, funcDisplayField);
             return;
@@ -294,7 +294,7 @@ public partial class ILEmitter
             }
             else
             {
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
             }
             IL.Emit(OpCodes.Stfld, arrowDisplayField);
             return;
@@ -315,7 +315,7 @@ public partial class ILEmitter
             }
             else
             {
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
             }
             IL.Emit(OpCodes.Stloc, predeclaredLexical);
 
@@ -663,7 +663,7 @@ public partial class ILEmitter
             }
             else
             {
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
             }
             IL.Emit(OpCodes.Stloc, local);
         }
@@ -2318,7 +2318,7 @@ public partial class ILEmitter
         // If the iterator property is absent, fall back to index-based iteration.
         // Explicit null remains present and fails as non-callable below.
         IL.Emit(OpCodes.Ldloc, iteratorFnLocal);
-        IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+        IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Sentinels.UndefinedType);
         builder.Emit_Brtrue(indexBasedLabel);
 
         // ===== Iterator protocol path =====
@@ -2829,7 +2829,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Isinst, _ctx.Runtime!.ArrayStorage.HoleType);
             IL.Emit(OpCodes.Brfalse, notHoleLabel);
             IL.Emit(OpCodes.Pop);
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
             IL.Emit(OpCodes.Br, unholedLabel);
             builder.MarkLabel(notHoleLabel);
             builder.MarkLabel(unholedLabel);
@@ -2873,7 +2873,7 @@ public partial class ILEmitter
         EmitCancellationCheck();
 
         IL.Emit(OpCodes.Ldloc, generatorLocal);
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
         IL.Emit(OpCodes.Callvirt, _ctx.Runtime.Generators.Next);
         IL.Emit(OpCodes.Stloc, resultLocal);
         IL.Emit(OpCodes.Ldloc, resultLocal);
@@ -3217,7 +3217,7 @@ public partial class ILEmitter
 
             var local = _ctx.Locals.DeclareLocal(
                 classStmt.Name.Lexeme, _ctx.Types.Object, classStmt);
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
             IL.Emit(OpCodes.Stloc, local);
         }
     }
@@ -3245,7 +3245,7 @@ public partial class ILEmitter
                 if (functionField.FieldType.IsValueType)
                     continue;
                 IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.LexicalUninitializedInstance);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.LexicalUninitializedInstance);
                 IL.Emit(OpCodes.Stfld, functionField);
                 continue;
             }
@@ -3255,7 +3255,7 @@ public partial class ILEmitter
                 && _ctx.ArrowScopeDisplayClassLocal != null)
             {
                 IL.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.LexicalUninitializedInstance);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.LexicalUninitializedInstance);
                 IL.Emit(OpCodes.Stfld, arrowField);
             }
         }

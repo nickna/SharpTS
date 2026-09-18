@@ -259,7 +259,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ble, useDefault);
             il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldelem_Ref); il.Emit(OpCodes.Stloc, vLoc);
             il.Emit(OpCodes.Ldloc, vLoc); il.Emit(OpCodes.Brfalse, useDefault);
-            il.Emit(OpCodes.Ldloc, vLoc); il.Emit(OpCodes.Isinst, runtime.UndefinedType); il.Emit(OpCodes.Brtrue, useDefault);
+            il.Emit(OpCodes.Ldloc, vLoc); il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType); il.Emit(OpCodes.Brtrue, useDefault);
             il.Emit(OpCodes.Ldloc, vLoc); il.Emit(OpCodes.Callvirt, objToString); il.Emit(OpCodes.Br, doneSep);
             il.MarkLabel(useDefault); il.Emit(OpCodes.Ldstr, ",");
             il.MarkLabel(doneSep);

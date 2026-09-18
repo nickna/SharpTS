@@ -153,7 +153,7 @@ public sealed class EmittedObjectConstructionRuntimeTests
                 "GetProperty" => runtime.ObjectRead.Property,
                 "GetIndex" => runtime.ObjectRead.Index,
                 "SetIndex" => runtime.ObjectWrite.Index,
-                _ => (name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, _ => (name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime) }) })
+                _ => (name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, _ => (name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => (name switch { "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime) }) }) })
             };
         }
         return ctor.Invoke(ctor.GetParameters().Select(Value).ToArray());

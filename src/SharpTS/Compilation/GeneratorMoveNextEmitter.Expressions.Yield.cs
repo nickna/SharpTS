@@ -41,7 +41,7 @@ public partial class GeneratorMoveNextEmitter
         }
         else
         {
-            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
             _il.Emit(OpCodes.Stloc, valueTemp);
         }
 
@@ -228,7 +228,7 @@ public partial class GeneratorMoveNextEmitter
         // If @@iterator is present, use the iterator protocol. Explicit null
         // is present-but-non-callable and must not take the CLR fallback.
         _il.Emit(OpCodes.Ldloc, iterFnLocal);
-        _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.UndefinedType);
+        _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.Sentinels.UndefinedType);
         _il.Emit(OpCodes.Brfalse, hasIteratorLabel);
 
         // No Symbol.iterator - fall back to IEnumerable cast
@@ -427,7 +427,7 @@ public partial class GeneratorMoveNextEmitter
         // ECMA-262 14.4.14 the `yield*` completion value is `undefined` — load the emitted
         // `$Undefined` sentinel, not CLR `null` (which would surface as JS `null`, #443). The
         // interpreter's DelegateYieldStar coerces its own null sentinel to `undefined` the same way.
-        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
+        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
         _il.Emit(OpCodes.Stloc, yieldStarResultLocal);
         _il.BeginExceptionBlock();
         _il.Emit(OpCodes.Ldarg_0);

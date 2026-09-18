@@ -469,7 +469,7 @@ public abstract partial class ExpressionEmitterBase
                     // Missing executor is a runtime TypeError. Emitting the
                     // undefined sentinel lets PromiseFromExecutor reject an
                     // enclosing async function instead of failing compilation.
-                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 else
                 {
@@ -794,7 +794,7 @@ public abstract partial class ExpressionEmitterBase
             case 1:
                 EmitExpression(arguments[0]);
                 EnsureBoxed();
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.RegExps.RequireImplementation().FromArguments);
                 break;
             default:
@@ -917,7 +917,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Brfalse, skipHwmLabel);
                 // Skip if $Undefined
                 IL.Emit(OpCodes.Ldloc, hwmValLocal);
-                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
                 IL.Emit(OpCodes.Brtrue, skipHwmLabel);
                 // Convert to int via Convert.ToInt32
                 IL.Emit(OpCodes.Ldloc, instanceLocal);
@@ -1029,7 +1029,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldloc, hwmValLocal);
                 IL.Emit(OpCodes.Brfalse, skipHwmLabel);
                 IL.Emit(OpCodes.Ldloc, hwmValLocal);
-                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
                 IL.Emit(OpCodes.Brtrue, skipHwmLabel);
                 IL.Emit(OpCodes.Ldloc, instanceLocal);
                 IL.Emit(OpCodes.Ldloc, hwmValLocal);

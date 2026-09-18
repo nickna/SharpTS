@@ -25,7 +25,7 @@ public partial class RuntimeEmitter
     /// This is used instead of referencing SharpTS.Runtime.Types.SharpTSUndefined
     /// so that compiled assemblies are standalone.
     /// </summary>
-    private void EmitUndefinedClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitUndefinedClass(ModuleBuilder moduleBuilder, EmittedSentinelRuntime sentinels)
     {
         // Define class: public sealed class $Undefined
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -33,7 +33,6 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.UndefinedType = typeBuilder;
 
         // Static field: public static readonly $Undefined Instance = new $Undefined();
         var instanceField = typeBuilder.DefineField(
@@ -41,7 +40,6 @@ public partial class RuntimeEmitter
             typeBuilder,
             FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        runtime.UndefinedInstance = instanceField;
 
         // Private constructor to ensure singleton
         var ctor = typeBuilder.DefineConstructor(
@@ -74,8 +72,8 @@ public partial class RuntimeEmitter
 
         // Create the type immediately so other emitters can reference it
         var createdType = typeBuilder.CreateType()!;
-        runtime.UndefinedType = createdType;
-        runtime.UndefinedInstance = createdType.GetField("Instance")!;
+        sentinels.UndefinedType = createdType;
+        sentinels.UndefinedInstance = createdType.GetField("Instance")!;
     }
 
     /// <summary>
@@ -85,7 +83,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitLexicalUninitializedClass(
         ModuleBuilder moduleBuilder,
-        EmittedRuntime runtime)
+        EmittedSentinelRuntime sentinels)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(
             moduleBuilder,
@@ -109,8 +107,8 @@ public partial class RuntimeEmitter
         cctor.Emit(OpCodes.Stsfld, instanceField);
         cctor.Emit(OpCodes.Ret);
         var createdType = typeBuilder.CreateType()!;
-        runtime.LexicalUninitializedType = createdType;
-        runtime.LexicalUninitializedInstance = createdType.GetField("Instance")!;
+        sentinels.LexicalUninitializedType = createdType;
+        sentinels.LexicalUninitializedInstance = createdType.GetField("Instance")!;
     }
 
     /// <summary>

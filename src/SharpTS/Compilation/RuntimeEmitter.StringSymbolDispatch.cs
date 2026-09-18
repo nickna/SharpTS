@@ -42,7 +42,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, noMethodLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, noMethodLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
@@ -96,7 +96,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Brfalse, noMethodLabel);
         il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brfalse, callableLabel);
 
         il.MarkLabel(noMethodLabel);

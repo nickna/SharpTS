@@ -354,7 +354,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Ldloc, cbLocal);
         il.Emit(OpCodes.Brfalse, invalidCallbackLabel);
         il.Emit(OpCodes.Ldloc, cbLocal);
-        il.Emit(OpCodes.Isinst, ctx.Runtime!.UndefinedType);
+        il.Emit(OpCodes.Isinst, ctx.Runtime!.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brfalse, callbackOkLabel);
         il.MarkLabel(invalidCallbackLabel);
         il.Emit(OpCodes.Ldstr, "Runtime Error: process.nextTick callback must be a function");

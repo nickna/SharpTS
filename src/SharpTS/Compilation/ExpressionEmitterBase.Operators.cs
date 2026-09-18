@@ -32,7 +32,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Brfalse, assignLabel);
                 IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
                 IL.Emit(OpCodes.Brtrue, assignLabel);
                 // Not nullish - pop extra value and skip assignment
                 IL.Emit(OpCodes.Pop);

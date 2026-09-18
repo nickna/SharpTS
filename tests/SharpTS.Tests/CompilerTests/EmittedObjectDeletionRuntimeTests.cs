@@ -141,7 +141,7 @@ public sealed class EmittedObjectDeletionRuntimeTests
     {
         var constructor = Assert.Single(type.GetConstructors());
         return constructor.Invoke(constructor.GetParameters().Select(parameter => overrides.TryGetValue(parameter.Name!, out var value)
-            ? value : (parameter.Name switch { "TSFunctionType" => runtime.FunctionValues.Type, _ => (parameter.Name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, _ => (parameter.Name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) }) }) })).ToArray());
+            ? value : (parameter.Name switch { "TSFunctionType" => runtime.FunctionValues.Type, _ => (parameter.Name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, _ => (parameter.Name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => (parameter.Name! switch { "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) }) }) }) })).ToArray());
     }
     private static void Fill(object owner, string? missing = null)
     {

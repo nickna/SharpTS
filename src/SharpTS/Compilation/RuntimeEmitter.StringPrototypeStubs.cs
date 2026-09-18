@@ -63,9 +63,9 @@ public partial class RuntimeEmitter
         // coerce via JS-spec ToJsString (so .call(false) → "false" not
         // .NET "False").
         runtime.Strings.ToUpperCase = EmitStringStringStub(typeBuilder, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor, runtime.StringCoercion.ToJsString,
-            runtime.UndefinedType, "StringToUpperCase", "ToUpper", strictReceiver: true);
+            runtime.Sentinels.UndefinedType, "StringToUpperCase", "ToUpper", strictReceiver: true);
         runtime.Strings.ToLowerCase = EmitStringStringStub(typeBuilder, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor, runtime.StringCoercion.ToJsString,
-            runtime.UndefinedType, "StringToLowerCase", "ToLower", strictReceiver: true);
+            runtime.Sentinels.UndefinedType, "StringToLowerCase", "ToLower", strictReceiver: true);
         // JsTrim(string, int mode) for inline call sites that already have a
         // string on the stack. mode: 0=both, 1=start, 2=end. Define BEFORE
         // StringTrim* stubs since those forward to it.
@@ -73,11 +73,11 @@ public partial class RuntimeEmitter
         // Trim variants need ECMA-262 whitespace set, which differs from .NET's
         // char.IsWhiteSpace by including ﻿ (ZWNBSP). Use a custom helper.
         runtime.Strings.Trim = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
-            runtime.StringCoercion.ToJsString, runtime.UndefinedType, "StringTrim", trimMode: 0, strictReceiver: true);
+            runtime.StringCoercion.ToJsString, runtime.Sentinels.UndefinedType, "StringTrim", trimMode: 0, strictReceiver: true);
         runtime.Strings.TrimStart = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
-            runtime.StringCoercion.ToJsString, runtime.UndefinedType, "StringTrimStart", trimMode: 1, strictReceiver: true);
+            runtime.StringCoercion.ToJsString, runtime.Sentinels.UndefinedType, "StringTrimStart", trimMode: 1, strictReceiver: true);
         runtime.Strings.TrimEnd = EmitJsTrimHelper(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
-            runtime.StringCoercion.ToJsString, runtime.UndefinedType, "StringTrimEnd", trimMode: 2, strictReceiver: true);
+            runtime.StringCoercion.ToJsString, runtime.Sentinels.UndefinedType, "StringTrimEnd", trimMode: 2, strictReceiver: true);
 
         // Generic stub for methods without specific helpers — used only for
         // typeof + isConstructor probes via $TSFunction wrappers, AND wired
@@ -85,14 +85,14 @@ public partial class RuntimeEmitter
         // tolerant of null/undefined receivers (returns empty string) since
         // those wirings legitimately call with non-string receivers.
         runtime.Strings.PrototypeGenericStub = EmitStringStringStub(typeBuilder, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
-            runtime.StringCoercion.ToJsString, runtime.UndefinedType, "_StringPrototypeStub", "ToString", strictReceiver: false);
+            runtime.StringCoercion.ToJsString, runtime.Sentinels.UndefinedType, "_StringPrototypeStub", "ToString", strictReceiver: false);
 
         // Strict variant for methods whose first spec step is RequireObjectCoercible
         // (match/matchAll/search/etc.) — these throw TypeError on null/undefined
         // receivers per ECMA-262 22.1.3.* step 1. Used for borrowed-method
         // patterns (`String.prototype.match.call(null, /./)`) where the inline
         // dispatch path doesn't fire.
-        _ = EmitStringStringStub(typeBuilder, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor, runtime.StringCoercion.ToJsString, runtime.UndefinedType,
+        _ = EmitStringStringStub(typeBuilder, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor, runtime.StringCoercion.ToJsString, runtime.Sentinels.UndefinedType,
             "_StringPrototypeStrictStub", "ToString", strictReceiver: true);
 
         // ECMA-262 22.1.3.27 String.prototype.toString === valueOf === thisStringValue.
@@ -134,12 +134,12 @@ public partial class RuntimeEmitter
                 Strings: runtime.Strings,
                 Symbols: runtime.Symbols,
                 TSFunctionType: runtime.FunctionValues.Type,
-                UndefinedType: runtime.UndefinedType
+                UndefinedType: runtime.Sentinels.UndefinedType
             )
         );
         runtime.ObjectPrototypes.ValueOf = EmitObjectProtoValueOfHelper(
             typeBuilder,
-            new ObjectProtoValueOfHelperInputs(runtime.Errors, runtime.UndefinedType)
+            new ObjectProtoValueOfHelperInputs(runtime.Errors, runtime.Sentinels.UndefinedType)
         );
         runtime.ObjectPrototypes.ToLocaleString = EmitObjectProtoToLocaleStringHelper(
             typeBuilder,
@@ -149,7 +149,7 @@ public partial class RuntimeEmitter
                 runtime.Invocation.Method,
                 runtime.StringCoercion,
                 runtime.Operators.TypeOf,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
 
@@ -180,7 +180,7 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.toString called on null or undefined");
         il.MarkLabel(receiverPresentLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         var receiverDefinedLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, receiverDefinedLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.toString called on null or undefined");
@@ -192,7 +192,7 @@ public partial class RuntimeEmitter
         // default ","). Mirrors ECMA-262 23.1.3.32 step 2.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.Materialize);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.Join);
         il.Emit(OpCodes.Ret);
 
@@ -223,7 +223,7 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.toLocaleString called on null or undefined");
         il.MarkLabel(receiverPresentLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         var receiverDefinedLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, receiverDefinedLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.toLocaleString called on null or undefined");
@@ -266,7 +266,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, nextLabel);
         il.MarkLabel(invokeLabel);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, nextLabel);
         var elementReadyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, elementLocal);
@@ -281,7 +281,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, nextLabel);
         il.MarkLabel(elementReadyLabel);
 

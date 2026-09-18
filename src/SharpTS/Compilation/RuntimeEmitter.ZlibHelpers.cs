@@ -147,7 +147,7 @@ public partial class RuntimeEmitter
 
         // Check if it's undefined
         il.Emit(OpCodes.Ldloc, levelLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, defaultLabel);
 
         // Unbox level as double and convert to int
@@ -259,7 +259,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, nestedLocal);
             il.Emit(OpCodes.Brfalse, def);
             il.Emit(OpCodes.Ldloc, nestedLocal);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brtrue, def);
             // val = GetProperty(nested, key)
             il.Emit(OpCodes.Ldloc, nestedLocal);
@@ -280,7 +280,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Brfalse, def);
         il.Emit(OpCodes.Ldloc, valLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, def);
 
         // n = (int)(double)val
@@ -339,7 +339,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Brfalse, def);
         il.Emit(OpCodes.Ldloc, valLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, def);
 
         // (long)(double)val
@@ -750,7 +750,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, initZero);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, initZero);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);

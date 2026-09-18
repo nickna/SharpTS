@@ -631,7 +631,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Box, Types.Double);
             IL.Emit(OpCodes.Br, doneLabel);
             IL.MarkLabel(outOfBoundsLabel);
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
             IL.MarkLabel(doneLabel);
             SetStackUnknown();
             return;
@@ -662,7 +662,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
             // Check for undefined
             IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+            IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
             IL.Emit(OpCodes.Brtrue, nullishLabel);
 
             // Not nullish — proceed with index access
@@ -673,7 +673,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Br, endLabel);
 
             IL.MarkLabel(nullishLabel);
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
 
             IL.MarkLabel(endLabel);
             SetStackUnknown();
@@ -2654,7 +2654,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 EmitExpression(u.Right);
                 EnsureBoxed();
                 IL.Emit(OpCodes.Pop);
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
                 SetStackUnknown();
                 break;
             default:
@@ -2919,14 +2919,14 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Brfalse, nullishLabel);          // CLR null → nullish
             IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+            IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
             IL.Emit(OpCodes.Brtrue, nullishLabel);           // $Undefined → nullish
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
             IL.Emit(OpCodes.Br, endLabel);
             IL.MarkLabel(nullishLabel);
             IL.Emit(OpCodes.Pop);
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
             IL.MarkLabel(endLabel);
         }
         else

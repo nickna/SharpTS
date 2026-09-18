@@ -51,7 +51,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Brtrue, haveSearch);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Br, afterSearch);
         il.MarkLabel(haveSearch);
         il.Emit(OpCodes.Ldarg_1);
@@ -318,7 +318,7 @@ public partial class RuntimeEmitter
 
         var notUndefined = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brfalse, notUndefined);
         il.Emit(OpCodes.Br, throwLabel);
         il.MarkLabel(notUndefined);
@@ -364,7 +364,7 @@ public partial class RuntimeEmitter
         var argsAfterAddLabel = il.DefineLabel();
         il.Emit(OpCodes.Blt, argsHaveLabel);
         il.Emit(OpCodes.Ldloc, argsResultLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.Emit(OpCodes.Br, argsAfterAddLabel);
         il.MarkLabel(argsHaveLabel);
@@ -530,7 +530,7 @@ public partial class RuntimeEmitter
 
         // $Undefined → throw TypeError "null/undefined"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         var notUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
@@ -1014,7 +1014,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Brfalse, pushHole_dict);
         il.Emit(OpCodes.Ldloc, valLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, pushHole_dict);
         il.Emit(OpCodes.Br, wasPresent);
         il.MarkLabel(pushHole_dict);
@@ -1066,7 +1066,7 @@ public partial class RuntimeEmitter
             // GetProperty returns $Undefined.Instance (not null) for absent
             // properties on Dictionary receivers — exclude that too.
             il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brtrue, afterLabel);
 
             // result = $Runtime.InvokeMethodValue(lenVal, fn, emptyArgs)
@@ -1243,7 +1243,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(receiverPresent);
         var receiverDefined = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brfalse, receiverDefined);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(receiverDefined);
@@ -1503,7 +1503,7 @@ public partial class RuntimeEmitter
         var hasSep = il.DefineLabel();
         var afterSep = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, afterSep);
         il.Emit(OpCodes.Br, hasSep);
         il.MarkLabel(afterSep);
@@ -1564,7 +1564,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipAppend);
         // undefined?
         il.Emit(OpCodes.Ldloc, elemLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, skipAppend);
 
         // sb.Append(ToJsString(elem)) — ECMA-262 23.1.3.16 step 7 ToString per element:
@@ -1616,7 +1616,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, receiverOkLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         var receiverNotUndefinedLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, receiverNotUndefinedLabel);
         il.MarkLabel(receiverOkLabel);
@@ -1701,7 +1701,7 @@ public partial class RuntimeEmitter
 
         var defaultSpreadabilityLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, spreadValueLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, defaultSpreadabilityLabel);
         il.Emit(OpCodes.Ldloc, spreadValueLocal);
         il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
@@ -1882,7 +1882,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, delegateLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, delegateLabel);
 
         // Array/List receivers can carry index accessors installed by

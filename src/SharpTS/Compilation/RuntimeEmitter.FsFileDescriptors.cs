@@ -163,7 +163,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, skipSeekLabel);
             // Check for undefined (use emitted $Undefined type for standalone DLLs)
             il.Emit(OpCodes.Ldarg, 4);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brtrue, skipSeekLabel);
 
             // Seek to position
@@ -245,7 +245,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, skipSeekLabel);
             // Use emitted $Undefined type for standalone DLLs
             il.Emit(OpCodes.Ldarg, 4);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brtrue, skipSeekLabel);
 
             il.Emit(OpCodes.Ldloc, streamLocal);

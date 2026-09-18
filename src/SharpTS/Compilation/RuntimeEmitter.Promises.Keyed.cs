@@ -29,7 +29,7 @@ public partial class RuntimeEmitter
         // rather than throwing synchronously, for primitive input.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, rejectInput);
-        EmitIsInstanceBranch(il, runtime.UndefinedType, rejectInput);
+        EmitIsInstanceBranch(il, runtime.Sentinels.UndefinedType, rejectInput);
         EmitIsInstanceBranch(il, _types.Boolean, rejectInput);
         EmitIsInstanceBranch(il, _types.Double, rejectInput);
         EmitIsInstanceBranch(il, _types.Int32, rejectInput);
@@ -185,7 +185,7 @@ public partial class RuntimeEmitter
 
         // CreateKeyedPromiseCombinatorResultObject uses a null prototype.
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Call, runtime.ObjectPrototypes.Create);
         il.Emit(OpCodes.Stloc, result);
 

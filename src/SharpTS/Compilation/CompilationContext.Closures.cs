@@ -192,13 +192,13 @@ public partial class CompilationContext
 
         var initialized = il.DefineLabel();
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Isinst, Runtime.LexicalUninitializedType);
+        il.Emit(OpCodes.Isinst, Runtime.Sentinels.LexicalUninitializedType);
         il.Emit(OpCodes.Brfalse, initialized);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldstr, name);
         il.Emit(OpCodes.Call, Runtime.Errors.ThrowUndefinedVariable);
         // Unreachable verifier value for the initialized join.
-        il.Emit(OpCodes.Ldsfld, Runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, Runtime.Sentinels.UndefinedInstance);
         il.MarkLabel(initialized);
         return true;
     }

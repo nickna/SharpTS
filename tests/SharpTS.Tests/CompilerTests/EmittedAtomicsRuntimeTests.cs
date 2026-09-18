@@ -61,7 +61,7 @@ public class EmittedAtomicsRuntimeTests
         var component = new EmittedAtomicsRuntime();
         typeof(RuntimeEmitter).GetMethod("EmitAtomicsHelpersPure", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(emitter, [helpers, component, runtime.TypedArrays.RequireImplementation(),
-                runtime.UndefinedType, runtime.UndefinedInstance, runtime.Errors.TypeErrorConstructor, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor]);
+                runtime.Sentinels.UndefinedType, runtime.Sentinels.UndefinedInstance, runtime.Errors.TypeErrorConstructor, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor]);
         foreach (var property in Handles)
         {
             var method = Assert.IsAssignableFrom<MethodBuilder>(property.GetValue(component));
@@ -145,8 +145,8 @@ public class EmittedAtomicsRuntimeTests
         Assert.Equal(true, Call(assembly, "IsLockFree", 4d));
         AssertGuestError(assembly, "$RangeError", () => Call(assembly, "AddInt32", signed, 1, 1d, false));
         AssertGuestError(assembly, "$TypeError", () => Call(assembly, "Pause", 1.5d));
-        var undefined = assembly.GetType(runtime.UndefinedInstance.DeclaringType!.FullName!)!
-            .GetField(runtime.UndefinedInstance.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
+        var undefined = assembly.GetType(runtime.Sentinels.UndefinedInstance.DeclaringType!.FullName!)!
+            .GetField(runtime.Sentinels.UndefinedInstance.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
         Assert.Same(undefined, Call(assembly, "Pause", undefined));
         Assert.Same(undefined, Call(assembly, "Pause", -1d));
         var unsigned = NewView(assembly, "$Uint32Array", 1);

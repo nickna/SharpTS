@@ -1806,7 +1806,7 @@ public partial class RuntimeEmitter
 
         // if (value is SharpTSUndefined) return "NaN"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, nanLabel);
 
         // if (value is double)
@@ -1914,7 +1914,7 @@ public partial class RuntimeEmitter
 
         // if (value is SharpTSUndefined) return "NaN"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, nanLabel);
 
         // if (value is double)
@@ -2052,7 +2052,7 @@ public partial class RuntimeEmitter
 
         // if (value is SharpTSUndefined) return "undefined"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         var notUndefined = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefined);
         il.Emit(OpCodes.Ldstr, "undefined");

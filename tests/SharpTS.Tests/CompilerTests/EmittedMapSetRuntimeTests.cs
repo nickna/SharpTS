@@ -333,14 +333,14 @@ public sealed class EmittedMapSetRuntimeTests
         var typeOfHelper = typeof(RuntimeEmitter).GetMethod("EmitTypeOf", InstanceMembers)!;
         var inputConstructor = Assert.Single(typeOfHelper.GetParameters()[2].ParameterType.GetConstructors());
         var typeOfInputs = inputConstructor.Invoke(inputConstructor.GetParameters()
-            .Select(parameter => (parameter.Name switch { "BoundAnyFunctionType" => runtime.FunctionBindings.AnyType, "BoundTSFunctionType" => runtime.FunctionBindings.BoundType, "FunctionApplyWrapperType" => runtime.FunctionBindings.ApplyType, "FunctionBindWrapperType" => runtime.FunctionBindings.BindType, "FunctionCallWrapperType" => runtime.FunctionBindings.CallType, "TSFunctionType" => runtime.FunctionValues.Type, _ => (parameter.Name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) }) })).ToArray());
+            .Select(parameter => (parameter.Name switch { "BoundAnyFunctionType" => runtime.FunctionBindings.AnyType, "BoundTSFunctionType" => runtime.FunctionBindings.BoundType, "FunctionApplyWrapperType" => runtime.FunctionBindings.ApplyType, "FunctionBindWrapperType" => runtime.FunctionBindings.BindType, "FunctionCallWrapperType" => runtime.FunctionBindings.CallType, "TSFunctionType" => runtime.FunctionValues.Type, _ => (parameter.Name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => (parameter.Name! switch { "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) }) }) })).ToArray());
         typeOfHelper.Invoke(emitter, [probe, new EmittedOperatorRuntime(), typeOfInputs]);
         var invokeHelper = typeof(RuntimeEmitter).GetMethod("EmitInvokeValue", InstanceMembers)!;
         var invokeConstructor = invokeHelper.GetParameters()[2].ParameterType.GetConstructors().Single();
         var invokeInputs = invokeConstructor.Invoke(invokeConstructor.GetParameters().Select(parameter =>
             parameter.ParameterType == typeof(bool)
                 ? typeof(RuntimeFeatureSet).GetProperty(parameter.Name!)!.GetValue(features)
-                : typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime)).ToArray());
+                : (parameter.Name! switch { "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) })).ToArray());
         invokeHelper.Invoke(emitter, [probe, new EmittedInvocationRuntime { Method = runtime.Invocation.Method }, invokeInputs]);
         probe.CreateType();
         using var bytes = new MemoryStream();

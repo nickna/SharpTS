@@ -85,7 +85,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             else
             {
                 IL.Emit(OpCodes.Ldarg_0);
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
                 IL.Emit(OpCodes.Stfld, field);
             }
         }
@@ -109,7 +109,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             }
             else
             {
-                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
                 IL.Emit(OpCodes.Stloc, local);
             }
         }
@@ -1168,7 +1168,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         il.Emit(OpCodes.Ldloc, asyncIteratorFnLocal);
         il.Emit(OpCodes.Brfalse, asyncGenLabel);
         il.Emit(OpCodes.Ldloc, asyncIteratorFnLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, asyncGenLabel);
 
         // ===== Custom async iterator protocol path =====
@@ -1285,7 +1285,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 il.Emit(OpCodes.Ldloc, returnFnLocal);
                 il.Emit(OpCodes.Brfalse, endLabel);
                 il.Emit(OpCodes.Ldloc, returnFnLocal);
-                il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+                il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
                 il.Emit(OpCodes.Brtrue, endLabel);
 
                 // Call: InvokeMethodValue(asyncIterator, returnFn, [])
@@ -1361,7 +1361,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             // Call next(undefined) which returns Task<object>; for-await-of passes undefined as the sent
             // value (#473 — next() now takes one argument matching the $IAsyncGenerator interface).
             il.Emit(OpCodes.Ldloc, asyncGenLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Callvirt, runtime.RequireAsyncGenerators().Next);
 
             // Await the Task<object>
