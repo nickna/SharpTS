@@ -221,7 +221,7 @@ public partial class GeneratorMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldloc, iterableLocal);
             _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Symbols.Iterator);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Function);
             _il.Emit(OpCodes.Stloc, iterFnLocal);
         });
 
@@ -391,11 +391,11 @@ public partial class GeneratorMoveNextEmitter
             });
 
             _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetIteratorDone);
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Done);
             _il.Emit(OpCodes.Brtrue, genDoneLabel);
 
             _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetIteratorValue);
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Value);
             _il.Emit(OpCodes.Stloc, valueTemp);
             // fall through to haveValue
         }
@@ -444,7 +444,7 @@ public partial class GeneratorMoveNextEmitter
             // $IGenerator done: the completion value is the done record's `value`.
             _il.MarkLabel(genDoneLabel);
             _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetIteratorValue);
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Value);
             _il.Emit(OpCodes.Stloc, yieldStarResultLocal);
             // fall through to doneCleanup
         }
@@ -547,18 +547,18 @@ public partial class GeneratorMoveNextEmitter
             // finally yielded, so the outer yields result.value and stays delegating.
             var innerReturnNotDone = _il.DefineLabel();
             _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorDone);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Done);
             _il.Emit(OpCodes.Brfalse, innerReturnNotDone);
             ClearDelegateField(delegatedField);
             EmitRoutedReturn(() =>
             {
                 _il.Emit(OpCodes.Ldloc, genResultLocal);
-                _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorValue);
+                _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
             });
 
             _il.MarkLabel(innerReturnNotDone);
             _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorValue);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
             _il.Emit(OpCodes.Stloc, valueTemp);
             _il.Emit(OpCodes.Br, haveValueLabel);
 
@@ -617,13 +617,13 @@ public partial class GeneratorMoveNextEmitter
             _il.MarkLabel(innerHandled);
             var innerThrowNotDone = _il.DefineLabel();
             _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorDone);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Done);
             _il.Emit(OpCodes.Brfalse, innerThrowNotDone);
             _il.Emit(OpCodes.Br, genDoneLabel);
 
             _il.MarkLabel(innerThrowNotDone);
             _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorValue);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
             _il.Emit(OpCodes.Stloc, valueTemp);
             _il.Emit(OpCodes.Br, haveValueLabel);
 

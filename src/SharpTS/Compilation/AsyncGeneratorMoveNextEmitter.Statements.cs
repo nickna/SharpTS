@@ -241,12 +241,12 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         // if (result.done) exit without calling return().
         _il.Emit(OpCodes.Ldloc, resultLocal);
-        _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorDone);
+        _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Done);
         _il.Emit(OpCodes.Brtrue, endLabel);
 
         // loopVar = result.value
         _il.Emit(OpCodes.Ldloc, resultLocal);
-        _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorValue);
+        _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
         if (varField != null)
         {
             var valueTemp = _il.DeclareLocal(_types.Object);

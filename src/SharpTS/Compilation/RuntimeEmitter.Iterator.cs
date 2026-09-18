@@ -8,6 +8,43 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    private readonly record struct IteratorFunctionInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedFunctionConstructionRuntime FunctionConstruction,
+        EmittedGeneratorRuntime Generators,
+        EmittedNodeStreamRuntime? NodeStreams,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedSymbolAccessorRuntime SymbolAccessors,
+        EmittedSymbolRuntime Symbols,
+        FieldInfo UndefinedInstance
+    );
+
+    private readonly record struct IteratorNextInputs(
+        EmittedInvocationRuntime Invocation,
+        EmittedObjectReadRuntime ObjectRead
+    );
+
+    private readonly record struct IteratorDoneInputs(
+        EmittedBooleanRuntime Booleans,
+        EmittedObjectReadRuntime ObjectRead,
+        CompactIteratorResultInputs CompactResults
+    );
+
+    private readonly record struct IteratorValueInputs(
+        EmittedObjectReadRuntime ObjectRead,
+        CompactIteratorResultInputs CompactResults
+    );
+
+    private readonly record struct IteratorCloseInputs(
+        EmittedErrorRuntime Errors,
+        EmittedGeneratorRuntime Generators,
+        EmittedInvocationRuntime Invocation,
+        EmittedObjectReadRuntime ObjectRead,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
+
     /// <summary>
     /// Emits the live iterator shared by Array.prototype entries/keys/values.
     /// Its MoveNext reads Count and the current indexed value on every call,
@@ -775,12 +812,35 @@ public partial class RuntimeEmitter
             new CapturedIteratorInputs(runtime.UndefinedType, runtime.Symbols, runtime.ObjectRead, runtime.Invocation, runtime.Errors)
         );
         runtime.IteratorRecords.CompleteEmission();
-        EmitGetIteratorDone(typeBuilder, runtime);
-        EmitGetIteratorValue(typeBuilder, runtime);
-        EmitInvokeIteratorNext(typeBuilder, runtime);
-        EmitInvokeIteratorNextWithSent(typeBuilder, runtime);
-        EmitGetIteratorFunction(typeBuilder, runtime);
-        EmitIteratorClose(typeBuilder, runtime);
+        EmitGetIteratorDone(
+            typeBuilder,
+            runtime.IteratorProtocol,
+            new IteratorDoneInputs(runtime.Booleans, runtime.ObjectRead, new CompactIteratorResultInputs(runtime.DescriptorStorage, runtime.Records, _features.CompactObjectRecordIteratorResultShapes, _features.CompactObjectRecordShapes, _features.UsesDynamicPropertyDescriptors))
+        );
+        EmitGetIteratorValue(
+            typeBuilder,
+            runtime.IteratorProtocol,
+            new IteratorValueInputs(runtime.ObjectRead, new CompactIteratorResultInputs(runtime.DescriptorStorage, runtime.Records, _features.CompactObjectRecordIteratorResultShapes, _features.CompactObjectRecordShapes, _features.UsesDynamicPropertyDescriptors))
+        );
+        EmitInvokeIteratorNext(
+            typeBuilder,
+            runtime.IteratorProtocol,
+            new IteratorNextInputs(runtime.Invocation, runtime.ObjectRead)
+        );
+        EmitInvokeIteratorNextWithSent(
+            typeBuilder,
+            new IteratorNextInputs(runtime.Invocation, runtime.ObjectRead)
+        );
+        EmitGetIteratorFunction(
+            typeBuilder,
+            runtime.IteratorProtocol,
+            new IteratorFunctionInputs(runtime.DescriptorStorage, runtime.FunctionConstruction, runtime.Generators, runtime.NodeStreams, runtime.ObjectRead, runtime.SymbolAccessors, runtime.Symbols, runtime.UndefinedInstance)
+        );
+        EmitIteratorClose(
+            typeBuilder,
+            runtime.IteratorProtocol,
+            new IteratorCloseInputs(runtime.Errors, runtime.Generators, runtime.Invocation, runtime.ObjectRead, runtime.UndefinedInstance, runtime.UndefinedType)
+        );
     }
 
     /// <summary>
@@ -789,14 +849,14 @@ public partial class RuntimeEmitter
     /// while retrieving/calling <c>return</c> are suppressed as required by
     /// ECMA-262 §7.4.11; normal completions propagate those failures.
     /// </summary>
-    private void EmitIteratorClose(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorClose(TypeBuilder typeBuilder, EmittedIteratorProtocolRuntime iteratorProtocol, IteratorCloseInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "IteratorClose",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Object, _types.Boolean]);
-        runtime.IteratorClose = method;
+        iteratorProtocol.Close = method;
 
         var il = method.GetILGenerator();
         var returnMethod = il.DeclareLocal(_types.Object);
@@ -816,32 +876,32 @@ public partial class RuntimeEmitter
         // shared close primitive so every iterator consumer observes the same
         // GeneratorResumeAbrupt semantics.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Generators.Type);
+        il.Emit(OpCodes.Isinst, inputs.Generators.Type);
         il.Emit(OpCodes.Brfalse, lookupReturn);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.Generators.Type);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, runtime.Generators.Return);
+        il.Emit(OpCodes.Castclass, inputs.Generators.Type);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, inputs.Generators.Return);
         il.Emit(OpCodes.Stloc, closeResult);
         il.Emit(OpCodes.Br, validateResult);
 
         il.MarkLabel(lookupReturn);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "return");
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, returnMethod);
 
         il.Emit(OpCodes.Ldloc, returnMethod);
         il.Emit(OpCodes.Brfalse, finishTry);
         il.Emit(OpCodes.Ldloc, returnMethod);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, finishTry);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, returnMethod);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Stloc, closeResult);
 
         // IteratorClose requires the return method's result to be an Object.
@@ -849,7 +909,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, closeResult);
         il.Emit(OpCodes.Brfalse, resultIsObject);
         il.Emit(OpCodes.Ldloc, closeResult);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, resultIsObject);
         il.Emit(OpCodes.Ldloc, closeResult);
         il.Emit(OpCodes.Isinst, _types.Double);
@@ -861,7 +921,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, finishTry);
         il.MarkLabel(resultIsObject);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Iterator .return() must return an object");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Iterator .return() must return an object");
 
         il.MarkLabel(finishTry);
         il.Emit(OpCodes.Leave, done);
@@ -909,7 +969,7 @@ public partial class RuntimeEmitter
     /// Emits GetIteratorDone: extracts the 'done' property from an iterator result and returns bool.
     /// Signature: bool GetIteratorDone(object result)
     /// </summary>
-    private void EmitGetIteratorDone(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetIteratorDone(TypeBuilder typeBuilder, EmittedIteratorProtocolRuntime iteratorProtocol, IteratorDoneInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "GetIteratorDone",
@@ -917,18 +977,18 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]
         );
-        runtime.GetIteratorDone = method;
+        iteratorProtocol.Done = method;
 
         var il = method.GetILGenerator();
-        EmitCompactIteratorResultRead(il, runtime, "done");
+        EmitCompactIteratorResultRead(il, inputs.CompactResults, "done");
 
         // Call GetProperty(result, "done")
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "done");
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
 
         // Call IsTruthy on the result
-        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Ret);
     }
 
@@ -936,7 +996,7 @@ public partial class RuntimeEmitter
     /// Emits GetIteratorValue: extracts the 'value' property from an iterator result.
     /// Signature: object GetIteratorValue(object result)
     /// </summary>
-    private void EmitGetIteratorValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetIteratorValue(TypeBuilder typeBuilder, EmittedIteratorProtocolRuntime iteratorProtocol, IteratorValueInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "GetIteratorValue",
@@ -944,15 +1004,15 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.GetIteratorValue = method;
+        iteratorProtocol.Value = method;
 
         var il = method.GetILGenerator();
-        EmitCompactIteratorResultRead(il, runtime, "value");
+        EmitCompactIteratorResultRead(il, inputs.CompactResults, "value");
 
         // Call GetProperty(result, "value")
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
         il.Emit(OpCodes.Ret);
     }
 
@@ -960,7 +1020,7 @@ public partial class RuntimeEmitter
     /// Emits InvokeIteratorNext: gets the 'next' method from iterator and calls it with proper 'this' binding.
     /// Signature: object InvokeIteratorNext(object iterator)
     /// </summary>
-    private void EmitInvokeIteratorNext(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitInvokeIteratorNext(TypeBuilder typeBuilder, EmittedIteratorProtocolRuntime iteratorProtocol, IteratorNextInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "InvokeIteratorNext",
@@ -968,7 +1028,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.InvokeIteratorNext = method;
+        iteratorProtocol.InvokeNext = method;
 
         var il = method.GetILGenerator();
         var throwLabel = il.DefineLabel();
@@ -977,7 +1037,7 @@ public partial class RuntimeEmitter
         // Get "next" property from iterator
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "next");
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, nextMethodLocal);
 
         // Check if null
@@ -989,7 +1049,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nextMethodLocal);    // nextMethod
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);     // empty args array
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Ret);
 
         // Throw error if next is null
@@ -1004,7 +1064,7 @@ public partial class RuntimeEmitter
     /// a sent value argument, forwarding the outer generator's resume value (ECMA-262 §14.4.14, #503).
     /// Signature: object InvokeIteratorNextWithSent(object iterator, object sent)
     /// </summary>
-    private void EmitInvokeIteratorNextWithSent(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitInvokeIteratorNextWithSent(TypeBuilder typeBuilder, IteratorNextInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "InvokeIteratorNextWithSent",
@@ -1012,7 +1072,6 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]  // iterator, sent
         );
-        runtime.InvokeIteratorNextWithSent = method;
 
         var il = method.GetILGenerator();
         var throwLabel = il.DefineLabel();
@@ -1022,7 +1081,7 @@ public partial class RuntimeEmitter
         // Get "next" property from iterator
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "next");
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, nextMethodLocal);
 
         // Check if null
@@ -1042,7 +1101,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);               // iterator (receiver/"this")
         il.Emit(OpCodes.Ldloc, nextMethodLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Ret);
 
         // Throw error if next is null
@@ -1061,15 +1120,15 @@ public partial class RuntimeEmitter
     /// non-callable.
     /// Signature: object GetIteratorFunction(object obj, $TSSymbol symbol)
     /// </summary>
-    private void EmitGetIteratorFunction(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetIteratorFunction(TypeBuilder typeBuilder, EmittedIteratorProtocolRuntime iteratorProtocol, IteratorFunctionInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "GetIteratorFunction",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, runtime.Symbols.Type]
+            [_types.Object, inputs.Symbols.Type]
         );
-        runtime.GetIteratorFunction = method;
+        iteratorProtocol.Function = method;
 
         var il = method.GetILGenerator();
         var returnUndefinedLabel = il.DefineLabel();
@@ -1084,30 +1143,30 @@ public partial class RuntimeEmitter
         // the generator receiver and the method returns that receiver unchanged.
         var notGeneratorIterator = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
         il.Emit(OpCodes.Bne_Un, notGeneratorIterator);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Generators.Type);
+        il.Emit(OpCodes.Isinst, inputs.Generators.Type);
         il.Emit(OpCodes.Brfalse, notGeneratorIterator);
-        EmitInstanceMethodInfoLiteral(il, runtime.Generators.Iterator, runtime.Generators.Type);
+        EmitInstanceMethodInfoLiteral(il, inputs.Generators.Iterator, inputs.Generators.Type);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGeneratorIterator);
 
         // #1024: node:stream $Readable exposes [Symbol.asyncIterator] via GetAsyncIterator().
         // It carries no per-object symbol dict and isn't a user class, so hook it here:
         //   if (symbol == SymbolAsyncIterator && obj is $Readable) return new $TSFunction(obj, GetAsyncIterator);
-        if (runtime.NodeStreams is { } nodeStreams)
+        if (inputs.NodeStreams is { } nodeStreams)
         {
             var notReadableAsyncIter = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldsfld, runtime.Symbols.AsyncIterator);
+            il.Emit(OpCodes.Ldsfld, inputs.Symbols.AsyncIterator);
             il.Emit(OpCodes.Bne_Un, notReadableAsyncIter);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, nodeStreams.ReadableType);
             il.Emit(OpCodes.Brfalse, notReadableAsyncIter);
             il.Emit(OpCodes.Ldarg_0); // target
             EmitInstanceMethodInfoLiteral(il, nodeStreams.ReadableGetAsyncIterator, nodeStreams.ReadableType);
-            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+            il.Emit(OpCodes.Newobj, inputs.FunctionConstruction.Constructor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notReadableAsyncIter);
         }
@@ -1122,7 +1181,7 @@ public partial class RuntimeEmitter
         // through the runtime symbol dictionary, so retain that lookup before
         // consulting the class-method registry.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
         il.Emit(OpCodes.Stloc, dictLocal);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Brfalse, tryRegistryLabel);
@@ -1138,11 +1197,11 @@ public partial class RuntimeEmitter
         // dictionary. Route only that shape through ordinary symbol [[Get]] so
         // accessor getters are invoked (and abrupt completion is propagated).
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Isinst, inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Brfalse, rawValueLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Index);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(rawValueLabel);
@@ -1152,7 +1211,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(tryRegistryLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.SymbolAccessors.FindMethod);
+        il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindMethod);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, registryValueLabel);
         il.Emit(OpCodes.Pop);
@@ -1163,7 +1222,7 @@ public partial class RuntimeEmitter
 
         // return undefined;
         il.MarkLabel(returnUndefinedLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1266,7 +1325,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+            il.Emit(OpCodes.Call, runtime.IteratorProtocol.Function);
             il.Emit(OpCodes.Stloc, iterFnLocal);
             il.Emit(OpCodes.Ldloc, iterFnLocal);
             il.Emit(OpCodes.Isinst, runtime.UndefinedType);
@@ -1590,7 +1649,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);  // Symbol.iterator
-            il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+            il.Emit(OpCodes.Call, runtime.IteratorProtocol.Function);
             il.Emit(OpCodes.Stloc, iterFnLocal);
         }
 
@@ -1649,13 +1708,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.IteratorRecords.InvokeNext);
         il.Emit(OpCodes.Stloc, iterationResultLocal);
         il.Emit(OpCodes.Ldloc, iterationResultLocal);
-        il.Emit(OpCodes.Call, runtime.GetIteratorDone);
+        il.Emit(OpCodes.Call, runtime.IteratorProtocol.Done);
         il.Emit(OpCodes.Brtrue, collectDoneLabel);
 
         // Append only values from non-completed iterator results.
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, iterationResultLocal);
-        il.Emit(OpCodes.Call, runtime.GetIteratorValue);
+        il.Emit(OpCodes.Call, runtime.IteratorProtocol.Value);
         AppendValue();
         il.Emit(OpCodes.Br, collectLoopLabel);
 

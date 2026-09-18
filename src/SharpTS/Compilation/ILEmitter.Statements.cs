@@ -2312,7 +2312,7 @@ public partial class ILEmitter
 
         IL.Emit(OpCodes.Ldloc, iterableLocal);
         IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Iterator);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorFunction);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorProtocol.Function);
         IL.Emit(OpCodes.Stloc, iteratorFnLocal);
 
         // If the iterator property is absent, fall back to index-based iteration.
@@ -2363,7 +2363,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorRecords.InvokeNext);
             IL.Emit(OpCodes.Stloc, resultLocal);
             IL.Emit(OpCodes.Ldloc, resultLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorDone);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorProtocol.Done);
             var bodyLabel = builder.DefineLabel("forof_iter_body");
             builder.Emit_Brtrue(iterEndLabel);
             builder.Emit_Br(bodyLabel);
@@ -2391,7 +2391,7 @@ public partial class ILEmitter
             // IteratorValue and binding/body evaluation are protected: every
             // abrupt exit closes, while a continue of this loop clears the flag.
             IL.Emit(OpCodes.Ldloc, resultLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorValue);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorProtocol.Value);
             IL.Emit(OpCodes.Stloc, loopVar);
 
             _iteratorLoopCompletionScopes.Push(new IteratorLoopCompletionScope(
@@ -2415,7 +2415,7 @@ public partial class ILEmitter
             builder.Emit_Brfalse(skipClose);
             IL.Emit(OpCodes.Ldloc, iteratorObjLocal);
             IL.Emit(OpCodes.Ldloc, throwing);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorClose);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorProtocol.Close);
             builder.MarkLabel(skipClose);
             builder.EndExceptionBlock();
             _ctx.ExceptionBlockDepth--;
@@ -2603,7 +2603,7 @@ public partial class ILEmitter
         // GetIteratorFromMethod, once: preserve observable iterator acquisition and this binding.
         IL.Emit(OpCodes.Ldloc, iterableLocal);
         IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Symbols.Iterator);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Function);
         var iteratorFunction = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, iteratorFunction);
         IL.Emit(OpCodes.Ldloc, iterableLocal);
@@ -2700,7 +2700,7 @@ public partial class ILEmitter
         builder.Emit_Brfalse(skipClose);
         IL.Emit(OpCodes.Ldloc, iteratorObject);
         IL.Emit(OpCodes.Ldloc, throwing);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorClose);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Close);
         builder.MarkLabel(skipClose);
         builder.EndExceptionBlock();
         _ctx.ExceptionBlockDepth--;
@@ -2877,7 +2877,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Callvirt, _ctx.Runtime.Generators.Next);
         IL.Emit(OpCodes.Stloc, resultLocal);
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorDone);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Done);
         builder.Emit_Brtrue(endLabel);
 
         IL.Emit(OpCodes.Ldc_I4_1);
@@ -2896,7 +2896,7 @@ public partial class ILEmitter
         builder.BeginExceptionBlock();
 
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorValue);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
         IL.Emit(OpCodes.Stloc, loopVar);
 
         _iteratorLoopCompletionScopes.Push(new IteratorLoopCompletionScope(
@@ -2920,7 +2920,7 @@ public partial class ILEmitter
         builder.Emit_Brfalse(skipClose);
         IL.Emit(OpCodes.Ldloc, generatorLocal);
         IL.Emit(OpCodes.Ldloc, throwing);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorClose);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Close);
         builder.MarkLabel(skipClose);
         builder.EndExceptionBlock();
         _ctx.ExceptionBlockDepth--;
@@ -3062,7 +3062,7 @@ public partial class ILEmitter
         builder.Emit_Brfalse(skipClose);
         IL.Emit(OpCodes.Ldloc, generatorLocal);
         IL.Emit(OpCodes.Ldloc, throwing);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorClose);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Close);
         builder.MarkLabel(skipClose);
         builder.EndExceptionBlock();
         _ctx.ExceptionBlockDepth--;

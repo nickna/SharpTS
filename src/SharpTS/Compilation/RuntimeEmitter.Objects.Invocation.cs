@@ -6,6 +6,14 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct IteratorProtocolCallInputs(
+        EmittedGeneratorRuntime Generators,
+        EmittedInvocationRuntime Invocation,
+        EmittedObjectReadRuntime ObjectRead,
+        FieldInfo UndefinedInstance
+    );
+
+
     private readonly record struct StackGuardInputs(MethodBuilder? CheckCancellationMethod, EmittedErrorRuntime Errors);
 
     private readonly record struct ThrowNotAFunctionInputs(EmittedErrorRuntime Errors, EmittedOperatorRuntime Operators);
@@ -1059,14 +1067,14 @@ public partial class RuntimeEmitter
     /// preserving existing behavior for user objects that carry their own
     /// <c>next</c>/<c>return</c> method (generators, custom iterators).
     /// </summary>
-    private void EmitIteratorProtocolCall(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorProtocolCall(TypeBuilder typeBuilder, EmittedIteratorProtocolRuntime iteratorProtocol, IteratorProtocolCallInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "IteratorProtocolCall",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.String, _types.ObjectArray]);
-        runtime.IteratorProtocolCall = method;
+        iteratorProtocol.Call = method;
 
         var il = method.GetILGenerator();
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
@@ -1084,7 +1092,7 @@ public partial class RuntimeEmitter
         // not the null that GetProperty+InvokeMethodValue would pad in for a missing
         // argument (#452). User iterators carrying their own next() keep the
         // GetProperty path below (they don't implement $IGenerator).
-        if (runtime.Generators.Type != null)
+        if (inputs.Generators.Type != null)
         {
             var notGeneratorNextLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
@@ -1092,13 +1100,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brfalse, notGeneratorNextLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.Generators.Type);
+            il.Emit(OpCodes.Isinst, inputs.Generators.Type);
             il.Emit(OpCodes.Brfalse, notGeneratorNextLabel);
             // ((​$IGenerator)recv).next(args.Length > 0 ? args[0] : undefined)
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.Generators.Type);
-            EmitArgZeroOrUndefined(il, runtime);
-            il.Emit(OpCodes.Callvirt, runtime.Generators.Next);
+            il.Emit(OpCodes.Castclass, inputs.Generators.Type);
+            EmitArgZeroOrUndefined(il, inputs.UndefinedInstance);
+            il.Emit(OpCodes.Callvirt, inputs.Generators.Next);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notGeneratorNextLabel);
 
@@ -1112,12 +1120,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brfalse, notGeneratorReturnLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.Generators.Type);
+            il.Emit(OpCodes.Isinst, inputs.Generators.Type);
             il.Emit(OpCodes.Brfalse, notGeneratorReturnLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.Generators.Type);
-            EmitArgZeroOrUndefined(il, runtime);
-            il.Emit(OpCodes.Callvirt, runtime.Generators.Return);
+            il.Emit(OpCodes.Castclass, inputs.Generators.Type);
+            EmitArgZeroOrUndefined(il, inputs.UndefinedInstance);
+            il.Emit(OpCodes.Callvirt, inputs.Generators.Return);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notGeneratorReturnLabel);
 
@@ -1131,12 +1139,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brfalse, notGeneratorThrowLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.Generators.Type);
+            il.Emit(OpCodes.Isinst, inputs.Generators.Type);
             il.Emit(OpCodes.Brfalse, notGeneratorThrowLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.Generators.Type);
-            EmitArgZeroOrUndefined(il, runtime);
-            il.Emit(OpCodes.Callvirt, runtime.Generators.Throw);
+            il.Emit(OpCodes.Castclass, inputs.Generators.Type);
+            EmitArgZeroOrUndefined(il, inputs.UndefinedInstance);
+            il.Emit(OpCodes.Callvirt, inputs.Generators.Throw);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notGeneratorThrowLabel);
         }
@@ -1150,20 +1158,20 @@ public partial class RuntimeEmitter
         var fn = fnLocal;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, fn);
         // if (fn == null) goto notEnumerator-or-synth
         il.Emit(OpCodes.Ldloc, fn);
         il.Emit(OpCodes.Brfalse, notEnumeratorLabel);
         // if (fn == $Undefined.Instance) goto notEnumerator-or-synth
         il.Emit(OpCodes.Ldloc, fn);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Beq, notEnumeratorLabel);
         // Real JS method present → normal dispatch.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fn);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Ret);
 
         // No JS-level next/return. var en = recv as IEnumerator<object>;
@@ -1182,7 +1190,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fn);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(synthLabel);
@@ -1199,7 +1207,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fn);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notThrowSynthLabel);
 
@@ -1238,7 +1246,7 @@ public partial class RuntimeEmitter
         // result["value"] = undefined
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Callvirt, setItem);
         // result["done"] = true
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -1281,7 +1289,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Br, haveValueLabel);
         il.MarkLabel(useUndefLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.MarkLabel(haveValueLabel);
         il.Emit(OpCodes.Callvirt, setItem);
         // result["done"] = true
@@ -1299,7 +1307,7 @@ public partial class RuntimeEmitter
     /// protocol methods, so a bare <c>next()</c>/<c>return()</c> injects <c>undefined</c> rather than
     /// the null a missing reflected argument would pad (#452/#526). Expects the args array in arg2.
     /// </summary>
-    private void EmitArgZeroOrUndefined(ILGenerator il, EmittedRuntime runtime)
+    private void EmitArgZeroOrUndefined(ILGenerator il, FieldInfo undefinedInstance)
     {
         var hasArg = il.DefineLabel();
         var done = il.DefineLabel();
@@ -1307,7 +1315,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Brtrue, hasArg);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Br, done);
         il.MarkLabel(hasArg);
         il.Emit(OpCodes.Ldarg_2);

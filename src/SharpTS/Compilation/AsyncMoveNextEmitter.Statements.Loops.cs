@@ -79,7 +79,7 @@ public partial class AsyncMoveNextEmitter
 
             _il.Emit(OpCodes.Ldloc, iterableLocal);
             _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Symbols.AsyncIterator);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Function);
             _il.Emit(OpCodes.Stloc, asyncIterFnLocal);
 
             var customSetup = _il.DefineLabel();
@@ -159,12 +159,12 @@ public partial class AsyncMoveNextEmitter
 
         // if (result.done) exit without calling return()
         _il.Emit(OpCodes.Ldloc, resultLocal);
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetIteratorDone);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Done);
         _il.Emit(OpCodes.Brtrue, endLabel);
 
         // loopVar = result.value
         _il.Emit(OpCodes.Ldloc, resultLocal);
-        _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorValue);
+        _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
         if (varField != null)
         {
             var valueTemp = _il.DeclareLocal(_types.Object);
@@ -450,7 +450,7 @@ public partial class AsyncMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, iteratorField);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.InvokeIteratorNext);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.InvokeNext);
             _il.Emit(OpCodes.Stloc, stepLocal);
         }
 

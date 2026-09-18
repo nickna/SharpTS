@@ -1349,7 +1349,11 @@ public partial class RuntimeEmitter
         // the @@toPrimitive hook.
         // Dynamic iterator-protocol bridge — must come after GetProperty +
         // InvokeMethodValue since its non-enumerator fallback calls both.
-        EmitIteratorProtocolCall(typeBuilder, runtime);
+        EmitIteratorProtocolCall(
+            typeBuilder,
+            runtime.IteratorProtocol,
+            new IteratorProtocolCallInputs(runtime.Generators, runtime.Invocation, runtime.ObjectRead, runtime.UndefinedInstance)
+        );
         // GetSymbolDict / IsSymbol already emitted above (moved earlier so
         // HasOwnPropertyHelper's Symbol-key arm can call them).
         // ToJsString depends on GetProperty + InvokeMethodValue + Stringify; emit after those.
@@ -1655,12 +1659,13 @@ public partial class RuntimeEmitter
         EmitStrictModeHelpers(typeBuilder, runtime.Operators, runtime.Errors);
         // Basic iterator protocol methods - must come AFTER object methods (need GetProperty, InvokeMethodValue)
         EmitIteratorMethodsBasic(typeBuilder, runtime);
+        runtime.IteratorProtocol.CompleteEmission();
         // Adapt custom iterator objects after captured-next and result helpers exist.
         // Iterator collection and normalization helpers follow.
         EmitIteratorWrapperType(
             moduleBuilder,
             runtime.IteratorWrappers,
-            new IteratorWrapperInputs(runtime.IteratorRecords, runtime.GetIteratorDone, runtime.GetIteratorValue)
+            new IteratorWrapperInputs(runtime.IteratorRecords, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value)
         );
         runtime.IteratorWrappers.CompleteEmission();
         EmitArrayIteratorType(moduleBuilder, runtime);
@@ -2100,7 +2105,7 @@ public partial class RuntimeEmitter
                 runtime.ArrayStorage,
                 runtime.DescriptorStorage,
                 runtime.Errors,
-                runtime.GetIteratorFunction,
+                runtime.IteratorProtocol.Function,
                 runtime.Invocation.Value,
                 runtime.IterateToList,
                 runtime.RuntimeType,
@@ -2543,7 +2548,7 @@ public partial class RuntimeEmitter
         // EmitRandom moved to before gOPD (see line ~660). The original site
         // here is now empty.
         EmitMathSumPrecise(typeBuilder, runtime.Math, new MathSumInputs(
-            runtime.Symbols.GetStorage, runtime.Symbols.Iterator, runtime.GetIteratorFunction, runtime.UndefinedType, runtime.Invocation.Method, runtime.IteratorRecords.NextMethod, runtime.IteratorRecords.InvokeNext, runtime.GetIteratorDone, runtime.GetIteratorValue, runtime.ObjectRead.Property, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
+            runtime.Symbols.GetStorage, runtime.Symbols.Iterator, runtime.IteratorProtocol.Function, runtime.UndefinedType, runtime.Invocation.Method, runtime.IteratorRecords.NextMethod, runtime.IteratorRecords.InvokeNext, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value, runtime.ObjectRead.Property, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitDefineSymbolAccessor(
             typeBuilder,
             runtime.ObjectConstruction,
@@ -2921,7 +2926,7 @@ public partial class RuntimeEmitter
                 new MapGroupByInputs(
                     runtime.ArrayStorage,
                     runtime.Errors.CreateException,
-                    runtime.GetIteratorFunction,
+                    runtime.IteratorProtocol.Function,
                     runtime.Invocation.Value,
                     runtime.IterateToList,
                     runtime.RuntimeType,

@@ -477,7 +477,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(customIteratorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
-        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+        il.Emit(OpCodes.Call, runtime.IteratorProtocol.Function);
         il.Emit(OpCodes.Stloc, iteratorFunctionLocal);
 
         var haveIteratorFunctionLabel = il.DefineLabel();
