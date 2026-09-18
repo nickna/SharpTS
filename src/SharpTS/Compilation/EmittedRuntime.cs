@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Required dynamic function-construction and general constructor-value dispatch metadata.</summary>
+    public EmittedDynamicConstructionRuntime DynamicConstruction { get; } = new();
+
+
     /// <summary>Required dynamic value, receiver-aware and zero-argument invocation metadata.</summary>
     public EmittedInvocationRuntime Invocation { get; } = new();
 
@@ -321,7 +325,6 @@ public class EmittedRuntime
     public EmittedStringRuntime Strings { get; } = new();
 
     // Object methods
-    public MethodBuilder NewOnFunction { get; set; } = null!;
 
 
 
@@ -349,7 +352,6 @@ public class EmittedRuntime
     public MethodBuilder DisposeResource { get; set; } = null!;
 
     // Invocation methods
-    public MethodBuilder ConstructDynamicValue { get; set; } = null!;
     public MethodBuilder GetSuperMethod { get; set; } = null!;
 
     // Dynamic JS iterator-protocol bridge (.next()/.return()) for any-typed

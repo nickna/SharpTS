@@ -494,7 +494,7 @@ public partial class ILEmitter
         // lost spread semantics and skipped abrupt iterator completions.
         EmitArgsArrayWithSpread(arguments);
 
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.NewOnFunction);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.Function);
         SetStackUnknown();
     }
 

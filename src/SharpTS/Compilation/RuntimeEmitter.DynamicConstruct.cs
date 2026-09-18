@@ -5,6 +5,17 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private readonly record struct ConstructDynamicValueInputs(
+        EmittedBoxedPrimitiveRuntime BoxedPrimitives,
+        EmittedErrorRuntime Errors,
+        EmittedFunctionConstructionRuntime FunctionConstruction,
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedRegExpRuntime RegExps,
+        EmittedStringCoercionRuntime StringCoercion,
+        FieldInfo UndefinedInstance,
+        Type UndefinedType
+    );
+
     /// <summary>
     /// Emits ConstructDynamicValue: (object ctor, object[] args) → object.
     ///
@@ -19,9 +30,13 @@ public partial class RuntimeEmitter
     ///   - everything else ($TSFunction etc.) → NewOnFunction, the shared JS
     ///     `new` protocol (fresh `this`, return-object-wins, IsConstructor
     ///     policy) — same routing ILEmitter's fallback construction uses.
-    /// Must be emitted AFTER EmitNewOnFunction so runtime.NewOnFunction is set.
+    /// Must be emitted AFTER EmitNewOnFunction so runtime.DynamicConstruction.Function is set.
     /// </summary>
-    private void EmitConstructDynamicValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConstructDynamicValue(
+        TypeBuilder typeBuilder,
+        EmittedDynamicConstructionRuntime dynamicConstruction,
+        ConstructDynamicValueInputs inputs
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ConstructDynamicValue",
@@ -29,7 +44,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.ObjectArray]
         );
-        runtime.ConstructDynamicValue = method;
+        dynamicConstruction.Value = method;
 
         var il = method.GetILGenerator();
         var throwLabel = il.DefineLabel();
@@ -38,26 +53,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, throwLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, throwLabel);
 
         // An aliased RegExp constructor is represented by the emitted $RegExp
         // Type. Activator cannot supply its JavaScript optional arguments (and
         // has no parameterless overload), so route it through RegExpFromArgs.
-        if (runtime.RegExps.Implementation is not null)
+        if (inputs.RegExps.Implementation is not null)
         {
             var notRegExpTypeLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, runtime.RegExps.RequireImplementation().Type);
+            il.Emit(OpCodes.Ldtoken, inputs.RegExps.RequireImplementation().Type);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notRegExpTypeLabel);
             var regexpArgsPresent = il.DefineLabel();
             var regexpFlagsPresent = il.DefineLabel();
             var regexpPatternLocal = il.DeclareLocal(_types.Object);
             var regexpFlagsLocal = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
             il.Emit(OpCodes.Stloc, regexpPatternLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
             il.Emit(OpCodes.Stloc, regexpFlagsLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldlen);
@@ -81,7 +96,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(regexpFlagsPresent);
             il.Emit(OpCodes.Ldloc, regexpPatternLocal);
             il.Emit(OpCodes.Ldloc, regexpFlagsLocal);
-            il.Emit(OpCodes.Call, runtime.RegExps.RequireImplementation().FromArguments);
+            il.Emit(OpCodes.Call, inputs.RegExps.RequireImplementation().FromArguments);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notRegExpTypeLabel);
         }
@@ -111,19 +126,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.MarkLabel(stringValueReadyLabel);
-        il.Emit(OpCodes.Call, runtime.BoxedPrimitives.New);
+        il.Emit(OpCodes.Call, inputs.BoxedPrimitives.New);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStringTypeLabel);
 
         var notFunctionType = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Ldtoken, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Bne_Un, notFunctionType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.FunctionConstruction.Construct);
+        il.Emit(OpCodes.Call, inputs.FunctionConstruction.Construct);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notFunctionType);
 
@@ -149,10 +164,10 @@ public partial class RuntimeEmitter
         // Callable values ($TSFunction and wrappers) → NewOnFunction(ctor, args)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.NewOnFunction);
+        il.Emit(OpCodes.Call, dynamicConstruction.Function);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Value is not a constructor");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Value is not a constructor");
     }
 }

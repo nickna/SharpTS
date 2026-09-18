@@ -5,6 +5,18 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    internal readonly record struct NewOnFunctionInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedErrorRuntime Errors,
+        EmittedFunctionBindingRuntime FunctionBindings,
+        EmittedFunctionIntrospectionRuntime FunctionIntrospection,
+        EmittedFunctionValueRuntime FunctionValues,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedReflectedMethodRuntime ReflectedMethods,
+        FieldInfo UndefinedInstance
+    );
+
     /// <summary>
     /// Emits <c>$Runtime.NewOnFunction(object fn, object[] args) → object</c>, the
     /// JS <c>new</c> protocol for runtime-valued function callees (<c>$TSFunction</c>,
@@ -20,19 +32,23 @@ public partial class RuntimeEmitter
     /// shouldn't regress. Must be emitted after <c>$Object</c>, <c>$TSFunction</c>,
     /// and <c>$BoundTSFunction</c> are defined.
     /// </remarks>
-    internal void EmitNewOnFunction(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void EmitNewOnFunction(
+        TypeBuilder typeBuilder,
+        EmittedDynamicConstructionRuntime dynamicConstruction,
+        NewOnFunctionInputs inputs
+    )
     {
         // The thread-static `_currentFunctionThis` field is now defined on $TSFunction
         // (during EmitTSFunctionClass) so that $TSFunction.InvokeWithThis can also
         // set/restore it for `Fn.call(target, ...)` paths. NewOnFunction just consumes
         // runtime.FunctionValues.CurrentThisField below.
-        var currentThisField = runtime.FunctionValues.CurrentThisField;
+        var currentThisField = inputs.FunctionValues.CurrentThisField;
 
-        var method = runtime.NewOnFunction;
+        var method = dynamicConstruction.Function;
 
         var il = method.GetILGenerator();
 
-        var newObjLocal = il.DeclareLocal(runtime.ObjectStorage.Type);
+        var newObjLocal = il.DeclareLocal(inputs.ObjectStorage.Type);
         var resultLocal = il.DeclareLocal(_types.Object);
         var prevThisLocal = il.DeclareLocal(_types.Object);
         var notCallableLocal = il.DeclareLocal(_types.Boolean);
@@ -43,7 +59,7 @@ public partial class RuntimeEmitter
             il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
         il.MarkLabel(proxyLabel);
         EmitProxyMethodCallUnwrapped(
-            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            il, inputs.ReflectedMethods.InvokeUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
             "TrapConstructCompiled", () =>
             {
                 il.Emit(OpCodes.Ldc_I4_4);
@@ -59,7 +75,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_2);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.NewOnFunction);
+                il.Emit(OpCodes.Ldftn, dynamicConstruction.Function);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, object?[], object?>),
                     _types.Object, _types.IntPtr)!);
@@ -67,7 +83,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_3);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, runtime.ObjectRead.Property);
+                il.Emit(OpCodes.Ldftn, inputs.ObjectRead.Property);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>),
                     _types.Object, _types.IntPtr)!);
@@ -88,12 +104,12 @@ public partial class RuntimeEmitter
         // Only run the check for $TSFunction inputs — Type and other callees
         // were already constructable in the legacy code path.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, skipConstructorCheckLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.FunctionIntrospection.IsConstructor);
+        il.Emit(OpCodes.Call, inputs.FunctionIntrospection.IsConstructor);
         il.Emit(OpCodes.Brtrue, isConstructorOkLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "not a constructor");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "not a constructor");
         il.MarkLabel(skipConstructorCheckLabel);
         il.MarkLabel(isConstructorOkLabel);
 
@@ -105,13 +121,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, notPlainObjectLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "not a constructor");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "not a constructor");
         il.MarkLabel(notPlainObjectLabel);
 
         // newObj = new $Object(new Dictionary<string, object>())
         var dictCtor = _types.GetDefaultConstructor(_types.DictionaryStringObject);
         il.Emit(OpCodes.Newobj, dictCtor);
-        il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
+        il.Emit(OpCodes.Newobj, inputs.ObjectStorage.Constructor);
         il.Emit(OpCodes.Stloc, newObjLocal);
 
         // Per JS spec, `new F()` links the freshly-created object to F.prototype:
@@ -125,7 +141,7 @@ public partial class RuntimeEmitter
         // skip the prototype link).
         var skipProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, skipProtoLabel);
 
         // Read F.prototype via $Runtime.GetFunctionMethod(fn, "prototype") so
@@ -134,7 +150,7 @@ public partial class RuntimeEmitter
         var fnProtoLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "prototype");
-        il.Emit(OpCodes.Call, runtime.FunctionIntrospection.GetProperty);
+        il.Emit(OpCodes.Call, inputs.FunctionIntrospection.GetProperty);
         il.Emit(OpCodes.Stloc, fnProtoLocal);
 
         // PDSSetPrototype(newObj, fnProto) — only when fnProto is non-null.
@@ -142,7 +158,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipProtoLabel);
         il.Emit(OpCodes.Ldloc, newObjLocal);
         il.Emit(OpCodes.Ldloc, fnProtoLocal);
-        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
 
         il.MarkLabel(skipProtoLabel);
 
@@ -163,28 +179,28 @@ public partial class RuntimeEmitter
 
         // if (fn is $TSFunction) result = fn.InvokeWithThis(newObj, args);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, tryBound);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
+        il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, newObjLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionValues.InvokeWithThis);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, afterTry);
 
         // else if (fn is $BoundTSFunction) result = fn.InvokeWithThis(newObj, args);
         il.MarkLabel(tryBound);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brfalse, notCallable);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Ldloc, newObjLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.FunctionBindings.BoundInvokeWithThis);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.BoundInvokeWithThis);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, afterTry);
 
@@ -214,7 +230,7 @@ public partial class RuntimeEmitter
         var notCallableSkip = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, notCallableLocal);
         il.Emit(OpCodes.Brfalse, notCallableSkip);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "not a constructor");
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "not a constructor");
         il.MarkLabel(notCallableSkip);
 
         // Per JS: return result if it's an object, else newObj.
@@ -224,7 +240,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnNewObj);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Beq, returnNewObj);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -245,5 +261,6 @@ public partial class RuntimeEmitter
         il.MarkLabel(returnNewObj);
         il.Emit(OpCodes.Ldloc, newObjLocal);
         il.Emit(OpCodes.Ret);
+        dynamicConstruction.MarkFunctionBodyEmitted();
     }
 }
