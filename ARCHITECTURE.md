@@ -330,6 +330,13 @@ carrier; the strict SyntaxError helper retains its existing CLR exception repres
 Exception wrapping follows supplied optional Promise metadata. Error-cause Proxy handling
 receives six explicit invocation/delegate handles through the shared reflection bridge.
 
+Array binding-pattern normalization belongs to the required `ArrayOperations`
+component through `DestructureSource`. Its emitter receives only that owner and
+the symbol type, iterator materializer and array-storage constructor. The helper
+keeps its original late emission point and the existing array-operations completion
+boundary. Indexed-source pass-through, iterator materialization, generated method
+signatures and deployment behavior remain unchanged by this ownership migration.
+
 Required `IteratorHelpers` owns normalization, lazy adapter constructors,
 factory declarations and eager iterator operations. Scoped emitters receive
 exact wrapper, error, invocation, truthiness, generator and undefined inputs;
@@ -663,7 +670,7 @@ generated shape values remain lazy and mutable. This registry is distinct from t
 string-identity table. Generic Object/invocation/iterator operations, other compiler registries,
 and the residual construction and shared-infrastructure audit remain required under #1599.
 
-Array operations use the required `ArrayOperations` component for 108 declarations: construction
+Array operations use the required `ArrayOperations` component for 109 declarations: construction
 and static helpers, ordinary and specialized operations, prototype population, bound-method
 dispatch, the live array iterator constructor, and array-like receiver/callback context. Like
 storage, these helpers are emitted even for minimal tree-shaken programs. Bound-method invocation,
@@ -672,9 +679,8 @@ and filled in later through the same handles. Declaration-only and operation-onl
 `EmittedArrayOperationsRuntime` directly; storage, invocation, descriptors, and coercion remain
 separate dependencies. The original and lazy array-like receiver paths share one checked handle
 for the existing thread-static field, without duplicate metadata storage. `EmitAll` completes
-operations after runtime and bound-method finalization. General iteration/destructuring helpers,
-collection iterators, generic element/length/key access, coercion, static-member dispatch, and
-call-argument expansion remain in their respective residual families under #1599.
+operations after runtime and bound-method finalization. Remaining family metadata and the
+construction, registry and shared-infrastructure audit continue under #1599.
 
 Node crypto uses `Crypto` / `RequireCrypto()` for its 105 hash/cipher constructors, module helpers,
 digest/encoding primitives, scrypt, signing, key exchange, KeyObject, and X509 declarations. `EmitAll`

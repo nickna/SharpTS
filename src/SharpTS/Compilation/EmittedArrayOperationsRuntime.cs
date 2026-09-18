@@ -686,6 +686,13 @@ public sealed class EmittedArrayOperationsRuntime
         internal set => SetHandle(ref _currentReceiverField, value);
     }
 
+    private MethodBuilder? _destructureSource;
+    public MethodBuilder DestructureSource
+    {
+        get => Require(_destructureSource);
+        internal set => SetHandle(ref _destructureSource, value);
+    }
+
     // Lazy-aware materializer used by Array.prototype.* iterator helpers.
     // For receivers whose elements may have descriptor side effects
     // (TSObject / Dictionary), returns a placeholder List&lt;object&gt; sized
@@ -932,6 +939,7 @@ public sealed class EmittedArrayOperationsRuntime
         _ = Materialize;
         _ = GetMethod;
         _ = CurrentReceiverField;
+        _ = DestructureSource;
         _ = MaterializeForIteration;
         _ = LoadArrayLikeElement;
         _ = HasArrayLikeProperty;

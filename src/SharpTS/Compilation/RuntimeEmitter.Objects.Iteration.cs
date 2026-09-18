@@ -53,21 +53,26 @@ public partial class RuntimeEmitter
     /// generators, strings, <c>[Symbol.iterator]</c> objects, <c>IEnumerable&lt;object&gt;</c>) is
     /// materialized via <c>IterateToList</c> into a <c>List&lt;object&gt;</c> so positional access
     /// yields the iterated elements. A <b>string</b> is deliberately not on the pass-through path: it
-    /// materializes to a fresh character array so a rest element binds an array rather than the trailing
-    /// substring (<c>const [a, ...rest] = "hi"</c>), matching ECMA-262 (#753) — non-rest character
-    /// values are identical either way. Non-iterable sources pass through, preserving the existing
-    /// lenient behavior.
+    /// materializes iterator code-point strings so a rest element binds an array rather than the
+    /// trailing substring (<c>const [a, ...rest] = "hi"</c>), matching ECMA-262 (#753).
+    /// Non-iterable sources throw through <c>IterateToList</c>.
     /// Signature: object ArrayDestructureSource(object value, $TSSymbol iteratorSymbol, Type runtimeType)
     /// </summary>
-    private void EmitArrayDestructureSource(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayDestructureSource(
+        TypeBuilder typeBuilder,
+        EmittedArrayOperationsRuntime arrays,
+        Type symbolType,
+        MethodInfo iterateToList,
+        ConstructorInfo arrayCtor
+    )
     {
         var method = typeBuilder.DefineMethod(
             "ArrayDestructureSource",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, runtime.Symbols.Type, _types.Type]
+            [_types.Object, symbolType, _types.Type]
         );
-        runtime.ArrayDestructureSource = method;
+        arrays.DestructureSource = method;
 
         var il = method.GetILGenerator();
         var ilistType = typeof(System.Collections.IList);
@@ -92,8 +97,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.IteratorCollection.ToList);
-        il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
+        il.Emit(OpCodes.Call, iterateToList);
+        il.Emit(OpCodes.Newobj, arrayCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(passThroughLabel);
