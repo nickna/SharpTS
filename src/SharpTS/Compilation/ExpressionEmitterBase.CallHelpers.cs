@@ -307,7 +307,7 @@ public abstract partial class ExpressionEmitterBase
                         if (pType == Types.Object)
                         {
                             // Missing optional args default to undefined (JS spec)
-                            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
                         }
                         else
                         {
@@ -691,7 +691,7 @@ public abstract partial class ExpressionEmitterBase
         var okLabel = IL.DefineLabel();
 
         IL.Emit(OpCodes.Ldloc, objLocal);
-        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
         IL.Emit(OpCodes.Brtrue, undefinedLabel);          // $Undefined → throw "undefined"
 
         IL.Emit(OpCodes.Ldloc, objLocal);
@@ -730,7 +730,7 @@ public abstract partial class ExpressionEmitterBase
         var okLabel = IL.DefineLabel();
 
         IL.Emit(OpCodes.Dup);
-        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
         IL.Emit(OpCodes.Brtrue, undefinedLabel);          // $Undefined → throw "undefined"
 
         IL.Emit(OpCodes.Dup);
@@ -773,7 +773,7 @@ public abstract partial class ExpressionEmitterBase
         var okLabel = IL.DefineLabel();
 
         IL.Emit(OpCodes.Ldloc, objLocal);
-        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
         IL.Emit(OpCodes.Brtrue, undefinedLabel);          // $Undefined → throw "undefined"
 
         IL.Emit(OpCodes.Ldloc, objLocal);
@@ -1785,7 +1785,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Ldloc, calleeLocal);
             IL.Emit(OpCodes.Brfalse, optChainNullishLabel.Value);
             IL.Emit(OpCodes.Ldloc, calleeLocal);
-            IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+            IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
             IL.Emit(OpCodes.Brtrue, optChainNullishLabel.Value);
         }
 
@@ -1802,7 +1802,7 @@ public abstract partial class ExpressionEmitterBase
         if (receiverLocal != null)
             IL.Emit(OpCodes.Ldloc, receiverLocal);
         else
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
         IL.Emit(OpCodes.Ldloc, calleeLocal);
         IL.Emit(OpCodes.Ldloc, argsLocal);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
@@ -1811,7 +1811,7 @@ public abstract partial class ExpressionEmitterBase
         {
             IL.Emit(OpCodes.Br, optChainEndLabel!.Value);
             IL.MarkLabel(optChainNullishLabel.Value);
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
             IL.MarkLabel(optChainEndLabel.Value);
         }
 
@@ -1900,7 +1900,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, recvLocal);
         IL.Emit(OpCodes.Brfalse, nullishLabel);
         IL.Emit(OpCodes.Ldloc, recvLocal);
-        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
         IL.Emit(OpCodes.Brtrue, nullishLabel);
 
         bool stringMethod = IsRuntimeDispatchableStringMethod(g.Name.Lexeme);
@@ -1943,7 +1943,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Ldloc, fnLocal);
             IL.Emit(OpCodes.Brfalse, nullishLabel);
             IL.Emit(OpCodes.Ldloc, fnLocal);
-            IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+            IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
             IL.Emit(OpCodes.Brtrue, nullishLabel);
 
             // InvokeMethodValue(recv, fn, args) — args evaluated only on the non-nullish path, per
@@ -1960,7 +1960,7 @@ public abstract partial class ExpressionEmitterBase
         }
 
         IL.MarkLabel(nullishLabel);
-        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
 
         IL.MarkLabel(endLabel);
         SetStackUnknown();
@@ -2011,7 +2011,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, fnLocal);
         IL.Emit(OpCodes.Brfalse, nullishLabel);
         IL.Emit(OpCodes.Ldloc, fnLocal);
-        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
         IL.Emit(OpCodes.Brtrue, nullishLabel);
 
         // Shared block both live dispatches reach: evaluate the suspending argument(s) exactly once.
@@ -2070,7 +2070,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldloc, receiverLocal);
                 IL.Emit(OpCodes.Brfalse, nullishLabel);
                 IL.Emit(OpCodes.Ldloc, receiverLocal);
-                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
                 IL.Emit(OpCodes.Brtrue, nullishLabel);
             }
             else
@@ -2094,7 +2094,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldloc, receiverLocal);
                 IL.Emit(OpCodes.Brfalse, nullishLabel);
                 IL.Emit(OpCodes.Ldloc, receiverLocal);
-                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
                 IL.Emit(OpCodes.Brtrue, nullishLabel);
             }
             else
@@ -2132,7 +2132,7 @@ public abstract partial class ExpressionEmitterBase
 
         // Check for undefined
         IL.Emit(OpCodes.Ldloc, calleeLocal);
-        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+        IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Sentinels.UndefinedType);
         IL.Emit(OpCodes.Brtrue, nullishLabel);
 
         // Not nullish — evaluate arguments (await-safe, spreads flattened) and invoke
@@ -2144,7 +2144,7 @@ public abstract partial class ExpressionEmitterBase
         if (receiverLocal != null)
             IL.Emit(OpCodes.Ldloc, receiverLocal);
         else
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
         IL.Emit(OpCodes.Ldloc, calleeLocal);
         IL.Emit(OpCodes.Ldloc, argsLocal);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
@@ -2152,7 +2152,7 @@ public abstract partial class ExpressionEmitterBase
 
         // Nullish path: push undefined
         IL.MarkLabel(nullishLabel);
-        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
 
         IL.MarkLabel(endLabel);
         SetStackUnknown();
@@ -2696,7 +2696,7 @@ public abstract partial class ExpressionEmitterBase
         {
             case "includes":
                 if (arguments.Count == 0)
-                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
                 else
                     EmitBoxedArgOrNull(arguments, 0);
                 if (arguments.Count > 1)
@@ -2710,7 +2710,7 @@ public abstract partial class ExpressionEmitterBase
             case "indexOf":
             case "lastIndexOf":
                 if (arguments.Count == 0)
-                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
                 else
                     EmitBoxedArgOrNull(arguments, 0);
                 if (arguments.Count > 1)

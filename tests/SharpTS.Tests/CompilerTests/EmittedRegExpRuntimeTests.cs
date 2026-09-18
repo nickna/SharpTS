@@ -128,7 +128,7 @@ public sealed class EmittedRegExpRuntimeTests
             Assert.Same(forward, root.PopulatePrototype);
             var method = typeof(RuntimeEmitter).GetMethod("EmitRegExpPrototypePopulate", InstanceMembers)!;
             var inputs = Activator.CreateInstance(method.GetParameters()[2].ParameterType,
-                runtime.DescriptorStorage, runtime.ObjectPrototypes.Prototype, runtime.Symbols, runtime.FunctionConstruction.CachedConstructor, runtime.UndefinedInstance)!;
+                runtime.DescriptorStorage, runtime.ObjectPrototypes.Prototype, runtime.Symbols, runtime.FunctionConstruction.CachedConstructor, runtime.Sentinels.UndefinedInstance)!;
             method.Invoke(emitter, [type, root, inputs]);
         }
         root.CompleteEmission(); type.CreateType();

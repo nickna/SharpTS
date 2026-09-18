@@ -791,7 +791,7 @@ public partial class ILCompiler
                 continue;
 
             var local = ctx.Locals.DeclareLocal(name, ctx.Types.Object, token);
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.LexicalUninitializedInstance);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.LexicalUninitializedInstance);
             il.Emit(OpCodes.Stloc, local);
         }
     }

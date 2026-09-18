@@ -65,7 +65,7 @@ public class EmittedWorkerRuntimeTests
                 Assert.True(method.GetILGenerator().ILOffset > 0);
         }
         EmitHelper(emitter, "EmitWorkerThreadsReceiveMessageOnPortBody", workers,
-            runtime.MessageChannels.Port, runtime.UndefinedInstance);
+            runtime.MessageChannels.Port, runtime.Sentinels.UndefinedInstance);
         Assert.True(workers.ReceiveMessageOnPort.GetILGenerator().ILOffset > 0);
         helpers.CreateType();
         workers.CompleteEmission();

@@ -1406,7 +1406,7 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Dup);
                     il.Emit(OpCodes.Brfalse, useGlobalThis);
                     il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
+                    il.Emit(OpCodes.Isinst, _runtime.Sentinels.UndefinedType);
                     il.Emit(OpCodes.Brfalse, keepThis);
                     il.MarkLabel(useGlobalThis);
                     il.Emit(OpCodes.Pop);

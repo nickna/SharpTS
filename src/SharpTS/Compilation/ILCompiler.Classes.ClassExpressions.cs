@@ -728,7 +728,7 @@ public partial class ILCompiler
                 var convertMessage = il.DefineLabel();
                 var haveMessage = il.DefineLabel();
                 il.Emit(aggregate ? OpCodes.Ldarg_2 : OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
+                il.Emit(OpCodes.Isinst, _runtime.Sentinels.UndefinedType);
                 il.Emit(OpCodes.Brfalse, convertMessage);
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Stloc, hasMessageLocal);

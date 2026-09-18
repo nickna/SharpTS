@@ -152,12 +152,13 @@ public partial class RuntimeEmitter
             runtime.BeginDgramEmission();
 
         // Emit $Undefined singleton class first (other methods need this type)
-        EmitUndefinedClass(moduleBuilder, runtime);
+        EmitUndefinedClass(moduleBuilder, runtime.Sentinels);
         runtime.ArrayStorage.NumberQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double);
         runtime.ArrayStorage.BooleanQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Bool);
         runtime.ArrayStorage.NumberQueueWithHoles = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double, true);
         runtime.ArrayStorage.BooleanQueueWithHoles = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Bool, true);
-        EmitLexicalUninitializedClass(moduleBuilder, runtime);
+        EmitLexicalUninitializedClass(moduleBuilder, runtime.Sentinels);
+        runtime.Sentinels.CompleteEmission();
 
         // Marker used only to give compiler-generated prototype constructors a
         // signature that cannot collide with a user-declared constructor.
@@ -225,8 +226,8 @@ public partial class RuntimeEmitter
                 runtime.Arguments,
                 runtime.FunctionAttributes,
                 runtime.GlobalThisSingletonField,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );
         runtime.FunctionValues.CompleteEmission();
@@ -237,7 +238,7 @@ public partial class RuntimeEmitter
         EmitTSNamespaceClass(moduleBuilder, runtime);
 
         // Emit TSSymbol class for symbol support
-        EmitTSSymbolClass(moduleBuilder, runtime.Symbols, runtime.UndefinedInstance);
+        EmitTSSymbolClass(moduleBuilder, runtime.Symbols, runtime.Sentinels.UndefinedInstance);
 
         // Emit ReferenceEqualityComparer for Map/Set key equality
         EmitReferenceEqualityComparerClass(moduleBuilder, runtime.CollectionKeys, runtime.Symbols.Type);
@@ -293,7 +294,7 @@ public partial class RuntimeEmitter
         // only on helper types emitted above.
         EmitPropertyDescriptorTypes(moduleBuilder, runtime.DescriptorStorage,
             new DescriptorKeyInputs(runtime.FunctionValues.Type, runtime.FunctionValues.GetMethodInfo),
-            runtime.UndefinedType);
+            runtime.Sentinels.UndefinedType);
 
         // Emit $Array class for standalone array support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSArray
@@ -311,7 +312,7 @@ public partial class RuntimeEmitter
                 new ObjectReadInputs(runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.TryGetGetter,
                     runtime.DescriptorStorage.GetPropertyDescriptor, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!,
                     runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.FunctionValues.Type,
-                    runtime.FunctionValues.InvokeWithThis, runtime.UndefinedInstance),
+                    runtime.FunctionValues.InvokeWithThis, runtime.Sentinels.UndefinedInstance),
                 new ObjectInvokeInputs(runtime.FunctionValues.Type, runtime.FunctionValues.InvokeWithThis),
                 runtime.Errors.TypeErrorConstructor));
 
@@ -323,7 +324,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsGetProperty, runtime.IHasFieldsSetProperty, runtime.IHasFieldsHasProperty);
             EmitJsonScalarRecordClass(moduleBuilder, runtime.Records, recordContract, features.JsonScalarRecordShapes);
             EmitCompactObjectRecordClasses(moduleBuilder, runtime.Records, recordContract,
-                runtime.UndefinedInstance, features.CompactObjectRecordShapes, features.CompactObjectRecordSelfFields);
+                runtime.Sentinels.UndefinedInstance, features.CompactObjectRecordShapes, features.CompactObjectRecordSelfFields);
         }
 
         if (runtime.Json.Implementation is not null)
@@ -358,8 +359,8 @@ public partial class RuntimeEmitter
                     runtime.FunctionValues.Type,
                     runtime.Errors.SyntaxErrorConstructor,
                     runtime.Errors.TypeErrorConstructor,
-                    runtime.UndefinedInstance,
-                    runtime.UndefinedType
+                    runtime.Sentinels.UndefinedInstance,
+                    runtime.Sentinels.UndefinedType
                 )
             );
 
@@ -570,7 +571,7 @@ public partial class RuntimeEmitter
                 runtime.ArrayOperations,
                 runtime.Map,
                 runtime.Set,
-                runtime.UndefinedInstance,
+                runtime.Sentinels.UndefinedInstance,
                 runtime.Errors
             )
         );
@@ -673,7 +674,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectRead,
                 runtime.ObjectStorage,
                 runtime.ReflectedMethods,
-                runtime.UndefinedInstance
+                runtime.Sentinels.UndefinedInstance
             )
         );
 
@@ -689,8 +690,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues,
                 runtime.RegExps,
                 runtime.StringCoercion,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );
         runtime.DynamicConstruction.CompleteEmission();
@@ -712,7 +713,7 @@ public partial class RuntimeEmitter
                     runtime.StringCoercion,
                     runtime.Symbols,
                     runtime.Errors.TypeErrorConstructor,
-                    runtime.UndefinedType
+                    runtime.Sentinels.UndefinedType
                 )
             );
             EmitRegExpSymbolMatchAllProtocol(
@@ -727,7 +728,7 @@ public partial class RuntimeEmitter
                     runtime.StringCoercion,
                     runtime.Symbols,
                     runtime.Errors.TypeErrorConstructor,
-                    runtime.UndefinedType
+                    runtime.Sentinels.UndefinedType
                 )
             );
         }
@@ -764,8 +765,8 @@ public partial class RuntimeEmitter
                     runtime.RequirePromise(),
                     runtime.RuntimeType,
                     runtime.Symbols,
-                    runtime.UndefinedInstance,
-                    runtime.UndefinedType
+                    runtime.Sentinels.UndefinedInstance,
+                    runtime.Sentinels.UndefinedType
                 )
             );
             runtime.RequireAsyncGenerators().RequireFromSync().CompleteEmission();
@@ -798,7 +799,7 @@ public partial class RuntimeEmitter
         // receiveMessageOnPort's body reads $MessagePort's _pending/_closed/_cloneError, so it
         // must be filled now that EmitMessageChannelTypes has created the type (#1077). Still
         // before EmitRuntimeClassFinalize, which closes the $Runtime type this method lives on.
-        EmitWorkerThreadsReceiveMessageOnPortBody(runtime.Workers, runtime.MessageChannels.Port, runtime.UndefinedInstance);
+        EmitWorkerThreadsReceiveMessageOnPortBody(runtime.Workers, runtime.MessageChannels.Port, runtime.Sentinels.UndefinedInstance);
 
         // Web Streams — gated on UsesWebStreams. The only external references are
         // user-code `new ReadableStream(...)`/`new WritableStream(...)`/`new TransformStream(...)`
@@ -832,9 +833,9 @@ public partial class RuntimeEmitter
         // Must come after EmitRuntimeClass (needs Map*/Set* runtime methods defined).
         // Gated alongside the rest of Map/Set emission.
         if (runtime.Map is not null)
-            EmitBoundMapMethodFinalize(runtime.RequireMap(), runtime.UndefinedInstance);
+            EmitBoundMapMethodFinalize(runtime.RequireMap(), runtime.Sentinels.UndefinedInstance);
         if (runtime.Set is not null)
-            EmitBoundSetMethodFinalize(runtime.RequireSet(), runtime.UndefinedInstance);
+            EmitBoundSetMethodFinalize(runtime.RequireSet(), runtime.Sentinels.UndefinedInstance);
 
         // Finalize $MethodCallable with Invoke method (Phase 2)
         EmitMethodCallableFinalize(runtime.ReflectedMethods);

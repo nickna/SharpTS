@@ -53,7 +53,7 @@ public partial class ILCompiler
                 if (!(_isStrictMode || BodyDeclaresUseStrict(funcStmt.Body)))
                 {
                     il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
+                    il.Emit(OpCodes.Isinst, _runtime.Sentinels.UndefinedType);
                     il.Emit(OpCodes.Brfalse, keepThis);
                 }
                 else

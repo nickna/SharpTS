@@ -539,7 +539,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Brfalse, noOpt);
             il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldstr, key); il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             // GetProperty returns $Undefined (not null) for an absent key — normalize to null.
-            il.Emit(OpCodes.Dup); il.Emit(OpCodes.Isinst, runtime.UndefinedType); il.Emit(OpCodes.Brfalse, notUndef);
+            il.Emit(OpCodes.Dup); il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType); il.Emit(OpCodes.Brfalse, notUndef);
             il.Emit(OpCodes.Pop); il.Emit(OpCodes.Ldnull);
             il.MarkLabel(notUndef);
             il.Emit(OpCodes.Stloc, loc);
@@ -718,7 +718,7 @@ public partial class RuntimeEmitter
             var noOpt = il.DefineLabel(); var done = il.DefineLabel(); var notUndef = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Brfalse, noOpt);
             il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldstr, key); il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
-            il.Emit(OpCodes.Dup); il.Emit(OpCodes.Isinst, runtime.UndefinedType); il.Emit(OpCodes.Brfalse, notUndef);
+            il.Emit(OpCodes.Dup); il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType); il.Emit(OpCodes.Brfalse, notUndef);
             il.Emit(OpCodes.Pop); il.Emit(OpCodes.Ldnull);
             il.MarkLabel(notUndef); il.Emit(OpCodes.Stloc, loc); il.Emit(OpCodes.Br, done);
             il.MarkLabel(noOpt); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Stloc, loc);

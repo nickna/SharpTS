@@ -780,7 +780,7 @@ public partial class RuntimeEmitter
         EmitFormatNumberMethod(typeBuilder, runtime.Numbers);
         EmitConcatStringInt64Method(typeBuilder, runtime.StringCoercion);
         EmitStringify(typeBuilder, runtime.StringCoercion,
-            runtime.ArrayStorage, runtime.UndefinedType, runtime.Numbers.Format, runtime.FunctionValues.Type, runtime.FunctionValues.InvokeWithThis);
+            runtime.ArrayStorage, runtime.Sentinels.UndefinedType, runtime.Numbers.Format, runtime.FunctionValues.Type, runtime.FunctionValues.InvokeWithThis);
         // EmitStringRaw is moved later in this method (after ToJsString/
         // ToNumber/GetProperty are emitted) so the spec-form String.raw can
         // resolve template.raw properties + ToString-coerce substitutions.
@@ -823,7 +823,7 @@ public partial class RuntimeEmitter
         EmitJsLessThan(typeBuilder, runtime.Operators, runtime.NumericCoercion);
         EmitJsLessOrEqual(typeBuilder, runtime.Operators, runtime.NumericCoercion);
         EmitUpdateNumeric(typeBuilder, runtime.Operators, runtime.NumericCoercion);
-        EmitIsTruthy(typeBuilder, runtime.Booleans, runtime.UndefinedType);
+        EmitIsTruthy(typeBuilder, runtime.Booleans, runtime.Sentinels.UndefinedType);
         // Promise resolving callbacks need these adoption tokens before their
         // bodies are filled by the resolve-value and capability emitters.
         if (_features.UsesPromise)
@@ -874,7 +874,7 @@ public partial class RuntimeEmitter
                 runtime.Set,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitAdd(
@@ -885,7 +885,7 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.NumericCoercion,
                 runtime.StringCoercion,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         // Equals body needs runtime.StringCoercion.ToJsString for the ECMA-262 7.2.14
@@ -896,7 +896,7 @@ public partial class RuntimeEmitter
         // here so any caller that references it before EmitEquals runs gets
         // a non-null token; body fills in after EmitToJsString below.
         DeclareEquals(typeBuilder, runtime.Operators);
-        EmitStrictEquals(typeBuilder, runtime.Operators, runtime.UndefinedType);
+        EmitStrictEquals(typeBuilder, runtime.Operators, runtime.Sentinels.UndefinedType);
         // Object methods - must come BEFORE iterator methods since GetProperty, InvokeMethodValue are needed
         EmitCreateObject(typeBuilder, runtime.ObjectConstruction);
         EmitGetArrayMethod(typeBuilder, runtime);
@@ -950,7 +950,7 @@ public partial class RuntimeEmitter
                 runtime.RegExps,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         // propertyIsEnumerable shares HasOwn's plumbing (PDS lookup + dict
@@ -964,7 +964,7 @@ public partial class RuntimeEmitter
                 runtime.RegExps,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         // Shell ObjectGetPrototypeOf early so IsPrototypeOfHelper can call it
@@ -974,7 +974,7 @@ public partial class RuntimeEmitter
         EmitIsPrototypeOfHelper(
             typeBuilder,
             runtime.ObjectPrototypes,
-            new IsPrototypeOfHelperInputs(runtime.Errors, runtime.Symbols, runtime.UndefinedType)
+            new IsPrototypeOfHelperInputs(runtime.Errors, runtime.Symbols, runtime.Sentinels.UndefinedType)
         );
         // ObjectPrototypePopulate / ArrayPrototypePopulate shells already
         // defined above (before cctor) so the cctor can call them eagerly.
@@ -992,8 +992,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectPrototypes,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );  // For bind/call/apply on functions
         // Pre-define IsBoxedPrimitiveOfType shell so InstanceOf can reference
@@ -1017,7 +1017,7 @@ public partial class RuntimeEmitter
                 runtime.Promise,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitToPascalCase(typeBuilder, runtime.ReflectedMethods);  // Must be emitted before GetFieldsProperty/SetFieldsProperty
@@ -1072,7 +1072,7 @@ public partial class RuntimeEmitter
                 runtime.Set,
                 runtime.TextEncoding,
                 runtime.TypedArrays,
-                runtime.UndefinedType,
+                runtime.Sentinels.UndefinedType,
                 _features.HasAnyTypedArray,
                 _features.UsesNodeStreams,
                 _features.UsesPromise,
@@ -1081,7 +1081,7 @@ public partial class RuntimeEmitter
                 runtime.IHasFieldsInterface,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.UndefinedInstance
+                runtime.Sentinels.UndefinedInstance
             )
         );
         EmitInvokeMethodValue(
@@ -1103,7 +1103,7 @@ public partial class RuntimeEmitter
                 runtime.Set,
                 runtime.TextEncoding,
                 runtime.TypedArrays,
-                runtime.UndefinedType,
+                runtime.Sentinels.UndefinedType,
                 _features.HasAnyTypedArray,
                 _features.UsesNodeStreams,
                 _features.UsesPromise,
@@ -1140,8 +1140,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionConstruction.Constructor,
                 runtime.FunctionValues.Type,
                 runtime.ReflectedMethods.ToPascalCase,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitGetListProperty(
@@ -1157,8 +1157,8 @@ public partial class RuntimeEmitter
                 runtime.Invocation.Method,
                 runtime.ObjectPrototypes,
                 runtime.Templates,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );
         // GetMapProperty / GetSetProperty are the duck-typed property dispatchers
@@ -1217,7 +1217,7 @@ public partial class RuntimeEmitter
             new IsConstructorInputs(
                 runtime.FunctionBindings,
                 runtime.FunctionValues,
-                runtime.UndefinedType,
+                runtime.Sentinels.UndefinedType,
                 runtime.ReflectedMethods.InvokeUnwrapped
             )
         );
@@ -1261,7 +1261,7 @@ public partial class RuntimeEmitter
             EmitWeakRefMethods(typeBuilder, weakRef);
         if (runtime.FinalizationRegistry.Implementation is { } finalizationRegistry)
             EmitFinalizationRegistryMethods(typeBuilder, finalizationRegistry,
-                runtime.FinalizationRegistry.PokeTable, runtime.UndefinedInstance);
+                runtime.FinalizationRegistry.PokeTable, runtime.Sentinels.UndefinedInstance);
         // Boxed Symbol property access binds these helpers directly.
         EmitSymbolPrototypePopulate(
             typeBuilder,
@@ -1337,8 +1337,8 @@ public partial class RuntimeEmitter
                 runtime.TSNamespaceGet,
                 runtime.TSNamespaceType,
                 runtime.TypedArrays,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType,
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType,
                 runtime.WeakMap,
                 runtime.WeakRef,
                 runtime.WeakSet
@@ -1352,14 +1352,14 @@ public partial class RuntimeEmitter
         EmitIteratorProtocolCall(
             typeBuilder,
             runtime.IteratorProtocol,
-            new IteratorProtocolCallInputs(runtime.Generators, runtime.Invocation, runtime.ObjectRead, runtime.UndefinedInstance)
+            new IteratorProtocolCallInputs(runtime.Generators, runtime.Invocation, runtime.ObjectRead, runtime.Sentinels.UndefinedInstance)
         );
         // GetSymbolDict / IsSymbol already emitted above (moved earlier so
         // HasOwnPropertyHelper's Symbol-key arm can call them).
         // ToJsString depends on GetProperty + InvokeMethodValue + Stringify; emit after those.
         EmitToJsString(typeBuilder, runtime.StringCoercion, runtime.ArrayStorage, runtime.ArrayOperations,
             new StringCoercionInputs(
-                runtime.UndefinedType, runtime.Symbols.Type, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
+                runtime.Sentinels.UndefinedType, runtime.Symbols.Type, runtime.GlobalThisSingletonField, runtime.GlobalThisGetProperty,
                 runtime.Operators.TypeOf, runtime.Invocation.Method, runtime.Arguments.Type, runtime.ObjectRead.Property, runtime.ObjectStorage.Type,
                 runtime.FunctionValues.Type, runtime.FunctionBindings.AnyType, runtime.ObjectOwnProperties.HasOwnProperty, runtime.IHasFieldsInterface,
                 runtime.Symbols.GetStorage, runtime.Symbols.ToPrimitive, runtime.DescriptorStorage.DescriptorType,
@@ -1384,14 +1384,14 @@ public partial class RuntimeEmitter
                 runtime.NumericCoercion,
                 runtime.ObjectStorage,
                 runtime.StringCoercion,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         // ToNumber/ConvertToNumber bodies: emit AFTER GetProperty/InvokeMethodValue
         // so their ToPrimitive(value, "number") on Dictionary/$Object args can
         // call those helpers.
         EmitToNumber(typeBuilder, runtime.NumericCoercion,
-            new AbstractNumberInputs(runtime.UndefinedType, runtime.Symbols.Type, runtime.ObjectStorage.Type,
+            new AbstractNumberInputs(runtime.Sentinels.UndefinedType, runtime.Symbols.Type, runtime.ObjectStorage.Type,
                 runtime.FunctionValues.Type, runtime.FunctionBindings.AnyType, runtime.IHasFieldsInterface,
                 runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
                 runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
@@ -1399,13 +1399,13 @@ public partial class RuntimeEmitter
                 runtime.Operators.TypeOf, runtime.StringCoercion.ToJsString, runtime.BoxedPrimitives.UnwrapIfBoxed,
                 runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitConvertToNumber(typeBuilder, runtime.NumericCoercion,
-            new ExplicitNumberInputs(runtime.UndefinedType, runtime.Symbols.Type, runtime.ObjectStorage.Type,
+            new ExplicitNumberInputs(runtime.Sentinels.UndefinedType, runtime.Symbols.Type, runtime.ObjectStorage.Type,
                 runtime.ObjectRead.Property, runtime.Invocation.Method, runtime.StringCoercion.ToJsString,
                 runtime.BigInt.ToNumber, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         // String.raw lives here so its body can read `template.raw` via
         // GetProperty and ToString-coerce substitutions via ToJsString.
         EmitStringRaw(typeBuilder, runtime.Templates,
-            runtime.UndefinedType, runtime.ObjectRead.Property, runtime.NumericCoercion.ToNumber, runtime.StringCoercion.ToJsString, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
+            runtime.Sentinels.UndefinedType, runtime.ObjectRead.Property, runtime.NumericCoercion.ToNumber, runtime.StringCoercion.ToJsString, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         EmitSetProperty(
             runtime.ObjectWrite,
             new SetPropertyInputs(
@@ -1435,7 +1435,7 @@ public partial class RuntimeEmitter
                 runtime.RegExps,
                 runtime.FunctionValues.InvokeWithThis,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitSetPropertyStrict(
@@ -1481,7 +1481,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.Records,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitDeletePropertyStrict(
@@ -1503,7 +1503,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.Records,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitMergeIntoTSObject(
@@ -1538,7 +1538,7 @@ public partial class RuntimeEmitter
                 runtime.StringCoercion,
                 runtime.Symbols,
                 runtime.ReflectedMethods.ToPascalCase,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         // Array SetElement helpers - must come BEFORE GetIndex/SetIndex which reference them.
@@ -1573,8 +1573,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionConstruction.Constructor,
                 runtime.FunctionValues.Type,
                 runtime.TypedArrays,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );
         // DisposeResource uses the shared Symbol indexed-get path so descriptor
@@ -1606,7 +1606,7 @@ public partial class RuntimeEmitter
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
                 runtime.TypedArrays,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitSetIndexStrict(
@@ -1621,7 +1621,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectState,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitDeleteIndex(
@@ -1687,7 +1687,7 @@ public partial class RuntimeEmitter
             new IteratorCollectionInputs(
                 runtime.ArrayStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
                 runtime.IteratorProtocol, runtime.IteratorRecords, runtime.ObjectRead,
-                runtime.UndefinedType, runtime.UndefinedInstance, runtime.TypedArrays.Implementation,
+                runtime.Sentinels.UndefinedType, runtime.Sentinels.UndefinedInstance, runtime.TypedArrays.Implementation,
                 _features.UsesBuffer ? runtime.RequireBuffer() : null,
                 runtime.Map is not null, _features.UsesArrayPrototypeMutation)
         );
@@ -1697,7 +1697,7 @@ public partial class RuntimeEmitter
             typeBuilder, moduleBuilder, runtime.IteratorHelpers,
             new IteratorHelperInputs(runtime.Errors, runtime.IteratorWrappers.Ctor,
                 runtime.Invocation.Method, runtime.Booleans.IsTruthy,
-                runtime.Generators, runtime.UndefinedInstance));
+                runtime.Generators, runtime.Sentinels.UndefinedInstance));
         runtime.IteratorHelpers.CompleteEmission();
         // Arrays - must come AFTER iterator methods since ConcatArrays/ExpandCallArgs use IterateToList.
         // SetArrayElement* helpers (including Object variant) are emitted earlier, BEFORE SetIndex,
@@ -1711,7 +1711,7 @@ public partial class RuntimeEmitter
         EmitGetElement(
             typeBuilder,
             runtime.ObjectRead,
-            new GetElementInputs(runtime.ArrayStorage, runtime.UndefinedInstance)
+            new GetElementInputs(runtime.ArrayStorage, runtime.Sentinels.UndefinedInstance)
         );
         // Proxy [[OwnPropertyKeys]] needs compiler-owned descriptor and
         // extensibility callbacks even though their public Object methods are
@@ -1750,7 +1750,7 @@ public partial class RuntimeEmitter
                 ),
                 runtime.RegExps,
                 runtime.Symbols,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         // Object.assign consumes both halves of [[OwnPropertyKeys]], so make
@@ -1778,7 +1778,7 @@ public partial class RuntimeEmitter
                     runtime.ReflectedMethods.InvokeUnwrapped
                 ),
                 runtime.Symbols,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitProxyOwnKeysHelperBodies(
@@ -1814,7 +1814,7 @@ public partial class RuntimeEmitter
                 ),
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         // MergeIntoObject implements CopyDataProperties through GetKeys and
@@ -1842,7 +1842,7 @@ public partial class RuntimeEmitter
                 _features.UsesProxy,
                 runtime.ObjectWrite.Index,
                 runtime.Symbols,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitGetValues(
@@ -1859,7 +1859,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectKeys,
                 runtime.ObjectStorage,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitGetEntries(
@@ -1876,18 +1876,18 @@ public partial class RuntimeEmitter
                 runtime.ObjectKeys,
                 runtime.ObjectStorage,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitObjectFromEntries(
             typeBuilder,
             runtime.ObjectOperations,
-            new ObjectFromEntriesInputs(runtime.Errors, runtime.IteratorCollection.ToList, runtime.Symbols, runtime.UndefinedType)
+            new ObjectFromEntriesInputs(runtime.Errors, runtime.IteratorCollection.ToList, runtime.Symbols, runtime.Sentinels.UndefinedType)
         );
         EmitObjectHasOwn(
             typeBuilder,
             runtime.ObjectOwnProperties,
-            new ObjectHasOwnInputs(runtime.Errors, runtime.UndefinedType)
+            new ObjectHasOwnInputs(runtime.Errors, runtime.Sentinels.UndefinedType)
         );
         EmitObjectIs(typeBuilder, runtime.ObjectOperations);
         EmitObjectAssign(
@@ -1914,7 +1914,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectWrite.IndexStrict,
                 runtime.ObjectWrite.PropertyStrict,
                 runtime.Symbols,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitObjectFreeze(typeBuilder, runtime.ObjectState, new ObjectIntegrityInputs(runtime.ArrayStorage, runtime.DescriptorStorage, runtime.ObjectStorage));
@@ -1945,8 +1945,8 @@ public partial class RuntimeEmitter
                 runtime.StringCoercion,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );
         // Math.* adapters must precede gOPD so its Math singleton synth can
@@ -1999,8 +1999,8 @@ public partial class RuntimeEmitter
                 runtime.Symbols,
                 runtime.FunctionConstruction.GetOrCreate,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitObjectDefineProperties(
@@ -2011,7 +2011,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectKeys.Keys,
                 runtime.ObjectRead.Property,
                 runtime.Symbols,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitObjectGetOwnPropertyDescriptors(
@@ -2030,8 +2030,8 @@ public partial class RuntimeEmitter
                     runtime.ReflectedMethods.InvokeUnwrapped
                 ),
                 runtime.Symbols,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitObjectCreate(
@@ -2042,8 +2042,8 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.ObjectDescriptors,
                 runtime.Symbols,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );
         // Promise keyed-combinator shells are declared with Promise methods,
@@ -2074,7 +2074,7 @@ public partial class RuntimeEmitter
                 runtime.RegExps,
                 runtime.Strings,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             ),
             prototypeStoreField
         );
@@ -2091,7 +2091,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.Records,
                 runtime.Symbols,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             ),
             prototypeStoreField
         );
@@ -2109,8 +2109,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectPrototypes,
                 runtime.StringCoercion,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );
         EmitObjectGroupBy(
@@ -2126,7 +2126,7 @@ public partial class RuntimeEmitter
                 runtime.RuntimeType,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         // Reflect.set / setPrototypeOf / defineProperty / ownKeys / apply /
@@ -2148,8 +2148,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.FunctionIntrospection.GetProperty,
                 runtime.Invocation.Method,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType,
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType,
                 runtime.ObjectRead.Property
             )
         );
@@ -2172,7 +2172,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectPrototypes.GetPrototypeOf,
                     runtime.Booleans.IsTruthy,
                     runtime.Invocation.Method,
-                    runtime.UndefinedType,
+                    runtime.Sentinels.UndefinedType,
                     runtime.ObjectRead.Property,
                     runtime.ObjectWrite.Property
                 )
@@ -2202,7 +2202,7 @@ public partial class RuntimeEmitter
                     runtime.StringCoercion.ToJsString,
                     runtime.ObjectState.IsExtensible,
                     runtime.ObjectDeletion.Property,
-                    runtime.UndefinedType,
+                    runtime.Sentinels.UndefinedType,
                     runtime.ObjectRead.Property
                 )
             );
@@ -2228,7 +2228,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectPrototypes.GetPrototypeOf,
                     runtime.ObjectPrototypes.SetPrototypeOf,
                     runtime.ObjectState.IsExtensible,
-                    runtime.UndefinedType,
+                    runtime.Sentinels.UndefinedType,
                     runtime.Symbols.Type,
                     runtime.ObjectRead.Property
                 )
@@ -2251,7 +2251,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectKeys.Ordinary,
                     runtime.ObjectKeys.Symbols,
                     runtime.ObjectKeys.Names,
-                    runtime.UndefinedType,
+                    runtime.Sentinels.UndefinedType,
                     runtime.Symbols.Type
                 )
             );
@@ -2271,7 +2271,7 @@ public partial class RuntimeEmitter
                     runtime.NumericCoercion.ToNumber,
                     runtime.FunctionIntrospection.IsConstructor,
                     runtime.DynamicConstruction.Function,
-                    runtime.UndefinedType,
+                    runtime.Sentinels.UndefinedType,
                     runtime.ObjectRead.Property,
                     runtime.DataView,
                     runtime.Promise
@@ -2349,7 +2349,7 @@ public partial class RuntimeEmitter
         EmitArrayReduceRight(typeBuilder, runtime);
         // Search helpers use ToIntegerOrInfinity for spec-compliant fromIndex clamping.
         EmitToIntegerOrInfinityHelper(typeBuilder, runtime.NumericCoercion,
-            new IntegerOrInfinityInputs(runtime.UndefinedType, runtime.ObjectStorage.Type, runtime.IHasFieldsInterface,
+            new IntegerOrInfinityInputs(runtime.Sentinels.UndefinedType, runtime.ObjectStorage.Type, runtime.IHasFieldsInterface,
                 runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Property, runtime.Invocation.Method,
                 runtime.Operators.TypeOf, runtime.BoxedPrimitives.IsOfType, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitArrayIncludes(typeBuilder, runtime);
@@ -2456,9 +2456,9 @@ public partial class RuntimeEmitter
                 runtime.Symbols.PopulatePrototype),
             _features.UsesBigInt ? new BoxedBigIntPrototype(runtime.BigInt.PrototypeField, runtime.BigInt.PrototypePopulateMethod) : null);
         EmitNormalizeForeignEvalValue(typeBuilder, runtime.BoxedPrimitives,
-            runtime.ObjectStorage.Type, runtime.UndefinedInstance, runtime.ObjectRead.Property);
+            runtime.ObjectStorage.Type, runtime.Sentinels.UndefinedInstance, runtime.ObjectRead.Property);
         EmitToObject(typeBuilder, runtime.BoxedPrimitives,
-            runtime.ObjectStorage.Constructor, runtime.UndefinedType, runtime.Symbols.Type);
+            runtime.ObjectStorage.Constructor, runtime.Sentinels.UndefinedType, runtime.Symbols.Type);
         EmitIsBoxedPrimitiveOfType(typeBuilder, runtime.BoxedPrimitives,
             runtime.ObjectStorage.Type, runtime.ObjectStorage.GetProperty);
         EmitUnwrapStringReceiver(typeBuilder, runtime.BoxedPrimitives,
@@ -2467,37 +2467,37 @@ public partial class RuntimeEmitter
         // String methods
         EmitStringCharAt(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToNumber);
         EmitStringSubstring(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor, runtime.NumericCoercion.ToIntegerOrInfinity,
-            runtime.StringCoercion.ToJsString, runtime.UndefinedInstance, runtime.UndefinedType);
+            runtime.StringCoercion.ToJsString, runtime.Sentinels.UndefinedInstance, runtime.Sentinels.UndefinedType);
         EmitStringSubstr(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToIntegerOrInfinity);
         EmitStringIndexOf(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString);
         EmitStringIndexOfFrom(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString);
         EmitPrimitiveStringIntrinsics(typeBuilder, runtime.Strings);
         EmitStringReplace(typeBuilder, runtime.Strings);
-        EmitStringIncludes(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.RegExps.Implementation?.Type, runtime.UndefinedType, runtime.Symbols.Match,
+        EmitStringIncludes(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.RegExps.Implementation?.Type, runtime.Sentinels.UndefinedType, runtime.Symbols.Match,
                 runtime.ObjectRead.Index, runtime.Booleans.IsTruthy, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
-        EmitStringStartsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.RegExps.Implementation?.Type, runtime.UndefinedType, runtime.Symbols.Match,
+        EmitStringStartsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.RegExps.Implementation?.Type, runtime.Sentinels.UndefinedType, runtime.Symbols.Match,
                 runtime.ObjectRead.Index, runtime.Booleans.IsTruthy, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
-        EmitStringEndsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.RegExps.Implementation?.Type, runtime.UndefinedType, runtime.Symbols.Match,
+        EmitStringEndsWith(typeBuilder, runtime.Strings, new StringSearchInputs(runtime.RegExps.Implementation?.Type, runtime.Sentinels.UndefinedType, runtime.Symbols.Match,
                 runtime.ObjectRead.Index, runtime.Booleans.IsTruthy, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.StringCoercion.ToJsString, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitStringSlice(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor, runtime.NumericCoercion.ToIntegerOrInfinity,
-            runtime.StringCoercion.ToJsString, runtime.UndefinedInstance, runtime.UndefinedType);
+            runtime.StringCoercion.ToJsString, runtime.Sentinels.UndefinedInstance, runtime.Sentinels.UndefinedType);
         EmitStringRepeat(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor, runtime.NumericCoercion.ToNumber);
-        EmitStringPadStart(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString, runtime.NumericCoercion.ToNumber, runtime.UndefinedType);
-        EmitStringPadEnd(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString, runtime.NumericCoercion.ToNumber, runtime.UndefinedType);
+        EmitStringPadStart(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString, runtime.NumericCoercion.ToNumber, runtime.Sentinels.UndefinedType);
+        EmitStringPadEnd(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString, runtime.NumericCoercion.ToNumber, runtime.Sentinels.UndefinedType);
         EmitStringCharCodeAt(typeBuilder, runtime.Strings);
         EmitStringConcat(typeBuilder, runtime.Strings, runtime.StringCoercion.ToJsString);
         EmitStringLastIndexOf(typeBuilder, runtime.Strings);
         EmitStringReplaceAll(typeBuilder, runtime.Strings);
-        EmitStringAt(typeBuilder, runtime.Strings, runtime.UndefinedInstance);
+        EmitStringAt(typeBuilder, runtime.Strings, runtime.Sentinels.UndefinedInstance);
         EmitStringFromCharCode(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToNumber);
-        EmitStringCodePointAt(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.UndefinedInstance);
+        EmitStringCodePointAt(typeBuilder, runtime.Strings, runtime.NumericCoercion.ToIntegerOrInfinity, runtime.Sentinels.UndefinedInstance);
         EmitStringWellFormedMethods(typeBuilder, runtime.Strings);
         EmitStringIterator(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.IteratorHelpers.NormalizeToEnumerator, runtime.Errors.TypeErrorConstructor,
-            runtime.StringCoercion.ToJsString, runtime.UndefinedType);
+            runtime.StringCoercion.ToJsString, runtime.Sentinels.UndefinedType);
         EmitStringFromCodePoint(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor, runtime.StringCoercion.ToJsString,
             runtime.NumericCoercion.ToNumber);
         EmitStringNormalize(typeBuilder, runtime.Strings, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor, runtime.StringCoercion.ToJsString,
-            runtime.UndefinedType);
+            runtime.Sentinels.UndefinedType);
         EmitStringLocaleCompare(typeBuilder, runtime.Strings);
         EmitStringTryInvokeSymbolMethod(typeBuilder, runtime);
         // RegExp methods emitted before String.prototype populate so the
@@ -2531,8 +2531,8 @@ public partial class RuntimeEmitter
                     runtime.FunctionValues.Type,
                     runtime.Errors.TypeErrorConstructor,
                     runtime.Operators.TypeOf,
-                    runtime.UndefinedInstance,
-                    runtime.UndefinedType
+                    runtime.Sentinels.UndefinedInstance,
+                    runtime.Sentinels.UndefinedType
                 )
             );
         // String.prototype dict populate — must come AFTER all the String* helpers,
@@ -2563,7 +2563,7 @@ public partial class RuntimeEmitter
         // EmitRandom moved to before gOPD (see line ~660). The original site
         // here is now empty.
         EmitMathSumPrecise(typeBuilder, runtime.Math, new MathSumInputs(
-            runtime.Symbols.GetStorage, runtime.Symbols.Iterator, runtime.IteratorProtocol.Function, runtime.UndefinedType, runtime.Invocation.Method, runtime.IteratorRecords.NextMethod, runtime.IteratorRecords.InvokeNext, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value, runtime.ObjectRead.Property, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
+            runtime.Symbols.GetStorage, runtime.Symbols.Iterator, runtime.IteratorProtocol.Function, runtime.Sentinels.UndefinedType, runtime.Invocation.Method, runtime.IteratorRecords.NextMethod, runtime.IteratorRecords.InvokeNext, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value, runtime.ObjectRead.Property, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitDefineSymbolAccessor(
             typeBuilder,
             runtime.ObjectConstruction,
@@ -2634,7 +2634,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectDescriptors.DefineProperty,
                     runtime.FunctionValues.InvokeWithThis,
                     runtime.FunctionValues.Type,
-                    runtime.UndefinedType
+                    runtime.Sentinels.UndefinedType
                 )
             );
             EmitJsonStringify(
@@ -2670,8 +2670,8 @@ public partial class RuntimeEmitter
                     runtime.Symbols.Type,
                     runtime.Errors.TypeErrorConstructor,
                     runtime.Operators.TypeOf,
-                    runtime.UndefinedInstance,
-                    runtime.UndefinedType,
+                    runtime.Sentinels.UndefinedInstance,
+                    runtime.Sentinels.UndefinedType,
                     _features.JsonScalarRecordShapes,
                     _features.PotentiallyMaterializesUnknownCompactObjectRecordShape,
                     _features.UsesArrayPrototypeMutation,
@@ -2708,8 +2708,8 @@ public partial class RuntimeEmitter
                     runtime.Symbols.Type,
                     runtime.Errors.TypeErrorConstructor,
                     runtime.Operators.TypeOf,
-                    runtime.UndefinedInstance,
-                    runtime.UndefinedType
+                    runtime.Sentinels.UndefinedInstance,
+                    runtime.Sentinels.UndefinedType
                 )
             );
             EmitJsonRawJsonMethods(
@@ -2742,7 +2742,7 @@ public partial class RuntimeEmitter
             EmitCreateBigInt(typeBuilder, bigInt,
                 new BigIntConversionInputs(
                     new BigIntPrimitiveInputs(runtime.ObjectRead.Index, runtime.ObjectRead.Property, runtime.Invocation.Method,
-                        runtime.Symbols.ToPrimitive, runtime.Symbols.Type, runtime.Operators.TypeOf, runtime.UndefinedType,
+                        runtime.Symbols.ToPrimitive, runtime.Symbols.Type, runtime.Operators.TypeOf, runtime.Sentinels.UndefinedType,
                         runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor),
                     runtime.ObjectStorage.Type, runtime.StringCoercion.ToJsString, runtime.Errors.RangeErrorConstructor, runtime.Errors.SyntaxErrorConstructor));
             EmitBigIntStaticMethods(typeBuilder, bigInt, runtime.NumericCoercion.ToNumber, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor);
@@ -2758,7 +2758,7 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!,
                     runtime.FunctionConstruction.GetOrCreate, runtime.Symbols.GetStorage, runtime.Symbols.ToStringTag,
                     runtime.ObjectPrototypes.Prototype, runtime.DescriptorStorage.SetPrototype,
-                    runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter, runtime.NumericCoercion.ToNumber, runtime.UndefinedType,
+                    runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter, runtime.NumericCoercion.ToNumber, runtime.Sentinels.UndefinedType,
                     runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         }
         // Promise methods moved earlier (before GetProperty, which needs PromiseThen for typeof p.then)
@@ -2766,7 +2766,7 @@ public partial class RuntimeEmitter
         EmitNumberMethods(typeBuilder, runtime.Numbers, runtime.StringCoercion,
             new NumberMethodInputs(
                 runtime.ObjectRead.Property,
-                runtime.UndefinedType,
+                runtime.Sentinels.UndefinedType,
                 runtime.NumericCoercion.ToIntegerOrInfinity,
                 runtime.ObjectStorage.Type,
                 runtime.Symbols.Type,
@@ -2819,7 +2819,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage.Type,
                 runtime.Symbols.ToPrimitive,
                 runtime.ObjectRead.Index,
-                runtime.UndefinedType,
+                runtime.Sentinels.UndefinedType,
                 runtime.Operators.TypeOf,
                 runtime.Invocation.Method,
                 runtime.ObjectStorage.GetProperty,
@@ -2853,8 +2853,8 @@ public partial class RuntimeEmitter
                     runtime.Booleans.IsTruthy
                 ),
                 runtime.StringCoercion,
-                runtime.UndefinedInstance,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedInstance,
+                runtime.Sentinels.UndefinedType
             )
         );
         // Error.prototype populate body — must come AFTER EmitErrorMethods so
@@ -2870,7 +2870,7 @@ public partial class RuntimeEmitter
                 runtime.StringCoercion,
                 runtime.Symbols,
                 runtime.FunctionConstruction.CachedConstructor,
-                runtime.UndefinedType
+                runtime.Sentinels.UndefinedType
             )
         );
         // Native-error subclass prototypes — distinct per ECMA-262 §20.5.6.4.
@@ -2889,9 +2889,9 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues,
                 runtime.ObjectPrototypes,
                 runtime.FunctionConstruction,
-                runtime.UndefinedInstance,
+                runtime.Sentinels.UndefinedInstance,
                 runtime.Invocation.Method,
-                runtime.UndefinedType,
+                runtime.Sentinels.UndefinedType,
                 runtime.Operators,
                 runtime.FunctionBindings,
                 runtime.Errors
@@ -2911,7 +2911,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectPrototypes.Prototype,
                     runtime.Symbols,
                     runtime.FunctionConstruction.CachedConstructor,
-                    runtime.UndefinedInstance
+                    runtime.Sentinels.UndefinedInstance
                 )
             );
         // Promise.prototype helpers + populate. Helpers wrap runtime.RequirePromise().Then
@@ -2934,7 +2934,7 @@ public partial class RuntimeEmitter
                 typeBuilder,
                 runtime.CollectionKeys,
                 runtime.RequireMap(),
-                new MapMethodsInputs(runtime.ArrayStorage, runtime.Invocation.Method, runtime.UndefinedInstance)
+                new MapMethodsInputs(runtime.ArrayStorage, runtime.Invocation.Method, runtime.Sentinels.UndefinedInstance)
             );
             EmitMapGroupBy(
                 typeBuilder,
@@ -2949,7 +2949,7 @@ public partial class RuntimeEmitter
                     runtime.Symbols.Iterator,
                     runtime.Errors.TypeErrorConstructor,
                     runtime.Operators.TypeOf,
-                    runtime.UndefinedType
+                    runtime.Sentinels.UndefinedType
                 )
             );
         }

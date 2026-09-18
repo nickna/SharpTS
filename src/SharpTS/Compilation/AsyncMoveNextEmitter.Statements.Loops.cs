@@ -88,7 +88,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Ldloc, asyncIterFnLocal);
             _il.Emit(OpCodes.Brfalse, adaptSyncIteratorLabel);
             _il.Emit(OpCodes.Ldloc, asyncIterFnLocal);
-            _il.Emit(OpCodes.Isinst, _ctx.Runtime.UndefinedType);
+            _il.Emit(OpCodes.Isinst, _ctx.Runtime.Sentinels.UndefinedType);
             _il.Emit(OpCodes.Brfalse, customSetup);
 
             // No async iterator: adapt any synchronous iterable per
@@ -405,7 +405,7 @@ public partial class AsyncMoveNextEmitter
         {
             // for-await-of never sends a value; pass undefined so the yield expression sees undefined
             // (not null) if the consumer somehow observes it (#473).
-            _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
+            _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
             _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Next);
         }
         _il.Emit(OpCodes.Stloc, stepLocal);
@@ -428,7 +428,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Ldloc, fnLocal);
             _il.Emit(OpCodes.Brfalse, noFnLabel);
             _il.Emit(OpCodes.Ldloc, fnLocal);
-            _il.Emit(OpCodes.Isinst, _ctx.Runtime.UndefinedType);
+            _il.Emit(OpCodes.Isinst, _ctx.Runtime.Sentinels.UndefinedType);
             _il.Emit(OpCodes.Brtrue, noFnLabel);
 
             // InvokeMethodValue(iterator, fn, [])
@@ -442,7 +442,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Br, haveFnLabel);
 
             _il.MarkLabel(noFnLabel);
-            _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
+            _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
             _il.Emit(OpCodes.Stloc, stepLocal);
             _il.MarkLabel(haveFnLabel);
         }

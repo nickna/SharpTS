@@ -53,7 +53,7 @@ public class BuiltInConstructorHandler : ICallHandler
             var ready = il.DefineLabel();
             il.Emit(OpCodes.Stloc, description);
             il.Emit(OpCodes.Ldloc, description);
-            il.Emit(OpCodes.Isinst, ctx.Runtime!.UndefinedType);
+            il.Emit(OpCodes.Isinst, ctx.Runtime!.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brfalse, stringify);
             // Explicit undefined is the same as an omitted description.
             il.Emit(OpCodes.Ldnull);
@@ -149,7 +149,7 @@ public class BuiltInConstructorHandler : ICallHandler
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         }
         il.Emit(OpCodes.Stloc, patternLocal);
         // flags → flagsLocal (undefined sentinel when omitted)
@@ -160,7 +160,7 @@ public class BuiltInConstructorHandler : ICallHandler
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         }
         il.Emit(OpCodes.Stloc, flagsLocal);
 
@@ -178,7 +178,7 @@ public class BuiltInConstructorHandler : ICallHandler
             il.Emit(OpCodes.Ldloc, flagsLocal);
             il.Emit(OpCodes.Brfalse, flagsOk);                       // null flags → ok
             il.Emit(OpCodes.Ldloc, flagsLocal);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brfalse, doFromArgs);                    // defined flags → copy
             il.MarkLabel(flagsOk);
             // pattern must be a non-null, non-string object

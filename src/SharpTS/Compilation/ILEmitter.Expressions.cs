@@ -75,7 +75,7 @@ public partial class ILEmitter
             var initializedLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, local);
             IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Sentinels.UndefinedType);
             IL.Emit(OpCodes.Brfalse, initializedLabel);
             IL.Emit(OpCodes.Pop);
             IL.Emit(OpCodes.Ldstr, name);
@@ -756,7 +756,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Pop);
                 IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.ThrowUndefinedVariable);
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
             }
             else
             {
@@ -920,7 +920,7 @@ public partial class ILEmitter
 
         // If left is undefined, use right
         IL.Emit(OpCodes.Dup);
-        IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+        IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Sentinels.UndefinedType);
         builder.Emit_Brtrue(useRightLabel);
 
         // Left is neither null nor undefined - use it

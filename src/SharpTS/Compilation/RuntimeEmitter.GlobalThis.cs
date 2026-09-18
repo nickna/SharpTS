@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, globalDataDescriptorLabel);
         il.MarkLabel(globalAccessorUndefinedLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Br, returnLabel);
         il.MarkLabel(globalDataDescriptorLabel);
         il.Emit(OpCodes.Ldloc, globalReadDescriptorLocal);
@@ -168,7 +168,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brfalse, checkBuiltInsLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(checkBuiltInsLabel);
@@ -390,7 +390,7 @@ public partial class RuntimeEmitter
         }
 
         // Default: return undefined
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Br, returnLabel);
 
         // globalThis / global self-reference → the runtime sentinel (#271).
@@ -406,7 +406,7 @@ public partial class RuntimeEmitter
 
         // undefined property
         il.MarkLabel(undefinedPropLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Br, returnLabel);
 
         // NaN property
@@ -530,7 +530,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));

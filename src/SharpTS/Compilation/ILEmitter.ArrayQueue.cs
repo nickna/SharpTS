@@ -28,7 +28,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Br, end);
         IL.MarkLabel(missing);
         if (numeric) IL.Emit(OpCodes.Ldc_R8, double.NaN);
-        else IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+        else IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
         IL.MarkLabel(end);
         if (numeric) SetStackType(StackType.Double);
         else SetStackUnknown();

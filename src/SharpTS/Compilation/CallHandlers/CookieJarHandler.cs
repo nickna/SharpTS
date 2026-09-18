@@ -80,14 +80,14 @@ public class CookieJarHandler : ICallHandler
                 }
                 il.Emit(OpCodes.Call, runtime.Fetch.RequireImplementation().RequireClient().CookieJarSetCookie);
                 // setCookie returns undefined in JS land — push the undefined sentinel.
-                il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
                 emitter.SetStackUnknown();
                 return true;
             }
             case "clear":
             {
                 il.Emit(OpCodes.Call, runtime.Fetch.RequireImplementation().RequireClient().CookieJarClear);
-                il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
                 emitter.SetStackUnknown();
                 return true;
             }

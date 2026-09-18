@@ -98,7 +98,7 @@ public sealed class EmittedIteratorCollectionRuntimeTests
         var inputs = Activator.CreateInstance(helper.GetParameters()[2].ParameterType,
             runtime.ArrayStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
             runtime.IteratorProtocol, runtime.IteratorRecords, runtime.ObjectRead,
-            runtime.UndefinedType, runtime.UndefinedInstance, runtime.TypedArrays.Implementation,
+            runtime.Sentinels.UndefinedType, runtime.Sentinels.UndefinedInstance, runtime.TypedArrays.Implementation,
             bufferSelected ? runtime.RequireBuffer() : null, runtime.Map is not null, mutation)!;
         helper.Invoke(emitter, [type, owner, inputs]); Assert.False(owner.IsComplete); owner.CompleteEmission(); type.CreateType();
         var loaded = SaveVerifyLoad(builder); var runtimeType = loaded.GetType("$Runtime")!; var symbol = Symbol(loaded, runtime); var probe = loaded.GetType("CollectionProbe")!;

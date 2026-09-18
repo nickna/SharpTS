@@ -102,7 +102,7 @@ public partial class RuntimeEmitter
         var noInitial = il.DefineLabel();
         var afterSeed = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, noInitial);
 
         // acc = initial; i = 0;
@@ -117,7 +117,7 @@ public partial class RuntimeEmitter
         var haveItems = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, countLocal);
         il.Emit(OpCodes.Brtrue, haveItems);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(haveItems);
@@ -263,7 +263,7 @@ public partial class RuntimeEmitter
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         }
         il.Emit(OpCodes.Call, runtime.RequirePromise().TypeResolve);
         il.Emit(OpCodes.Ret);

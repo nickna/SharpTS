@@ -197,7 +197,7 @@ public partial class RuntimeEmitter
             closeIl.Emit(OpCodes.Ldloc, returnMethodLocal);
             closeIl.Emit(OpCodes.Brfalse, noReturnMethodLabel);
             closeIl.Emit(OpCodes.Ldloc, returnMethodLocal);
-            closeIl.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            closeIl.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             closeIl.Emit(OpCodes.Brtrue, noReturnMethodLabel);
 
             closeIl.Emit(OpCodes.Ldloc, returnMethodLocal);
@@ -482,7 +482,7 @@ public partial class RuntimeEmitter
 
         var haveIteratorFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, iteratorFunctionLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brfalse, haveIteratorFunctionLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Value is not iterable");
         il.MarkLabel(haveIteratorFunctionLabel);
@@ -502,7 +502,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iteratorLocal);
         il.Emit(OpCodes.Brfalse, iteratorTypeErrorLabel);
         il.Emit(OpCodes.Ldloc, iteratorLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, iteratorTypeErrorLabel);
         il.Emit(OpCodes.Ldloc, iteratorLocal);
         il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
@@ -1286,7 +1286,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, speciesValLocal);
         il.Emit(OpCodes.Brfalse, promiseFallbackLabel);    // null → %Promise%
         il.Emit(OpCodes.Ldloc, speciesValLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, promiseFallbackLabel);     // undefined → %Promise%
         il.Emit(OpCodes.Br, generalFromValueLabel);
     }
@@ -1481,7 +1481,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, _types.Boolean);
             il.Emit(OpCodes.Brtrue, resolvePrimitiveValueLabel);
             il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brtrue, resolvePrimitiveValueLabel);
             il.Emit(OpCodes.Br, resolveObjectValueLabel);
 
@@ -1565,7 +1565,7 @@ public partial class RuntimeEmitter
             // Promise resolving functions are ECMAScript built-ins. Their
             // return value is always undefined, including repeated calls after
             // the promise has already settled (§27.2.1.3.2/.1).
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
 
@@ -1696,7 +1696,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Pop);
 
             il.MarkLabel(endLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
 
@@ -1792,7 +1792,7 @@ public partial class RuntimeEmitter
         // Promise executors are called with undefined as their thisArgument.
         // Preserve the sentinel so strict functions observe undefined while
         // sloppy functions still coerce it to globalThis in their body.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ldarg_0);  // executor
         il.Emit(OpCodes.Ldloc, argsLocal);  // args
         il.Emit(OpCodes.Call, runtime.Invocation.Method);

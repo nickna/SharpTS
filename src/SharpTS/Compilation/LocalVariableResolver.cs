@@ -689,10 +689,10 @@ public class LocalVariableResolver : IVariableResolver
 
         // undefined → globalThis (non-strict callees only).
         if (!(_ctx.ThisBindingIsStrictOverride ?? _ctx.IsStrictMode)
-            && _ctx.Runtime.UndefinedType != null)
+            && _ctx.Runtime.Sentinels.UndefinedType != null)
         {
             _il.Emit(OpCodes.Dup);
-            _il.Emit(OpCodes.Isinst, _ctx.Runtime.UndefinedType);
+            _il.Emit(OpCodes.Isinst, _ctx.Runtime.Sentinels.UndefinedType);
             _il.Emit(OpCodes.Brtrue, useGlobal);
         }
 

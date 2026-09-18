@@ -197,7 +197,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, checkRejectLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, resolveField);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brtrue, checkRejectLabel);
             il.Emit(OpCodes.Ldstr, "Promise capability executor was already invoked");
             GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
@@ -209,7 +209,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, captureArgsLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, rejectField);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brtrue, captureArgsLabel);
             il.Emit(OpCodes.Ldstr, "Promise capability executor was already invoked");
             GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
@@ -242,7 +242,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stfld, rejectField);
             il.MarkLabel(noRejectLabel);
 
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
 

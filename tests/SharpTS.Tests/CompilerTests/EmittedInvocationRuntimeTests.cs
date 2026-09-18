@@ -77,7 +77,7 @@ public sealed class EmittedInvocationRuntimeTests
             if (p.Name == "CheckCancellationMethod") return null;
             if (p.Name == "TypedArrays") return typedArrays;
             if (p.Name == key) return selected ? null : key == "NodeStreams" ? new EmittedNodeStreamRuntime(hasAbortSignal: false) : Activator.CreateInstance(p.ParameterType, nonPublic: true);
-            return typeof(EmittedRuntime).GetProperty(p.Name!)!.GetValue(runtime);
+            return (p.Name! switch { "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(p.Name!)!.GetValue(runtime) });
         }
         var helper = typeof(RuntimeEmitter).GetMethod(helperName, Members)!;
         var constructor = helper.GetParameters().Last().ParameterType.GetConstructors(Members).Single();
@@ -123,7 +123,7 @@ public sealed class EmittedInvocationRuntimeTests
             var receiver = new object();
             Assert.Same(receiver, type.GetMethod(owner.Method.Name)!.Invoke(null, [receiver, wrapper, Array.Empty<object>()]));
             Assert.Same(receiver, type.GetMethod(owner.Method0.Name)!.Invoke(null, [receiver, wrapper]));
-            Assert.Equal(runtime.UndefinedType.Name, type.GetMethod(owner.Value.Name)!.Invoke(null, [wrapper, Array.Empty<object>()])!.GetType().Name);
+            Assert.Equal(runtime.Sentinels.UndefinedType.Name, type.GetMethod(owner.Value.Name)!.Invoke(null, [wrapper, Array.Empty<object>()])!.GetType().Name);
             Func<object[], object> count = args => args.Length;
             Assert.Equal(2, type.GetMethod(owner.Value.Name)!.Invoke(null, [count, new object[] { 1, 2 }]));
             Assert.Equal(0, type.GetMethod(owner.Method0.Name)!.Invoke(null, [receiver, count]));

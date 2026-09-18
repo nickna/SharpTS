@@ -432,6 +432,17 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Required `Sentinels` owns the distinct `$Undefined` and `$LexicalUninitialized`
+singleton types and fields. Both helpers receive only the module and this owner.
+They publish the baked declarations once; temporary builders remain local.
+Undefined is available before the unchanged four array-queue declarations, and
+the owner completes after lexical sentinel emission. Checked reads, duplicate
+declaration guards and completion checks prevent incomplete or reused metadata.
+Tests cover per-compilation singleton isolation, the early undefined dependency,
+captured lexical reads, coercion, omitted arguments, generators, async returns,
+and standalone/hosted deployment. Existing captured-assignment behavior is
+retained; this migration does not change language semantics.
+
 Required `ReflectedMethods` owns method lookup, parent-method lookup, the weak
 receiver/name cache, unwrapped reflection invocation and the staged
 `$MethodCallable` wrapper. The original cache field and static initialization stay

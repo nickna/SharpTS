@@ -131,7 +131,7 @@ public partial class RuntimeEmitter
         // which is never callable and must not be treated as an omission.
         il.Emit(OpCodes.Brfalse, throwLabel);
         il.Emit(loadOp);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, allowUndefined ? okLabel : throwLabel);
 
         // Positive callable check: $TSFunction / $BoundTSFunction / Function*
@@ -208,7 +208,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brfalse, notHoleLabel);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Br, doneLabel);
         il.MarkLabel(notHoleLabel);
         il.MarkLabel(doneLabel);
@@ -851,7 +851,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         var notHole = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notHole);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.MarkLabel(notHole);
 
@@ -873,7 +873,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStart);
 
         il.MarkLabel(loopEnd);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
@@ -919,7 +919,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         var notHole = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notHole);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.MarkLabel(notHole);
 
@@ -938,7 +938,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStart);
 
         il.MarkLabel(loopEnd);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
@@ -985,7 +985,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         var notHole = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notHole);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.MarkLabel(notHole);
 
@@ -1052,7 +1052,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         var notHole = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notHole);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.MarkLabel(notHole);
 
@@ -1446,7 +1446,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
         // ECMA-262 23.1.3.10 Array.prototype.find: return undefined when no element matches.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1684,7 +1684,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
         // ECMA-262 23.1.3.11 Array.prototype.findLast: return undefined when no element matches.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2059,7 +2059,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Brfalse, reduceCallableThrow);
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, reduceCallableThrow);
         // Positive callable check — bool/number/string/dict/list/etc. all
         // throw TypeError per ECMA-262 IsCallable. Mirrors
@@ -2197,7 +2197,7 @@ public partial class RuntimeEmitter
         // path with the JS undefined sentinel. Function-body `this` loading
         // preserves it for strict callbacks and coerces it to globalThis for
         // sloppy callbacks.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Call, runtime.Invocation.Method);
@@ -2258,7 +2258,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Brfalse, reduceRCallableThrow);
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, reduceRCallableThrow);
         // Positive callable check (mirrors reduce / EmitThrowIfCallbackNotCallable).
         il.Emit(OpCodes.Ldloc, callbackLocal);
@@ -2393,7 +2393,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_Ref);
 
         // Symmetric with reduce: callback thisValue is JS undefined.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Call, runtime.Invocation.Method);

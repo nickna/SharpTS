@@ -718,7 +718,7 @@ public partial class ILEmitter
                 EmitExpression(u.Right);
                 EmitBoxIfNeeded(u.Right);
                 IL.Emit(OpCodes.Pop); // Discard the result
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance); // Load undefined
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance); // Load undefined
                 SetStackUnknown();
                 break;
         }
@@ -1014,7 +1014,7 @@ public partial class ILEmitter
                 builder.Emit_Brfalse(assignLabel);
                 // Check for undefined
                 IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Sentinels.UndefinedType);
                 builder.Emit_Brtrue(assignLabel);
                 // Not nullish - pop extra value and keep current value
                 IL.Emit(OpCodes.Pop);
@@ -1087,7 +1087,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Dup);
                 builder.Emit_Brfalse(assignLabel);
                 IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Sentinels.UndefinedType);
                 builder.Emit_Brtrue(assignLabel);
                 // Not nullish - pop extra value and skip assignment
                 IL.Emit(OpCodes.Pop);
@@ -1161,7 +1161,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Dup);
                 builder.Emit_Brfalse(assignLabel);
                 IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Sentinels.UndefinedType);
                 builder.Emit_Brtrue(assignLabel);
                 // Not nullish - pop extra value and skip assignment
                 IL.Emit(OpCodes.Pop);
@@ -3648,7 +3648,7 @@ public partial class ILEmitter
                 break;
 
             case SharpTS.Runtime.Types.SharpTSUndefined:
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                 SetStackUnknown();
                 break;
 

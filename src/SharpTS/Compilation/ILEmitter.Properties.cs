@@ -400,7 +400,7 @@ public partial class ILEmitter
 
         if (!g.Optional
             && objType is TypeInfo.Record recordType
-            && _ctx.Runtime?.UndefinedInstance != null)
+            && _ctx.Runtime?.Sentinels.UndefinedInstance != null)
         {
             JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzed);
             var shape = analyzed as JsonSerializationShape.Record;
@@ -438,7 +438,7 @@ public partial class ILEmitter
 
             // Check for undefined (non-null singleton $Undefined.Instance)
             IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Sentinels.UndefinedType);
             builder.Emit_Brtrue(nullishLabel);
 
             // Not nullish - proceed with property access
@@ -449,7 +449,7 @@ public partial class ILEmitter
             builder.MarkLabel(nullishLabel);
             IL.Emit(OpCodes.Pop);
             // Optional chaining returns undefined (not null) when object is nullish
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
 
             builder.MarkLabel(endLabel);
         }
@@ -803,7 +803,7 @@ public partial class ILEmitter
 
             IL.MarkLabel(notFoundLabel);
             // ECMA-262: missing property reads as undefined.
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
             IL.Emit(OpCodes.Br, endLabel);
         }
 
@@ -1210,7 +1210,7 @@ public partial class ILEmitter
             builder.Emit_Brfalse(nullishLabel);
 
             IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Sentinels.UndefinedType);
             builder.Emit_Brtrue(nullishLabel);
 
             // Not nullish — proceed with index access
@@ -1221,7 +1221,7 @@ public partial class ILEmitter
 
             builder.MarkLabel(nullishLabel);
             IL.Emit(OpCodes.Pop);
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
 
             builder.MarkLabel(endLabel);
             SetStackUnknown();
@@ -1322,7 +1322,7 @@ public partial class ILEmitter
 
             // Out of range: undefined (matches the interpreter and the $Array path).
             IL.MarkLabel(oobLabel);
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
 
             IL.MarkLabel(endLabel);
             SetStackUnknown();

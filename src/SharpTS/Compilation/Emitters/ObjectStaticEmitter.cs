@@ -40,7 +40,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
         }
         else if (methodName == "is")
         {
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
         }
         else
         {
@@ -93,7 +93,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.ObjectOperations.Is);
                 // Box the bool result for consistency with other methods
@@ -201,7 +201,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.ObjectPrototypes.Create);
                 return true;
@@ -235,7 +235,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     // A missing prototype argument is undefined, not null;
                     // Object.setPrototypeOf({}, undefined) must reject it.
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.ObjectPrototypes.SetPrototypeOf);
                 return true;
@@ -315,7 +315,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, throwLabel);
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, throwLabel);
         il.Emit(OpCodes.Br, okLabel);
         il.MarkLabel(throwLabel);

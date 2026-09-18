@@ -154,7 +154,7 @@ public class SuperConstructorHandler : ICallHandler
             var convertMessageLabel = il.DefineLabel();
             var haveMessageLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, rawMessageLocal);
-            il.Emit(OpCodes.Isinst, ctx.Runtime!.UndefinedType);
+            il.Emit(OpCodes.Isinst, ctx.Runtime!.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brfalse, convertMessageLabel);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Stloc, hasMessageLocal);

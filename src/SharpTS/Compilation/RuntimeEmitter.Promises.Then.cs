@@ -426,7 +426,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brtrue, fulfillHandlerResultLabel);
         il.Emit(OpCodes.Ldloc, callbackResultLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, fulfillHandlerResultLabel);
         il.Emit(OpCodes.Ldloc, callbackResultLocal);
         il.Emit(OpCodes.Isinst, _types.BigInteger);

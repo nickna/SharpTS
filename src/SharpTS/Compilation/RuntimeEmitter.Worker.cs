@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
             EmitTypedArrayHelpers(runtimeType, runtime);
             // Atomics static methods (pure-IL with reflection fallback for SharpTS types)
             EmitAtomicsHelpersPure(runtimeType, runtime.RequireAtomics(), runtime.TypedArrays.RequireImplementation(),
-                runtime.UndefinedType, runtime.UndefinedInstance, runtime.Errors.TypeErrorConstructor, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor);
+                runtime.Sentinels.UndefinedType, runtime.Sentinels.UndefinedInstance, runtime.Errors.TypeErrorConstructor, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor);
         }
 
         // MessageChannel/MessagePort moved to RuntimeEmitter.MessageChannel.cs —
@@ -39,7 +39,7 @@ public partial class RuntimeEmitter
         EmitWorkerHelper(runtimeType, runtime.Workers, runtime.EventLoop);
 
         // StructuredClone helper
-        EmitStructuredCloneHelper(runtimeType, runtime.StructuredClone, runtime.ArrayStorage, runtime.UndefinedType,
+        EmitStructuredCloneHelper(runtimeType, runtime.StructuredClone, runtime.ArrayStorage, runtime.Sentinels.UndefinedType,
             new StructuredCloneObjectInputs(runtime.ObjectStorage.Type, runtime.ObjectStorage.Constructor, runtime.ObjectStorage.FieldsGetter),
             new StructuredCloneErrorInputs(runtime.Errors.Type, runtime.IHasFieldsInterface,
                 runtime.Errors.NameGetter, runtime.Errors.MessageGetter, runtime.Errors.StackGetter, runtime.Errors.StackSetter,

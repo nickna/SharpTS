@@ -1011,7 +1011,7 @@ public partial class RuntimeEmitter
             i =>
             {
                 if (i < 2) il.Emit(OpCodes.Ldarg, i);
-                else il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                else il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             });
         il.Emit(OpCodes.Ret);
     }
@@ -1026,7 +1026,7 @@ public partial class RuntimeEmitter
 
         Type[] primitiveTypes =
         [
-            runtime.UndefinedType, _types.String, _types.Boolean,
+            runtime.Sentinels.UndefinedType, _types.String, _types.Boolean,
             _types.Byte, _types.SByte, _types.Int16, _types.UInt16,
             _types.Int32, _types.UInt32, _types.Int64, _types.UInt64,
             _types.Single, _types.Double, _types.Decimal, _types.BigInteger,

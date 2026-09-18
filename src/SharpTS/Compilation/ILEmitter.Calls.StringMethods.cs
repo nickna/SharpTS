@@ -114,7 +114,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 if (arguments.Count > 1)
                 {
@@ -123,7 +123,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().StringReplace);
                 break;
@@ -141,7 +141,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 if (arguments.Count > 1)
                 {
@@ -150,7 +150,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().StringReplaceAll);
                 break;
@@ -166,7 +166,7 @@ public partial class ILEmitter
                     // ECMA-262 22.1.3.21 step 4: missing separator is
                     // `undefined`, not `""`. Push the $Undefined singleton so
                     // the helper's undefined-arm returns [str].
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 if (arguments.Count >= 2)
                 {
@@ -175,7 +175,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExps.RequireImplementation().StringSplitProto);
                 break;

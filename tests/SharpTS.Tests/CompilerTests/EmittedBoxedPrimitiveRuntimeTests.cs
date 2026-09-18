@@ -161,7 +161,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var boxed = new EmittedBoxedPrimitiveRuntime();
         InvokeEmitter("DeclareUnwrapIfBoxed", emitter, helper, boxed);
         var peers = CreateInputs("UnwrapPrimitiveInputs",
-            runtime.ObjectStorage.Type, runtime.Symbols.ToPrimitive, runtime.ObjectRead.Index, runtime.UndefinedType,
+            runtime.ObjectStorage.Type, runtime.Symbols.ToPrimitive, runtime.ObjectRead.Index, runtime.Sentinels.UndefinedType,
             runtime.Operators.TypeOf, runtime.Invocation.Method, runtime.ObjectStorage.GetProperty,
             runtime.ObjectOwnProperties.HasOwnProperty, runtime.ObjectRead.Property, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         var dateInputs = includeDate ? CreateInputs("BoxedDateInputs", runtime.Dates.RequireImplementation().Type, runtime.Dates.RequireImplementation().ToStringMethod) : null;
@@ -226,7 +226,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         using var bytes = Save(runtime);
         var assembly = Assembly.Load(bytes.ToArray());
         var type = assembly.GetType("$Runtime")!;
-        var undefined = assembly.GetType(runtime.UndefinedType.Name)!.GetField("Instance")!.GetValue(null);
+        var undefined = assembly.GetType(runtime.Sentinels.UndefinedType.Name)!.GetField("Instance")!.GetValue(null);
         var boxed = runtime.BoxedPrimitives;
         var first = Call(type, boxed.ToObject, (object?)null);
         var second = Call(type, boxed.ToObject, undefined);
@@ -273,7 +273,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var assembly = Assembly.Load(bytes.ToArray());
         var type = assembly.GetType("$Runtime")!;
         var method = runtime.BoxedPrimitives.NormalizeForeignEvalValue;
-        var nativeUndefined = assembly.GetType(runtime.UndefinedType.Name)!.GetField("Instance")!.GetValue(null);
+        var nativeUndefined = assembly.GetType(runtime.Sentinels.UndefinedType.Name)!.GetField("Instance")!.GetValue(null);
         Assert.Same(nativeUndefined, Call(type, method, SharpTSUndefined.Instance));
         Assert.Null(Call(type, method, (object?)null));
         Assert.Equal(7d, Call(type, method, 7d));

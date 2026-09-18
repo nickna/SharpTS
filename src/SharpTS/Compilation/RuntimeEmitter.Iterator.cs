@@ -831,7 +831,7 @@ public partial class RuntimeEmitter
         EmitCapturedIteratorMethods(
             typeBuilder,
             runtime.IteratorRecords,
-            new CapturedIteratorInputs(runtime.UndefinedType, runtime.Symbols, runtime.ObjectRead, runtime.Invocation, runtime.Errors)
+            new CapturedIteratorInputs(runtime.Sentinels.UndefinedType, runtime.Symbols, runtime.ObjectRead, runtime.Invocation, runtime.Errors)
         );
         runtime.IteratorRecords.CompleteEmission();
         EmitGetIteratorDone(
@@ -856,12 +856,12 @@ public partial class RuntimeEmitter
         EmitGetIteratorFunction(
             typeBuilder,
             runtime.IteratorProtocol,
-            new IteratorFunctionInputs(runtime.DescriptorStorage, runtime.FunctionConstruction, runtime.Generators, runtime.NodeStreams, runtime.ObjectRead, runtime.SymbolAccessors, runtime.Symbols, runtime.UndefinedInstance)
+            new IteratorFunctionInputs(runtime.DescriptorStorage, runtime.FunctionConstruction, runtime.Generators, runtime.NodeStreams, runtime.ObjectRead, runtime.SymbolAccessors, runtime.Symbols, runtime.Sentinels.UndefinedInstance)
         );
         EmitIteratorClose(
             typeBuilder,
             runtime.IteratorProtocol,
-            new IteratorCloseInputs(runtime.Errors, runtime.Generators, runtime.Invocation, runtime.ObjectRead, runtime.UndefinedInstance, runtime.UndefinedType)
+            new IteratorCloseInputs(runtime.Errors, runtime.Generators, runtime.Invocation, runtime.ObjectRead, runtime.Sentinels.UndefinedInstance, runtime.Sentinels.UndefinedType)
         );
     }
 

@@ -275,7 +275,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         // yield* evaluates to undefined — load the `$Undefined` sentinel, not CLR null (#481). (A
         // delegated iterator's own return value as the yield* result is a separate, deeper gap; this
         // path drives via IAsyncEnumerator/IEnumerator, which carry no return value.)
-        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
+        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
         SetStackUnknown();
     }
 
@@ -368,7 +368,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Stfld, delegatedField);
 
         // yield* evaluates to undefined — load the `$Undefined` sentinel, not CLR null (#481).
-        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
+        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
         SetStackUnknown();
     }
 

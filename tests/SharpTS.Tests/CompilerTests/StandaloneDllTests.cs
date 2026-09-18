@@ -14433,4 +14433,95 @@ public class StandaloneDllTests
         }
     }
 
+    public static IEnumerable<object[]> SentinelPrograms =>
+    [
+        new object[]
+        {
+            "undefined_values",
+            "const value:any=undefined;console.log(typeof value,value===undefined,value==null,value===null);console.log(String(value),Boolean(value),Number.isNaN(Number(value)),value??\"fallback\");\n",
+            "undefined true true false\nundefined false true fallback\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "undefined_arguments",
+            "function f(a?:number,b:number=7){console.log(a===undefined,b);}const callable:any=f;callable();callable(3);function empty(){}console.log(empty()===undefined);\n",
+            "true 7\nfalse 7\ntrue\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "undefined_arrays",
+            "const a:number[]=[1];console.log(a.shift(),a.shift()===undefined);const b:boolean[]=[true];console.log(b.shift(),b.shift()===undefined);const holes=new Array(2);console.log(holes[0]===undefined,holes.length,[...holes].join(\":\"));\n",
+            "1 true\ntrue true\ntrue 2 :\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "lexical_read",
+            "function outer(){const get=()=>x;try{get();}catch(e){console.log(e.name);}let x:any=undefined;console.log(get()===undefined);x=4;console.log(get());}outer();\n",
+            "ReferenceError\ntrue\n4\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "lexical_typeof",
+            "function outer(){const get=()=>typeof x;try{get();}catch(e){console.log(e.name);}let x:any=undefined;console.log(get());}outer();\n",
+            "ReferenceError\nundefined\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "lexical_nested",
+            "let x=\"outer\";function outer(){const get=()=>()=>x;try{get()();}catch(e){console.log(e.name);}let x=\"inner\";console.log(get()());}outer();console.log(x);\n",
+            "ReferenceError\ninner\nouter\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "undefined_async",
+            "async function f(){await Promise.resolve(0);}f().then(v=>console.log(v===undefined,typeof v));\n",
+            "true undefined\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "undefined_generator",
+            "function* g(){yield undefined;}const it=g();const first=it.next();const second=it.next();console.log(first.value===undefined,first.done,second.value===undefined,second.done);\n",
+            "true false true true\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(SentinelPrograms))]
+    public void Isolated_Sentinels_PreserveUndefinedAndLexicalInitialization(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"sentinels_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
+
 }

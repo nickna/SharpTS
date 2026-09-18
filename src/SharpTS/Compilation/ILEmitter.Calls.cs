@@ -59,7 +59,7 @@ public partial class ILEmitter
 
         if (statements.Count == 0)
         {
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
             SetStackUnknown();
             return true;
         }
@@ -115,20 +115,20 @@ public partial class ILEmitter
                         EmitVarDeclaration(declaration);
                     }
                     if (isLast)
-                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                     break;
                 case Stmt.Function:
                     if (isLast)
-                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                     break;
                 case Stmt.Directive:
                     if (isLast)
-                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                     break;
                 default:
                     EmitStatement(statements[i]);
                     if (isLast)
-                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                     break;
             }
         }
@@ -430,7 +430,7 @@ public partial class ILEmitter
         // Push receiver (or undefined if no args)
         if (c.Arguments.Count == 0)
         {
-            IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         }
         else
         {
@@ -579,7 +579,7 @@ public partial class ILEmitter
             "Cannot convert undefined or null to object");
         IL.MarkLabel(receiverNotNull);
         IL.Emit(OpCodes.Ldloc, receiverLocal);
-        IL.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        IL.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         IL.Emit(OpCodes.Brfalse, receiverCoercible);
         IL.Emit(OpCodes.Pop);
         GuestErrorEmitter.ThrowTypeError(IL, runtime,
@@ -599,7 +599,7 @@ public partial class ILEmitter
             }
             else
             {
-                IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             }
             IL.Emit(OpCodes.Call, runtime.ArrayOperations.ToSortedGeneric);
             SetStackUnknown();
@@ -617,7 +617,7 @@ public partial class ILEmitter
             }
             else
             {
-                IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             }
             IL.Emit(OpCodes.Call, runtime.ArrayOperations.SortProto);
             SetStackUnknown();
@@ -750,7 +750,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Brfalse, throwPath);
             // $Undefined → throw
             IL.Emit(OpCodes.Ldloc, cbLocal);
-            IL.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            IL.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             IL.Emit(OpCodes.Brtrue, throwPath);
             IL.Emit(OpCodes.Br, cbValid);
 
@@ -828,7 +828,7 @@ public partial class ILEmitter
                     if (methodName is "indexOf" or "lastIndexOf")
                         IL.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
                     else if (methodName == "join")
-                        IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                        IL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
                     else
                         IL.Emit(OpCodes.Ldnull);
                 }
@@ -843,7 +843,7 @@ public partial class ILEmitter
                 else
                 {
                     if (methodName is "includes" or "indexOf" or "lastIndexOf")
-                        IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                        IL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
                     else
                         IL.Emit(OpCodes.Ldnull);
                 }
@@ -888,7 +888,7 @@ public partial class ILEmitter
             // Spec: void-returning prototype methods (forEach) return undefined.
             // Push $Undefined.Instance, not C# null — test262 call-with-boolean
             // tests `Array.prototype.forEach.call(true, () => {}) === undefined`.
-            IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         else if (rt == _ctx.Types.Double)
             IL.Emit(OpCodes.Box, _ctx.Types.Double);
         else if (rt == _ctx.Types.Boolean)

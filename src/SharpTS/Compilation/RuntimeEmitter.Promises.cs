@@ -923,7 +923,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, throwLabel);
         // $Undefined → throw
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, throwLabel);
         // primitive types → throw
         il.Emit(OpCodes.Ldarg_0);
@@ -1082,7 +1082,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(isTSFunctionLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
             il.Emit(OpCodes.Br, endLabel);
@@ -1157,7 +1157,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(isTSFunctionLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
             il.Emit(OpCodes.Br, endLabel);

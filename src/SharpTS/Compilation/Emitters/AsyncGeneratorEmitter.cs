@@ -38,7 +38,7 @@ public sealed class AsyncGeneratorEmitter : ITypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime.Sentinels.UndefinedInstance);
                 }
                 // Call next(sentValue) which returns Task<object>
                 il.Emit(OpCodes.Callvirt, ctx.Runtime.RequireAsyncGenerators().Next);
@@ -59,7 +59,7 @@ public sealed class AsyncGeneratorEmitter : ITypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime.Sentinels.UndefinedInstance);
                 }
                 // Call return(value) which returns Task<object>
                 il.Emit(OpCodes.Callvirt, ctx.Runtime.RequireAsyncGenerators().Return);
@@ -79,7 +79,7 @@ public sealed class AsyncGeneratorEmitter : ITypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime.Sentinels.UndefinedInstance);
                 }
                 // Call throw(error) which returns Task<object>
                 il.Emit(OpCodes.Callvirt, ctx.Runtime.RequireAsyncGenerators().Throw);

@@ -305,7 +305,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
         }
         il.Emit(OpCodes.Call, ctx.Runtime!.RequireAtomics().Pause);
         return true;

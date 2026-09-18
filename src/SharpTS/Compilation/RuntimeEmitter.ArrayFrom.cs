@@ -48,7 +48,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(nonNullLabel);
         var nonUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brfalse, nonUndefLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.from requires an array-like object - not null or undefined");
         il.MarkLabel(nonUndefLabel);
@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
         var mapFnOkLabel = il.DefineLabel();
         // $Undefined → skip check
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, mapFnOkLabel);
         // Provided value: must be callable. $TSFunction passes; everything else throws.
         il.Emit(OpCodes.Ldarg_1);
@@ -104,7 +104,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
         il.Emit(OpCodes.Brfalse, arrayLikePathLabel);
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brfalse, iterablePathLabel);
 
         il.MarkLabel(arrayLikePathLabel);
@@ -124,7 +124,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
         il.Emit(OpCodes.Brfalse, eagerIterablePathLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, eagerIterablePathLabel);
 
         var iteratorLocal = il.DeclareLocal(_types.Object);
@@ -195,7 +195,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, returnMethodLocal);
         il.Emit(OpCodes.Brfalse, skipReturnCallLabel);
         il.Emit(OpCodes.Ldloc, returnMethodLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, skipReturnCallLabel);
         il.Emit(OpCodes.Ldloc, iteratorLocal);
         il.Emit(OpCodes.Ldloc, returnMethodLocal);
@@ -258,7 +258,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, normalizeNextLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, normalizeIndexLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetSetMethod()!);
         il.MarkLabel(normalizeNextLabel);
         il.Emit(OpCodes.Ldloc, normalizeIndexLocal);
@@ -271,7 +271,7 @@ public partial class RuntimeEmitter
         // if (mapFn is $Undefined) return result. Callers now pass $Undefined
         // for absent mapfn, so the prior null-check is replaced by Isinst.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, noMapFnLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, noMapFnLabel);
@@ -428,7 +428,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Bgt, hasMapFn);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Stloc, mapFnLocal);
         il.Emit(OpCodes.Br, mapFnSet);
         il.MarkLabel(hasMapFn);
@@ -447,7 +447,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Bgt, hasThisArg);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Stloc, thisArgLocal);
         il.Emit(OpCodes.Br, thisArgSet);
         il.MarkLabel(hasThisArg);

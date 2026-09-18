@@ -307,7 +307,7 @@ public partial class ILEmitter
         }
         else
         {
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
         }
 
         // Stash once, then publish to the backing field and the namespace object.

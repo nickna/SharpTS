@@ -180,7 +180,7 @@ public partial class ILCompiler
             var convertErrorMessageLabel = il.DefineLabel();
             var haveErrorMessageLabel = il.DefineLabel();
             il.Emit(isDirectAggregateErrorSubclass ? OpCodes.Ldarg_2 : OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, _runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brfalse, convertErrorMessageLabel);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Stloc, hasErrorMessageLocal);
@@ -288,7 +288,7 @@ public partial class ILCompiler
                     }
                     else
                     {
-                        il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
+                        il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
                     }
                     // Call Runtime.SetIndex(object, key, value)
                     il.Emit(OpCodes.Call, _runtime.ObjectWrite.Index);

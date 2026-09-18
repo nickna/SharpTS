@@ -404,7 +404,7 @@ public class StateMachineEmitHelpers
         // Load $Undefined.Instance static field from the emitted runtime
         if (_runtime != null)
         {
-            _il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
+            _il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
         }
         else
         {
@@ -826,10 +826,10 @@ public class StateMachineEmitHelpers
         // value omitted from an optional parameter now produces (an omitted arg pads `$Undefined`,
         // not null) — manifesting e.g. as an infinite `while (x.length) yield* this.pop()` when
         // `pop(error)` does `error ?? stack.pop()`. Mirrors the non-state-machine ILEmitter override.
-        if (_runtime?.UndefinedType != null)
+        if (_runtime?.Sentinels.UndefinedType != null)
         {
             _il.Emit(OpCodes.Dup);
-            _il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
+            _il.Emit(OpCodes.Isinst, _runtime.Sentinels.UndefinedType);
             _il.Emit(OpCodes.Brtrue, rightLabel);  // undefined → use right
         }
 

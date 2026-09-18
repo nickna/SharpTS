@@ -1900,7 +1900,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(urlValidLabel);
         // Check for Undefined
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         var notUndefinedLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefinedLabel);
         // arg0 is undefined - throw
@@ -2031,7 +2031,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, hasBodyLabel);
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, hasBodyLabel2);
 
         // Body is present and not undefined - convert to string and set as content
@@ -2078,7 +2078,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, signalLocal);
         il.Emit(OpCodes.Brfalse, signalCheckDoneLabel);
         il.Emit(OpCodes.Ldloc, signalLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, signalCheckDoneLabel);
 
         // Check if signal is aborted: AbortSignalGetAborted(signal)
@@ -2794,7 +2794,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(throwLabel);
             EmitThrowTypeError(il, "Header name must be a valid HTTP token", "ERR_INVALID_HTTP_TOKEN");
             il.MarkLabel(okLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
 
@@ -2813,7 +2813,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, throwUndef);
             // value is Undefined → throw
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brtrue, throwUndef);
             // vstr = value.ToString()
             il.Emit(OpCodes.Ldarg_1);
@@ -2830,7 +2830,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(throwChar);
             EmitThrowTypeError(il, "Invalid character in header content", "ERR_INVALID_CHAR");
             il.MarkLabel(okLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
 
@@ -2840,7 +2840,7 @@ public partial class RuntimeEmitter
         http.SetMaxIdleParsers = sp;
         {
             var il = sp.GetILGenerator();
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
     }

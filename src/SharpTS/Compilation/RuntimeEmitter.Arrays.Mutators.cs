@@ -147,7 +147,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(receiverPresent);
         var receiverDefined = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brfalse, receiverDefined);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Array method called on null or undefined");
         il.MarkLabel(receiverDefined);
@@ -368,7 +368,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(emptyLengthWritable);
         // ECMA-262 23.1.3.20 Array.prototype.pop: returns undefined for empty
         // arrays (was null → broke `arr.pop() === undefined` checks).
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         // Array mutator algorithms use Delete/Set with Throw=true, so an
@@ -406,7 +406,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, runtime.ObjectWrite.PropertyStrict);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nonEmpty);
@@ -481,7 +481,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(emptyLabel);
         // ECMA-262 23.1.3.21 Array.prototype.shift: returns undefined for empty.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(frozenLabel);
@@ -507,7 +507,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, nonEmpty);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nonEmpty);
@@ -558,7 +558,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, runtime.ObjectWrite.PropertyStrict);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nonEmpty);
@@ -1312,7 +1312,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brfalse, parseEnd);
         il.Emit(OpCodes.Br, defaultEnd);
         il.MarkLabel(parseEnd);
@@ -2221,7 +2221,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, receiverCoercible);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         var receiverReady = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, receiverReady);
         il.MarkLabel(receiverCoercible);
@@ -2484,7 +2484,7 @@ public partial class RuntimeEmitter
         // `new Array(2); x[1]=1; x.sort(cmp)` left `[<hole>, 1]` rather than
         // `[1, undefined]`.
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, isUndefinedLabel);
 
         il.Emit(OpCodes.Ldloc, elementLocal);
@@ -2716,7 +2716,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Brfalse, noCompareFn);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brtrue, noCompareFn);
             il.Emit(OpCodes.Br, hasCompareFn);
 
@@ -2754,7 +2754,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, jLocal);
             il.Emit(OpCodes.Ldelem_Ref);
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Call, runtime.Invocation.Method);
@@ -2980,7 +2980,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, undefinedCountLocal);
             il.Emit(OpCodes.Bge, denseUndefinedDone);
             il.Emit(OpCodes.Ldloc, denseReceiver);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Callvirt,
                 _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
             il.Emit(OpCodes.Ldloc, denseUndefinedIndex);
@@ -3061,7 +3061,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, writeIndexLocal);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Call, runtime.ObjectWrite.IndexStrict);
             il.Emit(OpCodes.Ldloc, writeIndexLocal);
@@ -3120,7 +3120,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(appendLoopStart);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
         il.Emit(OpCodes.Ldloc, iLocal);
@@ -4196,7 +4196,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, validIndex);
 
         il.MarkLabel(returnUndefined);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(validIndex);
@@ -4677,7 +4677,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, hasValue);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Br, valueDone);
         il.MarkLabel(hasValue);
@@ -4841,7 +4841,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Brtrue, hasValue);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Stloc, value);
         il.Emit(OpCodes.Br, valueDone);
         il.MarkLabel(hasValue);
