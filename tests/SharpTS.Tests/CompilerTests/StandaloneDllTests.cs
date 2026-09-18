@@ -15285,4 +15285,128 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> ReceiverGuardPrograms =>
+    [
+        new object[]
+        {
+            "null_receiver",
+            "const trim:any=String.prototype.trim;try{trim.call(null);}catch(e){console.log(e instanceof TypeError);}\n",
+            "true\n",
+            false,
+        },
+        new object[]
+        {
+            "undefined_receiver",
+            "const trim:any=String.prototype.trim;try{trim.call(undefined);}catch(e){console.log(e instanceof TypeError);}\n",
+            "true\n",
+            false,
+        },
+        new object[]
+        {
+            "symbol_receiver",
+            "const trim:any=String.prototype.trim;try{trim.call(Symbol(\"x\"));}catch(e){console.log(e instanceof TypeError);}\n",
+            "true\n",
+            false,
+        },
+        new object[]
+        {
+            "number_receiver",
+            "const slice:any=String.prototype.slice;console.log(slice.call(12345,1,3));\n",
+            "23\n",
+            false,
+        },
+        new object[]
+        {
+            "boolean_receiver",
+            "const upper:any=String.prototype.toUpperCase;console.log(upper.call(true));\n",
+            "TRUE\n",
+            false,
+        },
+        new object[]
+        {
+            "object_receiver",
+            "let calls=0;const r={toString(){calls++;return \"  abc  \";}};const trim:any=String.prototype.trim;console.log(trim.call(r),calls);\n",
+            "abc 1\n",
+            false,
+        },
+        new object[]
+        {
+            "primitive_hook",
+            "let hint=\"\";const r={ [Symbol.toPrimitive](value:string){hint=value;return \"  abc  \";} };const trim:any=String.prototype.trim;console.log(trim.call(r),hint);\n",
+            "abc string\n",
+            false,
+        },
+        new object[]
+        {
+            "bound_receiver",
+            "const trim:any=String.prototype.trim;const fn=trim.bind(\" abc \");console.log(fn());\n",
+            "abc\n",
+            false,
+        },
+        new object[]
+        {
+            "array_missing_receiver",
+            "try{\n// @ts-expect-error Deliberately omit the call receiver to verify the runtime TypeError.\nArray.prototype.join.call();\n}catch(e){console.log(e instanceof TypeError);}\n",
+            "true\n",
+            false,
+        },
+        new object[]
+        {
+            "arraylike_receiver",
+            "const join:any=Array.prototype.join;console.log(join.call({0:\"a\",1:\"b\",length:2},\"-\"));\n",
+            "a-b\n",
+            false,
+        },
+        new object[]
+        {
+            "coercion_error",
+            "const r={toString(){throw \"coercion\";}};const trim:any=String.prototype.trim;try{trim.call(r);}catch(e){console.log(e);}\n",
+            "coercion\n",
+            false,
+        },
+        new object[]
+        {
+            "string_receiver",
+            "const trim:any=String.prototype.trim;console.log(trim.call(\" abc \"),trim.call(\"\"));\n",
+            "abc \n",
+            false,
+        },
+        new object[]
+        {
+            "hosted_string",
+            "export function trim(value:any){const fn:any=String.prototype.trim;return fn.call(value);}\n",
+            "",
+            true,
+        },
+        new object[]
+        {
+            "hosted_array",
+            "export function check(){try{\n// @ts-expect-error Deliberately omit the call receiver to verify the runtime TypeError.\nArray.prototype.join.call();\n}catch(e){return e instanceof TypeError;}}\n",
+            "",
+            true,
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ReceiverGuardPrograms))]
+    public void Isolated_ReceiverGuard_PreservesValidationCoercionAndDeployment(
+        string name, string source, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"receiver_guard_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }
