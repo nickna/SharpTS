@@ -268,10 +268,8 @@ public class EmittedRuntime
     /// <summary>Required cooperative cancellation metadata, emitted independently of feature selection.</summary>
     public EmittedCancellationRuntime Cancellation { get; } = new();
 
-    // Forces an emitted CLR class initializer at the JavaScript class
-    // definition site and unwraps TypeInitializationException so guest
-    // exceptions retain their original JavaScript identity.
-    public MethodBuilder RunClassDefinitionMethod { get; set; } = null!;
+    /// <summary>Required class-definition initialization and exception-unwrapping metadata.</summary>
+    public EmittedClassInitializationRuntime ClassInitialization { get; } = new();
 
     // Constructor-free prototype objects for emitted user classes. Each user
     // class creates its prototype through a compiler-only constructor and

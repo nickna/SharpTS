@@ -1535,6 +1535,16 @@ to these helpers emits the checks. This phase does not change that scheduling be
 and feature-free assemblies retain independent cancellation state. Class-initializer unwrapping,
 regex hoisting, runtime-type construction and the residual ownership audit remain separate work.
 
+Class-definition initialization lives in required `EmittedClassInitializationRuntime`. Its checked
+RunDefinition declaration retains the original RunClassDefinition signature and position after
+the cancellation helpers. The family emitter receives only the owner; completion requires its
+body marker, permits repair after an incomplete attempt, then rejects further writes. Ordinary
+and state-machine declarations and expressions all consume the same checked handle. The helper
+forces the CLR initializer and unwraps one TypeInitializationException, preserving the original
+exception object and the wrapper when its inner exception is absent. CLR initialization caching,
+guest evaluation order, emitted instructions and standalone/hosted dependencies remain unchanged.
+Regex hoisting, runtime-type construction and the final residual ownership audit remain required.
+
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only
 need that family's metadata (for example, DNS resolver declaration); retain `EmittedRuntime` where

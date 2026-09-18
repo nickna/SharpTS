@@ -15869,4 +15869,41 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+
+    public static IEnumerable<object[]> ClassInitializationPrograms =>
+    [
+        new object[] { "declaration_order", "console.log(\"before\");class C{static first=1;static {console.log(\"init\",C.first);}static second=2;}console.log(\"after\",C.second);\n", "before\ninit 1\nafter 2\n", false },
+        new object[] { "class_expression", "console.log(\"before\");const C=class{static value=3;static {console.log(\"expression\");}};console.log(\"after\",C.value);\n", "before\nexpression\nafter 3\n", false },
+        new object[] { "error_identity", "const marker=new Error(\"marker\");function fail(){throw marker;}function define(){class C{static value=fail();}}try{define();}catch(e){console.log(e===marker,e.message);}\n", "true marker\n", false },
+        new object[] { "inheritance", "class A{static value=2;static {console.log(\"parent\");}}class B extends A{static other=3;static {console.log(\"child\");}}console.log(B.value,B.other);\n", "parent\nchild\n2 3\n", false },
+        new object[] { "generator_declaration", "function* run():Generator<number>{class C{static value=3;}yield C.value;}console.log(run().next().value);\n", "3\n", false },
+        new object[] { "generator_expression", "function* run():Generator<number>{const C=class{static value=4;};yield C.value;}console.log(run().next().value);\n", "4\n", false },
+        new object[] { "async_expression", "async function run(){await Promise.resolve(0);const C=class{static value=6;};return C.value;}run().then(v=>console.log(v));\n", "6\n", false },
+        new object[] { "hosted_required", "export function run(){class C{static value=7;}return C.value;}\n", "", true },
+        new object[] { "hosted_optional", "export async function run(){await Promise.resolve(0);const C=class{static value=8;};return C.value;}\n", "", true },
+        new object[] { "async_control", "async function run(){await Promise.resolve(0);return 5;}run().then(v=>console.log(v));\n", "5\n", false },
+    ];
+
+    [Theory]
+    [MemberData(nameof(ClassInitializationPrograms))]
+    public void Isolated_ClassInitialization_PreservesEvaluationAndDeployment(
+        string name, string source, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"class_initialization_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }

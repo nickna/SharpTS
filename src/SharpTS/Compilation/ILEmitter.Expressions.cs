@@ -1128,7 +1128,7 @@ public partial class ILEmitter
             // static elements and computed keys share the same emitted .cctor.
             IL.Emit(OpCodes.Ldtoken, typeBuilder);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RunClassDefinitionMethod);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ClassInitialization.RunDefinition);
 
             // Load the Type object using ldtoken + GetTypeFromHandle
             IL.Emit(OpCodes.Ldtoken, typeBuilder);
