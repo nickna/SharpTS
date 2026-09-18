@@ -123,7 +123,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
                     IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
                     IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceSet);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
                 }
                 break;
 
@@ -143,7 +143,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldstr, classStmt.Name.Lexeme);
                     IL.Emit(OpCodes.Ldtoken, classType);
                     IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceSet);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
                 }
                 break;
 
@@ -199,7 +199,7 @@ public partial class ILEmitter
         // Emit: aliasLocal = nsField.Get(memberName)
         IL.Emit(OpCodes.Ldsfld, nsField);
         IL.Emit(OpCodes.Ldstr, memberName);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceGet);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Get);
         IL.Emit(OpCodes.Stloc, aliasLocal);
     }
 
@@ -251,7 +251,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldsfld, nsField);
         IL.Emit(OpCodes.Ldstr, enumStmt.Name.Lexeme);
         IL.Emit(OpCodes.Ldloc, dictLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceSet);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
     }
 
     /// <summary>
@@ -270,7 +270,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Box, memberLocal.LocalType);
             }
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceSet);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
         }
     }
 
@@ -323,6 +323,6 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldsfld, nsField);
         IL.Emit(OpCodes.Ldstr, memberName);
         IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceSet);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
     }
 }

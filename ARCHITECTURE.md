@@ -432,6 +432,17 @@ wrappers retain separate feature selections; Map and Set remain selected by
 metadata availability. Tests cover missing declarations, reuse, disabled
 optional metadata, receiver identity, zero-argument fallback and saved output.
 
+Required `Namespaces` owns the emitted namespace type, constructor and member
+get/set methods. Its helper receives only the destination module and namespace
+owner; completion follows the original type-creation point. Checked declarations
+reject missing, null and duplicate handles, support repair before completion, and
+freeze completed metadata. The private member dictionary, name field, display
+method, signatures, declaration order and generated instructions remain unchanged.
+Tests cover lifecycle repair/freeze, scoped emission, fresh owners across reused
+emitters, member identity and isolation, and standalone/hosted deployment.
+Namespace construction registries, local builders, shared type-provider lookups
+and the remaining ownership infrastructure stay within the complete audit.
+
 Required `GlobalObject` owns the global singleton, property dictionary, forward
 get/set methods and indirect-eval helper. Forward declarations complete at their
 original phase-one position; singleton initialization stays in the runtime static

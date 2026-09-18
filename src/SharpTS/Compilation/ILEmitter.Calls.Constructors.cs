@@ -723,12 +723,12 @@ public partial class ILEmitter
             else
             {
                 IL.Emit(OpCodes.Ldstr, namespaceParts[i]);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceGet);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Get);
             }
         }
 
         IL.Emit(OpCodes.Ldstr, className);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceGet);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Get);
 
         if (typeArgs != null && typeArgs.Count > 0)
         {

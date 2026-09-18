@@ -14928,4 +14928,79 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> NamespaceValuePrograms =>
+    [
+        new object[]
+        {
+            "hosted_members",
+            "namespace Api {export function plus(value:number){return value+2;}}export function call(value:number):number{return Api.plus(value);}\n",
+            "",
+            "",
+            true,
+        },
+        new object[]
+        {
+            "hosted_identity",
+            "namespace Api {export const value=4;}export function root():any{return Api;}\n",
+            "",
+            "",
+            true,
+        },
+        new object[]
+        {
+            "value_identity_control",
+            "namespace Values {export const value=3;}const values:any=Values;console.log(Values.value,values.value,values===Values);\n",
+            "",
+            "3 3 true\n",
+            false,
+        },
+        new object[]
+        {
+            "nested_values_control",
+            "namespace Outer.Inner {export const value=7;}const outer:any=Outer;console.log(Outer.Inner.value,outer.Inner.value,outer.Inner===Outer.Inner);\n",
+            "",
+            "7 7 true\n",
+            false,
+        },
+        new object[]
+        {
+            "merged_values_control",
+            "namespace Joined {export const first=3;}namespace Joined {export const second=5;}const joined:any=Joined;console.log(Joined.first,joined.first,joined.second,joined===Joined);\n",
+            "",
+            "3 3 5 true\n",
+            false,
+        },
+        new object[]
+        {
+            "module_values_control",
+            "import {Library} from \"./lib.ts\";const library:any=Library;console.log(Library.value,library===Library);\n",
+            "export namespace Library {export const value=8;}\n",
+            "8 true\n",
+            false,
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(NamespaceValuePrograms))]
+    public void Isolated_NamespaceValues_PreserveMembersIdentityAndDeployment(
+        string name, string source, string librarySource, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        if (librarySource.Length != 0) tempDir.CreateFile("lib.ts", librarySource);
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"namespace_values_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }

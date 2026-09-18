@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitTSNamespaceClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSNamespaceClass(ModuleBuilder moduleBuilder, EmittedNamespaceRuntime namespaces)
     {
         // Define class: public sealed class $TSNamespace
         // Mirrors SharpTSNamespace but is emitted into the compiled assembly
@@ -14,7 +14,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSNamespaceType = typeBuilder;
+        namespaces.Type = typeBuilder;
 
         // Field: private readonly Dictionary<string, object?> _members
         var membersField = typeBuilder.DefineField("_members", _types.DictionaryStringObject, FieldAttributes.Private);
@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [_types.String]
         );
-        runtime.TSNamespaceCtor = ctorBuilder;
+        namespaces.Constructor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor
@@ -51,7 +51,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSNamespaceGet = getBuilder;
+        namespaces.Get = getBuilder;
 
         var getIL = getBuilder.GetILGenerator();
         var valueLocal = getIL.DeclareLocal(_types.Object);
@@ -77,7 +77,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String, _types.Object]
         );
-        runtime.TSNamespaceSet = setBuilder;
+        namespaces.Set = setBuilder;
 
         var setIL = setBuilder.GetILGenerator();
         setIL.Emit(OpCodes.Ldarg_0);
