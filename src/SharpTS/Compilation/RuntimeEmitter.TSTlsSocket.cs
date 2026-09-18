@@ -730,7 +730,7 @@ public partial class RuntimeEmitter
         var has = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, has);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.MarkLabel(has);
     }
 

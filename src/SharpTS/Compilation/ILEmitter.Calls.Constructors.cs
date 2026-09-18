@@ -587,11 +587,11 @@ public partial class ILEmitter
             if (argTemps.Count > 0)
                 IL.Emit(OpCodes.Ldloc, argTemps[0]);
             else
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
             if (argTemps.Count > 1)
                 IL.Emit(OpCodes.Ldloc, argTemps[1]);
             else
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
             IL.Emit(OpCodes.Call, _ctx.Runtime.RegExps.RequireImplementation().FromArguments);
             IL.Emit(OpCodes.Br, constructionDone);
             IL.MarkLabel(notRegExpType);
@@ -666,7 +666,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Bne_Un, skipUndefinedLabel);
         IL.Emit(OpCodes.Ldloc, argsArrayLocal);
         IL.Emit(OpCodes.Ldloc, padIndexLocal);
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
         IL.Emit(OpCodes.Stelem_Ref);
         IL.MarkLabel(skipUndefinedLabel);
         IL.Emit(OpCodes.Ldloc, padIndexLocal);

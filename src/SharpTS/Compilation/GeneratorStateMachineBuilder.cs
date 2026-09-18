@@ -266,10 +266,10 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         // Seed the sent value with undefined so a yield resumed without an explicit
         // next(v) — for...of and yield* delegation drive MoveNext directly, never
         // setting SentField — evaluates to undefined rather than the null default.
-        if (_runtime?.Sentinels.UndefinedInstance != null)
+        if (_runtime?.UndefinedInstance != null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
             il.Emit(OpCodes.Stfld, SentField);
         }
         il.Emit(OpCodes.Ret);
@@ -527,7 +527,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         nextIL.Emit(OpCodes.Ldc_I4_M1);
         nextIL.Emit(OpCodes.Bne_Un, storeSentArgumentLabel);
         nextIL.Emit(OpCodes.Ldarg_0);
-        nextIL.Emit(OpCodes.Ldsfld, _runtime!.Sentinels.UndefinedInstance);
+        nextIL.Emit(OpCodes.Ldsfld, _runtime!.UndefinedInstance);
         nextIL.Emit(OpCodes.Stfld, SentField);
         nextIL.Emit(OpCodes.Br, sentReadyLabel);
         nextIL.MarkLabel(storeSentArgumentLabel);
@@ -704,7 +704,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         // for...of resumes a generator with undefined on every step. This is
         // observable when the yield expression's result is read after resume.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, _runtime!.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, _runtime!.UndefinedInstance);
         il.Emit(OpCodes.Stfld, SentField);
 
         il.Emit(OpCodes.Ldarg_0);

@@ -55,7 +55,7 @@ public sealed class MapEmitter : ITypeEmitterStrategy
 
             case "clear":
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().Clear);
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime.UndefinedInstance);
                 return true;
 
             case "keys":
@@ -79,10 +79,10 @@ public sealed class MapEmitter : ITypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireMap().ForEach);
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 return true;
 
             default:
@@ -120,7 +120,7 @@ public sealed class MapEmitter : ITypeEmitterStrategy
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 il.Emit(OpCodes.Br, done);
                 il.MarkLabel(missing);
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 il.MarkLabel(done);
                 emitter.SetStackType(StackType.Unknown);
                 return true;
@@ -145,7 +145,7 @@ public sealed class MapEmitter : ITypeEmitterStrategy
             case "clear" when arguments.Count == 0:
                 il.Emit(OpCodes.Ldloc, map);
                 il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(mapType, "Clear"));
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 emitter.SetStackType(StackType.Unknown);
                 return true;
 

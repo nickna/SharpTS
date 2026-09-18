@@ -191,13 +191,13 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 // holds — test262 callback-related tests rely on this.
                 if (TryEmitDirectDelegateCall(emitter, arguments, ctx.Runtime!.ArrayOperations.ForEachDirect))
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                     break;
                 }
                 var saved = EmitCallbackAndStashThisArg(emitter, arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.ForEach);
                 EmitRestoreCallbackThisArg(emitter, saved);
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 break;
             }
 
@@ -276,7 +276,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 if (arguments.Count > 0)
                     EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 else
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Join);
                 break;
 
@@ -325,7 +325,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
             case "includes":
                 if (arguments.Count == 0)
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 else
                     EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1, argLocals);
@@ -336,7 +336,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
             case "lastIndexOf":
                 // searchElement (arg 0) + optional fromIndex (arg 1).
                 if (arguments.Count == 0)
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 else
                     EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 if (arguments.Count >= 2)
@@ -365,7 +365,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 if (argLocals == null && TryEmitSortDirectCall(emitter, arguments))
                     break;
                 if (arguments.Count == 0)
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 else
                     EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Sort);
@@ -373,7 +373,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
             case "toSorted":
                 if (arguments.Count == 0)
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 else
                     EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.ToSorted);
@@ -869,7 +869,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         }
         il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CallbackThisArgField);
 

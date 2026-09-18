@@ -227,7 +227,7 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
         // and never reach this fall-through, so this only sets the implicit-completion value.
         if (_returnValueLocal != null)
         {
-            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
             _il.Emit(OpCodes.Stloc, _returnValueLocal);
         }
 

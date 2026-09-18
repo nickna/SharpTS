@@ -184,7 +184,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Stloc, result);
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Brtrue, notNull);
-        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         il.Emit(OpCodes.Br, done);
         il.MarkLabel(notNull);
         il.Emit(OpCodes.Ldloc, result);
@@ -222,7 +222,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Call, ctx.Runtime!.Workers.SetEnvironmentData);
 
         // setEnvironmentData returns undefined.
-        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         return true;
     }
 
@@ -246,7 +246,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Call, ctx.Runtime!.Workers.MarkAsUntransferable);
 
         // markAsUntransferable returns undefined.
-        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         return true;
     }
 }

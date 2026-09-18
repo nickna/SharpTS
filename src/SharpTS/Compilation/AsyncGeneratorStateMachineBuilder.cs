@@ -284,10 +284,10 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         il.Emit(OpCodes.Stfld, StateField);
         // Seed <>3__sent to $Undefined so bare next() / for-await-of delivers undefined to the resumed
         // yield expression, not null (#473, mirrors sync-gen ctor — GeneratorStateMachineBuilder).
-        if (SentField != null && _runtime?.Sentinels.UndefinedInstance != null)
+        if (SentField != null && _runtime?.UndefinedInstance != null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
             il.Emit(OpCodes.Stfld, SentField);
         }
         il.Emit(OpCodes.Ret);

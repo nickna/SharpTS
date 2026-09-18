@@ -29,7 +29,7 @@ public partial class AsyncArrowMoveNextEmitter
     // fall-through emitted after the body.
     private void EmitImplicitReturnUndefined()
     {
-        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
+        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
         EmitSetResult();
         _il.Emit(OpCodes.Leave, _exitLabel);
     }

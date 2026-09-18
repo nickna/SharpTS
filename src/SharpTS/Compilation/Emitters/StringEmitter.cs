@@ -401,7 +401,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
 
         if (arguments.Count > 1)
@@ -411,7 +411,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
 
         // The helper performs @@replace dispatch before deciding whether the
@@ -629,7 +629,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             // ECMA-262 22.1.3.21 step 4: missing separator is `undefined`,
             // not `""`. The helper's undefined-arm returns [str], so push
             // the $Undefined singleton.
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
         if (arguments.Count >= 2)
         {
@@ -638,7 +638,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
         il.Emit(OpCodes.Call, ctx.Runtime!.RegExps.RequireImplementation().StringSplitProto);
     }
@@ -857,7 +857,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
         il.Emit(OpCodes.Call, ctx.Runtime!.Strings.CodePointAt);
         // Result is already boxed (returns object: double or null)
@@ -930,7 +930,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
 
         if (arguments.Count > 1)
@@ -940,7 +940,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
         il.Emit(OpCodes.Call, ctx.Runtime!.RegExps.RequireImplementation().StringReplaceAll);
     }

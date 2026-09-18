@@ -742,7 +742,7 @@ public partial class ILCompiler
         if (slotType == typeof(object))
         {
             if (_runtime != null)
-                il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
             else
                 il.Emit(OpCodes.Ldnull);
         }

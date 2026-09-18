@@ -55,7 +55,7 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
 
                 // Load Symbol.iterator and runtime type for IterateToList
@@ -72,7 +72,7 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
 
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.From);

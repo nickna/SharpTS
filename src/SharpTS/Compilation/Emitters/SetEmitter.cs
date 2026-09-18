@@ -42,7 +42,7 @@ public sealed class SetEmitter : ITypeEmitterStrategy
 
             case "clear":
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().Clear);
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime.UndefinedInstance);
                 return true;
 
             case "keys":
@@ -66,10 +66,10 @@ public sealed class SetEmitter : ITypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireSet().ForEach);
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 return true;
 
             // ES2025 Set Operations

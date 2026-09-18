@@ -40,7 +40,7 @@ public partial class GeneratorMoveNextEmitter
             // done — and by a delegating `yield* thisGenerator()` — is `undefined` rather than
             // the stale last-yielded value still sitting in Current (#443).
             _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
             _il.Emit(OpCodes.Stfld, _builder.CurrentField);
         }
 

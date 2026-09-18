@@ -1528,7 +1528,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(returnNull);
         // Node returns undefined (not null) on a failed match
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1586,7 +1586,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(returnNull);
         // Node returns undefined (not null) on a failed match
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1635,7 +1635,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, emailLocal);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(returnUndefined);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 

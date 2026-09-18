@@ -441,7 +441,10 @@ declaration guards and completion checks prevent incomplete or reused metadata.
 Tests cover per-compilation singleton isolation, the early undefined dependency,
 captured lexical reads, coercion, omitted arguments, generators, async returns,
 and standalone/hosted deployment. Existing captured-assignment behavior is
-retained; this migration does not change language semantics.
+retained; this migration does not change language semantics. During the staged
+consumer migration, `EmittedRuntime.UndefinedInstance` is a getter-only forwarding
+accessor with no independent storage. The next step moves its remaining consumers
+to `Sentinels` and removes that accessor.
 
 Required `ReflectedMethods` owns method lookup, parent-method lookup, the weak
 receiver/name cache, unwrapped reflection invocation and the staged

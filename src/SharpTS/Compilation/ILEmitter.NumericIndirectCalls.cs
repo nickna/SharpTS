@@ -63,7 +63,7 @@ public partial class ILEmitter
         // Reuse the captured callable and evaluated values, including when an
         // argument replaced the source binding or the target has no capability.
         IL.MarkLabel(fallback);
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
         IL.Emit(OpCodes.Ldloc, callee);
         IL.Emit(OpCodes.Ldc_I4_4);
         IL.Emit(OpCodes.Newarr, _ctx.Types.Object);

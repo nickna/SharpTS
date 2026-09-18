@@ -117,7 +117,7 @@ public partial class GeneratorMoveNextEmitter : IteratorMoveNextEmitter
         // a delegating `yield* thisGenerator()` (#443). An explicit `return X` takes the
         // EmitReturn path instead and stores X in Current, so this only affects the no-return case.
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
+        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
 
         // Mark as done and return false
@@ -149,7 +149,7 @@ public partial class GeneratorMoveNextEmitter : IteratorMoveNextEmitter
         // the correct completion value), not this label, so genuine completion values are kept.
         _il.MarkLabel(_returnFalseLabel);
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
+        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
         _il.Emit(OpCodes.Ldc_I4_0);
         _il.Emit(OpCodes.Ret);

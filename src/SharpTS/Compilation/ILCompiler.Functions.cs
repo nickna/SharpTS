@@ -1184,7 +1184,7 @@ public partial class ILCompiler
             // Emit $Undefined.Instance only for untyped object returns; typed
             // reference returns (specific class types) keep their null default
             // since interpreter treats explicit `T | null` returns as null too.
-            il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
         }
         else
         {
@@ -1456,12 +1456,12 @@ public partial class ILCompiler
                 ctx.EntryPointDisplayClassFields?.TryGetValue(variable.Name.Lexeme, out var displayField) == true)
             {
                 il.Emit(OpCodes.Ldloc, ctx.EntryPointDisplayClassLocal);
-                il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
                 il.Emit(OpCodes.Stfld, displayField);
             }
             else if (ctx.TopLevelStaticVars?.TryGetValue(variable.Name.Lexeme, out var staticField) == true)
             {
-                il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
                 il.Emit(OpCodes.Stsfld, staticField);
             }
         }
@@ -1738,7 +1738,7 @@ public partial class ILCompiler
                 arity,
                 isStatic: true,
                 emitter,
-                _runtime.Sentinels.UndefinedInstance
+                _runtime.UndefinedInstance
             );
         }
     }

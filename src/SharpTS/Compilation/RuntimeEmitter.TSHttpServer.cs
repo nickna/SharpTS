@@ -237,7 +237,7 @@ public partial class RuntimeEmitter
 
         // default - return undefined
         il.MarkLabel(defaultLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
@@ -598,7 +598,7 @@ public partial class RuntimeEmitter
             for (int i = 0; i < argCount; i++) paramTypes[i] = _types.Object;
             var m = typeBuilder.DefineMethod(name, MethodAttributes.Public, _types.Object, paramTypes);
             var mil = m.GetILGenerator();
-            mil.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+            mil.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             mil.Emit(OpCodes.Ret);
         }
 
@@ -752,7 +752,7 @@ public partial class RuntimeEmitter
 
         // default - return undefined
         il.MarkLabel(defaultLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1232,7 +1232,7 @@ public partial class RuntimeEmitter
         var hasContentType = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, hasContentType);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.MarkLabel(hasContentType);
         il.Emit(OpCodes.Ret);
 
@@ -1248,7 +1248,7 @@ public partial class RuntimeEmitter
         var hasValue = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, hasValue);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.MarkLabel(hasValue);
         il.Emit(OpCodes.Ret);
     }
@@ -1529,7 +1529,7 @@ public partial class RuntimeEmitter
         var closeIdle = typeBuilder.DefineMethod("CloseIdleConnections",
             MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var ciil = closeIdle.GetILGenerator();
-        ciil.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        ciil.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         ciil.Emit(OpCodes.Ret);
 
         // SetTimeout(msecs, cb) → register cb as a 'timeout' listener (best effort); returns this.
@@ -2203,7 +2203,7 @@ public partial class RuntimeEmitter
 
         // default - return undefined
         il.MarkLabel(defaultLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 

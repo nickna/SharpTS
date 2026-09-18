@@ -232,6 +232,9 @@ public class EmittedRuntime
     /// <summary>Required undefined and lexical-initialization sentinels for this compilation.</summary>
     public EmittedSentinelRuntime Sentinels { get; } = new();
 
+    /// <summary>Temporary forwarding accessor while remaining consumers move to Sentinels.</summary>
+    public FieldInfo UndefinedInstance => Sentinels.UndefinedInstance;
+
 
     // The emitted TSNamespace class
     public TypeBuilder TSNamespaceType { get; set; } = null!;

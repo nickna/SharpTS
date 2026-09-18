@@ -1841,7 +1841,7 @@ public partial class RuntimeEmitter
                 // ECMA-262: void-returning prototype methods (forEach) return
                 // undefined, not null. Push $Undefined.Instance for spec-aligned
                 // `arr.forEach(...) === undefined` strict-equality tests.
-                il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             // Object/String/ListOfObject/etc. are already object-compatible.
         }
 
@@ -1877,7 +1877,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldelem_Ref);
             il.Emit(OpCodes.Br, doneLabel);
             il.MarkLabel(noArgsLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.MarkLabel(doneLabel);
         }
 
@@ -2008,7 +2008,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldlen);
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Bge, haveThisArgLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.Emit(OpCodes.Br, afterStashLabel);
             il.MarkLabel(haveThisArgLabel);
             il.Emit(OpCodes.Ldarg_1);
@@ -2065,7 +2065,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldlen);
                 il.Emit(OpCodes.Brtrue, haveSearch);
-                il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
                 il.Emit(OpCodes.Br, afterSearch);
                 il.MarkLabel(haveSearch);
                 il.Emit(OpCodes.Ldarg_1);

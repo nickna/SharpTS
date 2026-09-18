@@ -58,7 +58,7 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Brtrue, hasKey);  // If not null, jump to hasKey
                 // Null case: pop null and load undefined
                 il.Emit(OpCodes.Pop);
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 il.Emit(OpCodes.Br, doneKeyFor);
                 // Not null case: string is still on stack
                 il.MarkLabel(hasKey);

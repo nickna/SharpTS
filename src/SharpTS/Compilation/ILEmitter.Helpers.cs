@@ -85,10 +85,10 @@ public partial class ILEmitter
             var fireDefault = builder.DefineLabel($"fire_default_{i}");
             var skipDefault = builder.DefineLabel($"skip_default_{i}");
 
-            if (_ctx.Runtime?.Sentinels.UndefinedInstance != null)
+            if (_ctx.Runtime?.UndefinedInstance != null)
             {
                 IL.Emit(OpCodes.Ldarg, argIndex);
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
                 IL.Emit(OpCodes.Beq, fireDefault);
             }
 
