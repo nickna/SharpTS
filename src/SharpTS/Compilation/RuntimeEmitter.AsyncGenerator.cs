@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits the $IAsyncGenerator interface that extends IAsyncEnumerator&lt;object&gt; with async Return/Throw methods.
     /// </summary>
-    private void EmitAsyncGeneratorInterface(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitAsyncGeneratorInterface(ModuleBuilder moduleBuilder, EmittedAsyncGeneratorRuntime asyncGenerators)
     {
         // Define interface: public interface $IAsyncGenerator : IAsyncEnumerator<object>, IAsyncEnumerable<object>
         var interfaceBuilder = moduleBuilder.DefineType(
@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
             null,
             [_types.IAsyncEnumeratorOfObject, _types.IAsyncEnumerableOfObject]
         );
-        runtime.AsyncGeneratorInterfaceType = interfaceBuilder;
+        asyncGenerators.Type = interfaceBuilder;
 
         // Define next(object sentValue) method: Task<object> next(object)
         // sentValue is the value delivered as the result of the suspended yield expression (#473).
@@ -48,7 +48,7 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]
         );
-        runtime.AsyncGeneratorNextMethod = nextMethod;
+        asyncGenerators.Next = nextMethod;
 
         // Define return(object value) method: Task<object> return(object value)
         // Note: "return" is a C# keyword but valid as a method name via reflection
@@ -58,7 +58,7 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]
         );
-        runtime.AsyncGeneratorReturnMethod = returnMethod;
+        asyncGenerators.Return = returnMethod;
 
         // Define throw(object error) method: Task<object> throw(object error)
         // Note: "throw" is a C# keyword but valid as a method name via reflection
@@ -68,7 +68,7 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]
         );
-        runtime.AsyncGeneratorThrowMethod = throwMethod;
+        asyncGenerators.Throw = throwMethod;
 
         interfaceBuilder.CreateType();
     }
@@ -77,7 +77,11 @@ public partial class RuntimeEmitter
     /// Emits the AsyncGeneratorAwaitContinue method that awaits a task and then continues with MoveNextAsync.
     /// This replaces the RuntimeTypes.AsyncGeneratorAwaitContinue method for standalone support.
     /// </summary>
-    private void EmitAsyncGeneratorAwaitContinueMethods(TypeBuilder typeBuilder, ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitAsyncGeneratorAwaitContinueMethods(
+        TypeBuilder typeBuilder,
+        ModuleBuilder moduleBuilder,
+        EmittedAsyncGeneratorContinuationRuntime continuations
+    )
     {
         // Define the state machine type
         var sm = DefineAsyncGeneratorAwaitContinueStateMachine(moduleBuilder);
@@ -89,7 +93,7 @@ public partial class RuntimeEmitter
             typeof(ValueTask<bool>),
             [typeof(Task<object>), _types.IAsyncEnumeratorOfObject]
         );
-        runtime.AsyncGeneratorAwaitContinue = method;
+        continuations.AwaitContinue = method;
 
         // Emit wrapper body
         EmitAsyncGeneratorAwaitContinueWrapper(method.GetILGenerator(), sm);
@@ -101,7 +105,7 @@ public partial class RuntimeEmitter
         sm.Type.CreateType();
 
         // Emit the next()-result builder used by truly-async next() (#631/#542).
-        EmitAsyncGeneratorBuildResultMethod(typeBuilder, moduleBuilder, runtime);
+        EmitAsyncGeneratorBuildResultMethod(typeBuilder, moduleBuilder, continuations);
     }
 
     /// <summary>
@@ -117,7 +121,11 @@ public partial class RuntimeEmitter
     /// promise — exactly as ECMA-262 §27.6.1.2 requires.
     /// </para>
     /// </summary>
-    private void EmitAsyncGeneratorBuildResultMethod(TypeBuilder typeBuilder, ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitAsyncGeneratorBuildResultMethod(
+        TypeBuilder typeBuilder,
+        ModuleBuilder moduleBuilder,
+        EmittedAsyncGeneratorContinuationRuntime continuations
+    )
     {
         var builderType = _types.MakeGenericType(typeof(System.Runtime.CompilerServices.AsyncTaskMethodBuilder<>), _types.Object);
         var valueTaskAwaiterType = _types.ValueTaskAwaiterOfBool;
@@ -153,7 +161,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.TaskOfObject,
             [_types.ValueTaskOfBool, _types.IAsyncEnumeratorOfObject]);
-        runtime.AsyncGeneratorBuildResult = method;
+        continuations.BuildResult = method;
 
         {
             var il = method.GetILGenerator();

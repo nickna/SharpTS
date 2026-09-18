@@ -17,6 +17,20 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Optional async-generator interfaces with independently selected continuations and sync adaptation.</summary>
+    public EmittedAsyncGeneratorRuntime? AsyncGenerators { get; private set; }
+
+    internal void BeginAsyncGeneratorsEmission()
+    {
+        if (AsyncGenerators is not null)
+            throw new InvalidOperationException("Async generator metadata emission has already started.");
+        AsyncGenerators = new EmittedAsyncGeneratorRuntime();
+    }
+
+    public EmittedAsyncGeneratorRuntime RequireAsyncGenerators() => AsyncGenerators
+        ?? throw new InvalidOperationException("Async generator runtime was not enabled for this compilation.");
+
+
     /// <summary>Required synchronous and native-number generator protocol declarations.</summary>
     public EmittedGeneratorRuntime Generators { get; } = new();
 
@@ -567,21 +581,9 @@ public class EmittedRuntime
 
 
 
-    // Async Generator interface ($IAsyncGenerator extends IAsyncEnumerator<object> with async Return/Throw)
-    public TypeBuilder AsyncGeneratorInterfaceType { get; set; } = null!;
-    public MethodBuilder AsyncGeneratorNextMethod { get; set; } = null!;
-    public MethodBuilder AsyncGeneratorReturnMethod { get; set; } = null!;
-    public MethodBuilder AsyncGeneratorThrowMethod { get; set; } = null!;
 
-    public ConstructorBuilder AsyncFromSyncIteratorCtor { get; set; } = null!;
-    public MethodBuilder AdaptSyncIterableToAsyncGenerator { get; set; } = null!;
 
-    // Async Generator await continuation helper
-    public MethodBuilder AsyncGeneratorAwaitContinue { get; set; } = null!;
 
-    // Async Generator next-result builder: awaits a MoveNextAsync ValueTask<bool> and produces the
-    // { value, done } Task<object> for next(), so next() never blocks the event-loop thread (#631/#542).
-    public MethodBuilder AsyncGeneratorBuildResult { get; set; } = null!;
 
     // Iterator helper methods (ES2025 Iterator Helpers)
     public MethodBuilder NormalizeToEnumerator { get; set; } = null!;

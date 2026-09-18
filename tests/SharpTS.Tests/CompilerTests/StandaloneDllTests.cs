@@ -3708,6 +3708,128 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    public static IEnumerable<object[]> AsyncGeneratorPrograms =>
+    [
+        new object[]
+        {
+            "async_next_sent",
+            "async function* values(){const n:any=yield 2;yield await Promise.resolve(n+3);return 9;}async function run(){const g=values();const a=await g.next();const b=await g.next(4);const c=await g.next();console.log(a.value,a.done,b.value,b.done,c.value,c.done);}run();\n",
+            "2 false 7 false 9 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_pending_next",
+            "async function* values(){yield await new Promise<number>(resolve=>setTimeout(()=>resolve(6),5));}async function run(){const g=values();const pending=g.next();console.log(\"pending\");const a=await pending;console.log(a.value,a.done);console.log((await g.next()).done);}run();\n",
+            "pending\n6 false\ntrue\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_return_finally",
+            "async function* values(){try{yield 1;yield 2;}finally{console.log(\"closed\");}}async function run(){const g=values();console.log((await g.next()).value);const r=await g.return(8);console.log(r.value,r.done);}run();\n",
+            "1\nclosed\n8 true\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_from_sync_unicode",
+            "async function run(){let count=0;let lengths=\"\";for await(const c of \"a\ud83d\ude00\"){count++;lengths+=c.length+\",\";}console.log(count,lengths);}run();\n",
+            "2 1,2,\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_from_sync_set",
+            "async function run(){let total=0;for await(const n of new Set([2,3,2]))total+=n;console.log(total);}run();\n",
+            "5\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_from_sync_close",
+            "const values:any={[Symbol.iterator](){let n=0;return {next(){return {value:Promise.resolve(++n),done:false};},return(){console.log(\"closed\");return {value:Promise.resolve(8),done:true};}};}};async function run(){for await(const n of values){console.log(n);break;}console.log(\"done\");}run();\n",
+            "1\nclosed\ndone\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_rejected_await",
+            "async function* values(){yield 1;await Promise.reject(\"bad\");yield 2;}async function run(){try{for await(const n of values())console.log(n);}catch(e){console.log(e);}}run();\n",
+            "1\nbad\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_generator_break",
+            "async function* values(){try{yield await Promise.resolve(3);yield 4;}finally{console.log(\"closed\");}}async function run(){for await(const n of values()){console.log(n);break;}console.log(\"done\");}run();\n",
+            "3\nclosed\ndone\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_delegate_values_control",
+            "async function* inner(){yield 2;yield 3;}async function* outer(){yield* inner();}async function run(){let total=0;for await(const n of outer())total+=n;console.log(total);}run();\n",
+            "5\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_custom_external_counter_control",
+            "let n=0;const values:any={[Symbol.asyncIterator](){return {async next(){return {value:++n,done:n>3};}};}};async function run(){let total=0;for await(const v of values)total+=v;console.log(total);}run();\n",
+            "6\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_promise_array_any_control",
+            "async function run(){const values:any=[Promise.resolve(2),Promise.resolve(4)];let total=0;for await(const n of values)total+=n;console.log(total);}run();\n",
+            "6\n",
+            false,
+            "",
+        },
+        new object[]
+        {
+            "async_nested_array_any_control",
+            "async function* values(){const items:any=[Promise.resolve(2),Promise.resolve(3)];for await(const n of items)yield n+1;}async function run(){let total=0;for await(const n of values())total+=n;console.log(total);}run();\n",
+            "7\n",
+            false,
+            "",
+        },
+    ];
+
+    [Theory]
+    [MemberData(nameof(AsyncGeneratorPrograms))]
+    public void Isolated_AsyncGenerator_PreservesAwaitingDelegationAndCleanup(
+        string name, string source, string expected, bool hosted, string extraArguments)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"async_generator_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting} {extraArguments}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> GeneratorProtocolPrograms =>
     [
         new object[]

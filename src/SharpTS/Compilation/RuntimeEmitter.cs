@@ -249,7 +249,10 @@ public partial class RuntimeEmitter
         // Emit $IAsyncGenerator only when async-generator or for-await support
         // can reference it.
         if (features.UsesAsyncGenerator || features.UsesForAwaitOf)
-            EmitAsyncGeneratorInterface(moduleBuilder, runtime);
+        {
+            runtime.BeginAsyncGeneratorsEmission();
+            EmitAsyncGeneratorInterface(moduleBuilder, runtime.RequireAsyncGenerators());
+        }
 
         // NOTE: $IteratorWrapper is emitted later, after iterator methods are defined
 
@@ -740,7 +743,34 @@ public partial class RuntimeEmitter
         // CoerceAwaitableToTask, all of which are now defined. It is gated on
         // for-await syntax because most programs never reference this type.
         if (features.UsesForAwaitOf)
-            EmitAsyncFromSyncIteratorSupport(moduleBuilder, runtime);
+        {
+            runtime.RequireAsyncGenerators().BeginFromSyncEmission();
+            EmitAsyncFromSyncIteratorSupport(
+                moduleBuilder,
+                _runtimeTypeBuilder!,
+                runtime.RequireAsyncGenerators(),
+                runtime.RequireAsyncGenerators().RequireFromSync(),
+                new AsyncFromSyncIteratorSupportInputs(
+                    runtime.Generators,
+                    runtime.GetIteratorDone,
+                    runtime.GetIteratorFunction,
+                    runtime.GetIteratorNextMethod,
+                    runtime.GetIteratorValue,
+                    runtime.Invocation,
+                    runtime.InvokeCapturedIteratorNext,
+                    runtime.IterateToList,
+                    runtime.NormalizeToEnumerator,
+                    runtime.ObjectRead,
+                    runtime.RequirePromise(),
+                    runtime.RuntimeType,
+                    runtime.Symbols,
+                    runtime.UndefinedInstance,
+                    runtime.UndefinedType
+                )
+            );
+            runtime.RequireAsyncGenerators().RequireFromSync().CompleteEmission();
+        }
+        runtime.AsyncGenerators?.CompleteEmission();
 
         // AbortSignal / Intl value-position singletons (#224). Must follow
         // EmitRuntimeClass — they wrap the AbortSignal*/CreateIntl* helpers

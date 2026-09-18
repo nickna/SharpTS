@@ -238,10 +238,10 @@ public partial class AsyncGeneratorMoveNextEmitter
         // SentField on initial entry (which holds undefined or the outer first-next value) is safe.
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldfld, delegatedField);
-        _il.Emit(OpCodes.Castclass, _ctx!.Runtime!.AsyncGeneratorInterfaceType);
+        _il.Emit(OpCodes.Castclass, _ctx!.Runtime!.RequireAsyncGenerators().Type);
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldfld, _builder.SentField);
-        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.AsyncGeneratorNextMethod);
+        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Next);
         SetStackUnknown();
         EmitAwaitFromValueOnStack(awaitState);
         var asyncResultLocal = _il.DeclareLocal(typeof(object));
@@ -565,7 +565,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Castclass, _types.IAsyncEnumeratorOfObject);
 
         // Call AsyncGeneratorAwaitContinue(task, generator) - use emitted method for standalone support
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.AsyncGeneratorAwaitContinue);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.RequireAsyncGenerators().RequireContinuations().AwaitContinue);
 
         // Returns ValueTask<bool>, return it
         _il.Emit(OpCodes.Ret);
