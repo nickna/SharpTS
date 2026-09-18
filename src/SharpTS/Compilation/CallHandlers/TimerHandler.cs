@@ -79,7 +79,7 @@ public class TimerHandler : ICallHandler
     {
         if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); } else { il.Emit(OpCodes.Ldnull); }
         il.Emit(OpCodes.Call, ctx.Runtime!.Microtasks.QueueMicrotask);
-        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
         return true;
     }
 }

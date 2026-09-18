@@ -134,7 +134,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
 
             case "undefined":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
                 return true;
 
             case "NaN":

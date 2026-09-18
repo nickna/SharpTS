@@ -140,7 +140,7 @@ public partial class AsyncGeneratorMoveNextEmitter : IteratorMoveNextEmitter
         // otherwise surface as `next().value` after done, or as a delegating `yield*`'s completion value
         // (#481, async analog of #443). An explicit `return X` takes the EmitReturn path and stores X.
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
+        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldc_I4, -2);
@@ -166,7 +166,7 @@ public partial class AsyncGeneratorMoveNextEmitter : IteratorMoveNextEmitter
         // takes the fall-through / EmitReturn path above (correct completion value), not this label.
         _il.MarkLabel(_returnFalseLabel);
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
+        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
         EmitReturnValueTaskBool(false);
     }

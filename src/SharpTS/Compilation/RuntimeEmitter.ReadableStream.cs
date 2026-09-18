@@ -547,7 +547,7 @@ public partial class RuntimeEmitter
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Callvirt, setItem);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "done");
@@ -831,7 +831,7 @@ public partial class RuntimeEmitter
         }
         else
         {
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         }
         il.Emit(OpCodes.Callvirt, setItem);
 
@@ -1019,7 +1019,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "signal");
         il.Emit(OpCodes.Call, runtime.ObjectRead.FieldsProperty);
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Beq, haveSignalLabel);
         il.Emit(OpCodes.Stloc, signalLocal);
         il.Emit(OpCodes.Br, noSignalLabel);
@@ -1253,7 +1253,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(noCloseLabel);
 
         // return Task.FromResult($Undefined.Instance)
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
         il.Emit(OpCodes.Ret);
 

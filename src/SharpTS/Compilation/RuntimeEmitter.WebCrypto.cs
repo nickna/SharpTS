@@ -240,7 +240,7 @@ public partial class RuntimeEmitter
 
         // undefined sentinel → null
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Beq, nullLabel);
 
         il.Emit(OpCodes.Ldloc, valueLocal);

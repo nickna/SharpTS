@@ -148,7 +148,7 @@ public partial class RuntimeEmitter
             else body.Emit(OpCodes.Br, present);
             body.MarkLabel(missing);
             if (numeric) body.Emit(OpCodes.Ldc_R8, double.NaN);
-            else body.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            else body.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             body.Emit(OpCodes.Ret);
             body.MarkLabel(present);
             if (holes)

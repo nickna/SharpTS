@@ -125,7 +125,7 @@ public partial class RuntimeEmitter
         var hasErr = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, errLocal);
         il.Emit(OpCodes.Brtrue, hasErr);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         // return new $Error(err);

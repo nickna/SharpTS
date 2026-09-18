@@ -48,13 +48,10 @@ public sealed class EmittedSentinelRuntimeTests
     public void UndefinedIsAvailableBeforeLexicalDeclarationsAndCompletion()
     {
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
-        var emitter = new RuntimeEmitter(TypeProvider.Runtime); var runtime = new EmittedRuntime();
-        var owner = runtime.Sentinels;
-        Assert.Throws<InvalidOperationException>(() => runtime.UndefinedInstance);
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime); var owner = new EmittedRuntime().Sentinels;
         Emit(emitter, "EmitUndefinedClass", module, owner);
         Assert.Equal("$Undefined", owner.UndefinedType.Name);
         Assert.Equal("Instance", owner.UndefinedInstance.Name);
-        Assert.Same(owner.UndefinedInstance, runtime.UndefinedInstance);
         Assert.Same(owner.UndefinedType, owner.UndefinedInstance.DeclaringType);
         Assert.False(owner.IsComplete);
         Assert.Throws<InvalidOperationException>(() => owner.LexicalUninitializedType);
@@ -95,12 +92,7 @@ public sealed class EmittedSentinelRuntimeTests
         Assert.Equal(4, Handles.Length);
         Assert.NotSame(new EmittedRuntime().Sentinels, new EmittedRuntime().Sentinels);
         Assert.Null(typeof(EmittedRuntime).GetProperty("Sentinels")!.SetMethod);
-        foreach (var property in Handles.Where(p => p.Name != nameof(EmittedRuntime.UndefinedInstance)))
-            Assert.Null(typeof(EmittedRuntime).GetProperty(property.Name));
-        // The next migration step removes this getter after moving its remaining consumers.
-        var forwardingAccessor = typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.UndefinedInstance))!;
-        Assert.Null(forwardingAccessor.SetMethod);
-        Assert.Null(typeof(EmittedRuntime).GetField("<UndefinedInstance>k__BackingField", Members));
+        foreach (var property in Handles) Assert.Null(typeof(EmittedRuntime).GetProperty(property.Name));
         foreach (string name in new[] { "EmitUndefinedClass", "EmitLexicalUninitializedClass" })
             Assert.Equal(new[] { typeof(ModuleBuilder), typeof(EmittedSentinelRuntime) }, typeof(RuntimeEmitter).GetMethod(name, Members)!.GetParameters().Select(p => p.ParameterType));
     }

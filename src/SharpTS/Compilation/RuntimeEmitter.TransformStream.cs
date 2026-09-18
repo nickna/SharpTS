@@ -124,7 +124,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, transformFnLocal);
             il.Emit(OpCodes.Brfalse, hasTransformLabel);
             il.Emit(OpCodes.Ldloc, transformFnLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Beq, hasTransformLabel);
 
             // Found transform — call _transformer.transform(chunk, _readable)
@@ -184,7 +184,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, flushLocal);
             il.Emit(OpCodes.Brfalse, noFlushLabel);
             il.Emit(OpCodes.Ldloc, flushLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Beq, noFlushLabel);
 
             // _transformer.flush(_readable) via InvokeMethodValue
