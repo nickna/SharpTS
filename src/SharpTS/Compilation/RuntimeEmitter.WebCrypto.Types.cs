@@ -598,7 +598,7 @@ public partial class RuntimeEmitter
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
         var done = il.DefineLabel();
         var resultLocal = il.DeclareLocal(_types.String);
-        foreach (var (lower, web) in _wcHashes)
+        foreach (var (lower, web) in WebCryptoEmitConstants.HashNames)
         {
             var next = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, hashLocal);

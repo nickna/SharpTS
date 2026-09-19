@@ -185,6 +185,13 @@ forward-reference and completion checks remain with the emitted runtime componen
 catalog preserves method selection, digest order, platform support checks and emitted IL;
 method-local reflection and the other shared infrastructure still require the residual audit.
 
+`CryptoPrimeEmitConstants`, `ProcessSignalEmitConstants` and `WebCryptoEmitConstants`
+own the fixed trial divisors, signal mappings and algorithm-name pairs used by their emitters.
+These process-wide catalogs expose get-only `ImmutableArray` values; callers cannot change
+later compilations through a mutable array alias. Catalog order remains emission order.
+They contain no generated declarations or feature selection. Per-compilation handles and
+completion remain with the corresponding runtime components.
+
 Migrate `EmittedRuntime` metadata one feature family at a time. DNS is the first component:
 `Dns` is null when `UsesDns` is false, and `RequireDns()` reports accidental use of a disabled
 feature. `RuntimeEmitter.EmitAll` creates the component before emission and completes it before
