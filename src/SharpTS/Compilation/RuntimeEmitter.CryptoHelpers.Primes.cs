@@ -17,9 +17,6 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    private static readonly int[] _smallPrimes =
-        [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71];
-
     private void EmitCryptoPrimeHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var crypto = runtime.RequireCrypto();
@@ -238,7 +235,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notLtTwoLabel);
 
         // foreach small prime sp: if (n % sp == 0) return n == sp
-        foreach (var sp in _smallPrimes)
+        foreach (var sp in CryptoPrimeEmitConstants.SmallPrimes)
         {
             var notDivLabel = il.DefineLabel();
             // n % sp

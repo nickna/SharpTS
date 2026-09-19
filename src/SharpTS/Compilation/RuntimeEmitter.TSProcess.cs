@@ -27,19 +27,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private static readonly string[] _processTrappableSignals =
-        ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "SIGBREAK", "SIGWINCH"];
-
-    /// <summary>
-    /// Node signal name → conventional number (kill numeric form, 128+n exits).
-    /// </summary>
-    private static readonly (string Name, int Number)[] _processSignalNumbers =
-    [
-        ("SIGHUP", 1), ("SIGINT", 2), ("SIGQUIT", 3), ("SIGABRT", 6),
-        ("SIGKILL", 9), ("SIGUSR1", 10), ("SIGUSR2", 12), ("SIGTERM", 15),
-        ("SIGBREAK", 21), ("SIGWINCH", 28),
-    ];
-
     /// <summary>
     /// Emits the $Process infrastructure. Called at the end of
     /// EmitProcessMethods so the per-value $Runtime helpers it delegates to
@@ -1887,7 +1874,7 @@ public partial class RuntimeEmitter
         var register = il.DefineLabel();
         var done = il.DefineLabel();
 
-        foreach (var signal in _processTrappableSignals)
+        foreach (var signal in ProcessSignalEmitConstants.TrappableSignals)
         {
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, signal);
@@ -2097,7 +2084,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, signalNumLocal);
-        foreach (var (name, number) in _processSignalNumbers)
+        foreach (var (name, number) in ProcessSignalEmitConstants.SignalNumbers)
         {
             var next = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, signalNumLocal);
@@ -2115,7 +2102,7 @@ public partial class RuntimeEmitter
 
         // Validate the name and pick its number
         var validated = il.DefineLabel();
-        foreach (var (name, number) in _processSignalNumbers)
+        foreach (var (name, number) in ProcessSignalEmitConstants.SignalNumbers)
         {
             var next = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, signalLocal);

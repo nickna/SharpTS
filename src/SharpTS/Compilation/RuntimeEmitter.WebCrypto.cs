@@ -12,11 +12,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // Cross-file references for the $SubtleCrypto/$WebCrypto type emitters.
-
-    private static readonly (string Lower, string Web)[] _wcHashes =
-        [("sha1", "SHA-1"), ("sha256", "SHA-256"), ("sha384", "SHA-384"), ("sha512", "SHA-512")];
-
     private MethodInfo WcSpanFromBytes => _types.GetMethod(_types.ReadOnlySpanOfByte, "op_Implicit", [typeof(byte[])])!;
 
     /// <summary>Emits all WebCrypto byte-level helpers onto $Runtime.</summary>
@@ -74,7 +69,7 @@ public partial class RuntimeEmitter
         var il = webCrypto.HashAlgorithm.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
-        foreach (var (lower, _) in _wcHashes)
+        foreach (var (lower, _) in WebCryptoEmitConstants.HashNames)
         {
             var next = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -158,7 +153,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToUpperInvariant")!);
         il.Emit(OpCodes.Stloc, nameLocal);
 
-        foreach (var (lower, web) in _wcHashes)
+        foreach (var (lower, web) in WebCryptoEmitConstants.HashNames)
         {
             var next = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, nameLocal);
