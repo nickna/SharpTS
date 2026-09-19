@@ -1068,7 +1068,7 @@ public partial class ILCompiler
     /// <summary>
     /// Defines one <c>public static $RegExp</c> field on <c>$Program</c> per
     /// hoistable regex literal (<see cref="RegexLiteralHoistAnalyzer"/>), and
-    /// records them on <see cref="EmittedRuntime.RegexHoistFields"/> for
+    /// records them on <see cref="EmittedRuntime.RegexLiteralCache"/> for
     /// <c>EmitRegexLiteral</c>. Runs after <c>$Program</c> is created and before
     /// any body is emitted, so the fields exist when a literal is first emitted.
     /// Fields are <c>object</c>-typed (matching <c>CreateRegExpWithFlags</c>'s
@@ -1079,18 +1079,17 @@ public partial class ILCompiler
     private void DefineHoistedRegexFields(List<Stmt> statements)
     {
         var hoistable = RegexLiteralHoistAnalyzer.Analyze(statements);
-        if (hoistable.Count == 0) return;
-
-        var fields = new Dictionary<Parsing.Expr.RegexLiteral, FieldBuilder>(ReferenceEqualityComparer.Instance);
+        var cache = _runtime.RegexLiteralCache;
+        cache.BeginDeclarations(hoistable);
         int index = 0;
         foreach (var literal in hoistable)
         {
-            fields[literal] = _programType.DefineField(
+            cache.DeclareField(literal, _programType.DefineField(
                 $"$rx_{index++}",
                 _types.Object,
-                FieldAttributes.Public | FieldAttributes.Static);
+                FieldAttributes.Public | FieldAttributes.Static));
         }
-        _runtime.RegexHoistFields = fields;
+        cache.CompleteEmission();
     }
 
     /// <summary>

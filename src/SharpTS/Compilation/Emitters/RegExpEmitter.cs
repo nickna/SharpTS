@@ -115,7 +115,7 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         if (ctx.RuntimeFeatures?.UsesRegExpPrototypeMutation != false
             || receiver is not Expr.RegexLiteral literal
-            || ctx.Runtime?.RegexHoistFields?.ContainsKey(literal) != true
+            || ctx.Runtime?.RegexLiteralCache.Fields.ContainsKey(literal) != true
             || arguments.Count > 1)
             return false;
 

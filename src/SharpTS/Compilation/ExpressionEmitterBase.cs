@@ -2545,7 +2545,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// <see cref="ILEmitter"/>) so regex literals work identically in every emission context —
     /// plain functions, arrows, and the four state-machine bodies (async / async-arrow /
     /// generator / async-generator). It needs no sync-only state: the per-site hoist fields
-    /// hang off the shared <see cref="EmittedRuntime.RegexHoistFields"/>, reachable everywhere
+    /// hang off the shared <see cref="EmittedRuntime.RegexLiteralCache"/>, reachable everywhere
     /// (#1105 — previously the base pushed <c>null</c>, silently miscompiling every regex inside
     /// an async or generator body).
     /// </summary>
@@ -2558,7 +2558,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // Lazy init (vs. a .cctor) preserves SyntaxError throw-on-evaluation for
         // an invalid pattern, and a rare concurrent double-construct just yields
         // an equivalent instance (we only hoist where lastIndex is irrelevant).
-        if (Ctx.Runtime?.RegexHoistFields is { } hoistFields
+        if (Ctx.Runtime?.RegexLiteralCache.Fields is { } hoistFields
             && hoistFields.TryGetValue(re, out var field))
         {
             var done = IL.DefineLabel();

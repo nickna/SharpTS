@@ -1545,6 +1545,17 @@ exception object and the wrapper when its inner exception is absent. CLR initial
 guest evaluation order, emitted instructions and standalone/hosted dependencies remain unchanged.
 Regex hoisting, runtime-type construction and the final residual ownership audit remain required.
 
+Regex literal caches use required `EmittedRegexLiteralCacheRuntime`. The compiler snapshots the
+analyzer-selected AST nodes by reference identity after defining `$Program`, declares every
+`$rx_N` field in the original order, and completes the registry before emitting guest bodies.
+An empty selection is explicitly initialized and completed. Null, duplicate, unselected and
+late declarations are rejected; incomplete completion remains repairable. Consumers share a
+stable read-only view, including ordinary, async and generator emitters and intrinsic fast
+paths. Completion freezes metadata registration, while the generated public static object
+fields remain mutable for lazy initialization. Escaping literals, stateful test/exec exclusions,
+throw-on-evaluation, guest identity and hosted/standalone behavior are unchanged. Shared
+construction, registry and residual-state auditing remain separate work under #1599.
+
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only
 need that family's metadata (for example, DNS resolver declaration); retain `EmittedRuntime` where

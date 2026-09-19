@@ -427,7 +427,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             || arguments.Count != 2
             || arguments[0] is not Expr.RegexLiteral literal
             || literal.Flags.IndexOfAny(['u', 'v', 'y']) >= 0
-            || ctx.Runtime?.RegexHoistFields?.ContainsKey(literal) != true
+            || ctx.Runtime?.RegexLiteralCache.Fields.ContainsKey(literal) != true
             || !IsSideEffectFreePrimitiveString(receiver, ctx)
             || !IsSideEffectFreePrimitiveString(arguments[1], ctx))
             return false;
