@@ -27,7 +27,7 @@ public sealed class EmittedArrayDestructuringRuntimeTests
             Assert.True(runtime.ArrayOperations.IsComplete);
             var handle = runtime.ArrayOperations.DestructureSource;
             Assert.Same(builder, handle.Module.Assembly);
-            Assert.Same(runtime.RuntimeClass.Type, handle.DeclaringType);
+            Assert.Same(runtime.RuntimeType, handle.DeclaringType);
             var loaded = SaveVerifyLoad(builder); var type = loaded.GetType("$Runtime")!;
             var symbol = loaded.GetType(runtime.Symbols.Iterator.DeclaringType!.FullName!)!
                 .GetField(runtime.Symbols.Iterator.Name, Members)!.GetValue(null)!;

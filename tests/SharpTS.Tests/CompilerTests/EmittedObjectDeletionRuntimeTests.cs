@@ -95,7 +95,7 @@ public sealed class EmittedObjectDeletionRuntimeTests
     {
         var builder = NewAssembly(); var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect(selected));
-        var probe = runtime.RuntimeClass.Type.DefineNestedType("SuppliedPromiseDeletion", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeType.DefineNestedType("SuppliedPromiseDeletion", TypeAttributes.NestedPublic);
         var resolve = SimpleReceiver(probe, "SuppliedResolve"); var reject = SimpleReceiver(probe, "SuppliedReject");
         var promise = supplied ? new EmittedPromiseRuntime { ResolveCallbackType = resolve, RejectCallbackType = reject } : null;
         var owner = new EmittedObjectDeletionRuntime { Property = runtime.ObjectDeletion.Property, PropertyStrict = runtime.ObjectDeletion.PropertyStrict };

@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using SharpTS.Compilation;
 using SharpTS.Parsing;
 using Xunit;
+using static SharpTS.Tests.CompilerTests.RuntimeEmissionTestHelpers;
 
 namespace SharpTS.Tests.CompilerTests;
 
@@ -350,14 +351,6 @@ public class EmittedDescriptorStorageRuntimeTests
         emitter ??= new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
         return source is null ? emitter.EmitAll(module) : emitter.EmitAll(module,
             new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow()));
-    }
-
-    private static MemoryStream Save(EmittedRuntime runtime)
-    {
-        var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
-        bytes.Position = 0;
-        return bytes;
     }
 
     private static void Verify(MemoryStream bytes)

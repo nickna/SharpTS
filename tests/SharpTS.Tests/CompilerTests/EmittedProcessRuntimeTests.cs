@@ -146,8 +146,8 @@ public class EmittedProcessRuntimeTests
         Assert.Equal(70, Handles(typeof(EmittedProcessRuntime)).Count());
         Assert.Equal(6, Handles(typeof(EmittedProcessStreamRuntime)).Count());
         Assert.Equal(2, Handles(typeof(EmittedHostedProcessRuntime)).Count());
-        Assert.Same(runtime.RuntimeClass.Type, process.GetObject.DeclaringType);
-        Assert.Same(runtime.RuntimeClass.Type, process.UptimeBaselineField.DeclaringType);
+        Assert.Same(runtime.RuntimeType, process.GetObject.DeclaringType);
+        Assert.Same(runtime.RuntimeType, process.UptimeBaselineField.DeclaringType);
         Assert.Equal("$Process", process.GetInstance.DeclaringType!.Name);
         Assert.Same(process.GetInstance.DeclaringType, process.FieldsField.DeclaringType);
         Assert.Equal("$ProcessEmitClosure", process.EmitClosureCtor.DeclaringType!.Name);
@@ -295,7 +295,7 @@ public class EmittedProcessRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

@@ -100,9 +100,9 @@ public class EmittedOsRuntimeTests
             foreach (var property in Handles)
             {
                 var member = Assert.IsAssignableFrom<MethodBuilder>(property.GetValue(os));
-                Assert.Same(runtime.RuntimeClass.Type, member.DeclaringType);
+                Assert.Same(runtime.RuntimeType, member.DeclaringType);
                 Assert.True(member.IsPublic && member.IsStatic);
-                Assert.True(runtime.RuntimeClass.Type.IsCreated());
+                Assert.True(runtime.RuntimeType.IsCreated());
             }
         }
         else Assert.Throws<InvalidOperationException>(runtime.RequireOs);
@@ -182,7 +182,7 @@ public class EmittedOsRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

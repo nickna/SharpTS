@@ -1556,17 +1556,6 @@ fields remain mutable for lazy initialization. Escaping literals, stateful test/
 throw-on-evaluation, guest identity and hosted/standalone behavior are unchanged. Shared
 construction, registry and residual-state auditing remain separate work under #1599.
 
-The shared `$Runtime` declaration uses required `EmittedRuntimeClass`, exposed through
-`EmittedRuntime.RuntimeClass`. Its checked `Type` handle is assigned once in phase one and
-remains available to forward consumers. The finalizer receives that owner explicitly, creates
-the type at the original boundary after deferred helper bodies, and completes metadata only
-when `TypeBuilder.IsCreated()` confirms finalization. Missing/null/duplicate declarations,
-uncreated completion and later assignments are rejected; failed completion remains repairable.
-All consumers use this owner; the emitter no longer retains `_runtimeTypeBuilder`. Type name,
-attributes, base type, member order, cross-family tokens and hosted/standalone behavior remain
-unchanged. Removing the last flat type declaration does not finish the construction, registry,
-shared-infrastructure or semantic acceptance audit under #1599.
-
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only
 need that family's metadata (for example, DNS resolver declaration); retain `EmittedRuntime` where

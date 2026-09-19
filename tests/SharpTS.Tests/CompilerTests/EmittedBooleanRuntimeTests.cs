@@ -53,11 +53,11 @@ public class EmittedBooleanRuntimeTests
         runtime.BigInt.BeginImplementationEmission();
         typeof(RuntimeEmitter).GetMethod("DefineRuntimeClassPhase1", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(new RuntimeEmitter(TypeProvider.Runtime), [module, runtime]);
-        Assert.Same(runtime.RuntimeClass.Type, runtime.Booleans.IsTruthy.DeclaringType);
+        Assert.Same(runtime.RuntimeType, runtime.Booleans.IsTruthy.DeclaringType);
         Assert.Equal(0, runtime.Booleans.IsTruthy.GetILGenerator().ILOffset);
         Assert.Throws<InvalidOperationException>(() => runtime.Booleans.PrototypeField);
         Assert.Throws<InvalidOperationException>(() => runtime.Booleans.PrototypePopulateMethod);
-        var caller = runtime.RuntimeClass.Type.DefineMethod("ForwardTruthiness", MethodAttributes.Public | MethodAttributes.Static,
+        var caller = runtime.RuntimeType.DefineMethod("ForwardTruthiness", MethodAttributes.Public | MethodAttributes.Static,
             typeof(bool), [typeof(object)]);
         var il = caller.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -83,7 +83,7 @@ public class EmittedBooleanRuntimeTests
         var runtime = EmitRuntime(source, hosted);
         AssertFrozen(runtime.Booleans);
         foreach (var property in Handles)
-            Assert.Same(runtime.RuntimeClass.Type, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.Booleans)).DeclaringType);
+            Assert.Same(runtime.RuntimeType, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.Booleans)).DeclaringType);
         using var bytes = Save(runtime);
         Verify(bytes);
         using var pe = new PEReader(bytes);
@@ -247,7 +247,7 @@ public class EmittedBooleanRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

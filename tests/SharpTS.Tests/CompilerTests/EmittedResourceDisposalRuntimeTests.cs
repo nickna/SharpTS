@@ -99,7 +99,7 @@ public sealed class EmittedResourceDisposalRuntimeTests
             var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), new RuntimeFeatureDetector().Detect(statements));
             var owner = runtime.ResourceDisposal;
             Assert.True(owners.Add(owner)); Assert.True(owner.IsComplete); Assert.True(handles.Add(owner.Dispose));
-            Assert.Same(builder, owner.Dispose.Module.Assembly); Assert.Same(runtime.RuntimeClass.Type, owner.Dispose.DeclaringType);
+            Assert.Same(builder, owner.Dispose.Module.Assembly); Assert.Same(runtime.RuntimeType, owner.Dispose.DeclaringType);
             var loaded = SaveVerifyLoad(builder); var type = loaded.GetType("$Runtime")!; var dispose = type.GetMethod("DisposeResource")!;
             Assert.True(dispose.IsPublic && dispose.IsStatic); Assert.Equal(typeof(void), dispose.ReturnType);
             Assert.Equal(new[] { typeof(object), typeof(object) }, dispose.GetParameters().Select(p => p.ParameterType));

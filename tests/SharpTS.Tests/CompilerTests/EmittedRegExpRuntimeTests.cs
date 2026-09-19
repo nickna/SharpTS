@@ -117,7 +117,7 @@ public sealed class EmittedRegExpRuntimeTests
                 property.SetValue(child, property.GetValue(runtime.RegExps.RequireImplementation()));
             MarkProtocols(child);
         }
-        var type = runtime.RuntimeClass.Type.DefineNestedType("RegExpPrototypeProbe", TypeAttributes.NestedPublic);
+        var type = runtime.RuntimeType.DefineNestedType("RegExpPrototypeProbe", TypeAttributes.NestedPublic);
         root.Prototype = type.DefineField("Prototype", typeof(Dictionary<string, object>), FieldAttributes.Public | FieldAttributes.Static);
         MethodBuilder? forward = null;
         if (supplied)

@@ -111,7 +111,7 @@ public class EmittedArrayOperationsRuntimeTests
         Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
         Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
         using var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
         stream.Position = 0;
         using var pe = new PEReader(stream);
         var reader = pe.GetMetadataReader();
@@ -212,8 +212,8 @@ public class EmittedArrayOperationsRuntimeTests
         Assert.Same(arrays.BoundMethodType, arrays.BoundMethodCtor.DeclaringType);
         Assert.Same(arrays.BoundMethodType, arrays.BoundMethodInvoke.DeclaringType);
         Assert.True(Assert.IsAssignableFrom<TypeBuilder>(arrays.IteratorCtor.DeclaringType).IsCreated());
-        Assert.Same(runtime.RuntimeClass.Type, arrays.PrototypePopulateMethod.DeclaringType);
-        Assert.Same(runtime.RuntimeClass.Type, arrays.CurrentReceiverField.DeclaringType);
+        Assert.Same(runtime.RuntimeType, arrays.PrototypePopulateMethod.DeclaringType);
+        Assert.Same(runtime.RuntimeType, arrays.CurrentReceiverField.DeclaringType);
         Assert.Equal("_currentArrayLikeReceiver", arrays.CurrentReceiverField.Name);
     }
 

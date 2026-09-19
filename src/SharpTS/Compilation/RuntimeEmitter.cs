@@ -654,7 +654,7 @@ public partial class RuntimeEmitter
 
         // Reflect.construct and Proxy [[Construct]] need this token while the
         // main $Runtime body is emitted. Its body is filled after $Runtime.
-        runtime.DynamicConstruction.Function = runtime.RuntimeClass.Type.DefineMethod(
+        runtime.DynamicConstruction.Function = _runtimeTypeBuilder!.DefineMethod(
             "NewOnFunction",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -667,7 +667,7 @@ public partial class RuntimeEmitter
         // function callees. Depends on $Object, $TSFunction, $BoundTSFunction, and
         // the $Runtime type itself all being defined.
         EmitNewOnFunction(
-            runtime.RuntimeClass.Type,
+            _runtimeTypeBuilder!,
             runtime.DynamicConstruction,
             new NewOnFunctionInputs(
                 runtime.DescriptorStorage,
@@ -685,7 +685,7 @@ public partial class RuntimeEmitter
         // Dynamic-callee `new x(...)` dispatch for state-machine emitters (#224).
         // Must follow EmitNewOnFunction — it calls through runtime.DynamicConstruction.Function.
         EmitConstructDynamicValue(
-            runtime.RuntimeClass.Type,
+            _runtimeTypeBuilder!,
             runtime.DynamicConstruction,
             new ConstructDynamicValueInputs(
                 runtime.BoxedPrimitives,
@@ -752,7 +752,7 @@ public partial class RuntimeEmitter
             runtime.RequireAsyncGenerators().BeginFromSyncEmission();
             EmitAsyncFromSyncIteratorSupport(
                 moduleBuilder,
-                runtime.RuntimeClass.Type,
+                _runtimeTypeBuilder!,
                 runtime.RequireAsyncGenerators(),
                 runtime.RequireAsyncGenerators().RequireFromSync(),
                 new AsyncFromSyncIteratorSupportInputs(
@@ -767,7 +767,7 @@ public partial class RuntimeEmitter
                     runtime.IteratorHelpers.NormalizeToEnumerator,
                     runtime.ObjectRead,
                     runtime.RequirePromise(),
-                    runtime.RuntimeClass.Type,
+                    runtime.RuntimeType,
                     runtime.Symbols,
                     runtime.Sentinels.UndefinedInstance,
                     runtime.Sentinels.UndefinedType
@@ -780,7 +780,7 @@ public partial class RuntimeEmitter
         // AbortSignal / Intl value-position singletons (#224). Must follow
         // EmitRuntimeClass — they wrap the AbortSignal*/CreateIntl* helpers
         // emitted there.
-        EmitNamespaceSingletons(runtime.RuntimeClass.Type, runtime.Abort, runtime.Intl, runtime.FunctionConstruction.GetOrCreate);
+        EmitNamespaceSingletons(_runtimeTypeBuilder!, runtime.Abort, runtime.Intl, runtime.FunctionConstruction.GetOrCreate);
 
         // Emit $BroadcastChannel — extends $EventEmitter, dispatches via $EventLoop,
         // and clones messages via $Runtime.StructuredClone (populated during EmitRuntimeClass
@@ -797,7 +797,7 @@ public partial class RuntimeEmitter
         // $Runtime.StructuredClone for per-message cloning). Unconditional,
         // matching the previous CreateMessageChannel helper (#222).
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessagePort
-        EmitMessageChannelTypes(moduleBuilder, runtime.MessageChannels, runtime.RuntimeClass.Type,
+        EmitMessageChannelTypes(moduleBuilder, runtime.MessageChannels, _runtimeTypeBuilder!,
             runtime.EventEmitter, runtime.EventLoop, runtime.StructuredClone.Clone, runtime.StructuredClone.ErrorType);
 
         // receiveMessageOnPort's body reads $MessagePort's _pending/_closed/_cloneError, so it
@@ -880,7 +880,7 @@ public partial class RuntimeEmitter
             EmitTlsSocketFinalize(runtime);
         }
 
-        EmitRuntimeClassFinalize(runtime.RuntimeClass);     // Finalize $Runtime after all method bodies
+        EmitRuntimeClassFinalize();     // Finalize $Runtime after all method bodies
 
         if (features.UsesTls)
         {

@@ -253,7 +253,7 @@ public partial class GeneratorMoveNextEmitter
 
         // Create $IteratorWrapper: new $IteratorWrapper(iterator, runtimeType)
         _il.Emit(OpCodes.Ldloc, iteratorLocal);
-        _il.Emit(OpCodes.Ldtoken, _ctx.Runtime.RuntimeClass.Type);
+        _il.Emit(OpCodes.Ldtoken, _ctx.Runtime.RuntimeType);
         _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         _il.Emit(OpCodes.Newobj, _ctx.Runtime.IteratorWrappers.Ctor);
         _il.Emit(OpCodes.Stloc, enumTemp);

@@ -1438,7 +1438,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             }
 
             IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.Iterator);
-            IL.Emit(OpCodes.Ldtoken, Ctx.Runtime!.RuntimeClass.Type);
+            IL.Emit(OpCodes.Ldtoken, Ctx.Runtime!.RuntimeType);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.ConcatSources);
         }

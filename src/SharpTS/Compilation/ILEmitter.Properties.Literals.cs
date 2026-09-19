@@ -135,7 +135,7 @@ public partial class ILEmitter
 
             // Pass Symbol.iterator and runtimeType for iterator protocol support
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Iterator);
-            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeClass.Type);
+            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.ConcatSources);
         }

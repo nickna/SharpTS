@@ -148,7 +148,7 @@ public abstract partial class IteratorMoveNextEmitter : StateMachineExitRoutingE
         IL.MarkLabel(materializeLabel);
         IL.Emit(OpCodes.Ldloc, iterableLocal);
         IL.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
-        IL.Emit(OpCodes.Ldtoken, runtime.RuntimeClass.Type);
+        IL.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         IL.Emit(OpCodes.Call, runtime.IteratorCollection.ToList);
         IL.Emit(OpCodes.Stloc, iterableLocal);

@@ -56,12 +56,12 @@ public class EmittedStringCoercionRuntimeTests
         var coercion = runtime.StringCoercion;
         foreach (var method in new[] { coercion.Stringify, coercion.ToJsString, coercion.StringifyCoerce })
         {
-            Assert.Same(runtime.RuntimeClass.Type, method.DeclaringType);
+            Assert.Same(runtime.RuntimeType, method.DeclaringType);
             Assert.Equal(0, method.GetILGenerator().ILOffset);
         }
         Assert.NotSame(coercion.Stringify, coercion.ToJsString);
         Assert.NotSame(coercion.ToJsString, coercion.StringifyCoerce);
-        var caller = runtime.RuntimeClass.Type.DefineMethod("ForwardCaller", MethodAttributes.Public | MethodAttributes.Static,
+        var caller = runtime.RuntimeType.DefineMethod("ForwardCaller", MethodAttributes.Public | MethodAttributes.Static,
             typeof(string), [typeof(object)]);
         caller.GetILGenerator().Emit(OpCodes.Ldarg_0);
         caller.GetILGenerator().Emit(OpCodes.Call, coercion.ToJsString);
@@ -87,7 +87,7 @@ public class EmittedStringCoercionRuntimeTests
         var runtime = EmitRuntime(source, hosted);
         AssertFrozen(runtime.StringCoercion);
         foreach (var property in Handles)
-            Assert.Same(runtime.RuntimeClass.Type, Assert.IsAssignableFrom<MethodInfo>(property.GetValue(runtime.StringCoercion)).DeclaringType);
+            Assert.Same(runtime.RuntimeType, Assert.IsAssignableFrom<MethodInfo>(property.GetValue(runtime.StringCoercion)).DeclaringType);
         using var bytes = Save(runtime);
         Verify(bytes);
         using var pe = new PEReader(bytes);
@@ -309,7 +309,7 @@ public class EmittedStringCoercionRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

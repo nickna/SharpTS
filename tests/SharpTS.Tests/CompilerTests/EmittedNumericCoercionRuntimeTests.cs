@@ -53,9 +53,9 @@ public class EmittedNumericCoercionRuntimeTests
         var owner = runtime.NumericCoercion;
         foreach (var method in new[] { owner.ToNumber, owner.JsToInt32 })
         {
-            Assert.Same(runtime.RuntimeClass.Type, method.DeclaringType);
+            Assert.Same(runtime.RuntimeType, method.DeclaringType);
             Assert.Equal(0, method.GetILGenerator().ILOffset);
-            var caller = runtime.RuntimeClass.Type.DefineMethod("Forward" + method.Name,
+            var caller = runtime.RuntimeType.DefineMethod("Forward" + method.Name,
                 MethodAttributes.Public | MethodAttributes.Static, method.ReturnType, [typeof(object)]);
             var il = caller.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -66,7 +66,7 @@ public class EmittedNumericCoercionRuntimeTests
         Assert.Throws<InvalidOperationException>(() => owner.ConvertToNumber);
         Assert.Throws<InvalidOperationException>(() => owner.JsNumberToInt32);
         Assert.Throws<InvalidOperationException>(() => owner.ToIntegerOrInfinity);
-        emitter.DeclareConvertToNumber(runtime.RuntimeClass.Type, owner);
+        emitter.DeclareConvertToNumber(runtime.RuntimeType, owner);
         Assert.Equal(0, owner.ConvertToNumber.GetILGenerator().ILOffset);
         Assert.Contains("'JsNumberToInt32'", Assert.Throws<InvalidOperationException>(owner.CompleteEmission).Message);
         Assert.False(owner.IsComplete);
@@ -88,7 +88,7 @@ public class EmittedNumericCoercionRuntimeTests
         var owner = runtime.NumericCoercion;
         AssertFrozen(owner);
         foreach (var property in Handles)
-            Assert.Same(runtime.RuntimeClass.Type, Assert.IsAssignableFrom<MethodInfo>(property.GetValue(owner)).DeclaringType);
+            Assert.Same(runtime.RuntimeType, Assert.IsAssignableFrom<MethodInfo>(property.GetValue(owner)).DeclaringType);
         using var bytes = Save(runtime);
         Verify(bytes);
         var assembly = Assembly.Load(bytes.ToArray());
@@ -272,7 +272,7 @@ public class EmittedNumericCoercionRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

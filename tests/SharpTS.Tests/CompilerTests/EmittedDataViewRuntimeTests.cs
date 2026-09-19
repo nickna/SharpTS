@@ -120,7 +120,7 @@ public class EmittedDataViewRuntimeTests
         Assert.Equal("$DataView", buffer.Type.Name);
         Assert.Same(buffer.Type, buffer.Ctor.DeclaringType);
         Assert.Same(buffer.Type, buffer.BufferField.DeclaringType);
-        Assert.Same(runtime.RuntimeClass.Type, buffer.Create.DeclaringType);
+        Assert.Same(runtime.RuntimeType, buffer.Create.DeclaringType);
         foreach (var property in Handles)
         {
             var handle = Assert.IsAssignableFrom<MemberInfo>(property.GetValue(buffer));
@@ -146,7 +146,7 @@ public class EmittedDataViewRuntimeTests
         }
         var loaded = Assembly.Load(stream.ToArray());
         var type = loaded.GetType(view.Type.Name)!;
-        var helpers = loaded.GetType(runtime.RuntimeClass.Type.Name)!;
+        var helpers = loaded.GetType(runtime.RuntimeType.Name)!;
         var createBuffer = shared ? runtime.RequireSharedArrayBuffer().Create : runtime.RequireArrayBuffer().Create;
         var getBuffer = shared ? runtime.RequireSharedArrayBuffer().GetBuffer : runtime.RequireArrayBuffer().GetBuffer;
         var buffer = helpers.GetMethod(createBuffer.Name)!.Invoke(null, [16d]);
@@ -280,7 +280,7 @@ public class EmittedDataViewRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
         stream.Position = 0;
         return stream;
     }

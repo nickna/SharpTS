@@ -2433,7 +2433,7 @@ public partial class ILEmitter
             // (e.g. Intl.Segments) are properly materialized before index-based iteration
             IL.Emit(OpCodes.Ldloc, iterableLocal);
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Iterator);
-            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeClass.Type);
+            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
             IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorCollection.ToList);
             IL.Emit(OpCodes.Stloc, iterableLocal);
@@ -2762,7 +2762,7 @@ public partial class ILEmitter
             // Last resort: route through IterateToList to materialize.
             IL.Emit(OpCodes.Ldloc, iterableLocal);
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Iterator);
-            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeClass.Type);
+            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
             IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorCollection.ToList);
             IL.Emit(OpCodes.Stloc, listLocal);

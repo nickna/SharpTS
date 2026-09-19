@@ -111,7 +111,7 @@ public sealed class EmittedObjectKeysRuntimeTests
     {
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
         var emitter = new RuntimeEmitter(TypeProvider.Runtime); var runtime = emitter.EmitAll(module, Detect(selected));
-        var probe = runtime.RuntimeClass.Type.DefineNestedType("OwnNamesPromiseProbe", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeType.DefineNestedType("OwnNamesPromiseProbe", TypeAttributes.NestedPublic);
         var resolve = SimpleReceiver(probe, "SuppliedResolve"); var reject = SimpleReceiver(probe, "SuppliedReject");
         var promise = supplied ? new EmittedPromiseRuntime { ResolveCallbackType = resolve, RejectCallbackType = reject } : null;
         var owner = new EmittedObjectKeysRuntime { Normalize = runtime.ObjectKeys.Normalize };

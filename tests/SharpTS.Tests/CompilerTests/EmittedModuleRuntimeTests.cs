@@ -131,9 +131,9 @@ public class EmittedModuleRuntimeTests
         AssertFrozen(modules);
         Assert.Equal(commonJs, modules.CommonJs is not null);
         Assert.Equal(dynamicImport, modules.DynamicImport is not null);
-        Assert.Same(runtime.RuntimeClass.Type, modules.Registry.DeclaringType);
-        Assert.Same(runtime.RuntimeClass.Type, modules.Initialize.DeclaringType);
-        Assert.Same(runtime.RuntimeClass.Type, modules.Register.DeclaringType);
+        Assert.Same(runtime.RuntimeType, modules.Registry.DeclaringType);
+        Assert.Same(runtime.RuntimeType, modules.Initialize.DeclaringType);
+        Assert.Same(runtime.RuntimeType, modules.Register.DeclaringType);
         if (commonJs)
         {
             var cjs = modules.RequireCommonJs();
@@ -148,7 +148,7 @@ public class EmittedModuleRuntimeTests
             }
         }
         else Assert.Throws<InvalidOperationException>(modules.RequireCommonJs);
-        if (dynamicImport) Assert.Same(runtime.RuntimeClass.Type, modules.RequireDynamicImport().ImportModule.DeclaringType);
+        if (dynamicImport) Assert.Same(runtime.RuntimeType, modules.RequireDynamicImport().ImportModule.DeclaringType);
         else Assert.Throws<InvalidOperationException>(modules.RequireDynamicImport);
 
         using var bytes = Save(runtime);
@@ -199,7 +199,7 @@ public class EmittedModuleRuntimeTests
     public void SavedCommonJsRuntimePreservesExportsWriteThroughAndIndependentModuleState(bool hosted)
     {
         var runtime = EmitRuntime("module.exports = 1;", hosted);
-        var cells = ((ModuleBuilder)runtime.RuntimeClass.Type.Module).DefineType("ExportCells", TypeAttributes.Public);
+        var cells = ((ModuleBuilder)runtime.RuntimeType.Module).DefineType("ExportCells", TypeAttributes.Public);
         cells.DefineField("First", typeof(object), FieldAttributes.Public | FieldAttributes.Static);
         cells.DefineField("Second", typeof(object), FieldAttributes.Public | FieldAttributes.Static);
         cells.CreateType();
@@ -329,7 +329,7 @@ public class EmittedModuleRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

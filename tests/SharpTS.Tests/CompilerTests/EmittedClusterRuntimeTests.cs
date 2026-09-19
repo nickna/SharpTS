@@ -5,6 +5,7 @@ using System.Reflection.PortableExecutable;
 using SharpTS.Compilation;
 using SharpTS.Parsing;
 using Xunit;
+using static SharpTS.Tests.CompilerTests.RuntimeEmissionTestHelpers;
 
 namespace SharpTS.Tests.CompilerTests;
 
@@ -219,14 +220,6 @@ public class EmittedClusterRuntimeTests
     {
         using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
         Assert.Empty(verifier.Verify(bytes));
-    }
-
-    private static MemoryStream Save(EmittedRuntime runtime)
-    {
-        var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
-        bytes.Position = 0;
-        return bytes;
     }
 
     private static RuntimeFeatureSet Detect(string source) => new RuntimeFeatureDetector()

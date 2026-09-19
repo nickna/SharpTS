@@ -33,7 +33,7 @@ public class EmittedTlsRuntimeTests
         var runtime = EmitRuntime(false);
         Assert.Null(runtime.Tls);
         Assert.Contains("not enabled", Assert.Throws<InvalidOperationException>(runtime.RequireTls).Message);
-        Assert.DoesNotContain(runtime.RuntimeClass.Type.GetMethods(), method => method.Name.StartsWith("Tls", StringComparison.Ordinal));
+        Assert.DoesNotContain(runtime.RuntimeType.GetMethods(), method => method.Name.StartsWith("Tls", StringComparison.Ordinal));
     }
 
     [Fact]

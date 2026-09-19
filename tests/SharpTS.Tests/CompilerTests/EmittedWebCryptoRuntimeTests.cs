@@ -95,7 +95,7 @@ public class EmittedWebCryptoRuntimeTests
         Assert.Null(webCrypto.Implementation);
         AssertFrozen(webCrypto);
         Assert.Null(runtime.GetBuiltInModuleMethod("crypto", "getRandomValues"));
-        Assert.Same(runtime.RuntimeClass.Type, webCrypto.GetObject.DeclaringType);
+        Assert.Same(runtime.RuntimeType, webCrypto.GetObject.DeclaringType);
 
         using var stream = Save(runtime);
         using var pe = new PEReader(stream);
@@ -133,7 +133,7 @@ public class EmittedWebCryptoRuntimeTests
         Assert.Equal("$SubtleCrypto", implementation.SubtleCtor.DeclaringType!.Name);
         Assert.True(Assert.IsAssignableFrom<TypeBuilder>(implementation.SubtleCtor.DeclaringType).IsCreated());
         Assert.Same(implementation.SubtleCtor.DeclaringType, implementation.SubtleDeriveBitsCore.DeclaringType);
-        Assert.Same(runtime.RuntimeClass.Type, implementation.Digest.DeclaringType);
+        Assert.Same(runtime.RuntimeType, implementation.Digest.DeclaringType);
         Assert.NotNull(runtime.GetBuiltInModuleMethod("crypto", "getRandomValues"));
     }
 
@@ -149,7 +149,7 @@ public class EmittedWebCryptoRuntimeTests
         Assert.DoesNotContain(reader.AssemblyReferences,
             handle => reader.GetString(reader.GetAssemblyReference(handle).Name) == "SharpTS");
         var loaded = Assembly.Load(stream.ToArray());
-        var getter = loaded.GetType(runtime.RuntimeClass.Type.Name)!.GetMethod(runtime.WebCrypto.GetObject.Name)!;
+        var getter = loaded.GetType(runtime.RuntimeType.Name)!.GetMethod(runtime.WebCrypto.GetObject.Name)!;
         var first = getter.Invoke(null, null);
         Assert.NotNull(first);
         Assert.Equal("$WebCrypto", first.GetType().Name);
@@ -216,7 +216,7 @@ public class EmittedWebCryptoRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
         stream.Position = 0;
         return stream;
     }

@@ -123,7 +123,7 @@ public sealed class EmittedProxyConstructionRuntimeTests
                 var owner = runtime.RequireProxyConstruction(); Assert.True(owners.Add(owner)); Assert.True(owner.IsComplete);
                 foreach (var handle in new[] { owner.Create, owner.CreateRevocable })
                 {
-                    Assert.True(handles.Add(handle)); Assert.Same(builder, handle.Module.Assembly); Assert.Same(runtime.RuntimeClass.Type, handle.DeclaringType);
+                    Assert.True(handles.Add(handle)); Assert.Same(builder, handle.Module.Assembly); Assert.Same(runtime.RuntimeType, handle.DeclaringType);
                     var method = type.GetMethod(handle.Name)!;
                     Assert.True(method.IsPublic && method.IsStatic); Assert.Equal(typeof(object), method.ReturnType);
                     Assert.Equal(new[] { typeof(object), typeof(object) }, method.GetParameters().Select(p => p.ParameterType));

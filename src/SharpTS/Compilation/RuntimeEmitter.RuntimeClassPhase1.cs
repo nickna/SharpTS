@@ -24,7 +24,8 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.RuntimeClass.Type = typeBuilder;
+        runtime.RuntimeType = typeBuilder;
+        _runtimeTypeBuilder = typeBuilder;
 
         // Reserve Stringify(object) → string. EmitStringify fills the body
         // later; it must skip its own DefineMethod call when this signature

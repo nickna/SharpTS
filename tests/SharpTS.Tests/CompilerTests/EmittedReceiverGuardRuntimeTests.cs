@@ -83,7 +83,7 @@ public sealed class EmittedReceiverGuardRuntimeTests
             var owner = runtime.ReceiverGuard;
             Assert.True(owners.Add(owner)); Assert.True(owner.IsComplete); Assert.True(handles.Add(owner.RequireObjectCoercibleThis));
             Assert.Same(builder, owner.RequireObjectCoercibleThis.Module.Assembly);
-            Assert.Same(runtime.RuntimeClass.Type, owner.RequireObjectCoercibleThis.DeclaringType);
+            Assert.Same(runtime.RuntimeType, owner.RequireObjectCoercibleThis.DeclaringType);
             var loaded = SaveVerifyLoad(builder); var type = loaded.GetType("$Runtime")!; var guard = type.GetMethod("RequireObjectCoercibleThis")!;
             Assert.True(guard.IsPublic && guard.IsStatic); Assert.Equal(typeof(object), guard.ReturnType);
             Assert.Equal(new[] { typeof(object) }, guard.GetParameters().Select(p => p.ParameterType));

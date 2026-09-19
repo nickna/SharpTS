@@ -162,7 +162,7 @@ public class EmittedFileSystemAsyncRuntimeTests
             {
                 var wrapper = fileSystem.RequirePromiseWrapper(name);
                 Assert.Same(wrapper, fileSystem.PromisesWrapperMethods[name]);
-                Assert.Same(runtime.RuntimeClass.Type, wrapper.DeclaringType);
+                Assert.Same(runtime.RuntimeType, wrapper.DeclaringType);
                 Assert.Equal($"FsPromises_{name}_Wrapper", wrapper.Name);
             }
         }
@@ -258,7 +258,7 @@ public class EmittedFileSystemAsyncRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

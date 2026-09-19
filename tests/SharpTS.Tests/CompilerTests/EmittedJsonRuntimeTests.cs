@@ -111,7 +111,7 @@ public class EmittedJsonRuntimeTests
                 foreach (var property in Handles(selected.GetType()))
                 {
                     var handle = Assert.IsAssignableFrom<MemberInfo>(property.GetValue(selected));
-                    Assert.Same(runtime.RuntimeClass.Type.Assembly, handle.Module.Assembly);
+                    Assert.Same(runtime.RuntimeType.Assembly, handle.Module.Assembly);
                 }
             AssertFrozen(runtime.Json);
             var assembly = SaveAndLoad(runtime, hosted);
@@ -142,10 +142,10 @@ public class EmittedJsonRuntimeTests
         Assert.Throws<InvalidOperationException>(() => runtime.Json.SingletonField);
         Assert.Throws<InvalidOperationException>(() => runtime.Json.SingletonPopulateMethod);
         typeof(RuntimeEmitter).GetMethod("DefineJsonSingletonPopulateShell", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(emitter, [runtime.RuntimeClass.Type, runtime.Json]);
-        Assert.Same(runtime.RuntimeClass.Type, runtime.Json.SingletonPopulateMethod.DeclaringType);
+            .Invoke(emitter, [runtime.RuntimeType, runtime.Json]);
+        Assert.Same(runtime.RuntimeType, runtime.Json.SingletonPopulateMethod.DeclaringType);
         Assert.Equal(0, runtime.Json.SingletonPopulateMethod.GetILGenerator().ILOffset);
-        var caller = runtime.RuntimeClass.Type.DefineMethod("ForwardCaller", MethodAttributes.Public | MethodAttributes.Static, typeof(void), Type.EmptyTypes);
+        var caller = runtime.RuntimeType.DefineMethod("ForwardCaller", MethodAttributes.Public | MethodAttributes.Static, typeof(void), Type.EmptyTypes);
         var il = caller.GetILGenerator();
         il.Emit(OpCodes.Call, runtime.Json.SingletonPopulateMethod);
         il.Emit(OpCodes.Ret);
@@ -279,7 +279,7 @@ public class EmittedJsonRuntimeTests
     private static Assembly SaveAndLoad(EmittedRuntime runtime, bool hosted)
     {
         using var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
         bytes.Position = 0;
         using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
         Assert.Empty(verifier.Verify(bytes));

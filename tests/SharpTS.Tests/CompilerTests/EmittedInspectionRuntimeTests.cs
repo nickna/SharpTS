@@ -87,10 +87,10 @@ public class EmittedInspectionRuntimeTests
         foreach (var property in Handles)
         {
             var method = Assert.IsAssignableFrom<MethodBuilder>(property.GetValue(runtime.Inspection));
-            Assert.Same(runtime.RuntimeClass.Type, method.DeclaringType);
+            Assert.Same(runtime.RuntimeType, method.DeclaringType);
             Assert.True(method.IsPublic && method.IsStatic);
         }
-        Assert.True(runtime.RuntimeClass.Type.IsCreated());
+        Assert.True(runtime.RuntimeType.IsCreated());
         using var bytes = Save(runtime);
         using var pe = new PEReader(bytes);
         var reader = pe.GetMetadataReader();
@@ -186,7 +186,7 @@ public class EmittedInspectionRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

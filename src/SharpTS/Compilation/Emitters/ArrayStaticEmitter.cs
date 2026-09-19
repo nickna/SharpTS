@@ -60,7 +60,7 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
 
                 // Load Symbol.iterator and runtime type for IterateToList
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Iterator);
-                il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RuntimeClass.Type);
+                il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RuntimeType);
                 il.Emit(OpCodes.Call, ctx.Types.TypeGetTypeFromHandle);
 
                 // Emit thisArg (absent → $Undefined). Used as `this` when

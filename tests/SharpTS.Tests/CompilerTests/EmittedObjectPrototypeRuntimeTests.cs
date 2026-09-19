@@ -110,7 +110,7 @@ public sealed class EmittedObjectPrototypeRuntimeTests
     {
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main"); var features = Detect(selected);
         var emitter = new RuntimeEmitter(TypeProvider.Runtime); var runtime = emitter.EmitAll(module, features);
-        var probe = runtime.RuntimeClass.Type.DefineNestedType("PrototypePromiseProbe", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeType.DefineNestedType("PrototypePromiseProbe", TypeAttributes.NestedPublic);
         var promiseType = SimpleReceiver(probe, "SuppliedPromise"); var resolve = SimpleReceiver(probe, "SuppliedResolve"); var reject = SimpleReceiver(probe, "SuppliedReject");
         var store = probe.DefineField("Store", typeof(ConditionalWeakTable<object, object>), FieldAttributes.Public | FieldAttributes.Static);
         var prototype = probe.DefineField("Prototype", typeof(Dictionary<string, object>), FieldAttributes.Public | FieldAttributes.Static);
@@ -149,7 +149,7 @@ public sealed class EmittedObjectPrototypeRuntimeTests
         var calls = proxy.DefineField("Calls", typeof(int), FieldAttributes.Public | FieldAttributes.Static);
         var isCallable = proxy.DefineMethod("get_IsCallable", MethodAttributes.Public, typeof(bool), Type.EmptyTypes); var il = isCallable.GetILGenerator();
         il.Emit(OpCodes.Ldsfld, calls); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stsfld, calls); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Ret); proxy.CreateType();
-        var probe = runtime.RuntimeClass.Type.DefineNestedType("ProxyBrandProbe", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeType.DefineNestedType("ProxyBrandProbe", TypeAttributes.NestedPublic);
         var getIndex = probe.DefineMethod("SuppliedGetIndex", MethodAttributes.Public | MethodAttributes.Static, typeof(object), [typeof(object), typeof(object)]);
         il = getIndex.GetILGenerator(); il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance); il.Emit(OpCodes.Ret);
         var helper = typeof(RuntimeEmitter).GetMethod("EmitObjectProtoToStringHelper", Members)!;

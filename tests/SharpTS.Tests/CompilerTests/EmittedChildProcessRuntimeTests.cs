@@ -114,9 +114,9 @@ public class EmittedChildProcessRuntimeTests
             Assert.Same(child.ContextType, child.ContextRunStreamed.DeclaringType);
             Assert.Same(child.PushType, child.PushCtor.DeclaringType);
             Assert.Same(child.PushType, child.PushRun.DeclaringType);
-            Assert.Same(runtime.RuntimeClass.Type, child.OwnedProcessesField.DeclaringType);
-            Assert.Same(runtime.RuntimeClass.Type, child.TerminateOwned.DeclaringType);
-            Assert.Same(runtime.RuntimeClass.Type, child.ExecSync.DeclaringType);
+            Assert.Same(runtime.RuntimeType, child.OwnedProcessesField.DeclaringType);
+            Assert.Same(runtime.RuntimeType, child.TerminateOwned.DeclaringType);
+            Assert.Same(runtime.RuntimeType, child.ExecSync.DeclaringType);
             Assert.Equal(typeof(System.Diagnostics.Process), child.ProcessStart.DeclaringType);
             Assert.Equal("Start", child.ProcessStart.Name);
             Assert.Equal("GetMethodFromHandle", child.GetMethodFromHandle.Name);
@@ -216,7 +216,7 @@ public class EmittedChildProcessRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

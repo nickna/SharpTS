@@ -87,7 +87,7 @@ public sealed class EmittedEventSubscriptionRuntimeTests
             foreach (var property in Handles)
             {
                 var handle = (MemberInfo)property.GetValue(owner)!;
-                Assert.True(handles.Add(handle)); Assert.Same(builder, handle.Module.Assembly); Assert.Same(runtime.RuntimeClass.Type, handle.DeclaringType);
+                Assert.True(handles.Add(handle)); Assert.Same(builder, handle.Module.Assembly); Assert.Same(runtime.RuntimeType, handle.DeclaringType);
             }
             var loaded = SaveVerifyLoad(builder); Assert.True(registries.Add(VerifyRegistry(loaded.GetType("$Runtime")!)));
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");

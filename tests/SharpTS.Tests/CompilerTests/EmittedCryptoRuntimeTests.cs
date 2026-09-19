@@ -26,11 +26,11 @@ public class EmittedCryptoRuntimeTests
         Assert.Contains("not enabled", Assert.Throws<InvalidOperationException>(runtime.RequireCrypto).Message);
         Assert.Null(runtime.GetBuiltInModuleMethod("crypto", "createHash"));
         Assert.Null(runtime.GetBuiltInModuleMethod("crypto", "getRandomValues"));
-        Assert.DoesNotContain(runtime.RuntimeClass.Type.GetMethods(),
+        Assert.DoesNotContain(runtime.RuntimeType.GetMethods(),
             method => method.Name.StartsWith("Crypto", StringComparison.Ordinal));
 
         using var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
         stream.Position = 0;
         using var pe = new PEReader(stream);
         var reader = pe.GetMetadataReader();
@@ -137,7 +137,7 @@ public class EmittedCryptoRuntimeTests
         Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
         Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
         using var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
         stream.Position = 0;
         using var pe = new PEReader(stream);
         var reader = pe.GetMetadataReader();

@@ -5,6 +5,7 @@ using System.Reflection.PortableExecutable;
 using SharpTS.Compilation;
 using SharpTS.Parsing;
 using Xunit;
+using static SharpTS.Tests.CompilerTests.RuntimeEmissionTestHelpers;
 
 namespace SharpTS.Tests.CompilerTests;
 
@@ -275,14 +276,6 @@ public class EmittedEventLoopRuntimeTests
             var handle = Assert.IsAssignableFrom<MemberInfo>(property.GetValue(component));
             Assert.True(Assert.IsAssignableFrom<TypeBuilder>(handle is Type ? handle : handle.DeclaringType).IsCreated(), property.Name);
         }
-    }
-
-    private static MemoryStream Save(EmittedRuntime runtime)
-    {
-        var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
-        stream.Position = 0;
-        return stream;
     }
 
     private static EmittedRuntime EmitRuntime(string? source, bool hosted = false)

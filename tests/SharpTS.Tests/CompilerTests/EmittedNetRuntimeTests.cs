@@ -39,10 +39,10 @@ public class EmittedNetRuntimeTests
         Assert.Contains("not enabled", Assert.Throws<InvalidOperationException>(runtime.RequireNet).Message);
         foreach (var name in new[] { "createServer", "createConnection", "createSocket", "createBlockList" })
             Assert.Null(runtime.GetBuiltInModuleMethod("primitive:net", name));
-        Assert.DoesNotContain(runtime.RuntimeClass.Type.GetMethods(), method => method.Name.StartsWith("Net", StringComparison.Ordinal));
+        Assert.DoesNotContain(runtime.RuntimeType.GetMethods(), method => method.Name.StartsWith("Net", StringComparison.Ordinal));
 
         using var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
         stream.Position = 0;
         using var pe = new PEReader(stream);
         var reader = pe.GetMetadataReader();

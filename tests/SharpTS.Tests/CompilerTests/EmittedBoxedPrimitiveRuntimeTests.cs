@@ -58,14 +58,14 @@ public class EmittedBoxedPrimitiveRuntimeTests
         Assert.Equal(0, boxed.ToObject.GetILGenerator().ILOffset);
         Assert.Throws<InvalidOperationException>(() => boxed.UnwrapIfBoxed);
         Assert.Throws<InvalidOperationException>(() => boxed.IsOfType);
-        InvokeEmitter("DeclareUnwrapIfBoxed", emitter, runtime.RuntimeClass.Type, boxed);
+        InvokeEmitter("DeclareUnwrapIfBoxed", emitter, runtime.RuntimeType, boxed);
         Assert.Equal(0, boxed.UnwrapIfBoxed.GetILGenerator().ILOffset);
         Assert.Throws<InvalidOperationException>(() => boxed.IsOfType);
-        InvokeEmitter("DefineIsBoxedPrimitiveOfTypeShell", emitter, runtime.RuntimeClass.Type, boxed);
+        InvokeEmitter("DefineIsBoxedPrimitiveOfTypeShell", emitter, runtime.RuntimeType, boxed);
         Assert.Equal(0, boxed.IsOfType.GetILGenerator().ILOffset);
         foreach (var method in new[] { boxed.ToObject, boxed.UnwrapIfBoxed, boxed.IsOfType })
-            Assert.Same(runtime.RuntimeClass.Type, method.DeclaringType);
-        var caller = runtime.RuntimeClass.Type.DefineMethod("ForwardCaller", MethodAttributes.Public | MethodAttributes.Static,
+            Assert.Same(runtime.RuntimeType, method.DeclaringType);
+        var caller = runtime.RuntimeType.DefineMethod("ForwardCaller", MethodAttributes.Public | MethodAttributes.Static,
             typeof(object), [typeof(object)]);
         var il = caller.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -91,7 +91,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var runtime = EmitRuntime(source, hosted);
         AssertFrozen(runtime.BoxedPrimitives);
         foreach (var property in Handles)
-            Assert.Same(runtime.RuntimeClass.Type, Assert.IsAssignableFrom<MethodInfo>(property.GetValue(runtime.BoxedPrimitives)).DeclaringType);
+            Assert.Same(runtime.RuntimeType, Assert.IsAssignableFrom<MethodInfo>(property.GetValue(runtime.BoxedPrimitives)).DeclaringType);
         using var bytes = Save(runtime);
         Verify(bytes);
         using var pe = new PEReader(bytes);
@@ -379,7 +379,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }
