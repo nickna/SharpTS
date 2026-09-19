@@ -901,16 +901,20 @@ imports as well as fetch-family references. The global getter still exposes fetc
 The implementation's optional `Client` owns 15 declarations for async dispatch, four cached clients,
 the shared cookie container, and cookie-jar helpers. It is enabled only when the existing HttpClient
 and HttpRequestMessage lookups succeed; otherwise fetch retains its rejected-promise fallback and
-does not require client declarations.
+does not require client declarations. Eleven BCL types are resolved in their original order into an
+immutable construction value local to HTTP/Fetch emission. Six helper boundaries receive it explicitly;
+direct fetch emission without construction metadata takes the same rejection path, independently of
+any earlier emission by that emitter.
 
 Completion validates each parent's handles before completing its child, then freezes the parent.
-Missing declarations name the handle and leave completion retryable; a completed parent cannot enable
-a child later. All 15 former flat properties and 28 emitter fields are removed, including the duplicate
+Missing declarations name the handle and leave completion retryable; duplicate assignments cannot
+replace declarations, and a completed parent cannot enable a child later. All 15 former flat properties
+and 28 emitter fields are removed, including the duplicate
 Headers setter alias. The dispatch helper field has one checked handle instead of a reflection lookup;
 the four cached-client fields also live in the client component. Fetch-only helpers take the relevant
 component directly. HTTP/net/TLS, Promise, streams, Buffer/ArrayBuffer, scheduling, and generic
-property/coercion helpers retain their owners. BCL lookups and method-local helpers remain with the
-emitter. Declaration order, feature implications, emitted signatures, and cache/cookie behavior are
+property/coercion helpers retain their owners. Construction inputs and method-local helpers remain
+local to emission. Declaration order, feature implications, emitted signatures, and cache/cookie behavior are
 unchanged.
 
 Node Buffer uses optional `EmittedBufferRuntime`, started only for `UsesBuffer`. It owns 79 checked

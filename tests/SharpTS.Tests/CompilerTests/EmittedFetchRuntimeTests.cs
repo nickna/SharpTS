@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Reflection.Metadata;
@@ -36,7 +37,12 @@ public class EmittedFetchRuntimeTests
         var nullError = Assert.Throws<TargetInvocationException>(() => property.SetValue(owner, null));
         Assert.IsType<ArgumentNullException>(nullError.InnerException);
         var completeOwner = Owners(CreateDeclarations().Fetch).Single(value => value.GetType() == ownerType);
-        property.SetValue(owner, property.GetValue(completeOwner));
+        var repaired = property.GetValue(completeOwner);
+        property.SetValue(owner, repaired);
+        var replacement = property.GetValue(Owners(CreateDeclarations().Fetch).Single(value => value.GetType() == ownerType));
+        var duplicate = Assert.Throws<TargetInvocationException>(() => property.SetValue(owner, replacement));
+        Assert.Contains($"'{missingHandle}'", Assert.IsType<InvalidOperationException>(duplicate.InnerException).Message);
+        Assert.Same(repaired, property.GetValue(owner));
         fetch.CompleteEmission();
         AssertFrozen(fetch);
     }
@@ -89,9 +95,22 @@ public class EmittedFetchRuntimeTests
     }
 
     [Fact]
-    public void UnavailableHttpClientCallsRejectionHelperAndCompletesWithoutClientMetadata()
+    public void UnavailableHttpClientCallsRejectionHelperAndCompletesWithoutClientMetadata() =>
+        AssertUnavailableClient(new RuntimeEmitter(TypeProvider.Runtime));
+
+    [Fact]
+    public void ClientAbsenceRemainsExplicitAfterEarlierFullEmission()
     {
-        var runtime = CreateDeclarations(includeClient: false);
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime);
+        var assembly = new PersistedAssemblyBuilder(new AssemblyName($"fetch_before_absence_{Guid.NewGuid():N}"), typeof(object).Assembly);
+        var previous = emitter.EmitAll(assembly.DefineDynamicModule("main"));
+        Assert.True(previous.Fetch.RequireImplementation().RequireClient().IsComplete);
+        AssertUnavailableClient(emitter);
+    }
+
+    private static void AssertUnavailableClient(RuntimeEmitter emitter)
+    {
+        var runtime = CreateDeclarations(typeof(EmittedFetchImplementation), nameof(EmittedFetchImplementation.Invoke), includeClient: false);
         var fetch = runtime.Fetch.RequireImplementation();
         var type = (TypeBuilder)runtime.Fetch.CachedFunction.DeclaringType!;
         runtime.BeginPromiseEmission();
@@ -100,8 +119,8 @@ public class EmittedFetchRuntimeTests
         reject.GetILGenerator().Emit(OpCodes.Ldarg_0);
         reject.GetILGenerator().Emit(OpCodes.Ret);
         runtime.RequirePromise().TypeReject = reject;
-        // HttpClient BCL lookups remain unavailable until the HTTP emitter initializes them.
-        new RuntimeEmitter(TypeProvider.Runtime).EmitFetch(type, runtime);
+        // No construction metadata was supplied, regardless of earlier emissions.
+        emitter.EmitFetch(type, runtime);
         Assert.Null(fetch.Client);
         Assert.Equal("Fetch", fetch.Invoke.Name);
         type.CreateType();
@@ -234,6 +253,100 @@ public class EmittedFetchRuntimeTests
     {
         var errors = TestHarness.CompileAndVerifyOnly(source);
         Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReusedEmitterKeepsFunctionsClientsAndCookieJarsWithinEachAssembly(bool hosted)
+    {
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
+        var owners = new HashSet<EmittedFetchRuntime>();
+        var assemblies = new List<Assembly>();
+        var clients = new HashSet<HttpClient>();
+        var saved = new List<(Type Type, EmittedRuntime Runtime, object? Function, HttpClient[] Clients, string Marker)>();
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+        var options = new[] { ("follow", false), ("manual", false), ("follow", true), ("manual", true) };
+        try
+        {
+            foreach (string? source in new[]
+            {
+                "console.log(1);", "new Headers();", "fetch('http://localhost/');",
+                "import * as http from 'http';", null, "console.log(1);", "new Response('body');"
+            })
+            {
+                var builder = new PersistedAssemblyBuilder(new AssemblyName($"fetch_construction_{Guid.NewGuid():N}"), typeof(object).Assembly);
+                var module = builder.DefineDynamicModule("main");
+                var features = source is null ? null : new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
+                var runtime = features is null ? emitter.EmitAll(module) : emitter.EmitAll(module, features);
+                Assert.True(owners.Add(runtime.Fetch));
+                AssertFrozen(runtime.Fetch);
+                foreach (var owner in Owners(runtime.Fetch))
+                foreach (var property in Handles(owner.GetType()))
+                    Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(owner)).Module.Assembly);
+
+                using var bytes = Save(runtime);
+                using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+                Assert.Empty(verifier.Verify(bytes));
+                var assembly = Assembly.Load(bytes.ToArray());
+                var references = assembly.GetReferencedAssemblies();
+                Assert.DoesNotContain(references, reference => reference.Name == "SharpTS");
+                Assert.DoesNotContain(references, reference => assemblies.Any(previous => previous.GetName().Name == reference.Name));
+                Assert.Equal(hosted, references.Any(reference => reference.Name == "SharpTS.Hosting.Abstractions"));
+                assemblies.Add(assembly);
+                if (source == "console.log(1);")
+                {
+                    Assert.Null(runtime.Fetch.Implementation);
+                    Assert.Null(assembly.GetType("$FetchResponse"));
+                    continue;
+                }
+
+                var type = assembly.GetType(runtime.RuntimeClass.Type.Name)!;
+                object? function = null;
+                if (features is null || features.UsesFetch)
+                {
+                    function = type.GetMethod(runtime.GlobalObject.GetProperty.Name)!.Invoke(null, ["fetch"]);
+                    Assert.NotNull(function);
+                }
+                else
+                    Assert.Null(type.GetField(runtime.Fetch.CachedFunction.Name, flags)!.GetValue(null));
+                var client = runtime.Fetch.RequireImplementation().RequireClient();
+                var getter = type.GetMethod(client.GetOrCreateHttpClient.Name, flags)!;
+                var current = new List<HttpClient>();
+                foreach (var (redirect, cookies) in options)
+                {
+                    var instance = Assert.IsType<HttpClient>(getter.Invoke(null, [redirect, cookies]));
+                    Assert.True(clients.Add(instance));
+                    current.Add(instance);
+                    Assert.Same(instance, getter.Invoke(null, [redirect, cookies]));
+                }
+                var marker = $"session=value{saved.Count}";
+                type.GetMethod(client.CookieJarSetCookie.Name)!.Invoke(null, [marker + "; Path=/", "http://localhost/"]);
+                saved.Add((type, runtime, function, current.ToArray(), marker));
+            }
+
+            // Earlier assemblies retain their own lazy function, four clients and cookie jar.
+            foreach (var (type, runtime, function, current, marker) in saved)
+            {
+                var client = runtime.Fetch.RequireImplementation().RequireClient();
+                if (function is not null)
+                    Assert.Same(function, type.GetMethod(runtime.GlobalObject.GetProperty.Name)!.Invoke(null, ["fetch"]));
+                Assert.Same(function, type.GetField(runtime.Fetch.CachedFunction.Name, flags)!.GetValue(null));
+                var getter = type.GetMethod(client.GetOrCreateHttpClient.Name, flags)!;
+                for (int index = 0; index < options.Length; index++)
+                    Assert.Same(current[index], getter.Invoke(null, [options[index].Item1, options[index].Item2]));
+                var jar = Assert.IsType<CookieContainer>(type.GetField(client.CookieContainerField.Name, flags)!.GetValue(null));
+                Assert.Equal(marker, jar.GetCookieHeader(new Uri("http://localhost/")));
+                Assert.Equal(marker, type.GetMethod(client.CookieJarGetCookies.Name)!.Invoke(null, ["http://localhost/"]));
+                type.GetMethod(client.CookieJarClear.Name)!.Invoke(null, null);
+                Assert.Empty(jar.GetAllCookies());
+            }
+        }
+        finally
+        {
+            foreach (var client in clients)
+                client.Dispose();
+        }
     }
 
     private static EmittedRuntime CreateDeclarations(Type? missingOwner = null, string? missingHandle = null, bool includeClient = true)
