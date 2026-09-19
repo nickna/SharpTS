@@ -163,7 +163,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Reaching the C# WorkerEnvironmentData store needs SharpTS.dll co-located (#1000).
-        ctx.Runtime!.RequireSharpTSRuntime("worker_threads.getEnvironmentData");
+        ctx.Runtime!.Deployment.Require("worker_threads.getEnvironmentData");
 
         if (arguments.Count > 0)
         {
@@ -197,7 +197,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        ctx.Runtime!.RequireSharpTSRuntime("worker_threads.setEnvironmentData");
+        ctx.Runtime!.Deployment.Require("worker_threads.setEnvironmentData");
 
         // key
         if (arguments.Count > 0)
@@ -232,7 +232,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         // Reaching the C# StructuredClone registry needs SharpTS.dll co-located (#1002).
-        ctx.Runtime!.RequireSharpTSRuntime("worker_threads.markAsUntransferable");
+        ctx.Runtime!.Deployment.Require("worker_threads.markAsUntransferable");
 
         if (arguments.Count > 0)
         {

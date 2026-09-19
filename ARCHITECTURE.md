@@ -166,6 +166,16 @@ facts but must preserve JavaScript object identity, coercion, evaluation order, 
 
 ### Runtime metadata components
 
+`EmittedDeploymentRequirements`, exposed as `EmittedRuntime.Deployment`, owns sorted diagnostic
+reasons and deployment capability flags for one compilation. Feature emitters and late guest
+call sites record requirements through its checked, idempotent `Require` method. The registry
+stays open after runtime emission so eval, Worker and other guest calls can contribute. Single-
+file and module compilation complete it only after all guest types are finalized, including
+timed and hosted paths. Completion validates the reason/flag state and freezes recording.
+Reasons are immutable snapshots; consumers cannot clear the deployment signal through a
+collection cast. `ILCompiler` retains its existing read-only deployment API and forwards it to
+this owner. Pure-BCL output, soft runtime dependency selection and deployment policy are unchanged.
+
 `FrameworkEmitMetadata` owns the shared array span method references and the ten-row crypto
 digest catalog. Its get-only handles refer exclusively to framework assemblies; the digest
 rows use `ImmutableArray`, so consumers cannot modify the table through a mutable collection

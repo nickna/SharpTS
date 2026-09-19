@@ -106,7 +106,7 @@ public class EmittedAsyncLocalStorageRuntimeTests
         Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
         if (source == "import 'node:async_hooks';")
         {
-            Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
+            Assert.Empty(runtime.Deployment.Reasons);
             Assert.Equal(hosted, runtime.Promise is not null);
         }
     }

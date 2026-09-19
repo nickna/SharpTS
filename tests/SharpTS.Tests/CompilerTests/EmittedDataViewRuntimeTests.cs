@@ -135,8 +135,8 @@ public class EmittedDataViewRuntimeTests
     {
         var runtime = EmitRuntime("new DataView(new ArrayBuffer(16));");
         var view = runtime.RequireDataView();
-        Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
-        Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
+        Assert.Empty(runtime.Deployment.Reasons);
+        Assert.Equal(SharpTSRuntimeRequirements.None, runtime.Deployment.Requirements);
         using var stream = Save(runtime);
         using (var pe = new PEReader(stream, PEStreamOptions.LeaveOpen))
         {

@@ -120,7 +120,7 @@ public class EmittedVmRuntimeTests
     {
         var runtime = EmitRuntime(source, hosted);
         Assert.Equal(enabled, runtime.Vm is not null);
-        Assert.Equal(enabled, runtime.RequiredSharpTSRuntimeReasons.Contains("vm module"));
+        Assert.Equal(enabled, runtime.Deployment.Reasons.Contains("vm module"));
         if (enabled)
         {
             var vm = runtime.RequireVm();

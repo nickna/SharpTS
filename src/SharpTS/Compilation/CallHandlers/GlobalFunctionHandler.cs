@@ -130,7 +130,7 @@ public class GlobalFunctionHandler : ICallHandler
 
         // Dynamic eval routes through EvalBridge in the SharpTS runtime — record the
         // soft dependency so the build co-locates SharpTS.dll with the output.
-        ctx.Runtime?.RequireSharpTSRuntime("eval()");
+        ctx.Runtime?.Deployment.Require("eval()");
 
         // Type t = Type.GetType("SharpTS.Execution.EvalBridge, SharpTS");
         il.Emit(System.Reflection.Emit.OpCodes.Ldstr, "SharpTS.Execution.EvalBridge, SharpTS");

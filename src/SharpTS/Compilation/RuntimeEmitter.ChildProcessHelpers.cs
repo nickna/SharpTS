@@ -1376,7 +1376,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static object ChildProcessFork(string modulePath, object args, object options)
     /// fork runs a child .ts module through the SharpTS interpreter — a compiled standalone
-    /// binary has no in-process compiler, so it co-locates SharpTS.dll (RequireSharpTSRuntime,
+    /// binary has no in-process compiler, so it co-locates SharpTS.dll (Deployment.Require,
     /// recorded at the fork call site) and bridges by reflection to
     /// ChildProcessModuleInterpreter.ForkForCompiledLoop, passing the compiled $EventLoop's
     /// Ref/Unref/Schedule so IPC + lifecycle events marshal onto the compiled loop (#1017).

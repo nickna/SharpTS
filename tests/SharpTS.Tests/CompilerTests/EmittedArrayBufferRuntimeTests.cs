@@ -135,8 +135,8 @@ public class EmittedArrayBufferRuntimeTests
     {
         var runtime = EmitRuntime("new ArrayBuffer(8);");
         var buffer = runtime.RequireArrayBuffer();
-        Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
-        Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
+        Assert.Empty(runtime.Deployment.Reasons);
+        Assert.Equal(SharpTSRuntimeRequirements.None, runtime.Deployment.Requirements);
         using var stream = Save(runtime);
         using (var pe = new PEReader(stream, PEStreamOptions.LeaveOpen))
         {

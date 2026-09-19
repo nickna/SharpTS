@@ -128,7 +128,7 @@ public class EmittedHostPrimitiveRuntimeTests
         var references = reader.AssemblyReferences.Select(handle => reader.GetString(reader.GetAssemblyReference(handle).Name)).ToArray();
         Assert.DoesNotContain("SharpTS", references);
         Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
-        if (source == "import 'perf_hooks';import 'tty';") Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
+        if (source == "import 'perf_hooks';import 'tty';") Assert.Empty(runtime.Deployment.Reasons);
     }
 
     [Theory]

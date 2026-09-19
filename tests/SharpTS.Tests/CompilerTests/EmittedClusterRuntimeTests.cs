@@ -108,7 +108,7 @@ public class EmittedClusterRuntimeTests
         Assert.DoesNotContain("SharpTS", references);
         Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
         // Emitting declarations alone does not record a call site's soft dependency.
-        if (source == "import 'cluster';") Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
+        if (source == "import 'cluster';") Assert.Empty(runtime.Deployment.Reasons);
     }
 
     [Theory]

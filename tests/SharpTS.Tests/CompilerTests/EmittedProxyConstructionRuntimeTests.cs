@@ -78,7 +78,7 @@ public sealed class EmittedProxyConstructionRuntimeTests
         typeof(RuntimeEmitter).GetField("_features", Members)!.SetValue(emitter, new RuntimeFeatureSet { UsesProxy = selected });
         helper.Invoke(emitter, [type, owner, input]);
         Assert.Same(type, owner.Create.DeclaringType); Assert.Same(type, owner.CreateRevocable.DeclaringType);
-        Assert.False(owner.IsComplete); Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
+        Assert.False(owner.IsComplete); Assert.Empty(runtime.Deployment.Reasons);
         type.CreateType(); Complete(owner);
         var loaded = SaveVerifyLoad(builder).GetType("Probe")!;
         var undefined = new object(); loaded.GetField("Undefined")!.SetValue(null, undefined);
@@ -115,8 +115,8 @@ public sealed class EmittedProxyConstructionRuntimeTests
             var builder = NewAssembly(); var features = new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
             var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             Assert.Equal(features.UsesProxy, runtime.ProxyConstruction is not null);
-            Assert.Equal(features.UsesProxy, runtime.RequiredSharpTSRuntimeReasons.Contains("Proxy"));
-            Assert.Equal(features.UsesProxy, runtime.RequiredSharpTSRuntimeRequirements.HasFlag(SharpTSRuntimeRequirements.RuntimeAssembly));
+            Assert.Equal(features.UsesProxy, runtime.Deployment.Reasons.Contains("Proxy"));
+            Assert.Equal(features.UsesProxy, runtime.Deployment.Requirements.HasFlag(SharpTSRuntimeRequirements.RuntimeAssembly));
             var loaded = SaveVerifyLoad(builder); var type = loaded.GetType("$Runtime")!;
             if (features.UsesProxy)
             {
