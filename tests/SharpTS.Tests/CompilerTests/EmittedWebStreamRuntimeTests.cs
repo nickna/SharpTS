@@ -37,7 +37,13 @@ public class EmittedWebStreamRuntimeTests
         Assert.IsType<ArgumentNullException>(nullError.InnerException);
         var declarations = new EmittedWebStreamRuntime();
         FillDeclarations(declarations);
-        property.SetValue(streams, property.GetValue(declarations));
+        var repaired = property.GetValue(declarations);
+        property.SetValue(streams, repaired);
+        var replacement = new EmittedWebStreamRuntime();
+        FillDeclarations(replacement);
+        var duplicate = Assert.Throws<TargetInvocationException>(() => property.SetValue(streams, property.GetValue(replacement)));
+        Assert.Contains($"'{missingHandle}'", Assert.IsType<InvalidOperationException>(duplicate.InnerException).Message);
+        Assert.Same(repaired, property.GetValue(streams));
         streams.CompleteEmission();
         AssertFrozen(streams);
     }
@@ -197,6 +203,119 @@ public class EmittedWebStreamRuntimeTests
         Assert.NotSame(first.ReadableQueueField, second.ReadableQueueField);
         AssertFrozen(first);
         AssertFrozen(second);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReusedEmitterKeepsQueuesAndPendingReadsWithinEachAssembly(bool hosted)
+    {
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
+        var owners = new HashSet<EmittedWebStreamRuntime>();
+        var assemblies = new List<Assembly>();
+        var completions = new List<Action>();
+        foreach (string? source in new[]
+        {
+            "console.log(1);", "new ReadableStream();", "import * as stream from 'node:stream/web';",
+            "new WritableStream();", null, "console.log(1);", "new TransformStream();"
+        })
+        {
+            var runtime = EmitRuntime(source, hosted, emitter);
+            var builder = runtime.RuntimeClass.Type.Assembly;
+            if (runtime.WebStreams is { } streams)
+            {
+                Assert.True(owners.Add(streams));
+                AssertFrozen(streams);
+                foreach (var property in Handles)
+                    Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(streams)).Module.Assembly);
+            }
+            using var bytes = Save(runtime);
+            using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+            Assert.Empty(verifier.Verify(bytes));
+            var assembly = Assembly.Load(bytes.ToArray());
+            var references = assembly.GetReferencedAssemblies();
+            Assert.DoesNotContain(references, reference => reference.Name == "SharpTS");
+            Assert.DoesNotContain(references, reference => assemblies.Any(previous => previous.GetName().Name == reference.Name));
+            Assert.Equal(hosted, references.Any(reference => reference.Name == "SharpTS.Hosting.Abstractions"));
+            assemblies.Add(assembly);
+            if (source == "console.log(1);")
+            {
+                Assert.Null(runtime.WebStreams);
+                Assert.Null(assembly.GetType("$ReadableStream"));
+                continue;
+            }
+
+            Assert.NotNull(runtime.WebStreams);
+            var type = assembly.GetType("$ReadableStream")!;
+            var ctor = type.GetConstructor([typeof(object), typeof(object)])!;
+            var read = type.GetMethod("Read")!;
+            var enqueue = type.GetMethod("Enqueue")!;
+            string marker = $"assembly-{assemblies.Count}";
+            var buffered = ctor.Invoke([null, null]);
+            enqueue.Invoke(buffered, [marker]);
+            completions.Add(() =>
+            {
+                var task = Assert.IsAssignableFrom<Task<object>>(read.Invoke(buffered, null));
+                Assert.True(task.IsCompletedSuccessfully);
+                var result = Assert.IsType<Dictionary<string, object?>>(task.Result);
+                Assert.Equal(false, result["done"]);
+                Assert.Equal(marker, result["value"]);
+                var cancelled = Assert.IsAssignableFrom<Task<object>>(type.GetMethod("Cancel")!.Invoke(buffered, [null]));
+                Assert.True(cancelled.IsCompletedSuccessfully);
+                var eof = Assert.IsAssignableFrom<Task<object>>(read.Invoke(buffered, null));
+                Assert.True(eof.IsCompletedSuccessfully);
+                Assert.Equal(true, Assert.IsType<Dictionary<string, object?>>(eof.Result)["done"]);
+            });
+
+            foreach (string operation in new[] { "Enqueue", "CloseStream", "ErrorStream" })
+            {
+                var stream = ctor.Invoke([null, null]);
+                var first = Assert.IsAssignableFrom<Task<object>>(read.Invoke(stream, null));
+                var second = Assert.IsAssignableFrom<Task<object>>(read.Invoke(stream, null));
+                Assert.False(first.IsCompleted);
+                Assert.False(second.IsCompleted);
+                completions.Add(() =>
+                {
+                    Assert.False(first.IsCompleted);
+                    Assert.False(second.IsCompleted);
+                    if (operation == "Enqueue")
+                    {
+                        enqueue.Invoke(stream, [marker + "-first"]);
+                        Assert.True(first.IsCompletedSuccessfully);
+                        Assert.False(second.IsCompleted);
+                        enqueue.Invoke(stream, [marker + "-second"]);
+                        Assert.True(second.IsCompletedSuccessfully);
+                        Assert.Equal(marker + "-first", Assert.IsType<Dictionary<string, object?>>(first.Result)["value"]);
+                        Assert.Equal(marker + "-second", Assert.IsType<Dictionary<string, object?>>(second.Result)["value"]);
+                    }
+                    else if (operation == "CloseStream")
+                    {
+                        type.GetMethod(operation)!.Invoke(stream, null);
+                        var sentinel = runtime.Sentinels.UndefinedInstance;
+                        var undefined = assembly.GetType(sentinel.DeclaringType!.Name)!
+                            .GetField(sentinel.Name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!.GetValue(null);
+                        foreach (var task in new[] { first, second })
+                        {
+                            Assert.True(task.IsCompletedSuccessfully);
+                            var result = Assert.IsType<Dictionary<string, object?>>(task.Result);
+                            Assert.Equal(true, result["done"]);
+                            Assert.Same(undefined, result["value"]);
+                        }
+                    }
+                    else
+                    {
+                        type.GetMethod(operation)!.Invoke(stream, [marker]);
+                        foreach (var task in new[] { first, second })
+                        {
+                            Assert.True(task.IsFaulted);
+                            Assert.Equal(marker, Assert.Single(task.Exception!.InnerExceptions).Message);
+                        }
+                    }
+                });
+            }
+        }
+        foreach (var complete in completions)
+            complete();
     }
 
     private static void FillDeclarations(EmittedWebStreamRuntime streams, string? missingHandle = null)

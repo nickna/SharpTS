@@ -1100,10 +1100,13 @@ forward references, Readable stream and reader/controller calls, transform sink 
 and type finalization keep their order. Completion follows runtime finalization and freezes all
 selected handles. Thirty helpers receive the component directly; cross-feature helpers keep
 their Promise, invocation, iteration, Buffer, abort-signal, and scheduling dependencies. The
-three BCL construction types (`List<object>`, `TaskCompletionSource<object>`, and its queue),
-method-local declaration builders, and shared dispatch registries stay with their existing
-construction infrastructure for the final #1599 audit. No migrated flat aliases or emitter-held
-Web stream guest handles remain.
+three BCL construction types (`List<object>`, `TaskCompletionSource<object>`, and its queue) now
+form an immutable value local to readable-stream emission, passed explicitly to twelve helpers.
+All 45 checked Web stream declarations reject duplicate assignment before completion. Hosted and
+standalone reuse tests verify saved IL, current-assembly ownership, buffered values and earlier
+pending reads settled by enqueue, close and error after subsequent emissions. Method-local
+declaration builders and shared dispatch registries remain within the full #1599 ownership audit.
+No migrated flat aliases or emitter-held Web stream construction handles remain.
 
 Six backing fields are assembly-visible because peer emitted classes access them: writable
 `_state`, `_storedError`, `_writer`, `_highWaterMark`, and readable `_locked`, `_reader`.

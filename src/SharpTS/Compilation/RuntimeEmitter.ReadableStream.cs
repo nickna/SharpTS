@@ -18,16 +18,17 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    // BCL construction types; guest declaration handles belong to WebStreams.
-    private Type _listOfObject = null!;
-    private Type _pendingReadsQueueType = null!;       // Queue<TaskCompletionSource<object>>
-    private Type _pendingReadsTcsType = null!;         // TaskCompletionSource<object>
+    private sealed record ReadableStreamConstruction(
+        Type ListOfObject,
+        Type PendingReadsTcsType,
+        Type PendingReadsQueueType);
 
     private void EmitReadableStreamClasses(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        _listOfObject = typeof(List<object?>);
-        _pendingReadsTcsType = typeof(TaskCompletionSource<object>);
-        _pendingReadsQueueType = typeof(Queue<TaskCompletionSource<object>>);
+        var construction = new ReadableStreamConstruction(
+            typeof(List<object?>),
+            typeof(TaskCompletionSource<object>),
+            typeof(Queue<TaskCompletionSource<object>>));
 
         var streamBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ReadableStream",
@@ -48,7 +49,7 @@ public partial class RuntimeEmitter
         _ = controllerBuilder;
         _ = readerBuilder;
 
-        EmitReadableStreamFields(runtime.RequireWebStreams(), streamBuilder);
+        EmitReadableStreamFields(construction, runtime.RequireWebStreams(), streamBuilder);
 
         // Define controller fields + ctor first so the stream constructor can
         // reference the controller ctor.
@@ -63,25 +64,25 @@ public partial class RuntimeEmitter
         _ = readerCtor;
 
         // Now the stream constructor (uses controllerCtor).
-        var streamCtor = EmitReadableStreamConstructor(streamBuilder, controllerBuilder, controllerCtor, runtime);
+        var streamCtor = EmitReadableStreamConstructor(construction, streamBuilder, controllerBuilder, controllerCtor, runtime);
         runtime.RequireWebStreams().ReadableCtor = streamCtor;
 
         // Stream methods.
         EmitReadableStreamLockedGetter(runtime.RequireWebStreams(), streamBuilder);
-        var enqueueMethod = EmitReadableStreamEnqueue(streamBuilder, runtime.RequireWebStreams());
-        var closeMethod = EmitReadableStreamCloseStream(streamBuilder, runtime);
+        var enqueueMethod = EmitReadableStreamEnqueue(construction, streamBuilder, runtime.RequireWebStreams());
+        var closeMethod = EmitReadableStreamCloseStream(construction, streamBuilder, runtime);
         // "Terminate" is a thin alias for CloseStream. It exists so that the
         // TransformStream compiled path, which passes the underlying readable
         // directly as the "controller" to user transform(chunk, controller)
         // callbacks, can expose a terminate() method — PascalCase reflection
         // lookup finds "Terminate" and invokes it via $TSFunction wrapping.
         EmitReadableStreamTerminateAlias(streamBuilder, closeMethod);
-        var errorMethod = EmitReadableStreamErrorMethod(runtime.RequireWebStreams(), streamBuilder);
-        var desiredSizeMethod = EmitReadableStreamDesiredSizeProperty(runtime.RequireWebStreams(), streamBuilder);
-        var readMethod = EmitReadableStreamRead(streamBuilder, runtime);
-        runtime.RequireWebStreams().ReadableDrainQueuedChunks = EmitReadableStreamDrainQueuedChunks(runtime.RequireWebStreams(), streamBuilder);
+        var errorMethod = EmitReadableStreamErrorMethod(construction, runtime.RequireWebStreams(), streamBuilder);
+        var desiredSizeMethod = EmitReadableStreamDesiredSizeProperty(construction, runtime.RequireWebStreams(), streamBuilder);
+        var readMethod = EmitReadableStreamRead(construction, streamBuilder, runtime);
+        runtime.RequireWebStreams().ReadableDrainQueuedChunks = EmitReadableStreamDrainQueuedChunks(construction, runtime.RequireWebStreams(), streamBuilder);
         EmitReadableStreamGetReader(runtime.RequireWebStreams(), streamBuilder, readerCtor);
-        var cancelMethod = EmitReadableStreamCancel(streamBuilder, runtime);
+        var cancelMethod = EmitReadableStreamCancel(construction, streamBuilder, runtime);
         var pipeToMethod = EmitReadableStreamPipeTo(streamBuilder, readMethod, cancelMethod, runtime);
         EmitReadableStreamPipeThrough(streamBuilder, pipeToMethod);
         EmitReadableStreamTee(streamBuilder, streamCtor, readMethod, enqueueMethod, closeMethod, runtime);
@@ -94,7 +95,7 @@ public partial class RuntimeEmitter
         // Static ReadableStream.from(iterable) (#269) — must be defined before
         // streamBuilder.CreateType() below. Uses the ctor + Enqueue + CloseStream
         // just defined and the $Runtime.IterateToList primitive.
-        runtime.RequireWebStreams().ReadableFrom = EmitReadableStreamFromStatic(
+        runtime.RequireWebStreams().ReadableFrom = EmitReadableStreamFromStatic(construction,
             streamBuilder, streamCtor, enqueueMethod, closeMethod, runtime);
 
         // Controller methods (forward to stream).
@@ -114,11 +115,11 @@ public partial class RuntimeEmitter
         streamBuilder.CreateType();
     }
 
-    private void EmitReadableStreamFields(EmittedWebStreamRuntime webStreams, TypeBuilder t)
+    private void EmitReadableStreamFields(ReadableStreamConstruction construction, EmittedWebStreamRuntime webStreams, TypeBuilder t)
     {
         // Fields shared with the emitted reader/writer/controller must be visible
         // to those peer types in the same guest assembly. Other storage stays private.
-        webStreams.ReadableQueueField = t.DefineField("_queue", _listOfObject, FieldAttributes.Private);
+        webStreams.ReadableQueueField = t.DefineField("_queue", construction.ListOfObject, FieldAttributes.Private);
         webStreams.ReadableStateField = t.DefineField("_state", _types.Int32, FieldAttributes.Private);
         webStreams.ReadableStoredErrorField = t.DefineField("_storedError", _types.Object, FieldAttributes.Private);
         webStreams.ReadableLockedField = t.DefineField("_locked", _types.Boolean, FieldAttributes.Assembly);
@@ -128,7 +129,7 @@ public partial class RuntimeEmitter
         webStreams.ReadableCloseRequestedField = t.DefineField("_closeRequested", _types.Boolean, FieldAttributes.Private);
         webStreams.ReadableControllerField = t.DefineField("_controller", _types.Object, FieldAttributes.Private);
         webStreams.ReadableReaderField = t.DefineField("_reader", _types.Object, FieldAttributes.Assembly);
-        webStreams.ReadablePendingReadsField = t.DefineField("_pendingReads", _pendingReadsQueueType, FieldAttributes.Private);
+        webStreams.ReadablePendingReadsField = t.DefineField("_pendingReads", construction.PendingReadsQueueType, FieldAttributes.Private);
     }
 
     /// <summary>
@@ -136,7 +137,7 @@ public partial class RuntimeEmitter
     /// Used by the stream/consumers facade; async pull sources continue to use
     /// their reader path rather than this snapshot helper.
     /// </summary>
-    private MethodBuilder EmitReadableStreamDrainQueuedChunks(EmittedWebStreamRuntime webStreams, TypeBuilder t)
+    private MethodBuilder EmitReadableStreamDrainQueuedChunks(ReadableStreamConstruction construction, EmittedWebStreamRuntime webStreams, TypeBuilder t)
     {
         var method = t.DefineMethod(
             "DrainQueuedChunks",
@@ -144,14 +145,14 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes);
         var il = method.GetILGenerator();
-        var chunks = il.DeclareLocal(_listOfObject);
+        var chunks = il.DeclareLocal(construction.ListOfObject);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, webStreams.ReadableQueueField);
         il.Emit(OpCodes.Stloc, chunks);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_listOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(construction.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, webStreams.ReadableQueueField);
 
         il.Emit(OpCodes.Ldloc, chunks);
@@ -159,7 +160,7 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private ConstructorBuilder EmitReadableStreamConstructor(
+    private ConstructorBuilder EmitReadableStreamConstructor(ReadableStreamConstruction construction,
         TypeBuilder streamBuilder,
         TypeBuilder controllerBuilder,
         ConstructorBuilder controllerCtor,
@@ -184,12 +185,12 @@ public partial class RuntimeEmitter
 
         // _queue = new List<object?>()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_listOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(construction.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().ReadableQueueField);
 
         // _pendingReads = new Queue<TaskCompletionSource<object>>()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_pendingReadsQueueType, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(construction.PendingReadsQueueType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().ReadablePendingReadsField);
 
         // _highWaterMark = ExtractHighWaterMark(strategy) — defaults to 1 if no strategy
@@ -307,7 +308,7 @@ public partial class RuntimeEmitter
         prop.SetGetMethod(getter);
     }
 
-    private MethodBuilder EmitReadableStreamEnqueue(TypeBuilder t, EmittedWebStreamRuntime webStreams)
+    private MethodBuilder EmitReadableStreamEnqueue(ReadableStreamConstruction construction, TypeBuilder t, EmittedWebStreamRuntime webStreams)
     {
         // public void Enqueue(object? chunk) — adds chunk to the queue, or
         // resolves a pending read if one is parked on the pending-reads
@@ -328,15 +329,15 @@ public partial class RuntimeEmitter
         // if (_pendingReads.Count > 0) { resolve one pending read; return; }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, webStreams.ReadablePendingReadsField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_pendingReadsQueueType, "Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(construction.PendingReadsQueueType, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, appendToQueueLabel);
 
         // var tcs = _pendingReads.Dequeue();
-        var tcsLocal = il.DeclareLocal(_pendingReadsTcsType);
+        var tcsLocal = il.DeclareLocal(construction.PendingReadsTcsType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, webStreams.ReadablePendingReadsField);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsQueueType, "Dequeue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.PendingReadsQueueType, "Dequeue")!);
         il.Emit(OpCodes.Stloc, tcsLocal);
 
         // tcs.TrySetResult({ value: chunk, done: false })
@@ -356,7 +357,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Callvirt, setItem);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsTcsType, "TrySetResult", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.PendingReadsTcsType, "TrySetResult", [typeof(object)])!);
         il.Emit(OpCodes.Pop); // discard bool result
         il.Emit(OpCodes.Ret);
 
@@ -365,7 +366,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, webStreams.ReadableQueueField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_listOfObject, "Add", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.ListOfObject, "Add", [typeof(object)])!);
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -378,7 +379,7 @@ public partial class RuntimeEmitter
     /// protocol plus arrays/strings/sets) into a fresh stream's queue, then closes
     /// it so a reader observes the elements followed by done.
     /// </summary>
-    private MethodBuilder EmitReadableStreamFromStatic(
+    private MethodBuilder EmitReadableStreamFromStatic(ReadableStreamConstruction construction,
         TypeBuilder streamBuilder,
         ConstructorBuilder streamCtor,
         MethodBuilder enqueueMethod,
@@ -425,7 +426,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, streamLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_listOfObject, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.ListOfObject, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Callvirt, enqueueMethod);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -434,7 +435,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopCond);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_listOfObject, "Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(construction.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Blt, loopBody);
 
         // stream.CloseStream(); return stream;
@@ -446,7 +447,7 @@ public partial class RuntimeEmitter
         return method;
     }
 
-    private MethodBuilder EmitReadableStreamCloseStream(TypeBuilder t, EmittedRuntime runtime)
+    private MethodBuilder EmitReadableStreamCloseStream(ReadableStreamConstruction construction, TypeBuilder t, EmittedRuntime runtime)
     {
         var method = t.DefineMethod(
             "CloseStream",
@@ -463,7 +464,7 @@ public partial class RuntimeEmitter
         var notEmptyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadableQueueField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_listOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(construction.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, notEmptyLabel);
 
         // queue empty → mark closed now
@@ -475,7 +476,7 @@ public partial class RuntimeEmitter
 
         // Drain any parked readers with { value: undefined, done: true }. A
         // parked reader waiting on this stream would hang forever otherwise.
-        EmitDrainPendingReadsWithDone(il, runtime);
+        EmitDrainPendingReadsWithDone(construction, il, runtime);
 
         il.Emit(OpCodes.Ret);
         return method;
@@ -494,7 +495,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private MethodBuilder EmitReadableStreamErrorMethod(EmittedWebStreamRuntime webStreams, TypeBuilder t)
+    private MethodBuilder EmitReadableStreamErrorMethod(ReadableStreamConstruction construction, EmittedWebStreamRuntime webStreams, TypeBuilder t)
     {
         var method = t.DefineMethod(
             "ErrorStream",
@@ -512,10 +513,10 @@ public partial class RuntimeEmitter
         // Clear queue
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, webStreams.ReadableQueueField);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_listOfObject, "Clear")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.ListOfObject, "Clear")!);
 
         // Reject any parked readers with the stored error.
-        EmitDrainPendingReadsWithError(webStreams, il);
+        EmitDrainPendingReadsWithError(construction, webStreams, il);
 
         il.Emit(OpCodes.Ret);
         return method;
@@ -524,7 +525,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: while (_pendingReads.Count &gt; 0) { _pendingReads.Dequeue().TrySetResult({value:undefined, done:true}); }
     /// </summary>
-    private void EmitDrainPendingReadsWithDone(ILGenerator il, EmittedRuntime runtime)
+    private void EmitDrainPendingReadsWithDone(ReadableStreamConstruction construction, ILGenerator il, EmittedRuntime runtime)
     {
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -532,13 +533,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadablePendingReadsField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_pendingReadsQueueType, "Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(construction.PendingReadsQueueType, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, loopEnd);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadablePendingReadsField);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsQueueType, "Dequeue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.PendingReadsQueueType, "Dequeue")!);
 
         // Build done result dict inline
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
@@ -555,7 +556,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Callvirt, setItem);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsTcsType, "TrySetResult", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.PendingReadsTcsType, "TrySetResult", [typeof(object)])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopStart);
 
@@ -565,7 +566,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: while (_pendingReads.Count &gt; 0) { _pendingReads.Dequeue().TrySetException(new Exception(_storedError?.ToString() ?? "stream errored")); }
     /// </summary>
-    private void EmitDrainPendingReadsWithError(EmittedWebStreamRuntime webStreams, ILGenerator il)
+    private void EmitDrainPendingReadsWithError(ReadableStreamConstruction construction, EmittedWebStreamRuntime webStreams, ILGenerator il)
     {
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -573,13 +574,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, webStreams.ReadablePendingReadsField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_pendingReadsQueueType, "Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(construction.PendingReadsQueueType, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, loopEnd);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, webStreams.ReadablePendingReadsField);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsQueueType, "Dequeue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.PendingReadsQueueType, "Dequeue")!);
 
         // new Exception(_storedError?.ToString() ?? "stream errored")
         il.Emit(OpCodes.Ldarg_0);
@@ -596,14 +597,14 @@ public partial class RuntimeEmitter
         il.MarkLabel(msgDoneLabel);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
 
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsTcsType, "TrySetException", [typeof(Exception)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.PendingReadsTcsType, "TrySetException", [typeof(Exception)])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopStart);
 
         il.MarkLabel(loopEnd);
     }
 
-    private MethodBuilder EmitReadableStreamDesiredSizeProperty(EmittedWebStreamRuntime webStreams, TypeBuilder t)
+    private MethodBuilder EmitReadableStreamDesiredSizeProperty(ReadableStreamConstruction construction, EmittedWebStreamRuntime webStreams, TypeBuilder t)
     {
         // Property "DesiredSize" returning double.
         // Computed: _highWaterMark - _queue.Count
@@ -619,7 +620,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, webStreams.ReadableHwmField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, webStreams.ReadableQueueField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_listOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(construction.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Ret);
@@ -628,7 +629,7 @@ public partial class RuntimeEmitter
         return getter;
     }
 
-    private MethodBuilder EmitReadableStreamRead(TypeBuilder t, EmittedRuntime runtime)
+    private MethodBuilder EmitReadableStreamRead(ReadableStreamConstruction construction, TypeBuilder t, EmittedRuntime runtime)
     {
         // public Task<object> Read()
         // Flow:
@@ -663,7 +664,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(checkStateLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadableQueueField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_listOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(construction.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, dequeueLabel);
 
         // Queue empty: check state.
@@ -758,15 +759,15 @@ public partial class RuntimeEmitter
 
         // Park path: create a TCS, enqueue into _pendingReads, return its Task.
         il.MarkLabel(parkLabel);
-        var parkedTcsLocal = il.DeclareLocal(_pendingReadsTcsType);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_pendingReadsTcsType, Type.EmptyTypes)!);
+        var parkedTcsLocal = il.DeclareLocal(construction.PendingReadsTcsType);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(construction.PendingReadsTcsType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, parkedTcsLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadablePendingReadsField);
         il.Emit(OpCodes.Ldloc, parkedTcsLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsQueueType, "Enqueue", [_pendingReadsTcsType])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.PendingReadsQueueType, "Enqueue", [construction.PendingReadsTcsType])!);
         il.Emit(OpCodes.Ldloc, parkedTcsLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_pendingReadsTcsType, "Task")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(construction.PendingReadsTcsType, "Task")!.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         // Dequeue path
@@ -776,12 +777,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadableQueueField);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_listOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(construction.ListOfObject, "Item").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, chunkLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadableQueueField);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_listOfObject, "RemoveAt")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.ListOfObject, "RemoveAt")!);
 
         // Build result dict { value: chunk, done: false } and wrap in Task.FromResult
         EmitMakeReadResultAsTask(il, chunkLocal, doneFlag: false, runtime);
@@ -917,7 +918,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private MethodBuilder EmitReadableStreamCancel(TypeBuilder t, EmittedRuntime runtime)
+    private MethodBuilder EmitReadableStreamCancel(ReadableStreamConstruction construction, TypeBuilder t, EmittedRuntime runtime)
     {
         var method = t.DefineMethod(
             "Cancel",
@@ -933,7 +934,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, runtime.RequireWebStreams().ReadableStateField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadableQueueField);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_listOfObject, "Clear")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.ListOfObject, "Clear")!);
 
         // If cancel callback present, call it (sync) and return Task.FromResult
         var noCbLabel = il.DefineLabel();
