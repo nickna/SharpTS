@@ -213,8 +213,8 @@ public class EmittedDnsRuntimeTests
                 field => field.Name == "_dnsResultOrder");
             var getOrder = Assert.Single(methods, method => method.Name == "DnsGetDefaultResultOrder");
             Assert.Equal(getOrder.MetadataToken, dns.GetDefaultResultOrder.MetadataToken);
-            Assert.Same(dns.GetDefaultResultOrder, runtime.GetBuiltInModuleMethod("dns", "getDefaultResultOrder"));
-            Assert.Same(dns.GetDefaultResultOrder, runtime.GetBuiltInModuleMethod("dns/promises", "getDefaultResultOrder"));
+            Assert.Same(dns.GetDefaultResultOrder, runtime.BuiltInModules.GetOptional("dns", "getDefaultResultOrder"));
+            Assert.Same(dns.GetDefaultResultOrder, runtime.BuiltInModules.GetOptional("dns/promises", "getDefaultResultOrder"));
             string marker = $"assembly-{saved.Count}";
             resultOrder.SetValue(null, marker);
             saved.Add((loaded, dns.GetDefaultResultOrder.MetadataToken, marker));

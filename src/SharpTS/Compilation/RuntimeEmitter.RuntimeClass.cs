@@ -3075,7 +3075,7 @@ public partial class RuntimeEmitter
             // Keep the shared module index at the orchestration boundary. Helpers register
             // each declaration before emitting its body, preserving forward lookup timing.
             EmitVmMethods(typeBuilder, runtime.RequireVm(), runtime.RequirePromise(),
-                (name, method) => runtime.RegisterBuiltInModuleMethod("vm", name, method));
+                (name, method) => runtime.BuiltInModules.Register("vm", name, method));
         }
 
         if (_features.UsesSourceExecution)
@@ -3085,7 +3085,7 @@ public partial class RuntimeEmitter
                 SharpTSRuntimeRequirements.FullDependencyClosure |
                 SharpTSRuntimeRequirements.ManagedCompilerHost);
             EmitSourceExecutionMethods(typeBuilder, runtime.RequireSourceExecution(),
-                (name, method) => runtime.RegisterBuiltInModuleMethod("sharpts:execution", name, method));
+                (name, method) => runtime.BuiltInModules.Register("sharpts:execution", name, method));
         }
 
         // Web Streams API (stream/web) is now fully pure-IL emitted via

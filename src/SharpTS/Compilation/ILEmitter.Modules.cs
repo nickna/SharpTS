@@ -939,7 +939,7 @@ public partial class ILEmitter
     {
         // Create a TSFunction that wraps the built-in method
         // The runtime helper will be generated to handle the dispatch
-        var helperMethod = _ctx.Runtime?.GetBuiltInModuleMethod(moduleName, methodName);
+        var helperMethod = _ctx.Runtime?.BuiltInModules.GetOptional(moduleName, methodName);
         if (helperMethod != null)
         {
             IL.Emit(OpCodes.Ldnull); // target (null for static methods)

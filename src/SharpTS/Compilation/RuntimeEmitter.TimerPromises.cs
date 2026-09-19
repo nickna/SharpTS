@@ -920,7 +920,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, timerPromises.SetTimeoutPromise);
             il.Emit(OpCodes.Ret);
 
-            runtime.RegisterBuiltInModuleMethod("timers/promises", "setTimeout", method);
+            runtime.BuiltInModules.Register("timers/promises", "setTimeout", method);
         }
 
         // setImmediate wrapper: object SetImmediatePromiseWrapper(object[] args)
@@ -977,7 +977,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, timerPromises.SetImmediatePromise);
             il.Emit(OpCodes.Ret);
 
-            runtime.RegisterBuiltInModuleMethod("timers/promises", "setImmediate", method);
+            runtime.BuiltInModules.Register("timers/promises", "setImmediate", method);
         }
 
         // setInterval wrapper: object SetIntervalAsyncIterableWrapper(object[] args)
@@ -1059,7 +1059,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, timerPromises.SetIntervalAsyncIterable);
             il.Emit(OpCodes.Ret);
 
-            runtime.RegisterBuiltInModuleMethod("timers/promises", "setInterval", method);
+            runtime.BuiltInModules.Register("timers/promises", "setInterval", method);
         }
     }
 }

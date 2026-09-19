@@ -216,7 +216,7 @@ public class EmittedFileSystemRuntimeTests
             var wrappers = assembly.GetType("$Runtime")!
                 .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly)
                 .Where(method => method.Name == "Fs_lstatSync_Wrapper").ToArray();
-            var declaration = runtime.GetBuiltInModuleMethod("fs", "lstatSync");
+            var declaration = runtime.BuiltInModules.GetOptional("fs", "lstatSync");
             if (runtime.FileSystem is null)
             {
                 Assert.Null(declaration);

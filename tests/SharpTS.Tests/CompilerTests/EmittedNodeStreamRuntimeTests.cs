@@ -143,13 +143,13 @@ public class EmittedNodeStreamRuntimeTests
                 var handle = Assert.IsAssignableFrom<MemberInfo>(property.GetValue(streams));
                 Assert.True(Assert.IsAssignableFrom<TypeBuilder>(handle is Type ? handle : handle.DeclaringType).IsCreated(), property.Name);
             }
-            Assert.Same(streams.Finished, runtime.GetBuiltInModuleMethod("stream", "finished"));
-            Assert.Same(streams.PromisePipeline, runtime.GetBuiltInModuleMethod("stream/promises", "pipeline"));
+            Assert.Same(streams.Finished, runtime.BuiltInModules.GetOptional("stream", "finished"));
+            Assert.Same(streams.PromisePipeline, runtime.BuiltInModules.GetOptional("stream/promises", "pipeline"));
         }
         else
         {
             Assert.Throws<InvalidOperationException>(runtime.RequireNodeStreams);
-            Assert.Null(runtime.GetBuiltInModuleMethod("stream", "finished"));
+            Assert.Null(runtime.BuiltInModules.GetOptional("stream", "finished"));
         }
 
         using var bytes = new MemoryStream();

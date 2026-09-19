@@ -94,7 +94,7 @@ public class EmittedWebCryptoRuntimeTests
         var webCrypto = runtime.WebCrypto;
         Assert.Null(webCrypto.Implementation);
         AssertFrozen(webCrypto);
-        Assert.Null(runtime.GetBuiltInModuleMethod("crypto", "getRandomValues"));
+        Assert.Null(runtime.BuiltInModules.GetOptional("crypto", "getRandomValues"));
         Assert.Same(runtime.RuntimeClass.Type, webCrypto.GetObject.DeclaringType);
 
         using var stream = Save(runtime);
@@ -134,7 +134,7 @@ public class EmittedWebCryptoRuntimeTests
         Assert.True(Assert.IsAssignableFrom<TypeBuilder>(implementation.SubtleCtor.DeclaringType).IsCreated());
         Assert.Same(implementation.SubtleCtor.DeclaringType, implementation.SubtleDeriveBitsCore.DeclaringType);
         Assert.Same(runtime.RuntimeClass.Type, implementation.Digest.DeclaringType);
-        Assert.NotNull(runtime.GetBuiltInModuleMethod("crypto", "getRandomValues"));
+        Assert.NotNull(runtime.BuiltInModules.GetOptional("crypto", "getRandomValues"));
     }
 
     [Fact]

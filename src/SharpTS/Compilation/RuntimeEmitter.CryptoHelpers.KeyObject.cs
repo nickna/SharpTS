@@ -496,6 +496,6 @@ public partial class RuntimeEmitter
             _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
-        runtime.RegisterBuiltInModuleMethod("crypto", "diffieHellman", method);
+        runtime.BuiltInModules.Register("crypto", "diffieHellman", method);
     }
 }

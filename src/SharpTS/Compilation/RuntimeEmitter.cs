@@ -40,6 +40,7 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        runtime.BuiltInModules.BeginEmission(moduleBuilder, features);
         if (features.UsesRegExp)
             runtime.RegExps.BeginImplementationEmission();
         if (features.UsesDate)
@@ -1024,6 +1025,7 @@ public partial class RuntimeEmitter
         runtime.Http?.CompleteEmission();
         runtime.Fetch.CompleteEmission();
         runtime.Promise?.CompleteEmission();
+        runtime.BuiltInModules.CompleteEmission();
         return runtime;
     }
 }

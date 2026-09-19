@@ -241,8 +241,8 @@ public class EmittedTlsRuntimeTests
         Assert.All(typeof(EmittedTlsRuntime).GetProperties()
             .Where(property => property.PropertyType == typeof(MethodBuilder)),
             property => Assert.NotNull(property.GetValue(tls)));
-        Assert.Same(tls.Connect, runtime.GetBuiltInModuleMethod("tls", "connect"));
-        Assert.Same(tls.CreateServer, runtime.GetBuiltInModuleMethod("tls", "Server"));
+        Assert.Same(tls.Connect, runtime.BuiltInModules.GetOptional("tls", "connect"));
+        Assert.Same(tls.CreateServer, runtime.BuiltInModules.GetOptional("tls", "Server"));
         Assert.Throws<InvalidOperationException>(() => tls.Connect = tls.Connect);
         Assert.Throws<InvalidOperationException>(() => tls.SocketCtor = tls.SocketCtor);
         Assert.Throws<InvalidOperationException>(() => tls.SocketType = tls.SocketType);

@@ -285,7 +285,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.Object]);
         runtime.RequireChildProcess().ExecSync = method;
-        runtime.RegisterBuiltInModuleMethod("child_process", "execSync", method);
+        runtime.BuiltInModules.Register("child_process", "execSync", method);
 
         var il = method.GetILGenerator();
 
@@ -564,7 +564,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Object, _types.Object]);
         runtime.RequireChildProcess().SpawnSync = method;
-        runtime.RegisterBuiltInModuleMethod("child_process", "spawnSync", method);
+        runtime.BuiltInModules.Register("child_process", "spawnSync", method);
 
         var il = method.GetILGenerator();
 
@@ -948,7 +948,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Object, _types.Object]);
         runtime.RequireChildProcess().Exec = method;
-        runtime.RegisterBuiltInModuleMethod("child_process", "exec", method);
+        runtime.BuiltInModules.Register("child_process", "exec", method);
 
         var il = method.GetILGenerator();
         // exec(command, optionsOrCallback?, callback?)
@@ -994,7 +994,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Object, _types.Object]);
         runtime.RequireChildProcess().Spawn = method;
-        runtime.RegisterBuiltInModuleMethod("child_process", "spawn", method);
+        runtime.BuiltInModules.Register("child_process", "spawn", method);
 
         var il = method.GetILGenerator();
 
@@ -1065,7 +1065,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.Object, _types.Object]);
         runtime.RequireChildProcess().ExecFileSync = method;
-        runtime.RegisterBuiltInModuleMethod("child_process", "execFileSync", method);
+        runtime.BuiltInModules.Register("child_process", "execFileSync", method);
 
         var il = method.GetILGenerator();
 
@@ -1275,7 +1275,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Object, _types.Object, _types.Object]);
         runtime.RequireChildProcess().ExecFile = method;
-        runtime.RegisterBuiltInModuleMethod("child_process", "execFile", method);
+        runtime.BuiltInModules.Register("child_process", "execFile", method);
 
         var il = method.GetILGenerator();
 
@@ -1390,7 +1390,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Object, _types.Object]);
         runtime.RequireChildProcess().Fork = method;
-        runtime.RegisterBuiltInModuleMethod("child_process", "fork", method);
+        runtime.BuiltInModules.Register("child_process", "fork", method);
 
         var il = method.GetILGenerator();
         var typeLocal = il.DeclareLocal(_types.Type);

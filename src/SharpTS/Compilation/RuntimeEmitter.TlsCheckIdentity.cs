@@ -29,7 +29,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.RegisterBuiltInModuleMethod("tls", "checkServerIdentity", method);
+        runtime.BuiltInModules.Register("tls", "checkServerIdentity", method);
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;

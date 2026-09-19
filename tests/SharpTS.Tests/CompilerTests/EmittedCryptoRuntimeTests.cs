@@ -26,8 +26,8 @@ public class EmittedCryptoRuntimeTests
         var runtime = EmitRuntime("console.log(1);", hosted);
         Assert.Null(runtime.Crypto);
         Assert.Contains("not enabled", Assert.Throws<InvalidOperationException>(runtime.RequireCrypto).Message);
-        Assert.Null(runtime.GetBuiltInModuleMethod("crypto", "createHash"));
-        Assert.Null(runtime.GetBuiltInModuleMethod("crypto", "getRandomValues"));
+        Assert.Null(runtime.BuiltInModules.GetOptional("crypto", "createHash"));
+        Assert.Null(runtime.BuiltInModules.GetOptional("crypto", "getRandomValues"));
         Assert.DoesNotContain(runtime.RuntimeClass.Type.GetMethods(),
             method => method.Name.StartsWith("Crypto", StringComparison.Ordinal));
 
@@ -133,9 +133,9 @@ public class EmittedCryptoRuntimeTests
         Assert.Equal("$CryptoPrimitives", crypto.HashData.DeclaringType!.Name);
         Assert.True(Assert.IsAssignableFrom<TypeBuilder>(crypto.SignCtor.DeclaringType).IsCreated());
         Assert.True(Assert.IsAssignableFrom<TypeBuilder>(crypto.VerifyCtor.DeclaringType).IsCreated());
-        Assert.NotNull(runtime.GetBuiltInModuleMethod("crypto", "createHash"));
-        Assert.NotNull(runtime.GetBuiltInModuleMethod("crypto", "generateKeyPair"));
-        Assert.NotNull(runtime.GetBuiltInModuleMethod("crypto", "getRandomValues"));
+        Assert.NotNull(runtime.BuiltInModules.GetOptional("crypto", "createHash"));
+        Assert.NotNull(runtime.BuiltInModules.GetOptional("crypto", "generateKeyPair"));
+        Assert.NotNull(runtime.BuiltInModules.GetOptional("crypto", "getRandomValues"));
         Assert.True(runtime.RequirePromise().IsComplete);
     }
 

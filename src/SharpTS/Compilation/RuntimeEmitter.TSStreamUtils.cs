@@ -36,8 +36,8 @@ public partial class RuntimeEmitter
         typeBuilder.CreateType();
 
         // Register utility functions as module methods for TSFunction wrapping
-        runtime.RegisterBuiltInModuleMethod("stream", "finished", runtime.RequireNodeStreams().Finished);
-        runtime.RegisterBuiltInModuleMethod("stream", "pipeline", runtime.RequireNodeStreams().Pipeline);
+        runtime.BuiltInModules.Register("stream", "finished", runtime.RequireNodeStreams().Finished);
+        runtime.BuiltInModules.Register("stream", "pipeline", runtime.RequireNodeStreams().Pipeline);
     }
 
     /// <summary>
@@ -619,8 +619,8 @@ public partial class RuntimeEmitter
         EmitSimpleFactory(typeBuilder, runtime, "PassThrough", runtime.RequireNodeStreams().PassThroughCtor);
 
         // Also register utility functions for stream/promises
-        runtime.RegisterBuiltInModuleMethod("stream/promises", "pipeline", runtime.RequireNodeStreams().PromisePipeline);
-        runtime.RegisterBuiltInModuleMethod("stream/promises", "finished", runtime.RequireNodeStreams().PromiseFinished);
+        runtime.BuiltInModules.Register("stream/promises", "pipeline", runtime.RequireNodeStreams().PromisePipeline);
+        runtime.BuiltInModules.Register("stream/promises", "finished", runtime.RequireNodeStreams().PromiseFinished);
     }
 
     private void EmitSimpleFactory(TypeBuilder typeBuilder, EmittedRuntime runtime,
@@ -628,7 +628,7 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod($"Create{name}",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.ObjectArray]);
-        runtime.RegisterBuiltInModuleMethod("stream", name, method);
+        runtime.BuiltInModules.Register("stream", name, method);
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Newobj, ctor);

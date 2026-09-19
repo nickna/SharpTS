@@ -34,7 +34,7 @@ public partial class RuntimeEmitter
         wil.Emit(OpCodes.Ldarg_0);
         wil.Emit(OpCodes.Callvirt, webCrypto.GetRandomValues);
         wil.Emit(OpCodes.Ret);
-        runtime.RegisterBuiltInModuleMethod("crypto", "getRandomValues", wrapper);
+        runtime.BuiltInModules.Register("crypto", "getRandomValues", wrapper);
     }
 
     // ───────────────────────────── $CryptoKey ─────────────────────────────

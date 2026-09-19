@@ -92,7 +92,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         tty.Isatty = method;
-        // No RegisterBuiltInModuleMethod — the `tty` module is now a TS stdlib
+        // No EmittedBuiltInModuleRegistry.Register — the `tty` module is now a TS stdlib
         // file (stdlib/node/tty.ts) that calls primitive:tty. CJS require('tty')
         // flows through the standard ESM→CJS namespace-object path.
     }

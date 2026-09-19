@@ -136,7 +136,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, http.CreateServer);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("http", "createServer", method);
+        runtime.BuiltInModules.Register("http", "createServer", method);
     }
 
     private void EmitHttpRequestWrapper(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -188,7 +188,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, http.Request);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("http", "request", method);
+        runtime.BuiltInModules.Register("http", "request", method);
     }
 
     private void EmitHttpGetWrapper(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -240,7 +240,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, http.Get);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("http", "get", method);
+        runtime.BuiltInModules.Register("http", "get", method);
     }
 
     /// <summary>

@@ -926,7 +926,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, targetMethod);
             il.Emit(OpCodes.Ret);
 
-            runtime.RegisterBuiltInModuleMethod("primitive:zlib", name, wrapper);
+            runtime.BuiltInModules.Register("primitive:zlib", name, wrapper);
         }
 
         // Streaming create* methods (1 arg: options)
@@ -958,7 +958,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, targetMethod);
             il.Emit(OpCodes.Ret);
 
-            runtime.RegisterBuiltInModuleMethod("primitive:zlib", name, wrapper);
+            runtime.BuiltInModules.Register("primitive:zlib", name, wrapper);
         }
     }
 

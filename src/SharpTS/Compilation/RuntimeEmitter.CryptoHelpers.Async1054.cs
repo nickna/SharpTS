@@ -146,7 +146,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
-        runtime.RegisterBuiltInModuleMethod("crypto", "randomFill", method);
+        runtime.BuiltInModules.Register("crypto", "randomFill", method);
     }
 
     /// <summary>generateKey(type, options, callback) → callback(null, keyObject).</summary>
@@ -201,7 +201,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
-        runtime.RegisterBuiltInModuleMethod("crypto", "generatePrime", method);
+        runtime.BuiltInModules.Register("crypto", "generatePrime", method);
     }
 
     /// <summary>checkPrime(candidate, options?|cb, cb) → callback(null, bool).</summary>
@@ -252,7 +252,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
-        runtime.RegisterBuiltInModuleMethod("crypto", "checkPrime", method);
+        runtime.BuiltInModules.Register("crypto", "checkPrime", method);
     }
 
     /// <summary>Inline: dest = argIndex is double ? (int)argIndex : def.</summary>

@@ -39,7 +39,7 @@ public class EmittedNetRuntimeTests
         Assert.Null(runtime.Net);
         Assert.Contains("not enabled", Assert.Throws<InvalidOperationException>(runtime.RequireNet).Message);
         foreach (var name in new[] { "createServer", "createConnection", "createSocket", "createBlockList" })
-            Assert.Null(runtime.GetBuiltInModuleMethod("primitive:net", name));
+            Assert.Null(runtime.BuiltInModules.GetOptional("primitive:net", name));
         Assert.DoesNotContain(runtime.RuntimeClass.Type.GetMethods(), method => method.Name.StartsWith("Net", StringComparison.Ordinal));
 
         using var stream = new MemoryStream();
@@ -143,10 +143,10 @@ public class EmittedNetRuntimeTests
         Assert.Same(net.ServerType, net.ServerCtor.DeclaringType);
         Assert.Same(net.BlockListType, net.BlockListCtor.DeclaringType);
         Assert.Same(net.BlockListType, net.BlockListCheckIp.DeclaringType);
-        Assert.Same(net.CreateServer, runtime.GetBuiltInModuleMethod("primitive:net", "createServer"));
-        Assert.Same(net.CreateConnection, runtime.GetBuiltInModuleMethod("primitive:net", "createConnection"));
-        Assert.Same(net.CreateSocket, runtime.GetBuiltInModuleMethod("primitive:net", "createSocket"));
-        Assert.Same(net.CreateBlockList, runtime.GetBuiltInModuleMethod("primitive:net", "createBlockList"));
+        Assert.Same(net.CreateServer, runtime.BuiltInModules.GetOptional("primitive:net", "createServer"));
+        Assert.Same(net.CreateConnection, runtime.BuiltInModules.GetOptional("primitive:net", "createConnection"));
+        Assert.Same(net.CreateSocket, runtime.BuiltInModules.GetOptional("primitive:net", "createSocket"));
+        Assert.Same(net.CreateBlockList, runtime.BuiltInModules.GetOptional("primitive:net", "createBlockList"));
         foreach (var property in typeof(EmittedNetRuntime).GetProperties()
             .Where(property => property.Name != nameof(EmittedNetRuntime.IsComplete)))
         {

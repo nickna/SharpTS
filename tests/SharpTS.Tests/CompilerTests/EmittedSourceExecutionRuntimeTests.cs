@@ -64,6 +64,9 @@ public class EmittedSourceExecutionRuntimeTests
         var type = assembly.DefineDynamicModule("main").DefineType("Runtime", TypeAttributes.Public);
         var sourceExecution = new EmittedSourceExecutionRuntime();
         var runtime = new EmittedRuntime();
+        var features = new RuntimeFeatureDetector().Detect(new Parser(new Lexer("console.log(1);").ScanTokens()).ParseOrThrow());
+        features.UsesSourceExecution = true;
+        runtime.BuiltInModules.BeginEmission((ModuleBuilder)type.Module, features);
         var registrations = new List<string>();
         Action<string, MethodBuilder> register = (name, method) =>
         {
@@ -73,8 +76,8 @@ public class EmittedSourceExecutionRuntimeTests
             Assert.Equal(0, method.GetILGenerator().ILOffset);
             Assert.False(sourceExecution.IsComplete);
             Assert.False(type.IsCreated());
-            runtime.RegisterBuiltInModuleMethod("sharpts:execution", name, method);
-            Assert.Same(method, runtime.GetBuiltInModuleMethod("sharpts:execution", name));
+            runtime.BuiltInModules.Register("sharpts:execution", name, method);
+            Assert.Same(method, runtime.BuiltInModules.GetOptional("sharpts:execution", name));
             registrations.Add(name);
         };
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
@@ -120,15 +123,15 @@ public class EmittedSourceExecutionRuntimeTests
             Assert.True(runtime.RequiredSharpTSRuntimeRequirements.HasFlag(SharpTSRuntimeRequirements.FullDependencyClosure));
             Assert.True(runtime.RequiredSharpTSRuntimeRequirements.HasFlag(SharpTSRuntimeRequirements.ManagedCompilerHost));
             foreach (var (export, handle) in RegisteredExports)
-                Assert.Same(typeof(EmittedSourceExecutionRuntime).GetProperty(handle)!.GetValue(sourceExecution), runtime.GetBuiltInModuleMethod("sharpts:execution", export));
+                Assert.Same(typeof(EmittedSourceExecutionRuntime).GetProperty(handle)!.GetValue(sourceExecution), runtime.BuiltInModules.GetOptional("sharpts:execution", export));
         }
         else
         {
             Assert.Throws<InvalidOperationException>(runtime.RequireSourceExecution);
-            foreach (var (export, _) in RegisteredExports) Assert.Null(runtime.GetBuiltInModuleMethod("sharpts:execution", export));
+            foreach (var (export, _) in RegisteredExports) Assert.Null(runtime.BuiltInModules.GetOptional("sharpts:execution", export));
         }
         foreach (var name in new[] { "RunJson", "ConfigureUntrustedProcess", "unknown" })
-            Assert.Null(runtime.GetBuiltInModuleMethod("sharpts:execution", name));
+            Assert.Null(runtime.BuiltInModules.GetOptional("sharpts:execution", name));
         using var bytes = Save(runtime);
         using var pe = new PEReader(bytes);
         var reader = pe.GetMetadataReader();

@@ -379,7 +379,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String]);
         readline.QuestionSync = method;
-        // No RegisterBuiltInModuleMethod — `readline` is now a TS stdlib module
+        // No EmittedBuiltInModuleRegistry.Register — `readline` is now a TS stdlib module
         // (stdlib/node/readline.ts) that calls primitive:readline. CJS
         // require('readline') flows through the standard ESM→CJS namespace-object path.
 

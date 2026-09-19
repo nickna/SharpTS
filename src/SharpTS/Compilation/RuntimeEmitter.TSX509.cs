@@ -100,7 +100,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, runtime.RequireCrypto().X509CertificateCtor!);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("crypto", "X509Certificate", method);
+        runtime.BuiltInModules.Register("crypto", "X509Certificate", method);
     }
 
     // ------------------------------------------------------------------

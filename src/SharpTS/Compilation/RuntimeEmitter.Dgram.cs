@@ -13,7 +13,7 @@ public partial class RuntimeEmitter
     {
         var dgram = runtime.RequireDgram();
         EmitDgramCreateSocket(typeBuilder, dgram);
-        runtime.RegisterBuiltInModuleMethod("dgram", "createSocket", dgram.CreateSocket);
+        runtime.BuiltInModules.Register("dgram", "createSocket", dgram.CreateSocket);
     }
 
     /// <summary>
