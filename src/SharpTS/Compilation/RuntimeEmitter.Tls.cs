@@ -75,7 +75,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Phase 2: Emits the body of TlsConnect after $TlsConnectClosure is available.
     /// </summary>
-    internal void EmitTlsConnectBody(EmittedRuntime runtime)
+    private void EmitTlsConnectBody(
+        EmittedRuntime runtime,
+        TlsSocketFields socketFields,
+        TlsConnectConstruction connectClosure)
     {
         var il = runtime.RequireTls().Connect.GetILGenerator();
 
@@ -226,7 +229,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, socketLocal);
         il.Emit(OpCodes.Ldloc, socketLocal);
         il.Emit(OpCodes.Ldloc, hostLocal);
-        il.Emit(OpCodes.Stfld, _tlsSocketServernameField);
+        il.Emit(OpCodes.Stfld, socketFields.Servername);
 
         // Register the connect callback as a 'secureConnect' listener (Node semantics):
         // the OK closure emits 'secureConnect' once the handshake completes.
@@ -250,12 +253,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, hostLocal);
         il.Emit(OpCodes.Ldloc, rejectLocal);
         il.Emit(OpCodes.Ldloc, alpnLocal);
-        il.Emit(OpCodes.Newobj, _tlsConnectClosureCtor);
-        var closureLocal = il.DeclareLocal(_tlsConnectClosureType);
+        il.Emit(OpCodes.Newobj, connectClosure.Constructor);
+        var closureLocal = il.DeclareLocal(connectClosure.Constructor.DeclaringType!);
         il.Emit(OpCodes.Stloc, closureLocal);
 
         il.Emit(OpCodes.Ldloc, closureLocal);
-        il.Emit(OpCodes.Ldftn, _tlsConnectClosureConnect);
+        il.Emit(OpCodes.Ldftn, connectClosure.Connect);
         il.Emit(OpCodes.Newobj, typeof(System.Threading.WaitCallback).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call, typeof(System.Threading.ThreadPool).GetMethod("QueueUserWorkItem", [typeof(System.Threading.WaitCallback)])!);
         il.Emit(OpCodes.Pop);

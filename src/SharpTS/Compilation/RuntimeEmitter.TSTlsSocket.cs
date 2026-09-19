@@ -23,74 +23,48 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    // ---- $TlsSocket field builders ----
-    private TypeBuilder _tlsSocketTypeBuilder = null!;
-    private FieldBuilder _tlsSocketSslStreamField = null!;      // SslStream (negotiated; also stored in base _stream)
-    private FieldBuilder _tlsSocketAuthorizedField = null!;     // bool
-    private FieldBuilder _tlsSocketAuthErrorField = null!;      // object (string message or null)
-    private FieldBuilder _tlsSocketAlpnProtocolField = null!;   // object (string or null)
-    private FieldBuilder _tlsSocketServernameField = null!;     // object (string or null)
-    private FieldBuilder _tlsSocketPeerCertField = null!;       // X509Certificate2 (peer cert)
-    private MethodBuilder _tlsProtoStringMethod = null!;        // static string _ProtoString(SslProtocols)
-    private MethodBuilder _tlsBuildAlpnListMethod = null!;      // static List<SslApplicationProtocol> _BuildAlpnList(string[])
-    private MethodBuilder _tlsAlpnStringMethod = null!;         // static string _AlpnString(SslStream)
-    private MethodBuilder _tlsLoadCertMethod = null!;           // static X509Certificate2 _LoadCert(string cert, string key)
-    private MethodBuilder _tlsSanStringMethod = null!;          // static string _SanString(X509Certificate2)
-    internal MethodBuilder _tlsDescribeErrMethod = null!;       // static string _DescribePolicyErrors(SslPolicyErrors)
-
-    // ---- $TlsServer field builders ----
-    private TypeBuilder _tlsServerTypeBuilder = null!;
-    private FieldBuilder _tlsServerIsListeningField = null!;
-    private FieldBuilder _tlsServerCallbackField = null!;
-    private FieldBuilder _tlsServerCertField = null!;       // string (PEM cert)
-    private FieldBuilder _tlsServerKeyField = null!;        // string (PEM key)
-    private FieldBuilder _tlsServerRequestCertField = null!; // bool (requestCert)
-    private FieldBuilder _tlsServerListenerField = null!;   // TcpListener
-    private FieldBuilder _tlsServerPortField = null!;       // int
-    private FieldBuilder _tlsServerAlpnField = null!;       // string[] (ALPN protocol names)
-    private MethodBuilder _tlsServerAcceptWorkerMethod = null!;
-
     /// <summary>
     /// Phase 1: emits $TlsSocket and $TlsServer types (fields, constructors, method bodies)
     /// but defers CreateType() to <see cref="EmitTlsSocketFinalize"/> / <see cref="EmitTlsServerFinalize"/>.
     /// Must be called after $NetSocket Phase 1 ($TlsSocket extends it) and $EventEmitter.
     /// </summary>
-    private void EmitTlsTypesPhase1(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private TlsConstruction EmitTlsTypesPhase1(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        EmitTlsSocketClass(moduleBuilder, runtime);
-        EmitTlsServerClass(moduleBuilder, runtime);
+        var socket = EmitTlsSocketClass(moduleBuilder, runtime);
+        var server = EmitTlsServerClass(moduleBuilder, runtime);
+
+        return new(socket, server);
     }
 
     /// <summary>
     /// Phase 2: finalize $TlsSocket. Must come after $NetSocket.CreateType() (base) and after
     /// the connect closure that populates $TlsSocket fields has been defined.
     /// </summary>
-    private void EmitTlsSocketFinalize(EmittedRuntime runtime)
+    private void EmitTlsSocketFinalize(EmittedTlsRuntime tls)
     {
-        _tlsSocketTypeBuilder.CreateType();
+        ((TypeBuilder)tls.SocketType).CreateType();
     }
 
     // ========================================================================
     // $TlsSocket : $NetSocket
     // ========================================================================
 
-    private void EmitTlsSocketClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private TlsSocketConstruction EmitTlsSocketClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsSocket",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.RequireNet().SocketType  // extends $NetSocket — inherits real socket I/O over the SslStream
         );
-        _tlsSocketTypeBuilder = typeBuilder;
         runtime.RequireTls().SocketType = typeBuilder;
 
         // Fields (Assembly so the connect/accept workers can populate them)
-        _tlsSocketSslStreamField = typeBuilder.DefineField("_sslStream", typeof(SslStream), FieldAttributes.Assembly);
-        _tlsSocketAuthorizedField = typeBuilder.DefineField("_authorized", _types.Boolean, FieldAttributes.Assembly);
-        _tlsSocketAuthErrorField = typeBuilder.DefineField("_authError", _types.Object, FieldAttributes.Assembly);
-        _tlsSocketAlpnProtocolField = typeBuilder.DefineField("_alpnProtocol", _types.Object, FieldAttributes.Assembly);
-        _tlsSocketServernameField = typeBuilder.DefineField("_servername", _types.Object, FieldAttributes.Assembly);
-        _tlsSocketPeerCertField = typeBuilder.DefineField("_peerCert", typeof(X509Certificate2), FieldAttributes.Assembly);
+        var sslStreamField = typeBuilder.DefineField("_sslStream", typeof(SslStream), FieldAttributes.Assembly);
+        var authorizedField = typeBuilder.DefineField("_authorized", _types.Boolean, FieldAttributes.Assembly);
+        var authErrorField = typeBuilder.DefineField("_authError", _types.Object, FieldAttributes.Assembly);
+        var alpnProtocolField = typeBuilder.DefineField("_alpnProtocol", _types.Object, FieldAttributes.Assembly);
+        var servernameField = typeBuilder.DefineField("_servername", _types.Object, FieldAttributes.Assembly);
+        var peerCertField = typeBuilder.DefineField("_peerCert", typeof(X509Certificate2), FieldAttributes.Assembly);
 
         // Constructor: public $TlsSocket() : base()  (calls $NetSocket default ctor)
         var ctor = typeBuilder.DefineConstructor(
@@ -104,34 +78,44 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Call, runtime.RequireNet().SocketCtor);
         ctorIL.Emit(OpCodes.Ret);
 
+        var socketFields = new TlsSocketFields(
+            sslStreamField,
+            authorizedField,
+            authErrorField,
+            alpnProtocolField,
+            servernameField,
+            peerCertField);
+
         // Static helpers
-        EmitTlsProtoStringHelper(typeBuilder);
-        EmitTlsBuildAlpnListHelper(typeBuilder);
-        EmitTlsAlpnStringHelper(typeBuilder);
-        EmitTlsLoadCertHelper(typeBuilder);
-        EmitTlsSanStringHelper(typeBuilder);
-        EmitTlsDescribePolicyErrorsHelper(typeBuilder);
+        var protoString = EmitTlsProtoStringHelper(typeBuilder);
+        var buildAlpnList = EmitTlsBuildAlpnListHelper(typeBuilder);
+        var alpnString = EmitTlsAlpnStringHelper(typeBuilder);
+        var loadCert = EmitTlsLoadCertHelper(typeBuilder);
+        var sanString = EmitTlsSanStringHelper(typeBuilder);
+        var describeErrors = EmitTlsDescribePolicyErrorsHelper(typeBuilder);
 
         // TLS-specific methods
-        EmitTlsSocketGetCipher(typeBuilder);
-        EmitTlsSocketGetProtocol(typeBuilder);
-        EmitTlsSocketGetPeerCertificate(typeBuilder);
+        EmitTlsSocketGetCipher(typeBuilder, socketFields, protoString);
+        EmitTlsSocketGetProtocol(typeBuilder, socketFields, protoString);
+        EmitTlsSocketGetPeerCertificate(typeBuilder, socketFields, sanString);
         EmitTlsSocketRenegotiate(typeBuilder);
         // Advanced TLS APIs not exposed by .NET SslStream — throw a clear error (not a silent
         // no-op), matching interp SharpTSTlsSocket. See the #1032 "Known SslStream ceilings".
         foreach (var m in new[] { "GetSession", "SetSession", "GetTLSTicket", "GetPeerFinished",
                                   "GetFinished", "SetMaxSendFragment", "ExportKeyingMaterial" })
             EmitTlsSocketUnsupported(typeBuilder, runtime, m);
-        EmitTlsSocketGetMember(typeBuilder, runtime);
+        EmitTlsSocketGetMember(typeBuilder, runtime, socketFields);
 
         // NOTE: CreateType() deferred to EmitTlsSocketFinalize (Phase 2).
+
+        return new(socketFields, new TlsSocketHelpers(buildAlpnList, alpnString, loadCert, describeErrors));
     }
 
     /// <summary>
     /// Emits: private static string _ProtoString(SslProtocols p)
     /// Maps the negotiated protocol to its Node string ("TLSv1.3"/"TLSv1.2"), else p.ToString().
     /// </summary>
-    private void EmitTlsProtoStringHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTlsProtoStringHelper(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "_ProtoString",
@@ -139,7 +123,6 @@ public partial class RuntimeEmitter
             _types.String,
             [typeof(SslProtocols)]
         );
-        _tlsProtoStringMethod = method;
         var il = method.GetILGenerator();
 
         var notTls13 = il.DefineLabel();
@@ -166,12 +149,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, typeof(SslProtocols));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
+
+        return method;
     }
 
     /// <summary>
     /// Emits: private static List&lt;SslApplicationProtocol&gt; _BuildAlpnList(string[] names)
     /// </summary>
-    private void EmitTlsBuildAlpnListHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTlsBuildAlpnListHelper(TypeBuilder typeBuilder)
     {
         var listType = typeof(List<SslApplicationProtocol>);
         var method = typeBuilder.DefineMethod(
@@ -180,7 +165,6 @@ public partial class RuntimeEmitter
             listType,
             [typeof(string[])]
         );
-        _tlsBuildAlpnListMethod = method;
         var il = method.GetILGenerator();
 
         var listLocal = il.DeclareLocal(listType);
@@ -218,13 +202,15 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ret);
+
+        return method;
     }
 
     /// <summary>
     /// Emits: private static string _AlpnString(SslStream s)
     /// Returns the negotiated ALPN protocol name, or null if none was negotiated.
     /// </summary>
-    private void EmitTlsAlpnStringHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTlsAlpnStringHelper(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "_AlpnString",
@@ -232,7 +218,6 @@ public partial class RuntimeEmitter
             _types.String,
             [typeof(SslStream)]
         );
-        _tlsAlpnStringMethod = method;
         var il = method.GetILGenerator();
 
         // var p = s.NegotiatedApplicationProtocol; var str = p.ToString();
@@ -256,13 +241,15 @@ public partial class RuntimeEmitter
         il.MarkLabel(notEmpty);
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ret);
+
+        return method;
     }
 
     /// <summary>
     /// Emits: private static X509Certificate2 _LoadCert(string certPem, string keyPem)
     /// Parses the PEM cert+key, round-tripping through PKCS#12 for SslStream compatibility on Windows.
     /// </summary>
-    private void EmitTlsLoadCertHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTlsLoadCertHelper(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "_LoadCert",
@@ -270,7 +257,6 @@ public partial class RuntimeEmitter
             typeof(X509Certificate2),
             [_types.String, _types.String]
         );
-        _tlsLoadCertMethod = method;
         var il = method.GetILGenerator();
 
         var asSpan = typeof(MemoryExtensions).GetMethod("AsSpan", [_types.String])!;
@@ -313,13 +299,15 @@ public partial class RuntimeEmitter
         }
         il.Emit(OpCodes.Call, loadPkcs12);
         il.Emit(OpCodes.Ret);
+
+        return method;
     }
 
     /// <summary>
     /// Emits: internal static string _DescribePolicyErrors(SslPolicyErrors errors)
     /// Mirrors interp SharpTSTlsSocket.DescribePolicyErrors.
     /// </summary>
-    private void EmitTlsDescribePolicyErrorsHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTlsDescribePolicyErrorsHelper(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "_DescribePolicyErrors",
@@ -327,7 +315,6 @@ public partial class RuntimeEmitter
             _types.String,
             [typeof(SslPolicyErrors)]
         );
-        _tlsDescribeErrMethod = method;
         var il = method.GetILGenerator();
 
         // if ((errors & ChainErrors) != 0) return "self-signed certificate"
@@ -368,6 +355,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Constrained, typeof(SslPolicyErrors));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
+
+        return method;
     }
 
     /// <summary>
@@ -375,7 +364,7 @@ public partial class RuntimeEmitter
     /// Formats the Subject Alternative Name extension as "DNS:host, IP Address:1.2.3.4" (Node style),
     /// or null when absent. Mirrors interp SharpTSTlsSocket.SubjectAltName.
     /// </summary>
-    private void EmitTlsSanStringHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTlsSanStringHelper(TypeBuilder typeBuilder)
     {
         var sanExtType = typeof(X509SubjectAlternativeNameExtension);
         var method = typeBuilder.DefineMethod(
@@ -384,7 +373,6 @@ public partial class RuntimeEmitter
             _types.String,
             [typeof(X509Certificate2)]
         );
-        _tlsSanStringMethod = method;
         var il = method.GetILGenerator();
 
         var listType = typeof(List<string>);
@@ -444,6 +432,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(retNull);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
+
+        return method;
     }
 
     /// <summary>
@@ -486,7 +476,10 @@ public partial class RuntimeEmitter
     /// Emits: public object? GetCipher()
     /// Reads the negotiated cipher suite + protocol from the retained SslStream.
     /// </summary>
-    private void EmitTlsSocketGetCipher(TypeBuilder typeBuilder)
+    private void EmitTlsSocketGetCipher(
+        TypeBuilder typeBuilder,
+        TlsSocketFields socketFields,
+        MethodBuilder protoString)
     {
         var method = typeBuilder.DefineMethod("GetCipher", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
@@ -496,7 +489,7 @@ public partial class RuntimeEmitter
         // if (_sslStream == null) return null
         var hasStream = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsSocketSslStreamField);
+        il.Emit(OpCodes.Ldfld, socketFields.SslStream);
         il.Emit(OpCodes.Brtrue, hasStream);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -506,7 +499,7 @@ public partial class RuntimeEmitter
         var cipherLocal = il.DeclareLocal(_types.String);
         var suiteLocal = il.DeclareLocal(typeof(System.Net.Security.TlsCipherSuite));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsSocketSslStreamField);
+        il.Emit(OpCodes.Ldfld, socketFields.SslStream);
         il.Emit(OpCodes.Callvirt, typeof(SslStream).GetProperty("NegotiatedCipherSuite")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, suiteLocal);
         il.Emit(OpCodes.Ldloca, suiteLocal);
@@ -517,9 +510,9 @@ public partial class RuntimeEmitter
         // version = _ProtoString(_sslStream.SslProtocol)
         var versionLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsSocketSslStreamField);
+        il.Emit(OpCodes.Ldfld, socketFields.SslStream);
         il.Emit(OpCodes.Callvirt, typeof(SslStream).GetProperty("SslProtocol")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _tlsProtoStringMethod);
+        il.Emit(OpCodes.Call, protoString);
         il.Emit(OpCodes.Stloc, versionLocal);
 
         // dict = { name, standardName, version }
@@ -536,23 +529,26 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object? GetProtocol()
     /// </summary>
-    private void EmitTlsSocketGetProtocol(TypeBuilder typeBuilder)
+    private void EmitTlsSocketGetProtocol(
+        TypeBuilder typeBuilder,
+        TlsSocketFields socketFields,
+        MethodBuilder protoString)
     {
         var method = typeBuilder.DefineMethod("GetProtocol", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
 
         var hasStream = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsSocketSslStreamField);
+        il.Emit(OpCodes.Ldfld, socketFields.SslStream);
         il.Emit(OpCodes.Brtrue, hasStream);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(hasStream);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsSocketSslStreamField);
+        il.Emit(OpCodes.Ldfld, socketFields.SslStream);
         il.Emit(OpCodes.Callvirt, typeof(SslStream).GetProperty("SslProtocol")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _tlsProtoStringMethod);
+        il.Emit(OpCodes.Call, protoString);
         il.Emit(OpCodes.Ret);
     }
 
@@ -560,7 +556,10 @@ public partial class RuntimeEmitter
     /// Emits: public object? GetPeerCertificate(object detailed)
     /// Builds { subject, issuer, valid_from, valid_to, serialNumber, fingerprint } from _peerCert.
     /// </summary>
-    private void EmitTlsSocketGetPeerCertificate(TypeBuilder typeBuilder)
+    private void EmitTlsSocketGetPeerCertificate(
+        TypeBuilder typeBuilder,
+        TlsSocketFields socketFields,
+        MethodBuilder sanString)
     {
         var method = typeBuilder.DefineMethod("GetPeerCertificate", MethodAttributes.Public, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
@@ -570,7 +569,7 @@ public partial class RuntimeEmitter
         // if (_peerCert == null) return new Dictionary()
         var hasCert = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsSocketPeerCertField);
+        il.Emit(OpCodes.Ldfld, socketFields.PeerCert);
         il.Emit(OpCodes.Brtrue, hasCert);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(dictType));
         il.Emit(OpCodes.Ret);
@@ -581,39 +580,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, dictLocal);
 
         // subject / issuer / serialNumber / fingerprint
-        EmitTlsDictPut(il, dictLocal, "subject", () => EmitLoadCertStringProp(il, "Subject"), setItem);
-        EmitTlsDictPut(il, dictLocal, "issuer", () => EmitLoadCertStringProp(il, "Issuer"), setItem);
-        EmitTlsDictPut(il, dictLocal, "serialNumber", () => EmitLoadCertStringProp(il, "SerialNumber"), setItem);
-        EmitTlsDictPut(il, dictLocal, "fingerprint", () => EmitLoadCertStringProp(il, "Thumbprint"), setItem);
+        EmitTlsDictPut(il, dictLocal, "subject", () => EmitLoadCertStringProp(il, "Subject", socketFields), setItem);
+        EmitTlsDictPut(il, dictLocal, "issuer", () => EmitLoadCertStringProp(il, "Issuer", socketFields), setItem);
+        EmitTlsDictPut(il, dictLocal, "serialNumber", () => EmitLoadCertStringProp(il, "SerialNumber", socketFields), setItem);
+        EmitTlsDictPut(il, dictLocal, "fingerprint", () => EmitLoadCertStringProp(il, "Thumbprint", socketFields), setItem);
 
         // valid_from = _peerCert.NotBefore.ToString("R")
-        EmitTlsDictPut(il, dictLocal, "valid_from", () => EmitLoadCertDateProp(il, "NotBefore"), setItem);
-        EmitTlsDictPut(il, dictLocal, "valid_to", () => EmitLoadCertDateProp(il, "NotAfter"), setItem);
+        EmitTlsDictPut(il, dictLocal, "valid_from", () => EmitLoadCertDateProp(il, "NotBefore", socketFields), setItem);
+        EmitTlsDictPut(il, dictLocal, "valid_to", () => EmitLoadCertDateProp(il, "NotAfter", socketFields), setItem);
 
         // subjectaltname = _SanString(_peerCert)  (may be null)
         EmitTlsDictPut(il, dictLocal, "subjectaltname", () =>
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _tlsSocketPeerCertField);
-            il.Emit(OpCodes.Call, _tlsSanStringMethod);
+            il.Emit(OpCodes.Ldfld, socketFields.PeerCert);
+            il.Emit(OpCodes.Call, sanString);
         }, setItem);
 
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitLoadCertStringProp(ILGenerator il, string prop)
+    private void EmitLoadCertStringProp(ILGenerator il, string prop, TlsSocketFields socketFields)
     {
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsSocketPeerCertField);
+        il.Emit(OpCodes.Ldfld, socketFields.PeerCert);
         il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetProperty(prop)!.GetGetMethod()!);
     }
 
-    private void EmitLoadCertDateProp(ILGenerator il, string prop)
+    private void EmitLoadCertDateProp(ILGenerator il, string prop, TlsSocketFields socketFields)
     {
         var dtLocal = il.DeclareLocal(_types.DateTime);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsSocketPeerCertField);
+        il.Emit(OpCodes.Ldfld, socketFields.PeerCert);
         il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetProperty(prop)!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, dtLocal);
         il.Emit(OpCodes.Ldloca, dtLocal);
@@ -655,7 +654,7 @@ public partial class RuntimeEmitter
     /// TLS props (authorized/encrypted/alpnProtocol/servername/authorizationError); falls back to
     /// $NetSocket.GetMember for the inherited socket properties (remoteAddress, bytesRead, …).
     /// </summary>
-    private void EmitTlsSocketGetMember(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTlsSocketGetMember(TypeBuilder typeBuilder, EmittedRuntime runtime, TlsSocketFields socketFields)
     {
         var method = typeBuilder.DefineMethod("GetMember", MethodAttributes.Public, _types.Object, [_types.String]);
         var il = method.GetILGenerator();
@@ -677,14 +676,14 @@ public partial class RuntimeEmitter
         // authorized -> box _authorized
         il.MarkLabel(authorizedLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsSocketAuthorizedField);
+        il.Emit(OpCodes.Ldfld, socketFields.Authorized);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
         // encrypted -> _sslStream != null
         il.MarkLabel(encryptedLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsSocketSslStreamField);
+        il.Emit(OpCodes.Ldfld, socketFields.SslStream);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Cgt_Un);
         il.Emit(OpCodes.Box, _types.Boolean);
@@ -692,18 +691,18 @@ public partial class RuntimeEmitter
 
         // alpnProtocol -> _alpnProtocol ?? undefined
         il.MarkLabel(alpnLabel);
-        EmitTlsFieldOrUndefined(il, _tlsSocketAlpnProtocolField, runtime);
+        EmitTlsFieldOrUndefined(il, socketFields.AlpnProtocol, runtime);
         il.Emit(OpCodes.Ret);
 
         // servername -> _servername ?? undefined
         il.MarkLabel(servernameLabel);
-        EmitTlsFieldOrUndefined(il, _tlsSocketServernameField, runtime);
+        EmitTlsFieldOrUndefined(il, socketFields.Servername, runtime);
         il.Emit(OpCodes.Ret);
 
         // authorizationError -> _authError (may be null)
         il.MarkLabel(authErrLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsSocketAuthErrorField);
+        il.Emit(OpCodes.Ldfld, socketFields.AuthError);
         il.Emit(OpCodes.Ret);
 
         // default -> base.GetMember(name) (inherited $NetSocket props)
@@ -734,7 +733,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(has);
     }
 
-    private void EmitTlsDictPut(ILGenerator il, LocalBuilder dictLocal, string key, Action loadValue, MethodInfo setItem)
+    private void EmitTlsDictPut(
+        ILGenerator il,
+        LocalBuilder dictLocal,
+        string key,
+        Action loadValue,
+        MethodInfo setItem)
     {
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, key);
@@ -746,28 +750,27 @@ public partial class RuntimeEmitter
     // $TlsServer : $EventEmitter
     // ========================================================================
 
-    private void EmitTlsServerClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private TlsServerConstruction EmitTlsServerClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsServer",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.EventEmitter.Type
         );
-        _tlsServerTypeBuilder = typeBuilder;
-        _ = typeBuilder;
+
 
         // Fields
-        _tlsServerIsListeningField = typeBuilder.DefineField("_isListening", _types.Boolean, FieldAttributes.Private);
-        _tlsServerCallbackField = typeBuilder.DefineField("_callback", _types.Object, FieldAttributes.Assembly);
-        _tlsServerCertField = typeBuilder.DefineField("_cert", _types.String, FieldAttributes.Assembly);
-        _tlsServerKeyField = typeBuilder.DefineField("_key", _types.String, FieldAttributes.Assembly);
-        _tlsServerRequestCertField = typeBuilder.DefineField("_requestCert", _types.Boolean, FieldAttributes.Assembly);
-        _tlsServerListenerField = typeBuilder.DefineField("_listener", typeof(System.Net.Sockets.TcpListener), FieldAttributes.Assembly);
-        _tlsServerPortField = typeBuilder.DefineField("_port", _types.Int32, FieldAttributes.Private);
-        _tlsServerAlpnField = typeBuilder.DefineField("_alpn", typeof(string[]), FieldAttributes.Assembly);
+        var isListeningField = typeBuilder.DefineField("_isListening", _types.Boolean, FieldAttributes.Private);
+        var callbackField = typeBuilder.DefineField("_callback", _types.Object, FieldAttributes.Assembly);
+        var certField = typeBuilder.DefineField("_cert", _types.String, FieldAttributes.Assembly);
+        var keyField = typeBuilder.DefineField("_key", _types.String, FieldAttributes.Assembly);
+        var requestCertField = typeBuilder.DefineField("_requestCert", _types.Boolean, FieldAttributes.Assembly);
+        var listenerField = typeBuilder.DefineField("_listener", typeof(System.Net.Sockets.TcpListener), FieldAttributes.Assembly);
+        var portField = typeBuilder.DefineField("_port", _types.Int32, FieldAttributes.Private);
+        var alpnField = typeBuilder.DefineField("_alpn", typeof(string[]), FieldAttributes.Assembly);
 
         // Accept worker stub (body emitted later — needs closure type)
-        _tlsServerAcceptWorkerMethod = typeBuilder.DefineMethod(
+        var acceptWorker = typeBuilder.DefineMethod(
             "_TlsAcceptWorker",
             MethodAttributes.Private,
             typeof(void),
@@ -787,10 +790,10 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Call, runtime.EventEmitter.Ctor);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldc_I4_0);
-        ctorIL.Emit(OpCodes.Stfld, _tlsServerIsListeningField);
+        ctorIL.Emit(OpCodes.Stfld, isListeningField);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_2);
-        ctorIL.Emit(OpCodes.Stfld, _tlsServerCallbackField);
+        ctorIL.Emit(OpCodes.Stfld, callbackField);
 
         var skipOptions = ctorIL.DefineLabel();
         ctorIL.Emit(OpCodes.Ldarg_1);
@@ -810,9 +813,9 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Stloc, optLocal);
 
         // cert
-        EmitTlsCtorExtractString(ctorIL, optLocal, tempLocal, dictTryGet, "cert", _tlsServerCertField);
+        EmitTlsCtorExtractString(ctorIL, optLocal, tempLocal, dictTryGet, "cert", certField);
         // key
-        EmitTlsCtorExtractString(ctorIL, optLocal, tempLocal, dictTryGet, "key", _tlsServerKeyField);
+        EmitTlsCtorExtractString(ctorIL, optLocal, tempLocal, dictTryGet, "key", keyField);
 
         // secureContext fallback: if cert/key absent, pull them from options.secureContext
         // (a tls.createSecureContext result).
@@ -831,16 +834,16 @@ public partial class RuntimeEmitter
         // if (_cert == null) extract sc["cert"]
         var skipScCert = ctorIL.DefineLabel();
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Ldfld, _tlsServerCertField);
+        ctorIL.Emit(OpCodes.Ldfld, certField);
         ctorIL.Emit(OpCodes.Brtrue, skipScCert);
-        EmitTlsCtorExtractString(ctorIL, scLocal, tempLocal, dictTryGet, "cert", _tlsServerCertField);
+        EmitTlsCtorExtractString(ctorIL, scLocal, tempLocal, dictTryGet, "cert", certField);
         ctorIL.MarkLabel(skipScCert);
         // if (_key == null) extract sc["key"]
         var skipScKey = ctorIL.DefineLabel();
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Ldfld, _tlsServerKeyField);
+        ctorIL.Emit(OpCodes.Ldfld, keyField);
         ctorIL.Emit(OpCodes.Brtrue, skipScKey);
-        EmitTlsCtorExtractString(ctorIL, scLocal, tempLocal, dictTryGet, "key", _tlsServerKeyField);
+        EmitTlsCtorExtractString(ctorIL, scLocal, tempLocal, dictTryGet, "key", keyField);
         ctorIL.MarkLabel(skipScKey);
         ctorIL.MarkLabel(noSecureCtx);
 
@@ -857,7 +860,7 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldloc, tempLocal);
         ctorIL.Emit(OpCodes.Unbox_Any, _types.Boolean);
-        ctorIL.Emit(OpCodes.Stfld, _tlsServerRequestCertField);
+        ctorIL.Emit(OpCodes.Stfld, requestCertField);
         ctorIL.MarkLabel(noReq);
 
         // ALPNProtocols → string[]
@@ -875,23 +878,41 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Castclass, _types.ListOfObject);
         ctorIL.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethod("OfType")!, _types.String));
         ctorIL.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethod("ToArray")!, _types.String));
-        ctorIL.Emit(OpCodes.Stfld, _tlsServerAlpnField);
+        ctorIL.Emit(OpCodes.Stfld, alpnField);
         ctorIL.MarkLabel(noAlpn);
 
         ctorIL.MarkLabel(skipOptions);
         ctorIL.Emit(OpCodes.Ret);
 
         // Properties + methods
-        EmitTlsServerProperties(typeBuilder);
-        EmitTlsServerListen(typeBuilder, runtime);
-        EmitTlsServerClose(typeBuilder, runtime);
-        EmitTlsServerAddress(typeBuilder, runtime);
-        EmitTlsServerGetMember(typeBuilder, runtime);
+        var serverFields = new TlsServerFields(
+            isListeningField,
+            callbackField,
+            certField,
+            keyField,
+            requestCertField,
+            listenerField,
+            portField,
+            alpnField);
+
+        EmitTlsServerProperties(typeBuilder, serverFields);
+        EmitTlsServerListen(typeBuilder, runtime, serverFields, acceptWorker);
+        EmitTlsServerClose(typeBuilder, runtime, serverFields);
+        EmitTlsServerAddress(typeBuilder, runtime, serverFields);
+        EmitTlsServerGetMember(typeBuilder, runtime, serverFields);
 
         // NOTE: CreateType() deferred to EmitTlsServerFinalize (needs accept worker body)
+
+        return new(serverFields, acceptWorker);
     }
 
-    private void EmitTlsCtorExtractString(ILGenerator il, LocalBuilder optLocal, LocalBuilder tempLocal, MethodInfo dictTryGet, string key, FieldBuilder field)
+    private void EmitTlsCtorExtractString(
+        ILGenerator il,
+        LocalBuilder optLocal,
+        LocalBuilder tempLocal,
+        MethodInfo dictTryGet,
+        string key,
+        FieldBuilder field)
     {
         var skip = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, optLocal);
@@ -909,7 +930,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(skip);
     }
 
-    private void EmitTlsServerProperties(TypeBuilder typeBuilder)
+    private void EmitTlsServerProperties(TypeBuilder typeBuilder, TlsServerFields serverFields)
     {
         var listeningProp = typeBuilder.DefineProperty("Listening", PropertyAttributes.None, _types.Boolean, null);
         var getListening = typeBuilder.DefineMethod(
@@ -920,12 +941,16 @@ public partial class RuntimeEmitter
         );
         var il = getListening.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerIsListeningField);
+        il.Emit(OpCodes.Ldfld, serverFields.IsListening);
         il.Emit(OpCodes.Ret);
         listeningProp.SetGetMethod(getListening);
     }
 
-    private void EmitTlsServerListen(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTlsServerListen(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime,
+        TlsServerFields serverFields,
+        MethodBuilder acceptWorker)
     {
         var method = typeBuilder.DefineMethod(
             "Listen",
@@ -1021,7 +1046,7 @@ public partial class RuntimeEmitter
         // _listener = listener
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, listenerLocal);
-        il.Emit(OpCodes.Stfld, _tlsServerListenerField);
+        il.Emit(OpCodes.Stfld, serverFields.Listener);
 
         // If port == 0, read actual
         var portNotZero = il.DefineLabel();
@@ -1037,12 +1062,12 @@ public partial class RuntimeEmitter
         // _port = port
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, portLocal);
-        il.Emit(OpCodes.Stfld, _tlsServerPortField);
+        il.Emit(OpCodes.Stfld, serverFields.Port);
 
         // _isListening = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tlsServerIsListeningField);
+        il.Emit(OpCodes.Stfld, serverFields.IsListening);
 
         // EventLoop.Ref()
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
@@ -1070,7 +1095,7 @@ public partial class RuntimeEmitter
 
         // ThreadPool.QueueUserWorkItem(new WaitCallback(this._TlsAcceptWorker))
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldftn, _tlsServerAcceptWorkerMethod);
+        il.Emit(OpCodes.Ldftn, acceptWorker);
         il.Emit(OpCodes.Newobj, typeof(System.Threading.WaitCallback).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call, typeof(System.Threading.ThreadPool).GetMethod("QueueUserWorkItem", [typeof(System.Threading.WaitCallback)])!);
         il.Emit(OpCodes.Pop);
@@ -1079,7 +1104,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTlsServerClose(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTlsServerClose(TypeBuilder typeBuilder, EmittedRuntime runtime, TlsServerFields serverFields)
     {
         var method = typeBuilder.DefineMethod(
             "Close",
@@ -1092,7 +1117,7 @@ public partial class RuntimeEmitter
 
         var isListeningLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerIsListeningField);
+        il.Emit(OpCodes.Ldfld, serverFields.IsListening);
         il.Emit(OpCodes.Brtrue, isListeningLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
@@ -1101,19 +1126,19 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tlsServerIsListeningField);
+        il.Emit(OpCodes.Stfld, serverFields.IsListening);
 
         // Stop listener
         var noListener = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerListenerField);
+        il.Emit(OpCodes.Ldfld, serverFields.Listener);
         il.Emit(OpCodes.Brfalse, noListener);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerListenerField);
+        il.Emit(OpCodes.Ldfld, serverFields.Listener);
         il.Emit(OpCodes.Callvirt, typeof(System.Net.Sockets.TcpListener).GetMethod("Stop")!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _tlsServerListenerField);
+        il.Emit(OpCodes.Stfld, serverFields.Listener);
         il.MarkLabel(noListener);
 
         // EventLoop.Unref()
@@ -1163,7 +1188,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTlsServerAddress(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTlsServerAddress(TypeBuilder typeBuilder, EmittedRuntime runtime, TlsServerFields serverFields)
     {
         var method = typeBuilder.DefineMethod(
             "Address",
@@ -1177,14 +1202,14 @@ public partial class RuntimeEmitter
 
         var hasListener = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerListenerField);
+        il.Emit(OpCodes.Ldfld, serverFields.Listener);
         il.Emit(OpCodes.Brtrue, hasListener);
         // Return dict with port from _port field
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(dictType));
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "port");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerPortField);
+        il.Emit(OpCodes.Ldfld, serverFields.Port);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "set_Item", _types.String, _types.Object));
@@ -1197,7 +1222,7 @@ public partial class RuntimeEmitter
 
         var epLocal = il.DeclareLocal(typeof(System.Net.IPEndPoint));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerListenerField);
+        il.Emit(OpCodes.Ldfld, serverFields.Listener);
         il.Emit(OpCodes.Callvirt, typeof(System.Net.Sockets.TcpListener).GetProperty("LocalEndpoint")!.GetGetMethod()!);
         il.Emit(OpCodes.Castclass, typeof(System.Net.IPEndPoint));
         il.Emit(OpCodes.Stloc, epLocal);
@@ -1226,7 +1251,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTlsServerGetMember(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTlsServerGetMember(TypeBuilder typeBuilder, EmittedRuntime runtime, TlsServerFields serverFields)
     {
         var method = typeBuilder.DefineMethod(
             "GetMember",
@@ -1249,7 +1274,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(listeningLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerIsListeningField);
+        il.Emit(OpCodes.Ldfld, serverFields.IsListening);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
 

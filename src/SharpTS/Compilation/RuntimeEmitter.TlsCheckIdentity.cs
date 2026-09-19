@@ -10,10 +10,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private MethodBuilder _tlsCheckIdentityCoreMethod = null!;
-    private MethodBuilder _tlsHostMatchesMethod = null!;
-    private MethodBuilder _tlsExtractCnMethod = null!;
-
     private const int OrdinalCmp = (int)StringComparison.Ordinal;
     private const int OrdinalIgnoreCaseCmp = (int)StringComparison.OrdinalIgnoreCase;
 
@@ -23,9 +19,9 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTlsCheckServerIdentity(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitTlsHostMatchesHelper(typeBuilder);
-        EmitTlsExtractCnHelper(typeBuilder);
-        EmitTlsCheckIdentityCoreHelper(typeBuilder);
+        var hostMatches = EmitTlsHostMatchesHelper(typeBuilder);
+        var extractCn = EmitTlsExtractCnHelper(typeBuilder);
+        var checkIdentity = EmitTlsCheckIdentityCoreHelper(typeBuilder, hostMatches, extractCn);
 
         var method = typeBuilder.DefineMethod(
             "TlsCheckServerIdentity",
@@ -118,7 +114,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, hLocal);
         il.Emit(OpCodes.Ldloc, sanLocal);
         il.Emit(OpCodes.Ldloc, subjLocal);
-        il.Emit(OpCodes.Call, _tlsCheckIdentityCoreMethod);
+        il.Emit(OpCodes.Call, checkIdentity);
         il.Emit(OpCodes.Stloc, errLocal);
 
         // if (err == null) return $Undefined._instance;
@@ -136,7 +132,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>private static bool TlsHostMatches(string host, string name)</summary>
-    private void EmitTlsHostMatchesHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTlsHostMatchesHelper(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "TlsHostMatches",
@@ -144,7 +140,6 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.String, _types.String]
         );
-        _tlsHostMatchesMethod = method;
         var il = method.GetILGenerator();
 
         var startsWith = _types.GetMethod(_types.String, "StartsWith", [_types.String, typeof(StringComparison)])!;
@@ -192,10 +187,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, OrdinalIgnoreCaseCmp);
         il.Emit(OpCodes.Call, equalsCmp);
         il.Emit(OpCodes.Ret);
+
+        return method;
     }
 
     /// <summary>private static string TlsExtractCN(string dn)</summary>
-    private void EmitTlsExtractCnHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTlsExtractCnHelper(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "TlsExtractCN",
@@ -203,7 +200,6 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String]
         );
-        _tlsExtractCnMethod = method;
         var il = method.GetILGenerator();
 
         var indexOfStrCmp = _types.GetMethod(_types.String, "IndexOf", [_types.String, typeof(StringComparison)])!;
@@ -264,10 +260,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, substringII);
         il.Emit(OpCodes.Callvirt, trim);
         il.Emit(OpCodes.Ret);
+
+        return method;
     }
 
     /// <summary>private static string TlsCheckIdentityCore(string host, string san, string subjDN)</summary>
-    private void EmitTlsCheckIdentityCoreHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTlsCheckIdentityCoreHelper(
+        TypeBuilder typeBuilder,
+        MethodBuilder hostMatches,
+        MethodBuilder extractCn)
     {
         var method = typeBuilder.DefineMethod(
             "TlsCheckIdentityCore",
@@ -275,7 +276,6 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.String, _types.String]
         );
-        _tlsCheckIdentityCoreMethod = method;
         var il = method.GetILGenerator();
 
         var listType = typeof(List<string>);
@@ -374,7 +374,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, cnDone);
         var cnLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _tlsExtractCnMethod);
+        il.Emit(OpCodes.Call, extractCn);
         il.Emit(OpCodes.Stloc, cnLocal);
         il.Emit(OpCodes.Ldloc, cnLocal);
         il.Emit(OpCodes.Call, isNullOrEmpty);
@@ -396,7 +396,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ldloc, jLocal);
         il.Emit(OpCodes.Callvirt, listGetItem);
-        il.Emit(OpCodes.Call, _tlsHostMatchesMethod);
+        il.Emit(OpCodes.Call, hostMatches);
         var noMatch = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, noMatch);
         il.Emit(OpCodes.Ldnull);
@@ -436,5 +436,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, altLocal);
         il.Emit(OpCodes.Call, concat4);
         il.Emit(OpCodes.Ret);
+
+        return method;
     }
 }

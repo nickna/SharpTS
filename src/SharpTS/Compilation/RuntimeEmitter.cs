@@ -627,11 +627,13 @@ public partial class RuntimeEmitter
             var serverConstruction = EmitTSNetServerPhase1(moduleBuilder, runtime);
             netConstruction = new(socketConstruction, serverConstruction);
         }
+        TlsConstruction? tlsConstruction = null;
+
         // TLS types — Phase 1 (type + fields + method stubs, no CreateType). Must come
         // after $NetSocket Phase 1 ($TlsSocket : $NetSocket) and before EmitRuntimeClass
         // (the tls module methods reference TlsSocketCtor/TlsServerCtor). UsesTls ⇒ UsesNet.
         if (features.UsesTls)
-            EmitTlsTypesPhase1(moduleBuilder, runtime);
+            tlsConstruction = EmitTlsTypesPhase1(moduleBuilder, runtime);
         if (features.UsesDgram)
             EmitDatagramSocketTypeDefinition(moduleBuilder, runtime);
 
@@ -849,6 +851,7 @@ public partial class RuntimeEmitter
         runtime.ReflectedMethods.CompleteEmission();
 
         NetClosureConstruction? netClosures = null;
+        TlsAcceptClosures? tlsAcceptClosures = null;
 
         // Net / Http / Tls / Dgram phase-1b/phase-2 finalize work — gated on
         // their own feature flags. UsesHttp ⇒ UsesNet, UsesTls ⇒ UsesNet.
@@ -879,14 +882,18 @@ public partial class RuntimeEmitter
         if (features.UsesTls)
         {
             var socketFields = RequireNetConstruction(netConstruction).Socket.Fields;
-            EmitTlsAcceptClosureClass(moduleBuilder, runtime);
-            EmitTlsAcceptErrorClosureClass(moduleBuilder, runtime);
-            EmitTlsConnectClosureClass(moduleBuilder, runtime, socketFields.Client, socketFields.Stream);
-            EmitTlsConnectBody(runtime);
+            var tls = runtime.RequireTls();
+            var construction = RequireTlsConstruction(tlsConstruction);
+            var accept = EmitTlsAcceptClosureClass(moduleBuilder, runtime, tls, construction.Server.Fields);
+            var acceptError = EmitTlsAcceptErrorClosureClass(moduleBuilder, runtime, tls);
+            tlsAcceptClosures = new(accept, acceptError);
+            var connect = EmitTlsConnectClosureClass(moduleBuilder, runtime, socketFields.Client, socketFields.Stream,
+                tls, construction.Socket.Fields, construction.Socket.Helpers);
+            EmitTlsConnectBody(runtime, construction.Socket.Fields, connect);
             // $TlsSocket Phase 2: emit method bodies + CreateType. Must come after the
             // connect closure (its Connect body sets $TlsSocket fields) and after
             // $NetSocket.CreateType (base, already finalized above).
-            EmitTlsSocketFinalize(runtime);
+            EmitTlsSocketFinalize(tls);
         }
 
         EmitRuntimeClassFinalize(runtime.RuntimeClass);     // Finalize $Runtime after all method bodies
@@ -894,8 +901,12 @@ public partial class RuntimeEmitter
         if (features.UsesTls)
         {
             var socketFields = RequireNetConstruction(netConstruction).Socket.Fields;
-            EmitTlsServerAcceptWorkerBody(runtime, socketFields.Client, socketFields.Stream);
-            EmitTlsServerFinalize();
+            var construction = RequireTlsConstruction(tlsConstruction);
+            var closures = tlsAcceptClosures ?? throw new InvalidOperationException("TLS accept closures must be emitted before the worker body.");
+            EmitTlsServerAcceptWorkerBody(runtime, socketFields.Client, socketFields.Stream, runtime.RequireTls(),
+                construction.Socket.Fields, construction.Socket.Helpers, construction.Server.Fields,
+                construction.Server.AcceptWorker, closures);
+            EmitTlsServerFinalize(runtime.RequireTls());
         }
 
         // Finalize $ReadlineInterface class (Phase 2)
