@@ -243,10 +243,12 @@ public sealed class EmittedFetchImplementation
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException($"Fetch Web API metadata '{name}' has not been declared.");
 
-    private void Set<T>(ref T? field, T value) where T : class
+    private void Set<T>(ref T? field, T value, [CallerMemberName] string name = "") where T : class
     {
         EnsureMutable();
         ArgumentNullException.ThrowIfNull(value);
+        if (field is not null)
+            throw new InvalidOperationException($"Fetch Web API metadata '{name}' has already been declared.");
         field = value;
     }
 

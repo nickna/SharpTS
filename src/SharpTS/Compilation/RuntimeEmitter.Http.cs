@@ -13,34 +13,38 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    // HTTP types from BCL
-    private Type? _httpClientType;
-    private Type? _httpRequestMessageType;
-    private Type? _httpResponseMessageType;
-    private Type? _httpMethodType;
-    private Type? _httpContentType;
-    private Type? _stringContentType;
-    private Type? _httpClientHandlerType;
-    private Type? _httpRequestHeadersType;
-    private Type? _httpResponseHeadersType;
-    private Type? _httpContentHeadersType;
-    private Type? _cookieContainerType;
+    // BCL construction inputs are scoped to one HTTP/Fetch emission.
+    internal sealed record HttpConstruction(
+        Type? HttpClientType,
+        Type? HttpRequestMessageType,
+        Type? HttpResponseMessageType,
+        Type? HttpMethodType,
+        Type? HttpContentType,
+        Type? StringContentType,
+        Type? HttpClientHandlerType,
+        Type? HttpRequestHeadersType,
+        Type? HttpResponseHeadersType,
+        Type? HttpContentHeadersType,
+        Type? CookieContainerType);
 
-    private void InitializeHttpTypes()
+    private static HttpConstruction CreateHttpConstruction()
     {
-        _httpClientType = Type.GetType("System.Net.Http.HttpClient, System.Net.Http");
-        _httpRequestMessageType = Type.GetType("System.Net.Http.HttpRequestMessage, System.Net.Http");
-        _httpResponseMessageType = Type.GetType("System.Net.Http.HttpResponseMessage, System.Net.Http");
-        _httpMethodType = Type.GetType("System.Net.Http.HttpMethod, System.Net.Http");
-        _httpContentType = Type.GetType("System.Net.Http.HttpContent, System.Net.Http");
-        _stringContentType = Type.GetType("System.Net.Http.StringContent, System.Net.Http");
-        _httpClientHandlerType = Type.GetType("System.Net.Http.HttpClientHandler, System.Net.Http");
-        _httpRequestHeadersType = Type.GetType("System.Net.Http.Headers.HttpRequestHeaders, System.Net.Http");
-        _httpResponseHeadersType = Type.GetType("System.Net.Http.Headers.HttpResponseHeaders, System.Net.Http");
-        _httpContentHeadersType = Type.GetType("System.Net.Http.Headers.HttpContentHeaders, System.Net.Http");
+        var httpClientType = Type.GetType("System.Net.Http.HttpClient, System.Net.Http");
+        var httpRequestMessageType = Type.GetType("System.Net.Http.HttpRequestMessage, System.Net.Http");
+        var httpResponseMessageType = Type.GetType("System.Net.Http.HttpResponseMessage, System.Net.Http");
+        var httpMethodType = Type.GetType("System.Net.Http.HttpMethod, System.Net.Http");
+        var httpContentType = Type.GetType("System.Net.Http.HttpContent, System.Net.Http");
+        var stringContentType = Type.GetType("System.Net.Http.StringContent, System.Net.Http");
+        var httpClientHandlerType = Type.GetType("System.Net.Http.HttpClientHandler, System.Net.Http");
+        var httpRequestHeadersType = Type.GetType("System.Net.Http.Headers.HttpRequestHeaders, System.Net.Http");
+        var httpResponseHeadersType = Type.GetType("System.Net.Http.Headers.HttpResponseHeaders, System.Net.Http");
+        var httpContentHeadersType = Type.GetType("System.Net.Http.Headers.HttpContentHeaders, System.Net.Http");
         // CookieContainer lives in System.Net.Primitives — referenced for the
         // process-wide cookie jar wired into the with-cookies HttpClientHandler instances.
-        _cookieContainerType = Type.GetType("System.Net.CookieContainer, System.Net.Primitives");
+        var cookieContainerType = Type.GetType("System.Net.CookieContainer, System.Net.Primitives");
+        return new HttpConstruction(
+            httpClientType, httpRequestMessageType, httpResponseMessageType, httpMethodType, httpContentType, stringContentType,
+            httpClientHandlerType, httpRequestHeadersType, httpResponseHeadersType, httpContentHeadersType, cookieContainerType);
     }
 
     /// <summary>
@@ -48,7 +52,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitHttpModuleMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        InitializeHttpTypes();
+        var construction = CreateHttpConstruction();
 
         // Emit the $Headers class first (used by $FetchResponse)
         var moduleBuilder = typeBuilder.Module as ModuleBuilder ?? throw new CompileException("Module is not a ModuleBuilder");
@@ -67,8 +71,8 @@ public partial class RuntimeEmitter
         EmitResponseStaticMethods(typeBuilder, runtime);
 
         // Emit fetch display class (for async Task.Run dispatch) and fetch function
-        EmitFetchDisplayClass(moduleBuilder, runtime);
-        EmitFetch(typeBuilder, runtime);
+        EmitFetchDisplayClass(construction, moduleBuilder, runtime);
+        EmitFetch(typeBuilder, runtime, construction);
 
         // Emit http module methods
         EmitHttpCreateServer(typeBuilder, runtime.RequireHttp());
@@ -1223,9 +1227,9 @@ public partial class RuntimeEmitter
     /// Emits $FetchDisplayClass: captures _url and _options, Invoke() calls FetchHelper
     /// and constructs $FetchResponse from the result. Used with Task.Run for async dispatch.
     /// </summary>
-    private void EmitFetchDisplayClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitFetchDisplayClass(HttpConstruction construction, ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        if (_httpClientType == null || _httpRequestMessageType == null)
+        if (construction.HttpClientType == null || construction.HttpRequestMessageType == null)
             return; // No HttpClient available, Fetch will return rejected promise
 
         var fetch = runtime.Fetch.RequireImplementation();
@@ -1367,10 +1371,10 @@ public partial class RuntimeEmitter
     /// Emits a helper method to perform the HTTP request with try/catch,
     /// then dispatches it asynchronously via Task.Run and wraps in a Promise.
     /// </remarks>
-    internal void EmitFetch(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void EmitFetch(TypeBuilder typeBuilder, EmittedRuntime runtime, HttpConstruction? construction = null)
     {
         var fetch = runtime.Fetch.RequireImplementation();
-        if (_httpClientType == null || _httpRequestMessageType == null)
+        if (construction is null || construction.HttpClientType == null || construction.HttpRequestMessageType == null)
         {
             // Emit a method that returns rejected promise
             var method = typeBuilder.DefineMethod(
@@ -1391,19 +1395,19 @@ public partial class RuntimeEmitter
         var client = fetch.RequireClient();
 
         // Emit cached HttpClient infrastructure (four static fields + getter method)
-        EmitCachedHttpClients(client, typeBuilder);
+        EmitCachedHttpClients(construction, client, typeBuilder);
 
         // Emit the fetch.cookieJar.{getCookies,setCookie,clear} helpers — they
         // operate on the same _cookieContainer static field as the with-cookies
         // HttpClient handlers, so the JS-facing introspection sees the same jar
         // that fetch reads/writes.
-        EmitCookieJarHelpers(typeBuilder, runtime);
+        EmitCookieJarHelpers(construction, typeBuilder, runtime);
 
         // First emit the headers helper
-        var applyHeadersMethod = EmitApplyRequestHeaders(typeBuilder, runtime);
+        var applyHeadersMethod = EmitApplyRequestHeaders(construction, typeBuilder, runtime);
 
         // Then emit the helper that does the actual fetch work
-        var fetchHelperMethod = EmitFetchHelper(typeBuilder, runtime, applyHeadersMethod);
+        var fetchHelperMethod = EmitFetchHelper(construction, typeBuilder, runtime, applyHeadersMethod);
 
         // Now emit the Fetch method: creates display class, dispatches via Task.Run,
         // returns a pending Promise that resolves when the HTTP call completes.
@@ -1476,39 +1480,39 @@ public partial class RuntimeEmitter
     /// present at runtime.
     /// </remarks>
 
-    private void EmitCachedHttpClients(EmittedFetchClientRuntime client, TypeBuilder typeBuilder)
+    private void EmitCachedHttpClients(HttpConstruction construction, EmittedFetchClientRuntime client, TypeBuilder typeBuilder)
     {
         // Static fields for the four cached clients
         client.FollowClientField = typeBuilder.DefineField(
-            "_httpClientFollow", _httpClientType!, FieldAttributes.Private | FieldAttributes.Static);
+            "_httpClientFollow", construction.HttpClientType!, FieldAttributes.Private | FieldAttributes.Static);
         client.NoRedirectClientField = typeBuilder.DefineField(
-            "_httpClientNoRedirect", _httpClientType!, FieldAttributes.Private | FieldAttributes.Static);
+            "_httpClientNoRedirect", construction.HttpClientType!, FieldAttributes.Private | FieldAttributes.Static);
         client.FollowCookiesClientField = typeBuilder.DefineField(
-            "_httpClientFollowCookies", _httpClientType!, FieldAttributes.Private | FieldAttributes.Static);
+            "_httpClientFollowCookies", construction.HttpClientType!, FieldAttributes.Private | FieldAttributes.Static);
         client.NoRedirectCookiesClientField = typeBuilder.DefineField(
-            "_httpClientNoRedirectCookies", _httpClientType!, FieldAttributes.Private | FieldAttributes.Static);
+            "_httpClientNoRedirectCookies", construction.HttpClientType!, FieldAttributes.Private | FieldAttributes.Static);
 
         // Static field holding the shared CookieContainer (process-wide, lazy-init)
         client.CookieContainerField = typeBuilder.DefineField(
-            "_cookieContainer", _cookieContainerType!, FieldAttributes.Assembly | FieldAttributes.Static);
+            "_cookieContainer", construction.CookieContainerType!, FieldAttributes.Assembly | FieldAttributes.Static);
 
         // GetOrCreateHttpClient(string redirectMode, bool useCookies) -> HttpClient
         var method = typeBuilder.DefineMethod(
             "GetOrCreateHttpClient",
             MethodAttributes.Private | MethodAttributes.Static,
-            _httpClientType!,
+            construction.HttpClientType!,
             [_types.String, _types.Boolean]
         );
         client.GetOrCreateHttpClient = method;
 
         var il = method.GetILGenerator();
-        var handlerCtor = _types.GetConstructor(_httpClientHandlerType!, Type.EmptyTypes)!;
-        var httpClientCtor = _types.GetConstructor(_httpClientType!, [typeof(System.Net.Http.HttpMessageHandler)])!;
-        var allowAutoRedirectProp = _types.GetProperty(_httpClientHandlerType!, "AllowAutoRedirect");
-        var useCookiesProp = _types.GetProperty(_httpClientHandlerType!, "UseCookies");
-        var cookieContainerProp = _types.GetProperty(_httpClientHandlerType!, "CookieContainer");
-        var cookieContainerCtor = _types.GetConstructor(_cookieContainerType!, Type.EmptyTypes)!;
-        var timeoutProp = _types.GetProperty(_httpClientType!, "Timeout");
+        var handlerCtor = _types.GetConstructor(construction.HttpClientHandlerType!, Type.EmptyTypes)!;
+        var httpClientCtor = _types.GetConstructor(construction.HttpClientType!, [typeof(System.Net.Http.HttpMessageHandler)])!;
+        var allowAutoRedirectProp = _types.GetProperty(construction.HttpClientHandlerType!, "AllowAutoRedirect");
+        var useCookiesProp = _types.GetProperty(construction.HttpClientHandlerType!, "UseCookies");
+        var cookieContainerProp = _types.GetProperty(construction.HttpClientHandlerType!, "CookieContainer");
+        var cookieContainerCtor = _types.GetConstructor(construction.CookieContainerType!, Type.EmptyTypes)!;
+        var timeoutProp = _types.GetProperty(construction.HttpClientType!, "Timeout");
         var fromSecondsMethod = _types.GetMethod(_types.TimeSpan, "FromSeconds", [_types.Double])!;
 
         // Local helper: emit the create-and-cache sequence for one of the four field combinations.
@@ -1522,7 +1526,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, doneLabel);
 
             // var handler = new HttpClientHandler();
-            var handlerLocal = il.DeclareLocal(_httpClientHandlerType!);
+            var handlerLocal = il.DeclareLocal(construction.HttpClientHandlerType!);
             il.Emit(OpCodes.Newobj, handlerCtor);
             il.Emit(OpCodes.Stloc, handlerLocal);
 
@@ -1610,13 +1614,13 @@ public partial class RuntimeEmitter
     /// Pure-IL — no reflection back to SharpTS.dll. <c>CookieContainer</c> lives in
     /// <c>System.Net.Primitives</c> which is part of the BCL surface.
     /// </remarks>
-    private void EmitCookieJarHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCookieJarHelpers(HttpConstruction construction, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var client = runtime.Fetch.RequireImplementation().RequireClient();
-        var cookieContainerCtor = _types.GetConstructor(_cookieContainerType!, Type.EmptyTypes)!;
-        var getCookieHeaderMethod = _types.GetMethod(_cookieContainerType!, "GetCookieHeader", [typeof(Uri)]);
-        var setCookiesMethod = _types.GetMethod(_cookieContainerType!, "SetCookies", [typeof(Uri), _types.String]);
-        var getAllCookiesMethod = _types.GetMethod(_cookieContainerType!, "GetAllCookies", Type.EmptyTypes);
+        var cookieContainerCtor = _types.GetConstructor(construction.CookieContainerType!, Type.EmptyTypes)!;
+        var getCookieHeaderMethod = _types.GetMethod(construction.CookieContainerType!, "GetCookieHeader", [typeof(Uri)]);
+        var setCookiesMethod = _types.GetMethod(construction.CookieContainerType!, "SetCookies", [typeof(Uri), _types.String]);
+        var getAllCookiesMethod = _types.GetMethod(construction.CookieContainerType!, "GetAllCookies", Type.EmptyTypes);
         var uriTryCreate = typeof(Uri).GetMethod("TryCreate", [_types.String, typeof(UriKind), typeof(Uri).MakeByRefType()])!;
         var uriKindAbsolute = (int)UriKind.Absolute;
         var typeErrorCtor = runtime.Errors.TypeErrorConstructor;
@@ -1860,7 +1864,7 @@ public partial class RuntimeEmitter
     /// Emits helper method that performs the actual HTTP request with try/catch.
     /// Returns object[] { success, status, statusText, ok, url, headers, bodyBytes, errorMessage }
     /// </summary>
-    private MethodBuilder EmitFetchHelper(TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder applyHeadersMethod)
+    private MethodBuilder EmitFetchHelper(HttpConstruction construction, TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder applyHeadersMethod)
     {
         var client = runtime.Fetch.RequireImplementation().RequireClient();
         var method = typeBuilder.DefineMethod(
@@ -1874,9 +1878,9 @@ public partial class RuntimeEmitter
 
         var resultLocal = il.DeclareLocal(_types.ObjectArray);
         var urlLocal = il.DeclareLocal(_types.String);
-        var clientLocal = il.DeclareLocal(_httpClientType!);
-        var requestLocal = il.DeclareLocal(_httpRequestMessageType!);
-        var responseLocal = il.DeclareLocal(_httpResponseMessageType!);
+        var clientLocal = il.DeclareLocal(construction.HttpClientType!);
+        var requestLocal = il.DeclareLocal(construction.HttpRequestMessageType!);
+        var responseLocal = il.DeclareLocal(construction.HttpResponseMessageType!);
         var bodyBytesLocal = il.DeclareLocal(_types.ByteArray);
         var statusLocal = il.DeclareLocal(_types.Double);
         var okLocal = il.DeclareLocal(_types.Boolean);
@@ -2001,8 +2005,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(methodDoneLabel);
 
         // Create HttpRequestMessage
-        var httpMethodCtor = _types.GetConstructor(_httpMethodType!, [_types.String])!;
-        var requestCtor = _types.GetConstructor(_httpRequestMessageType!, [_httpMethodType!, _types.String]);
+        var httpMethodCtor = _types.GetConstructor(construction.HttpMethodType!, [_types.String])!;
+        var requestCtor = _types.GetConstructor(construction.HttpRequestMessageType!, [construction.HttpMethodType!, _types.String]);
 
         il.Emit(OpCodes.Ldloc, methodStrLocal);
         il.Emit(OpCodes.Newobj, httpMethodCtor);
@@ -2042,8 +2046,8 @@ public partial class RuntimeEmitter
         // request.Content = new StringContent(bodyStr)
         il.Emit(OpCodes.Ldloc, requestLocal);
         il.Emit(OpCodes.Ldloc, bodyStrLocal);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_stringContentType!, [_types.String])!);
-        var requestContentProperty = _types.GetProperty(_httpRequestMessageType!, "Content")!;
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(construction.StringContentType!, [_types.String])!);
+        var requestContentProperty = _types.GetProperty(construction.HttpRequestMessageType!, "Content")!;
         il.Emit(OpCodes.Callvirt, requestContentProperty.GetSetMethod()!);
         il.Emit(OpCodes.Br, bodyDoneLabel);
 
@@ -2107,7 +2111,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(signalCheckDoneLabel);
 
         // var response = client.SendAsync(request).Result
-        var sendAsyncMethod = _types.GetMethod(_httpClientType!, "SendAsync", [_httpRequestMessageType!]);
+        var sendAsyncMethod = _types.GetMethod(construction.HttpClientType!, "SendAsync", [construction.HttpRequestMessageType!]);
         var taskOfResponseType = sendAsyncMethod.ReturnType;
         var getResultMethod = _types.GetProperty(taskOfResponseType, "Result")!.GetGetMethod()!;
 
@@ -2118,7 +2122,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, responseLocal);
 
         // If redirect mode is "error" and status is 3xx, throw
-        var statusCodeProperty2 = _types.GetProperty(_httpResponseMessageType!, "StatusCode")!;
+        var statusCodeProperty2 = _types.GetProperty(construction.HttpResponseMessageType!, "StatusCode")!;
         var skipRedirectError = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, redirectLocal);
         il.Emit(OpCodes.Ldstr, "error");
@@ -2145,8 +2149,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(skipRedirectError);
 
         // byte[] bodyBytes = response.Content.ReadAsByteArrayAsync().Result
-        var contentProperty = _types.GetProperty(_httpResponseMessageType!, "Content")!;
-        var readAsByteArrayMethod = _types.GetMethod(_httpContentType!, "ReadAsByteArrayAsync", Type.EmptyTypes)!;
+        var contentProperty = _types.GetProperty(construction.HttpResponseMessageType!, "Content")!;
+        var readAsByteArrayMethod = _types.GetMethod(construction.HttpContentType!, "ReadAsByteArrayAsync", Type.EmptyTypes)!;
         var taskOfBytesResultProp = _types.GetProperty(readAsByteArrayMethod.ReturnType, "Result")!;
 
         il.Emit(OpCodes.Ldloc, responseLocal);
@@ -2156,20 +2160,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, bodyBytesLocal);
 
         // double status = (double)response.StatusCode
-        var statusCodeProperty = _types.GetProperty(_httpResponseMessageType!, "StatusCode");
+        var statusCodeProperty = _types.GetProperty(construction.HttpResponseMessageType!, "StatusCode");
         il.Emit(OpCodes.Ldloc, responseLocal);
         il.Emit(OpCodes.Callvirt, statusCodeProperty.GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Stloc, statusLocal);
 
         // bool ok = response.IsSuccessStatusCode
-        var isSuccessProperty = _types.GetProperty(_httpResponseMessageType!, "IsSuccessStatusCode");
+        var isSuccessProperty = _types.GetProperty(construction.HttpResponseMessageType!, "IsSuccessStatusCode");
         il.Emit(OpCodes.Ldloc, responseLocal);
         il.Emit(OpCodes.Callvirt, isSuccessProperty.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, okLocal);
 
         // string statusText = response.ReasonPhrase ?? ""
-        var reasonPhraseProperty = _types.GetProperty(_httpResponseMessageType!, "ReasonPhrase");
+        var reasonPhraseProperty = _types.GetProperty(construction.HttpResponseMessageType!, "ReasonPhrase");
         il.Emit(OpCodes.Ldloc, responseLocal);
         il.Emit(OpCodes.Callvirt, reasonPhraseProperty.GetGetMethod()!);
         il.Emit(OpCodes.Dup);
@@ -2186,7 +2190,7 @@ public partial class RuntimeEmitter
 
         // Extract response headers into dictionary
         // Iterate response.Headers
-        var responseHeadersProperty = _types.GetProperty(_httpResponseMessageType!, "Headers")!;
+        var responseHeadersProperty = _types.GetProperty(construction.HttpResponseMessageType!, "Headers")!;
         var getEnumeratorMethodForHeaders = typeof(IEnumerable<KeyValuePair<string, IEnumerable<string>>>)
             .GetMethod("GetEnumerator")!;
         var moveNextMethodForHeaders = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
@@ -2197,7 +2201,7 @@ public partial class RuntimeEmitter
         // we just call the enumerator pattern.
 
         // Get enumerator from response.Headers (which is HttpResponseHeaders : IEnumerable<KVP<string, IEnumerable<string>>>)
-        var respHdrsLocal = il.DeclareLocal(_httpResponseHeadersType!);
+        var respHdrsLocal = il.DeclareLocal(construction.HttpResponseHeadersType!);
         il.Emit(OpCodes.Ldloc, responseLocal);
         il.Emit(OpCodes.Callvirt, responseHeadersProperty.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, respHdrsLocal);
@@ -2265,10 +2269,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(hdrLoopEnd);
 
         // Also extract Content headers
-        var contentPropertyForHeaders = _types.GetProperty(_httpResponseMessageType!, "Content");
-        var contentHeadersProperty = _types.GetProperty(_httpContentType!, "Headers");
+        var contentPropertyForHeaders = _types.GetProperty(construction.HttpResponseMessageType!, "Content");
+        var contentHeadersProperty = _types.GetProperty(construction.HttpContentType!, "Headers");
 
-        var contentLocal = il.DeclareLocal(_httpContentType!);
+        var contentLocal = il.DeclareLocal(construction.HttpContentType!);
         il.Emit(OpCodes.Ldloc, responseLocal);
         il.Emit(OpCodes.Callvirt, contentPropertyForHeaders.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, contentLocal);
@@ -2277,7 +2281,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, contentLocal);
         il.Emit(OpCodes.Brfalse, noContentLabel);
 
-        var contentHdrsLocal = il.DeclareLocal(_httpContentHeadersType!);
+        var contentHdrsLocal = il.DeclareLocal(construction.HttpContentHeadersType!);
         il.Emit(OpCodes.Ldloc, contentLocal);
         il.Emit(OpCodes.Callvirt, contentHeadersProperty.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, contentHdrsLocal);
@@ -2422,14 +2426,14 @@ public partial class RuntimeEmitter
     /// Emits a helper method to apply request headers from an options object.
     /// ApplyRequestHeaders(HttpRequestMessage request, object? options)
     /// </summary>
-    private MethodBuilder EmitApplyRequestHeaders(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitApplyRequestHeaders(HttpConstruction construction, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var fetch = runtime.Fetch.RequireImplementation();
         var method = typeBuilder.DefineMethod(
             "ApplyRequestHeaders",
             MethodAttributes.Private | MethodAttributes.Static,
             typeof(void),
-            [_httpRequestMessageType!, _types.Object]
+            [construction.HttpRequestMessageType!, _types.Object]
         );
 
         var il = method.GetILGenerator();
@@ -2523,8 +2527,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, hValueLocal);
 
         // request.Headers.TryAddWithoutValidation(key, value)
-        var headersProperty = _types.GetProperty(_httpRequestMessageType!, "Headers")!;
-        var tryAddMethod = _types.GetMethod(_httpRequestHeadersType!, "TryAddWithoutValidation", [_types.String, _types.String])!;
+        var headersProperty = _types.GetProperty(construction.HttpRequestMessageType!, "Headers")!;
+        var tryAddMethod = _types.GetMethod(construction.HttpRequestHeadersType!, "TryAddWithoutValidation", [_types.String, _types.String])!;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, headersProperty.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, hKeyLocal);
@@ -2604,8 +2608,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, valueLocal);
 
         // request.Headers.TryAddWithoutValidation(key, value)
-        var dictHeadersProperty = _types.GetProperty(_httpRequestMessageType!, "Headers")!;
-        var dictTryAddMethod = _types.GetMethod(_httpRequestHeadersType!, "TryAddWithoutValidation", [_types.String, _types.String])!;
+        var dictHeadersProperty = _types.GetProperty(construction.HttpRequestMessageType!, "Headers")!;
+        var dictTryAddMethod = _types.GetMethod(construction.HttpRequestHeadersType!, "TryAddWithoutValidation", [_types.String, _types.String])!;
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, dictHeadersProperty.GetGetMethod()!);
