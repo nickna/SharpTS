@@ -9,9 +9,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // Promise class fields
-    private FieldBuilder _tsPromiseTaskField = null!;
-
     private void EmitTSPromiseClass(ModuleBuilder moduleBuilder, EmittedPromiseRuntime promise)
     {
         // First emit the PromiseRejectedException class (needed by Reject method)
@@ -26,17 +23,17 @@ public partial class RuntimeEmitter
         promise.Type = typeBuilder;
 
         // Field: private readonly Task<object?> _task
-        _tsPromiseTaskField = typeBuilder.DefineField(
+        var taskField = typeBuilder.DefineField(
             "_task",
             _types.TaskOfObject,
             FieldAttributes.Private
         );
 
         // Constructor: public $Promise(Task<object?> task)
-        EmitTSPromiseConstructor(typeBuilder, promise);
+        EmitTSPromiseConstructor(typeBuilder, promise, taskField);
 
         // Property: Task (getter)
-        EmitTSPromiseTaskProperty(typeBuilder, promise);
+        EmitTSPromiseTaskProperty(typeBuilder, promise, taskField);
 
         // Static method: Resolve(object? value)
         EmitTSPromiseResolve(typeBuilder, promise);
@@ -45,18 +42,18 @@ public partial class RuntimeEmitter
         EmitTSPromiseReject(typeBuilder, promise);
 
         // Method: GetValueAsync()
-        EmitTSPromiseGetValueAsync(typeBuilder, promise);
+        EmitTSPromiseGetValueAsync(typeBuilder, promise, taskField);
 
         // Property: IsCompleted
-        EmitTSPromiseIsCompletedProperty(typeBuilder, promise);
+        EmitTSPromiseIsCompletedProperty(typeBuilder, taskField);
 
         // Override: ToString()
-        EmitTSPromiseToString(typeBuilder, promise);
+        EmitTSPromiseToString(typeBuilder, taskField);
 
         typeBuilder.CreateType();
     }
 
-    private void EmitTSPromiseConstructor(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
+    private void EmitTSPromiseConstructor(TypeBuilder typeBuilder, EmittedPromiseRuntime promise, FieldBuilder taskField)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
@@ -74,12 +71,12 @@ public partial class RuntimeEmitter
         // _task = task
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsPromiseTaskField);
+        il.Emit(OpCodes.Stfld, taskField);
 
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSPromiseTaskProperty(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
+    private void EmitTSPromiseTaskProperty(TypeBuilder typeBuilder, EmittedPromiseRuntime promise, FieldBuilder taskField)
     {
         var prop = typeBuilder.DefineProperty(
             "Task",
@@ -98,7 +95,7 @@ public partial class RuntimeEmitter
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsPromiseTaskField);
+        il.Emit(OpCodes.Ldfld, taskField);
         il.Emit(OpCodes.Ret);
 
         prop.SetGetMethod(getter);
@@ -164,7 +161,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSPromiseGetValueAsync(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
+    private void EmitTSPromiseGetValueAsync(TypeBuilder typeBuilder, EmittedPromiseRuntime promise, FieldBuilder taskField)
     {
         // This is an async method, but for simplicity, we'll emit it as a regular method
         // that returns Task<object?> and handles promise flattening.
@@ -186,11 +183,11 @@ public partial class RuntimeEmitter
         // For now, just return the underlying task
         // Full flattening would require async state machine emission
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsPromiseTaskField);
+        il.Emit(OpCodes.Ldfld, taskField);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSPromiseIsCompletedProperty(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
+    private void EmitTSPromiseIsCompletedProperty(TypeBuilder typeBuilder, FieldBuilder taskField)
     {
         var prop = typeBuilder.DefineProperty(
             "IsCompleted",
@@ -208,14 +205,14 @@ public partial class RuntimeEmitter
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsPromiseTaskField);
+        il.Emit(OpCodes.Ldfld, taskField);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCompleted")!.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         prop.SetGetMethod(getter);
     }
 
-    private void EmitTSPromiseToString(TypeBuilder typeBuilder, EmittedPromiseRuntime promise)
+    private void EmitTSPromiseToString(TypeBuilder typeBuilder, FieldBuilder taskField)
     {
         var method = typeBuilder.DefineMethod(
             "ToString",
@@ -231,12 +228,12 @@ public partial class RuntimeEmitter
         var faultedLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsPromiseTaskField);
+        il.Emit(OpCodes.Ldfld, taskField);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCompletedSuccessfully")!.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, completedLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsPromiseTaskField);
+        il.Emit(OpCodes.Ldfld, taskField);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsFaulted")!.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, faultedLabel);
 

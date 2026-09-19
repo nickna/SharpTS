@@ -1567,6 +1567,12 @@ attributes, base type, member order, cross-family tokens and hosted/standalone b
 unchanged. Removing the last flat type declaration does not finish the construction, registry,
 shared-infrastructure or semantic acceptance audit under #1599.
 
+Promise's private `_task` field handle is local to `EmitTSPromiseClass` and passed to its
+constructor, task accessors, completion property and display helper. It is needed only until
+that generated type is created; the reusable emitter and the public Promise component do not
+retain a second construction handle. The existing optional Promise lifecycle, declaration
+order, field attributes and generated task identity remain unchanged.
+
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only
 need that family's metadata (for example, DNS resolver declaration); retain `EmittedRuntime` where
