@@ -186,6 +186,63 @@ public class EmittedPromiseRuntimeTests
         Assert.Equal("8\ncaught\nfinally\n", TestHarness.RunCompiledStandalone(source));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReusedEmitterKeepsPromiseTaskStorageWithinEachGeneratedType(bool hosted)
+    {
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
+        var pending = new List<(object Promise, TaskCompletionSource<object> Completion)>();
+        var declarations = new HashSet<Type>();
+        foreach (string? source in new[] { "Promise.resolve(1);", "console.log(1);", null, "async function f() { return 2; }" })
+        {
+            var builder = new PersistedAssemblyBuilder(new AssemblyName($"promise_reuse_{Guid.NewGuid():N}"), typeof(object).Assembly);
+            var module = builder.DefineDynamicModule("main");
+            var features = source is null ? null : new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
+            var runtime = features is null ? emitter.EmitAll(module) : emitter.EmitAll(module, features);
+            using var bytes = new MemoryStream(); builder.Save(bytes); bytes.Position = 0;
+            using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+            Assert.Empty(verifier.Verify(bytes));
+            var loaded = Assembly.Load(bytes.ToArray());
+            Assert.DoesNotContain(loaded.GetReferencedAssemblies(), reference => reference.Name == "SharpTS");
+            Assert.Equal(hosted, loaded.GetReferencedAssemblies().Any(reference => reference.Name == "SharpTS.Hosting.Abstractions"));
+            if (!hosted && source == "console.log(1);")
+            {
+                Assert.Null(runtime.Promise);
+                Assert.Null(loaded.GetType("$Promise"));
+                continue;
+            }
+
+            AssertComplete(runtime);
+            Assert.True(declarations.Add(runtime.RequirePromise().Type));
+            var type = loaded.GetType("$Promise")!;
+            var completion = new TaskCompletionSource<object>();
+            var value = Activator.CreateInstance(type, completion.Task)!;
+            Assert.Same(completion.Task, type.GetProperty("Task")!.GetValue(value));
+            Assert.Same(completion.Task, type.GetMethod("GetValueAsync")!.Invoke(value, null));
+            Assert.Equal(false, type.GetProperty("IsCompleted")!.GetValue(value));
+            Assert.Equal("Promise { <pending> }", value.ToString());
+            Assert.Same(value, type.GetMethod("Resolve")!.Invoke(null, [value]));
+            var rejected = type.GetMethod("Reject")!.Invoke(null, ["reason"])!;
+            var rejectedTask = (Task<object>)type.GetProperty("Task")!.GetValue(rejected)!;
+            Assert.True(rejectedTask.IsFaulted);
+            Assert.Equal("Promise { <rejected> }", rejected.ToString());
+            Assert.Equal("reason", rejectedTask.Exception!.InnerException!.GetType().GetProperty("Reason")!.GetValue(rejectedTask.Exception.InnerException));
+            pending.Add((value, completion));
+        }
+
+        for (int index = 0; index < pending.Count; index++)
+        {
+            var (value, completion) = pending[index];
+            Assert.Equal("Promise { <pending> }", value.ToString());
+            completion.SetResult(index);
+            Assert.Equal("Promise { <resolved> }", value.ToString());
+            Assert.Equal(true, value.GetType().GetProperty("IsCompleted")!.GetValue(value));
+            Assert.Equal(index, await (Task<object>)value.GetType().GetMethod("GetValueAsync")!.Invoke(value, null)!);
+            Assert.All(pending.Skip(index + 1), later => Assert.Equal("Promise { <pending> }", later.Promise.ToString()));
+        }
+    }
+
     private static EmittedRuntime EmitRuntime(string? source, bool hosted = false)
     {
         var assembly = new PersistedAssemblyBuilder(new AssemblyName($"promise_metadata_{Guid.NewGuid():N}"), typeof(object).Assembly);
