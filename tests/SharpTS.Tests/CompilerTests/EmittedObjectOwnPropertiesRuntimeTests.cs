@@ -51,7 +51,7 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
             Assert.True(owners.Add(runtime.ObjectOwnProperties)); AssertFrozen(runtime.ObjectOwnProperties);
             foreach (var property in Handles(typeof(EmittedObjectOwnPropertiesRuntime)))
                 Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.ObjectOwnProperties)).Module.Assembly);
-            var accessorProbe=runtime.RuntimeType.DefineNestedType("NativeAccessorProbe",TypeAttributes.NestedPublic);
+            var accessorProbe=runtime.RuntimeClass.Type.DefineNestedType("NativeAccessorProbe",TypeAttributes.NestedPublic);
             var getter=accessorProbe.DefineMethod("GetValue",MethodAttributes.Public|MethodAttributes.Static,typeof(object),Type.EmptyTypes);
             var getterIl=getter.GetILGenerator();getterIl.Emit(OpCodes.Ldc_R8,7d);getterIl.Emit(OpCodes.Box,typeof(double));getterIl.Emit(OpCodes.Ret);
             var setter=accessorProbe.DefineMethod("SetValue",MethodAttributes.Public|MethodAttributes.Static,typeof(void),[typeof(object)]);
@@ -108,7 +108,7 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
     {
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
         var emitter = new RuntimeEmitter(TypeProvider.Runtime); var runtime = emitter.EmitAll(module, Detect(selected));
-        var probe = runtime.RuntimeType.DefineNestedType("HasOwnPromiseProbe", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeClass.Type.DefineNestedType("HasOwnPromiseProbe", TypeAttributes.NestedPublic);
         var resolve = SimpleReceiver(probe, "SuppliedResolve"); var reject = SimpleReceiver(probe, "SuppliedReject");
         var promise = supplied ? new EmittedPromiseRuntime { ResolveCallbackType = resolve, RejectCallbackType = reject } : null;
         var owner = new EmittedObjectOwnPropertiesRuntime();

@@ -330,7 +330,7 @@ public partial class RuntimeEmitter
         // their fast path and strings expand to their code-unit elements.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
-        il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
+        il.Emit(OpCodes.Ldtoken, runtime.RuntimeClass.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Call, runtime.IteratorCollection.ToList);
         il.Emit(OpCodes.Stloc, listLocal);
@@ -523,7 +523,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(iteratorObjectOkLabel);
 
         il.Emit(OpCodes.Ldloc, iteratorLocal);
-        il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
+        il.Emit(OpCodes.Ldtoken, runtime.RuntimeClass.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Newobj, runtime.IteratorWrappers.Ctor);

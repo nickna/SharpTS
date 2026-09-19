@@ -109,7 +109,7 @@ public sealed class EmittedErrorRuntimeTests
     {
         var builder = NewAssembly(); var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect(selected));
-        var probe = runtime.RuntimeType.DefineNestedType("WrapProbe", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeClass.Type.DefineNestedType("WrapProbe", TypeAttributes.NestedPublic);
         var (rejection, constructor, getter) = DefineRejection(probe);
         var promise = supplied ? new EmittedPromiseRuntime { RejectedExceptionType = rejection, RejectedExceptionReasonGetter = getter } : null;
         var owner = Copy(runtime.Errors, nameof(EmittedErrorRuntime.WrapException));
@@ -132,7 +132,7 @@ public sealed class EmittedErrorRuntimeTests
     {
         var builder = NewAssembly(); var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect(false));
-        var probe = runtime.RuntimeType.DefineNestedType("FactoryProbe", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeClass.Type.DefineNestedType("FactoryProbe", TypeAttributes.NestedPublic);
         var (rejection, constructor, _) = DefineRejection(probe);
         var owner = Copy(runtime.Errors, nameof(EmittedErrorRuntime.CreateException), nameof(EmittedErrorRuntime.ThrownValueConstructor));
         owner.CreateException = probe.DefineMethod("CreateException", MethodAttributes.Public | MethodAttributes.Static, typeof(Exception), [typeof(object)]);

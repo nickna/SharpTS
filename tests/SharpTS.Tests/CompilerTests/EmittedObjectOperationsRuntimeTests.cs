@@ -51,7 +51,7 @@ public sealed class EmittedObjectOperationsRuntimeTests
             Assert.True(owners.Add(runtime.ObjectOperations)); AssertFrozen(runtime.ObjectOperations);
             foreach (var property in Handles(typeof(EmittedObjectOperationsRuntime)))
                 Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.ObjectOperations)).Module.Assembly);
-            var callbackProbe=runtime.RuntimeType.DefineNestedType("NativeGroupCallback",TypeAttributes.NestedPublic);
+            var callbackProbe=runtime.RuntimeClass.Type.DefineNestedType("NativeGroupCallback",TypeAttributes.NestedPublic);
             var callback=callbackProbe.DefineMethod("Group",MethodAttributes.Public|MethodAttributes.Static,typeof(object),[typeof(object),typeof(object)]);
             var callbackIl=callback.GetILGenerator();callbackIl.Emit(OpCodes.Ldstr,"all");callbackIl.Emit(OpCodes.Ret);callbackProbe.CreateType();
             var loaded = SaveVerifyLoad(builder); var references = loaded.GetReferencedAssemblies().Select(r => r.Name).ToArray();

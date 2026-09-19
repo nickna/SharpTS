@@ -129,8 +129,8 @@ public class EmittedReadlineRuntimeTests
             Assert.Same(readline.InterfaceType, readline.PromptField.DeclaringType);
             Assert.True(readline.ClosedField.IsPrivate && readline.PausedField.IsPrivate);
             Assert.True(readline.PromptField.IsAssembly);
-            Assert.Same(runtime.RuntimeType, readline.QuestionSync.DeclaringType);
-            Assert.Same(runtime.RuntimeType, readline.CreateInterface.DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, readline.QuestionSync.DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, readline.CreateInterface.DeclaringType);
         }
         else Assert.Throws<InvalidOperationException>(runtime.RequireReadline);
         using var bytes = Save(runtime);
@@ -227,7 +227,7 @@ public class EmittedReadlineRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

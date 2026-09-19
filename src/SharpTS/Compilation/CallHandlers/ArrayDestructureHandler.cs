@@ -51,7 +51,7 @@ public class ArrayDestructureHandler : ICallHandler
             // wrong even for a statically typed array. Materialize through the iterator protocol
             // when whole-program analysis cannot prove the built-in iterator remains intact.
             il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Iterator);
-            il.Emit(OpCodes.Ldtoken, ctx.Runtime.RuntimeType);
+            il.Emit(OpCodes.Ldtoken, ctx.Runtime.RuntimeClass.Type);
             il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle"));
             il.Emit(OpCodes.Call, ctx.Runtime.IteratorCollection.ToList);
             il.Emit(OpCodes.Newobj, ctx.Runtime.ArrayStorage.Ctor);
@@ -61,7 +61,7 @@ public class ArrayDestructureHandler : ICallHandler
         // Otherwise normalize at runtime:
         //   ArrayDestructureSource(value, Symbol.iterator, runtimeType)
         il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Iterator);
-        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RuntimeType);
+        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RuntimeClass.Type);
         il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle"));
         il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.DestructureSource);
         return true;

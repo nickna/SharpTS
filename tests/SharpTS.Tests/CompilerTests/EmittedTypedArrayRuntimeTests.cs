@@ -183,7 +183,7 @@ public class EmittedTypedArrayRuntimeTests
                 handle => reader.GetString(reader.GetMethodDefinition(handle).Name) is "GetTypedArrayMember" or "CreateInt8ArrayFromObject");
         }
         var loaded = Assembly.Load(stream.ToArray());
-        var detection = loaded.GetType(runtime.RuntimeType.Name)!.GetMethod(runtime.TypedArrays.IsTypedArray.Name)!;
+        var detection = loaded.GetType(runtime.RuntimeClass.Type.Name)!.GetMethod(runtime.TypedArrays.IsTypedArray.Name)!;
         Assert.Equal(false, detection.Invoke(null, [null]));
         Assert.Equal(false, detection.Invoke(null, [new byte[1]]));
     }
@@ -313,7 +313,7 @@ public class EmittedTypedArrayRuntimeTests
         var implementation = runtime.TypedArrays.RequireImplementation();
         using var stream = Save(runtime);
         var loaded = Assembly.Load(stream.ToArray());
-        var helpers = loaded.GetType(runtime.RuntimeType.Name)!;
+        var helpers = loaded.GetType(runtime.RuntimeClass.Type.Name)!;
         var buffer = helpers.GetMethod(runtime.RequireArrayBuffer().Create.Name)!.Invoke(null, [64d]);
         var array = helpers.GetMethod(implementation.FromBufferHelpers[element + "Array"].Name)!.Invoke(null, [buffer, 8d, 2d]);
         var type = array!.GetType();
@@ -425,7 +425,7 @@ public class EmittedTypedArrayRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
         stream.Position = 0;
         return stream;
     }

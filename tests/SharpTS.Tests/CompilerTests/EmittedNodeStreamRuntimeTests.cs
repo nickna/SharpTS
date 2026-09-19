@@ -153,7 +153,7 @@ public class EmittedNodeStreamRuntimeTests
         }
 
         using var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
         bytes.Position = 0;
         using var pe = new PEReader(bytes);
         var reader = pe.GetMetadataReader();

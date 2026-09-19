@@ -461,7 +461,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iterableLocal);
         il.Emit(OpCodes.Ldloc, mapFnLocal);
         il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
-        il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
+        il.Emit(OpCodes.Ldtoken, runtime.RuntimeClass.Type);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.From);
