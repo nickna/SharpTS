@@ -13,32 +13,21 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // Display class types for DNS promise closures
-    private TypeBuilder _dnsDisplayClass1 = null!; // 1-arg: hostname field + method field + Invoke
-    private FieldBuilder _dnsDisplay1Hostname = null!;
-    private FieldBuilder _dnsDisplay1Method = null!;
-    private ConstructorBuilder _dnsDisplay1Ctor = null!;
-    private MethodBuilder _dnsDisplay1Invoke = null!;
+    // These handles are passed only between the construction steps of one emission.
+    private readonly record struct DnsDisplay1Construction(
+        TypeBuilder Type, FieldBuilder Hostname, FieldBuilder Method,
+        ConstructorBuilder Constructor, MethodBuilder Invoke);
 
-    private TypeBuilder _dnsDisplayClass2 = null!; // 2-arg: arg0, arg1, method fields + Invoke
-    private FieldBuilder _dnsDisplay2Arg0 = null!;
-    private FieldBuilder _dnsDisplay2Arg1 = null!;
-    private FieldBuilder _dnsDisplay2Method = null!;
-    private ConstructorBuilder _dnsDisplay2Ctor = null!;
-    private MethodBuilder _dnsDisplay2Invoke = null!;
-
-    // Shared promise runner infrastructure. The completion closure transfers the
-    // pool task's terminal state to a facade task on the event-loop thread.
-    private ConstructorBuilder _dnsAsyncCompletionCtor = null!;
-    private MethodBuilder _dnsAsyncCompletionSchedule = null!;
-    private MethodBuilder _dnsRunAsync = null!;
+    private readonly record struct DnsDisplay2Construction(
+        TypeBuilder Type, FieldBuilder Arg0, FieldBuilder Arg1, FieldBuilder Method,
+        ConstructorBuilder Constructor, MethodBuilder Invoke);
 
     private void EmitDnsPromisesMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Emit display classes for closures
-        EmitDnsDisplayClass1(typeBuilder.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder"));
-        EmitDnsDisplayClass2(typeBuilder.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder"));
-        EmitDnsAsyncRunner(typeBuilder, runtime);
+        var display1 = EmitDnsDisplayClass1(typeBuilder.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder"));
+        var display2 = EmitDnsDisplayClass2(typeBuilder.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder"));
+        var runAsync = EmitDnsAsyncRunner(typeBuilder, runtime.EventLoop);
 
         // Single-arg record type resolvers: hostname → DnsResolveRecord(hostname, rrtype)
         var rrtypes = new (string MethodName, string Rrtype)[]
@@ -58,44 +47,44 @@ public partial class RuntimeEmitter
 
         foreach (var (methodName, rrtype) in rrtypes)
         {
-            var syncHelper = EmitDnsSyncHelper1(typeBuilder, runtime, methodName + "_Sync", il =>
+            var syncHelper = EmitDnsSyncHelper1(typeBuilder, methodName + "_Sync", il =>
             {
                 il.Emit(OpCodes.Ldarg_0); // hostname
                 il.Emit(OpCodes.Ldstr, rrtype);
                 il.Emit(OpCodes.Call, runtime.RequireDns().ResolveRecord);
             });
-            EmitDnsAsyncWrapper1(typeBuilder, runtime, methodName, syncHelper);
+            EmitDnsAsyncWrapper1(typeBuilder, runtime.RequireDns(), runtime.RequirePromise(), display1, runAsync, methodName, syncHelper);
         }
 
         // lookup(hostname, options)
-        var lookupSync = EmitDnsSyncHelper2(typeBuilder, runtime, "DnsPromisesLookup_Sync", il =>
+        var lookupSync = EmitDnsSyncHelper2(typeBuilder, "DnsPromisesLookup_Sync", il =>
         {
             il.Emit(OpCodes.Ldarg_0); // hostname
             il.Emit(OpCodes.Ldarg_1); // options
             il.Emit(OpCodes.Call, runtime.RequireDns().Lookup);
         });
-        EmitDnsAsyncWrapper2(typeBuilder, runtime, "DnsPromisesLookup", lookupSync);
+        EmitDnsAsyncWrapper2(typeBuilder, runtime.RequireDns(), runtime.RequirePromise(), display2, runAsync, "DnsPromisesLookup", lookupSync);
 
         // lookupService(address, port)
-        var lookupServiceSync = EmitDnsSyncHelper2(typeBuilder, runtime, "DnsPromisesLookupService_Sync", il =>
+        var lookupServiceSync = EmitDnsSyncHelper2(typeBuilder, "DnsPromisesLookupService_Sync", il =>
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.RequireDns().LookupService);
         });
-        EmitDnsAsyncWrapper2(typeBuilder, runtime, "DnsPromisesLookupService", lookupServiceSync);
+        EmitDnsAsyncWrapper2(typeBuilder, runtime.RequireDns(), runtime.RequirePromise(), display2, runAsync, "DnsPromisesLookupService", lookupServiceSync);
 
         // resolve(hostname, rrtype)
-        var resolveSync = EmitDnsSyncHelper2(typeBuilder, runtime, "DnsPromisesResolve_Sync", il =>
+        var resolveSync = EmitDnsSyncHelper2(typeBuilder, "DnsPromisesResolve_Sync", il =>
         {
             il.Emit(OpCodes.Ldarg_0); // hostname
             il.Emit(OpCodes.Ldarg_1); // rrtype (already defaulted in wrapper)
             il.Emit(OpCodes.Call, runtime.RequireDns().ResolveRecord);
         });
-        EmitDnsAsyncWrapper2(typeBuilder, runtime, "DnsPromisesResolve", resolveSync);
+        EmitDnsAsyncWrapper2(typeBuilder, runtime.RequireDns(), runtime.RequirePromise(), display2, runAsync, "DnsPromisesResolve", resolveSync);
 
         // reverse(ip)
-        var reverseSync = EmitDnsSyncHelper1(typeBuilder, runtime, "DnsPromisesReverse_Sync", il =>
+        var reverseSync = EmitDnsSyncHelper1(typeBuilder, "DnsPromisesReverse_Sync", il =>
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
@@ -114,34 +103,35 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, typeof(IPHostEntry).GetProperty("HostName")!.GetGetMethod()!);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
         });
-        EmitDnsAsyncWrapper1(typeBuilder, runtime, "DnsPromisesReverse", reverseSync);
+        EmitDnsAsyncWrapper1(typeBuilder, runtime.RequireDns(), runtime.RequirePromise(), display1, runAsync, "DnsPromisesReverse", reverseSync);
 
         // Resolver queries use the same event-loop-aware Task.Run path. The sync
         // target late-binds to the shared DnsResolverInstance state in SharpTS.dll;
         // its single object[] request carries state/method/identifier/rrtype.
-        EmitDnsAsyncWrapper1(typeBuilder, runtime, "DnsResolverResolveAsync", runtime.RequireDns().ResolverResolve);
+        EmitDnsAsyncWrapper1(typeBuilder, runtime.RequireDns(), runtime.RequirePromise(), display1, runAsync, "DnsResolverResolveAsync", runtime.RequireDns().ResolverResolve);
 
         // Namespace getter for dns.promises sub-property
-        EmitDnsGetPromisesNamespace(typeBuilder, runtime);
+        EmitDnsGetPromisesNamespace(typeBuilder, runtime.RequireDns(), runtime.FunctionConstruction.Constructor,
+            runtime.ObjectStorage.Constructor);
     }
 
     /// <summary>
     /// Emits a 1-arg display class: $DnsDisplay1 { object _hostname; MethodInfo _method; object Invoke() }
     /// The Invoke method calls _method.Invoke(null, [_hostname]).
     /// </summary>
-    private void EmitDnsDisplayClass1(ModuleBuilder moduleBuilder)
+    private DnsDisplay1Construction EmitDnsDisplayClass1(ModuleBuilder moduleBuilder)
     {
-        _dnsDisplayClass1 = moduleBuilder.DefineType(
+        var type = moduleBuilder.DefineType(
             "$DnsDisplay1",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
-        _dnsDisplay1Hostname = _dnsDisplayClass1.DefineField("_hostname", _types.Object, FieldAttributes.Public);
-        _dnsDisplay1Method = _dnsDisplayClass1.DefineField("_method", typeof(MethodInfo), FieldAttributes.Public);
+        var hostname = type.DefineField("_hostname", _types.Object, FieldAttributes.Public);
+        var method = type.DefineField("_method", typeof(MethodInfo), FieldAttributes.Public);
 
-        _dnsDisplay1Ctor = _dnsDisplayClass1.DefineConstructor(
+        var constructor = type.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         {
-            var il = _dnsDisplay1Ctor.GetILGenerator();
+            var il = constructor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
             il.Emit(OpCodes.Ret);
@@ -149,24 +139,24 @@ public partial class RuntimeEmitter
 
         // Invoke() → calls _method.Invoke(null, new object[] { _hostname }),
         // preserving the sync helper's original exception as the Task fault.
-        _dnsDisplay1Invoke = _dnsDisplayClass1.DefineMethod(
+        var invoke = type.DefineMethod(
             "Invoke",
             MethodAttributes.Public,
             _types.Object,
             Type.EmptyTypes);
         {
-            var il = _dnsDisplay1Invoke.GetILGenerator();
+            var il = invoke.GetILGenerator();
             var resultLocal = il.DeclareLocal(_types.Object);
             il.BeginExceptionBlock();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _dnsDisplay1Method);
+            il.Emit(OpCodes.Ldfld, method);
             il.Emit(OpCodes.Ldnull); // target (static)
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _dnsDisplay1Hostname);
+            il.Emit(OpCodes.Ldfld, hostname);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Callvirt, typeof(MethodBase).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
             il.Emit(OpCodes.Stloc, resultLocal);
@@ -176,54 +166,55 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        _dnsDisplayClass1.CreateType();
+        type.CreateType();
+        return new(type, hostname, method, constructor, invoke);
     }
 
     /// <summary>
     /// Emits a 2-arg display class: $DnsDisplay2 { object _arg0, _arg1; MethodInfo _method; object Invoke() }
     /// </summary>
-    private void EmitDnsDisplayClass2(ModuleBuilder moduleBuilder)
+    private DnsDisplay2Construction EmitDnsDisplayClass2(ModuleBuilder moduleBuilder)
     {
-        _dnsDisplayClass2 = moduleBuilder.DefineType(
+        var type = moduleBuilder.DefineType(
             "$DnsDisplay2",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
-        _dnsDisplay2Arg0 = _dnsDisplayClass2.DefineField("_arg0", _types.Object, FieldAttributes.Public);
-        _dnsDisplay2Arg1 = _dnsDisplayClass2.DefineField("_arg1", _types.Object, FieldAttributes.Public);
-        _dnsDisplay2Method = _dnsDisplayClass2.DefineField("_method", typeof(MethodInfo), FieldAttributes.Public);
+        var arg0 = type.DefineField("_arg0", _types.Object, FieldAttributes.Public);
+        var arg1 = type.DefineField("_arg1", _types.Object, FieldAttributes.Public);
+        var method = type.DefineField("_method", typeof(MethodInfo), FieldAttributes.Public);
 
-        _dnsDisplay2Ctor = _dnsDisplayClass2.DefineConstructor(
+        var constructor = type.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         {
-            var il = _dnsDisplay2Ctor.GetILGenerator();
+            var il = constructor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
             il.Emit(OpCodes.Ret);
         }
 
-        _dnsDisplay2Invoke = _dnsDisplayClass2.DefineMethod(
+        var invoke = type.DefineMethod(
             "Invoke",
             MethodAttributes.Public,
             _types.Object,
             Type.EmptyTypes);
         {
-            var il = _dnsDisplay2Invoke.GetILGenerator();
+            var il = invoke.GetILGenerator();
             var resultLocal = il.DeclareLocal(_types.Object);
             il.BeginExceptionBlock();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _dnsDisplay2Method);
+            il.Emit(OpCodes.Ldfld, method);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _dnsDisplay2Arg0);
+            il.Emit(OpCodes.Ldfld, arg0);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _dnsDisplay2Arg1);
+            il.Emit(OpCodes.Ldfld, arg1);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Callvirt, typeof(MethodBase).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
             il.Emit(OpCodes.Stloc, resultLocal);
@@ -233,7 +224,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        _dnsDisplayClass2.CreateType();
+        type.CreateType();
+        return new(type, arg0, arg1, method, constructor, invoke);
     }
 
     /// <summary>
@@ -261,7 +253,7 @@ public partial class RuntimeEmitter
     /// Its facade task is settled on the loop thread before that ref is released,
     /// ensuring guest await continuations become visible while the loop is live.
     /// </summary>
-    private void EmitDnsAsyncRunner(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitDnsAsyncRunner(TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop)
     {
         var moduleBuilder = typeBuilder.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder");
         var completionType = EmitTypeDefinitions.DefineType(
@@ -273,12 +265,12 @@ public partial class RuntimeEmitter
         var tcsField = completionType.DefineField(
             "_completion", _types.TaskCompletionSourceOfObject, FieldAttributes.Private);
 
-        _dnsAsyncCompletionCtor = completionType.DefineConstructor(
+        var completionConstructor = completionType.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             [_types.TaskCompletionSourceOfObject]);
         {
-            var il = _dnsAsyncCompletionCtor.GetILGenerator();
+            var il = completionConstructor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
             il.Emit(OpCodes.Ldarg_0);
@@ -338,26 +330,26 @@ public partial class RuntimeEmitter
             // The finally begins only after the facade task has been settled.
             il.MarkLabel(settled);
             il.BeginFinallyBlock();
-            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
+            il.Emit(OpCodes.Call, eventLoop.GetInstance);
+            il.Emit(OpCodes.Callvirt, eventLoop.Unref);
             il.EndExceptionBlock();
             il.Emit(OpCodes.Ret);
         }
 
         // Pool continuation: retain the terminal worker task, then enqueue the
         // settlement action. It never settles or Unrefs from the pool thread.
-        _dnsAsyncCompletionSchedule = completionType.DefineMethod(
+        var schedule = completionType.DefineMethod(
             "Schedule", MethodAttributes.Public, _types.Void, [_types.TaskOfObject]);
         {
-            var il = _dnsAsyncCompletionSchedule.GetILGenerator();
+            var il = schedule.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Stfld, taskField);
-            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+            il.Emit(OpCodes.Call, eventLoop.GetInstance);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldftn, complete);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+            il.Emit(OpCodes.Callvirt, eventLoop.Schedule);
             il.Emit(OpCodes.Ret);
         }
 
@@ -372,13 +364,13 @@ public partial class RuntimeEmitter
         var funcType = _types.MakeGenericType(typeof(Func<>), _types.Object);
         var continuationType = _types.MakeGenericType(typeof(Action<>), _types.TaskOfObject);
 
-        _dnsRunAsync = typeBuilder.DefineMethod(
+        var runAsync = typeBuilder.DefineMethod(
             "DnsRunAsync",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.TaskOfObject,
             [funcType]);
         {
-            var il = _dnsRunAsync.GetILGenerator();
+            var il = runAsync.GetILGenerator();
             var tcsLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
             var completionLocal = il.DeclareLocal(completionType);
             var taskLocal = il.DeclareLocal(_types.TaskOfObject);
@@ -387,11 +379,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.TaskCompletionSourceOfObject));
             il.Emit(OpCodes.Stloc, tcsLocal);
             il.Emit(OpCodes.Ldloc, tcsLocal);
-            il.Emit(OpCodes.Newobj, _dnsAsyncCompletionCtor);
+            il.Emit(OpCodes.Newobj, completionConstructor);
             il.Emit(OpCodes.Stloc, completionLocal);
 
-            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
+            il.Emit(OpCodes.Call, eventLoop.GetInstance);
+            il.Emit(OpCodes.Callvirt, eventLoop.Ref);
 
             // Balance the ref if Task.Run or continuation registration throws
             // synchronously. Once registered, the completion closure owns it.
@@ -401,7 +393,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, taskLocal);
             il.Emit(OpCodes.Ldloc, taskLocal);
             il.Emit(OpCodes.Ldloc, completionLocal);
-            il.Emit(OpCodes.Ldftn, _dnsAsyncCompletionSchedule);
+            il.Emit(OpCodes.Ldftn, schedule);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(
                 continuationType, [_types.Object, typeof(IntPtr)])!);
             il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
@@ -412,8 +404,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Pop);
             il.BeginCatchBlock(_types.Exception);
             il.Emit(OpCodes.Stloc, exceptionLocal);
-            il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-            il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
+            il.Emit(OpCodes.Call, eventLoop.GetInstance);
+            il.Emit(OpCodes.Callvirt, eventLoop.Unref);
             il.Emit(OpCodes.Ldloc, exceptionLocal);
             il.Emit(OpCodes.Throw);
             il.EndExceptionBlock();
@@ -423,12 +415,14 @@ public partial class RuntimeEmitter
                 _types.TaskCompletionSourceOfObject, "Task").GetGetMethod()!);
             il.Emit(OpCodes.Ret);
         }
+
+        return runAsync;
     }
 
     /// <summary>
     /// Emits a 1-arg sync helper: static object MethodName(object hostname) { ... }
     /// </summary>
-    private MethodBuilder EmitDnsSyncHelper1(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private MethodBuilder EmitDnsSyncHelper1(TypeBuilder typeBuilder,
         string methodName, Action<ILGenerator> emitBody)
     {
         var method = typeBuilder.DefineMethod(
@@ -446,7 +440,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits a 2-arg sync helper: static object MethodName(object arg0, object arg1) { ... }
     /// </summary>
-    private MethodBuilder EmitDnsSyncHelper2(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private MethodBuilder EmitDnsSyncHelper2(TypeBuilder typeBuilder,
         string methodName, Action<ILGenerator> emitBody)
     {
         var method = typeBuilder.DefineMethod(
@@ -465,7 +459,8 @@ public partial class RuntimeEmitter
     /// Emits 1-arg async wrapper: creates the worker closure, then calls the
     /// shared event-loop-aware runner and WrapTaskAsPromise.
     /// </summary>
-    private void EmitDnsAsyncWrapper1(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitDnsAsyncWrapper1(TypeBuilder typeBuilder, EmittedDnsRuntime dns,
+        EmittedPromiseRuntime promise, DnsDisplay1Construction display, MethodBuilder runAsync,
         string methodName, MethodBuilder syncHelper)
     {
         var wrapper = typeBuilder.DefineMethod(
@@ -477,40 +472,41 @@ public partial class RuntimeEmitter
         var il = wrapper.GetILGenerator();
 
         // var dc = new $DnsDisplay1();
-        il.Emit(OpCodes.Newobj, _dnsDisplay1Ctor);
-        var dcLocal = il.DeclareLocal(_dnsDisplayClass1);
+        il.Emit(OpCodes.Newobj, display.Constructor);
+        var dcLocal = il.DeclareLocal(display.Type);
         il.Emit(OpCodes.Stloc, dcLocal);
 
         // dc._hostname = arg0;
         il.Emit(OpCodes.Ldloc, dcLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stfld, _dnsDisplay1Hostname);
+        il.Emit(OpCodes.Stfld, display.Hostname);
 
         // dc._method = syncHelper (via Ldtoken)
         il.Emit(OpCodes.Ldloc, dcLocal);
         il.Emit(OpCodes.Ldtoken, syncHelper);
         il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
         il.Emit(OpCodes.Castclass, typeof(MethodInfo));
-        il.Emit(OpCodes.Stfld, _dnsDisplay1Method);
+        il.Emit(OpCodes.Stfld, display.Method);
 
         // DnsRunAsync(new Func<object?>(dc.Invoke))
         il.Emit(OpCodes.Ldloc, dcLocal);
-        il.Emit(OpCodes.Ldftn, _dnsDisplay1Invoke);
+        il.Emit(OpCodes.Ldftn, display.Invoke);
         il.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructors()[0]);
-        il.Emit(OpCodes.Call, _dnsRunAsync);
+        il.Emit(OpCodes.Call, runAsync);
 
         // WrapTaskAsPromise
-        il.Emit(OpCodes.Call, runtime.RequirePromise().WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, promise.WrapTaskAsPromise);
         il.Emit(OpCodes.Ret);
 
-        runtime.RequireDns().RegisterPromiseWrapper(methodName, wrapper);
+        dns.RegisterPromiseWrapper(methodName, wrapper);
     }
 
     /// <summary>
     /// Emits 2-arg async wrapper: packs both arguments into the worker closure,
     /// then uses the same event-loop-aware runner as the 1-arg path.
     /// </summary>
-    private void EmitDnsAsyncWrapper2(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitDnsAsyncWrapper2(TypeBuilder typeBuilder, EmittedDnsRuntime dns,
+        EmittedPromiseRuntime promise, DnsDisplay2Construction display, MethodBuilder runAsync,
         string methodName, MethodBuilder syncHelper)
     {
         var wrapper = typeBuilder.DefineMethod(
@@ -533,50 +529,51 @@ public partial class RuntimeEmitter
         }
 
         // var dc = new $DnsDisplay2();
-        il.Emit(OpCodes.Newobj, _dnsDisplay2Ctor);
-        var dcLocal = il.DeclareLocal(_dnsDisplayClass2);
+        il.Emit(OpCodes.Newobj, display.Constructor);
+        var dcLocal = il.DeclareLocal(display.Type);
         il.Emit(OpCodes.Stloc, dcLocal);
 
         // dc._arg0 = arg0; dc._arg1 = arg1;
         il.Emit(OpCodes.Ldloc, dcLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stfld, _dnsDisplay2Arg0);
+        il.Emit(OpCodes.Stfld, display.Arg0);
         il.Emit(OpCodes.Ldloc, dcLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _dnsDisplay2Arg1);
+        il.Emit(OpCodes.Stfld, display.Arg1);
 
         // dc._method = syncHelper
         il.Emit(OpCodes.Ldloc, dcLocal);
         il.Emit(OpCodes.Ldtoken, syncHelper);
         il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
         il.Emit(OpCodes.Castclass, typeof(MethodInfo));
-        il.Emit(OpCodes.Stfld, _dnsDisplay2Method);
+        il.Emit(OpCodes.Stfld, display.Method);
 
         // DnsRunAsync(new Func<object?>(dc.Invoke))
         il.Emit(OpCodes.Ldloc, dcLocal);
-        il.Emit(OpCodes.Ldftn, _dnsDisplay2Invoke);
+        il.Emit(OpCodes.Ldftn, display.Invoke);
         il.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructors()[0]);
-        il.Emit(OpCodes.Call, _dnsRunAsync);
+        il.Emit(OpCodes.Call, runAsync);
 
         // WrapTaskAsPromise
-        il.Emit(OpCodes.Call, runtime.RequirePromise().WrapTaskAsPromise);
+        il.Emit(OpCodes.Call, promise.WrapTaskAsPromise);
         il.Emit(OpCodes.Ret);
 
-        runtime.RequireDns().RegisterPromiseWrapper(methodName, wrapper);
+        dns.RegisterPromiseWrapper(methodName, wrapper);
     }
 
     /// <summary>
     /// Emits DnsGetPromisesNamespace: creates a Dictionary&lt;string, object?&gt; namespace
     /// with TSFunction entries for each dns/promises method.
     /// </summary>
-    private void EmitDnsGetPromisesNamespace(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDnsGetPromisesNamespace(TypeBuilder typeBuilder, EmittedDnsRuntime dns,
+        ConstructorBuilder functionConstructor, ConstructorBuilder objectConstructor)
     {
         var method = typeBuilder.DefineMethod(
             "DnsGetPromisesNamespace",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             Type.EmptyTypes);
-        runtime.RequireDns().GetPromisesNamespace = method;
+        dns.GetPromisesNamespace = method;
 
         var il = method.GetILGenerator();
 
@@ -612,16 +609,16 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, jsName);
 
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldtoken, runtime.RequireDns().PromisesWrapperMethods[wrapperKey]);
+            il.Emit(OpCodes.Ldtoken, dns.PromisesWrapperMethods[wrapperKey]);
             il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
             il.Emit(OpCodes.Castclass, typeof(MethodInfo));
-            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+            il.Emit(OpCodes.Newobj, functionConstructor);
 
             il.Emit(OpCodes.Call, addMethod);
         }
 
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
+        il.Emit(OpCodes.Newobj, objectConstructor);
         il.Emit(OpCodes.Ret);
     }
 }
