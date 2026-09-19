@@ -614,6 +614,8 @@ public partial class RuntimeEmitter
         // so types that need CompiledPropertyDescriptorType during their own
         // emission can reference it. This used to live here.
 
+        NetConstruction? netConstruction = null;
+
         // Net / Dgram types — gated on UsesNet / UsesDgram. UsesNet is implied
         // by UsesHttp and UsesTls (both extend $NetServer-style sockets).
         if (features.UsesNet)
@@ -621,8 +623,9 @@ public partial class RuntimeEmitter
             // The opaque $BlockList handle is self-contained (pure BCL) and must
             // exist before $NetServer and the primitive net factory reference it.
             EmitTSNetBlockListTypes(moduleBuilder, runtime.RequireNet());
-            EmitTSNetSocketPhase1(moduleBuilder, runtime);
-            EmitTSNetServerPhase1(moduleBuilder, runtime);
+            var socketConstruction = EmitTSNetSocketPhase1(moduleBuilder, runtime);
+            var serverConstruction = EmitTSNetServerPhase1(moduleBuilder, runtime);
+            netConstruction = new(socketConstruction, serverConstruction);
         }
         // TLS types — Phase 1 (type + fields + method stubs, no CreateType). Must come
         // after $NetSocket Phase 1 ($TlsSocket : $NetSocket) and before EmitRuntimeClass
@@ -661,7 +664,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.ObjectArray]);
 
         // Emit $Runtime class with all helper methods
-        EmitRuntimeClass(moduleBuilder, runtime);
+        EmitRuntimeClass(moduleBuilder, runtime, netConstruction);
 
         // Emit $Runtime.NewOnFunction — the JS `new` protocol for runtime-valued
         // function callees. Depends on $Object, $TSFunction, $BoundTSFunction, and
@@ -845,11 +848,14 @@ public partial class RuntimeEmitter
         EmitMethodCallableFinalize(runtime.ReflectedMethods);
         runtime.ReflectedMethods.CompleteEmission();
 
+        NetClosureConstruction? netClosures = null;
+
         // Net / Http / Tls / Dgram phase-1b/phase-2 finalize work — gated on
         // their own feature flags. UsesHttp ⇒ UsesNet, UsesTls ⇒ UsesNet.
         if (features.UsesNet)
         {
-            EmitNetClosureTypes(moduleBuilder, runtime);
+            var net = RequireNetConstruction(netConstruction);
+            netClosures = EmitNetClosureTypes(moduleBuilder, runtime, net.Socket.Fields, net.Socket.Methods, net.Server.Fields);
         }
 
         if (features.UsesHttp)
@@ -857,8 +863,10 @@ public partial class RuntimeEmitter
 
         if (features.UsesNet)
         {
-            EmitTSNetSocketPhase2(runtime);
-            EmitTSNetServerPhase2(runtime);
+            var net = RequireNetConstruction(netConstruction);
+            var closures = netClosures ?? throw new InvalidOperationException("Net closures must be emitted before socket/server bodies.");
+            EmitTSNetSocketPhase2(runtime, net.Socket.Fields, net.Socket.Methods, closures.Socket);
+            EmitTSNetServerPhase2(runtime, net.Server.Fields, net.Server.Methods, closures.Server);
         }
 
         if (features.UsesDgram)
@@ -870,9 +878,10 @@ public partial class RuntimeEmitter
 
         if (features.UsesTls)
         {
+            var socketFields = RequireNetConstruction(netConstruction).Socket.Fields;
             EmitTlsAcceptClosureClass(moduleBuilder, runtime);
             EmitTlsAcceptErrorClosureClass(moduleBuilder, runtime);
-            EmitTlsConnectClosureClass(moduleBuilder, runtime);
+            EmitTlsConnectClosureClass(moduleBuilder, runtime, socketFields.Client, socketFields.Stream);
             EmitTlsConnectBody(runtime);
             // $TlsSocket Phase 2: emit method bodies + CreateType. Must come after the
             // connect closure (its Connect body sets $TlsSocket fields) and after
@@ -884,7 +893,8 @@ public partial class RuntimeEmitter
 
         if (features.UsesTls)
         {
-            EmitTlsServerAcceptWorkerBody(runtime);
+            var socketFields = RequireNetConstruction(netConstruction).Socket.Fields;
+            EmitTlsServerAcceptWorkerBody(runtime, socketFields.Client, socketFields.Stream);
             EmitTlsServerFinalize();
         }
 

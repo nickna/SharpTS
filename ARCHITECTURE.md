@@ -1584,6 +1584,16 @@ both existing DNS module emission points, reflection exception unwrapping and se
 before event-loop release are preserved. The checked DNS component still owns public
 declarations and the promise-wrapper registry; construction values do not duplicate ownership.
 
+Net construction metadata stays within one `EmitAll` invocation. Socket and server phase-one
+emitters return immutable field/method construction values; closure emission returns separate
+constructor/run pairs for phase two. Early module factories receive their field inputs, and late
+TLS population receives only the Net client and stream fields it needs. BlockList helpers, the
+socket error-code helper and the TCP drop-payload helper remain method-local. These values replace
+79 retained emitter fields without adding another persistent owner. `EmittedNetRuntime` continues
+to own checked public declarations and completion; optional availability, forward declarations,
+field visibility and type-creation order are unchanged. TLS's own construction fields and the
+broader construction, registry, semantic and final ownership audit remain required under #1599.
+
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only
 need that family's metadata (for example, DNS resolver declaration); retain `EmittedRuntime` where

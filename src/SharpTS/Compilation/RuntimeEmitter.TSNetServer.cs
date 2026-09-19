@@ -19,46 +19,12 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // Field builders for $NetServer
-    private FieldBuilder _netServerListenerField = null!;
-    private FieldBuilder _netServerIsListeningField = null!;
-    private FieldBuilder _netServerCtsField = null!;
-    private FieldBuilder _netServerConnectionListenerField = null!;
-    private FieldBuilder _netServerPortField = null!;
-    private FieldBuilder _netServerHostField = null!;
-    private FieldBuilder _netServerMaxConnectionsField = null!;
-    private FieldBuilder _netServerConnectionsField = null!;
-    private FieldBuilder _netServerIsIpcField = null!;
-    private FieldBuilder _netServerPipePathField = null!;
-    private FieldBuilder _netServerUnixSocketField = null!;
-    private FieldBuilder _netServerPipeReadyField = null!;
-    // createServer(options) settings applied to accepted sockets (#1068); -1 = unset
-    private FieldBuilder _netServerSocketHwmField = null!;
-    // createServer({blockList}) — a $BlockList checked per accepted connection (#1069)
-    private FieldBuilder _netServerBlockListField = null!;
-    // createServer({allowHalfOpen}) — applied to accepted sockets (#1070)
-    private FieldBuilder _netServerSocketAllowHalfOpenField = null!;
-
-    // Method builders (defined in Phase 1a, bodies emitted in Phase 2)
-    private MethodBuilder _netServerListenMethod = null!;
-    private MethodBuilder _netServerCloseMethod = null!;
-    private MethodBuilder _netServerAddressMethod = null!;
-    private MethodBuilder _netServerGetConnectionsMethod = null!;
-    private MethodBuilder _netServerGetMemberMethod = null!;
-    private MethodBuilder _netServerSetMemberMethod = null!;
-
-    // Closure constructors/run methods (set by the closure emitter between phases)
-    internal ConstructorBuilder _tcpAcceptClosureCtor = null!;
-    internal MethodBuilder _tcpAcceptClosureRun = null!;
-    internal ConstructorBuilder _ipcAcceptClosureCtor = null!;
-    internal MethodBuilder _ipcAcceptClosureRun = null!;
-
     /// <summary>
     /// Phase 1a: Defines the $NetServer type, fields, constructor (with body),
     /// and method STUBS (no bodies). Must be called BEFORE closure types are defined
     /// and BEFORE EmitRuntimeClass so NetCreateServer can use the constructor.
     /// </summary>
-    private void EmitTSNetServerPhase1(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private NetServerConstruction EmitTSNetServerPhase1(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$NetServer",
@@ -69,95 +35,115 @@ public partial class RuntimeEmitter
         _ = typeBuilder;
 
         // ── Fields ──
-        _netServerListenerField = typeBuilder.DefineField("_listener", typeof(TcpListener), FieldAttributes.Private);
-        _netServerIsListeningField = typeBuilder.DefineField("_isListening", _types.Boolean, FieldAttributes.Private);
-        _ = _netServerIsListeningField;
-        _netServerCtsField = typeBuilder.DefineField("_cts", typeof(CancellationTokenSource), FieldAttributes.Private);
-        _netServerConnectionListenerField = typeBuilder.DefineField("_connectionListener", _types.Object, FieldAttributes.Assembly);
-        _netServerPortField = typeBuilder.DefineField("_port", _types.Int32, FieldAttributes.Private);
-        _netServerHostField = typeBuilder.DefineField("_host", _types.String, FieldAttributes.Private);
+        var listenerField = typeBuilder.DefineField("_listener", typeof(TcpListener), FieldAttributes.Private);
+        var isListeningField = typeBuilder.DefineField("_isListening", _types.Boolean, FieldAttributes.Private);
+        var ctsField = typeBuilder.DefineField("_cts", typeof(CancellationTokenSource), FieldAttributes.Private);
+        var connectionListenerField = typeBuilder.DefineField("_connectionListener", _types.Object, FieldAttributes.Assembly);
+        var portField = typeBuilder.DefineField("_port", _types.Int32, FieldAttributes.Private);
+        var hostField = typeBuilder.DefineField("_host", _types.String, FieldAttributes.Private);
         // Assembly: the TCP accept closure enforces maxConnections + 'drop' (#1070)
-        _netServerMaxConnectionsField = typeBuilder.DefineField("_maxConnections", _types.Int32, FieldAttributes.Assembly);
-        _netServerConnectionsField = typeBuilder.DefineField("_connections", _types.ListOfObject, FieldAttributes.Assembly);
-        _netServerIsIpcField = typeBuilder.DefineField("_isIpc", _types.Boolean, FieldAttributes.Private);
-        _netServerPipePathField = typeBuilder.DefineField("_pipePath", _types.String, FieldAttributes.Private);
-        _netServerUnixSocketField = typeBuilder.DefineField("_unixSocket", typeof(Socket), FieldAttributes.Private);
-        _netServerPipeReadyField = typeBuilder.DefineField("_pipeReady", typeof(System.Threading.ManualResetEventSlim), FieldAttributes.Private);
-        _netServerSocketHwmField = typeBuilder.DefineField("_socketHwm", _types.Int32, FieldAttributes.Assembly);
-        _netServerBlockListField = typeBuilder.DefineField("_blockList", _types.Object, FieldAttributes.Assembly);
-        _netServerSocketAllowHalfOpenField = typeBuilder.DefineField("_socketAllowHalfOpen", _types.Boolean, FieldAttributes.Assembly);
+        var maxConnectionsField = typeBuilder.DefineField("_maxConnections", _types.Int32, FieldAttributes.Assembly);
+        var connectionsField = typeBuilder.DefineField("_connections", _types.ListOfObject, FieldAttributes.Assembly);
+        var isIpcField = typeBuilder.DefineField("_isIpc", _types.Boolean, FieldAttributes.Private);
+        var pipePathField = typeBuilder.DefineField("_pipePath", _types.String, FieldAttributes.Private);
+        var unixSocketField = typeBuilder.DefineField("_unixSocket", typeof(Socket), FieldAttributes.Private);
+        var pipeReadyField = typeBuilder.DefineField("_pipeReady", typeof(System.Threading.ManualResetEventSlim), FieldAttributes.Private);
+        var socketHwmField = typeBuilder.DefineField("_socketHwm", _types.Int32, FieldAttributes.Assembly);
+        var blockListField = typeBuilder.DefineField("_blockList", _types.Object, FieldAttributes.Assembly);
+        var socketAllowHalfOpenField = typeBuilder.DefineField("_socketAllowHalfOpen", _types.Boolean, FieldAttributes.Assembly);
 
         // ── Constructor (with body) ──
-        EmitNetServerCtor(typeBuilder, runtime);
+        var serverFields = new NetServerFields(
+            listenerField,
+            isListeningField,
+            ctsField,
+            connectionListenerField,
+            portField,
+            hostField,
+            maxConnectionsField,
+            connectionsField,
+            isIpcField,
+            pipePathField,
+            unixSocketField,
+            pipeReadyField,
+            socketHwmField,
+            blockListField,
+            socketAllowHalfOpenField);
+        EmitNetServerCtor(typeBuilder, runtime, serverFields);
 
         // ── Method stubs (no bodies — emitted in Phase 2) ──
 
-        _netServerListenMethod = typeBuilder.DefineMethod(
+        var listenMethod = typeBuilder.DefineMethod(
             "Listen",
             MethodAttributes.Public,
             _types.Object,
             [_types.Object, _types.Object, _types.Object, _types.Object]
         );
-        _ = _netServerListenMethod;
 
-        _netServerCloseMethod = typeBuilder.DefineMethod(
+        var closeMethod = typeBuilder.DefineMethod(
             "Close",
             MethodAttributes.Public,
             _types.Object,
             [_types.Object]
         );
-        _ = _netServerCloseMethod;
 
-        _netServerAddressMethod = typeBuilder.DefineMethod(
+        var addressMethod = typeBuilder.DefineMethod(
             "Address",
             MethodAttributes.Public,
             _types.Object,
             Type.EmptyTypes
         );
-        _ = _netServerAddressMethod;
 
-        _netServerGetConnectionsMethod = typeBuilder.DefineMethod(
+        var getConnectionsMethod = typeBuilder.DefineMethod(
             "GetConnections",
             MethodAttributes.Public,
             _types.Object,
             [_types.Object]
         );
-        _ = _netServerGetConnectionsMethod;
 
-        _netServerGetMemberMethod = typeBuilder.DefineMethod(
+        var getMemberMethod = typeBuilder.DefineMethod(
             "GetMember",
             MethodAttributes.Public,
             _types.Object,
             [_types.String]
         );
-        _ = _netServerGetMemberMethod;
 
-        _netServerSetMemberMethod = typeBuilder.DefineMethod(
+        var setMemberMethod = typeBuilder.DefineMethod(
             "SetMember",
             MethodAttributes.Public,
             typeof(void),
             [_types.String, _types.Object]
         );
-        _ = _netServerSetMemberMethod;
 
         // NOTE: CreateType() is deferred to Phase 2
+        return new(serverFields, new NetServerMethods(
+                listenMethod,
+                closeMethod,
+                addressMethod,
+                getConnectionsMethod,
+                getMemberMethod,
+                setMemberMethod));
     }
 
     /// <summary>
     /// Phase 2: Emits all method bodies and finalizes the $NetServer type.
     /// Called after closure types have been defined between phases.
     /// </summary>
-    private void EmitTSNetServerPhase2(EmittedRuntime runtime)
+    private void EmitTSNetServerPhase2(
+        EmittedRuntime runtime,
+        NetServerFields serverFields,
+        NetServerMethods serverMethods,
+        NetServerClosures serverClosures)
     {
         var typeBuilder = runtime.RequireNet().ServerType;
 
         // Emit method bodies
-        EmitNetServerListenBody(typeBuilder, runtime);
-        EmitNetServerCloseBody(typeBuilder, runtime);
-        EmitNetServerAddressBody(typeBuilder, runtime);
-        EmitNetServerGetConnectionsBody(typeBuilder, runtime);
-        EmitNetServerGetMemberBody(typeBuilder, runtime);
-        EmitNetServerSetMemberBody(typeBuilder, runtime);
+        EmitNetServerListenBody(typeBuilder, runtime, serverFields, serverMethods, serverClosures);
+        EmitNetServerCloseBody(typeBuilder, runtime, serverFields, serverMethods);
+        EmitNetServerAddressBody(typeBuilder, runtime, serverFields, serverMethods);
+        EmitNetServerGetConnectionsBody(typeBuilder, runtime, serverFields, serverMethods);
+        EmitNetServerGetMemberBody(typeBuilder, runtime, serverFields, serverMethods);
+        EmitNetServerSetMemberBody(typeBuilder, runtime, serverFields, serverMethods);
 
         typeBuilder.CreateType();
     }
@@ -166,7 +152,7 @@ public partial class RuntimeEmitter
     //  Constructor (body emitted in Phase 1a)
     // ════════════════════════════════════════════════════════════════
 
-    private void EmitNetServerCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetServerCtor(TypeBuilder typeBuilder, EmittedRuntime runtime, NetServerFields serverFields)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
@@ -182,23 +168,23 @@ public partial class RuntimeEmitter
         // _connectionListener = callback
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _netServerConnectionListenerField);
+        il.Emit(OpCodes.Stfld, serverFields.ConnectionListener);
         // _host = "0.0.0.0"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "0.0.0.0");
-        il.Emit(OpCodes.Stfld, _netServerHostField);
+        il.Emit(OpCodes.Stfld, serverFields.Host);
         // _maxConnections = int.MaxValue
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4, int.MaxValue);
-        il.Emit(OpCodes.Stfld, _netServerMaxConnectionsField);
+        il.Emit(OpCodes.Stfld, serverFields.MaxConnections);
         // _connections = new List<object>()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
-        il.Emit(OpCodes.Stfld, _netServerConnectionsField);
+        il.Emit(OpCodes.Stfld, serverFields.Connections);
         // _socketHwm = -1 (unset — accepted sockets keep the 16 KiB default)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Stfld, _netServerSocketHwmField);
+        il.Emit(OpCodes.Stfld, serverFields.SocketHwm);
         il.Emit(OpCodes.Ret);
     }
 
@@ -209,14 +195,19 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits body for: public object Listen(object portOrOptions, object hostOrCallback, object backlogOrCallback, object callback)
     /// </summary>
-    private void EmitNetServerListenBody(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetServerListenBody(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime,
+        NetServerFields serverFields,
+        NetServerMethods serverMethods,
+        NetServerClosures serverClosures)
     {
-        var il = _netServerListenMethod.GetILGenerator();
+        var il = serverMethods.Listen.GetILGenerator();
 
         // if (_isListening) throw
         var notListening = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerIsListeningField);
+        il.Emit(OpCodes.Ldfld, serverFields.IsListening);
         il.Emit(OpCodes.Brfalse, notListening);
         il.Emit(OpCodes.Ldstr, "Runtime Error: Server is already listening");
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
@@ -266,7 +257,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stfld, _netServerPortField);
+        il.Emit(OpCodes.Stfld, serverFields.Port);
 
         // Check arg2: string (host) or callable (callback)
         var arg2NotString = il.DefineLabel();
@@ -276,7 +267,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Stfld, _netServerHostField);
+        il.Emit(OpCodes.Stfld, serverFields.Host);
         // Find callback in remaining args
         EmitFindCallback(il, runtime, 3, callbackLocal);
         EmitFindCallback(il, runtime, 4, callbackLocal);
@@ -299,16 +290,16 @@ public partial class RuntimeEmitter
         // Extract path from dict["path"] first
         EmitDictTryGetString(il, 1, "path", ipcPathLocal);
         // Extract port from dict["port"]
-        EmitDictExtractPort(il, 1, _netServerPortField);
+        EmitDictExtractPort(il, 1, serverFields.Port);
         // Extract host from dict["host"]
         var hostLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerHostField);
+        il.Emit(OpCodes.Ldfld, serverFields.Host);
         il.Emit(OpCodes.Stloc, hostLocal);
         EmitDictTryGetString(il, 1, "host", hostLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, hostLocal);
-        il.Emit(OpCodes.Stfld, _netServerHostField);
+        il.Emit(OpCodes.Stfld, serverFields.Host);
         // arg2 is callback
         EmitFindCallback(il, runtime, 2, callbackLocal);
         il.Emit(OpCodes.Br, parseDone);
@@ -328,15 +319,15 @@ public partial class RuntimeEmitter
         // Set _isIpc = true, _pipePath = path
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _netServerIsIpcField);
+        il.Emit(OpCodes.Stfld, serverFields.IsIpc);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, ipcPathLocal);
-        il.Emit(OpCodes.Stfld, _netServerPipePathField);
+        il.Emit(OpCodes.Stfld, serverFields.PipePath);
 
         // _cts = new CancellationTokenSource()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, typeof(CancellationTokenSource).GetConstructor(Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stfld, _netServerCtsField);
+        il.Emit(OpCodes.Stfld, serverFields.Cts);
 
         // Branch on OS: Windows vs Unix
         var isWindows = il.DefineLabel();
@@ -362,25 +353,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, (int)SocketType.Stream);
         il.Emit(OpCodes.Ldc_I4, (int)ProtocolType.Unspecified);
         il.Emit(OpCodes.Newobj, typeof(Socket).GetConstructor([typeof(AddressFamily), typeof(SocketType), typeof(ProtocolType)])!);
-        il.Emit(OpCodes.Stfld, _netServerUnixSocketField);
+        il.Emit(OpCodes.Stfld, serverFields.UnixSocket);
 
         // _unixSocket.Bind(new UnixDomainSocketEndPoint(path))
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerUnixSocketField);
+        il.Emit(OpCodes.Ldfld, serverFields.UnixSocket);
         il.Emit(OpCodes.Ldloc, ipcPathLocal);
         il.Emit(OpCodes.Newobj, typeof(UnixDomainSocketEndPoint).GetConstructor([_types.String])!);
         il.Emit(OpCodes.Callvirt, typeof(Socket).GetMethod("Bind", [typeof(EndPoint)])!);
 
         // _unixSocket.Listen(511)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerUnixSocketField);
+        il.Emit(OpCodes.Ldfld, serverFields.UnixSocket);
         il.Emit(OpCodes.Ldc_I4, 511);
         il.Emit(OpCodes.Callvirt, typeof(Socket).GetMethod("Listen", [_types.Int32])!);
 
         // _isListening = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _netServerIsListeningField);
+        il.Emit(OpCodes.Stfld, serverFields.IsListening);
 
         // EventLoop.Ref()
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
@@ -388,7 +379,7 @@ public partial class RuntimeEmitter
 
         // Start Unix IPC accept worker on ThreadPool BEFORE callback
         // (callback may trigger client connect; accept worker must be ready)
-        EmitIpcAcceptWorkerUnixStart(il, runtime);
+        EmitIpcAcceptWorkerUnixStart(il, runtime, serverFields, serverClosures);
 
         // Emit 'listening' event
         il.Emit(OpCodes.Ldarg_0);
@@ -414,7 +405,7 @@ public partial class RuntimeEmitter
         // _isListening = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _netServerIsListeningField);
+        il.Emit(OpCodes.Stfld, serverFields.IsListening);
 
         // EventLoop.Ref()
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
@@ -424,14 +415,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, typeof(System.Threading.ManualResetEventSlim).GetConstructor([_types.Boolean])!);
-        il.Emit(OpCodes.Stfld, _netServerPipeReadyField);
+        il.Emit(OpCodes.Stfld, serverFields.PipeReady);
 
         // Start Windows IPC accept worker on ThreadPool
-        EmitIpcAcceptWorkerWindowsStart(il, runtime);
+        EmitIpcAcceptWorkerWindowsStart(il, runtime, serverFields, serverClosures);
 
         // _pipeReady.Wait(5000) — block until first pipe is listening
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerPipeReadyField);
+        il.Emit(OpCodes.Ldfld, serverFields.PipeReady);
         il.Emit(OpCodes.Ldc_I4, 5000);
         il.Emit(OpCodes.Callvirt, typeof(System.Threading.ManualResetEventSlim).GetMethod("Wait", [_types.Int32])!);
         il.Emit(OpCodes.Pop); // Wait(int) returns bool
@@ -469,12 +460,12 @@ public partial class RuntimeEmitter
         var anyLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerHostField);
+        il.Emit(OpCodes.Ldfld, serverFields.Host);
         il.Emit(OpCodes.Ldstr, "0.0.0.0");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, anyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerHostField);
+        il.Emit(OpCodes.Ldfld, serverFields.Host);
         il.Emit(OpCodes.Ldstr, "::");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, anyLabel);
@@ -488,7 +479,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notAny);
         // Try parse, fallback to Loopback
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerHostField);
+        il.Emit(OpCodes.Ldfld, serverFields.Host);
         il.Emit(OpCodes.Ldloca, ipAddrLocal);
         il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("TryParse", [_types.String, typeof(IPAddress).MakeByRefType()])!);
         il.Emit(OpCodes.Brtrue, ipDone);
@@ -501,14 +492,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, ipAddrLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerPortField);
+        il.Emit(OpCodes.Ldfld, serverFields.Port);
         il.Emit(OpCodes.Newobj, typeof(TcpListener).GetConstructor([typeof(IPAddress), _types.Int32])!);
-        il.Emit(OpCodes.Stfld, _netServerListenerField);
+        il.Emit(OpCodes.Stfld, serverFields.Listener);
 
         // try { _listener.Start() } catch { return this }
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerListenerField);
+        il.Emit(OpCodes.Ldfld, serverFields.Listener);
         il.Emit(OpCodes.Callvirt, typeof(TcpListener).GetMethod("Start", Type.EmptyTypes)!);
 
         var startOk = il.DefineLabel();
@@ -524,29 +515,29 @@ public partial class RuntimeEmitter
         // Update port if it was 0 (auto-assigned)
         var portNotZero = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerPortField);
+        il.Emit(OpCodes.Ldfld, serverFields.Port);
         il.Emit(OpCodes.Brtrue, portNotZero);
 
         // _port = ((IPEndPoint)_listener.LocalEndpoint).Port
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerListenerField);
+        il.Emit(OpCodes.Ldfld, serverFields.Listener);
         il.Emit(OpCodes.Callvirt, typeof(TcpListener).GetProperty("LocalEndpoint")!.GetGetMethod()!);
         il.Emit(OpCodes.Castclass, typeof(IPEndPoint));
         il.Emit(OpCodes.Callvirt, typeof(IPEndPoint).GetProperty("Port")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stfld, _netServerPortField);
+        il.Emit(OpCodes.Stfld, serverFields.Port);
 
         il.MarkLabel(portNotZero);
 
         // _isListening = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _netServerIsListeningField);
+        il.Emit(OpCodes.Stfld, serverFields.IsListening);
 
         // _cts = new CancellationTokenSource()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, typeof(CancellationTokenSource).GetConstructor(Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stfld, _netServerCtsField);
+        il.Emit(OpCodes.Stfld, serverFields.Cts);
 
         // EventLoop.Ref()
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
@@ -569,7 +560,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
 
         // Start TCP accept worker on ThreadPool using $TcpAcceptClosure
-        EmitTcpAcceptWorkerStart(il, runtime);
+        EmitTcpAcceptWorkerStart(il, runtime, serverFields, serverClosures);
 
         // return this
         il.Emit(OpCodes.Ldarg_0);
@@ -581,7 +572,11 @@ public partial class RuntimeEmitter
     /// The closure accept loop is in $TcpAcceptClosure.Run(), which checks _isListening,
     /// calls AcceptTcpClient, creates $NetSocket, schedules connection handling via EventLoop.
     /// </summary>
-    private void EmitTcpAcceptWorkerStart(ILGenerator callerIl, EmittedRuntime runtime)
+    private void EmitTcpAcceptWorkerStart(
+        ILGenerator callerIl,
+        EmittedRuntime runtime,
+        NetServerFields serverFields,
+        NetServerClosures serverClosures)
     {
         // Emit a private _TcpAcceptWorker(object state) method that creates and runs the closure
         var acceptWorker = runtime.RequireNet().ServerType.DefineMethod(
@@ -602,13 +597,13 @@ public partial class RuntimeEmitter
 
             // Check _isListening
             wil.Emit(OpCodes.Ldarg_0);
-            wil.Emit(OpCodes.Ldfld, _netServerIsListeningField);
+            wil.Emit(OpCodes.Ldfld, serverFields.IsListening);
             wil.Emit(OpCodes.Brfalse, loopExit);
 
             // try { client = _listener.AcceptTcpClient() } catch { break }
             wil.BeginExceptionBlock();
             wil.Emit(OpCodes.Ldarg_0);
-            wil.Emit(OpCodes.Ldfld, _netServerListenerField);
+            wil.Emit(OpCodes.Ldfld, serverFields.Listener);
             wil.Emit(OpCodes.Callvirt, typeof(TcpListener).GetMethod("AcceptTcpClient")!);
             wil.Emit(OpCodes.Stloc, clientLocal);
 
@@ -626,8 +621,8 @@ public partial class RuntimeEmitter
             wil.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             wil.Emit(OpCodes.Ldarg_0);
             wil.Emit(OpCodes.Ldloc, clientLocal);
-            wil.Emit(OpCodes.Newobj, _tcpAcceptClosureCtor);
-            wil.Emit(OpCodes.Ldftn, _tcpAcceptClosureRun);
+            wil.Emit(OpCodes.Newobj, serverClosures.TcpAccept.Constructor);
+            wil.Emit(OpCodes.Ldftn, serverClosures.TcpAccept.Run);
             wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
             wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
@@ -648,7 +643,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits the Unix IPC accept worker start: ThreadPool.QueueUserWorkItem on a blocking Socket.Accept loop.
     /// </summary>
-    private void EmitIpcAcceptWorkerUnixStart(ILGenerator callerIl, EmittedRuntime runtime)
+    private void EmitIpcAcceptWorkerUnixStart(
+        ILGenerator callerIl,
+        EmittedRuntime runtime,
+        NetServerFields serverFields,
+        NetServerClosures serverClosures)
     {
         var acceptWorker = runtime.RequireNet().ServerType.DefineMethod(
             "_IpcAcceptWorkerUnix",
@@ -669,19 +668,19 @@ public partial class RuntimeEmitter
 
             // Check _isListening
             wil.Emit(OpCodes.Ldarg_0);
-            wil.Emit(OpCodes.Ldfld, _netServerIsListeningField);
+            wil.Emit(OpCodes.Ldfld, serverFields.IsListening);
             wil.Emit(OpCodes.Brfalse, loopExit);
 
             // Check _unixSocket != null
             wil.Emit(OpCodes.Ldarg_0);
-            wil.Emit(OpCodes.Ldfld, _netServerUnixSocketField);
+            wil.Emit(OpCodes.Ldfld, serverFields.UnixSocket);
             wil.Emit(OpCodes.Brfalse, loopExit);
 
             // try { clientSocket = _unixSocket.AcceptAsync().GetAwaiter().GetResult() } catch { break }
             // Use async path — synchronous Socket.Accept may hang on macOS for Unix domain sockets
             wil.BeginExceptionBlock();
             wil.Emit(OpCodes.Ldarg_0);
-            wil.Emit(OpCodes.Ldfld, _netServerUnixSocketField);
+            wil.Emit(OpCodes.Ldfld, serverFields.UnixSocket);
             wil.Emit(OpCodes.Callvirt, typeof(Socket).GetMethod("AcceptAsync", Type.EmptyTypes)!);
             wil.Emit(OpCodes.Callvirt, typeof(Task<Socket>).GetMethod("GetAwaiter")!);
             var acceptAwaiterLocal = wil.DeclareLocal(typeof(TaskAwaiter<Socket>));
@@ -711,9 +710,9 @@ public partial class RuntimeEmitter
             wil.Emit(OpCodes.Ldarg_0);
             wil.Emit(OpCodes.Ldloc, streamLocal);
             wil.Emit(OpCodes.Ldarg_0);
-            wil.Emit(OpCodes.Ldfld, _netServerPipePathField);
-            wil.Emit(OpCodes.Newobj, _ipcAcceptClosureCtor);
-            wil.Emit(OpCodes.Ldftn, _ipcAcceptClosureRun);
+            wil.Emit(OpCodes.Ldfld, serverFields.PipePath);
+            wil.Emit(OpCodes.Newobj, serverClosures.IpcAccept.Constructor);
+            wil.Emit(OpCodes.Ldftn, serverClosures.IpcAccept.Run);
             wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
             wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
@@ -735,7 +734,11 @@ public partial class RuntimeEmitter
     /// Emits the Windows IPC accept worker start: ThreadPool.QueueUserWorkItem on a blocking
     /// NamedPipeServerStream.WaitForConnection loop.
     /// </summary>
-    private void EmitIpcAcceptWorkerWindowsStart(ILGenerator callerIl, EmittedRuntime runtime)
+    private void EmitIpcAcceptWorkerWindowsStart(
+        ILGenerator callerIl,
+        EmittedRuntime runtime,
+        NetServerFields serverFields,
+        NetServerClosures serverClosures)
     {
         var acceptWorker = runtime.RequireNet().ServerType.DefineMethod(
             "_IpcAcceptWorkerWindows",
@@ -760,7 +763,7 @@ public partial class RuntimeEmitter
             // if path starts with "\\.\pipe\", strip prefix; else use Path.GetFileName()
             var pathLocal = wil.DeclareLocal(_types.String);
             wil.Emit(OpCodes.Ldarg_0);
-            wil.Emit(OpCodes.Ldfld, _netServerPipePathField);
+            wil.Emit(OpCodes.Ldfld, serverFields.PipePath);
             wil.Emit(OpCodes.Stloc, pathLocal);
 
             var notPipePrefix = wil.DefineLabel();
@@ -789,7 +792,7 @@ public partial class RuntimeEmitter
             // Load cancellation token once before the loop
             // token = _cts.Token
             wil.Emit(OpCodes.Ldarg_0);
-            wil.Emit(OpCodes.Ldfld, _netServerCtsField);
+            wil.Emit(OpCodes.Ldfld, serverFields.Cts);
             wil.Emit(OpCodes.Callvirt, typeof(CancellationTokenSource).GetProperty("Token")!.GetGetMethod()!);
             wil.Emit(OpCodes.Stloc, tokenLocal);
 
@@ -801,7 +804,7 @@ public partial class RuntimeEmitter
 
             // Check _isListening
             wil.Emit(OpCodes.Ldarg_0);
-            wil.Emit(OpCodes.Ldfld, _netServerIsListeningField);
+            wil.Emit(OpCodes.Ldfld, serverFields.IsListening);
             wil.Emit(OpCodes.Brfalse, loopExit);
 
             // try {
@@ -837,7 +840,7 @@ public partial class RuntimeEmitter
             wil.Emit(OpCodes.Ldc_I4_0);
             wil.Emit(OpCodes.Stloc, firstLocal);
             wil.Emit(OpCodes.Ldarg_0);
-            wil.Emit(OpCodes.Ldfld, _netServerPipeReadyField);
+            wil.Emit(OpCodes.Ldfld, serverFields.PipeReady);
             wil.Emit(OpCodes.Callvirt, typeof(System.Threading.ManualResetEventSlim).GetMethod("Set")!);
             wil.MarkLabel(skipSignal);
 
@@ -863,9 +866,9 @@ public partial class RuntimeEmitter
             wil.Emit(OpCodes.Ldarg_0);
             wil.Emit(OpCodes.Ldloc, pipeLocal);
             wil.Emit(OpCodes.Ldarg_0);
-            wil.Emit(OpCodes.Ldfld, _netServerPipePathField);
-            wil.Emit(OpCodes.Newobj, _ipcAcceptClosureCtor);
-            wil.Emit(OpCodes.Ldftn, _ipcAcceptClosureRun);
+            wil.Emit(OpCodes.Ldfld, serverFields.PipePath);
+            wil.Emit(OpCodes.Newobj, serverClosures.IpcAccept.Constructor);
+            wil.Emit(OpCodes.Ldftn, serverClosures.IpcAccept.Run);
             wil.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
             wil.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
@@ -951,14 +954,18 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits body for: public object Close(object callback)
     /// </summary>
-    private void EmitNetServerCloseBody(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetServerCloseBody(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime,
+        NetServerFields serverFields,
+        NetServerMethods serverMethods)
     {
-        var il = _netServerCloseMethod.GetILGenerator();
+        var il = serverMethods.Close.GetILGenerator();
 
         // if (!_isListening) return this
         var isListening = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerIsListeningField);
+        il.Emit(OpCodes.Ldfld, serverFields.IsListening);
         il.Emit(OpCodes.Brtrue, isListening);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
@@ -969,10 +976,10 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
         var noCts = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerCtsField);
+        il.Emit(OpCodes.Ldfld, serverFields.Cts);
         il.Emit(OpCodes.Brfalse, noCts);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerCtsField);
+        il.Emit(OpCodes.Ldfld, serverFields.Cts);
         il.Emit(OpCodes.Callvirt, typeof(CancellationTokenSource).GetMethod("Cancel", Type.EmptyTypes)!);
         il.MarkLabel(noCts);
 
@@ -981,19 +988,19 @@ public partial class RuntimeEmitter
         var cleanupDone = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerIsIpcField);
+        il.Emit(OpCodes.Ldfld, serverFields.IsIpc);
         il.Emit(OpCodes.Brfalse, notIpcClose);
 
         // ── IPC cleanup ──
         // Close _unixSocket if set
         var noUnixSock = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerUnixSocketField);
+        il.Emit(OpCodes.Ldfld, serverFields.UnixSocket);
         il.Emit(OpCodes.Brfalse, noUnixSock);
 
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerUnixSocketField);
+        il.Emit(OpCodes.Ldfld, serverFields.UnixSocket);
         il.Emit(OpCodes.Callvirt, typeof(Socket).GetMethod("Close", Type.EmptyTypes)!);
         var unixCloseOk = il.DefineLabel();
         il.Emit(OpCodes.Leave, unixCloseOk);
@@ -1013,16 +1020,16 @@ public partial class RuntimeEmitter
         // if (_pipePath != null && File.Exists(_pipePath)) File.Delete(_pipePath)
         var noPipePath = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerPipePathField);
+        il.Emit(OpCodes.Ldfld, serverFields.PipePath);
         il.Emit(OpCodes.Brfalse, noPipePath);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerPipePathField);
+        il.Emit(OpCodes.Ldfld, serverFields.PipePath);
         il.Emit(OpCodes.Call, typeof(File).GetMethod("Exists", [_types.String])!);
         il.Emit(OpCodes.Brfalse, noPipePath);
 
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerPipePathField);
+        il.Emit(OpCodes.Ldfld, serverFields.PipePath);
         il.Emit(OpCodes.Call, typeof(File).GetMethod("Delete", [_types.String])!);
         var deleteOk = il.DefineLabel();
         il.Emit(OpCodes.Leave, deleteOk);
@@ -1043,10 +1050,10 @@ public partial class RuntimeEmitter
         // _listener?.Stop()
         var noListener = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerListenerField);
+        il.Emit(OpCodes.Ldfld, serverFields.Listener);
         il.Emit(OpCodes.Brfalse, noListener);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerListenerField);
+        il.Emit(OpCodes.Ldfld, serverFields.Listener);
         il.Emit(OpCodes.Callvirt, typeof(TcpListener).GetMethod("Stop")!);
         il.MarkLabel(noListener);
 
@@ -1059,7 +1066,7 @@ public partial class RuntimeEmitter
         // _isListening = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _netServerIsListeningField);
+        il.Emit(OpCodes.Stfld, serverFields.IsListening);
 
         // EventLoop.Unref()
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
@@ -1092,14 +1099,18 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits body for: public object Address()
     /// </summary>
-    private void EmitNetServerAddressBody(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetServerAddressBody(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime,
+        NetServerFields serverFields,
+        NetServerMethods serverMethods)
     {
-        var il = _netServerAddressMethod.GetILGenerator();
+        var il = serverMethods.Address.GetILGenerator();
 
         // if (!_isListening) return null
         var isListening = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerIsListeningField);
+        il.Emit(OpCodes.Ldfld, serverFields.IsListening);
         il.Emit(OpCodes.Brtrue, isListening);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -1109,11 +1120,11 @@ public partial class RuntimeEmitter
         // if (_isIpc) return _pipePath (Node.js returns the pipe path as a string)
         var notIpcAddr = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerIsIpcField);
+        il.Emit(OpCodes.Ldfld, serverFields.IsIpc);
         il.Emit(OpCodes.Brfalse, notIpcAddr);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerPipePathField);
+        il.Emit(OpCodes.Ldfld, serverFields.PipePath);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notIpcAddr);
@@ -1124,7 +1135,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "address");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerHostField);
+        il.Emit(OpCodes.Ldfld, serverFields.Host);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.Emit(OpCodes.Dup);
@@ -1135,7 +1146,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "port");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerPortField);
+        il.Emit(OpCodes.Ldfld, serverFields.Port);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
@@ -1150,9 +1161,13 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits body for: public object GetConnections(object callback)
     /// </summary>
-    private void EmitNetServerGetConnectionsBody(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetServerGetConnectionsBody(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime,
+        NetServerFields serverFields,
+        NetServerMethods serverMethods)
     {
-        var il = _netServerGetConnectionsMethod.GetILGenerator();
+        var il = serverMethods.GetConnections.GetILGenerator();
 
         // if (callback is TSFunction) callback.Invoke([null, connections.Count])
         var noCb = il.DefineLabel();
@@ -1171,7 +1186,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
+        il.Emit(OpCodes.Ldfld, serverFields.Connections);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
@@ -1191,9 +1206,13 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits body for: public object GetMember(string name)
     /// </summary>
-    private void EmitNetServerGetMemberBody(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetServerGetMemberBody(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime,
+        NetServerFields serverFields,
+        NetServerMethods serverMethods)
     {
-        var il = _netServerGetMemberMethod.GetILGenerator();
+        var il = serverMethods.GetMember.GetILGenerator();
 
         var listeningLabel = il.DefineLabel();
         var maxConnLabel = il.DefineLabel();
@@ -1205,13 +1224,13 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(listeningLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerIsListeningField);
+        il.Emit(OpCodes.Ldfld, serverFields.IsListening);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(maxConnLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netServerMaxConnectionsField);
+        il.Emit(OpCodes.Ldfld, serverFields.MaxConnections);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -1224,9 +1243,13 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits body for: public void SetMember(string name, object value)
     /// </summary>
-    private void EmitNetServerSetMemberBody(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetServerSetMemberBody(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime,
+        NetServerFields serverFields,
+        NetServerMethods serverMethods)
     {
-        var il = _netServerSetMemberMethod.GetILGenerator();
+        var il = serverMethods.SetMember.GetILGenerator();
 
         var maxConnLabel = il.DefineLabel();
         var endLabel = il.DefineLabel();
@@ -1242,7 +1265,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stfld, _netServerMaxConnectionsField);
+        il.Emit(OpCodes.Stfld, serverFields.MaxConnections);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
