@@ -198,6 +198,62 @@ public class EmittedFileSystemRuntimeTests
         AssertFrozen(second);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LstatValueImportUsesOneWrapperPerAssemblyAcrossEmitterReuse(bool hosted)
+    {
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
+        var saved = new List<MethodInfo>();
+        var declarations = new HashSet<MethodBuilder>();
+        foreach (string? source in new[] { "import * as fs from 'fs';", "console.log(1);", null, "import * as fs from 'fs/promises';" })
+        {
+            var runtime = EmitRuntime(source, hosted, emitter);
+            using var bytes = Save(runtime);
+            using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+            Assert.Empty(verifier.Verify(bytes));
+            var assembly = Assembly.Load(bytes.ToArray());
+            var wrappers = assembly.GetType("$Runtime")!
+                .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                .Where(method => method.Name == "Fs_lstatSync_Wrapper").ToArray();
+            var declaration = runtime.GetBuiltInModuleMethod("fs", "lstatSync");
+            if (runtime.FileSystem is null)
+            {
+                Assert.Null(declaration);
+                Assert.Empty(wrappers);
+                continue;
+            }
+
+            var wrapper = Assert.Single(wrappers);
+            Assert.NotNull(declaration);
+            Assert.True(declarations.Add(declaration));
+            Assert.Same(runtime.RuntimeClass.Type.Module, declaration.Module);
+            Assert.Equal(declaration.MetadataToken, wrapper.MetadataToken);
+            Assert.Equal(typeof(object), wrapper.ReturnType);
+            Assert.Equal(typeof(object), Assert.Single(wrapper.GetParameters()).ParameterType);
+            Assert.True(runtime.RequireFileSystem().IsComplete);
+            saved.Add(wrapper);
+        }
+
+        // Invoke earlier exports after later compilations have finished using the emitter.
+        var directory = Path.Combine(Path.GetTempPath(), $"sharpts_lstat_export_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "data.txt");
+            File.WriteAllText(path, "content");
+            foreach (var wrapper in saved)
+            {
+                var file = wrapper.Invoke(null, [path])!;
+                Assert.Equal(true, file.GetType().GetMethod("isFile")!.Invoke(file, null));
+                Assert.Equal(7.0, file.GetType().GetProperty("size")!.GetValue(file));
+                var folder = wrapper.Invoke(null, [directory])!;
+                Assert.Equal(true, folder.GetType().GetMethod("isDirectory")!.Invoke(folder, null));
+            }
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     private static void FillDeclarations(EmittedFileSystemRuntime fileSystem, string? missingHandle = null)
     {
         var assembly = new PersistedAssemblyBuilder(new AssemblyName($"filesystem_declarations_{Guid.NewGuid():N}"), typeof(object).Assembly);
