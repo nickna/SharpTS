@@ -363,10 +363,12 @@ public sealed class EmittedArrayStorageRuntime
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException($"Array storage metadata '{name}' has not been declared.");
 
-    private void SetHandle<T>(ref T? field, T value) where T : class
+    private void SetHandle<T>(ref T? field, T value, [CallerMemberName] string name = "") where T : class
     {
         EnsureMutable();
         ArgumentNullException.ThrowIfNull(value);
+        if (field is not null)
+            throw new InvalidOperationException($"Array storage metadata '{name}' has already been declared.");
         field = value;
     }
 

@@ -225,8 +225,12 @@ and `$ArrayHole` types, constructors, sparse and packed-double accessors, rest b
 immutable numeric/boolean queue records. These types are always emitted, including for minimal
 tree-shaken programs, so the component is created with `EmittedRuntime` rather than gated on an
 optional feature. `EnsureBoxed` is declared before the base-list methods that call it; its later
-body emission uses the same component handle without an emitter-local alias. Array-only helpers
-accept `EmittedArrayStorageRuntime` directly, while descriptor, error, and undefined dependencies
+body emission uses the same component handle without an emitter-local alias. The eight private
+storage fields, sparse dictionary type and nine BCL collection methods are immutable construction
+inputs local to emitting `$Array`; 31 helper boundaries receive those inputs explicitly. Collection
+methods resolve before type definition, and private fields retain their declaration order. The
+component rejects duplicate declarations before completion and permits missing-declaration repair.
+Array-only helpers accept `EmittedArrayStorageRuntime` directly, while descriptor, error, and undefined dependencies
 still require the shared runtime. `EmitAll` completes storage after runtime finalization, validating
 queue declarations as well as array handles. Boolean queues intentionally omit unboxed numeric
 reads. Array operations have a separate component described below. ArrayBuffer/TypedArray
