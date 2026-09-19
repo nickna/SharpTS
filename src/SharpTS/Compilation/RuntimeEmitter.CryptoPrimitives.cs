@@ -19,29 +19,6 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    /// <summary>
-    /// Digest table rows: name, rooted one-shot HashData method, optional
-    /// IsSupported getter, and XOF default length.
-    /// </summary>
-    private static readonly (string Name, MethodInfo HashData, MethodInfo? IsSupported, int XofDefault)[] _hashTable =
-    [
-        ("md5", ((Func<byte[], byte[]>)MD5.HashData).Method, null, -1),
-        ("sha1", ((Func<byte[], byte[]>)SHA1.HashData).Method, null, -1),
-        ("sha256", ((Func<byte[], byte[]>)SHA256.HashData).Method, null, -1),
-        ("sha384", ((Func<byte[], byte[]>)SHA384.HashData).Method, null, -1),
-        ("sha512", ((Func<byte[], byte[]>)SHA512.HashData).Method, null, -1),
-        ("sha3-256", ((Func<byte[], byte[]>)SHA3_256.HashData).Method,
-            typeof(SHA3_256).GetProperty(nameof(SHA3_256.IsSupported))!.GetMethod, -1),
-        ("sha3-384", ((Func<byte[], byte[]>)SHA3_384.HashData).Method,
-            typeof(SHA3_384).GetProperty(nameof(SHA3_384.IsSupported))!.GetMethod, -1),
-        ("sha3-512", ((Func<byte[], byte[]>)SHA3_512.HashData).Method,
-            typeof(SHA3_512).GetProperty(nameof(SHA3_512.IsSupported))!.GetMethod, -1),
-        ("shake128", ((Func<byte[], int, byte[]>)Shake128.HashData).Method,
-            typeof(Shake128).GetProperty(nameof(Shake128.IsSupported))!.GetMethod, 16),
-        ("shake256", ((Func<byte[], int, byte[]>)Shake256.HashData).Method,
-            typeof(Shake256).GetProperty(nameof(Shake256.IsSupported))!.GetMethod, 32),
-    ];
-
     private void EmitCryptoPrimitivesClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var crypto = runtime.RequireCrypto();
@@ -80,7 +57,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, lowerLocal);
 
-        foreach (var (name, _, isSupported, _) in _hashTable)
+        foreach (var (name, _, isSupported, _) in FrameworkEmitMetadata.CryptoHashes)
         {
             var nextLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, lowerLocal);
@@ -133,7 +110,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, crypto.ValidateHashName);
         il.Emit(OpCodes.Stloc, lowerLocal);
 
-        foreach (var (name, hashData, _, xofDefault) in _hashTable)
+        foreach (var (name, hashData, _, xofDefault) in FrameworkEmitMetadata.CryptoHashes)
         {
             var nextLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, lowerLocal);

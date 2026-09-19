@@ -6,24 +6,6 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    internal static readonly MethodInfo DoubleListAsSpan =
-        EmitGenerics.MakeGenericMethod(
-            typeof(System.Runtime.InteropServices.CollectionsMarshal)
-                .GetMethod(nameof(System.Runtime.InteropServices.CollectionsMarshal.AsSpan))!,
-            typeof(double));
-    private static readonly MethodInfo DoubleSpanSlice =
-        typeof(Span<double>).GetMethod(nameof(Span<double>.Slice), [typeof(int)])!;
-    internal static readonly MethodInfo DoubleSpanIndexOf =
-        EmitGenerics.MakeGenericMethod(
-            typeof(MemoryExtensions).GetMethods().Single(method =>
-                method.Name == nameof(MemoryExtensions.IndexOf) &&
-                method.IsGenericMethodDefinition &&
-                method.GetParameters() is [var span, var value] &&
-                span.ParameterType.IsGenericType &&
-                span.ParameterType.GetGenericTypeDefinition() == typeof(Span<>) &&
-                value.ParameterType.IsGenericParameter),
-            typeof(double));
-
     /// <summary>
     /// Variadic Array.prototype.includes entry point. Keeping the original
     /// argument count distinguishes an omitted searchElement (undefined) from
@@ -160,13 +142,13 @@ public partial class RuntimeEmitter
         // while also avoiding two NaN tests on every ordinary miss.
         var span = il.DeclareLocal(typeof(Span<double>));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, DoubleListAsSpan);
+        il.Emit(OpCodes.Call, FrameworkEmitMetadata.DoubleListAsSpan);
         il.Emit(OpCodes.Stloc, span);
         il.Emit(OpCodes.Ldloca, span);
         il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Call, DoubleSpanSlice);
+        il.Emit(OpCodes.Call, FrameworkEmitMetadata.DoubleSpanSlice);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, DoubleSpanIndexOf);
+        il.Emit(OpCodes.Call, FrameworkEmitMetadata.DoubleSpanIndexOf);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Clt);
         il.Emit(OpCodes.Ldc_I4_0);

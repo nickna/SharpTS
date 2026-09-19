@@ -166,6 +166,15 @@ facts but must preserve JavaScript object identity, coercion, evaluation order, 
 
 ### Runtime metadata components
 
+`FrameworkEmitMetadata` owns the shared array span method references and the ten-row crypto
+digest catalog. Its get-only handles refer exclusively to framework assemblies; the digest
+rows use `ImmutableArray`, so consumers cannot modify the table through a mutable collection
+view. These references are initialized once and never hold generated types or methods. Runtime
+and user-code emitters use the same handles. Feature selection and per-compilation declaration,
+forward-reference and completion checks remain with the emitted runtime components. This
+catalog preserves method selection, digest order, platform support checks and emitted IL;
+method-local reflection and the other shared infrastructure still require the residual audit.
+
 Migrate `EmittedRuntime` metadata one feature family at a time. DNS is the first component:
 `Dns` is null when `UsesDns` is false, and `RequireDns()` reports accidental use of a disabled
 feature. `RuntimeEmitter.EmitAll` creates the component before emission and completes it before

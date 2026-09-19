@@ -253,9 +253,9 @@ public partial class ILEmitter
             else
             {
                 IL.Emit(OpCodes.Ldloc, includesPromotion.Local);
-                IL.Emit(OpCodes.Call, RuntimeEmitter.DoubleListAsSpan);
+                IL.Emit(OpCodes.Call, FrameworkEmitMetadata.DoubleListAsSpan);
                 EmitExpressionAsDouble(arguments[0]);
-                IL.Emit(OpCodes.Call, RuntimeEmitter.DoubleSpanIndexOf);
+                IL.Emit(OpCodes.Call, FrameworkEmitMetadata.DoubleSpanIndexOf);
                 IL.Emit(OpCodes.Ldc_I4_0);
                 IL.Emit(OpCodes.Clt);
                 IL.Emit(OpCodes.Ldc_I4_0);
