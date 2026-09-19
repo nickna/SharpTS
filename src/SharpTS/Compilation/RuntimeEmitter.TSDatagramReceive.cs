@@ -161,7 +161,7 @@ public partial class RuntimeEmitter
     /// supports cooperative cancellation at the .NET runtime layer, which works
     /// uniformly across Linux, Windows, and macOS.
     /// </summary>
-    private void EmitDgramReceiveWorkerBody(EmittedRuntime runtime)
+    private void EmitDgramReceiveWorkerBody(DgramSocketFields fields, EmittedRuntime runtime)
     {
         var dgram = runtime.RequireDgram();
         var il = dgram.ReceiveWorker.GetILGenerator();
@@ -179,12 +179,12 @@ public partial class RuntimeEmitter
 
         // if (_closed) break
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClosedField);
+        il.Emit(OpCodes.Ldfld, fields.Closed);
         il.Emit(OpCodes.Brtrue, loopExit);
 
         // if (_client == null) break
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brfalse, loopExit);
 
         // try {
@@ -194,7 +194,7 @@ public partial class RuntimeEmitter
         var ctsNonNull = il.DefineLabel();
         var tokenReady = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramReceiveCtsField);
+        il.Emit(OpCodes.Ldfld, fields.ReceiveCts);
         il.Emit(OpCodes.Brtrue, ctsNonNull);
         // default(CancellationToken)
         il.Emit(OpCodes.Ldloca, tokenLocal);
@@ -202,7 +202,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, tokenReady);
         il.MarkLabel(ctsNonNull);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramReceiveCtsField);
+        il.Emit(OpCodes.Ldfld, fields.ReceiveCts);
         il.Emit(OpCodes.Callvirt, typeof(System.Threading.CancellationTokenSource)
             .GetProperty("Token")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, tokenLocal);
@@ -210,7 +210,7 @@ public partial class RuntimeEmitter
 
         // vt = _client.ReceiveAsync(token)   — ValueTask<UdpReceiveResult>
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldloc, tokenLocal);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient)
             .GetMethod("ReceiveAsync", [typeof(System.Threading.CancellationToken)])!);
