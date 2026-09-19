@@ -16,28 +16,24 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // Field builders for $DatagramSocket (used across method emitters)
-    private FieldBuilder _dgramClientField = null!;
-    private FieldBuilder _dgramFamilyField = null!;
-    private FieldBuilder _dgramBoundField = null!;
-    private FieldBuilder _dgramClosedField = null!;
-    private FieldBuilder _dgramConnectedField = null!;
-    private FieldBuilder _dgramConnectedAddressField = null!;
-    private FieldBuilder _dgramConnectedPortField = null!;
-    private FieldBuilder _dgramReceiveCtsField = null!;
-    private FieldBuilder _dgramPendingCloseCallbackField = null!;
-    private FieldBuilder _dgramPendingErrorField = null!;
-    private MethodBuilder _dgramEmitListeningMethod = null!;
-    private MethodBuilder _dgramEmitCloseMethod = null!;
-    private MethodBuilder _dgramEmitConnectMethod = null!;
-    private MethodBuilder _dgramFireCloseCallbackMethod = null!;
-    private MethodBuilder _dgramFireBindErrorMethod = null!;
+    // Construction values live only within one EmitAll invocation.
+    private sealed record DgramSocketFields(
+        FieldBuilder Client,
+        FieldBuilder Family,
+        FieldBuilder Bound,
+        FieldBuilder Closed,
+        FieldBuilder Connected,
+        FieldBuilder ConnectedAddress,
+        FieldBuilder ConnectedPort,
+        FieldBuilder ReceiveCts,
+        FieldBuilder PendingCloseCallback,
+        FieldBuilder PendingError);
 
     /// <summary>
     /// Phase 1: Defines the $DatagramSocket type, fields, constructor, and all sync methods.
     /// Must be called BEFORE EmitRuntimeClass so DgramCreateSocket can use the constructor.
     /// </summary>
-    private void EmitDatagramSocketTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private DgramSocketFields EmitDatagramSocketTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var dgram = runtime.RequireDgram();
         // Define class: public sealed class $DatagramSocket extends $EventEmitter
@@ -49,16 +45,19 @@ public partial class RuntimeEmitter
         dgram.SocketType = typeBuilder;
 
         // Fields
-        _dgramClientField = typeBuilder.DefineField("_client", typeof(UdpClient), FieldAttributes.Private);
-        _dgramFamilyField = typeBuilder.DefineField("_family", _types.Int32, FieldAttributes.Private);
-        _dgramBoundField = typeBuilder.DefineField("_bound", _types.Boolean, FieldAttributes.Private);
-        _dgramClosedField = typeBuilder.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
-        _dgramConnectedField = typeBuilder.DefineField("_connected", _types.Boolean, FieldAttributes.Private);
-        _dgramConnectedAddressField = typeBuilder.DefineField("_connectedAddress", _types.String, FieldAttributes.Private);
-        _dgramConnectedPortField = typeBuilder.DefineField("_connectedPort", _types.Int32, FieldAttributes.Private);
-        _dgramReceiveCtsField = typeBuilder.DefineField("_receiveCts", typeof(CancellationTokenSource), FieldAttributes.Private);
-        _dgramPendingCloseCallbackField = typeBuilder.DefineField("_pendingCloseCallback", _types.Object, FieldAttributes.Private);
-        _dgramPendingErrorField = typeBuilder.DefineField("_pendingError", _types.Object, FieldAttributes.Private);
+        var clientField = typeBuilder.DefineField("_client", typeof(UdpClient), FieldAttributes.Private);
+        var familyField = typeBuilder.DefineField("_family", _types.Int32, FieldAttributes.Private);
+        var boundField = typeBuilder.DefineField("_bound", _types.Boolean, FieldAttributes.Private);
+        var closedField = typeBuilder.DefineField("_closed", _types.Boolean, FieldAttributes.Private);
+        var connectedField = typeBuilder.DefineField("_connected", _types.Boolean, FieldAttributes.Private);
+        var connectedAddressField = typeBuilder.DefineField("_connectedAddress", _types.String, FieldAttributes.Private);
+        var connectedPortField = typeBuilder.DefineField("_connectedPort", _types.Int32, FieldAttributes.Private);
+        var receiveCtsField = typeBuilder.DefineField("_receiveCts", typeof(CancellationTokenSource), FieldAttributes.Private);
+        var pendingCloseCallbackField = typeBuilder.DefineField("_pendingCloseCallback", _types.Object, FieldAttributes.Private);
+        var pendingErrorField = typeBuilder.DefineField("_pendingError", _types.Object, FieldAttributes.Private);
+        var fields = new DgramSocketFields(
+            clientField, familyField, boundField, closedField, connectedField,
+            connectedAddressField, connectedPortField, receiveCtsField, pendingCloseCallbackField, pendingErrorField);
 
         // Constructor: public $DatagramSocket(object typeArg)
         var ctor = typeBuilder.DefineConstructor(
@@ -76,7 +75,7 @@ public partial class RuntimeEmitter
         // Default _family = 2 (InterNetwork)
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldc_I4_2);
-        ctorIL.Emit(OpCodes.Stfld, _dgramFamilyField);
+        ctorIL.Emit(OpCodes.Stfld, fields.Family);
 
         // if (typeArg?.ToString() == "udp6") _family = 23
         var skipUdp6 = ctorIL.DefineLabel();
@@ -90,7 +89,7 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Brfalse, skipUdp6);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldc_I4, 23); // InterNetworkV6
-        ctorIL.Emit(OpCodes.Stfld, _dgramFamilyField);
+        ctorIL.Emit(OpCodes.Stfld, fields.Family);
         ctorIL.Emit(OpCodes.Br, doneFamily);
 
         ctorIL.MarkLabel(skipUdp6);
@@ -99,19 +98,19 @@ public partial class RuntimeEmitter
         // _bound = false, _closed = false, _connected = false (default)
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldc_I4_0);
-        ctorIL.Emit(OpCodes.Stfld, _dgramBoundField);
+        ctorIL.Emit(OpCodes.Stfld, fields.Bound);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldc_I4_0);
-        ctorIL.Emit(OpCodes.Stfld, _dgramClosedField);
+        ctorIL.Emit(OpCodes.Stfld, fields.Closed);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldc_I4_0);
-        ctorIL.Emit(OpCodes.Stfld, _dgramConnectedField);
+        ctorIL.Emit(OpCodes.Stfld, fields.Connected);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldstr, "");
-        ctorIL.Emit(OpCodes.Stfld, _dgramConnectedAddressField);
+        ctorIL.Emit(OpCodes.Stfld, fields.ConnectedAddress);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldc_I4_0);
-        ctorIL.Emit(OpCodes.Stfld, _dgramConnectedPortField);
+        ctorIL.Emit(OpCodes.Stfld, fields.ConnectedPort);
 
         ctorIL.Emit(OpCodes.Ret);
 
@@ -126,41 +125,42 @@ public partial class RuntimeEmitter
 
         // Define event-emit helper instance methods used as Action delegate targets
         // for deferred event emission via EventLoop.Schedule. These bind 'this' implicitly.
-        EmitDgramEventHelper(typeBuilder, runtime, "_EmitListening", "listening", out _dgramEmitListeningMethod);
-        EmitDgramEventHelper(typeBuilder, runtime, "_EmitClose",     "close",     out _dgramEmitCloseMethod);
-        EmitDgramEventHelper(typeBuilder, runtime, "_EmitConnect",   "connect",   out _dgramEmitConnectMethod);
+        EmitDgramEventHelper(typeBuilder, runtime, "_EmitListening", "listening", out var emitListening);
+        EmitDgramEventHelper(typeBuilder, runtime, "_EmitClose",     "close",     out var emitClose);
+        EmitDgramEventHelper(typeBuilder, runtime, "_EmitConnect",   "connect",   out var emitConnect);
 
         // Define helpers that read pending callback/error fields and dispatch.
         // Used as Action delegate targets to defer user close-callback and bind-error
         // emission to the event loop without needing a separate closure class.
-        EmitDgramFireCloseCallbackHelper(typeBuilder, runtime, out _dgramFireCloseCallbackMethod);
-        EmitDgramFireBindErrorHelper(typeBuilder, runtime, out _dgramFireBindErrorMethod);
+        EmitDgramFireCloseCallbackHelper(fields, typeBuilder, runtime, out var fireCloseCallback);
+        EmitDgramFireBindErrorHelper(fields, typeBuilder, runtime, out var fireBindError);
 
         // Emit all methods (none need InvokeValue, so all go in Phase 1)
-        EmitDgramBind(typeBuilder, runtime);
-        EmitDgramClose(typeBuilder, runtime);
-        EmitDgramAddress(typeBuilder, runtime);
-        EmitDgramRemoteAddress(typeBuilder, runtime);
-        EmitDgramConnect(typeBuilder, runtime);
-        EmitDgramDisconnect(typeBuilder, runtime);
-        EmitDgramSetBroadcast(typeBuilder, runtime);
-        EmitDgramSetTTL(typeBuilder, runtime);
-        EmitDgramSetMulticastTTL(typeBuilder, runtime);
-        EmitDgramGetRecvBufferSize(typeBuilder, runtime);
-        EmitDgramSetRecvBufferSize(typeBuilder, runtime);
-        EmitDgramGetSendBufferSize(typeBuilder, runtime);
-        EmitDgramSetSendBufferSize(typeBuilder, runtime);
-        EmitDgramSend(typeBuilder, runtime);
-        EmitDgramAddMembership(typeBuilder, runtime);
-        EmitDgramDropMembership(typeBuilder, runtime);
-        EmitDgramSourceSpecificMembership(typeBuilder, runtime, add: true);
-        EmitDgramSourceSpecificMembership(typeBuilder, runtime, add: false);
-        EmitDgramSetMulticastLoopback(typeBuilder, runtime);
-        EmitDgramSetMulticastInterface(typeBuilder, runtime);
+        EmitDgramBind(fields, emitListening, fireBindError, typeBuilder, runtime);
+        EmitDgramClose(fields, emitClose, fireCloseCallback, typeBuilder, runtime);
+        EmitDgramAddress(fields, typeBuilder, runtime);
+        EmitDgramRemoteAddress(fields, typeBuilder, runtime);
+        EmitDgramConnect(fields, emitConnect, typeBuilder, runtime);
+        EmitDgramDisconnect(fields, typeBuilder, runtime);
+        EmitDgramSetBroadcast(fields, typeBuilder, runtime);
+        EmitDgramSetTTL(fields, typeBuilder, runtime);
+        EmitDgramSetMulticastTTL(fields, typeBuilder, runtime);
+        EmitDgramGetRecvBufferSize(fields, typeBuilder, runtime);
+        EmitDgramSetRecvBufferSize(fields, typeBuilder, runtime);
+        EmitDgramGetSendBufferSize(fields, typeBuilder, runtime);
+        EmitDgramSetSendBufferSize(fields, typeBuilder, runtime);
+        EmitDgramSend(fields, typeBuilder, runtime);
+        EmitDgramAddMembership(fields, typeBuilder, runtime);
+        EmitDgramDropMembership(fields, typeBuilder, runtime);
+        EmitDgramSourceSpecificMembership(fields, typeBuilder, runtime, add: true);
+        EmitDgramSourceSpecificMembership(fields, typeBuilder, runtime, add: false);
+        EmitDgramSetMulticastLoopback(fields, typeBuilder, runtime);
+        EmitDgramSetMulticastInterface(fields, typeBuilder, runtime);
         EmitDgramRef(typeBuilder, runtime);
         EmitDgramUnref(typeBuilder, runtime);
 
         // NOTE: CreateType() is deferred to Phase 2
+        return fields;
     }
 
     /// <summary>
@@ -283,6 +283,7 @@ public partial class RuntimeEmitter
     /// Close() is idempotent (`if (_closed) return null`), so the field is set at most once.
     /// </summary>
     private void EmitDgramFireCloseCallbackHelper(
+        DgramSocketFields fields,
         TypeBuilder typeBuilder,
         EmittedRuntime runtime,
         out MethodBuilder methodBuilder)
@@ -302,7 +303,7 @@ public partial class RuntimeEmitter
         // var cb = _pendingCloseCallback; if (cb == null) return;
         var cbLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramPendingCloseCallbackField);
+        il.Emit(OpCodes.Ldfld, fields.PendingCloseCallback);
         il.Emit(OpCodes.Stloc, cbLocal);
         il.Emit(OpCodes.Ldloc, cbLocal);
         il.Emit(OpCodes.Brfalse, doneLabel);
@@ -310,7 +311,7 @@ public partial class RuntimeEmitter
         // _pendingCloseCallback = null  (release reference, single-shot semantics)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _dgramPendingCloseCallbackField);
+        il.Emit(OpCodes.Stfld, fields.PendingCloseCallback);
 
         // if (cb is TSFunction) ((TSFunction)cb).Invoke(new object[0]);
         il.Emit(OpCodes.Ldloc, cbLocal);
@@ -349,6 +350,7 @@ public partial class RuntimeEmitter
     /// dispatch for Bind()'s catch block.
     /// </summary>
     private void EmitDgramFireBindErrorHelper(
+        DgramSocketFields fields,
         TypeBuilder typeBuilder,
         EmittedRuntime runtime,
         out MethodBuilder methodBuilder)
@@ -365,7 +367,7 @@ public partial class RuntimeEmitter
         // var err = _pendingError; if (err == null) return;
         var errLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramPendingErrorField);
+        il.Emit(OpCodes.Ldfld, fields.PendingError);
         il.Emit(OpCodes.Stloc, errLocal);
         il.Emit(OpCodes.Ldloc, errLocal);
         il.Emit(OpCodes.Brfalse, doneLabel);
@@ -373,7 +375,7 @@ public partial class RuntimeEmitter
         // _pendingError = null
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _dgramPendingErrorField);
+        il.Emit(OpCodes.Stfld, fields.PendingError);
 
         // this.Emit("error", new object[] { err });
         il.Emit(OpCodes.Ldarg_0);
@@ -444,7 +446,7 @@ public partial class RuntimeEmitter
     /// Helper: emits IL to parse address from object (string, default depends on family).
     /// Result is stored in the returned local.
     /// </summary>
-    private LocalBuilder EmitDgramParseAddress(ILGenerator il, int argIndex)
+    private LocalBuilder EmitDgramParseAddress(DgramSocketFields fields, ILGenerator il, int argIndex)
     {
         var addrLocal = il.DeclareLocal(_types.String);
 
@@ -452,7 +454,7 @@ public partial class RuntimeEmitter
         var isV6 = il.DefineLabel();
         var addrDefaultDone = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramFamilyField);
+        il.Emit(OpCodes.Ldfld, fields.Family);
         il.Emit(OpCodes.Ldc_I4, 23);
         il.Emit(OpCodes.Beq, isV6);
         il.Emit(OpCodes.Ldstr, "0.0.0.0");
@@ -479,13 +481,13 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Helper: emits IL to create a UdpClient with the specified AddressFamily and store in _client.
     /// </summary>
-    private void EmitDgramCreateClient(ILGenerator il)
+    private void EmitDgramCreateClient(DgramSocketFields fields, ILGenerator il)
     {
         il.Emit(OpCodes.Ldarg_0); // this
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramFamilyField);
+        il.Emit(OpCodes.Ldfld, fields.Family);
         il.Emit(OpCodes.Newobj, typeof(UdpClient).GetConstructor([typeof(AddressFamily)])!);
-        il.Emit(OpCodes.Stfld, _dgramClientField);
+        il.Emit(OpCodes.Stfld, fields.Client);
     }
 
     /// <summary>
@@ -526,14 +528,14 @@ public partial class RuntimeEmitter
     /// Helper: emits IL to compute family string from _family field.
     /// Returns a local containing "IPv4" or "IPv6".
     /// </summary>
-    private LocalBuilder EmitDgramFamilyString(ILGenerator il)
+    private LocalBuilder EmitDgramFamilyString(DgramSocketFields fields, ILGenerator il)
     {
         var familyLocal = il.DeclareLocal(_types.String);
         var isV6Label = il.DefineLabel();
         var familyDone = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramFamilyField);
+        il.Emit(OpCodes.Ldfld, fields.Family);
         il.Emit(OpCodes.Ldc_I4, 23);
         il.Emit(OpCodes.Beq, isV6Label);
         il.Emit(OpCodes.Ldstr, "IPv4");
@@ -551,7 +553,8 @@ public partial class RuntimeEmitter
     /// Emits: public object Bind(object portArg, object addressArg, object callbackArg)
     /// Binds the socket to the given port/address, emits 'listening' event.
     /// </summary>
-    private void EmitDgramBind(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramBind(DgramSocketFields fields,
+        MethodBuilder emitListening, MethodBuilder fireBindError, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Bind",
@@ -599,7 +602,7 @@ public partial class RuntimeEmitter
         var portLocal = EmitDgramParsePort(il, 1, 0);
 
         // Parse address (default based on family)
-        var addressLocal = EmitDgramParseAddress(il, 2);
+        var addressLocal = EmitDgramParseAddress(fields, il, 2);
 
         // If callback != null, register it as a one-time 'listening' listener.
         // This matches the interpreter's `Once("listening", callback)` and Node's
@@ -621,14 +624,14 @@ public partial class RuntimeEmitter
         // Create UdpClient if null
         var clientExists = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brtrue, clientExists);
-        EmitDgramCreateClient(il);
+        EmitDgramCreateClient(fields, il);
         il.MarkLabel(clientExists);
 
         // _client.Client.Bind(new IPEndPoint(IPAddress.Parse(address), port))
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, addressLocal);
         il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
@@ -639,13 +642,13 @@ public partial class RuntimeEmitter
         // _bound = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _dgramBoundField);
+        il.Emit(OpCodes.Stfld, fields.Bound);
 
         // _receiveCts = new CancellationTokenSource()
         // Must be set before queueing the receive worker so the worker observes a non-null CTS.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, typeof(CancellationTokenSource).GetConstructor(Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stfld, _dgramReceiveCtsField);
+        il.Emit(OpCodes.Stfld, fields.ReceiveCts);
 
         // EventLoop.Ref() to keep process alive while socket is bound
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
@@ -661,7 +664,7 @@ public partial class RuntimeEmitter
 
         // Schedule 'listening' event on the event loop (NOT synchronous).
         // Node guarantees bind() is async — listening fires on a future tick.
-        EmitDgramScheduleAction(il, runtime, _dgramEmitListeningMethod);
+        EmitDgramScheduleAction(il, runtime, emitListening);
 
         // Catch block: store the exception in _pendingError and schedule _FireBindError
         // on the event loop. This defers the 'error' event so user-attached error handlers
@@ -672,9 +675,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, exLocal);     // exception → exLocal
         il.Emit(OpCodes.Ldarg_0);            // this
         il.Emit(OpCodes.Ldloc, exLocal);     // exception
-        il.Emit(OpCodes.Stfld, _dgramPendingErrorField);  // this._pendingError = exception
+        il.Emit(OpCodes.Stfld, fields.PendingError);  // this._pendingError = exception
         // EventLoop.Schedule(new Action(this._FireBindError))
-        EmitDgramScheduleAction(il, runtime, _dgramFireBindErrorMethod);
+        EmitDgramScheduleAction(il, runtime, fireBindError);
         il.EndExceptionBlock();
 
         // return this
@@ -685,7 +688,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object Close(object callbackArg)
     /// </summary>
-    private void EmitDgramClose(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramClose(DgramSocketFields fields,
+        MethodBuilder emitClose, MethodBuilder fireCloseCallback, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Close",
@@ -699,13 +703,13 @@ public partial class RuntimeEmitter
 
         // if (_closed) return null
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClosedField);
+        il.Emit(OpCodes.Ldfld, fields.Closed);
         il.Emit(OpCodes.Brtrue, returnNull);
 
         // _closed = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _dgramClosedField);
+        il.Emit(OpCodes.Stfld, fields.Closed);
 
         // Cancel the receive worker BEFORE disposing the client. This is the cooperative
         // wakeup mechanism: ReceiveAsync(token) observes the cancellation at the runtime
@@ -713,38 +717,38 @@ public partial class RuntimeEmitter
         // another thread does not reliably interrupt a blocked recvfrom().
         var noCts = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramReceiveCtsField);
+        il.Emit(OpCodes.Ldfld, fields.ReceiveCts);
         il.Emit(OpCodes.Brfalse, noCts);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramReceiveCtsField);
+        il.Emit(OpCodes.Ldfld, fields.ReceiveCts);
         il.Emit(OpCodes.Callvirt, typeof(CancellationTokenSource).GetMethod("Cancel", Type.EmptyTypes)!);
         il.MarkLabel(noCts);
 
         // if _client != null: _client.Close(), _client.Dispose()
         var noClient = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brfalse, noClient);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetMethod("Close", Type.EmptyTypes)!);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetMethod("Dispose", Type.EmptyTypes)!);
 
         // _client = null
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _dgramClientField);
+        il.Emit(OpCodes.Stfld, fields.Client);
 
         il.MarkLabel(noClient);
 
         // EventLoop.Unref() only if socket was bound (i.e., Ref() was called during bind)
         var skipUnref = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramBoundField);
+        il.Emit(OpCodes.Ldfld, fields.Bound);
         il.Emit(OpCodes.Brfalse, skipUnref);
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
@@ -761,13 +765,13 @@ public partial class RuntimeEmitter
         // _pendingCloseCallback = callback
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _dgramPendingCloseCallbackField);
+        il.Emit(OpCodes.Stfld, fields.PendingCloseCallback);
         // EventLoop.Schedule(new Action(this._FireCloseCallback))
-        EmitDgramScheduleAction(il, runtime, _dgramFireCloseCallbackMethod);
+        EmitDgramScheduleAction(il, runtime, fireCloseCallback);
         il.MarkLabel(noCallback);
 
         // Schedule 'close' event (deferred to a future tick)
-        EmitDgramScheduleAction(il, runtime, _dgramEmitCloseMethod);
+        EmitDgramScheduleAction(il, runtime, emitClose);
 
         il.MarkLabel(returnNull);
         il.Emit(OpCodes.Ldnull);
@@ -778,7 +782,7 @@ public partial class RuntimeEmitter
     /// Emits: public object Address()
     /// Returns a Dictionary with address, family, port from the bound socket.
     /// </summary>
-    private void EmitDgramAddress(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramAddress(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Address",
@@ -792,12 +796,12 @@ public partial class RuntimeEmitter
 
         // if _client == null, return empty dict
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brfalse, returnEmpty);
 
         // var socket = _client.Client
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
 
         // Check if socket is null
@@ -830,7 +834,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, portLocal);
 
         // Family string
-        var familyLocal = EmitDgramFamilyString(il);
+        var familyLocal = EmitDgramFamilyString(fields, il);
 
         // Create and return dictionary
         EmitDgramCreateAddressDict(il, addrLocal, familyLocal, portLocal);
@@ -846,7 +850,7 @@ public partial class RuntimeEmitter
     /// Emits: public object RemoteAddress()
     /// Returns remote address info or throws if not connected.
     /// </summary>
-    private void EmitDgramRemoteAddress(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramRemoteAddress(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "RemoteAddress",
@@ -860,7 +864,7 @@ public partial class RuntimeEmitter
         // if (!_connected) throw ERR_SOCKET_DGRAM_NOT_CONNECTED (#1071)
         var isConnected = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramConnectedField);
+        il.Emit(OpCodes.Ldfld, fields.Connected);
         il.Emit(OpCodes.Brtrue, isConnected);
 
         EmitDgramThrowCoded(il, runtime, "ERR_SOCKET_DGRAM_NOT_CONNECTED", "Not connected");
@@ -870,15 +874,15 @@ public partial class RuntimeEmitter
         // Build address dict from stored fields
         var addrLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramConnectedAddressField);
+        il.Emit(OpCodes.Ldfld, fields.ConnectedAddress);
         il.Emit(OpCodes.Stloc, addrLocal);
 
         var portLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramConnectedPortField);
+        il.Emit(OpCodes.Ldfld, fields.ConnectedPort);
         il.Emit(OpCodes.Stloc, portLocal);
 
-        var familyLocal = EmitDgramFamilyString(il);
+        var familyLocal = EmitDgramFamilyString(fields, il);
 
         EmitDgramCreateAddressDict(il, addrLocal, familyLocal, portLocal);
         il.Emit(OpCodes.Ret);
@@ -887,7 +891,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object Connect(object portArg, object addressArg, object callbackArg)
     /// </summary>
-    private void EmitDgramConnect(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramConnect(DgramSocketFields fields, MethodBuilder emitConnect, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Connect",
@@ -902,7 +906,7 @@ public partial class RuntimeEmitter
         var portLocal = EmitDgramParsePort(il, 1, 0);
 
         // Parse address (default based on family)
-        var addressLocal = EmitDgramParseAddress(il, 2);
+        var addressLocal = EmitDgramParseAddress(fields, il, 2);
 
         // If callback != null, register as one-time 'connect' listener (mirrors interpreter).
         var noCallback = il.DefineLabel();
@@ -918,14 +922,14 @@ public partial class RuntimeEmitter
         // Create UdpClient if null
         var clientExists = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brtrue, clientExists);
-        EmitDgramCreateClient(il);
+        EmitDgramCreateClient(fields, il);
         il.MarkLabel(clientExists);
 
         // _client.Connect(IPAddress.Parse(address), port)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldloc, addressLocal);
         il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
         il.Emit(OpCodes.Ldloc, portLocal);
@@ -935,21 +939,21 @@ public partial class RuntimeEmitter
         // _connected = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _dgramConnectedField);
+        il.Emit(OpCodes.Stfld, fields.Connected);
 
         // _connectedAddress = address
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, addressLocal);
-        il.Emit(OpCodes.Stfld, _dgramConnectedAddressField);
+        il.Emit(OpCodes.Stfld, fields.ConnectedAddress);
 
         // _connectedPort = port
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, portLocal);
-        il.Emit(OpCodes.Stfld, _dgramConnectedPortField);
+        il.Emit(OpCodes.Stfld, fields.ConnectedPort);
 
         // Schedule 'connect' event on the event loop. The Once-registered callback (if any)
         // fires as part of this event.
-        EmitDgramScheduleAction(il, runtime, _dgramEmitConnectMethod);
+        EmitDgramScheduleAction(il, runtime, emitConnect);
 
         // return null
         il.Emit(OpCodes.Ldnull);
@@ -959,7 +963,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object Disconnect()
     /// </summary>
-    private void EmitDgramDisconnect(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramDisconnect(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Disconnect",
@@ -973,7 +977,7 @@ public partial class RuntimeEmitter
         // if (!_connected) throw ERR_SOCKET_DGRAM_NOT_CONNECTED (#1071)
         var isConnected = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramConnectedField);
+        il.Emit(OpCodes.Ldfld, fields.Connected);
         il.Emit(OpCodes.Brtrue, isConnected);
 
         EmitDgramThrowCoded(il, runtime, "ERR_SOCKET_DGRAM_NOT_CONNECTED", "Not connected");
@@ -984,7 +988,7 @@ public partial class RuntimeEmitter
         // try { _client.Client.Connect(new IPEndPoint(IPAddress.Any, 0)) } catch { }
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldsfld, typeof(IPAddress).GetField("Any")!);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1001,17 +1005,17 @@ public partial class RuntimeEmitter
         // _connected = false (always, regardless of socket-level result)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _dgramConnectedField);
+        il.Emit(OpCodes.Stfld, fields.Connected);
 
         // _connectedAddress = ""
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "");
-        il.Emit(OpCodes.Stfld, _dgramConnectedAddressField);
+        il.Emit(OpCodes.Stfld, fields.ConnectedAddress);
 
         // _connectedPort = 0
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _dgramConnectedPortField);
+        il.Emit(OpCodes.Stfld, fields.ConnectedPort);
 
         // return null
         il.Emit(OpCodes.Ldnull);
@@ -1021,7 +1025,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object SetBroadcast(object flagArg)
     /// </summary>
-    private void EmitDgramSetBroadcast(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramSetBroadcast(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetBroadcast",
@@ -1035,7 +1039,7 @@ public partial class RuntimeEmitter
 
         // if _client == null, return null
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brfalse, returnNull);
 
         // Determine truthy: arg is bool true, or non-null non-false
@@ -1050,7 +1054,7 @@ public partial class RuntimeEmitter
 
         // It's a bool - unbox and use directly
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("EnableBroadcast")!.GetSetMethod()!);
@@ -1062,14 +1066,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, setFalse);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("EnableBroadcast")!.GetSetMethod()!);
         il.Emit(OpCodes.Br, returnNull);
 
         il.MarkLabel(setFalse);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("EnableBroadcast")!.GetSetMethod()!);
 
@@ -1081,7 +1085,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object SetTTL(object ttlArg)
     /// </summary>
-    private void EmitDgramSetTTL(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramSetTTL(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetTTL",
@@ -1095,7 +1099,7 @@ public partial class RuntimeEmitter
 
         // if _client == null, return null
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brfalse, returnNull);
 
         // if arg is not double, return null
@@ -1105,7 +1109,7 @@ public partial class RuntimeEmitter
 
         // _client.Ttl = (short)(double)arg
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I2);
@@ -1119,7 +1123,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object SetMulticastTTL(object ttlArg)
     /// </summary>
-    private void EmitDgramSetMulticastTTL(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramSetMulticastTTL(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetMulticastTTL",
@@ -1133,7 +1137,7 @@ public partial class RuntimeEmitter
 
         // if _client == null, return null
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brfalse, returnNull);
 
         // if arg is not double, return null
@@ -1143,7 +1147,7 @@ public partial class RuntimeEmitter
 
         // _client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, (int)ttl)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4, (int)SocketOptionLevel.IP);
         il.Emit(OpCodes.Ldc_I4, (int)SocketOptionName.MulticastTimeToLive);
@@ -1160,7 +1164,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object GetRecvBufferSize()
     /// </summary>
-    private void EmitDgramGetRecvBufferSize(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramGetRecvBufferSize(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetRecvBufferSize",
@@ -1174,12 +1178,12 @@ public partial class RuntimeEmitter
 
         // if (!_bound) throw
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramBoundField);
+        il.Emit(OpCodes.Ldfld, fields.Bound);
         il.Emit(OpCodes.Brfalse, throwLabel);
 
         // return (double)_client.Client.ReceiveBufferSize
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, typeof(Socket).GetProperty("ReceiveBufferSize")!.GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
@@ -1195,7 +1199,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object SetRecvBufferSize(object size)
     /// </summary>
-    private void EmitDgramSetRecvBufferSize(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramSetRecvBufferSize(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetRecvBufferSize",
@@ -1209,7 +1213,7 @@ public partial class RuntimeEmitter
 
         // if _client == null, return null
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brfalse, returnNull);
 
         // if arg is not double, return null
@@ -1219,7 +1223,7 @@ public partial class RuntimeEmitter
 
         // _client.Client.ReceiveBufferSize = (int)(double)size
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
@@ -1234,7 +1238,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object GetSendBufferSize()
     /// </summary>
-    private void EmitDgramGetSendBufferSize(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramGetSendBufferSize(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetSendBufferSize",
@@ -1248,12 +1252,12 @@ public partial class RuntimeEmitter
 
         // if (!_bound) throw
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramBoundField);
+        il.Emit(OpCodes.Ldfld, fields.Bound);
         il.Emit(OpCodes.Brfalse, throwLabel);
 
         // return (double)_client.Client.SendBufferSize
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, typeof(Socket).GetProperty("SendBufferSize")!.GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
@@ -1269,7 +1273,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object SetSendBufferSize(object size)
     /// </summary>
-    private void EmitDgramSetSendBufferSize(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramSetSendBufferSize(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetSendBufferSize",
@@ -1283,7 +1287,7 @@ public partial class RuntimeEmitter
 
         // if _client == null, return null
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brfalse, returnNull);
 
         // if arg is not double, return null
@@ -1293,7 +1297,7 @@ public partial class RuntimeEmitter
 
         // _client.Client.SendBufferSize = (int)(double)size
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
@@ -1309,7 +1313,7 @@ public partial class RuntimeEmitter
     /// Emits: public object Send(object msg, object portOrCb, object addrOrCb, object cb1, object cb2, object cb3)
     /// Sends data via UDP. If connected, sends to connected endpoint; otherwise parses port/address.
     /// </summary>
-    private void EmitDgramSend(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramSend(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Send",
@@ -1366,9 +1370,9 @@ public partial class RuntimeEmitter
         // Create client if null
         var clientExists = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brtrue, clientExists);
-        EmitDgramCreateClient(il);
+        EmitDgramCreateClient(fields, il);
         il.MarkLabel(clientExists);
 
         // Detect callback: scan args 6,5,4,3,2 for callable
@@ -1393,7 +1397,7 @@ public partial class RuntimeEmitter
             var validationDone = il.DefineLabel();
             var notConnectedCheck = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _dgramConnectedField);
+            il.Emit(OpCodes.Ldfld, fields.Connected);
             il.Emit(OpCodes.Brfalse, notConnectedCheck);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Isinst, _types.Double);
@@ -1415,12 +1419,12 @@ public partial class RuntimeEmitter
         var sendDone = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramConnectedField);
+        il.Emit(OpCodes.Ldfld, fields.Connected);
         il.Emit(OpCodes.Brfalse, notConnected);
 
         // Connected: _client.Send(bytes, bytes.Length)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldlen);
@@ -1452,7 +1456,7 @@ public partial class RuntimeEmitter
         var addrIsV6 = il.DefineLabel();
         var addrDefaultDone = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramFamilyField);
+        il.Emit(OpCodes.Ldfld, fields.Family);
         il.Emit(OpCodes.Ldc_I4, 23);
         il.Emit(OpCodes.Beq, addrIsV6);
         il.Emit(OpCodes.Ldstr, "127.0.0.1");
@@ -1473,7 +1477,7 @@ public partial class RuntimeEmitter
 
         // _client.Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Parse(addr), port))
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldlen);
@@ -1533,13 +1537,13 @@ public partial class RuntimeEmitter
     /// Helper: if (_client == null) _client = new UdpClient(family) — lazily creates
     /// the handle so pre-bind option setters work (mirrors SharpTSDatagramSocket.EnsureClient).
     /// </summary>
-    private void EmitDgramEnsureClient(ILGenerator il)
+    private void EmitDgramEnsureClient(DgramSocketFields fields, ILGenerator il)
     {
         var exists = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brtrue, exists);
-        EmitDgramCreateClient(il);
+        EmitDgramCreateClient(fields, il);
         il.MarkLabel(exists);
     }
 
@@ -1548,7 +1552,7 @@ public partial class RuntimeEmitter
     /// UdpClient.JoinMulticastGroup with the optional local interface address (#1071 —
     /// previously a silent no-op stub, diverging from the interpreter).
     /// </summary>
-    private void EmitDgramAddMembership(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramAddMembership(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "AddMembership",
@@ -1562,7 +1566,7 @@ public partial class RuntimeEmitter
 
         // if (_client == null || multicastAddr is not string) return null
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.String);
@@ -1575,7 +1579,7 @@ public partial class RuntimeEmitter
 
         // _client.JoinMulticastGroup(Parse(mcast), Parse(local))
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
@@ -1588,7 +1592,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(noLocal);
         // _client.JoinMulticastGroup(Parse(mcast))
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
@@ -1606,7 +1610,7 @@ public partial class RuntimeEmitter
     /// join's (group, interface) tuple, so an interface-scoped join must be dropped
     /// with the same interface (Windows matches by group alone).
     /// </summary>
-    private void EmitDgramDropMembership(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramDropMembership(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DropMembership",
@@ -1619,7 +1623,7 @@ public partial class RuntimeEmitter
         var done = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.String);
@@ -1631,12 +1635,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, noLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramFamilyField);
+        il.Emit(OpCodes.Ldfld, fields.Family);
         il.Emit(OpCodes.Ldc_I4, 23);
         il.Emit(OpCodes.Beq, noLocal); // v6: interface form is an ifindex — fall through to the plain drop
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4, (int)SocketOptionLevel.IP);
         il.Emit(OpCodes.Ldc_I4, (int)SocketOptionName.DropMembership);
@@ -1652,7 +1656,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(noLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
@@ -1670,7 +1674,7 @@ public partial class RuntimeEmitter
     /// group,iface,source). udp6 throws — no portable MCAST_JOIN_SOURCE_GROUP in .NET.
     /// Mirrors SharpTSDatagramSocket.SourceSpecificMembership (#1071).
     /// </summary>
-    private void EmitDgramSourceSpecificMembership(TypeBuilder typeBuilder, EmittedRuntime runtime, bool add)
+    private void EmitDgramSourceSpecificMembership(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime, bool add)
     {
         var method = typeBuilder.DefineMethod(
             add ? "AddSourceSpecificMembership" : "DropSourceSpecificMembership",
@@ -1700,14 +1704,14 @@ public partial class RuntimeEmitter
 
         // if (_family == InterNetworkV6) throw — documented ceiling
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramFamilyField);
+        il.Emit(OpCodes.Ldfld, fields.Family);
         il.Emit(OpCodes.Ldc_I4, 23);
         il.Emit(OpCodes.Bne_Un, familyOk);
         EmitDgramThrowCoded(il, runtime, "ERR_INVALID_ARG_VALUE",
             "Source-specific multicast is not supported for udp6 sockets on this runtime");
         il.MarkLabel(familyOk);
 
-        EmitDgramEnsureClient(il);
+        EmitDgramEnsureClient(fields, il);
 
         // mreq = new byte[12]
         il.Emit(OpCodes.Ldc_I4, 12);
@@ -1768,7 +1772,7 @@ public partial class RuntimeEmitter
 
         // _client.Client.SetSocketOption(IP, Add/DropSourceMembership, mreq)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4, (int)SocketOptionLevel.IP);
         il.Emit(OpCodes.Ldc_I4, (int)(add ? SocketOptionName.AddSourceMembership : SocketOptionName.DropSourceMembership));
@@ -1797,7 +1801,7 @@ public partial class RuntimeEmitter
     /// Emits: public object SetMulticastLoopback(object flag)
     /// UdpClient.MulticastLoopback picks the right option level from the family (#1071).
     /// </summary>
-    private void EmitDgramSetMulticastLoopback(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramSetMulticastLoopback(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetMulticastLoopback",
@@ -1809,7 +1813,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var flagLocal = il.DeclareLocal(_types.Boolean);
 
-        EmitDgramEnsureClient(il);
+        EmitDgramEnsureClient(fields, il);
 
         // flag = (arg is bool b && b) || (arg is double d && d != 0)
         var setTrue = il.DefineLabel();
@@ -1833,7 +1837,7 @@ public partial class RuntimeEmitter
 
         // _client.MulticastLoopback = flag
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Ldloc, flagLocal);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("MulticastLoopback")!.GetSetMethod()!);
 
@@ -1845,7 +1849,7 @@ public partial class RuntimeEmitter
     /// Emits: public object SetMulticastInterface(object iface)
     /// IPv4: interface address bytes; IPv6: scope id (#1071).
     /// </summary>
-    private void EmitDgramSetMulticastInterface(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDgramSetMulticastInterface(DgramSocketFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetMulticastInterface",
@@ -1865,7 +1869,7 @@ public partial class RuntimeEmitter
             "The \"multicastInterface\" argument must be of type string");
         il.MarkLabel(argOk);
 
-        EmitDgramEnsureClient(il);
+        EmitDgramEnsureClient(fields, il);
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
@@ -1875,13 +1879,13 @@ public partial class RuntimeEmitter
         var v6Path = il.DefineLabel();
         var done = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramFamilyField);
+        il.Emit(OpCodes.Ldfld, fields.Family);
         il.Emit(OpCodes.Ldc_I4, 23);
         il.Emit(OpCodes.Beq, v6Path);
 
         // IPv4: SetSocketOption(IP, MulticastInterface, ip.GetAddressBytes())
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4, (int)SocketOptionLevel.IP);
         il.Emit(OpCodes.Ldc_I4, (int)SocketOptionName.MulticastInterface);
@@ -1893,7 +1897,7 @@ public partial class RuntimeEmitter
         // IPv6: SetSocketOption(IPv6, MulticastInterface, (int)ip.ScopeId)
         il.MarkLabel(v6Path);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldfld, fields.Client);
         il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4, (int)SocketOptionLevel.IPv6);
         il.Emit(OpCodes.Ldc_I4, (int)SocketOptionName.MulticastInterface);

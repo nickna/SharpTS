@@ -634,8 +634,9 @@ public partial class RuntimeEmitter
         // (the tls module methods reference TlsSocketCtor/TlsServerCtor). UsesTls ⇒ UsesNet.
         if (features.UsesTls)
             tlsConstruction = EmitTlsTypesPhase1(moduleBuilder, runtime);
+        DgramSocketFields? dgramFields = null;
         if (features.UsesDgram)
-            EmitDatagramSocketTypeDefinition(moduleBuilder, runtime);
+            dgramFields = EmitDatagramSocketTypeDefinition(moduleBuilder, runtime);
 
         // Emit $ReadlineInterface type definition (Phase 1)
         // Must come before EmitRuntimeClass so ReadlineCreateInterface can use the constructor
@@ -875,7 +876,8 @@ public partial class RuntimeEmitter
         if (features.UsesDgram)
         {
             EmitDgramMessageClosureClass(moduleBuilder, runtime);
-            EmitDgramReceiveWorkerBody(runtime);
+            EmitDgramReceiveWorkerBody(
+                dgramFields ?? throw new InvalidOperationException("Dgram construction requires the Dgram feature declarations."), runtime);
             EmitDatagramSocketFinalize(runtime.RequireDgram());
         }
 

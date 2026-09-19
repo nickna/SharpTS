@@ -1593,6 +1593,17 @@ socket error-code helper and the TCP drop-payload helper remain method-local. Th
 to own checked public declarations and completion; optional availability, forward declarations,
 field visibility and type-creation order are unchanged.
 
+Datagram construction stays within one `EmitAll` invocation. Ten socket field builders form an
+immutable construction value passed from early type declaration to the deferred receive body;
+five event/callback helpers remain local and are passed directly to Bind, Close and Connect.
+The checked Dgram component remains the sole owner of public socket, factory, receive-worker
+and message-closure declarations. Its setters reject duplicate declarations, and failed
+completion still allows missing declarations to be supplied. No construction handles remain
+on the emitter. The original declaration/body/finalization order, feature gates, cancellable
+receive loop, event scheduling and deployment remain unchanged. Tests cover every declaration,
+hosted and standalone emitter reuse, serialized IL and transport behavior. Shared construction
+infrastructure and the complete residual-state audit remain required under #1599.
+
 TLS construction likewise stays within one `EmitAll` invocation, replacing 37 retained emitter
 fields. Socket and server emission return immutable field/helper values for deferred handshake
 and accept bodies. Closure emission returns constructor/callback pairs; the connect closure type
