@@ -137,14 +137,6 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldnull);
             });
 
-        // lstatSync(path) -> object
-        EmitFsMethodWrapperSimple(typeBuilder, runtime, "lstatSync", 1,
-            il =>
-            {
-                il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, runtime.RequireFileSystem().LstatSync);
-            });
-
         // chmodSync(path, mode) -> undefined
         EmitFsMethodWrapperSimple(typeBuilder, runtime, "chmodSync", 2,
             il =>

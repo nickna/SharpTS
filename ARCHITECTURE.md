@@ -1132,6 +1132,10 @@ missing declarations or subsequent writes. No migrated flat aliases or emitter-h
 remain; feature selection, generated public signatures, native imports, and method bodies
 are preserved.
 
+The synchronous value-import wrappers are emitted once after their filesystem declarations.
+The `fs.lstatSync` registry entry refers to the single `Fs_lstatSync_Wrapper` declaration in
+that assembly; hosted and standalone emitter reuse keep earlier exports independent.
+
 Local descriptor table fields and builders, BCL lookups, and the shared built-in module registry
 remain with their existing construction infrastructure for the final ownership audit.
 
