@@ -47,7 +47,7 @@ public sealed class EmittedClassInitializationRuntimeTests
             var features = new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
             var runtime = emitter.EmitAll(module, features); var owner = runtime.ClassInitialization;
             Assert.True(owner.IsComplete); Assert.True(owners.Add(owner)); Assert.True(handles.Add(owner.RunDefinition));
-            Assert.Same(builder, owner.RunDefinition.Module.Assembly); Assert.Same(runtime.RuntimeType, owner.RunDefinition.DeclaringType);
+            Assert.Same(builder, owner.RunDefinition.Module.Assembly); Assert.Same(runtime.RuntimeClass.Type, owner.RunDefinition.DeclaringType);
             DefineInitializers(module);
             var loaded = SaveVerifyLoad(builder); var runtimeType = loaded.GetType("$Runtime")!;
             var helper = runtimeType.GetMethod("RunClassDefinition")!;

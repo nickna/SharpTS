@@ -195,7 +195,7 @@ public class EmittedHttpRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
         stream.Position = 0;
         return stream;
     }

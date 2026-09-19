@@ -96,7 +96,7 @@ public sealed class EmittedObjectDescriptorRuntimeTests
     {
         var builder = NewAssembly(); var features = Detect(selected); var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
-        var probe = runtime.RuntimeType.DefineNestedType("FunctionDescriptorProbe", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeClass.Type.DefineNestedType("FunctionDescriptorProbe", TypeAttributes.NestedPublic);
         var resolve = SimpleReceiver(probe, "SuppliedResolve"); var reject = SimpleReceiver(probe, "SuppliedReject");
         var promise = supplied ? new EmittedPromiseRuntime { ResolveCallbackType = resolve, RejectCallbackType = reject } : null;
         var getProperty = probe.DefineMethod("SuppliedGetProperty", MethodAttributes.Public | MethodAttributes.Static,
@@ -134,7 +134,7 @@ public sealed class EmittedObjectDescriptorRuntimeTests
     {
         var builder = NewAssembly(); var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect(selected));
-        var probe = runtime.RuntimeType.DefineNestedType("JsonDescriptorProbe", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeClass.Type.DefineNestedType("JsonDescriptorProbe", TypeAttributes.NestedPublic);
         var field = probe.DefineField("SuppliedJson", typeof(Dictionary<string, object>), FieldAttributes.Public | FieldAttributes.Static);
         var json = new EmittedJsonRuntime { SingletonField = field };
         if (supplied) json.BeginImplementationEmission();

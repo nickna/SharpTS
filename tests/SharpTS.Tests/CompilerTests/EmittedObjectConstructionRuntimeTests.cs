@@ -51,7 +51,7 @@ public sealed class EmittedObjectConstructionRuntimeTests
             Assert.True(owners.Add(runtime.ObjectConstruction)); AssertFrozen(runtime.ObjectConstruction);
             foreach (var property in Handles(typeof(EmittedObjectConstructionRuntime)))
                 Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.ObjectConstruction)).Module.Assembly);
-            var callbackProbe=runtime.RuntimeType.DefineNestedType("NativeConstructionCallback",TypeAttributes.NestedPublic);
+            var callbackProbe=runtime.RuntimeClass.Type.DefineNestedType("NativeConstructionCallback",TypeAttributes.NestedPublic);
             var callback=callbackProbe.DefineMethod("Read",MethodAttributes.Public|MethodAttributes.Static,typeof(object),Type.EmptyTypes);
             var callbackIl=callback.GetILGenerator();callbackIl.Emit(OpCodes.Ldc_R8,7d);callbackIl.Emit(OpCodes.Box,typeof(double));callbackIl.Emit(OpCodes.Ret);callbackProbe.CreateType();
             var loaded = SaveVerifyLoad(builder); var references = loaded.GetReferencedAssemblies().Select(r => r.Name).ToArray();
@@ -102,7 +102,7 @@ public sealed class EmittedObjectConstructionRuntimeTests
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
         var features = Detect(true); var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         var runtime = emitter.EmitAll(module, features); features.UsesProxy = globalFlag;
-        var probe = runtime.RuntimeType.DefineNestedType("ExplicitProxySpread", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeClass.Type.DefineNestedType("ExplicitProxySpread", TypeAttributes.NestedPublic);
         var owner = new EmittedObjectConstructionRuntime();
         var helper = typeof(RuntimeEmitter).GetMethod("EmitMergeIntoObject", Members)!;
         var inputs = MakeInputs(helper.GetParameters()[2].ParameterType, runtime,

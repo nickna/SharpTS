@@ -104,7 +104,7 @@ public sealed class EmittedStringSymbolDispatchTests
             var assembly = NewAssembly(); var features = new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
             var runtime = emitter.EmitAll(assembly.DefineDynamicModule("main"), features);
             Assert.True(owners.Add(runtime.Strings)); Assert.True(runtime.Strings.IsComplete); Assert.True(handles.Add(runtime.Strings.TryInvokeSymbolMethod));
-            Assert.Same(assembly, runtime.Strings.TryInvokeSymbolMethod.Module.Assembly); Assert.Same(runtime.RuntimeType, runtime.Strings.TryInvokeSymbolMethod.DeclaringType);
+            Assert.Same(assembly, runtime.Strings.TryInvokeSymbolMethod.Module.Assembly); Assert.Same(runtime.RuntimeClass.Type, runtime.Strings.TryInvokeSymbolMethod.DeclaringType);
             var loaded = SaveVerifyLoad(assembly); var type = loaded.GetType("$Runtime")!; var method = type.GetMethod("StringTryInvokeSymbolMethod")!;
             Assert.True(method.IsPublic && method.IsStatic); Assert.Equal(typeof(object), method.ReturnType);
             Assert.True(method.MetadataToken > type.GetMethod("StringLocaleCompare")!.MetadataToken);

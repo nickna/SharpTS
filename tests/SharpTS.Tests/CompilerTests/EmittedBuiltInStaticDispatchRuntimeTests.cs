@@ -70,7 +70,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             var owner = runtime.BuiltInStatics;
             Assert.True(owners.Add(owner)); Assert.True(handles.Add(owner.Lookup)); Assert.True(owner.IsComplete);
-            Assert.Same(builder, owner.Lookup.Module.Assembly); Assert.Same(runtime.RuntimeType, owner.Lookup.DeclaringType);
+            Assert.Same(builder, owner.Lookup.Module.Assembly); Assert.Same(runtime.RuntimeClass.Type, owner.Lookup.DeclaringType);
             var loaded = SaveVerifyLoad(builder); var type = loaded.GetType("$Runtime")!;
             var lookup = type.GetMethod("LookupBuiltInStaticMember")!;
             Assert.True(lookup.IsPublic && lookup.IsStatic); Assert.Equal(typeof(object), lookup.ReturnType);

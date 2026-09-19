@@ -92,7 +92,7 @@ public class EmittedBigIntRuntimeTests
             var implementation = runtime.BigInt.RequireImplementation();
             Assert.Equal(0, implementation.ToBigInt.GetILGenerator().ILOffset);
             Assert.Throws<InvalidOperationException>(() => implementation.Create);
-            var caller = runtime.RuntimeType.DefineMethod("ForwardCaller", MethodAttributes.Public | MethodAttributes.Static,
+            var caller = runtime.RuntimeClass.Type.DefineMethod("ForwardCaller", MethodAttributes.Public | MethodAttributes.Static,
                 typeof(object), [typeof(object)]);
             var il = caller.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -124,10 +124,10 @@ public class EmittedBigIntRuntimeTests
         Assert.Equal(3, Handles(typeof(EmittedBigIntRuntime)).Length);
         Assert.Equal(24, Handles(typeof(EmittedBigIntImplementation)).Length);
         foreach (var property in Handles(typeof(EmittedBigIntRuntime)))
-            Assert.Same(runtime.RuntimeType, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.BigInt)).DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.BigInt)).DeclaringType);
         if (runtime.BigInt.Implementation is { } implementation)
             foreach (var property in Handles(typeof(EmittedBigIntImplementation)))
-                Assert.Same(runtime.RuntimeType, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(implementation)).DeclaringType);
+                Assert.Same(runtime.RuntimeClass.Type, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(implementation)).DeclaringType);
         using var bytes = Save(runtime);
         Verify(bytes);
         using var pe = new PEReader(bytes);
@@ -351,7 +351,7 @@ public class EmittedBigIntRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

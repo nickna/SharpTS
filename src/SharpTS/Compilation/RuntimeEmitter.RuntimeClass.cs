@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Reflection.Emit;
 using System.Buffers;
 using System.Runtime.CompilerServices;
@@ -42,8 +42,7 @@ public partial class RuntimeEmitter
         // so types that emit before us — $RegExp's Symbol.* helpers in
         // particular — could refer to them. Re-use the existing TypeBuilder
         // here; everything below adds fields/methods to the same type.
-        var typeBuilder = (TypeBuilder)runtime.RuntimeType;
-        _runtimeTypeBuilder = typeBuilder;
+        var typeBuilder = runtime.RuntimeClass.Type;
 
         DefineCancellationFlag(typeBuilder, runtime.Cancellation);
 
@@ -2041,7 +2040,7 @@ public partial class RuntimeEmitter
                 runtime.IteratorProtocol.Function,
                 runtime.Invocation.Value,
                 runtime.IteratorCollection.ToList,
-                runtime.RuntimeType,
+                runtime.RuntimeClass.Type,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType
@@ -2879,7 +2878,7 @@ public partial class RuntimeEmitter
                     runtime.IteratorProtocol.Function,
                     runtime.Invocation.Value,
                     runtime.IteratorCollection.ToList,
-                    runtime.RuntimeType,
+                    runtime.RuntimeClass.Type,
                     runtime.Symbols.Iterator,
                     runtime.Errors.TypeErrorConstructor,
                     runtime.Operators.TypeOf,
@@ -3101,13 +3100,12 @@ public partial class RuntimeEmitter
         // Phase 2 method bodies (e.g., TlsConnect) to be emitted after closure types.
     }
 
-    private TypeBuilder? _runtimeTypeBuilder;
-
     /// <summary>
     /// Phase 2: Finalizes the $Runtime class after all deferred method bodies are emitted.
     /// </summary>
-    internal void EmitRuntimeClassFinalize()
+    internal static void EmitRuntimeClassFinalize(EmittedRuntimeClass runtimeClass)
     {
-        _runtimeTypeBuilder?.CreateType();
+        runtimeClass.Type.CreateType();
+        runtimeClass.CompleteEmission();
     }
 }

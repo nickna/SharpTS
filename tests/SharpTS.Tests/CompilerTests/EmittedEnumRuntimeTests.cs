@@ -71,7 +71,7 @@ public sealed class EmittedEnumRuntimeTests
             var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), new RuntimeFeatureDetector().Detect(statements));
             var owner = runtime.Enums;
             Assert.True(owners.Add(owner)); Assert.True(owner.IsComplete); Assert.True(handles.Add(owner.GetMemberName));
-            Assert.Same(builder, owner.GetMemberName.Module.Assembly); Assert.Same(runtime.RuntimeType, owner.GetMemberName.DeclaringType);
+            Assert.Same(builder, owner.GetMemberName.Module.Assembly); Assert.Same(runtime.RuntimeClass.Type, owner.GetMemberName.DeclaringType);
             var loaded = SaveVerifyLoad(builder); var type = loaded.GetType("$Runtime")!; var method = type.GetMethod("GetEnumMemberName")!;
             Assert.True(method.IsPublic && method.IsStatic); Assert.Equal(typeof(string), method.ReturnType);
             Assert.Equal(new[] { typeof(string), typeof(double), typeof(double[]), typeof(string[]) }, method.GetParameters().Select(p => p.ParameterType));

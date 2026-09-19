@@ -116,7 +116,7 @@ public sealed class EmittedObjectStateRuntimeTests
     {
         var builder = NewAssembly(); var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect("const value = 1;"));
-        var type = runtime.RuntimeType.DefineNestedType("IntegrityProbe", TypeAttributes.NestedPublic);
+        var type = runtime.RuntimeClass.Type.DefineNestedType("IntegrityProbe", TypeAttributes.NestedPublic);
         string operation = freeze ? nameof(EmittedObjectStateRuntime.Freeze) : nameof(EmittedObjectStateRuntime.Seal);
         var supplied = CopyWithNewTables(runtime.ObjectState, type, operation);
         var method = typeof(RuntimeEmitter).GetMethod(freeze ? "EmitObjectFreeze" : "EmitObjectSeal", InstanceMembers)!;
@@ -138,7 +138,7 @@ public sealed class EmittedObjectStateRuntimeTests
     {
         var builder = NewAssembly(); var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect("const value = 1;"));
-        var type = runtime.RuntimeType.DefineNestedType("DeletionProbe", TypeAttributes.NestedPublic);
+        var type = runtime.RuntimeClass.Type.DefineNestedType("DeletionProbe", TypeAttributes.NestedPublic);
         var supplied = CopyWithNewTables(runtime.ObjectState, type, nameof(EmittedObjectStateRuntime.MarkBuiltinDeleted), nameof(EmittedObjectStateRuntime.IsBuiltinDeleted));
         typeof(RuntimeEmitter).GetMethod("EmitDeletedBuiltinsHelpers", InstanceMembers)!.Invoke(emitter, [type, supplied]);
         supplied.MarkIsExtensibleBodyEmitted(); supplied.CompleteEmission(); type.CreateType();

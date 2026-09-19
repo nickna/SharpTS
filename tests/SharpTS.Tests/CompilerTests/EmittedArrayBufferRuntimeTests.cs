@@ -121,8 +121,8 @@ public class EmittedArrayBufferRuntimeTests
         Assert.Same(buffer.Type, buffer.BufferField.DeclaringType);
         Assert.Same(buffer.Type, buffer.DetachedField.DeclaringType);
         Assert.Same(buffer.Type, buffer.Detach.DeclaringType);
-        Assert.Same(runtime.RuntimeType, buffer.Create.DeclaringType);
-        Assert.Same(runtime.RuntimeType, buffer.IsView.DeclaringType);
+        Assert.Same(runtime.RuntimeClass.Type, buffer.Create.DeclaringType);
+        Assert.Same(runtime.RuntimeClass.Type, buffer.IsView.DeclaringType);
         foreach (var property in Handles)
         {
             var handle = Assert.IsAssignableFrom<MemberInfo>(property.GetValue(buffer));
@@ -146,7 +146,7 @@ public class EmittedArrayBufferRuntimeTests
         }
         var loaded = Assembly.Load(stream.ToArray());
         var type = loaded.GetType(buffer.Type.Name)!;
-        var helpers = loaded.GetType(runtime.RuntimeType.Name)!;
+        var helpers = loaded.GetType(runtime.RuntimeClass.Type.Name)!;
         var value = helpers.GetMethod(buffer.Create.Name)!.Invoke(null, [8d]);
         var getBytes = type.GetMethod(buffer.GetBuffer.Name)!;
         var bytes = Assert.IsType<byte[]>(getBytes.Invoke(value, null));
@@ -222,7 +222,7 @@ public class EmittedArrayBufferRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
         stream.Position = 0;
         return stream;
     }

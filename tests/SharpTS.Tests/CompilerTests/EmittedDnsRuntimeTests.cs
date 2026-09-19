@@ -33,7 +33,7 @@ public class EmittedDnsRuntimeTests
         var runtime = EmitRuntime(false);
         Assert.Null(runtime.Dns);
         Assert.Contains("not enabled", Assert.Throws<InvalidOperationException>(runtime.RequireDns).Message);
-        Assert.DoesNotContain(runtime.RuntimeType.GetMethods(), method => method.Name.StartsWith("Dns", StringComparison.Ordinal));
+        Assert.DoesNotContain(runtime.RuntimeClass.Type.GetMethods(), method => method.Name.StartsWith("Dns", StringComparison.Ordinal));
     }
 
     [Fact]

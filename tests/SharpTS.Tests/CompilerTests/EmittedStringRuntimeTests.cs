@@ -95,7 +95,7 @@ public class EmittedStringRuntimeTests
         var runtime = EmitRuntime(source, hosted);
         AssertFrozen(runtime.Strings);
         foreach (var property in Handles)
-            Assert.Same(runtime.RuntimeType, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.Strings)).DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.Strings)).DeclaringType);
         using var bytes = Save(runtime);
         using var pe = new PEReader(bytes);
         var reader = pe.GetMetadataReader();
@@ -275,7 +275,7 @@ public class EmittedStringRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

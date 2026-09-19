@@ -144,12 +144,12 @@ public class EmittedReflectRuntimeTests
         if (selected)
         {
             var assignment = runtime.Reflect.RequireAssignment();
-            Assert.Same(runtime.RuntimeType, assignment.Set.DeclaringType);
-            Assert.Same(runtime.RuntimeType, assignment.DefineProperty.DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, assignment.Set.DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, assignment.DefineProperty.DeclaringType);
             Assert.Equal(0, assignment.Set.GetILGenerator().ILOffset);
             Assert.Equal(0, assignment.DefineProperty.GetILGenerator().ILOffset);
             Assert.Throws<InvalidOperationException>(() => assignment.DefinePropertyObjectAdapter);
-            var caller = runtime.RuntimeType.DefineMethod("ForwardCaller", MethodAttributes.Public | MethodAttributes.Static,
+            var caller = runtime.RuntimeClass.Type.DefineMethod("ForwardCaller", MethodAttributes.Public | MethodAttributes.Static,
                 typeof(bool), [typeof(object), typeof(object), typeof(object)]);
             var il = caller.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -363,7 +363,7 @@ public class EmittedReflectRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

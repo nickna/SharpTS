@@ -61,7 +61,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
             case "fromEntries":
                 // Load Symbol.iterator and runtime type for IterateToList
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Symbols.Iterator);
-                il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RuntimeType);
+                il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RuntimeClass.Type);
                 il.Emit(OpCodes.Call, ctx.Types.TypeGetTypeFromHandle);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ObjectOperations.FromEntries);
                 return true;
