@@ -121,10 +121,10 @@ public class EmittedFileSystemWatcherRuntimeTests
             Assert.Same(fileSystem.StatType, fileSystem.StatPollCallback.DeclaringType);
             Assert.Same(fileSystem.ChangeClosureType, fileSystem.ChangeClosureRun.DeclaringType);
             Assert.Same(fileSystem.PollClosureType, fileSystem.PollClosureRun.DeclaringType);
-            Assert.Same(runtime.RuntimeType, fileSystem.Watch.DeclaringType);
-            Assert.Same(runtime.RuntimeType, fileSystem.WatchFile.DeclaringType);
-            Assert.Same(runtime.RuntimeType, fileSystem.UnwatchFile.DeclaringType);
-            Assert.Same(runtime.RuntimeType, fileSystem.StatRegistryField.DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, fileSystem.Watch.DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, fileSystem.WatchFile.DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, fileSystem.UnwatchFile.DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, fileSystem.StatRegistryField.DeclaringType);
             Assert.True(fileSystem.StatRegistryField.IsStatic);
             Assert.Equal(typeof(Dictionary<string, object>), fileSystem.StatRegistryField.FieldType);
             foreach (var property in Handles.Where(property => property.PropertyType == typeof(FieldBuilder)))
@@ -367,7 +367,7 @@ public class EmittedFileSystemWatcherRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

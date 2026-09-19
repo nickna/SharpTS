@@ -109,7 +109,7 @@ public class EmittedArrayStorageRuntimeTests
         Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
         Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
         using var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
         stream.Position = 0;
         using var pe = new PEReader(stream);
         var reader = pe.GetMetadataReader();

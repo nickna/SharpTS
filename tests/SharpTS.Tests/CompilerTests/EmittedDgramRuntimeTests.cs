@@ -42,9 +42,9 @@ public class EmittedDgramRuntimeTests
         Assert.Null(runtime.Dgram);
         Assert.Contains("not enabled", Assert.Throws<InvalidOperationException>(runtime.RequireDgram).Message);
         Assert.Null(runtime.GetBuiltInModuleMethod("dgram", "createSocket"));
-        Assert.DoesNotContain(runtime.RuntimeType.GetMethods(), method => method.Name.StartsWith("Dgram", StringComparison.Ordinal));
+        Assert.DoesNotContain(runtime.RuntimeClass.Type.GetMethods(), method => method.Name.StartsWith("Dgram", StringComparison.Ordinal));
         using var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
         stream.Position = 0;
         using var pe = new PEReader(stream);
         var reader = pe.GetMetadataReader();

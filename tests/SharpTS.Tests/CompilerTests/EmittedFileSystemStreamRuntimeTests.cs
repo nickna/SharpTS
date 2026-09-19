@@ -117,8 +117,8 @@ public class EmittedFileSystemStreamRuntimeTests
             Assert.Same(fileSystem.WriteType, fileSystem.WriteStreamField.DeclaringType);
             Assert.Same(fileSystem.WriteType, fileSystem.Write.DeclaringType);
             Assert.Same(fileSystem.WriteType, fileSystem.End.DeclaringType);
-            Assert.Same(runtime.RuntimeType, fileSystem.CreateReadStream.DeclaringType);
-            Assert.Same(runtime.RuntimeType, fileSystem.CreateWriteStream.DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, fileSystem.CreateReadStream.DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, fileSystem.CreateWriteStream.DeclaringType);
             foreach (var property in Handles.Where(property => property.PropertyType == typeof(FieldBuilder)))
                 Assert.True(((FieldBuilder)property.GetValue(fileSystem)!).IsPrivate);
         }
@@ -239,7 +239,7 @@ public class EmittedFileSystemStreamRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

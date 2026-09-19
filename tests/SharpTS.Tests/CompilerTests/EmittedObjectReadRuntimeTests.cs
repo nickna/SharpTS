@@ -117,7 +117,7 @@ public sealed class EmittedObjectReadRuntimeTests
             ["DataView"] = supplied ? runtime.DataView : null,
             ["BigInt"] = supplied ? runtime.BigInt : new EmittedBigIntRuntime { PrototypeField = runtime.BigInt.PrototypeField }
         };
-        var probe = runtime.RuntimeType.DefineNestedType("SuppliedRead", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeClass.Type.DefineNestedType("SuppliedRead", TypeAttributes.NestedPublic);
         var propertyOwner = ObjectReadTestSupport.EmitProperty(emitter, probe, runtime, inputs);
         AssertFrozen(propertyOwner);
         var indexOwner = new EmittedObjectReadRuntime { Property = propertyOwner.Property };

@@ -23,7 +23,7 @@ public sealed class EmittedSuperMethodRuntimeTests
             var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), new RuntimeFeatureDetector().Detect(statements));
             var owner = runtime.ReflectedMethods;
             Assert.True(owners.Add(owner)); Assert.True(owner.IsComplete);
-            Assert.Same(builder, owner.SuperMethod.Module.Assembly); Assert.Same(runtime.RuntimeType, owner.SuperMethod.DeclaringType);
+            Assert.Same(builder, owner.SuperMethod.Module.Assembly); Assert.Same(runtime.RuntimeClass.Type, owner.SuperMethod.DeclaringType);
             var loaded = SaveVerifyLoad(builder); var type = loaded.GetType("$Runtime")!;
             var lookup = type.GetMethod("GetSuperMethod")!;
             Assert.True(lookup.IsPublic && lookup.IsStatic); Assert.Equal(typeof(object), lookup.ReturnType);

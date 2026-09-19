@@ -15947,4 +15947,46 @@ public class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
+    public static IEnumerable<object[]> RuntimeClassPrograms =>
+    [
+        new object[] { "plain", "console.log(1);\n", "1\n", false },
+        new object[] { "array_from", "const values=Array.from({0:3,1:4,length:2},(x,i)=>x+i);console.log(values.join(\",\"));\n", "3,5\n", false },
+        new object[] { "array_from_iterator", "function* values(){yield 2;yield 5;}console.log(Array.from(values(),(x,i)=>x+i).join(\",\"));\n", "2,6\n", false },
+        new object[] { "array_destructure", "function* values(){yield 2;yield 4;yield 6;}const [first,...rest]=values();console.log(first,rest.join(\",\"));\n", "2 4,6\n", false },
+        new object[] { "for_of", "function* values(){yield 2;yield 3;}let sum=0;for(const value of values()){sum+=value;}console.log(sum);\n", "5\n", false },
+        new object[] { "spread", "function total(a:number,b:number,c:number){return a+b+c;}const values=[2,3,4];console.log([...values].join(\",\"),total(...values as [number,number,number]));\n", "2,3,4 9\n", false },
+        new object[] { "yield_delegate", "function* values(){yield* [2,3];}const g=values();console.log(g.next().value,g.next().value,g.next().done);\n", "2 3 true\n", false },
+        new object[] { "promise_executor", "new Promise<number>((resolve,reject)=>{resolve(7);}).then(v=>console.log(v));\n", "7\n", false },
+        new object[] { "object_fields", "class Value{value=7;getValue(){return this.value;}}const v=new Value();const o={value:3,getValue(){return this.value;}};console.log(v.getValue(),o.getValue());\n", "7 3\n", false },
+        new object[] { "async_iterator", "async function* values(){yield 2;yield 4;}async function run(){let sum=0;for await(const v of values()){sum+=v;}return sum;}run().then(v=>console.log(v));\n", "6\n", false },
+        new object[] { "readable_stream", "const stream=new ReadableStream({start(controller){controller.enqueue(7);controller.close();}});const reader=stream.getReader();reader.read().then(result=>console.log(result.value,result.done));\n", "7 false\n", false },
+        new object[] { "hosted_required", "export function run(){return Array.from({0:3,length:1},(x,i)=>x+i);}\n", "", true },
+        new object[] { "hosted_optional", "export async function run(){await Promise.resolve(0);return Array.from([2,3],(x,i)=>x+i);}\n", "", true },
+        new object[] { "object_group_by_value", "const O:any=Object;try{const groups=O.groupBy([1,2,3],(x:number)=>x%2);console.log(groups[1].join(\",\"));}catch(e){console.log(\"failed\");}\n", "1,3\n", false },
+        new object[] { "object_group_by_direct", "interface ObjectConstructor{groupBy(items:any,callback:any):any;}const groups=Object.groupBy([1,2,3],(x:number)=>x%2);console.log(groups[1].join(\",\"));\n", "1,3\n", false },
+        new object[] { "map_group_by_direct", "interface MapConstructor{groupBy(items:any,callback:any):any;}const groups=Map.groupBy([1,2,3],(x:number)=>x%2);console.log(groups.get(0).join(\",\"));\n", "2\n", false },
+    ];
+
+    [Theory]
+    [MemberData(nameof(RuntimeClassPrograms))]
+    public void Isolated_RuntimeClass_PreservesCrossFamilyCallsAndDeployment(
+        string name, string source, string expected, bool hosted)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"runtime_class_{name}.dll");
+        var hosting = hosted ? " --target dll --hosted" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{sourcePath}\" -o \"{dllPath}\" --verify --standalone{hosting}", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(dllPath);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        if (!hosted)
+            Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+                verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
 }

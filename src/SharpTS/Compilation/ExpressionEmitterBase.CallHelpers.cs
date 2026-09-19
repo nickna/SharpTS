@@ -1040,7 +1040,7 @@ public abstract partial class ExpressionEmitterBase
             {
                 IL.Emit(OpCodes.Ldloc, value);
                 IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.Symbols.Iterator);
-                IL.Emit(OpCodes.Ldtoken, Ctx.Runtime.RuntimeType);
+                IL.Emit(OpCodes.Ldtoken, Ctx.Runtime.RuntimeClass.Type);
                 IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
                 IL.Emit(OpCodes.Ldloc, target);
                 IL.Emit(OpCodes.Castclass, Types.ListOfObject);
@@ -1399,7 +1399,7 @@ public abstract partial class ExpressionEmitterBase
     protected void EmitExpandCallArgs()
     {
         IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.Iterator);
-        IL.Emit(OpCodes.Ldtoken, Ctx.Runtime!.RuntimeType);
+        IL.Emit(OpCodes.Ldtoken, Ctx.Runtime!.RuntimeClass.Type);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.CallArguments.Expand);
     }

@@ -129,7 +129,7 @@ public sealed class EmittedObjectWriteRuntimeTests
             ["TypedArrays"] = supplied ? runtime.TypedArrays : new EmittedTypedArrayRuntime(), ["ProxySelected"] = false,
             ["ReflectAssignment"] = null
         };
-        var probe = runtime.RuntimeType.DefineNestedType("SuppliedWrite", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeClass.Type.DefineNestedType("SuppliedWrite", TypeAttributes.NestedPublic);
         var owner = EmitWrites(emitter, probe, runtime, inputs); AssertFrozen(owner); probe.CreateType();
         var loaded = SaveVerifyLoad(builder); var saved = loaded.GetType(probe.FullName!)!;
         foreach (var name in new[] { "SetFieldsProperty", "SetFieldsPropertyStrict" })
@@ -156,7 +156,7 @@ public sealed class EmittedObjectWriteRuntimeTests
     {
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main"); var features = Detect(true);
         var emitter = new RuntimeEmitter(TypeProvider.Runtime); var runtime = emitter.EmitAll(module, features); features.UsesProxy = globalFlag;
-        var probe = runtime.RuntimeType.DefineNestedType("SelectedProxyWrite", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeClass.Type.DefineNestedType("SelectedProxyWrite", TypeAttributes.NestedPublic);
         var owner = EmitWrites(emitter, probe, runtime, new Dictionary<string, object?>
         {
             ["ProxySelected"] = selected, ["ReflectAssignment"] = selected ? runtime.Reflect.Assignment : null

@@ -127,7 +127,7 @@ public class EmittedFetchRuntimeTests
         Assert.Null(runtime.Fetch.Implementation);
         AssertFrozen(runtime.Fetch);
         Assert.Equal("_cachedFetchFunction", runtime.Fetch.CachedFunction.Name);
-        Assert.Same(runtime.RuntimeType, runtime.Fetch.CachedFunction.DeclaringType);
+        Assert.Same(runtime.RuntimeClass.Type, runtime.Fetch.CachedFunction.DeclaringType);
         using var stream = Save(runtime);
         using var pe = new PEReader(stream);
         var reader = pe.GetMetadataReader();
@@ -184,7 +184,7 @@ public class EmittedFetchRuntimeTests
         var reader = pe.GetMetadataReader();
         Assert.DoesNotContain(reader.AssemblyReferences,
             handle => reader.GetString(reader.GetAssemblyReference(handle).Name) == "SharpTS");
-        var loaded = Assembly.Load(stream.ToArray()).GetType(runtime.RuntimeType.Name)!;
+        var loaded = Assembly.Load(stream.ToArray()).GetType(runtime.RuntimeClass.Type.Name)!;
         var globalGet = loaded.GetMethod(runtime.GlobalObject.GetProperty.Name)!;
         var function = globalGet.Invoke(null, ["fetch"]);
         Assert.NotNull(function);
@@ -296,7 +296,7 @@ public class EmittedFetchRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
         stream.Position = 0;
         return stream;
     }

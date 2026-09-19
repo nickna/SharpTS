@@ -103,7 +103,7 @@ public sealed class EmittedCancellationRuntimeTests
             {
                 var member = (MemberInfo)property.GetValue(owner)!;
                 Assert.True(handles.Add(member)); Assert.Same(builder, member.Module.Assembly);
-                Assert.Same(runtime.RuntimeType, member.DeclaringType);
+                Assert.Same(runtime.RuntimeClass.Type, member.DeclaringType);
             }
             var loaded = SaveVerifyLoad(builder); var type = loaded.GetType("$Runtime")!;
             var flag = type.GetField("_cancelRequested")!;

@@ -110,7 +110,7 @@ public sealed class EmittedOperatorRuntimeTests
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main"); var features = Detect(true);
         var emitter = new RuntimeEmitter(TypeProvider.Runtime); var runtime = emitter.EmitAll(module, features);
         features.UsesPromise = globalFlag;
-        var probe = runtime.RuntimeType.DefineNestedType("SuppliedPromise", TypeAttributes.NestedPublic);
+        var probe = runtime.RuntimeClass.Type.DefineNestedType("SuppliedPromise", TypeAttributes.NestedPublic);
         var owner = new EmittedOperatorRuntime();
         foreach (var name in new[] { "EmitTypeOf", "EmitInstanceOf" })
         {

@@ -31,7 +31,7 @@ public class EmittedZlibRuntimeTests
         var runtime = EmitRuntime(false);
         Assert.Null(runtime.Zlib);
         Assert.Contains("not enabled", Assert.Throws<InvalidOperationException>(runtime.RequireZlib).Message);
-        Assert.DoesNotContain(runtime.RuntimeType.GetMethods(), method => method.Name.StartsWith("Zlib", StringComparison.Ordinal));
+        Assert.DoesNotContain(runtime.RuntimeClass.Type.GetMethods(), method => method.Name.StartsWith("Zlib", StringComparison.Ordinal));
     }
 
     [Fact]

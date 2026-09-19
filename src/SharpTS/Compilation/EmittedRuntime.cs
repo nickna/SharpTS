@@ -266,8 +266,8 @@ public class EmittedRuntime
     // class creates its prototype through a compiler-only constructor and
     // registers it here when the class definition is evaluated.
 
-    // The emitted runtime helper class
-    public TypeBuilder RuntimeType { get; set; } = null!;
+    /// <summary>Required shared helper type with checked forward declaration and finalization.</summary>
+    public EmittedRuntimeClass RuntimeClass { get; } = new();
 
     /// <summary>Required console metadata, emitted for every compilation.</summary>
     public EmittedConsoleRuntime Console { get; } = new();

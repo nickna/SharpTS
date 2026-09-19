@@ -131,8 +131,8 @@ public class EmittedBufferRuntimeTests
         Assert.Same(buffer.Type, buffer.Ctor.DeclaringType);
         Assert.Same(buffer.Type, buffer.DataField.DeclaringType);
         Assert.Same(buffer.Type, buffer.ReadUInt32LE.DeclaringType);
-        Assert.Same(runtime.RuntimeType, buffer.BytesOf.DeclaringType);
-        Assert.Same(runtime.RuntimeType, buffer.CoerceString.DeclaringType);
+        Assert.Same(runtime.RuntimeClass.Type, buffer.BytesOf.DeclaringType);
+        Assert.Same(runtime.RuntimeClass.Type, buffer.CoerceString.DeclaringType);
         foreach (var property in EnabledHandles(buffer))
         {
             var handle = Assert.IsAssignableFrom<MemberInfo>(property.GetValue(buffer));
@@ -158,7 +158,7 @@ public class EmittedBufferRuntimeTests
         var runtime = EmitRuntime("Buffer.from('data');");
         using var stream = Save(runtime);
         var loaded = Assembly.Load(stream.ToArray());
-        var getter = loaded.GetType(runtime.RuntimeType.Name)!.GetMethod(runtime.GlobalObject.GetProperty.Name)!;
+        var getter = loaded.GetType(runtime.RuntimeClass.Type.Name)!.GetMethod(runtime.GlobalObject.GetProperty.Name)!;
         Assert.Same(loaded.GetType(runtime.RequireBuffer().Type.Name), getter.Invoke(null, ["Buffer"]));
     }
 
@@ -219,7 +219,7 @@ public class EmittedBufferRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
         stream.Position = 0;
         return stream;
     }

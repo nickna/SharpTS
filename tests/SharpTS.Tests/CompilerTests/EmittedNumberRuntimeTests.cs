@@ -55,11 +55,11 @@ public class EmittedNumberRuntimeTests
         var numbers = runtime.Numbers;
         Assert.Equal(0, numbers.Format.GetILGenerator().ILOffset);
         Assert.Throws<InvalidOperationException>(() => numbers.PrototypePopulateMethod);
-        InvokeEmitter("DefineNumberPrototypePopulateShell", emitter, runtime.RuntimeType, numbers);
+        InvokeEmitter("DefineNumberPrototypePopulateShell", emitter, runtime.RuntimeClass.Type, numbers);
         Assert.Equal(0, numbers.PrototypePopulateMethod.GetILGenerator().ILOffset);
         Assert.Throws<InvalidOperationException>(() => numbers.FixedUInt64FormatterField);
-        InvokeEmitter("DefineNumberFixedFormattingInfrastructure", emitter, runtime.RuntimeType, numbers);
-        Assert.Same(runtime.RuntimeType, numbers.FixedUInt64FormatterCallback.DeclaringType);
+        InvokeEmitter("DefineNumberFixedFormattingInfrastructure", emitter, runtime.RuntimeClass.Type, numbers);
+        Assert.Same(runtime.RuntimeClass.Type, numbers.FixedUInt64FormatterCallback.DeclaringType);
         Assert.True(numbers.FixedUInt64FormatterCallback.GetILGenerator().ILOffset > 0);
         Assert.True(numbers.FixedUInt64FormatterField.IsInitOnly);
         Assert.True(numbers.FixedUInt64FormatterField.IsPrivate);
@@ -82,7 +82,7 @@ public class EmittedNumberRuntimeTests
         var runtime = EmitRuntime(source, hosted);
         AssertFrozen(runtime.Numbers);
         foreach (var property in Handles)
-            Assert.Same(runtime.RuntimeType, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.Numbers)).DeclaringType);
+            Assert.Same(runtime.RuntimeClass.Type, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.Numbers)).DeclaringType);
         using var bytes = Save(runtime);
         Verify(bytes);
         using var pe = new PEReader(bytes);
@@ -259,7 +259,7 @@ public class EmittedNumberRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

@@ -263,7 +263,7 @@ public class EmittedAbortRuntimeTests
     private static MemoryStream Save(EmittedRuntime runtime)
     {
         var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
+        ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(bytes);
         bytes.Position = 0;
         return bytes;
     }

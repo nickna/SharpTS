@@ -134,9 +134,9 @@ public sealed class EmittedGlobalObjectRuntimeTests
             foreach (var property in Declarations.Append(typeof(EmittedGlobalObjectRuntime).GetProperty("IndirectEval")!))
             {
                 var member = (MemberInfo)property.GetValue(owner)!;
-                Assert.Same(builder, member.Module.Assembly); Assert.Same(runtime.RuntimeType, member.DeclaringType);
+                Assert.Same(builder, member.Module.Assembly); Assert.Same(runtime.RuntimeClass.Type, member.DeclaringType);
             }
-            var loaded = SaveVerifyLoad(builder); var type = loaded.GetType(runtime.RuntimeType.FullName!)!;
+            var loaded = SaveVerifyLoad(builder); var type = loaded.GetType(runtime.RuntimeClass.Type.FullName!)!;
             var singleton = type.GetField(owner.SingletonField.Name)!.GetValue(null)!;
             Assert.True(singletons.Add(singleton));
             var get = type.GetMethod(owner.GetProperty.Name)!; var set = type.GetMethod(owner.SetProperty.Name)!;
