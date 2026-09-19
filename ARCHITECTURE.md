@@ -861,9 +861,15 @@ helpers accept `EmittedCryptoRuntime` directly; Buffer, Promise, and generic pro
 helpers remain separate dependencies. X509 constructor dispatch checks feature availability
 explicitly so a user class still resolves when crypto is absent.
 
-The shared built-in module registry still owns crypto named-import wrappers and aliases. Node crypto's
-other type-local fields and construction state remain with their emitters; the residual-state audit
-must review that ownership before closing #1599.
+Crypto construction values now stay within one `EmitAll` invocation, replacing 65 retained emitter
+fields. Hash/HMAC, cipher/decipher and DH/ECDH builders receive immutable construction records;
+Sign/Verify reuse their existing construction records. Six early-declaration/finalization pairs
+pass those values explicitly, preserving forward declarations and emission order. The EC padding
+and X509 public-key helpers are returned to their callers and passed directly to consumers.
+The 105 checked declarations reject duplicate assignment, validate completion and freeze writes.
+Hosted and standalone reuse tests verify assembly ownership, saved IL and active operations from
+earlier emissions. The shared built-in module registry still owns crypto named-import wrappers
+and aliases; its contract and the full residual-state audit remain required under #1599.
 
 WebCrypto uses required `WebCrypto` metadata for the `GetObject` accessor, which is declared in runtime
 phase 1 even when crypto is disabled. Its optional `Implementation` owns 49 helper, type, constructor,

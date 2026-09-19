@@ -11,44 +11,37 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private TypeBuilder _tsSignTypeBuilder = null!;
-    private FieldBuilder _tsSignHashAlgorithmField = null!;
-    private FieldBuilder _tsSignDataField = null!;
-    private FieldBuilder _tsSignFinalizedField = null!;
 
     /// <summary>
     /// Phase 1: Define type, fields, constructor, and Update method.
     /// Called before EmitRuntimeClass. Shares the definition with $Verify via
     /// <see cref="EmitStreamingSignVerifyTypeDefinition"/>.
     /// </summary>
-    private void EmitTSSignTypeDefinition(ModuleBuilder moduleBuilder, EmittedCryptoRuntime crypto)
+    private StreamingSignVerifyParts EmitTSSignTypeDefinition(ModuleBuilder moduleBuilder, EmittedCryptoRuntime crypto)
     {
         var parts = EmitStreamingSignVerifyTypeDefinition(moduleBuilder, "$Sign",
             unsupportedAlgorithmPrefix: "Unsupported signing algorithm: ",
             updateFinalizedMessage: "Cannot update Sign after sign() has been called");
-        _tsSignTypeBuilder = parts.Type;
-        _tsSignHashAlgorithmField = parts.HashAlgorithmField;
-        _tsSignDataField = parts.DataField;
-        _tsSignFinalizedField = parts.FinalizedField;
         crypto.SignCtor = parts.Ctor;
+        return parts;
     }
 
     /// <summary>
     /// Phase 2: Add Sign method and finalize type.
     /// Called after EmitRuntimeClass (needs runtime.RequireCrypto().SignDataBytes).
     /// </summary>
-    private void EmitTSSignFinalize(EmittedRuntime runtime)
+    private void EmitTSSignFinalize(StreamingSignVerifyParts construction, EmittedRuntime runtime)
     {
         // Sign method needs runtime.RequireCrypto().SignDataBytes
-        EmitTSSignSign(_tsSignTypeBuilder, runtime);
+        EmitTSSignSign(construction, construction.Type, runtime);
 
-        _tsSignTypeBuilder.CreateType();
+        construction.Type.CreateType();
     }
 
     /// <summary>
     /// Emits: public object Sign(string privateKeyPem, string? encoding)
     /// </summary>
-    private void EmitTSSignSign(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSSignSign(StreamingSignVerifyParts construction, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Sign",
@@ -60,17 +53,17 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitThrowIfFinalized(il, _tsSignFinalizedField, "sign() has already been called");
+        EmitThrowIfFinalized(il, construction.FinalizedField, "sign() has already been called");
 
         // _finalized = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsSignFinalizedField);
+        il.Emit(OpCodes.Stfld, construction.FinalizedField);
 
         // var dataBytes = _data.ToArray()
         var dataBytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsSignDataField);
+        il.Emit(OpCodes.Ldfld, construction.DataField);
         il.Emit(OpCodes.Callvirt, _types.ListByteToArray);
         il.Emit(OpCodes.Stloc, dataBytesLocal);
 
@@ -79,7 +72,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);  // privateKeyPem
         il.Emit(OpCodes.Ldloc, dataBytesLocal);  // dataBytes
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsSignHashAlgorithmField);  // hashAlgorithm
+        il.Emit(OpCodes.Ldfld, construction.HashAlgorithmField);  // hashAlgorithm
         il.Emit(OpCodes.Call, runtime.RequireCrypto().SignDataBytes);
         il.Emit(OpCodes.Stloc, signatureBytesLocal);
 

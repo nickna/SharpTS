@@ -15,18 +15,16 @@ public partial class RuntimeEmitter
     private void EmitEcPointHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var crypto = runtime.RequireCrypto();
-        EmitEcdhPadTo(typeBuilder, runtime);
-        EmitEcdhDecompressY(typeBuilder, crypto);
-        EmitEcdhEncodePoint(typeBuilder, crypto);
+        var padTo = EmitEcdhPadTo(typeBuilder, runtime);
+        EmitEcdhDecompressY(padTo, typeBuilder, crypto);
+        EmitEcdhEncodePoint(padTo, typeBuilder, crypto);
     }
-
-    private MethodBuilder _ecdhPadTo = null!;
 
     /// <summary>
     /// byte[] EcdhDecompressY(byte[] xBytes, bool odd, int fieldLen) — recovers
     /// the Y coordinate for a compressed point on the supported NIST curves.
     /// </summary>
-    private void EmitEcdhDecompressY(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
+    private void EmitEcdhDecompressY(MethodBuilder padTo, TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "EcdhDecompressY",
@@ -189,19 +187,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, toByteArray);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _ecdhPadTo);
+        il.Emit(OpCodes.Call, padTo);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>byte[] EcdhPadTo(byte[] bytes, int length) — left-pad/trim a big-endian magnitude.</summary>
-    private void EmitEcdhPadTo(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitEcdhPadTo(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "EcdhPadTo",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ByteArray,
             [_types.ByteArray, _types.Int32]);
-        _ecdhPadTo = method;
 
         var il = method.GetILGenerator();
         var lenLocal = il.DeclareLocal(_types.Int32);
@@ -258,13 +255,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.ArrayCopy5);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
     /// <summary>
     /// byte[] EcdhEncodePoint(byte[] x, byte[] y, int fieldLen, string format) —
     /// builds an uncompressed (04||X||Y), compressed (02/03||X), or hybrid (06/07||X||Y) point.
     /// </summary>
-    private void EmitEcdhEncodePoint(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
+    private void EmitEcdhEncodePoint(MethodBuilder padTo, TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var method = typeBuilder.DefineMethod(
             "EcdhEncodePoint",
@@ -282,11 +280,11 @@ public partial class RuntimeEmitter
         // x = EcdhPadTo(x, fieldLen); y = EcdhPadTo(y, fieldLen)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _ecdhPadTo);
+        il.Emit(OpCodes.Call, padTo);
         il.Emit(OpCodes.Stloc, xLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _ecdhPadTo);
+        il.Emit(OpCodes.Call, padTo);
         il.Emit(OpCodes.Stloc, yLocal);
 
         // fmt = (format ?? "uncompressed").ToLowerInvariant()

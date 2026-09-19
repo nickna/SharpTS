@@ -65,7 +65,7 @@ public partial class RuntimeEmitter
         EmitX509FingerprintGetter(tb, "fingerprint256", "get_Fingerprint256", certField, colonHex, "SHA256");
         EmitX509FingerprintGetter(tb, "fingerprint512", "get_Fingerprint512", certField, colonHex, "SHA512");
         EmitX509RawGetter(tb, runtime, certField);
-        EmitX509PublicKeyGetter(tb, crypto, certField);
+        var spkiPem = EmitX509PublicKeyGetter(tb, crypto, certField);
         EmitX509KeyUsageGetter(tb, runtime, certField);
         EmitX509ExtKeyUsageGetter(tb, runtime, certField);
         EmitX509InfoAccessGetter(tb);
@@ -75,7 +75,7 @@ public partial class RuntimeEmitter
         EmitX509CheckHost(tb, runtime, dnsField, cnField, hostMatches);
         EmitX509CheckIp(tb, runtime, ipsField);
         EmitX509CheckEmail(tb, runtime, emailsField);
-        EmitX509CheckIssued(tb, certField, subjectField, issuerField, verifyWithPem);
+        EmitX509CheckIssued(spkiPem, tb, certField, subjectField, issuerField, verifyWithPem);
         EmitX509ToString(tb, certField);
         EmitX509ToLegacyObject(tb, runtime, certField, subjectField, issuerField, sanField,
             caField, formatValidity, colonHex, nameToObject);
@@ -1198,7 +1198,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>Emits: string SpkiPem(X509Certificate2) — used by publicKey and checkIssued.</summary>
-    private void EmitX509PublicKeyGetter(TypeBuilder tb, EmittedCryptoRuntime crypto, FieldBuilder certField)
+    private MethodBuilder EmitX509PublicKeyGetter(TypeBuilder tb, EmittedCryptoRuntime crypto, FieldBuilder certField)
     {
         // helper: static string SpkiPem(X509Certificate2)
         var spkiPem = tb.DefineMethod("SpkiPem",
@@ -1215,7 +1215,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, typeof(PemEncoding).GetMethod("WriteString", [typeof(ReadOnlySpan<char>), typeof(ReadOnlySpan<byte>)])!);
             il.Emit(OpCodes.Ret);
         }
-        _x509SpkiPemHelper = spkiPem;
 
         var prop = tb.DefineProperty("publicKey", PropertyAttributes.None, _types.Object, Type.EmptyTypes);
         var getter = tb.DefineMethod("get_PublicKey",
@@ -1229,9 +1228,8 @@ public partial class RuntimeEmitter
         gil.Emit(OpCodes.Newobj, crypto.KeyObjectCtorAsym);
         gil.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
+        return spkiPem;
     }
-
-    private MethodBuilder? _x509SpkiPemHelper;
 
     private void EmitX509KeyUsageGetter(TypeBuilder tb, EmittedRuntime runtime, FieldBuilder certField)
     {
@@ -1639,7 +1637,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitX509CheckIssued(TypeBuilder tb, FieldBuilder certField,
+    private void EmitX509CheckIssued(MethodBuilder spkiPem, TypeBuilder tb, FieldBuilder certField,
         FieldBuilder subjectField, FieldBuilder issuerField, MethodBuilder verifyWithPem)
     {
         var method = tb.DefineMethod("CheckIssued",
@@ -1670,7 +1668,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetProperty("RawData")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, otherLocal);
         il.Emit(OpCodes.Ldfld, certField);
-        il.Emit(OpCodes.Call, _x509SpkiPemHelper!);
+        il.Emit(OpCodes.Call, spkiPem);
         il.Emit(OpCodes.Call, verifyWithPem);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);

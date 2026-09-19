@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Security.Cryptography;
+using System.Text;
 using SharpTS.Compilation;
 using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
@@ -97,7 +99,14 @@ public class EmittedCryptoRuntimeTests
         Assert.Contains($"'{missingHandle}'", Assert.Throws<InvalidOperationException>(crypto.CompleteEmission).Message);
         Assert.False(crypto.IsComplete);
 
-        property.SetValue(crypto, property.GetValue(CreateDeclarations()));
+        var nullError = Assert.Throws<TargetInvocationException>(() => property.SetValue(crypto, null));
+        Assert.IsType<ArgumentNullException>(nullError.InnerException);
+        var repaired = property.GetValue(CreateDeclarations());
+        property.SetValue(crypto, repaired);
+        var replacement = property.GetValue(CreateDeclarations());
+        var duplicate = Assert.Throws<TargetInvocationException>(() => property.SetValue(crypto, replacement));
+        Assert.Contains($"'{missingHandle}'", Assert.IsType<InvalidOperationException>(duplicate.InnerException).Message);
+        Assert.Same(repaired, property.GetValue(crypto));
         crypto.CompleteEmission();
         AssertFrozen(crypto);
     }
@@ -174,6 +183,85 @@ public class EmittedCryptoRuntimeTests
         Assert.Null(EmitRuntime(source).Crypto);
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
         Assert.Equal("42\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReusedEmitterKeepsCryptoDeclarationsAndActiveOperationsWithinEachAssembly(bool hosted)
+    {
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
+        var owners = new HashSet<EmittedCryptoRuntime>();
+        var assemblies = new List<Assembly>();
+        var saved = new List<(Assembly Assembly, object Hash, object Hmac, object Cipher, string Marker)>();
+        foreach (string? source in new[]
+        {
+            "console.log(1);", "import * as crypto from 'crypto';",
+            "import { createHash } from 'node:crypto';", "crypto.randomUUID();",
+            null, "console.log(1);", "import * as crypto from 'crypto';"
+        })
+        {
+            var builder = new PersistedAssemblyBuilder(new AssemblyName($"crypto_construction_{Guid.NewGuid():N}"), typeof(object).Assembly);
+            var module = builder.DefineDynamicModule("main");
+            var features = source is null ? null : new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
+            var runtime = features is null ? emitter.EmitAll(module) : emitter.EmitAll(module, features);
+            if (runtime.Crypto is { } crypto)
+            {
+                Assert.True(owners.Add(crypto));
+                AssertFrozen(crypto);
+                foreach (var property in Handles)
+                    Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(crypto)).Module.Assembly);
+            }
+
+            using var bytes = new MemoryStream();
+            builder.Save(bytes);
+            bytes.Position = 0;
+            using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+            Assert.Empty(verifier.Verify(bytes));
+            var assembly = Assembly.Load(bytes.ToArray());
+            var references = assembly.GetReferencedAssemblies();
+            Assert.DoesNotContain(references, reference => reference.Name == "SharpTS");
+            Assert.DoesNotContain(references, reference => assemblies.Any(previous => previous.GetName().Name == reference.Name));
+            Assert.Equal(hosted, references.Any(reference => reference.Name == "SharpTS.Hosting.Abstractions"));
+            assemblies.Add(assembly);
+            if (source == "console.log(1);")
+            {
+                Assert.Null(runtime.Crypto);
+                Assert.Null(assembly.GetType("$Hash"));
+                Assert.Null(assembly.GetType("$ECDH"));
+                continue;
+            }
+
+            Assert.NotNull(runtime.Crypto);
+            var hash = Activator.CreateInstance(assembly.GetType("$Hash")!, ["sha256", 0])!;
+            var hmac = Activator.CreateInstance(assembly.GetType("$Hmac")!, ["sha256", Encoding.UTF8.GetBytes("key")])!;
+            var cipher = Activator.CreateInstance(assembly.GetType("$Cipher")!, ["aes-256-cbc", new byte[32], new byte[16]])!;
+            string marker = $"assembly-{assemblies.Count}";
+            Assert.Same(hash, hash.GetType().GetMethod("Update")!.Invoke(hash, [marker]));
+            Assert.Same(hmac, hmac.GetType().GetMethod("Update")!.Invoke(hmac, [marker]));
+            cipher.GetType().GetMethod("Update")!.Invoke(cipher, [marker, "utf8", "hex"]);
+            saved.Add((assembly, hash, hmac, cipher, marker));
+        }
+
+        // Complete operations created before later emissions and check their independent buffers.
+        foreach (var (assembly, hash, hmac, cipher, marker) in saved)
+        {
+            hash.GetType().GetMethod("Update")!.Invoke(hash, ["-done"]);
+            hmac.GetType().GetMethod("Update")!.Invoke(hmac, ["-done"]);
+            byte[] message = Encoding.UTF8.GetBytes(marker + "-done");
+            Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(message)), hash.GetType().GetMethod("Digest")!.Invoke(hash, ["hex"]));
+            Assert.Equal(Convert.ToHexStringLower(HMACSHA256.HashData(Encoding.UTF8.GetBytes("key"), message)), hmac.GetType().GetMethod("Digest")!.Invoke(hmac, ["hex"]));
+            using var aes = Aes.Create();
+            aes.Key = new byte[32];
+            string ciphertext = Assert.IsType<string>(cipher.GetType().GetMethod("Final")!.Invoke(cipher, ["hex"]));
+            Assert.Equal(Convert.ToHexStringLower(aes.EncryptCbc(Encoding.UTF8.GetBytes(marker), new byte[16])), ciphertext);
+            var decipher = Activator.CreateInstance(assembly.GetType("$Decipher")!, ["aes-256-cbc", new byte[32], new byte[16]])!;
+            string prefix = Assert.IsType<string>(decipher.GetType().GetMethod("Update")!.Invoke(decipher, [ciphertext, "hex", "utf8"]));
+            string suffix = Assert.IsType<string>(decipher.GetType().GetMethod("Final")!.Invoke(decipher, ["utf8"]));
+            Assert.Equal(marker, prefix + suffix);
+            ((IDisposable)cipher).Dispose();
+            ((IDisposable)decipher).Dispose();
+        }
     }
 
     private static EmittedCryptoRuntime CreateDeclarations(string? missingHandle = null)

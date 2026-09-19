@@ -11,44 +11,37 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private TypeBuilder _tsVerifyTypeBuilder = null!;
-    private FieldBuilder _tsVerifyHashAlgorithmField = null!;
-    private FieldBuilder _tsVerifyDataField = null!;
-    private FieldBuilder _tsVerifyFinalizedField = null!;
 
     /// <summary>
     /// Phase 1: Define type, fields, constructor, and Update method.
     /// Called before EmitRuntimeClass. Shares the definition with $Sign via
     /// <see cref="EmitStreamingSignVerifyTypeDefinition"/>.
     /// </summary>
-    private void EmitTSVerifyTypeDefinition(ModuleBuilder moduleBuilder, EmittedCryptoRuntime crypto)
+    private StreamingSignVerifyParts EmitTSVerifyTypeDefinition(ModuleBuilder moduleBuilder, EmittedCryptoRuntime crypto)
     {
         var parts = EmitStreamingSignVerifyTypeDefinition(moduleBuilder, "$Verify",
             unsupportedAlgorithmPrefix: "Unsupported verification algorithm: ",
             updateFinalizedMessage: "Cannot update Verify after verify() has been called");
-        _tsVerifyTypeBuilder = parts.Type;
-        _tsVerifyHashAlgorithmField = parts.HashAlgorithmField;
-        _tsVerifyDataField = parts.DataField;
-        _tsVerifyFinalizedField = parts.FinalizedField;
         crypto.VerifyCtor = parts.Ctor;
+        return parts;
     }
 
     /// <summary>
     /// Phase 2: Add Verify method and finalize type.
     /// Called after EmitRuntimeClass (needs runtime.RequireCrypto().VerifyDataBytes).
     /// </summary>
-    private void EmitTSVerifyFinalize(EmittedRuntime runtime)
+    private void EmitTSVerifyFinalize(StreamingSignVerifyParts construction, EmittedRuntime runtime)
     {
         // Verify method needs runtime.RequireCrypto().VerifyDataBytes
-        EmitTSVerifyVerify(_tsVerifyTypeBuilder, runtime);
+        EmitTSVerifyVerify(construction, construction.Type, runtime);
 
-        _tsVerifyTypeBuilder.CreateType();
+        construction.Type.CreateType();
     }
 
     /// <summary>
     /// Emits: public object Verify(string publicKeyPem, object signature, string? signatureEncoding)
     /// </summary>
-    private void EmitTSVerifyVerify(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSVerifyVerify(StreamingSignVerifyParts construction, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Verify",
@@ -60,17 +53,17 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitThrowIfFinalized(il, _tsVerifyFinalizedField, "verify() has already been called");
+        EmitThrowIfFinalized(il, construction.FinalizedField, "verify() has already been called");
 
         // _finalized = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsVerifyFinalizedField);
+        il.Emit(OpCodes.Stfld, construction.FinalizedField);
 
         // var dataBytes = _data.ToArray()
         var dataBytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsVerifyDataField);
+        il.Emit(OpCodes.Ldfld, construction.DataField);
         il.Emit(OpCodes.Callvirt, _types.ListByteToArray);
         il.Emit(OpCodes.Stloc, dataBytesLocal);
 
@@ -166,7 +159,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);  // publicKeyPem
         il.Emit(OpCodes.Ldloc, dataBytesLocal);  // dataBytes
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsVerifyHashAlgorithmField);  // hashAlgorithm
+        il.Emit(OpCodes.Ldfld, construction.HashAlgorithmField);  // hashAlgorithm
         il.Emit(OpCodes.Ldloc, signatureBytesLocal);  // signatureBytes
         il.Emit(OpCodes.Call, runtime.RequireCrypto().VerifyDataBytes);
         il.Emit(OpCodes.Box, _types.Boolean);
