@@ -192,6 +192,11 @@ later compilations through a mutable array alias. Catalog order remains emission
 They contain no generated declarations or feature selection. Per-compilation handles and
 completion remain with the corresponding runtime components.
 
+`DatePrototypeEmitCatalog` owns the immutable prototype wiring definitions: JavaScript
+names, declared lengths and static selectors. Each selector reads a checked method from
+the supplied `EmittedDateImplementation`; the shared catalog never retains a generated
+handle. Date feature selection, forward declarations and completion remain per compilation.
+
 Migrate `EmittedRuntime` metadata one feature family at a time. DNS is the first component:
 `Dns` is null when `UsesDns` is false, and `RequireDns()` reports accidental use of a disabled
 feature. `RuntimeEmitter.EmitAll` creates the component before emission and completes it before
