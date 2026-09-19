@@ -77,9 +77,9 @@ public class EmittedTlsRuntimeTests
     public void ReusedEmitterKeepsTlsConstructionAndCertificateHelpersWithinEachAssembly(bool hosted)
     {
         using var rsa = RSA.Create(2048);
-        var request = new CertificateRequest("CN=reuse.example", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var request = new CertificateRequest("CN=localhost", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         var names = new SubjectAlternativeNameBuilder();
-        names.AddDnsName("reuse.example");
+        names.AddDnsName("localhost");
         names.AddIpAddress(IPAddress.Loopback);
         request.CertificateExtensions.Add(names.Build());
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
@@ -157,15 +157,15 @@ public class EmittedTlsRuntimeTests
             Assert.True(loadedCert.HasPrivateKey);
             socketType.GetField("_peerCert", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(socket, loadedCert);
             var peer = Assert.IsType<Dictionary<string, object>>(socketType.GetMethod("GetPeerCertificate")!.Invoke(socket, [null]));
-            Assert.Equal("DNS:reuse.example, IP Address:127.0.0.1", peer["subjectaltname"]);
+            Assert.Equal("DNS:localhost, IP Address:127.0.0.1", peer["subjectaltname"]);
             var check = assembly.GetType("$Runtime")!.GetMethod("TlsCheckServerIdentity")!;
-            Assert.Same(assembly.GetType("$Undefined"), check.Invoke(null, ["reuse.example", peer])!.GetType());
-            Assert.Same(assembly.GetType("$Error"), check.Invoke(null, ["missing.example", peer])!.GetType());
+            Assert.Same(assembly.GetType("$Undefined"), check.Invoke(null, ["localhost", peer])!.GetType());
+            Assert.Same(assembly.GetType("$Error"), check.Invoke(null, ["mismatch.localhost", peer])!.GetType());
 
             var connectType = assembly.GetType("$TlsConnectClosure")!;
             foreach (bool reject in new[] { false, true })
             {
-                var connect = Activator.CreateInstance(connectType, socket, 443, "reuse.example", reject, new[] { "h2" })!;
+                var connect = Activator.CreateInstance(connectType, socket, 443, "localhost", reject, new[] { "h2" })!;
                 var validate = connectType.GetMethod("_Validate")!;
                 Assert.Equal(true, validate.Invoke(connect, [null, loadedCert, null, SslPolicyErrors.None]));
                 Assert.Equal(!reject, validate.Invoke(connect, [null, loadedCert, null, SslPolicyErrors.RemoteCertificateChainErrors]));
