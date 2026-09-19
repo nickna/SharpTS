@@ -11,13 +11,14 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // $ZlibTransform fields
-    private FieldBuilder _tsZlibKindField = null!;        // int: ZlibTransformKind ordinal
-    private FieldBuilder _tsZlibOutputMsField = null!;     // MemoryStream: compression output buffer
-    private FieldBuilder _tsZlibCompressField = null!;     // Stream: the BCL compression stream
-    private FieldBuilder _tsZlibInputMsField = null!;      // MemoryStream: decompression accumulation buffer
-    private FieldBuilder _tsZlibLevelField = null!;        // int (CompressionLevel): compression level
-    private FieldBuilder _tsZlibBytesWrittenField = null!; // long: total bytes written into the engine
+    // Immutable construction metadata is confined to this emission.
+    private sealed record ZlibTransformFields(
+        FieldBuilder Kind,
+        FieldBuilder OutputMs,
+        FieldBuilder Compress,
+        FieldBuilder InputMs,
+        FieldBuilder Level,
+        FieldBuilder BytesWritten);
 
     // Kind constants matching ZlibTransformKind enum
     private const int KindGzip = 0;
@@ -45,25 +46,27 @@ public partial class RuntimeEmitter
         _ = typeBuilder;
 
         // Fields
-        _tsZlibKindField = typeBuilder.DefineField("_kind", _types.Int32, FieldAttributes.Private);
-        _tsZlibOutputMsField = typeBuilder.DefineField("_outputMs", typeof(MemoryStream), FieldAttributes.Private);
-        _tsZlibCompressField = typeBuilder.DefineField("_compressStream", _types.Stream, FieldAttributes.Private);
-        _tsZlibInputMsField = typeBuilder.DefineField("_inputMs", typeof(MemoryStream), FieldAttributes.Private);
-        _tsZlibLevelField = typeBuilder.DefineField("_level", _types.Int32, FieldAttributes.Private);
-        _tsZlibBytesWrittenField = typeBuilder.DefineField("_bytesWritten", _types.Int64, FieldAttributes.Private);
+        var kindField = typeBuilder.DefineField("_kind", _types.Int32, FieldAttributes.Private);
+        var outputMsField = typeBuilder.DefineField("_outputMs", typeof(MemoryStream), FieldAttributes.Private);
+        var compressField = typeBuilder.DefineField("_compressStream", _types.Stream, FieldAttributes.Private);
+        var inputMsField = typeBuilder.DefineField("_inputMs", typeof(MemoryStream), FieldAttributes.Private);
+        var levelField = typeBuilder.DefineField("_level", _types.Int32, FieldAttributes.Private);
+        var bytesWrittenField = typeBuilder.DefineField("_bytesWritten", _types.Int64, FieldAttributes.Private);
+        var fields = new ZlibTransformFields(
+            kindField, outputMsField, compressField, inputMsField, levelField, bytesWrittenField);
 
         // Emit ChunkToBytes as a static method on $ZlibTransform itself
-        EmitTSZlibChunkToBytesOnType(typeBuilder, runtime);
-        EmitTSZlibTransformCtor(typeBuilder, runtime);
-        EmitTSZlibTransformWrite(typeBuilder, runtime);
-        EmitTSZlibTransformEnd(typeBuilder, runtime);
+        var chunkToBytes = EmitTSZlibChunkToBytesOnType(typeBuilder, runtime);
+        EmitTSZlibTransformCtor(fields, typeBuilder, runtime);
+        EmitTSZlibTransformWrite(fields, chunkToBytes, typeBuilder, runtime);
+        EmitTSZlibTransformEnd(fields, chunkToBytes, typeBuilder, runtime);
         // Node zlib stream control surface (#1164). Reflection dispatch resolves the
         // camelCase JS names to these PascalCase members via ToPascalCase + IgnoreCase.
-        EmitTSZlibBytesProperties(typeBuilder, runtime);
-        EmitTSZlibTransformFlush(typeBuilder, runtime);
-        EmitTSZlibTransformParams(typeBuilder, runtime);
-        EmitTSZlibTransformReset(typeBuilder, runtime);
-        EmitTSZlibTransformClose(typeBuilder, runtime);
+        EmitTSZlibBytesProperties(fields, typeBuilder, runtime);
+        EmitTSZlibTransformFlush(fields, typeBuilder, runtime);
+        EmitTSZlibTransformParams(fields, typeBuilder, runtime);
+        EmitTSZlibTransformReset(fields, typeBuilder, runtime);
+        EmitTSZlibTransformClose(fields, typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }
@@ -72,7 +75,7 @@ public partial class RuntimeEmitter
     /// Constructor: public $ZlibTransform(int kind, int compressionLevel)
     /// Sets up compression or decompression state based on kind.
     /// </summary>
-    private void EmitTSZlibTransformCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSZlibTransformCtor(ZlibTransformFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
@@ -90,12 +93,12 @@ public partial class RuntimeEmitter
         // this._kind = kind
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, _tsZlibKindField);
+        il.Emit(OpCodes.Stfld, fields.Kind);
 
         // this._level = compressionLevel
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stfld, _tsZlibLevelField);
+        il.Emit(OpCodes.Stfld, fields.Level);
 
         // if (IsCompression(kind)) setup compression, else setup decompression
         var isDecompLabel = il.DefineLabel();
@@ -128,18 +131,18 @@ public partial class RuntimeEmitter
         // _outputMs = new MemoryStream()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(typeof(MemoryStream)));
-        il.Emit(OpCodes.Stfld, _tsZlibOutputMsField);
+        il.Emit(OpCodes.Stfld, fields.OutputMs);
 
         // Create the appropriate compression stream
         // Switch on kind to create correct compression stream
-        EmitCreateCompressionStreamSwitch(il, runtime);
+        EmitCreateCompressionStreamSwitch(fields, il, runtime);
         il.Emit(OpCodes.Br, doneLabel);
 
         // Decompression setup: _inputMs = new MemoryStream()
         il.MarkLabel(isDecompLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(typeof(MemoryStream)));
-        il.Emit(OpCodes.Stfld, _tsZlibInputMsField);
+        il.Emit(OpCodes.Stfld, fields.InputMs);
 
         il.MarkLabel(doneLabel);
         il.Emit(OpCodes.Ret);
@@ -149,7 +152,7 @@ public partial class RuntimeEmitter
     /// Emits a switch on this._kind to create the appropriate BCL compression stream.
     /// Stores result in this._compressStream.
     /// </summary>
-    private void EmitCreateCompressionStreamSwitch(ILGenerator il, EmittedRuntime runtime)
+    private void EmitCreateCompressionStreamSwitch(ZlibTransformFields fields, ILGenerator il, EmittedRuntime runtime)
     {
         var gzipLabel = il.DefineLabel();
         var deflateLabel = il.DefineLabel();
@@ -160,20 +163,20 @@ public partial class RuntimeEmitter
 
         // switch (_kind)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibKindField);
+        il.Emit(OpCodes.Ldfld, fields.Kind);
 
         il.Emit(OpCodes.Ldc_I4, KindGzip);
         il.Emit(OpCodes.Beq, gzipLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibKindField);
+        il.Emit(OpCodes.Ldfld, fields.Kind);
         il.Emit(OpCodes.Ldc_I4, KindDeflate);
         il.Emit(OpCodes.Beq, deflateLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibKindField);
+        il.Emit(OpCodes.Ldfld, fields.Kind);
         il.Emit(OpCodes.Ldc_I4, KindDeflateRaw);
         il.Emit(OpCodes.Beq, deflateRawLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibKindField);
+        il.Emit(OpCodes.Ldfld, fields.Kind);
         il.Emit(OpCodes.Ldc_I4, KindZstdCompress);
         il.Emit(OpCodes.Beq, zstdLabel);
         // Default: brotli
@@ -183,60 +186,60 @@ public partial class RuntimeEmitter
         il.MarkLabel(gzipLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibOutputMsField);
+        il.Emit(OpCodes.Ldfld, fields.OutputMs);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibLevelField);
+        il.Emit(OpCodes.Ldfld, fields.Level);
         il.Emit(OpCodes.Ldc_I4_1); // leaveOpen = true
         il.Emit(OpCodes.Newobj, typeof(GZipStream).GetConstructor([typeof(Stream), typeof(CompressionLevel), typeof(bool)])!);
-        il.Emit(OpCodes.Stfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Stfld, fields.Compress);
         il.Emit(OpCodes.Br, storeLabel);
 
         // ZLibStream(outputMs, level, leaveOpen: true)
         il.MarkLabel(deflateLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibOutputMsField);
+        il.Emit(OpCodes.Ldfld, fields.OutputMs);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibLevelField);
+        il.Emit(OpCodes.Ldfld, fields.Level);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newobj, typeof(ZLibStream).GetConstructor([typeof(Stream), typeof(CompressionLevel), typeof(bool)])!);
-        il.Emit(OpCodes.Stfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Stfld, fields.Compress);
         il.Emit(OpCodes.Br, storeLabel);
 
         // DeflateStream(outputMs, level, leaveOpen: true)
         il.MarkLabel(deflateRawLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibOutputMsField);
+        il.Emit(OpCodes.Ldfld, fields.OutputMs);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibLevelField);
+        il.Emit(OpCodes.Ldfld, fields.Level);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newobj, typeof(DeflateStream).GetConstructor([typeof(Stream), typeof(CompressionLevel), typeof(bool)])!);
-        il.Emit(OpCodes.Stfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Stfld, fields.Compress);
         il.Emit(OpCodes.Br, storeLabel);
 
         // BrotliStream(outputMs, level, leaveOpen: true)
         il.MarkLabel(brotliLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibOutputMsField);
+        il.Emit(OpCodes.Ldfld, fields.OutputMs);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibLevelField);
+        il.Emit(OpCodes.Ldfld, fields.Level);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newobj, typeof(BrotliStream).GetConstructor([typeof(Stream), typeof(CompressionLevel), typeof(bool)])!);
-        il.Emit(OpCodes.Stfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Stfld, fields.Compress);
         il.Emit(OpCodes.Br, storeLabel);
 
         // ZstdSharp.CompressionStream(outputMs, level=3, bufferSize=0, leaveOpen=true)
         il.MarkLabel(zstdLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibOutputMsField);
+        il.Emit(OpCodes.Ldfld, fields.OutputMs);
         il.Emit(OpCodes.Ldc_I4_3);  // default zstd level
         il.Emit(OpCodes.Ldc_I4_0);  // bufferSize = 0 (default)
         il.Emit(OpCodes.Ldc_I4_1);  // leaveOpen = true
         il.Emit(OpCodes.Newobj, typeof(ZstdSharp.CompressionStream).GetConstructor([typeof(Stream), typeof(int), typeof(int), typeof(bool)])!);
-        il.Emit(OpCodes.Stfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Stfld, fields.Compress);
 
         il.MarkLabel(storeLabel);
     }
@@ -245,7 +248,7 @@ public partial class RuntimeEmitter
     /// Override Write: for compression, write bytes to compression stream and push output.
     /// For decompression, accumulate in input buffer.
     /// </summary>
-    private void EmitTSZlibTransformWrite(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSZlibTransformWrite(ZlibTransformFields fields, MethodBuilder chunkToBytes, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Write",
@@ -271,7 +274,7 @@ public partial class RuntimeEmitter
         // var bytes = ChunkToBytes(chunk)
         var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_1); // chunk
-        il.Emit(OpCodes.Call, _tsZlibChunkToBytesMethod!);
+        il.Emit(OpCodes.Call, chunkToBytes);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
         // if (bytes.Length == 0) goto afterWrite
@@ -284,22 +287,22 @@ public partial class RuntimeEmitter
         // _bytesWritten += bytes.Length (Node's bytesWritten counts engine input)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibBytesWrittenField);
+        il.Emit(OpCodes.Ldfld, fields.BytesWritten);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stfld, _tsZlibBytesWrittenField);
+        il.Emit(OpCodes.Stfld, fields.BytesWritten);
 
         // if (_compressStream != null) -> compression path, else -> decompression path
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Brfalse, isDecompLabel);
 
         // --- Compression path ---
         // _compressStream.Write(bytes, 0, bytes.Length)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, bytesLocal);
@@ -309,19 +312,19 @@ public partial class RuntimeEmitter
 
         // _compressStream.Flush()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Stream, "Flush"));
 
         // Push output buffer contents to readable side
         // var data = _outputMs.ToArray(); _outputMs.SetLength(0);
-        EmitPushOutputBuffer(il, runtime);
+        EmitPushOutputBuffer(fields, il, runtime);
         il.Emit(OpCodes.Br, afterWriteLabel);
 
         // --- Decompression path ---
         il.MarkLabel(isDecompLabel);
         // _inputMs.Write(bytes, 0, bytes.Length)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibInputMsField);
+        il.Emit(OpCodes.Ldfld, fields.InputMs);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, bytesLocal);
@@ -342,16 +345,16 @@ public partial class RuntimeEmitter
     /// Emits IL to push whatever is in _outputMs to the readable side as a $Buffer,
     /// then resets _outputMs.
     /// </summary>
-    private void EmitPushOutputBuffer(ILGenerator il, EmittedRuntime runtime)
+    private void EmitPushOutputBuffer(ZlibTransformFields fields, ILGenerator il, EmittedRuntime runtime)
     {
         var noDataLabel = il.DefineLabel();
 
         // if (_outputMs == null || _outputMs.Position == 0) skip
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibOutputMsField);
+        il.Emit(OpCodes.Ldfld, fields.OutputMs);
         il.Emit(OpCodes.Brfalse, noDataLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibOutputMsField);
+        il.Emit(OpCodes.Ldfld, fields.OutputMs);
         il.Emit(OpCodes.Callvirt, typeof(MemoryStream).GetProperty("Position")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I8, 0L);
         il.Emit(OpCodes.Beq, noDataLabel);
@@ -359,13 +362,13 @@ public partial class RuntimeEmitter
         // var data = _outputMs.ToArray()
         var dataLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibOutputMsField);
+        il.Emit(OpCodes.Ldfld, fields.OutputMs);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(typeof(MemoryStream), "ToArray"));
         il.Emit(OpCodes.Stloc, dataLocal);
 
         // _outputMs.SetLength(0)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibOutputMsField);
+        il.Emit(OpCodes.Ldfld, fields.OutputMs);
         il.Emit(OpCodes.Ldc_I8, 0L);
         il.Emit(OpCodes.Callvirt, typeof(MemoryStream).GetMethod("SetLength", [typeof(long)])!);
 
@@ -390,7 +393,7 @@ public partial class RuntimeEmitter
     /// For decompression, decompress accumulated input and push result.
     /// Then signal end of stream.
     /// </summary>
-    private void EmitTSZlibTransformEnd(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSZlibTransformEnd(ZlibTransformFields fields, MethodBuilder chunkToBytes, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "End",
@@ -425,29 +428,29 @@ public partial class RuntimeEmitter
         // Convert chunk to bytes and write
         var chunkBytes = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _tsZlibChunkToBytesMethod!);
+        il.Emit(OpCodes.Call, chunkToBytes);
         il.Emit(OpCodes.Stloc, chunkBytes);
 
         // _bytesWritten += chunk.Length
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibBytesWrittenField);
+        il.Emit(OpCodes.Ldfld, fields.BytesWritten);
         il.Emit(OpCodes.Ldloc, chunkBytes);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stfld, _tsZlibBytesWrittenField);
+        il.Emit(OpCodes.Stfld, fields.BytesWritten);
 
         // if (_compressStream != null) -> write to compress stream
         var chunkDecompLabel = il.DefineLabel();
         var afterChunkLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Brfalse, chunkDecompLabel);
 
         // compression: write to compression stream
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Ldloc, chunkBytes);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, chunkBytes);
@@ -459,7 +462,7 @@ public partial class RuntimeEmitter
         // decompression: accumulate
         il.MarkLabel(chunkDecompLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibInputMsField);
+        il.Emit(OpCodes.Ldfld, fields.InputMs);
         il.Emit(OpCodes.Ldloc, chunkBytes);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, chunkBytes);
@@ -472,26 +475,26 @@ public partial class RuntimeEmitter
 
         // Check if compression or decompression
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Brfalse, isDecompLabel);
 
         // --- Compression flush ---
         // Dispose compression stream (writes final data)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(typeof(IDisposable), "Dispose"));
         // null out the field so we know it's disposed
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Stfld, fields.Compress);
 
         // Push remaining output buffer
-        EmitPushOutputBuffer(il, runtime);
+        EmitPushOutputBuffer(fields, il, runtime);
         il.Emit(OpCodes.Br, emitEventsLabel);
 
         // --- Decompression flush ---
         il.MarkLabel(isDecompLabel);
-        EmitDecompressionFlush(il, runtime);
+        EmitDecompressionFlush(fields, il, runtime);
 
         il.MarkLabel(emitEventsLabel);
 
@@ -523,7 +526,7 @@ public partial class RuntimeEmitter
     /// Emits decompression flush: read accumulated bytes from _inputMs, decompress via
     /// the appropriate BCL stream, push result as $Buffer.
     /// </summary>
-    private void EmitDecompressionFlush(ILGenerator il, EmittedRuntime runtime)
+    private void EmitDecompressionFlush(ZlibTransformFields fields, ILGenerator il, EmittedRuntime runtime)
     {
         // var inputBytes = _inputMs.ToArray()
         var inputBytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
@@ -531,21 +534,21 @@ public partial class RuntimeEmitter
 
         // if (_inputMs == null) skip
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibInputMsField);
+        il.Emit(OpCodes.Ldfld, fields.InputMs);
         il.Emit(OpCodes.Brfalse, skipDecompLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibInputMsField);
+        il.Emit(OpCodes.Ldfld, fields.InputMs);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(typeof(MemoryStream), "ToArray"));
         il.Emit(OpCodes.Stloc, inputBytesLocal);
 
         // Dispose _inputMs
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibInputMsField);
+        il.Emit(OpCodes.Ldfld, fields.InputMs);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(typeof(IDisposable), "Dispose"));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _tsZlibInputMsField);
+        il.Emit(OpCodes.Stfld, fields.InputMs);
 
         // if (inputBytes.Length == 0) skip
         il.Emit(OpCodes.Ldloc, inputBytesLocal);
@@ -568,7 +571,7 @@ public partial class RuntimeEmitter
 
         // Create decompression stream based on kind
         var decompStreamLocal = il.DeclareLocal(_types.Stream);
-        EmitCreateDecompressionStream(il, inputStreamLocal, inputBytesLocal, decompStreamLocal);
+        EmitCreateDecompressionStream(fields, il, inputStreamLocal, inputBytesLocal, decompStreamLocal);
 
         // CopyTo output
         il.Emit(OpCodes.Ldloc, decompStreamLocal);
@@ -611,7 +614,7 @@ public partial class RuntimeEmitter
     /// Emits a switch on this._kind to create the appropriate BCL decompression stream.
     /// For Unzip, auto-detects format from magic bytes.
     /// </summary>
-    private void EmitCreateDecompressionStream(ILGenerator il, LocalBuilder inputStreamLocal,
+    private void EmitCreateDecompressionStream(ZlibTransformFields fields, ILGenerator il, LocalBuilder inputStreamLocal,
         LocalBuilder inputBytesLocal, LocalBuilder decompStreamLocal)
     {
         var gunzipLabel = il.DefineLabel();
@@ -624,25 +627,25 @@ public partial class RuntimeEmitter
 
         // For Unzip (kind == 8), detect format from magic bytes
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibKindField);
+        il.Emit(OpCodes.Ldfld, fields.Kind);
         il.Emit(OpCodes.Ldc_I4, KindUnzip);
         il.Emit(OpCodes.Beq, unzipLabel);
 
         // Normal dispatch
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibKindField);
+        il.Emit(OpCodes.Ldfld, fields.Kind);
         il.Emit(OpCodes.Ldc_I4, KindGunzip);
         il.Emit(OpCodes.Beq, gunzipLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibKindField);
+        il.Emit(OpCodes.Ldfld, fields.Kind);
         il.Emit(OpCodes.Ldc_I4, KindInflate);
         il.Emit(OpCodes.Beq, inflateLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibKindField);
+        il.Emit(OpCodes.Ldfld, fields.Kind);
         il.Emit(OpCodes.Ldc_I4, KindInflateRaw);
         il.Emit(OpCodes.Beq, inflateRawLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibKindField);
+        il.Emit(OpCodes.Ldfld, fields.Kind);
         il.Emit(OpCodes.Ldc_I4, KindZstdDecompress);
         il.Emit(OpCodes.Beq, zstdDecompLabel);
         // Default to brotli decompress
@@ -737,7 +740,7 @@ public partial class RuntimeEmitter
     /// Emits the bytesWritten / bytesRead read-only properties (both surface the
     /// engine-input byte count; Node's bytesRead is a deprecated alias).
     /// </summary>
-    private void EmitTSZlibBytesProperties(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSZlibBytesProperties(ZlibTransformFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         foreach (var name in new[] { "BytesWritten", "BytesRead" })
         {
@@ -749,7 +752,7 @@ public partial class RuntimeEmitter
                 Type.EmptyTypes);
             var il = getter.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _tsZlibBytesWrittenField);
+            il.Emit(OpCodes.Ldfld, fields.BytesWritten);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Ret);
             prop.SetGetMethod(getter);
@@ -787,7 +790,7 @@ public partial class RuntimeEmitter
     /// flush([kind][, callback]): pushes buffered compressor output and invokes the
     /// callback. (BCL streams cannot emit a true zlib flush boundary — documented.)
     /// </summary>
-    private void EmitTSZlibTransformFlush(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSZlibTransformFlush(ZlibTransformFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Flush",
@@ -798,12 +801,12 @@ public partial class RuntimeEmitter
 
         var notComp = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Brfalse, notComp);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Stream, "Flush"));
-        EmitPushOutputBuffer(il, runtime);
+        EmitPushOutputBuffer(fields, il, runtime);
         il.MarkLabel(notComp);
 
         EmitInvokeFirstCallback(il, runtime, 2, 1);
@@ -816,7 +819,7 @@ public partial class RuntimeEmitter
     /// retuned, so we flush and invoke the callback; the values are not applied to
     /// already-written data.
     /// </summary>
-    private void EmitTSZlibTransformParams(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSZlibTransformParams(ZlibTransformFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Params",
@@ -827,12 +830,12 @@ public partial class RuntimeEmitter
 
         var notComp = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Brfalse, notComp);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Stream, "Flush"));
-        EmitPushOutputBuffer(il, runtime);
+        EmitPushOutputBuffer(fields, il, runtime);
         il.MarkLabel(notComp);
 
         EmitInvokeFirstCallback(il, runtime, 3);
@@ -843,7 +846,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// reset(): restores the stream to its initial state for reuse and zeroes the counter.
     /// </summary>
-    private void EmitTSZlibTransformReset(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSZlibTransformReset(ZlibTransformFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Reset",
@@ -857,38 +860,38 @@ public partial class RuntimeEmitter
 
         // Compression streams keep _outputMs; decompression streams keep _inputMs.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibOutputMsField);
+        il.Emit(OpCodes.Ldfld, fields.OutputMs);
         il.Emit(OpCodes.Brfalse, decomp);
 
         // dispose old compression stream if present
         var skipDispose = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Brfalse, skipDispose);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(typeof(IDisposable), "Dispose"));
         il.MarkLabel(skipDispose);
 
         // _outputMs = new MemoryStream(); recreate _compressStream
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(typeof(MemoryStream)));
-        il.Emit(OpCodes.Stfld, _tsZlibOutputMsField);
-        EmitCreateCompressionStreamSwitch(il, runtime);
+        il.Emit(OpCodes.Stfld, fields.OutputMs);
+        EmitCreateCompressionStreamSwitch(fields, il, runtime);
         il.Emit(OpCodes.Br, done);
 
         // decompression: _inputMs = new MemoryStream()
         il.MarkLabel(decomp);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(typeof(MemoryStream)));
-        il.Emit(OpCodes.Stfld, _tsZlibInputMsField);
+        il.Emit(OpCodes.Stfld, fields.InputMs);
 
         il.MarkLabel(done);
         // _bytesWritten = 0
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Stfld, _tsZlibBytesWrittenField);
+        il.Emit(OpCodes.Stfld, fields.BytesWritten);
 
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -897,7 +900,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// close([callback]): releases the streams, emits 'close', and invokes the callback.
     /// </summary>
-    private void EmitTSZlibTransformClose(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSZlibTransformClose(ZlibTransformFields fields, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Close",
@@ -908,26 +911,26 @@ public partial class RuntimeEmitter
 
         var skipComp = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Brfalse, skipComp);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Ldfld, fields.Compress);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(typeof(IDisposable), "Dispose"));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _tsZlibCompressField);
+        il.Emit(OpCodes.Stfld, fields.Compress);
         il.MarkLabel(skipComp);
 
         var skipInput = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibInputMsField);
+        il.Emit(OpCodes.Ldfld, fields.InputMs);
         il.Emit(OpCodes.Brfalse, skipInput);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsZlibInputMsField);
+        il.Emit(OpCodes.Ldfld, fields.InputMs);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(typeof(IDisposable), "Dispose"));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stfld, _tsZlibInputMsField);
+        il.Emit(OpCodes.Stfld, fields.InputMs);
         il.MarkLabel(skipInput);
 
         // emit 'close'
@@ -944,20 +947,18 @@ public partial class RuntimeEmitter
     }
 
     // Static helper method for converting chunk to byte[]
-    private MethodBuilder? _tsZlibChunkToBytesMethod;
 
     /// <summary>
     /// Emits: public static byte[] ChunkToBytes(object? chunk)
     /// Converts Buffer or string to byte[]. Emitted on the $ZlibTransform type.
     /// </summary>
-    private void EmitTSZlibChunkToBytesOnType(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitTSZlibChunkToBytesOnType(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ChunkToBytes",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.MakeArrayType(_types.Byte),
             [_types.Object]);
-        _tsZlibChunkToBytesMethod = method;
 
         var il = method.GetILGenerator();
         var isStringLabel = il.DefineLabel();
@@ -992,5 +993,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Byte);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 }

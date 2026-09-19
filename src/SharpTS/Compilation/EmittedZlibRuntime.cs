@@ -184,10 +184,12 @@ public sealed class EmittedZlibRuntime
     private static T Require<T>(T? method, [CallerMemberName] string name = "") where T : class =>
         method ?? throw new InvalidOperationException($"Zlib metadata '{name}' has not been declared.");
 
-    private void Set<T>(ref T? field, T value) where T : class
+    private void Set<T>(ref T? field, T value, [CallerMemberName] string name = "") where T : class
     {
         EnsureMutable();
         ArgumentNullException.ThrowIfNull(value);
+        if (field is not null)
+            throw new InvalidOperationException($"Zlib metadata '{name}' has already been declared.");
         field = value;
     }
 

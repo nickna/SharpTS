@@ -1593,6 +1593,17 @@ socket error-code helper and the TCP drop-payload helper remain method-local. Th
 to own checked public declarations and completion; optional availability, forward declarations,
 field visibility and type-creation order are unchanged.
 
+Zlib construction is local to its emitting methods. Six transform fields form an immutable
+construction value, its chunk-conversion helper is passed directly to Write/End, and eight
+synchronous input/option/copy helpers are returned into a separate immutable value. None of
+these fifteen handles remain on `RuntimeEmitter`. The checked Zlib component still owns its
+twenty-four public declarations and rejects missing, null and duplicate declarations; failed
+completion can be repaired before metadata is frozen. Declaration/body order, compression
+options, stream finalization, Buffer/NodeStream dependencies and deployment are preserved.
+Lifecycle and hosted/standalone reuse tests exercise prior assemblies after later emissions.
+The kind constants, method-local BCL lookups and shared infrastructure remain in the final
+ownership audit under #1599.
+
 Datagram construction stays within one `EmitAll` invocation. Ten socket field builders form an
 immutable construction value passed from early type declaration to the deferred receive body;
 five event/callback helpers remain local and are passed directly to Bind, Close and Connect.
