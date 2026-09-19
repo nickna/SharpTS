@@ -6,6 +6,7 @@ using SharpTS.Compilation;
 using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
+using static SharpTS.Tests.CompilerTests.RuntimeEmissionTestHelpers;
 
 namespace SharpTS.Tests.CompilerTests;
 
@@ -177,14 +178,6 @@ public class EmittedEventEmitterRuntimeTests
             var error = Assert.Throws<TargetInvocationException>(() => property.SetValue(events, value));
             Assert.IsType<InvalidOperationException>(error.InnerException);
         }
-    }
-
-    private static MemoryStream Save(EmittedRuntime runtime)
-    {
-        var stream = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(stream);
-        stream.Position = 0;
-        return stream;
     }
 
     private static EmittedRuntime EmitRuntime(string? source, bool hosted = false)

@@ -5,6 +5,7 @@ using System.Reflection.PortableExecutable;
 using SharpTS.Compilation;
 using SharpTS.Parsing;
 using Xunit;
+using static SharpTS.Tests.CompilerTests.RuntimeEmissionTestHelpers;
 
 namespace SharpTS.Tests.CompilerTests;
 
@@ -199,14 +200,6 @@ public class EmittedAsyncLocalStorageRuntimeTests
         Assert.False(typeof(EmittedAsyncLocalStorageRuntime).GetProperty(nameof(storage.Ctor))!.SetMethod!.IsPublic);
         Assert.Throws<InvalidOperationException>(storage.CompleteEmission);
         Assert.Throws<InvalidOperationException>(() => storage.Ctor = storage.Ctor);
-    }
-
-    private static MemoryStream Save(EmittedRuntime runtime)
-    {
-        var bytes = new MemoryStream();
-        ((PersistedAssemblyBuilder)runtime.RuntimeType.Assembly).Save(bytes);
-        bytes.Position = 0;
-        return bytes;
     }
 
     private static EmittedRuntime EmitRuntime(string? source, bool hosted, RuntimeEmitter? emitter = null)
