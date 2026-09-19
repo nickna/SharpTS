@@ -50,7 +50,7 @@ public partial class ILCompiler
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeMapper _typeMapper;
     private readonly TypeEmitterRegistry _typeEmitterRegistry = new();  // Type-first method dispatch registry
-    private readonly BuiltInModuleEmitterRegistry _builtInModuleEmitterRegistry = new();  // Built-in module emitters
+    private readonly BuiltInModuleEmitterRegistry _builtInModuleEmitterRegistry = BuiltInModuleEmitterRegistry.CreateDefault();  // Built-in module emitters
     private readonly Dictionary<string, string> _builtInModuleNamespaces = [];  // Variable name -> module name for direct dispatch
     // Per-owning-module local-name → (module, method) bindings for named imports.
     // Keyed by the importing module's path so that two stdlib modules aliasing the same
@@ -1210,62 +1210,6 @@ public partial class ILCompiler
         _typeEmitterRegistry.RegisterStatic("RegExp", new RegExpStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Date", new DateStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("ReadableStream", new ReadableStreamStaticEmitter());
-
-        // Built-in module emitters
-        _builtInModuleEmitterRegistry.Register(new OsModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new FsModuleEmitter());
-        // "path"         — migrated to stdlib/node/path.ts (pure-TS, uses primitive:process for cwd).
-        // "querystring"  — migrated to stdlib/node/querystring.ts.
-        // "assert"       — migrated to stdlib/node/assert.ts (pure-logic leaf).
-        // "url"          — migrated to stdlib/node/url.ts (full WHATWG state machine).
-        // "process"      — migrated to stdlib/node/process.ts which imports from primitive:process.
-        //   ProcessModuleEmitter remains, registered only under the primitive specifier.
-        var processEmitter = new ProcessModuleEmitter();
-        _builtInModuleEmitterRegistry.RegisterAlias("primitive:process", processEmitter);
-        _builtInModuleEmitterRegistry.Register(new CryptoModuleEmitter());
-        // "util" — migrated to stdlib/node/util.ts (pure-TS port).
-        // "readline" — migrated to stdlib/node/readline.ts; emitter registered under primitive:readline only.
-        _builtInModuleEmitterRegistry.Register(new ReadlinePrimitiveEmitter());
-        _builtInModuleEmitterRegistry.Register(new ModulePrimitiveEmitter());
-        _builtInModuleEmitterRegistry.Register(new StreamConsumersPrimitiveEmitter());
-        _builtInModuleEmitterRegistry.Register(new ChildProcessModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new BufferModuleEmitter());
-        // "zlib" — migrated to stdlib/node/zlib.ts; emitter registered under primitive:zlib only.
-        _builtInModuleEmitterRegistry.Register(new ZlibModuleEmitter());
-        // "events" — migrated to stdlib/node/events.ts (pure-TS EventEmitter).
-        // "timers" and "timers/promises" migrated to stdlib/node/timers{,/promises}.ts
-        //   (TS facades over primitive:timers and primitive:timers/promises respectively).
-        _builtInModuleEmitterRegistry.Register(new TimersPrimitiveEmitter());
-        _builtInModuleEmitterRegistry.Register(new TimersPromisesPrimitiveEmitter());
-        // "string_decoder" — migrated to stdlib/node/string_decoder.ts.
-        // "perf_hooks" — migrated to stdlib/node/perf_hooks.ts (pure-TS over primitive:perf).
-        //   Only the narrow now() method needs host access; mark/measure/observer are TS.
-        _builtInModuleEmitterRegistry.Register(new PerfPrimitiveEmitter());
-        _builtInModuleEmitterRegistry.Register(new StreamModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new StreamPromisesModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new StreamWebModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new HttpModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new WorkerThreadsModuleEmitter());
-        // "dns" / "dns/promises" migrated to stdlib TS facades. These emitters
-        // now serve only the stdlib-internal primitive:dns{,/promises} seams.
-        _builtInModuleEmitterRegistry.Register(new DnsModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new DnsPromisesModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new FsPromisesModuleEmitter());
-        // "net" migrated to stdlib/node/net.ts; emitter serves primitive:net.
-        _builtInModuleEmitterRegistry.Register(new NetModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new TlsModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new DgramModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new ClusterModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new VmModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new SourceExecutionModuleEmitter());
-        // "async_hooks" migrated to stdlib/node/async_hooks.ts (TS class over primitive:async_hooks).
-        _builtInModuleEmitterRegistry.Register(new AsyncHooksPrimitiveEmitter());
-        // "tty" migrated to stdlib/node/tty.ts (pure-TS over primitive:tty).
-        _builtInModuleEmitterRegistry.Register(new TtyPrimitiveEmitter());
-
-        // https delegates to http emitter
-        var httpsEmitter = new HttpModuleEmitter();
-        _builtInModuleEmitterRegistry.Register(new HttpsModuleEmitterProxy());
     }
 
     #endregion
