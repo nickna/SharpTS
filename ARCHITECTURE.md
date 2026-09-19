@@ -214,7 +214,8 @@ including implied async/module features and hosted emission. Adoption helpers ar
 resolving callbacks, and capability helpers before static wrappers; later body emitters reuse those
 declarations. Completion follows runtime and dependent-type finalization. Promise type emission,
 task wrapping, and capability-only helpers accept `EmittedPromiseRuntime` directly. State-machine
-carriers and the Promise task field stay local to the emitter. The shared FIFO `QueuePromiseJob`,
+carriers stay local to the emitter. The Promise task field handle stays local to
+`EmitTSPromiseClass`. The shared FIFO `QueuePromiseJob`,
 timer/stream Promise APIs, and filesystem/module registries remain owned by their respective
 infrastructure or feature families; they are not duplicate Promise handles and remain in the
 residual migration scope of #1599.
