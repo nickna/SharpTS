@@ -639,7 +639,7 @@ public sealed class RuntimeFeatureDetector
         }
         // `AbortSignal.any([...])` late-binds to RuntimeTypes.AbortSignalAnyCompiled via
         // reflection on its normal path, so a program that actually calls it needs SharpTS.dll
-        // co-located at runtime. This precise flag drives RequireSharpTSRuntime("AbortSignal.any")
+        // co-located at runtime. This precise flag drives Deployment.Require("AbortSignal.any")
         // without penalising the common, pure-IL AbortController + fetch case (#116).
         if (objectName == "AbortSignal" && memberName == "any")
         {

@@ -382,7 +382,7 @@ public sealed class DateEmitter : ITypeEmitterStrategy
             il.Emit(OpCodes.Ldc_I4, kind);
             emitter.EmitArgsArray(arguments);
             il.Emit(OpCodes.Call, ctx.Runtime.Dates.RequireImplementation().ToLocaleWithOptions);
-            ctx.Runtime.RequireSharpTSRuntime("Date.prototype.toLocale* with locale/options");
+            ctx.Runtime.Deployment.Require("Date.prototype.toLocale* with locale/options");
         }
         else
         {

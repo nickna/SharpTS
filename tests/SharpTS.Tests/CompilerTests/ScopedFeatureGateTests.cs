@@ -86,7 +86,7 @@ public sealed class ScopedFeatureGateTests
             var features = new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
             var builder = NewAssembly(); var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             Assert.Equal(readline, runtime.Readline is not null); Assert.Equal(abort, runtime.Abort is not null);
-            Assert.Equal(any, runtime.RequiredSharpTSRuntimeReasons.Contains("AbortSignal.any"));
+            Assert.Equal(any, runtime.Deployment.Reasons.Contains("AbortSignal.any"));
             foreach (var owner in new object?[] { runtime.Readline, runtime.Abort }.OfType<object>())
             {
                 Assert.True(owners.Add(owner));

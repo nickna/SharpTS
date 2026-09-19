@@ -579,7 +579,7 @@ public abstract partial class ExpressionEmitterBase
                 // child graphs are compiled at runtime into isolated realms. Co-locate the
                 // managed compiler dependency closure, not only SharpTS.dll; otherwise the
                 // child compilation fails when this output runs outside the compiler bin dir.
-                Ctx.Runtime!.RequireSharpTSRuntime(
+                Ctx.Runtime!.Deployment.Require(
                     "Worker",
                     SharpTSRuntimeRequirements.FullDependencyClosure |
                     SharpTSRuntimeRequirements.ManagedCompilerHost);

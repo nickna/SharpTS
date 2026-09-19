@@ -12,7 +12,7 @@ namespace SharpTS.Compilation;
 /// the original entry script interpreted on a thread inside the same process, so the
 /// compiled primary and its workers share one ClusterSingleton (coherent workers map,
 /// settings, scheduling policy, events, shared-port round-robin). SharpTS.dll must be
-/// co-located; each cluster emit site records RequireSharpTSRuntime("cluster") so the
+/// co-located; each cluster emit site records Deployment.Require("cluster") so the
 /// CLI copies it, and --standalone yields a clear runtime error instead of a silent
 /// degrade (the tls lesson, #1033).
 /// </summary>

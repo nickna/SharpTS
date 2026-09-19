@@ -123,13 +123,13 @@ public class EmittedIntlRuntimeTests
     {
         var runtime = EmitRuntime(source, hosted);
         Assert.Equal(enabled, runtime.Intl is not null);
-        Assert.Equal(enabled, runtime.RequiredSharpTSRuntimeReasons.Contains("Intl"));
+        Assert.Equal(enabled, runtime.Deployment.Reasons.Contains("Intl"));
         if (enabled)
         {
             var intl = runtime.RequireIntl();
             AssertFrozen(intl);
             Assert.Equal(10, Handles.Count());
-            Assert.True(runtime.RequiredSharpTSRuntimeRequirements.HasFlag(SharpTSRuntimeRequirements.RuntimeAssembly));
+            Assert.True(runtime.Deployment.Requirements.HasFlag(SharpTSRuntimeRequirements.RuntimeAssembly));
         }
         else Assert.Throws<InvalidOperationException>(runtime.RequireIntl);
         using var bytes = Save(runtime);

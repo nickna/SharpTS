@@ -1378,7 +1378,7 @@ public partial class RuntimeEmitter
         // and the compiled-mode half of the #329 premature-exit fix (#354). The
         // worker compiles and loads its child module graph into an isolated realm, so
         // SharpTS.dll and its managed dependency closure must be co-located; the emit site
-        // records those deployment capabilities via RequireSharpTSRuntime.
+        // records those deployment capabilities via Deployment.Require.
         var method = runtimeType.DefineMethod(
             "CreateWorker",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -1603,7 +1603,7 @@ public partial class RuntimeEmitter
 
         // getEnvironmentData / setEnvironmentData — route to the C# per-process
         // WorkerEnvironmentData store via reflection (worker programs co-locate SharpTS.dll;
-        // RequireSharpTSRuntime is recorded at the call sites in WorkerThreadsModuleEmitter so
+        // Deployment.Require is recorded at the call sites in WorkerThreadsModuleEmitter so
         // a program that never calls these stays standalone). #1000.
         EmitWorkerThreadsEnvironmentData(runtimeType, workers);
     }

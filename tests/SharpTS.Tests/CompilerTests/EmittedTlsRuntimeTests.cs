@@ -247,7 +247,7 @@ public class EmittedTlsRuntimeTests
         Assert.Throws<InvalidOperationException>(() => tls.SocketCtor = tls.SocketCtor);
         Assert.Throws<InvalidOperationException>(() => tls.SocketType = tls.SocketType);
         Assert.Throws<InvalidOperationException>(tls.CompleteEmission);
-        Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
+        Assert.Empty(runtime.Deployment.Reasons);
     }
 
     private static EmittedRuntime EmitRuntime(bool usesTls)

@@ -99,12 +99,12 @@ public class EmittedAbortRuntimeTests
             Assert.NotNull(abort.SignalTimeout);
             Assert.Throws<InvalidOperationException>(() => abort.SignalAny);
             Assert.False(abort.IsComplete);
-            runtime.RequireSharpTSRuntime(reason);
+            runtime.Deployment.Require(reason);
             requirements.Add(reason);
         };
         Emit("EmitAbortControllerMethods", type, abort, requireRuntime, usesAny);
         Assert.Equal(usesAny ? 1 : 0, requirements.Count);
-        Assert.Equal(usesAny, runtime.RequiredSharpTSRuntimeReasons.Contains("AbortSignal.any"));
+        Assert.Equal(usesAny, runtime.Deployment.Reasons.Contains("AbortSignal.any"));
         Assert.Throws<InvalidOperationException>(abort.CompleteEmission);
         Assert.Throws<InvalidOperationException>(() => abort.NamespacePopulate);
         Assert.False(abort.IsComplete);
@@ -142,7 +142,7 @@ public class EmittedAbortRuntimeTests
     {
         var runtime = EmitRuntime(source, hosted);
         Assert.Equal(enabled, runtime.Abort is not null);
-        Assert.Equal(requiresRuntime, runtime.RequiredSharpTSRuntimeReasons.Contains("AbortSignal.any"));
+        Assert.Equal(requiresRuntime, runtime.Deployment.Reasons.Contains("AbortSignal.any"));
         if (enabled)
         {
             AssertFrozen(runtime.RequireAbort());

@@ -1152,7 +1152,7 @@ public partial class RuntimeEmitter
             EmitFireAbortEvent(typeBuilder, runtime.RequireAbort(), runtime.FunctionValues.Type,
                 runtime.FunctionValues.Invoke, runtime.FunctionBindings.BoundType, runtime.FunctionBindings.BoundInvoke);
             EmitAbortControllerMethods(typeBuilder, runtime.RequireAbort(),
-                reason => runtime.RequireSharpTSRuntime(reason), _features.UsesAbortSignalAny);
+                reason => runtime.Deployment.Require(reason), _features.UsesAbortSignalAny);
             // stream.addAbortSignal destroy-on-abort wiring (#1027) — needs the AbortSignal
             // helpers above + the $StreamAbortCallback closure emitted in the stream block.
             if (_features.UsesNodeStreams)
@@ -2907,7 +2907,7 @@ public partial class RuntimeEmitter
         // compiled output needs SharpTS.dll present at runtime when Proxy is used.
         if (_features.UsesProxy)
         {
-            runtime.RequireSharpTSRuntime("Proxy");
+            runtime.Deployment.Require("Proxy");
             runtime.BeginProxyConstructionEmission();
             var proxies = runtime.RequireProxyConstruction();
             EmitProxyMethods(typeBuilder, proxies,
@@ -2951,7 +2951,7 @@ public partial class RuntimeEmitter
             // works standalone; only dns.Resolver and the dns.promises namespace
             // late-bind to RuntimeTypes (SharpTS.dll), so the soft-dependency is
             // KEPT and recorded here rather than re-emitting those as IL.
-            runtime.RequireSharpTSRuntime("dns module");
+            runtime.Deployment.Require("dns module");
             EmitDnsModuleMethods(typeBuilder, runtime);
             EmitDnsPromisesMethods(typeBuilder, runtime);
         }
@@ -3053,7 +3053,7 @@ public partial class RuntimeEmitter
         // Every Intl operation late-binds to RuntimeTypes — needs SharpTS at runtime.
         if (_features.UsesIntl)
         {
-            runtime.RequireSharpTSRuntime("Intl");
+            runtime.Deployment.Require("Intl");
             EmitIntlMethods(typeBuilder, runtime.RequireIntl());
         }
 
@@ -3071,7 +3071,7 @@ public partial class RuntimeEmitter
         // vm delegates to VmModuleInterpreter via late binding — needs SharpTS at runtime.
         if (_features.UsesVm)
         {
-            runtime.RequireSharpTSRuntime("vm module");
+            runtime.Deployment.Require("vm module");
             // Keep the shared module index at the orchestration boundary. Helpers register
             // each declaration before emitting its body, preserving forward lookup timing.
             EmitVmMethods(typeBuilder, runtime.RequireVm(), runtime.RequirePromise(),
@@ -3080,7 +3080,7 @@ public partial class RuntimeEmitter
 
         if (_features.UsesSourceExecution)
         {
-            runtime.RequireSharpTSRuntime(
+            runtime.Deployment.Require(
                 "sharpts:execution module",
                 SharpTSRuntimeRequirements.FullDependencyClosure |
                 SharpTSRuntimeRequirements.ManagedCompilerHost);

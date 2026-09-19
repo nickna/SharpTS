@@ -112,16 +112,16 @@ public class EmittedSourceExecutionRuntimeTests
     {
         var runtime = EmitRuntime(source, hosted);
         Assert.Equal(enabled, runtime.SourceExecution is not null);
-        Assert.Equal(enabled, runtime.RequiredSharpTSRuntimeReasons.Contains("sharpts:execution module"));
+        Assert.Equal(enabled, runtime.Deployment.Reasons.Contains("sharpts:execution module"));
         if (enabled)
         {
             var sourceExecution = runtime.RequireSourceExecution();
             AssertFrozen(sourceExecution);
             Assert.Equal(2, Handles.Count());
             Assert.True(runtime.RequirePromise().IsComplete);
-            Assert.True(runtime.RequiredSharpTSRuntimeRequirements.HasFlag(SharpTSRuntimeRequirements.RuntimeAssembly));
-            Assert.True(runtime.RequiredSharpTSRuntimeRequirements.HasFlag(SharpTSRuntimeRequirements.FullDependencyClosure));
-            Assert.True(runtime.RequiredSharpTSRuntimeRequirements.HasFlag(SharpTSRuntimeRequirements.ManagedCompilerHost));
+            Assert.True(runtime.Deployment.Requirements.HasFlag(SharpTSRuntimeRequirements.RuntimeAssembly));
+            Assert.True(runtime.Deployment.Requirements.HasFlag(SharpTSRuntimeRequirements.FullDependencyClosure));
+            Assert.True(runtime.Deployment.Requirements.HasFlag(SharpTSRuntimeRequirements.ManagedCompilerHost));
             foreach (var (export, handle) in RegisteredExports)
                 Assert.Same(typeof(EmittedSourceExecutionRuntime).GetProperty(handle)!.GetValue(sourceExecution), runtime.BuiltInModules.GetOptional("sharpts:execution", export));
         }

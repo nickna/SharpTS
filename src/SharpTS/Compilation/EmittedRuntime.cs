@@ -181,41 +181,8 @@ public class EmittedRuntime
     /// <summary>Required array operation metadata, emitted for every compilation.</summary>
     public EmittedArrayOperationsRuntime ArrayOperations { get; } = new();
 
-    /// <summary>
-    /// Human-readable reasons this compilation emitted late binding into the SharpTS runtime
-    /// assembly (e.g. "eval()", "Proxy", "Intl"). Populated during emission by
-    /// <see cref="RequireSharpTSRuntime"/> at the feature gates / call sites that emit a
-    /// <c>Type.GetType("…, SharpTS")</c> reflection path whose <em>normal</em> execution needs
-    /// SharpTS.dll present. When non-empty, the build copies SharpTS.dll next to the output so
-    /// the soft dependency resolves; when empty, the output is fully standalone.
-    /// </summary>
-    /// <remarks>
-    /// Deliberately excludes graceful-fallback-only late binding that a normal program never
-    /// reaches (e.g. the unconditional <c>process</c> helper), and pure-BCL features that emit
-    /// no late binding at all (zlib, child_process, JSON). See <c>RuntimeEmitter.RuntimeClass</c>
-    /// and <c>GlobalFunctionHandler.EmitEval</c> for the recording sites.
-    /// </remarks>
-    public SortedSet<string> RequiredSharpTSRuntimeReasons { get; } = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// Stable deployment capabilities corresponding to
-    /// <see cref="RequiredSharpTSRuntimeReasons"/>. Build logic must use these flags rather than
-    /// comparing human-readable reason strings.
-    /// </summary>
-    public SharpTSRuntimeRequirements RequiredSharpTSRuntimeRequirements { get; private set; }
-
-    /// <summary>
-    /// Records that <paramref name="reason"/> emitted a SharpTS-runtime late-binding path that a
-    /// normal execution will hit. Idempotent.
-    /// </summary>
-    public void RequireSharpTSRuntime(
-        string reason,
-        SharpTSRuntimeRequirements requirements = SharpTSRuntimeRequirements.RuntimeAssembly)
-    {
-        RequiredSharpTSRuntimeReasons.Add(reason);
-        RequiredSharpTSRuntimeRequirements |=
-            requirements | SharpTSRuntimeRequirements.RuntimeAssembly;
-    }
+    /// <summary>Deployment requirements accumulated through runtime and guest emission.</summary>
+    public EmittedDeploymentRequirements Deployment { get; } = new();
 
     /// <summary>Required per-site regex cache declarations, including an explicitly empty selection.</summary>
     public EmittedRegexLiteralCacheRuntime RegexLiteralCache { get; } = new();

@@ -108,8 +108,8 @@ public class EmittedArrayOperationsRuntimeTests
     public void ArrayOperationsDoNotIntroduceGuestRuntimeDependencies()
     {
         var runtime = EmitRuntime("const values = [1, 2];");
-        Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
-        Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
+        Assert.Empty(runtime.Deployment.Reasons);
+        Assert.Equal(SharpTSRuntimeRequirements.None, runtime.Deployment.Requirements);
         using var stream = new MemoryStream();
         ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
         stream.Position = 0;

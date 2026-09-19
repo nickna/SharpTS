@@ -1145,7 +1145,7 @@ public partial class ILEmitter
         // This slow path reflects into DotNetEventBinder in the SharpTS runtime — record the
         // soft dependency so the build co-locates SharpTS.dll. (The literal-event-name fast
         // path is pure IL and does not reach here.)
-        _ctx.Runtime?.RequireSharpTSRuntime("@DotNetType dynamic event binding");
+        _ctx.Runtime?.Deployment.Require("@DotNetType dynamic event binding");
 
         // Locals: object receiver, object[] args
         var receiverLocal = IL.DeclareLocal(_ctx.Types.Object);

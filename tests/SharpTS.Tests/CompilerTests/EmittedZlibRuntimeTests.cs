@@ -139,7 +139,7 @@ public class EmittedZlibRuntimeTests
         Assert.Throws<InvalidOperationException>(() => zlib.GzipSync = zlib.GzipSync);
         Assert.Throws<InvalidOperationException>(() => zlib.TransformCtor = zlib.TransformCtor);
         Assert.Throws<InvalidOperationException>(zlib.CompleteEmission);
-        Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
+        Assert.Empty(runtime.Deployment.Reasons);
     }
 
     [Theory]

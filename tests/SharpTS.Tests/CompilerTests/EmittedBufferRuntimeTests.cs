@@ -147,8 +147,8 @@ public class EmittedBufferRuntimeTests
             handle => reader.GetString(reader.GetAssemblyReference(handle).Name) == "SharpTS");
         if (source is not null)
         {
-            Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
-            Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
+            Assert.Empty(runtime.Deployment.Reasons);
+            Assert.Equal(SharpTSRuntimeRequirements.None, runtime.Deployment.Requirements);
         }
     }
 

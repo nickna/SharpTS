@@ -9,7 +9,7 @@ public partial class RuntimeEmitter
     /// Emits the Intl.* constructor factories into the $Runtime class. Each is a
     /// late-bound <see cref="EmitReflectionHelper"/> wrapper over the same-named
     /// RuntimeTypes static (standalone-DLL soft dependency; the Intl feature records
-    /// <see cref="EmittedRuntime.RequireSharpTSRuntime"/> so SharpTS.dll is co-located).
+    /// <see cref="EmittedDeploymentRequirements.Require"/> so SharpTS.dll is co-located).
     /// Instance methods (format/resolvedOptions/…) need no stubs: the factories return
     /// SharpTSIntl* runtime objects and calls dispatch reflectively onto those directly.
     /// </summary>
