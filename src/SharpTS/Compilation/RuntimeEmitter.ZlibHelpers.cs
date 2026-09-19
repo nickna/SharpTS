@@ -6,6 +6,17 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    // Immutable construction metadata is confined to this emission.
+    private sealed record ZlibConstructionMethods(
+        MethodBuilder InputBytes,
+        MethodBuilder CompressionLevel,
+        MethodBuilder RawLevel,
+        MethodBuilder Strategy,
+        MethodBuilder BrotliQuality,
+        MethodBuilder BrotliWindow,
+        MethodBuilder MaxOutputLength,
+        MethodBuilder CopyStreamWithLimit);
+
     /// <summary>
     /// Emits zlib module helper methods.
     /// All compression logic is emitted inline using BCL compression streams.
@@ -13,31 +24,34 @@ public partial class RuntimeEmitter
     private void EmitZlibMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Emit helper methods FIRST (they are used by compression methods)
-        EmitGetZlibInputBytes(typeBuilder, runtime);
-        EmitGetZlibCompressionLevel(typeBuilder, runtime);
-        EmitGetZlibRawLevel(typeBuilder, runtime);
-        EmitGetZlibStrategy(typeBuilder, runtime);
-        EmitGetBrotliQuality(typeBuilder, runtime);
-        EmitGetBrotliWindow(typeBuilder, runtime);
-        EmitGetZlibMaxOutputLength(typeBuilder, runtime);
-        EmitCopyStreamWithLimit(typeBuilder, runtime);
+        var inputBytes = EmitGetZlibInputBytes(typeBuilder, runtime);
+        var compressionLevel = EmitGetZlibCompressionLevel(typeBuilder, runtime);
+        var rawLevel = EmitGetZlibRawLevel(typeBuilder, runtime);
+        var strategy = EmitGetZlibStrategy(typeBuilder, runtime);
+        var brotliQuality = EmitGetBrotliQuality(typeBuilder, runtime);
+        var brotliWindow = EmitGetBrotliWindow(typeBuilder, runtime);
+        var maxOutputLength = EmitGetZlibMaxOutputLength(typeBuilder, runtime);
+        var copyStreamWithLimit = EmitCopyStreamWithLimit(typeBuilder, runtime);
+        var methods = new ZlibConstructionMethods(
+            inputBytes, compressionLevel, rawLevel, strategy,
+            brotliQuality, brotliWindow, maxOutputLength, copyStreamWithLimit);
 
         // Compression methods
-        EmitZlibGzipSync(typeBuilder, runtime);
-        EmitZlibGunzipSync(typeBuilder, runtime);
-        EmitZlibDeflateSync(typeBuilder, runtime);
-        EmitZlibInflateSync(typeBuilder, runtime);
-        EmitZlibDeflateRawSync(typeBuilder, runtime);
-        EmitZlibInflateRawSync(typeBuilder, runtime);
-        EmitZlibBrotliCompressSync(typeBuilder, runtime);
-        EmitZlibBrotliDecompressSync(typeBuilder, runtime);
-        EmitZlibZstdCompressSync(typeBuilder, runtime);
-        EmitZlibZstdDecompressSync(typeBuilder, runtime);
-        EmitZlibUnzipSync(typeBuilder, runtime);
-        EmitZlibCrc32(typeBuilder, runtime);
+        EmitZlibGzipSync(methods, typeBuilder, runtime);
+        EmitZlibGunzipSync(methods, typeBuilder, runtime);
+        EmitZlibDeflateSync(methods, typeBuilder, runtime);
+        EmitZlibInflateSync(methods, typeBuilder, runtime);
+        EmitZlibDeflateRawSync(methods, typeBuilder, runtime);
+        EmitZlibInflateRawSync(methods, typeBuilder, runtime);
+        EmitZlibBrotliCompressSync(methods, typeBuilder, runtime);
+        EmitZlibBrotliDecompressSync(methods, typeBuilder, runtime);
+        EmitZlibZstdCompressSync(methods, typeBuilder, runtime);
+        EmitZlibZstdDecompressSync(methods, typeBuilder, runtime);
+        EmitZlibUnzipSync(methods, typeBuilder, runtime);
+        EmitZlibCrc32(methods, typeBuilder, runtime);
 
         // Emit streaming create* methods (pure-IL, no reflection)
-        EmitZlibStreamingMethods(typeBuilder, runtime);
+        EmitZlibStreamingMethods(methods, typeBuilder, runtime);
 
         // Emit wrapper methods for named imports
         EmitZlibMethodWrappers(typeBuilder, runtime);
@@ -45,21 +59,17 @@ public partial class RuntimeEmitter
 
     #region Input/Options Helpers
 
-    private MethodBuilder? _getZlibInputBytes;
-    private MethodBuilder? _getZlibCompressionLevel;
-
     /// <summary>
     /// Emits: public static byte[] GetZlibInputBytes(object input)
     /// Extracts bytes from Buffer or string.
     /// </summary>
-    private void EmitGetZlibInputBytes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitGetZlibInputBytes(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetZlibInputBytes",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.MakeArrayType(_types.Byte),
             [_types.Object]);
-        _getZlibInputBytes = method;
 
         var il = method.GetILGenerator();
 
@@ -108,6 +118,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
     /// <summary>
@@ -115,14 +126,13 @@ public partial class RuntimeEmitter
     /// Extracts compression level from options object, returns CompressionLevel enum value.
     /// For now, returns Optimal (2) as the default. Options parsing can be enhanced later.
     /// </summary>
-    private void EmitGetZlibCompressionLevel(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitGetZlibCompressionLevel(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetZlibCompressionLevel",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Int32,
             [_types.Object]);
-        _getZlibCompressionLevel = method;
 
         var il = method.GetILGenerator();
 
@@ -196,29 +206,24 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
-    private MethodBuilder? _getZlibRawLevel;
-    private MethodBuilder? _getZlibStrategy;
-    private MethodBuilder? _getBrotliQuality;
-    private MethodBuilder? _getBrotliWindow;
-    private MethodBuilder? _getZlibMaxOutputLength;
-    private MethodBuilder? _copyStreamWithLimit;
 
     // Honors the exact Node `level` (-1..9), strategy (0..4) and Brotli params,
     // mirroring ZlibOptions.ToZLibCompressionOptions / GetBrotliQuality/Window so
     // interpreter and compiled emit byte-identical output for non-default options.
-    private void EmitGetZlibRawLevel(TypeBuilder typeBuilder, EmittedRuntime runtime)
-        => _getZlibRawLevel = EmitIntOptionGetter(typeBuilder, runtime, "GetZlibRawLevel", "level", null, -1, -1, 9);
+    private MethodBuilder EmitGetZlibRawLevel(TypeBuilder typeBuilder, EmittedRuntime runtime)
+        => EmitIntOptionGetter(typeBuilder, runtime, "GetZlibRawLevel", "level", null, -1, -1, 9);
 
-    private void EmitGetZlibStrategy(TypeBuilder typeBuilder, EmittedRuntime runtime)
-        => _getZlibStrategy = EmitIntOptionGetter(typeBuilder, runtime, "GetZlibStrategy", "strategy", null, 0, 0, 4);
+    private MethodBuilder EmitGetZlibStrategy(TypeBuilder typeBuilder, EmittedRuntime runtime)
+        => EmitIntOptionGetter(typeBuilder, runtime, "GetZlibStrategy", "strategy", null, 0, 0, 4);
 
-    private void EmitGetBrotliQuality(TypeBuilder typeBuilder, EmittedRuntime runtime)
-        => _getBrotliQuality = EmitIntOptionGetter(typeBuilder, runtime, "GetZlibBrotliQuality", "1", "params", 11, 0, 11);
+    private MethodBuilder EmitGetBrotliQuality(TypeBuilder typeBuilder, EmittedRuntime runtime)
+        => EmitIntOptionGetter(typeBuilder, runtime, "GetZlibBrotliQuality", "1", "params", 11, 0, 11);
 
-    private void EmitGetBrotliWindow(TypeBuilder typeBuilder, EmittedRuntime runtime)
-        => _getBrotliWindow = EmitIntOptionGetter(typeBuilder, runtime, "GetZlibBrotliWindow", "2", "params", 22, 10, 24);
+    private MethodBuilder EmitGetBrotliWindow(TypeBuilder typeBuilder, EmittedRuntime runtime)
+        => EmitIntOptionGetter(typeBuilder, runtime, "GetZlibBrotliWindow", "2", "params", 22, 10, 24);
 
     /// <summary>
     /// Emits <c>int Name(object options)</c> that reads a numeric option named
@@ -318,14 +323,13 @@ public partial class RuntimeEmitter
     /// Emits <c>long GetZlibMaxOutputLength(object options)</c> — the maxOutputLength
     /// option (0 = no limit), read through the generic GetProperty.
     /// </summary>
-    private void EmitGetZlibMaxOutputLength(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitGetZlibMaxOutputLength(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetZlibMaxOutputLength",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Int64,
             [_types.Object]);
-        _getZlibMaxOutputLength = method;
 
         var il = method.GetILGenerator();
         var def = il.DefineLabel();
@@ -352,6 +356,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
     /// <summary>
@@ -359,14 +364,13 @@ public partial class RuntimeEmitter
     /// — drains <paramref name="source"/> into <paramref name="dest"/>, throwing when the
     /// running total exceeds <c>max</c> (when max &gt; 0). Mirrors ZlibHelpers.CopyWithLimit.
     /// </summary>
-    private void EmitCopyStreamWithLimit(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitCopyStreamWithLimit(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CopyStreamWithLimit",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Stream, typeof(MemoryStream), _types.Int64]);
-        _copyStreamWithLimit = method;
 
         var il = method.GetILGenerator();
         var byteArr = _types.MakeArrayType(_types.Byte);
@@ -428,19 +432,20 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(done);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
     /// <summary>
     /// Emits the post-compression maxOutputLength guard: throws when
     /// <c>result.Length &gt; GetZlibMaxOutputLength(options)</c> (options = arg1).
     /// </summary>
-    private void EmitMaxOutputCheck(ILGenerator il, LocalBuilder resultLocal)
+    private void EmitMaxOutputCheck(ZlibConstructionMethods methods, ILGenerator il, LocalBuilder resultLocal)
     {
         var maxLocal = il.DeclareLocal(_types.Int64);
         var skip = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _getZlibMaxOutputLength!);
+        il.Emit(OpCodes.Call, methods.MaxOutputLength);
         il.Emit(OpCodes.Stloc, maxLocal);
         // if (max <= 0) skip
         il.Emit(OpCodes.Ldloc, maxLocal);
@@ -467,7 +472,7 @@ public partial class RuntimeEmitter
     /// Emits: public static object ZlibGzipSync(object input, object options)
     /// Uses GZipStream for compression.
     /// </summary>
-    private void EmitZlibGzipSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibGzipSync(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibGzipSync",
@@ -476,14 +481,14 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         runtime.RequireZlib().GzipSync = method;
 
-        EmitDeflateFamilyCompress(method.GetILGenerator(), runtime, typeof(GZipStream));
+        EmitDeflateFamilyCompress(methods, method.GetILGenerator(), runtime, typeof(GZipStream));
     }
 
     /// <summary>
     /// Emits: public static object ZlibGunzipSync(object input, object options)
     /// Uses GZipStream for decompression.
     /// </summary>
-    private void EmitZlibGunzipSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibGunzipSync(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibGunzipSync",
@@ -492,7 +497,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         runtime.RequireZlib().GunzipSync = method;
 
-        EmitDecompressMethod(method.GetILGenerator(), runtime, typeof(GZipStream));
+        EmitDecompressMethod(methods, method.GetILGenerator(), runtime, typeof(GZipStream));
     }
 
     #endregion
@@ -503,7 +508,7 @@ public partial class RuntimeEmitter
     /// Emits: public static object ZlibDeflateSync(object input, object options)
     /// Uses ZLibStream for compression (includes zlib header).
     /// </summary>
-    private void EmitZlibDeflateSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibDeflateSync(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibDeflateSync",
@@ -512,14 +517,14 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         runtime.RequireZlib().DeflateSync = method;
 
-        EmitDeflateFamilyCompress(method.GetILGenerator(), runtime, typeof(ZLibStream));
+        EmitDeflateFamilyCompress(methods, method.GetILGenerator(), runtime, typeof(ZLibStream));
     }
 
     /// <summary>
     /// Emits: public static object ZlibInflateSync(object input, object options)
     /// Uses ZLibStream for decompression.
     /// </summary>
-    private void EmitZlibInflateSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibInflateSync(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibInflateSync",
@@ -528,7 +533,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         runtime.RequireZlib().InflateSync = method;
 
-        EmitDecompressMethod(method.GetILGenerator(), runtime, typeof(ZLibStream));
+        EmitDecompressMethod(methods, method.GetILGenerator(), runtime, typeof(ZLibStream));
     }
 
     #endregion
@@ -539,7 +544,7 @@ public partial class RuntimeEmitter
     /// Emits: public static object ZlibDeflateRawSync(object input, object options)
     /// Uses DeflateStream for compression (no header).
     /// </summary>
-    private void EmitZlibDeflateRawSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibDeflateRawSync(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibDeflateRawSync",
@@ -548,14 +553,14 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         runtime.RequireZlib().DeflateRawSync = method;
 
-        EmitDeflateFamilyCompress(method.GetILGenerator(), runtime, typeof(DeflateStream));
+        EmitDeflateFamilyCompress(methods, method.GetILGenerator(), runtime, typeof(DeflateStream));
     }
 
     /// <summary>
     /// Emits: public static object ZlibInflateRawSync(object input, object options)
     /// Uses DeflateStream for decompression.
     /// </summary>
-    private void EmitZlibInflateRawSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibInflateRawSync(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibInflateRawSync",
@@ -564,7 +569,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         runtime.RequireZlib().InflateRawSync = method;
 
-        EmitDecompressMethod(method.GetILGenerator(), runtime, typeof(DeflateStream));
+        EmitDecompressMethod(methods, method.GetILGenerator(), runtime, typeof(DeflateStream));
     }
 
     #endregion
@@ -575,7 +580,7 @@ public partial class RuntimeEmitter
     /// Emits: public static object ZlibBrotliCompressSync(object input, object options)
     /// Uses BrotliStream for compression.
     /// </summary>
-    private void EmitZlibBrotliCompressSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibBrotliCompressSync(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibBrotliCompressSync",
@@ -584,14 +589,14 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         runtime.RequireZlib().BrotliCompressSync = method;
 
-        EmitBrotliCompress(method.GetILGenerator(), runtime);
+        EmitBrotliCompress(methods, method.GetILGenerator(), runtime);
     }
 
     /// <summary>
     /// Emits: public static object ZlibBrotliDecompressSync(object input, object options)
     /// Uses BrotliStream for decompression.
     /// </summary>
-    private void EmitZlibBrotliDecompressSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibBrotliDecompressSync(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibBrotliDecompressSync",
@@ -600,7 +605,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         runtime.RequireZlib().BrotliDecompressSync = method;
 
-        EmitDecompressMethod(method.GetILGenerator(), runtime, typeof(BrotliStream));
+        EmitDecompressMethod(methods, method.GetILGenerator(), runtime, typeof(BrotliStream));
     }
 
     #endregion
@@ -611,7 +616,7 @@ public partial class RuntimeEmitter
     /// Emits: public static object ZlibZstdCompressSync(object input, object options)
     /// Uses ZstdSharp.CompressionStream for compression.
     /// </summary>
-    private void EmitZlibZstdCompressSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibZstdCompressSync(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibZstdCompressSync",
@@ -620,14 +625,14 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         runtime.RequireZlib().ZstdCompressSync = method;
 
-        EmitZstdCompressMethod(method.GetILGenerator(), runtime);
+        EmitZstdCompressMethod(methods, method.GetILGenerator(), runtime);
     }
 
     /// <summary>
     /// Emits: public static object ZlibZstdDecompressSync(object input, object options)
     /// Uses ZstdSharp.DecompressionStream for decompression.
     /// </summary>
-    private void EmitZlibZstdDecompressSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibZstdDecompressSync(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibZstdDecompressSync",
@@ -636,7 +641,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         runtime.RequireZlib().ZstdDecompressSync = method;
 
-        EmitZstdDecompressMethod(method.GetILGenerator(), runtime);
+        EmitZstdDecompressMethod(methods, method.GetILGenerator(), runtime);
     }
 
     #endregion
@@ -647,7 +652,7 @@ public partial class RuntimeEmitter
     /// Emits: public static object ZlibUnzipSync(object input, object options)
     /// Auto-detects gzip/deflate format based on magic bytes.
     /// </summary>
-    private void EmitZlibUnzipSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibUnzipSync(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibUnzipSync",
@@ -660,7 +665,7 @@ public partial class RuntimeEmitter
 
         // Get input bytes
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _getZlibInputBytes!);
+        il.Emit(OpCodes.Call, methods.InputBytes);
         var inputLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Stloc, inputLocal);
 
@@ -727,7 +732,7 @@ public partial class RuntimeEmitter
     /// byte-for-byte identical to <c>ZlibHelpers.Crc32</c> (interpreter twin), so
     /// standalone output stays free of a System.IO.Hashing dependency.
     /// </summary>
-    private void EmitZlibCrc32(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibCrc32(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ZlibCrc32",
@@ -740,7 +745,7 @@ public partial class RuntimeEmitter
 
         // byte[] bytes = GetZlibInputBytes(data)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _getZlibInputBytes!);
+        il.Emit(OpCodes.Call, methods.InputBytes);
         var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Stloc, bytesLocal);
 
@@ -840,27 +845,27 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits all zlib streaming create* methods.
     /// </summary>
-    private void EmitZlibStreamingMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitZlibStreamingMethods(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Create methods for each compression/decompression type
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateGzip", 0, mb => runtime.RequireZlib().CreateGzip = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateGunzip", 1, mb => runtime.RequireZlib().CreateGunzip = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateDeflate", 2, mb => runtime.RequireZlib().CreateDeflate = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateInflate", 3, mb => runtime.RequireZlib().CreateInflate = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateDeflateRaw", 4, mb => runtime.RequireZlib().CreateDeflateRaw = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateInflateRaw", 5, mb => runtime.RequireZlib().CreateInflateRaw = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateBrotliCompress", 6, mb => runtime.RequireZlib().CreateBrotliCompress = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateBrotliDecompress", 7, mb => runtime.RequireZlib().CreateBrotliDecompress = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateZstdCompress", 9, mb => runtime.RequireZlib().CreateZstdCompress = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateZstdDecompress", 10, mb => runtime.RequireZlib().CreateZstdDecompress = mb);
-        EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateUnzip", 8, mb => runtime.RequireZlib().CreateUnzip = mb);
+        EmitZlibCreateStreamMethod(methods, typeBuilder, runtime, "ZlibCreateGzip", 0, mb => runtime.RequireZlib().CreateGzip = mb);
+        EmitZlibCreateStreamMethod(methods, typeBuilder, runtime, "ZlibCreateGunzip", 1, mb => runtime.RequireZlib().CreateGunzip = mb);
+        EmitZlibCreateStreamMethod(methods, typeBuilder, runtime, "ZlibCreateDeflate", 2, mb => runtime.RequireZlib().CreateDeflate = mb);
+        EmitZlibCreateStreamMethod(methods, typeBuilder, runtime, "ZlibCreateInflate", 3, mb => runtime.RequireZlib().CreateInflate = mb);
+        EmitZlibCreateStreamMethod(methods, typeBuilder, runtime, "ZlibCreateDeflateRaw", 4, mb => runtime.RequireZlib().CreateDeflateRaw = mb);
+        EmitZlibCreateStreamMethod(methods, typeBuilder, runtime, "ZlibCreateInflateRaw", 5, mb => runtime.RequireZlib().CreateInflateRaw = mb);
+        EmitZlibCreateStreamMethod(methods, typeBuilder, runtime, "ZlibCreateBrotliCompress", 6, mb => runtime.RequireZlib().CreateBrotliCompress = mb);
+        EmitZlibCreateStreamMethod(methods, typeBuilder, runtime, "ZlibCreateBrotliDecompress", 7, mb => runtime.RequireZlib().CreateBrotliDecompress = mb);
+        EmitZlibCreateStreamMethod(methods, typeBuilder, runtime, "ZlibCreateZstdCompress", 9, mb => runtime.RequireZlib().CreateZstdCompress = mb);
+        EmitZlibCreateStreamMethod(methods, typeBuilder, runtime, "ZlibCreateZstdDecompress", 10, mb => runtime.RequireZlib().CreateZstdDecompress = mb);
+        EmitZlibCreateStreamMethod(methods, typeBuilder, runtime, "ZlibCreateUnzip", 8, mb => runtime.RequireZlib().CreateUnzip = mb);
     }
 
     /// <summary>
     /// Emits: public static object CreateXxx(object? options)
     /// Creates a $ZlibTransform directly via newobj (no reflection).
     /// </summary>
-    private void EmitZlibCreateStreamMethod(TypeBuilder typeBuilder, EmittedRuntime runtime,
+    private void EmitZlibCreateStreamMethod(ZlibConstructionMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime,
         string methodName, int kindValue, Action<MethodBuilder> setter)
     {
         var method = typeBuilder.DefineMethod(
@@ -876,7 +881,7 @@ public partial class RuntimeEmitter
         // For decompression kinds, level is ignored but we still pass it
         il.Emit(OpCodes.Ldc_I4, kindValue);   // kind
         il.Emit(OpCodes.Ldarg_0);              // options
-        il.Emit(OpCodes.Call, _getZlibCompressionLevel!);  // -> int (CompressionLevel)
+        il.Emit(OpCodes.Call, methods.CompressionLevel);  // -> int (CompressionLevel)
         il.Emit(OpCodes.Newobj, runtime.RequireZlib().TransformCtor);  // new $ZlibTransform(kind, level)
         il.Emit(OpCodes.Ret);
     }
@@ -966,7 +971,7 @@ public partial class RuntimeEmitter
     /// Node <c>level</c> (-1..9) and <c>strategy</c> via <see cref="ZLibCompressionOptions"/>,
     /// matching <c>ZlibHelpers</c> in the interpreter byte-for-byte. Pure BCL.
     /// </summary>
-    private void EmitDeflateFamilyCompress(ILGenerator il, EmittedRuntime runtime, Type streamType)
+    private void EmitDeflateFamilyCompress(ZlibConstructionMethods methods, ILGenerator il, EmittedRuntime runtime, Type streamType)
     {
         var zoptsType = typeof(ZLibCompressionOptions);
         var zoptsCtor = zoptsType.GetConstructor(Type.EmptyTypes)!;
@@ -976,7 +981,7 @@ public partial class RuntimeEmitter
 
         // Get input bytes
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _getZlibInputBytes!);
+        il.Emit(OpCodes.Call, methods.InputBytes);
         var inputLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Stloc, inputLocal);
 
@@ -986,11 +991,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, optsLocal);
         il.Emit(OpCodes.Ldloc, optsLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _getZlibRawLevel!);
+        il.Emit(OpCodes.Call, methods.RawLevel);
         il.Emit(OpCodes.Callvirt, setLevel);
         il.Emit(OpCodes.Ldloc, optsLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _getZlibStrategy!);
+        il.Emit(OpCodes.Call, methods.Strategy);
         il.Emit(OpCodes.Callvirt, setStrategy);
 
         // Create output MemoryStream
@@ -1028,7 +1033,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, outputLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(typeof(IDisposable), "Dispose"));
 
-        EmitMaxOutputCheck(il, resultLocal);
+        EmitMaxOutputCheck(methods, il, resultLocal);
 
         // new $Buffer(result)
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -1042,7 +1047,7 @@ public partial class RuntimeEmitter
     /// matching the interpreter byte-for-byte. Pure BCL; mode/size_hint are not applied
     /// (no public BCL knob).
     /// </summary>
-    private void EmitBrotliCompress(ILGenerator il, EmittedRuntime runtime)
+    private void EmitBrotliCompress(ZlibConstructionMethods methods, ILGenerator il, EmittedRuntime runtime)
     {
         var byteArr = _types.MakeArrayType(_types.Byte);
         var roSpanByte = typeof(ReadOnlySpan<byte>);
@@ -1056,17 +1061,17 @@ public partial class RuntimeEmitter
 
         // input = GetZlibInputBytes(arg0)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _getZlibInputBytes!);
+        il.Emit(OpCodes.Call, methods.InputBytes);
         var inputLocal = il.DeclareLocal(byteArr);
         il.Emit(OpCodes.Stloc, inputLocal);
 
         // quality, window from options
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _getBrotliQuality!);
+        il.Emit(OpCodes.Call, methods.BrotliQuality);
         var qualityLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, qualityLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _getBrotliWindow!);
+        il.Emit(OpCodes.Call, methods.BrotliWindow);
         var windowLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, windowLocal);
 
@@ -1102,7 +1107,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, writtenLocal);
         il.Emit(OpCodes.Call, arrayCopy);
 
-        EmitMaxOutputCheck(il, resultLocal);
+        EmitMaxOutputCheck(methods, il, resultLocal);
 
         // new $Buffer(result)
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -1113,11 +1118,11 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits decompression using a BCL compression stream type.
     /// </summary>
-    private void EmitDecompressMethod(ILGenerator il, EmittedRuntime runtime, Type streamType)
+    private void EmitDecompressMethod(ZlibConstructionMethods methods, ILGenerator il, EmittedRuntime runtime, Type streamType)
     {
         // Get input bytes
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _getZlibInputBytes!);
+        il.Emit(OpCodes.Call, methods.InputBytes);
         var inputLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Stloc, inputLocal);
 
@@ -1145,8 +1150,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, decompressLocal);
         il.Emit(OpCodes.Ldloc, outputLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _getZlibMaxOutputLength!);
-        il.Emit(OpCodes.Call, _copyStreamWithLimit!);
+        il.Emit(OpCodes.Call, methods.MaxOutputLength);
+        il.Emit(OpCodes.Call, methods.CopyStreamWithLimit);
 
         // Dispose streams
         il.Emit(OpCodes.Ldloc, decompressLocal);
@@ -1175,17 +1180,17 @@ public partial class RuntimeEmitter
     /// Emits zstd compression using ZstdSharp.CompressionStream.
     /// Constructor: CompressionStream(Stream stream, int level, int bufferSize, bool leaveOpen)
     /// </summary>
-    private void EmitZstdCompressMethod(ILGenerator il, EmittedRuntime runtime)
+    private void EmitZstdCompressMethod(ZlibConstructionMethods methods, ILGenerator il, EmittedRuntime runtime)
     {
         // Get input bytes
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _getZlibInputBytes!);
+        il.Emit(OpCodes.Call, methods.InputBytes);
         var inputLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Stloc, inputLocal);
 
         // Get compression level (reuse helper, maps to int)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _getZlibCompressionLevel!);
+        il.Emit(OpCodes.Call, methods.CompressionLevel);
         var levelLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Stloc, levelLocal);
 
@@ -1266,7 +1271,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, outputLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(typeof(IDisposable), "Dispose"));
 
-        EmitMaxOutputCheck(il, resultLocal);
+        EmitMaxOutputCheck(methods, il, resultLocal);
 
         // Create $Buffer from result
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -1278,11 +1283,11 @@ public partial class RuntimeEmitter
     /// Emits zstd decompression using ZstdSharp.DecompressionStream.
     /// Constructor: DecompressionStream(Stream stream, int bufferSize, bool checkEndOfStream, bool leaveOpen)
     /// </summary>
-    private void EmitZstdDecompressMethod(ILGenerator il, EmittedRuntime runtime)
+    private void EmitZstdDecompressMethod(ZlibConstructionMethods methods, ILGenerator il, EmittedRuntime runtime)
     {
         // Get input bytes
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _getZlibInputBytes!);
+        il.Emit(OpCodes.Call, methods.InputBytes);
         var inputLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Stloc, inputLocal);
 
@@ -1312,8 +1317,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, decompressLocal);
         il.Emit(OpCodes.Ldloc, outputLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _getZlibMaxOutputLength!);
-        il.Emit(OpCodes.Call, _copyStreamWithLimit!);
+        il.Emit(OpCodes.Call, methods.MaxOutputLength);
+        il.Emit(OpCodes.Call, methods.CopyStreamWithLimit);
 
         // Dispose streams
         il.Emit(OpCodes.Ldloc, decompressLocal);
