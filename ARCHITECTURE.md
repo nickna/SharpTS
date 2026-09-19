@@ -1596,10 +1596,15 @@ chase helper remain local to `EmitDnsModuleMethods`; the one- and two-argument p
 worker declarations are immutable construction values passed to their wrappers. The async
 runner keeps its completion constructor and scheduling method local and returns only the
 runner handle. Its event-loop peer and the wrappers' DNS/Promise peers are explicit inputs.
-The reusable emitter retains none of these sixteen handles. Declaration and creation order,
-both existing DNS module emission points, reflection exception unwrapping and settlement
-before event-loop release are preserved. The checked DNS component still owns public
-declarations and the promise-wrapper registry; construction values do not duplicate ownership.
+The reusable emitter retains none of these sixteen handles. DNS module declarations are emitted
+once, before Promise wrappers capture their synchronous targets. The former later duplicate
+pass is removed, so synchronous and Promise consumers use the same methods and result-order
+field, and every DNS callback closure type has one definition. The DNS component rejects
+duplicate handle assignments and validates all sixteen
+Promise-wrapper names, non-null declarations and completion before freezing its registry.
+Consumers use checked wrapper lookup, while forward declarations remain readable before their
+bodies exist. Reflection exception unwrapping and settlement before event-loop release are
+preserved; construction values do not duplicate ownership.
 
 Net construction metadata stays within one `EmitAll` invocation. Socket and server phase-one
 emitters return immutable field/method construction values; closure emission returns separate
