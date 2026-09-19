@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -17,7 +18,7 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "primitive:net";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "createServer",
         "createConnection",

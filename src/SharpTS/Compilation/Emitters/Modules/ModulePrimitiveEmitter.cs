@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -13,7 +14,9 @@ public sealed class ModulePrimitiveEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "primitive:module";
 
-    public IReadOnlyList<string> GetExportedMembers() => ["createRequire"];
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)["createRequire"];
+
+    public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
 
     public bool TryEmitMethodCall(IEmitterContext emitter, string methodName, List<Expr> arguments)
     {

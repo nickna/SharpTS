@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
@@ -14,7 +15,7 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
     // served by stdlib/node/fs.ts, which imports from this primitive.
     public string ModuleName => "primitive:fs";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "existsSync", "readFileSync", "writeFileSync", "appendFileSync",
         "unlinkSync", "mkdirSync", "rmdirSync", "readdirSync",

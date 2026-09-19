@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -12,7 +13,7 @@ public sealed class TtyPrimitiveEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "primitive:tty";
 
-    private static readonly string[] _exportedMembers = ["isatty"];
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>) ["isatty"];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
 

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
@@ -14,7 +15,7 @@ public sealed class FsPromisesModuleEmitter : IBuiltInModuleEmitter
     // specifier is served by stdlib/node/fs/promises.ts, which imports from this primitive.
     public string ModuleName => "primitive:fs/promises";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "readFile", "writeFile", "appendFile",
         "stat", "lstat", "unlink", "mkdir", "rmdir", "rm",

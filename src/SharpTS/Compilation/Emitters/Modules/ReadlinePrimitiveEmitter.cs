@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -14,7 +15,7 @@ public sealed class ReadlinePrimitiveEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "primitive:readline";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "questionSync", "createInterface"
     ];

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -12,7 +13,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "stream";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "Readable",
         "Writable",

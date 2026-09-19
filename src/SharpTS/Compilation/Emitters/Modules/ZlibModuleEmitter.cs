@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
@@ -18,7 +19,7 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "primitive:zlib";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "gzipSync", "gunzipSync",
         "deflateSync", "inflateSync",

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -22,7 +23,7 @@ public sealed class StreamWebModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "stream/web";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "ReadableStream",
         "WritableStream",
@@ -42,7 +43,7 @@ public sealed class StreamWebModuleEmitter : IBuiltInModuleEmitter
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        if (Array.IndexOf(_exportedMembers, propertyName) < 0)
+        if (!_exportedMembers.Contains(propertyName, StringComparer.Ordinal))
             return false;
 
         // Emit a placeholder TSFunction so `typeof ReadableStream === 'function'`

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -19,7 +20,7 @@ public sealed class PerfPrimitiveEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "primitive:perf";
 
-    private static readonly string[] _exportedMembers = ["now"];
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>) ["now"];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
 
