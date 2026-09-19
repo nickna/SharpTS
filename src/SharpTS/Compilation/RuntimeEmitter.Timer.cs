@@ -1057,7 +1057,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         // Register the wrapper for the timers module
-        runtime.RegisterBuiltInModuleMethod("timers", "setTimeout", method);
+        runtime.BuiltInModules.Register("timers", "setTimeout", method);
     }
 
     /// <summary>
@@ -1100,7 +1100,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("timers", "clearTimeout", method);
+        runtime.BuiltInModules.Register("timers", "clearTimeout", method);
     }
 
     /// <summary>
@@ -1206,7 +1206,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, timers.SetInterval);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("timers", "setInterval", method);
+        runtime.BuiltInModules.Register("timers", "setInterval", method);
     }
 
     /// <summary>
@@ -1247,7 +1247,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("timers", "clearInterval", method);
+        runtime.BuiltInModules.Register("timers", "clearInterval", method);
     }
 
     /// <summary>
@@ -1331,7 +1331,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, timers.SetTimeout);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("timers", "setImmediate", method);
+        runtime.BuiltInModules.Register("timers", "setImmediate", method);
     }
 
     /// <summary>
@@ -1373,6 +1373,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("timers", "clearImmediate", method);
+        runtime.BuiltInModules.Register("timers", "clearImmediate", method);
     }
 }

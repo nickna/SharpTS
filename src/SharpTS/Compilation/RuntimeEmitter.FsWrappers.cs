@@ -267,6 +267,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         // Register the wrapper for named imports
-        runtime.RegisterBuiltInModuleMethod("fs", methodName, method);
+        runtime.BuiltInModules.Register("fs", methodName, method);
     }
 }

@@ -531,7 +531,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         // Register the wrapper for named imports
-        runtime.RegisterBuiltInModuleMethod("crypto", methodName, method);
+        runtime.BuiltInModules.Register("crypto", methodName, method);
     }
 
     /// <summary>
@@ -700,7 +700,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("crypto", methodName, method);
+        runtime.BuiltInModules.Register("crypto", methodName, method);
     }
 
     /// <summary>
@@ -802,7 +802,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("crypto", "scrypt", method);
+        runtime.BuiltInModules.Register("crypto", "scrypt", method);
     }
 
     /// <summary>
@@ -883,6 +883,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("crypto", "generateKeyPair", method);
+        runtime.BuiltInModules.Register("crypto", "generateKeyPair", method);
     }
 }

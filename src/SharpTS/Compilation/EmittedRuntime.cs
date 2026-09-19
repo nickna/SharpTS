@@ -878,35 +878,8 @@ public class EmittedRuntime
     public EmittedFileSystemWatcherRuntime RequireFileSystemWatchers() => FileSystemWatchers
         ?? throw new InvalidOperationException("Filesystem watcher runtime was not enabled for this compilation.");
 
-    // Built-in module methods (module name -> method name -> MethodBuilder)
-    // Used for creating TSFunction wrappers when importing named exports
-    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _builtInModuleMethods = new();
-
-    /// <summary>
-    /// Registers a built-in module method.
-    /// </summary>
-    public void RegisterBuiltInModuleMethod(string moduleName, string methodName, MethodBuilder method)
-    {
-        if (!_builtInModuleMethods.TryGetValue(moduleName, out var methods))
-        {
-            methods = new Dictionary<string, MethodBuilder>();
-            _builtInModuleMethods[moduleName] = methods;
-        }
-        methods[methodName] = method;
-    }
-
-    /// <summary>
-    /// Gets a built-in module method for creating a TSFunction wrapper.
-    /// </summary>
-    public MethodBuilder? GetBuiltInModuleMethod(string moduleName, string methodName)
-    {
-        if (_builtInModuleMethods.TryGetValue(moduleName, out var methods) &&
-            methods.TryGetValue(methodName, out var method))
-        {
-            return method;
-        }
-        return null;
-    }
+    /// <summary>Selected built-in callable exports and their per-compilation declaration lifecycle.</summary>
+    public EmittedBuiltInModuleRegistry BuiltInModules { get; } = new();
 
     // ============================================================
     // Worker Threads Support

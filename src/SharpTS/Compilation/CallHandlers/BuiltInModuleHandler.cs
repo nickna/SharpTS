@@ -8,7 +8,7 @@ namespace SharpTS.Compilation.CallHandlers;
 /// Handles built-in module method calls: path.join, fs.readFileSync, os.platform, etc.
 /// Also handles nested calls like util.types.isArray().
 /// Delegates to BuiltInModuleEmitterRegistry for module-specific emission, falling back
-/// to $Runtime wrapper methods registered via RegisterBuiltInModuleMethod.
+/// to $Runtime wrapper methods registered via EmittedBuiltInModuleRegistry.Register.
 /// </summary>
 public class BuiltInModuleHandler : ICallHandler
 {
@@ -34,7 +34,7 @@ public class BuiltInModuleHandler : ICallHandler
             }
 
             // Fall back to the $Runtime wrapper registered for this method
-            // (RegisterBuiltInModuleMethod — dns.resolve4, fs callbacks, ...).
+            // (EmittedBuiltInModuleRegistry.Register — dns.resolve4, fs callbacks, ...).
             // Without this, the call only worked where the namespace object
             // happened to be reachable as an entry-point local: inside any
             // function/arrow body the variable resolved to null and the call
@@ -84,14 +84,14 @@ public class BuiltInModuleHandler : ICallHandler
 
     /// <summary>
     /// Emits a direct static call to a $Runtime module wrapper registered via
-    /// RegisterBuiltInModuleMethod. Only fires for the uniform object-in/object-out
+    /// EmittedBuiltInModuleRegistry.Register. Only fires for the uniform object-in/object-out
     /// wrapper shape; anything else keeps the previous fallthrough behavior.
     /// </summary>
     private static bool TryEmitRegisteredModuleMethodCall(
         IEmitterContext emitter, string moduleName, string methodName, List<Expr> arguments)
     {
         var ctx = emitter.Context;
-        var helper = ctx.Runtime?.GetBuiltInModuleMethod(moduleName, methodName);
+        var helper = ctx.Runtime?.BuiltInModules.GetOptional(moduleName, methodName);
         if (helper == null)
             return false;
 

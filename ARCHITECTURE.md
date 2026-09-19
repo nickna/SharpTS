@@ -1293,6 +1293,19 @@ order, and output dependencies are unchanged. Promise wrapping retains its exist
 method-local BCL references and property/constructor builders remain scoped construction locals.
 No migrated flat aliases or CommonJS emitter-held copies remain.
 
+`EmittedBuiltInModuleRegistry` owns the shared callable-export index for each compilation.
+`EmitAll` snapshots feature selection into required export keys before emission; timers are
+unconditional and optional families reserve only their selected exports. Registration requires
+one non-null declaration from that emitted module per key. Distinct aliases may intentionally
+index the same family-owned method, including DNS result-order and TLS Server exports.
+Selected declarations are available before bodies and types are completed; an undeclared selected
+export fails checked lookup, while unselected/unknown optional exports preserve generic consumer
+fallthrough. Completion after all runtime families validates every selected key and freezes writes.
+The registry retains no mutable feature set, and no parallel index remains on `EmittedRuntime`.
+Generic import/require consumers use optional lookup; required TLS identity calls use `Require`.
+The existing declaration order, method bodies, export surface and deployment requirements remain
+unchanged. Other module/type registries and the complete residual audit remain separate work.
+
 VM uses optional `EmittedVmRuntime`, selected by `UsesVm`, for twelve checked method declarations.
 Thirteen VM emission helpers take this component; memory measurement also takes the Promise
 component. A module-scoped registration callback keeps the eight exported callable registrations

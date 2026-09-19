@@ -24,7 +24,7 @@ public partial class RuntimeEmitter
             Type.EmptyTypes
         );
         runtime.RequireTls().GetCiphers = method;
-        runtime.RegisterBuiltInModuleMethod("tls", "getCiphers", method);
+        runtime.BuiltInModules.Register("tls", "getCiphers", method);
 
         var il = method.GetILGenerator();
         var listType = _types.ListOfObject;

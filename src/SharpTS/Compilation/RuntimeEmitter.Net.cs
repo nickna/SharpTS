@@ -22,10 +22,10 @@ public partial class RuntimeEmitter
         EmitNetCreateConnection(typeBuilder, net);
         EmitNetCreateSocket(typeBuilder, net, socketFields);
         EmitNetCreateBlockList(typeBuilder, net);
-        runtime.RegisterBuiltInModuleMethod("primitive:net", "createServer", net.CreateServer);
-        runtime.RegisterBuiltInModuleMethod("primitive:net", "createConnection", net.CreateConnection);
-        runtime.RegisterBuiltInModuleMethod("primitive:net", "createSocket", net.CreateSocket);
-        runtime.RegisterBuiltInModuleMethod("primitive:net", "createBlockList", net.CreateBlockList);
+        runtime.BuiltInModules.Register("primitive:net", "createServer", net.CreateServer);
+        runtime.BuiltInModules.Register("primitive:net", "createConnection", net.CreateConnection);
+        runtime.BuiltInModules.Register("primitive:net", "createSocket", net.CreateSocket);
+        runtime.BuiltInModules.Register("primitive:net", "createBlockList", net.CreateBlockList);
     }
 
     /// <summary>

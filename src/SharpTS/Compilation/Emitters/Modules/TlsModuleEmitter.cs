@@ -63,7 +63,7 @@ public sealed class TlsModuleEmitter : IBuiltInModuleEmitter
                 il.Emit(OpCodes.Ldnull);
             }
         }
-        var checkServerIdentity = ctx.Runtime!.GetBuiltInModuleMethod("tls", "checkServerIdentity")!;
+        var checkServerIdentity = ctx.Runtime!.BuiltInModules.Require("tls", "checkServerIdentity");
         il.Emit(OpCodes.Call, checkServerIdentity);
         emitter.SetStackUnknown();
         return true;

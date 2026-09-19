@@ -70,6 +70,9 @@ public class EmittedVmRuntimeTests
         var promise = new EmittedPromiseRuntime { TypeResolve = resolve };
         var vm = new EmittedVmRuntime();
         var runtime = new EmittedRuntime();
+        var features = new RuntimeFeatureDetector().Detect(new Parser(new Lexer("console.log(1);").ScanTokens()).ParseOrThrow());
+        features.UsesVm = true;
+        runtime.BuiltInModules.BeginEmission((ModuleBuilder)type.Module, features);
         var registrations = new List<string>();
         Action<string, MethodBuilder> register = (name, method) =>
         {
@@ -79,8 +82,8 @@ public class EmittedVmRuntimeTests
             Assert.Equal(0, method.GetILGenerator().ILOffset);
             Assert.False(vm.IsComplete);
             Assert.False(type.IsCreated());
-            runtime.RegisterBuiltInModuleMethod("vm", name, method);
-            Assert.Same(method, runtime.GetBuiltInModuleMethod("vm", name));
+            runtime.BuiltInModules.Register("vm", name, method);
+            Assert.Same(method, runtime.BuiltInModules.GetOptional("vm", name));
             registrations.Add(name);
         };
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
@@ -125,15 +128,15 @@ public class EmittedVmRuntimeTests
             Assert.Equal(12, Handles.Count());
             Assert.True(runtime.RequirePromise().IsComplete);
             foreach (var (export, handle) in RegisteredExports)
-                Assert.Same(typeof(EmittedVmRuntime).GetProperty(handle)!.GetValue(vm), runtime.GetBuiltInModuleMethod("vm", export));
+                Assert.Same(typeof(EmittedVmRuntime).GetProperty(handle)!.GetValue(vm), runtime.BuiltInModules.GetOptional("vm", export));
         }
         else
         {
             Assert.Throws<InvalidOperationException>(runtime.RequireVm);
-            foreach (var (export, _) in RegisteredExports) Assert.Null(runtime.GetBuiltInModuleMethod("vm", export));
+            foreach (var (export, _) in RegisteredExports) Assert.Null(runtime.BuiltInModules.GetOptional("vm", export));
         }
         foreach (var name in new[] { "constants", "SourceTextModule", "SyntheticModule", "unknown" })
-            Assert.Null(runtime.GetBuiltInModuleMethod("vm", name));
+            Assert.Null(runtime.BuiltInModules.GetOptional("vm", name));
         using var bytes = Save(runtime);
         using var pe = new PEReader(bytes);
         var reader = pe.GetMetadataReader();

@@ -82,7 +82,7 @@ public class EmittedHttpRuntimeTests
         Assert.Null(runtime.Http);
         Assert.Contains("not enabled", Assert.Throws<InvalidOperationException>(runtime.RequireHttp).Message);
         foreach (var name in new[] { "createServer", "request", "get" })
-            Assert.Null(runtime.GetBuiltInModuleMethod("http", name));
+            Assert.Null(runtime.BuiltInModules.GetOptional("http", name));
         using var stream = Save(runtime);
         using var pe = new PEReader(stream);
         var reader = pe.GetMetadataReader();
@@ -130,7 +130,7 @@ public class EmittedHttpRuntimeTests
             Assert.True(owner.IsCreated(), property.Name);
         }
         foreach (var name in new[] { "createServer", "request", "get" })
-            Assert.NotNull(runtime.GetBuiltInModuleMethod("http", name));
+            Assert.NotNull(runtime.BuiltInModules.GetOptional("http", name));
     }
 
     [Fact]

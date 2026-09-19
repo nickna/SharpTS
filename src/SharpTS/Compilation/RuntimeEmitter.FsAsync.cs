@@ -60,7 +60,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().ReadFileSync, 2);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "readFile", method);
+        runtime.BuiltInModules.Register("fs/promises", "readFile", method);
     }
 
     /// <summary>
@@ -80,7 +80,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().WriteFileSync, 3);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "writeFile", method);
+        runtime.BuiltInModules.Register("fs/promises", "writeFile", method);
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().AppendFileSync, 3);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "appendFile", method);
+        runtime.BuiltInModules.Register("fs/promises", "appendFile", method);
     }
 
     /// <summary>
@@ -120,7 +120,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().StatRaw, 1);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "stat", method);
+        runtime.BuiltInModules.Register("fs/promises", "stat", method);
     }
 
     /// <summary>
@@ -140,7 +140,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().LstatRaw, 1);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "lstat", method);
+        runtime.BuiltInModules.Register("fs/promises", "lstat", method);
     }
 
     /// <summary>
@@ -160,7 +160,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().UnlinkSync, 1);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "unlink", method);
+        runtime.BuiltInModules.Register("fs/promises", "unlink", method);
     }
 
     /// <summary>
@@ -180,7 +180,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().MkdirSync, 2);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "mkdir", method);
+        runtime.BuiltInModules.Register("fs/promises", "mkdir", method);
     }
 
     /// <summary>
@@ -200,7 +200,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().RmdirSync, 2);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "rmdir", method);
+        runtime.BuiltInModules.Register("fs/promises", "rmdir", method);
     }
 
     /// <summary>
@@ -305,7 +305,7 @@ public partial class RuntimeEmitter
 
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), method.GetILGenerator(), impl, 2);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "rm", method);
+        runtime.BuiltInModules.Register("fs/promises", "rm", method);
     }
 
     /// <summary>
@@ -325,7 +325,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().ReaddirSync, 2);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "readdir", method);
+        runtime.BuiltInModules.Register("fs/promises", "readdir", method);
     }
 
     /// <summary>
@@ -345,7 +345,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().RenameSync, 2);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "rename", method);
+        runtime.BuiltInModules.Register("fs/promises", "rename", method);
     }
 
     /// <summary>
@@ -365,7 +365,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().CopyFileSync, 2);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "copyFile", method);
+        runtime.BuiltInModules.Register("fs/promises", "copyFile", method);
     }
 
     /// <summary>
@@ -385,7 +385,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().AccessSync, 2);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "access", method);
+        runtime.BuiltInModules.Register("fs/promises", "access", method);
     }
 
     /// <summary>
@@ -405,7 +405,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().ChmodSync, 2);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "chmod", method);
+        runtime.BuiltInModules.Register("fs/promises", "chmod", method);
     }
 
     /// <summary>
@@ -425,7 +425,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().TruncateSync, 2);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "truncate", method);
+        runtime.BuiltInModules.Register("fs/promises", "truncate", method);
     }
 
     /// <summary>
@@ -445,7 +445,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().UtimesSync, 3);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "utimes", method);
+        runtime.BuiltInModules.Register("fs/promises", "utimes", method);
     }
 
     /// <summary>
@@ -465,7 +465,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().ReadlinkSync, 1);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "readlink", method);
+        runtime.BuiltInModules.Register("fs/promises", "readlink", method);
     }
 
     /// <summary>
@@ -485,7 +485,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().RealpathSync, 1);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "realpath", method);
+        runtime.BuiltInModules.Register("fs/promises", "realpath", method);
     }
 
     /// <summary>
@@ -505,7 +505,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().SymlinkSync, 3);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "symlink", method);
+        runtime.BuiltInModules.Register("fs/promises", "symlink", method);
     }
 
     /// <summary>
@@ -525,7 +525,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().LinkSync, 2);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "link", method);
+        runtime.BuiltInModules.Register("fs/promises", "link", method);
     }
 
     /// <summary>
@@ -545,7 +545,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         EmitFsAsyncDispatch(runtime.RequireFileSystemAsync(), il, runtime.RequireFileSystem().MkdtempSync, 1);
 
-        runtime.RegisterBuiltInModuleMethod("fs/promises", "mkdtemp", method);
+        runtime.BuiltInModules.Register("fs/promises", "mkdtemp", method);
     }
 
     /// <summary>

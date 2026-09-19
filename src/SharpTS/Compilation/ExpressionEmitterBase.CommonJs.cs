@@ -244,7 +244,7 @@ public abstract partial class ExpressionEmitterBase
             if (!emitter.TryEmitPropertyGet(this, memberName))
             {
                 // For methods, create a TSFunction wrapper
-                var helperMethod = Ctx.Runtime?.GetBuiltInModuleMethod(moduleName, memberName);
+                var helperMethod = Ctx.Runtime?.BuiltInModules.GetOptional(moduleName, memberName);
                 if (helperMethod != null)
                 {
                     IL.Emit(OpCodes.Ldnull);

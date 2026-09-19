@@ -93,7 +93,7 @@ public class EmittedDgramRuntimeTests
         var runtime = EmitRuntime(false);
         Assert.Null(runtime.Dgram);
         Assert.Contains("not enabled", Assert.Throws<InvalidOperationException>(runtime.RequireDgram).Message);
-        Assert.Null(runtime.GetBuiltInModuleMethod("dgram", "createSocket"));
+        Assert.Null(runtime.BuiltInModules.GetOptional("dgram", "createSocket"));
         Assert.DoesNotContain(runtime.RuntimeClass.Type.GetMethods(), method => method.Name.StartsWith("Dgram", StringComparison.Ordinal));
         using var stream = new MemoryStream();
         ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
@@ -154,7 +154,7 @@ public class EmittedDgramRuntimeTests
         Assert.Equal("$DgramMessageClosure", dgram.MessageClosureCtor.DeclaringType!.Name);
         Assert.Same(dgram.MessageClosureCtor.DeclaringType, dgram.MessageClosureRun.DeclaringType);
         Assert.True(((TypeBuilder)dgram.MessageClosureRun.DeclaringType!).IsCreated());
-        Assert.Same(dgram.CreateSocket, runtime.GetBuiltInModuleMethod("dgram", "createSocket"));
+        Assert.Same(dgram.CreateSocket, runtime.BuiltInModules.GetOptional("dgram", "createSocket"));
         Assert.Throws<InvalidOperationException>(() => dgram.CreateSocket = dgram.CreateSocket);
         Assert.Throws<InvalidOperationException>(() => dgram.SocketType = dgram.SocketType);
         Assert.Throws<InvalidOperationException>(() => dgram.SocketCtor = dgram.SocketCtor);

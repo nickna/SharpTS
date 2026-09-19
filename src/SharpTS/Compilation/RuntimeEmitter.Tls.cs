@@ -38,8 +38,8 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]
         );
         runtime.RequireTls().CreateServer = method;
-        runtime.RegisterBuiltInModuleMethod("tls", "createServer", method);
-        runtime.RegisterBuiltInModuleMethod("tls", "Server", method); // alias
+        runtime.BuiltInModules.Register("tls", "createServer", method);
+        runtime.BuiltInModules.Register("tls", "Server", method); // alias
 
         var il = method.GetILGenerator();
 
@@ -67,7 +67,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object, _types.Object, _types.Object]
         );
         runtime.RequireTls().Connect = method;
-        runtime.RegisterBuiltInModuleMethod("tls", "connect", method);
+        runtime.BuiltInModules.Register("tls", "connect", method);
 
         // Body emitted in EmitTlsConnectBody after $TlsConnectClosure is defined
     }
@@ -280,7 +280,7 @@ public partial class RuntimeEmitter
             Type.EmptyTypes
         );
         runtime.RequireTls().CreateSocket = method;
-        runtime.RegisterBuiltInModuleMethod("tls", "TLSSocket", method);
+        runtime.BuiltInModules.Register("tls", "TLSSocket", method);
 
         var il = method.GetILGenerator();
 
@@ -304,7 +304,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.RequireTls().CreateSecureContext = method;
-        runtime.RegisterBuiltInModuleMethod("tls", "createSecureContext", method);
+        runtime.BuiltInModules.Register("tls", "createSecureContext", method);
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;

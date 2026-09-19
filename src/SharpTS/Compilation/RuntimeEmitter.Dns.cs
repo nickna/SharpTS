@@ -78,8 +78,8 @@ public partial class RuntimeEmitter
                 Type.EmptyTypes
             );
             runtime.RequireDns().GetDefaultResultOrder = method;
-            runtime.RegisterBuiltInModuleMethod("dns", "getDefaultResultOrder", method);
-            runtime.RegisterBuiltInModuleMethod("dns/promises", "getDefaultResultOrder", method);
+            runtime.BuiltInModules.Register("dns", "getDefaultResultOrder", method);
+            runtime.BuiltInModules.Register("dns/promises", "getDefaultResultOrder", method);
 
             var il = method.GetILGenerator();
             var haveValue = il.DefineLabel();
@@ -101,8 +101,8 @@ public partial class RuntimeEmitter
                 [_types.Object]
             );
             runtime.RequireDns().SetDefaultResultOrder = method;
-            runtime.RegisterBuiltInModuleMethod("dns", "setDefaultResultOrder", method);
-            runtime.RegisterBuiltInModuleMethod("dns/promises", "setDefaultResultOrder", method);
+            runtime.BuiltInModules.Register("dns", "setDefaultResultOrder", method);
+            runtime.BuiltInModules.Register("dns/promises", "setDefaultResultOrder", method);
 
             var il = method.GetILGenerator();
             var strLocal = il.DeclareLocal(_types.String);
@@ -3905,7 +3905,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("dns", methodName, method);
+        runtime.BuiltInModules.Register("dns", methodName, method);
     }
 
     /// <summary>
@@ -4096,7 +4096,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("dns", "resolve", method);
+        runtime.BuiltInModules.Register("dns", "resolve", method);
     }
 
     /// <summary>
@@ -4186,7 +4186,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("dns", "reverse", method);
+        runtime.BuiltInModules.Register("dns", "reverse", method);
     }
 
     /// <summary>
@@ -4251,7 +4251,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        runtime.RegisterBuiltInModuleMethod("dns", methodName, method);
+        runtime.BuiltInModules.Register("dns", methodName, method);
     }
 
     /// <summary>
