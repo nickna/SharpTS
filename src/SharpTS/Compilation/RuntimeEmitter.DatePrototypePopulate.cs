@@ -11,63 +11,6 @@ public partial class RuntimeEmitter
         MethodBuilder TSFunctionGetOrCreate
     );
 
-    /// <summary>
-    /// The ECMA-262 §21.4.4 <c>Date.prototype</c> method table: JS name, the
-    /// <see cref="EmittedDateImplementation"/> helper backing it, and its spec <c>length</c>.
-    /// </summary>
-    /// <remarks>
-    /// Kept as data rather than 43 hand-written wiring calls so a new Date helper is one row.
-    /// The helpers all take the receiver as their first <c>object</c> parameter, which is the
-    /// shape <see cref="EmitWirePrototypeMethod"/> expects.
-    /// </remarks>
-    private static (string JsName, System.Func<EmittedDateImplementation, MethodBuilder> Helper, int Length)[]
-        DatePrototypeMethods =>
-    [
-        ("getTime",              r => r.GetTime,              0),
-        ("valueOf",              r => r.ValueOf,              0),
-        ("getFullYear",          r => r.GetFullYear,          0),
-        ("getMonth",             r => r.GetMonth,             0),
-        ("getDate",              r => r.GetDate,              0),
-        ("getDay",               r => r.GetDay,               0),
-        ("getHours",             r => r.GetHours,             0),
-        ("getMinutes",           r => r.GetMinutes,           0),
-        ("getSeconds",           r => r.GetSeconds,           0),
-        ("getMilliseconds",      r => r.GetMilliseconds,      0),
-        ("getTimezoneOffset",    r => r.GetTimezoneOffset,    0),
-        ("getUTCFullYear",       r => r.GetUTCFullYear,       0),
-        ("getUTCMonth",          r => r.GetUTCMonth,          0),
-        ("getUTCDate",           r => r.GetUTCDate,           0),
-        ("getUTCDay",            r => r.GetUTCDay,            0),
-        ("getUTCHours",          r => r.GetUTCHours,          0),
-        ("getUTCMinutes",        r => r.GetUTCMinutes,        0),
-        ("getUTCSeconds",        r => r.GetUTCSeconds,        0),
-        ("getUTCMilliseconds",   r => r.GetUTCMilliseconds,   0),
-        ("setTime",              r => r.SetTime,              1),
-        ("setMilliseconds",      r => r.SetMilliseconds,      1),
-        ("setSeconds",           r => r.SetSeconds,           2),
-        ("setMinutes",           r => r.SetMinutes,           3),
-        ("setHours",             r => r.SetHours,             4),
-        ("setDate",              r => r.SetDate,              1),
-        ("setMonth",             r => r.SetMonth,             2),
-        ("setFullYear",          r => r.SetFullYear,          3),
-        ("setUTCMilliseconds",   r => r.SetUTCMilliseconds,   1),
-        ("setUTCSeconds",        r => r.SetUTCSeconds,        2),
-        ("setUTCMinutes",        r => r.SetUTCMinutes,        3),
-        ("setUTCHours",          r => r.SetUTCHours,          4),
-        ("setUTCDate",           r => r.SetUTCDate,           1),
-        ("setUTCMonth",          r => r.SetUTCMonth,          2),
-        ("setUTCFullYear",       r => r.SetUTCFullYear,       3),
-        ("toString",             r => r.ToStringMethod,             0),
-        ("toISOString",          r => r.ToISOString,          0),
-        ("toDateString",         r => r.ToDateString,         0),
-        ("toTimeString",         r => r.ToTimeString,         0),
-        ("toUTCString",          r => r.ToUTCString,          0),
-        ("toJSON",               r => r.ToJSON,               1),
-        ("toLocaleString",       r => r.ToLocaleString,       0),
-        ("toLocaleDateString",   r => r.ToLocaleDateString,   0),
-        ("toLocaleTimeString",   r => r.ToLocaleTimeString,   0),
-    ];
-
     private void DefineDatePrototypePopulateShell(TypeBuilder typeBuilder, EmittedDateRuntime dates)
     {
         dates.PopulatePrototype = typeBuilder.DefineMethod(
@@ -116,7 +59,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         });
 
-        foreach (var (jsName, helper, jsLength) in DatePrototypeMethods)
+        foreach (var (jsName, helper, jsLength) in DatePrototypeEmitCatalog.Methods)
         {
             EmitWirePrototypeMethodDescriptor(il, descriptors, inputs.TSFunctionGetOrCreate, dates.Prototype, descLocal,
                 setItem, jsName, helper(date), jsLength);
