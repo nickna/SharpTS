@@ -240,22 +240,44 @@ public sealed class EmittedDnsRuntime
         internal set => Set(ref _resolverResolve, value);
     }
 
+    private static readonly IReadOnlyList<string> RequiredWrapperNames = Array.AsReadOnly<string>(
+    [
+        "DnsPromisesResolve4", "DnsPromisesResolve6", "DnsPromisesResolveMx",
+        "DnsPromisesResolveTxt", "DnsPromisesResolveSrv", "DnsPromisesResolveCname",
+        "DnsPromisesResolveNs", "DnsPromisesResolveSoa", "DnsPromisesResolvePtr",
+        "DnsPromisesResolveCaa", "DnsPromisesResolveNaptr", "DnsPromisesLookup",
+        "DnsPromisesLookupService", "DnsPromisesResolve", "DnsPromisesReverse",
+        "DnsResolverResolveAsync"
+    ]);
+
     private readonly Dictionary<string, MethodBuilder> _promiseWrappers = new(StringComparer.Ordinal);
+
+    /// <summary>A live read-only view of declarations; method bodies may be emitted later.</summary>
     public IReadOnlyDictionary<string, MethodBuilder> PromisesWrapperMethods { get; }
+
+    public MethodBuilder RequirePromiseWrapper(string name) =>
+        _promiseWrappers.TryGetValue(name, out var method) ? method
+            : throw new InvalidOperationException($"DNS promise wrapper '{name}' has not been declared.");
 
     internal void RegisterPromiseWrapper(string name, MethodBuilder method)
     {
         EnsureMutable();
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(method);
+        if (!RequiredWrapperNames.Contains(name, StringComparer.Ordinal))
+            throw new ArgumentException($"Unknown DNS promise wrapper '{name}'.", nameof(name));
         _promiseWrappers.Add(name, method);
     }
 
     private static MethodBuilder Require(MethodBuilder? method, [CallerMemberName] string name = "") =>
         method ?? throw new InvalidOperationException($"DNS metadata '{name}' has not been declared.");
 
-    private void Set(ref MethodBuilder? field, MethodBuilder value)
+    private void Set(ref MethodBuilder? field, MethodBuilder value, [CallerMemberName] string name = "")
     {
         EnsureMutable();
         ArgumentNullException.ThrowIfNull(value);
+        if (field is not null)
+            throw new InvalidOperationException($"DNS metadata '{name}' has already been declared.");
         field = value;
     }
 
@@ -300,20 +322,8 @@ public sealed class EmittedDnsRuntime
         _ = ResolverGetGeneration;
         _ = ResolverSetLocalAddress;
         _ = ResolverResolve;
-        string[] requiredWrappers =
-        [
-            "DnsPromisesResolve4", "DnsPromisesResolve6", "DnsPromisesResolveMx",
-            "DnsPromisesResolveTxt", "DnsPromisesResolveSrv", "DnsPromisesResolveCname",
-            "DnsPromisesResolveNs", "DnsPromisesResolveSoa", "DnsPromisesResolvePtr",
-            "DnsPromisesResolveCaa", "DnsPromisesResolveNaptr", "DnsPromisesLookup",
-            "DnsPromisesLookupService", "DnsPromisesResolve", "DnsPromisesReverse",
-            "DnsResolverResolveAsync"
-        ];
-        foreach (string name in requiredWrappers)
-        {
-            if (!_promiseWrappers.ContainsKey(name))
-                throw new InvalidOperationException($"DNS promise wrapper '{name}' has not been declared.");
-        }
+        foreach (string name in RequiredWrapperNames)
+            _ = RequirePromiseWrapper(name);
         IsComplete = true;
     }
 }

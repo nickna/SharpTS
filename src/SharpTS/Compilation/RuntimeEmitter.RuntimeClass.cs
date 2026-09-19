@@ -3042,9 +3042,6 @@ public partial class RuntimeEmitter
         // constants) — gated; the $Buffer class they compose is also UsesBuffer-gated.
         if (_features.UsesBuffer)
             EmitBufferModuleMethods(typeBuilder, runtime);
-        // DNS module methods — gated.
-        if (_features.UsesDns)
-            EmitDnsModuleMethods(typeBuilder, runtime);
         // primitive:perf — only the host-tied now() method; the rest of perf_hooks
         // is pure TypeScript in stdlib/node/perf_hooks.ts. Gated on UsesPerf
         // (set by `import 'perf_hooks'` or bare `performance` reference).

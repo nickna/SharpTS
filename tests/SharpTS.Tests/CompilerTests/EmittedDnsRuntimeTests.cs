@@ -9,6 +9,103 @@ namespace SharpTS.Tests.CompilerTests;
 
 public class EmittedDnsRuntimeTests
 {
+    private static IEnumerable<PropertyInfo> Handles => typeof(EmittedDnsRuntime).GetProperties()
+        .Where(property => property.PropertyType == typeof(MethodBuilder));
+
+    private static readonly string[] WrapperNames =
+    [
+        "DnsPromisesResolve4", "DnsPromisesResolve6", "DnsPromisesResolveMx",
+        "DnsPromisesResolveTxt", "DnsPromisesResolveSrv", "DnsPromisesResolveCname",
+        "DnsPromisesResolveNs", "DnsPromisesResolveSoa", "DnsPromisesResolvePtr",
+        "DnsPromisesResolveCaa", "DnsPromisesResolveNaptr", "DnsPromisesLookup",
+        "DnsPromisesLookupService", "DnsPromisesResolve", "DnsPromisesReverse",
+        "DnsResolverResolveAsync"
+    ];
+
+    public static IEnumerable<object[]> HandleNames => Handles.Select(property => new object[] { property.Name });
+    public static IEnumerable<object[]> RequiredWrappers => WrapperNames.Select(name => new object[] { name });
+
+    [Theory]
+    [MemberData(nameof(HandleNames))]
+    public void EveryDeclarationRejectsMissingNullAndDuplicateHandlesBeforeCompletion(string missingHandle)
+    {
+        var dns = new EmittedDnsRuntime();
+        FillDeclarations(dns, missingHandle: missingHandle);
+        var property = typeof(EmittedDnsRuntime).GetProperty(missingHandle)!;
+        var missing = Assert.Throws<TargetInvocationException>(() => property.GetValue(dns));
+        Assert.Contains($"'{missingHandle}'", Assert.IsType<InvalidOperationException>(missing.InnerException).Message);
+        Assert.Contains($"'{missingHandle}'", Assert.Throws<InvalidOperationException>(dns.CompleteEmission).Message);
+        Assert.False(dns.IsComplete);
+        var nullError = Assert.Throws<TargetInvocationException>(() => property.SetValue(dns, null));
+        Assert.IsType<ArgumentNullException>(nullError.InnerException);
+        var original = CreateDeclaration();
+        property.SetValue(dns, original);
+        var duplicate = Assert.Throws<TargetInvocationException>(() => property.SetValue(dns, CreateDeclaration()));
+        Assert.Contains($"'{missingHandle}'", Assert.IsType<InvalidOperationException>(duplicate.InnerException).Message);
+        Assert.Same(original, property.GetValue(dns));
+        dns.CompleteEmission();
+        AssertFrozen(dns);
+    }
+
+    [Theory]
+    [MemberData(nameof(RequiredWrappers))]
+    public void EveryRequiredWrapperRejectsMissingNullAndDuplicateDeclarationsThenAllowsCompletion(string missingWrapper)
+    {
+        var dns = new EmittedDnsRuntime();
+        FillDeclarations(dns, missingWrapper: missingWrapper);
+        Assert.Contains($"'{missingWrapper}'", Assert.Throws<InvalidOperationException>(() => dns.RequirePromiseWrapper(missingWrapper)).Message);
+        Assert.Contains($"'{missingWrapper}'", Assert.Throws<InvalidOperationException>(dns.CompleteEmission).Message);
+        Assert.False(dns.IsComplete);
+        Assert.Throws<ArgumentNullException>(() => dns.RegisterPromiseWrapper(missingWrapper, null!));
+        Assert.DoesNotContain(missingWrapper, dns.PromisesWrapperMethods.Keys);
+        var original = CreateDeclaration();
+        dns.RegisterPromiseWrapper(missingWrapper, original);
+        Assert.Same(original, dns.RequirePromiseWrapper(missingWrapper));
+        Assert.Throws<ArgumentException>(() => dns.RegisterPromiseWrapper(missingWrapper, CreateDeclaration()));
+        Assert.Same(original, dns.PromisesWrapperMethods[missingWrapper]);
+        dns.CompleteEmission();
+        AssertFrozen(dns);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("unknown")]
+    public void InvalidWrapperNamesCannotCreateDeclarations(string? name)
+    {
+        var dns = new EmittedDnsRuntime();
+        Assert.ThrowsAny<ArgumentException>(() => dns.RegisterPromiseWrapper(name!, CreateDeclaration()));
+        Assert.Empty(dns.PromisesWrapperMethods);
+    }
+
+    [Fact]
+    public void PromiseWrapperCanBeReferencedBeforeItsBodyExists()
+    {
+        var dns = new EmittedDnsRuntime();
+        var builder = new PersistedAssemblyBuilder(new AssemblyName("dns_wrapper_forward"), typeof(object).Assembly);
+        var module = builder.DefineDynamicModule("main");
+        var target = module.DefineType("Target", TypeAttributes.Public);
+        var declaration = target.DefineMethod("Lookup", MethodAttributes.Public | MethodAttributes.Static, typeof(int), Type.EmptyTypes);
+        dns.RegisterPromiseWrapper("DnsPromisesLookup", declaration);
+        var caller = module.DefineType("Caller", TypeAttributes.Public);
+        var call = caller.DefineMethod("Run", MethodAttributes.Public | MethodAttributes.Static, typeof(int), Type.EmptyTypes);
+        var il = call.GetILGenerator();
+        il.Emit(OpCodes.Call, dns.RequirePromiseWrapper("DnsPromisesLookup"));
+        il.Emit(OpCodes.Ret);
+        caller.CreateType();
+        Assert.False(dns.IsComplete);
+        il = declaration.GetILGenerator();
+        il.Emit(OpCodes.Ldc_I4, 27);
+        il.Emit(OpCodes.Ret);
+        target.CreateType();
+        using var bytes = new MemoryStream();
+        builder.Save(bytes); bytes.Position = 0;
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        Assert.Empty(verifier.Verify(bytes));
+        var loaded = Assembly.Load(bytes.ToArray());
+        Assert.Equal(27, loaded.GetType("Caller")!.GetMethod("Run")!.Invoke(null, null));
+    }
+
     [Fact]
     public void DnsAndPromiseConsumersPassILVerification()
     {
@@ -78,7 +175,7 @@ public class EmittedDnsRuntimeTests
     public async Task ReusedEmitterKeepsDnsConstructionWithinEachAssembly(bool hosted)
     {
         var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
-        var saved = new List<(Assembly Assembly, int GetOrderToken)>();
+        var saved = new List<(Assembly Assembly, int GetOrderToken, string Marker)>();
         var owners = new HashSet<EmittedDnsRuntime>();
         foreach (string? source in new[] { "import * as dns from 'dns';", "console.log(1);", null, "import * as dns from 'dns/promises';" })
         {
@@ -105,14 +202,29 @@ public class EmittedDnsRuntimeTests
             Assert.True(dns.IsComplete);
             Assert.Equal(16, dns.PromisesWrapperMethods.Count);
             Assert.All(dns.PromisesWrapperMethods.Values, method => Assert.Same(builder, method.Module.Assembly));
-            saved.Add((loaded, dns.GetDefaultResultOrder.MetadataToken));
+            Assert.All(loaded.GetTypes().Where(type => type.Name.StartsWith("$Dns", StringComparison.Ordinal))
+                .GroupBy(type => type.FullName), group => Assert.Single(group));
+            var runtimeType = loaded.GetType("$Runtime")!;
+            var methods = runtimeType.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+            Assert.All(methods.Where(method => method.Name.StartsWith("Dns", StringComparison.Ordinal))
+                .GroupBy(method => method.Name + "(" + string.Join(",", method.GetParameters().Select(parameter => parameter.ParameterType)) + ")"),
+                group => Assert.Single(group));
+            var resultOrder = Assert.Single(runtimeType.GetFields(BindingFlags.Static | BindingFlags.NonPublic),
+                field => field.Name == "_dnsResultOrder");
+            var getOrder = Assert.Single(methods, method => method.Name == "DnsGetDefaultResultOrder");
+            Assert.Equal(getOrder.MetadataToken, dns.GetDefaultResultOrder.MetadataToken);
+            Assert.Same(dns.GetDefaultResultOrder, runtime.GetBuiltInModuleMethod("dns", "getDefaultResultOrder"));
+            Assert.Same(dns.GetDefaultResultOrder, runtime.GetBuiltInModuleMethod("dns/promises", "getDefaultResultOrder"));
+            string marker = $"assembly-{saved.Count}";
+            resultOrder.SetValue(null, marker);
+            saved.Add((loaded, dns.GetDefaultResultOrder.MetadataToken, marker));
         }
 
         // Exercise earlier assemblies only after the emitter has constructed all later ones.
-        foreach (var (assembly, getOrderToken) in saved)
+        foreach (var (assembly, getOrderToken, marker) in saved)
         {
             var getOrder = assembly.ManifestModule.ResolveMethod(getOrderToken)!;
-            Assert.Equal("verbatim", getOrder.Invoke(null, null));
+            Assert.Equal(marker, getOrder.Invoke(null, null));
             var one = Activator.CreateInstance(assembly.GetType("$DnsDisplay1")!)!;
             one.GetType().GetField("_hostname")!.SetValue(one, "first");
             one.GetType().GetField("_method")!.SetValue(one, typeof(Convert).GetMethod("ToString", [typeof(object)]));
@@ -147,6 +259,37 @@ public class EmittedDnsRuntimeTests
                     Assert.Equal("done", await completion.Task);
             }
         }
+    }
+
+    private static MethodBuilder CreateDeclaration()
+    {
+        var builder = new PersistedAssemblyBuilder(new AssemblyName($"dns_declaration_{Guid.NewGuid():N}"), typeof(object).Assembly);
+        return builder.DefineDynamicModule("main").DefineType("Runtime")
+            .DefineMethod("Declared", MethodAttributes.Public | MethodAttributes.Static, typeof(void), Type.EmptyTypes);
+    }
+
+    private static void FillDeclarations(EmittedDnsRuntime dns, string? missingHandle = null, string? missingWrapper = null)
+    {
+        foreach (var property in Handles.Where(property => property.Name != missingHandle))
+            property.SetValue(dns, CreateDeclaration());
+        foreach (string name in WrapperNames.Where(name => name != missingWrapper))
+            dns.RegisterPromiseWrapper(name, CreateDeclaration());
+    }
+
+    private static void AssertFrozen(EmittedDnsRuntime dns)
+    {
+        Assert.True(dns.IsComplete);
+        Assert.Throws<InvalidOperationException>(dns.CompleteEmission);
+        foreach (var property in Handles)
+        {
+            var error = Assert.Throws<TargetInvocationException>(() => property.SetValue(dns, property.GetValue(dns)));
+            Assert.IsType<InvalidOperationException>(error.InnerException);
+        }
+        foreach (string name in WrapperNames)
+            Assert.Throws<InvalidOperationException>(() => dns.RegisterPromiseWrapper(name, dns.RequirePromiseWrapper(name)));
+        var view = Assert.IsAssignableFrom<IDictionary<string, MethodBuilder>>(dns.PromisesWrapperMethods);
+        Assert.Throws<NotSupportedException>(() => view[WrapperNames[0]] = CreateDeclaration());
+        Assert.Throws<NotSupportedException>(view.Clear);
     }
 
     private static EmittedRuntime EmitRuntime(bool usesDns)

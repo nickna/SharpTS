@@ -93,7 +93,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
         }
 
         // Wrappers already return $Promise (they call WrapTaskAsPromise internally)
-        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().PromisesWrapperMethods[runtimeMethod]);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().RequirePromiseWrapper(runtimeMethod));
         return true;
     }
 
@@ -122,7 +122,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
 
         // Wrapper already calls WrapTaskAsPromise internally
-        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().PromisesWrapperMethods["DnsPromisesLookup"]);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().RequirePromiseWrapper("DnsPromisesLookup"));
         return true;
     }
 
@@ -144,7 +144,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
             }
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().PromisesWrapperMethods["DnsPromisesLookupService"]);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().RequirePromiseWrapper("DnsPromisesLookupService"));
         return true;
     }
 
@@ -171,7 +171,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Stelem_Ref);
         }
 
-        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().PromisesWrapperMethods["DnsResolverResolveAsync"]);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().RequirePromiseWrapper("DnsResolverResolveAsync"));
         return true;
     }
 
@@ -200,7 +200,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
 
         // Wrapper already calls WrapTaskAsPromise internally
-        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().PromisesWrapperMethods["DnsPromisesResolve"]);
+        il.Emit(OpCodes.Call, ctx.Runtime!.RequireDns().RequirePromiseWrapper("DnsPromisesResolve"));
         return true;
     }
 }

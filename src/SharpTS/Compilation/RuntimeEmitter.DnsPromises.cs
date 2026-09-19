@@ -609,7 +609,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, jsName);
 
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldtoken, dns.PromisesWrapperMethods[wrapperKey]);
+            il.Emit(OpCodes.Ldtoken, dns.RequirePromiseWrapper(wrapperKey));
             il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
             il.Emit(OpCodes.Castclass, typeof(MethodInfo));
             il.Emit(OpCodes.Newobj, functionConstructor);
