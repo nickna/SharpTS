@@ -41,7 +41,16 @@ public class EmittedEventEmitterRuntimeTests
         Assert.False(events.IsComplete);
         var nullError = Assert.Throws<TargetInvocationException>(() => property.SetValue(events, null));
         Assert.IsType<ArgumentNullException>(nullError.InnerException);
-        property.SetValue(events, property.GetValue(CreateDeclarations()));
+        var declaration = property.GetValue(CreateDeclarations());
+        property.SetValue(events, declaration);
+        foreach (var declared in Handles)
+        {
+            var value = declared.GetValue(events);
+            var duplicate = Assert.Throws<TargetInvocationException>(() => declared.SetValue(events, value));
+            Assert.Contains($"'{declared.Name}'", Assert.IsType<InvalidOperationException>(duplicate.InnerException).Message);
+            Assert.Same(value, declared.GetValue(events));
+        }
+        Assert.Same(declaration, property.GetValue(events));
         events.CompleteEmission();
         AssertFrozen(events);
     }
@@ -145,6 +154,90 @@ public class EmittedEventEmitterRuntimeTests
         Assert.True(derived.IsSubclassOf(baseType));
         Assert.Same(baseType, derived.GetMethod("On")!.DeclaringType);
         Assert.Same(baseType, derived.GetMethod("Emit")!.DeclaringType);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReusedEmitterKeepsListenerCollectionsAndDispatchWithinEachAssembly(bool hosted)
+    {
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
+        var owners = new HashSet<EmittedEventEmitterRuntime>();
+        var saved = new List<(Assembly Assembly, object Instance, object Listener, object Once, List<object> Seen, List<object> OnceSeen, int Max)>();
+        foreach (string? source in new[]
+        {
+            "import * as events from 'events';", "console.log(1);", "import * as stream from 'stream';",
+            "import * as net from 'net'; import * as tls from 'tls';",
+            null, "console.log(1);", "import * as events from 'events'; Promise.resolve(1);"
+        })
+        {
+            var builder = new PersistedAssemblyBuilder(new AssemblyName($"eventemitter_reuse_{Guid.NewGuid():N}"), typeof(object).Assembly);
+            var module = builder.DefineDynamicModule("main");
+            var features = source is null ? null : new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
+            var runtime = features is null ? emitter.EmitAll(module) : emitter.EmitAll(module, features);
+            using var bytes = new MemoryStream();
+            builder.Save(bytes);
+            bytes.Position = 0;
+            using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+            Assert.Empty(verifier.Verify(bytes));
+            var assembly = Assembly.Load(bytes.ToArray());
+            var references = assembly.GetReferencedAssemblies();
+            Assert.DoesNotContain(references, reference => reference.Name == "SharpTS");
+            Assert.DoesNotContain(references, reference => saved.Any(previous => previous.Assembly.GetName().Name == reference.Name));
+            Assert.Equal(hosted, references.Any(reference => reference.Name == "SharpTS.Hosting.Abstractions"));
+            Assert.True(owners.Add(runtime.EventEmitter));
+            Assert.True(runtime.EventEmitter.IsComplete);
+            foreach (var property in Handles)
+                Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.EventEmitter)).Module.Assembly);
+            if (source == "console.log(1);")
+                Assert.Null(assembly.GetType("$Readable"));
+
+            var type = assembly.GetType("$EventEmitter")!;
+            var instance = Activator.CreateInstance(type)!;
+            var seen = new List<object>();
+            var onceSeen = new List<object>();
+            object Listener(List<object> values) => Activator.CreateInstance(assembly.GetType("$TSFunction")!,
+                [values, typeof(List<object>).GetMethod(nameof(List<object>.Add))!])!;
+            var listener = Listener(seen);
+            var once = Listener(onceSeen);
+            Assert.Same(instance, type.GetMethod("On")!.Invoke(instance, ["tick", listener]));
+            Assert.Same(instance, type.GetMethod("PrependOnceListener")!.Invoke(instance, ["tick", once]));
+            var defaultMax = type.GetField("DefaultMaxListeners")!;
+            Assert.Equal(10, defaultMax.GetValue(null));
+            int max = 20 + saved.Count;
+            defaultMax.SetValue(null, max);
+            saved.Add((assembly, instance, listener, once, seen, onceSeen, max));
+        }
+
+        // Earlier listener collections, callbacks and static defaults survive later emissions.
+        foreach (var (assembly, instance, listener, once, seen, onceSeen, max) in saved)
+        {
+            var type = assembly.GetType("$EventEmitter")!;
+            object? Call(string method, params object?[] arguments) => type.GetMethod(method)!.Invoke(instance, arguments);
+            List<object> Values(string method, params object?[] arguments)
+                => Assert.IsAssignableFrom<List<object>>(Call(method, arguments));
+            Assert.Equal((double)max, Call("GetMaxListeners"));
+            Assert.Equal(new[] { once, listener }, Values("Listeners", "tick"));
+            Assert.Equal(new object[] { "tick" }, Values("EventNames"));
+            Assert.Equal(2d, Call("ListenerCount", "tick"));
+            Assert.Equal(true, Call("Emit", "tick", new object[] { 3d }));
+            Assert.Equal(true, Call("Emit", "tick", new object[] { 4d }));
+            Assert.Equal(new object[] { 3d, 4d }, seen);
+            Assert.Equal(new object[] { 3d }, onceSeen);
+            Assert.Equal(new[] { listener }, Values("Listeners", "tick"));
+            Assert.Equal(1d, Call("ListenerCount", "tick"));
+            Call("On", "other", listener);
+            Assert.Equal(new object[] { "tick", "other" }, Values("EventNames"));
+            Call("Off", "tick", listener);
+            Assert.Equal(0d, Call("ListenerCount", "tick"));
+            Assert.Equal(false, Call("Emit", "tick", new object[] { 5d }));
+            Assert.Empty(Values("Listeners", "tick"));
+            Call("RemoveAllListeners", "other");
+            Assert.Empty(Values("EventNames"));
+            Call("On", "all", listener);
+            Call("RemoveAllListeners", new object?[] { null });
+            Assert.Empty(Values("EventNames"));
+        }
     }
 
     private static EmittedEventEmitterRuntime CreateDeclarations(string? missingHandle = null)

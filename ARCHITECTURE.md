@@ -1593,6 +1593,16 @@ socket error-code helper and the TCP drop-payload helper remain method-local. Th
 to own checked public declarations and completion; optional availability, forward declarations,
 field visibility and type-creation order are unchanged.
 
+EventEmitter resolves its twelve open-generic BCL collection methods into an immutable local
+value at the original initialization point. Seven helpers receive that value explicitly when
+resolving methods on the generated listener-list and event-dictionary types. No collection
+method handles remain on `RuntimeEmitter`; the required checked EventEmitter component still
+owns its twenty-six generated declarations and rejects duplicate assignments before completion.
+Declaration/body order, mutually recursive rejection routing, listener ordering, subclass hooks
+and deployment are unchanged. Lifecycle and hosted/standalone reuse tests cover earlier listener
+collections, callbacks and static defaults after later emissions. Shared BCL resolution and the
+error-monitor constant remain within the final ownership audit under #1599.
+
 Zlib construction is local to its emitting methods. Six transform fields form an immutable
 construction value, its chunk-conversion helper is passed directly to Write/End, and eight
 synchronous input/option/copy helpers are returned into a separate immutable value. None of

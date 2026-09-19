@@ -14,19 +14,20 @@ public partial class RuntimeEmitter
     // compiled store/dispatch errorMonitor listeners under the same key.
     private const string ErrorMonitorKey = "Symbol(nodejs.events.errorMonitor)";
 
-    // Cached method infos from open generic types for TypeBuilder.GetMethod
-    private MethodInfo _listCountGetter = null!;
-    private MethodInfo _listGetItem = null!;
-    private MethodInfo _listRemoveAt = null!;
-    private MethodInfo _listRemove = null!;
-    private MethodInfo _listAdd = null!;
-    private MethodInfo _listInsert = null!;
-    private MethodInfo _listToArray = null!;
-    private MethodInfo _dictTryGetValue = null!;
-    private MethodInfo _dictRemove = null!;
-    private MethodInfo _dictClear = null!;
-    private MethodInfo _dictAdd = null!;
-    private MethodInfo _dictKeysGetter = null!;
+    // Open-generic BCL methods are resolved once and confined to this emission.
+    private sealed record EventEmitterGenericMethods(
+        MethodInfo ListCountGetter,
+        MethodInfo ListGetItem,
+        MethodInfo ListRemoveAt,
+        MethodInfo ListRemove,
+        MethodInfo ListAdd,
+        MethodInfo ListInsert,
+        MethodInfo ListToArray,
+        MethodInfo DictTryGetValue,
+        MethodInfo DictRemove,
+        MethodInfo DictClear,
+        MethodInfo DictAdd,
+        MethodInfo DictKeysGetter);
 
     private void EmitTSEventEmitterClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
@@ -47,8 +48,8 @@ public partial class RuntimeEmitter
         var dictType = _types.MakeGenericType(_types.DictionaryOpen, _types.String, listType);
         events.EventsField = typeBuilder.DefineField("_events", dictType, FieldAttributes.Private);
 
-        // Cache method infos from open generic types for later use with TypeBuilder.GetMethod
-        CacheGenericMethodInfos(listType, dictType);
+        // Resolve open-generic methods at the original construction boundary.
+        var methods = CreateEventEmitterGenericMethods();
 
         // Field: private int _maxListeners = 0
         events.MaxListenersField = typeBuilder.DefineField("_maxListeners", _types.Int32, FieldAttributes.Private);
@@ -71,7 +72,7 @@ public partial class RuntimeEmitter
         EmitTSEventEmitterOnListenerAdded(typeBuilder, events);
 
         // Instance methods - AddListenerInternal must be defined first as it's called by On/Once/Prepend methods
-        EmitTSEventEmitterAddListenerInternal(typeBuilder, events, listType, dictType);
+        EmitTSEventEmitterAddListenerInternal(methods, typeBuilder, events, listType, dictType);
         // #1099 helpers. Emit and RouteCaptureRejection are mutually recursive
         // (Emit invokes RouteCaptureRejection; RouteCaptureRejection re-emits
         // 'error'), so define RouteCaptureRejection's handle before Emit's body
@@ -80,13 +81,13 @@ public partial class RuntimeEmitter
         DefineTSEventEmitterRouteCaptureRejection(typeBuilder, events);
         EmitTSEventEmitterOn(typeBuilder, events, listType);
         EmitTSEventEmitterOnce(typeBuilder, events, listType);
-        EmitTSEventEmitterOff(typeBuilder, events, listType, dictType);
-        EmitTSEventEmitterEmit(typeBuilder, runtime, listType);
+        EmitTSEventEmitterOff(methods, typeBuilder, events, listType, dictType);
+        EmitTSEventEmitterEmit(methods, typeBuilder, runtime, listType);
         FillTSEventEmitterRouteCaptureRejection(runtime);
-        EmitTSEventEmitterRemoveAllListeners(typeBuilder, events, dictType);
-        EmitTSEventEmitterListeners(typeBuilder, runtime, listType);
-        EmitTSEventEmitterListenerCount(typeBuilder, events, listType);
-        EmitTSEventEmitterEventNames(typeBuilder, runtime, dictType);
+        EmitTSEventEmitterRemoveAllListeners(methods, typeBuilder, events, dictType);
+        EmitTSEventEmitterListeners(methods, typeBuilder, runtime, listType);
+        EmitTSEventEmitterListenerCount(methods, typeBuilder, events, listType);
+        EmitTSEventEmitterEventNames(methods, typeBuilder, runtime, dictType);
         EmitTSEventEmitterPrependListener(typeBuilder, events, listType);
         EmitTSEventEmitterPrependOnceListener(typeBuilder, events, listType);
         EmitTSEventEmitterSetMaxListeners(typeBuilder, events);
@@ -104,30 +105,32 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Cache method infos from open generic types.
+    /// Resolve methods from open generic BCL types for this emission.
     /// These are used with TypeBuilder.GetMethod to get the closed generic methods.
     /// </summary>
-    private void CacheGenericMethodInfos(Type listType, Type dictType)
+    private static EventEmitterGenericMethods CreateEventEmitterGenericMethods()
     {
         // List<T> methods from open generic type
         var openListType = typeof(List<>);
-        _listCountGetter = openListType.GetProperty("Count")!.GetGetMethod()!;
-        _listGetItem = openListType.GetMethod("get_Item", [typeof(int)])!;
-        _listRemoveAt = openListType.GetMethod("RemoveAt", [typeof(int)])!;
-        _listRemove = openListType.GetMethod("Remove", openListType.GetGenericArguments())!;
-        _listAdd = openListType.GetMethod("Add", openListType.GetGenericArguments())!;
-        _listInsert = openListType.GetMethod("Insert", [typeof(int), openListType.GetGenericArguments()[0]])!;
-        _listToArray = openListType.GetMethod("ToArray", Type.EmptyTypes)!;
+        var listCountGetter = openListType.GetProperty("Count")!.GetGetMethod()!;
+        var listGetItem = openListType.GetMethod("get_Item", [typeof(int)])!;
+        var listRemoveAt = openListType.GetMethod("RemoveAt", [typeof(int)])!;
+        var listRemove = openListType.GetMethod("Remove", openListType.GetGenericArguments())!;
+        var listAdd = openListType.GetMethod("Add", openListType.GetGenericArguments())!;
+        var listInsert = openListType.GetMethod("Insert", [typeof(int), openListType.GetGenericArguments()[0]])!;
+        var listToArray = openListType.GetMethod("ToArray", Type.EmptyTypes)!;
 
         // Dictionary<TKey, TValue> methods from open generic type
         var openDictType = typeof(Dictionary<,>);
         var dictGenericArgs = openDictType.GetGenericArguments();
-        var valueType = dictGenericArgs[1]; // TValue
-        _dictTryGetValue = openDictType.GetMethod("TryGetValue", [dictGenericArgs[0], dictGenericArgs[1].MakeByRefType()])!;
-        _dictRemove = openDictType.GetMethod("Remove", [dictGenericArgs[0]])!;
-        _dictClear = openDictType.GetMethod("Clear", Type.EmptyTypes)!;
-        _dictAdd = openDictType.GetMethod("Add", [dictGenericArgs[0], dictGenericArgs[1]])!;
-        _dictKeysGetter = openDictType.GetProperty("Keys")!.GetGetMethod()!;
+        var dictTryGetValue = openDictType.GetMethod("TryGetValue", [dictGenericArgs[0], dictGenericArgs[1].MakeByRefType()])!;
+        var dictRemove = openDictType.GetMethod("Remove", [dictGenericArgs[0]])!;
+        var dictClear = openDictType.GetMethod("Clear", Type.EmptyTypes)!;
+        var dictAdd = openDictType.GetMethod("Add", [dictGenericArgs[0], dictGenericArgs[1]])!;
+        var dictKeysGetter = openDictType.GetProperty("Keys")!.GetGetMethod()!;
+        return new EventEmitterGenericMethods(
+            listCountGetter, listGetItem, listRemoveAt, listRemove, listAdd, listInsert, listToArray,
+            dictTryGetValue, dictRemove, dictClear, dictAdd, dictKeysGetter);
     }
 
     /// <summary>
@@ -268,7 +271,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterOff(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType, Type dictType)
+    private void EmitTSEventEmitterOff(EventEmitterGenericMethods methods, TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType, Type dictType)
     {
         var method = typeBuilder.DefineMethod(
             "Off",
@@ -288,7 +291,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listenersLocal);
-        var tryGetValueMethod = GetDictMethod(dictType, _dictTryGetValue);
+        var tryGetValueMethod = GetDictMethod(dictType, methods.DictTryGetValue);
         il.Emit(OpCodes.Callvirt, tryGetValueMethod);
         il.Emit(OpCodes.Brfalse, endLabel);
 
@@ -304,7 +307,7 @@ public partial class RuntimeEmitter
 
         // count = listeners.Count
         il.Emit(OpCodes.Ldloc, listenersLocal);
-        var countGetter = GetListMethod(listType, _listCountGetter);
+        var countGetter = GetListMethod(listType, methods.ListCountGetter);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Stloc, countLocal);
 
@@ -317,7 +320,7 @@ public partial class RuntimeEmitter
         // if (listeners[index].Listener == listener)
         il.Emit(OpCodes.Ldloc, listenersLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        var getItemMethod = GetListMethod(listType, _listGetItem);
+        var getItemMethod = GetListMethod(listType, methods.ListGetItem);
         il.Emit(OpCodes.Callvirt, getItemMethod);
         il.Emit(OpCodes.Ldfld, events.ListenerWrapperListenerField);
         il.Emit(OpCodes.Ldarg_2);
@@ -335,7 +338,7 @@ public partial class RuntimeEmitter
         // listeners.RemoveAt(index)
         il.Emit(OpCodes.Ldloc, listenersLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        var removeAtMethod = GetListMethod(listType, _listRemoveAt);
+        var removeAtMethod = GetListMethod(listType, methods.ListRemoveAt);
         il.Emit(OpCodes.Callvirt, removeAtMethod);
 
         // if (listeners.Count == 0) _events.Remove(eventName)
@@ -345,7 +348,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
-        var removeMethod = GetDictMethod(dictType, _dictRemove);
+        var removeMethod = GetDictMethod(dictType, methods.DictRemove);
         il.Emit(OpCodes.Callvirt, removeMethod);
         il.Emit(OpCodes.Pop);
 
@@ -523,7 +526,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterEmit(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
+    private void EmitTSEventEmitterEmit(EventEmitterGenericMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
     {
         var events = runtime.EventEmitter;
         // public bool Emit(string eventName, params object[] args)
@@ -540,9 +543,9 @@ public partial class RuntimeEmitter
         var trueLabel = il.DefineLabel();
 
         var wrapperArrayType = _types.MakeArrayType(events.ListenerWrapperType);
-        var countGetter = GetListMethod(listType, _listCountGetter);
-        var toArrayMethod = GetListMethod(listType, _listToArray);
-        var tryGetValueMethod = GetDictMethod(events.EventsField.FieldType, _dictTryGetValue);
+        var countGetter = GetListMethod(listType, methods.ListCountGetter);
+        var toArrayMethod = GetListMethod(listType, methods.ListToArray);
+        var tryGetValueMethod = GetDictMethod(events.EventsField.FieldType, methods.DictTryGetValue);
         var stringEquals = _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!;
 
         // Local: invoke the listener in `listenerLocal`, leaving its return value on the stack.
@@ -685,7 +688,7 @@ public partial class RuntimeEmitter
         // Remove from original list
         il.Emit(OpCodes.Ldloc, listenersLocal);
         il.Emit(OpCodes.Ldloc, wrapperLocal);
-        var removeObjMethod = GetListMethod(listType, _listRemove);
+        var removeObjMethod = GetListMethod(listType, methods.ListRemove);
         il.Emit(OpCodes.Callvirt, removeObjMethod);
         il.Emit(OpCodes.Pop);
 
@@ -760,7 +763,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterRemoveAllListeners(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type dictType)
+    private void EmitTSEventEmitterRemoveAllListeners(EventEmitterGenericMethods methods, TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type dictType)
     {
         var method = typeBuilder.DefineMethod(
             "RemoveAllListeners",
@@ -782,7 +785,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
-        var removeMethod = GetDictMethod(dictType, _dictRemove);
+        var removeMethod = GetDictMethod(dictType, methods.DictRemove);
         il.Emit(OpCodes.Callvirt, removeMethod);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, endLabel);
@@ -790,7 +793,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(clearAllLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, events.EventsField);
-        var clearMethod = GetDictMethod(dictType, _dictClear);
+        var clearMethod = GetDictMethod(dictType, methods.DictClear);
         il.Emit(OpCodes.Callvirt, clearMethod);
 
         il.MarkLabel(endLabel);
@@ -798,7 +801,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterListeners(TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
+    private void EmitTSEventEmitterListeners(EventEmitterGenericMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)
     {
         var events = runtime.EventEmitter;
         var method = typeBuilder.DefineMethod(
@@ -818,7 +821,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listenersLocal);
-        var tryGetValueMethod = GetDictMethod(events.EventsField.FieldType, _dictTryGetValue);
+        var tryGetValueMethod = GetDictMethod(events.EventsField.FieldType, methods.DictTryGetValue);
         il.Emit(OpCodes.Callvirt, tryGetValueMethod);
         il.Emit(OpCodes.Brfalse, emptyLabel);
 
@@ -836,7 +839,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
         il.Emit(OpCodes.Ldloc, listenersLocal);
-        var countGetter = GetListMethod(listType, _listCountGetter);
+        var countGetter = GetListMethod(listType, methods.ListCountGetter);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Stloc, countLocal);
 
@@ -849,7 +852,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultListLocal);
         il.Emit(OpCodes.Ldloc, listenersLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        var getItemMethod = GetListMethod(listType, _listGetItem);
+        var getItemMethod = GetListMethod(listType, methods.ListGetItem);
         il.Emit(OpCodes.Callvirt, getItemMethod);
         il.Emit(OpCodes.Ldfld, events.ListenerWrapperListenerField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
@@ -873,7 +876,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterListenerCount(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType)
+    private void EmitTSEventEmitterListenerCount(EventEmitterGenericMethods methods, TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType)
     {
         var method = typeBuilder.DefineMethod(
             "ListenerCount",
@@ -891,12 +894,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listenersLocal);
-        var tryGetValueMethod = GetDictMethod(events.EventsField.FieldType, _dictTryGetValue);
+        var tryGetValueMethod = GetDictMethod(events.EventsField.FieldType, methods.DictTryGetValue);
         il.Emit(OpCodes.Callvirt, tryGetValueMethod);
         il.Emit(OpCodes.Brfalse, notFoundLabel);
 
         il.Emit(OpCodes.Ldloc, listenersLocal);
-        var countGetter = GetListMethod(listType, _listCountGetter);
+        var countGetter = GetListMethod(listType, methods.ListCountGetter);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
@@ -906,7 +909,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterEventNames(TypeBuilder typeBuilder, EmittedRuntime runtime, Type dictType)
+    private void EmitTSEventEmitterEventNames(EventEmitterGenericMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime, Type dictType)
     {
         var events = runtime.EventEmitter;
         var method = typeBuilder.DefineMethod(
@@ -926,7 +929,7 @@ public partial class RuntimeEmitter
 
         // foreach (var key in _events.Keys)
         // Get the Keys property and iterate
-        var keysProperty = GetDictMethod(dictType, _dictKeysGetter);
+        var keysProperty = GetDictMethod(dictType, methods.DictKeysGetter);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, events.EventsField);
@@ -1057,7 +1060,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitTSEventEmitterAddListenerInternal(TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType, Type dictType)
+    private void EmitTSEventEmitterAddListenerInternal(EventEmitterGenericMethods methods, TypeBuilder typeBuilder, EmittedEventEmitterRuntime events, Type listType, Type dictType)
     {
         var method = typeBuilder.DefineMethod(
             "AddListenerInternal",
@@ -1078,7 +1081,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listenersLocal);
-        var tryGetValueMethod = GetDictMethod(dictType, _dictTryGetValue);
+        var tryGetValueMethod = GetDictMethod(dictType, methods.DictTryGetValue);
         il.Emit(OpCodes.Callvirt, tryGetValueMethod);
         il.Emit(OpCodes.Brfalse, createListLabel);
         il.Emit(OpCodes.Br_S, prependLabel);
@@ -1093,7 +1096,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, events.EventsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, listenersLocal);
-        var addMethod = GetDictMethod(dictType, _dictAdd);
+        var addMethod = GetDictMethod(dictType, methods.DictAdd);
         il.Emit(OpCodes.Callvirt, addMethod);
 
         il.MarkLabel(prependLabel);
@@ -1113,7 +1116,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listenersLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, wrapperLocal);
-        var insertMethod = GetListMethod(listType, _listInsert);
+        var insertMethod = GetListMethod(listType, methods.ListInsert);
         il.Emit(OpCodes.Callvirt, insertMethod);
         il.Emit(OpCodes.Br, afterAddLabel);
 
@@ -1121,7 +1124,7 @@ public partial class RuntimeEmitter
         // Add at end
         il.Emit(OpCodes.Ldloc, listenersLocal);
         il.Emit(OpCodes.Ldloc, wrapperLocal);
-        var addItemMethod = GetListMethod(listType, _listAdd);
+        var addItemMethod = GetListMethod(listType, methods.ListAdd);
         il.Emit(OpCodes.Callvirt, addItemMethod);
 
         il.MarkLabel(afterAddLabel);
