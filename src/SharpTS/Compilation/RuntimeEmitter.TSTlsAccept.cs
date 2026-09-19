@@ -20,21 +20,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private ConstructorBuilder _tlsAcceptClosureCtor = null!;
-    private MethodBuilder _tlsAcceptClosureRun = null!;
-    private ConstructorBuilder _tlsAcceptErrorClosureCtor = null!;
-    private MethodBuilder _tlsAcceptErrorClosureRun = null!;
-
-    // TLS client connect closures
-    private TypeBuilder _tlsConnectClosureType = null!;
-    private ConstructorBuilder _tlsConnectClosureCtor = null!;
-    private MethodBuilder _tlsConnectClosureConnect = null!;
-
-    private ConstructorBuilder _tlsConnectOkClosureCtor = null!;
-    private MethodBuilder _tlsConnectOkClosureRun = null!;
-    private ConstructorBuilder _tlsConnectErrClosureCtor = null!;
-    private MethodBuilder _tlsConnectErrClosureRun = null!;
-
     // The OR of the two enabled TLS protocol versions (1.2 | 1.3). 1.0/1.1 stay disabled.
     private static int EnabledTlsProtocols => (int)(SslProtocols.Tls12 | SslProtocols.Tls13);
 
@@ -42,7 +27,11 @@ public partial class RuntimeEmitter
     /// Emits the $TlsAcceptClosure class.
     /// Run(): invokes _server._callback([socket]), emits "secureConnection", then socket.StartReading().
     /// </summary>
-    private void EmitTlsAcceptClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private TlsClosureMethods EmitTlsAcceptClosureClass(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        EmittedTlsRuntime tls,
+        TlsServerFields serverFields)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsAcceptClosure",
@@ -50,15 +39,14 @@ public partial class RuntimeEmitter
             _types.Object
         );
 
-        var serverField = typeBuilder.DefineField("_server", _tlsServerTypeBuilder, FieldAttributes.Private);
-        var socketField = typeBuilder.DefineField("_socket", _tlsSocketTypeBuilder, FieldAttributes.Private);
+        var serverField = typeBuilder.DefineField("_server", tls.ServerCtor.DeclaringType!, FieldAttributes.Private);
+        var socketField = typeBuilder.DefineField("_socket", tls.SocketType, FieldAttributes.Private);
 
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_tlsServerTypeBuilder, _tlsSocketTypeBuilder]
+            [tls.ServerCtor.DeclaringType!, tls.SocketType]
         );
-        _tlsAcceptClosureCtor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -72,7 +60,6 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ret);
 
         var run = typeBuilder.DefineMethod("Run", MethodAttributes.Public, typeof(void), Type.EmptyTypes);
-        _tlsAcceptClosureRun = run;
 
         var il = run.GetILGenerator();
 
@@ -80,18 +67,18 @@ public partial class RuntimeEmitter
         var noCallback = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, serverField);
-        il.Emit(OpCodes.Ldfld, _tlsServerCallbackField);
+        il.Emit(OpCodes.Ldfld, serverFields.Callback);
         il.Emit(OpCodes.Brfalse, noCallback);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, serverField);
-        il.Emit(OpCodes.Ldfld, _tlsServerCallbackField);
+        il.Emit(OpCodes.Ldfld, serverFields.Callback);
         il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Brfalse, noCallback);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, serverField);
-        il.Emit(OpCodes.Ldfld, _tlsServerCallbackField);
+        il.Emit(OpCodes.Ldfld, serverFields.Callback);
         il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -127,6 +114,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         typeBuilder.CreateType();
+
+        return new(ctor, run);
     }
 
     /// <summary>
@@ -134,7 +123,10 @@ public partial class RuntimeEmitter
     /// on the event-loop thread. The accept worker itself runs on the ThreadPool and must not
     /// invoke TypeScript listeners directly.
     /// </summary>
-    private void EmitTlsAcceptErrorClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private TlsClosureMethods EmitTlsAcceptErrorClosureClass(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        EmittedTlsRuntime tls)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsAcceptErrorClosure",
@@ -142,15 +134,14 @@ public partial class RuntimeEmitter
             _types.Object
         );
 
-        var serverField = typeBuilder.DefineField("_server", _tlsServerTypeBuilder, FieldAttributes.Private);
+        var serverField = typeBuilder.DefineField("_server", tls.ServerCtor.DeclaringType!, FieldAttributes.Private);
         var msgField = typeBuilder.DefineField("_msg", _types.String, FieldAttributes.Private);
 
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_tlsServerTypeBuilder, _types.String]
+            [tls.ServerCtor.DeclaringType!, _types.String]
         );
-        _tlsAcceptErrorClosureCtor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -164,7 +155,6 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ret);
 
         var run = typeBuilder.DefineMethod("Run", MethodAttributes.Public, typeof(void), Type.EmptyTypes);
-        _tlsAcceptErrorClosureRun = run;
         var il = run.GetILGenerator();
 
         var errLocal = il.DeclareLocal(runtime.Errors.Type);
@@ -187,12 +177,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         typeBuilder.CreateType();
+
+        return new(ctor, run);
     }
 
     /// <summary>
     /// Emits $TlsConnectOkClosure: client-side success — emit 'secureConnect', start reading, release ref.
     /// </summary>
-    private void EmitTlsConnectOkClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private TlsClosureMethods EmitTlsConnectOkClosureClass(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        EmittedTlsRuntime tls)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsConnectOkClosure",
@@ -200,11 +195,10 @@ public partial class RuntimeEmitter
             _types.Object
         );
 
-        var socketField = typeBuilder.DefineField("_socket", _tlsSocketTypeBuilder, FieldAttributes.Private);
+        var socketField = typeBuilder.DefineField("_socket", tls.SocketType, FieldAttributes.Private);
 
         var ctor = typeBuilder.DefineConstructor(
-            MethodAttributes.Public, CallingConventions.Standard, [_tlsSocketTypeBuilder]);
-        _tlsConnectOkClosureCtor = ctor;
+            MethodAttributes.Public, CallingConventions.Standard, [tls.SocketType]);
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
@@ -214,7 +208,6 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ret);
 
         var run = typeBuilder.DefineMethod("Run", MethodAttributes.Public, typeof(void), Type.EmptyTypes);
-        _tlsConnectOkClosureRun = run;
         var il = run.GetILGenerator();
 
         // _socket.Emit("secureConnect", [])
@@ -237,12 +230,17 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ret);
         typeBuilder.CreateType();
+
+        return new(ctor, run);
     }
 
     /// <summary>
     /// Emits $TlsConnectErrClosure: client-side failure — emit 'error' with the message, release ref.
     /// </summary>
-    private void EmitTlsConnectErrClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private TlsClosureMethods EmitTlsConnectErrClosureClass(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        EmittedTlsRuntime tls)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsConnectErrClosure",
@@ -250,12 +248,11 @@ public partial class RuntimeEmitter
             _types.Object
         );
 
-        var socketField = typeBuilder.DefineField("_socket", _tlsSocketTypeBuilder, FieldAttributes.Private);
+        var socketField = typeBuilder.DefineField("_socket", tls.SocketType, FieldAttributes.Private);
         var msgField = typeBuilder.DefineField("_msg", _types.String, FieldAttributes.Private);
 
         var ctor = typeBuilder.DefineConstructor(
-            MethodAttributes.Public, CallingConventions.Standard, [_tlsSocketTypeBuilder, _types.String]);
-        _tlsConnectErrClosureCtor = ctor;
+            MethodAttributes.Public, CallingConventions.Standard, [tls.SocketType, _types.String]);
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
@@ -268,7 +265,6 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ret);
 
         var run = typeBuilder.DefineMethod("Run", MethodAttributes.Public, typeof(void), Type.EmptyTypes);
-        _tlsConnectErrClosureRun = run;
         var il = run.GetILGenerator();
 
         // var err = new $Error(_msg)
@@ -297,6 +293,8 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ret);
         typeBuilder.CreateType();
+
+        return new(ctor, run);
     }
 
     /// <summary>
@@ -304,24 +302,26 @@ public partial class RuntimeEmitter
     /// ThreadPool (pure-BCL), populates the $TlsSocket, then schedules the OK/Err closure.
     /// Fields: _socket, _port(int), _host, _reject(bool), _alpn(string[])
     /// </summary>
-    private void EmitTlsConnectClosureClass(
+    private TlsConnectConstruction EmitTlsConnectClosureClass(
         ModuleBuilder moduleBuilder,
         EmittedRuntime runtime,
         FieldBuilder netClientField,
-        FieldBuilder netStreamField)
+        FieldBuilder netStreamField,
+        EmittedTlsRuntime tls,
+        TlsSocketFields socketFields,
+        TlsSocketHelpers socketHelpers)
     {
         // The OK/Err dispatch closures are defined first (referenced from Connect()).
-        EmitTlsConnectOkClosureClass(moduleBuilder, runtime);
-        EmitTlsConnectErrClosureClass(moduleBuilder, runtime);
+        var connectOk = EmitTlsConnectOkClosureClass(moduleBuilder, runtime, tls);
+        var connectErr = EmitTlsConnectErrClosureClass(moduleBuilder, runtime, tls);
 
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsConnectClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        _tlsConnectClosureType = typeBuilder;
 
-        var socketField = typeBuilder.DefineField("_socket", _tlsSocketTypeBuilder, FieldAttributes.Private);
+        var socketField = typeBuilder.DefineField("_socket", tls.SocketType, FieldAttributes.Private);
         var portField = typeBuilder.DefineField("_port", _types.Int32, FieldAttributes.Private);
         var hostField = typeBuilder.DefineField("_host", _types.String, FieldAttributes.Private);
         var rejectField = typeBuilder.DefineField("_reject", _types.Boolean, FieldAttributes.Private);
@@ -331,9 +331,8 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_tlsSocketTypeBuilder, _types.Int32, _types.String, _types.Boolean, typeof(string[])]
+            [tls.SocketType, _types.Int32, _types.String, _types.Boolean, typeof(string[])]
         );
-        _tlsConnectClosureCtor = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -378,7 +377,6 @@ public partial class RuntimeEmitter
         // Connect(object state): void — runs on ThreadPool
         var connect = typeBuilder.DefineMethod(
             "Connect", MethodAttributes.Public, typeof(void), [_types.Object]);
-        _tlsConnectClosureConnect = connect;
 
         var il = connect.GetILGenerator();
 
@@ -429,7 +427,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, optsLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, alpnField);
-        il.Emit(OpCodes.Call, _tlsBuildAlpnListMethod);
+        il.Emit(OpCodes.Call, socketHelpers.BuildAlpnList);
         il.Emit(OpCodes.Callvirt, typeof(SslClientAuthenticationOptions).GetProperty("ApplicationProtocols")!.GetSetMethod()!);
         il.MarkLabel(noAlpn);
 
@@ -442,7 +440,7 @@ public partial class RuntimeEmitter
         EmitTlsPopulateSocket(il,
             loadSocket: () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, socketField); },
             loadClient: () => il.Emit(OpCodes.Ldloc, tcpClientLocal),
-            loadSslStream: () => il.Emit(OpCodes.Ldloc, sslStreamLocal), netClientField, netStreamField);
+            loadSslStream: () => il.Emit(OpCodes.Ldloc, sslStreamLocal), netClientField, netStreamField, socketFields, socketHelpers);
 
         // _socket._authorized = (_policyErrors == None)
         il.Emit(OpCodes.Ldarg_0);
@@ -451,7 +449,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, policyErrorsField);
         il.Emit(OpCodes.Ldc_I4, (int)SslPolicyErrors.None);
         il.Emit(OpCodes.Ceq);
-        il.Emit(OpCodes.Stfld, _tlsSocketAuthorizedField);
+        il.Emit(OpCodes.Stfld, socketFields.Authorized);
         // if (_policyErrors != None) _socket._authError = _DescribePolicyErrors(_policyErrors)
         var authOk = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -461,16 +459,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, socketField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, policyErrorsField);
-        il.Emit(OpCodes.Call, _tlsDescribeErrMethod);
-        il.Emit(OpCodes.Stfld, _tlsSocketAuthErrorField);
+        il.Emit(OpCodes.Call, socketHelpers.DescribeErrors);
+        il.Emit(OpCodes.Stfld, socketFields.AuthError);
         il.MarkLabel(authOk);
 
         // EventLoop.Schedule(new Action(new $TlsConnectOkClosure(_socket).Run))
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, socketField);
-        il.Emit(OpCodes.Newobj, _tlsConnectOkClosureCtor);
-        il.Emit(OpCodes.Ldftn, _tlsConnectOkClosureRun);
+        il.Emit(OpCodes.Newobj, connectOk.Constructor);
+        il.Emit(OpCodes.Ldftn, connectOk.Run);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
@@ -486,8 +484,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, socketField);
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
-        il.Emit(OpCodes.Newobj, _tlsConnectErrClosureCtor);
-        il.Emit(OpCodes.Ldftn, _tlsConnectErrClosureRun);
+        il.Emit(OpCodes.Newobj, connectErr.Constructor);
+        il.Emit(OpCodes.Ldftn, connectErr.Run);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
         il.Emit(OpCodes.Leave, afterConnect);
@@ -497,6 +495,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         typeBuilder.CreateType();
+
+        return new(ctor, connect);
     }
 
     /// <summary>
@@ -509,24 +509,26 @@ public partial class RuntimeEmitter
         Action loadClient,
         Action loadSslStream,
         FieldBuilder netClientField,
-        FieldBuilder netStreamField)
+        FieldBuilder netStreamField,
+        TlsSocketFields socketFields,
+        TlsSocketHelpers socketHelpers)
     {
         // socket._client = tcpClient   (base $NetSocket field)
         loadSocket(); loadClient(); il.Emit(OpCodes.Stfld, netClientField);
         // socket._stream = sslStream   (base $NetSocket field — SslStream is a Stream)
         loadSocket(); loadSslStream(); il.Emit(OpCodes.Stfld, netStreamField);
         // socket._sslStream = sslStream
-        loadSocket(); loadSslStream(); il.Emit(OpCodes.Stfld, _tlsSocketSslStreamField);
+        loadSocket(); loadSslStream(); il.Emit(OpCodes.Stfld, socketFields.SslStream);
         // NOTE: _authorized/_authError are set by the caller (connect: chain policy; server: IsAuthenticated).
         // socket._peerCert = sslStream.RemoteCertificate as X509Certificate2
         loadSocket(); loadSslStream();
         il.Emit(OpCodes.Callvirt, typeof(SslStream).GetProperty("RemoteCertificate")!.GetGetMethod()!);
         il.Emit(OpCodes.Isinst, typeof(X509Certificate2));
-        il.Emit(OpCodes.Stfld, _tlsSocketPeerCertField);
+        il.Emit(OpCodes.Stfld, socketFields.PeerCert);
         // socket._alpnProtocol = _AlpnString(sslStream)
         loadSocket(); loadSslStream();
-        il.Emit(OpCodes.Call, _tlsAlpnStringMethod);
-        il.Emit(OpCodes.Stfld, _tlsSocketAlpnProtocolField);
+        il.Emit(OpCodes.Call, socketHelpers.AlpnString);
+        il.Emit(OpCodes.Stfld, socketFields.AlpnProtocol);
     }
 
     /// <summary>
@@ -535,14 +537,23 @@ public partial class RuntimeEmitter
     /// A per-client handshake failure is swallowed (the client is closed) and the loop continues,
     /// matching interp's tlsClientError-and-continue behavior; only a listener fault breaks the loop.
     /// </summary>
-    private void EmitTlsServerAcceptWorkerBody(EmittedRuntime runtime, FieldBuilder netClientField, FieldBuilder netStreamField)
+    private void EmitTlsServerAcceptWorkerBody(
+        EmittedRuntime runtime,
+        FieldBuilder netClientField,
+        FieldBuilder netStreamField,
+        EmittedTlsRuntime tls,
+        TlsSocketFields socketFields,
+        TlsSocketHelpers socketHelpers,
+        TlsServerFields serverFields,
+        MethodBuilder acceptWorker,
+        TlsAcceptClosures acceptClosures)
     {
-        var il = _tlsServerAcceptWorkerMethod.GetILGenerator();
+        var il = acceptWorker.GetILGenerator();
 
         var tcpClientLocal = il.DeclareLocal(typeof(TcpClient));
         var sslStreamLocal = il.DeclareLocal(typeof(SslStream));
         var authOptsLocal = il.DeclareLocal(typeof(SslServerAuthenticationOptions));
-        var socketLocal = il.DeclareLocal(_tlsSocketTypeBuilder);
+        var socketLocal = il.DeclareLocal(tls.SocketType);
         var handshakeExceptionLocal = il.DeclareLocal(_types.Exception);
 
         var loopTop = il.DefineLabel();
@@ -552,16 +563,16 @@ public partial class RuntimeEmitter
 
         // if (!_isListening || _listener == null) break
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerIsListeningField);
+        il.Emit(OpCodes.Ldfld, serverFields.IsListening);
         il.Emit(OpCodes.Brfalse, loopExit);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerListenerField);
+        il.Emit(OpCodes.Ldfld, serverFields.Listener);
         il.Emit(OpCodes.Brfalse, loopExit);
 
         // try { tcpClient = _listener.AcceptTcpClient(); } catch { break; }
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerListenerField);
+        il.Emit(OpCodes.Ldfld, serverFields.Listener);
         il.Emit(OpCodes.Callvirt, typeof(System.Net.Sockets.TcpListener).GetMethod("AcceptTcpClient", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, tcpClientLocal);
         var acceptOk = il.DefineLabel();
@@ -588,15 +599,15 @@ public partial class RuntimeEmitter
         // authOpts.ServerCertificate = _LoadCert(_cert, _key)
         il.Emit(OpCodes.Ldloc, authOptsLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerCertField);
+        il.Emit(OpCodes.Ldfld, serverFields.Cert);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerKeyField);
-        il.Emit(OpCodes.Call, _tlsLoadCertMethod);
+        il.Emit(OpCodes.Ldfld, serverFields.Key);
+        il.Emit(OpCodes.Call, socketHelpers.LoadCert);
         il.Emit(OpCodes.Callvirt, typeof(SslServerAuthenticationOptions).GetProperty("ServerCertificate")!.GetSetMethod()!);
         // authOpts.ClientCertificateRequired = _requestCert
         il.Emit(OpCodes.Ldloc, authOptsLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerRequestCertField);
+        il.Emit(OpCodes.Ldfld, serverFields.RequestCert);
         il.Emit(OpCodes.Callvirt, typeof(SslServerAuthenticationOptions).GetProperty("ClientCertificateRequired")!.GetSetMethod()!);
         // authOpts.EnabledSslProtocols = 1.2|1.3
         il.Emit(OpCodes.Ldloc, authOptsLocal);
@@ -605,12 +616,12 @@ public partial class RuntimeEmitter
         // if (_alpn != null) authOpts.ApplicationProtocols = _BuildAlpnList(_alpn)
         var noAlpn = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerAlpnField);
+        il.Emit(OpCodes.Ldfld, serverFields.Alpn);
         il.Emit(OpCodes.Brfalse, noAlpn);
         il.Emit(OpCodes.Ldloc, authOptsLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tlsServerAlpnField);
-        il.Emit(OpCodes.Call, _tlsBuildAlpnListMethod);
+        il.Emit(OpCodes.Ldfld, serverFields.Alpn);
+        il.Emit(OpCodes.Call, socketHelpers.BuildAlpnList);
         il.Emit(OpCodes.Callvirt, typeof(SslServerAuthenticationOptions).GetProperty("ApplicationProtocols")!.GetSetMethod()!);
         il.MarkLabel(noAlpn);
 
@@ -625,19 +636,19 @@ public partial class RuntimeEmitter
         EmitTlsPopulateSocket(il,
             loadSocket: () => il.Emit(OpCodes.Ldloc, socketLocal),
             loadClient: () => il.Emit(OpCodes.Ldloc, tcpClientLocal),
-            loadSslStream: () => il.Emit(OpCodes.Ldloc, sslStreamLocal), netClientField, netStreamField);
+            loadSslStream: () => il.Emit(OpCodes.Ldloc, sslStreamLocal), netClientField, netStreamField, socketFields, socketHelpers);
         // server-side: socket._authorized = sslStream.IsAuthenticated
         il.Emit(OpCodes.Ldloc, socketLocal);
         il.Emit(OpCodes.Ldloc, sslStreamLocal);
         il.Emit(OpCodes.Callvirt, typeof(SslStream).GetProperty("IsAuthenticated")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stfld, _tlsSocketAuthorizedField);
+        il.Emit(OpCodes.Stfld, socketFields.Authorized);
 
         // EventLoop.Schedule(new Action(new $TlsAcceptClosure(this, socket).Run))
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, socketLocal);
-        il.Emit(OpCodes.Newobj, _tlsAcceptClosureCtor);
-        il.Emit(OpCodes.Ldftn, _tlsAcceptClosureRun);
+        il.Emit(OpCodes.Newobj, acceptClosures.Accept.Constructor);
+        il.Emit(OpCodes.Ldftn, acceptClosures.Accept.Run);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
 
@@ -662,8 +673,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, handshakeExceptionLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
-        il.Emit(OpCodes.Newobj, _tlsAcceptErrorClosureCtor);
-        il.Emit(OpCodes.Ldftn, _tlsAcceptErrorClosureRun);
+        il.Emit(OpCodes.Newobj, acceptClosures.Error.Constructor);
+        il.Emit(OpCodes.Ldftn, acceptClosures.Error.Run);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call, runtime.EventLoop.Schedule);
         il.Emit(OpCodes.Leave, handshakeOk);
@@ -679,8 +690,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Finalizes the $TlsServer type after the accept worker body is emitted.
     /// </summary>
-    private void EmitTlsServerFinalize()
+    private void EmitTlsServerFinalize(EmittedTlsRuntime tls)
     {
-        _tlsServerTypeBuilder.CreateType();
+        ((TypeBuilder)tls.ServerCtor.DeclaringType!).CreateType();
     }
 }

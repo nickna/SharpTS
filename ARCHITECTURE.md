@@ -1591,8 +1591,18 @@ TLS population receives only the Net client and stream fields it needs. BlockLis
 socket error-code helper and the TCP drop-payload helper remain method-local. These values replace
 79 retained emitter fields without adding another persistent owner. `EmittedNetRuntime` continues
 to own checked public declarations and completion; optional availability, forward declarations,
-field visibility and type-creation order are unchanged. TLS's own construction fields and the
-broader construction, registry, semantic and final ownership audit remain required under #1599.
+field visibility and type-creation order are unchanged.
+
+TLS construction likewise stays within one `EmitAll` invocation, replacing 37 retained emitter
+fields. Socket and server emission return immutable field/helper values for deferred handshake
+and accept bodies. Closure emission returns constructor/callback pairs; the connect closure type
+comes from its constructor. Checked socket metadata and the server constructor remain the sole
+sources of their type declarations, including finalization. Protocol and certificate-display
+helpers stay local to socket construction, and certificate-identity helpers stay local to their
+module emitter. `EmittedTlsRuntime` rejects duplicate declarations as well as null and completed
+writes; failed completion remains repairable. Existing declaration/body order, visibility,
+feature selection, Net field inputs and deployment rules are preserved. The broader construction,
+registry, semantic and final ownership audit remains required under #1599.
 
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only
