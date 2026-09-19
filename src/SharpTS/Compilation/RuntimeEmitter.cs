@@ -381,6 +381,14 @@ public partial class RuntimeEmitter
         if (features.UsesBuffer)
             EmitTSBufferClass(moduleBuilder, runtime.RequireBuffer());
 
+        // Construction values bridge early declarations and later body emission.
+        StreamingSignVerifyParts? signConstruction = null;
+        StreamingSignVerifyParts? verifyConstruction = null;
+        EcdhConstruction? ecdhConstruction = null;
+        BoundEcdhConstruction? boundEcdhConstruction = null;
+        DhConstruction? dhConstruction = null;
+        BoundDhConstruction? boundDhConstruction = null;
+
         // Crypto helper types — gated on UsesCrypto. All references are confined
         // to crypto's own emit files; no central-dispatch fallout.
         if (features.UsesCrypto)
@@ -392,14 +400,14 @@ public partial class RuntimeEmitter
             EmitTSHmacClass(moduleBuilder, runtime);
             EmitTSCipherClass(moduleBuilder, runtime);
             EmitTSDecipherClass(moduleBuilder, runtime);
-            EmitTSSignTypeDefinition(moduleBuilder, runtime.RequireCrypto());
-            EmitTSVerifyTypeDefinition(moduleBuilder, runtime.RequireCrypto());
+            signConstruction = EmitTSSignTypeDefinition(moduleBuilder, runtime.RequireCrypto());
+            verifyConstruction = EmitTSVerifyTypeDefinition(moduleBuilder, runtime.RequireCrypto());
             EmitTSKeyObjectClass(moduleBuilder, runtime);
             EmitTSX509Class(moduleBuilder, runtime); // crypto.X509Certificate (#1064); needs $TSKeyObject
-            EmitTSECDHTypeDefinition(moduleBuilder, runtime.RequireCrypto());
-            EmitBoundECDHMethodTypeDefinition(moduleBuilder, runtime.RequireCrypto());
-            EmitTSDHTypeDefinition(moduleBuilder, runtime);
-            EmitBoundDHMethodTypeDefinition(moduleBuilder, runtime.RequireCrypto());
+            ecdhConstruction = EmitTSECDHTypeDefinition(moduleBuilder, runtime.RequireCrypto());
+            boundEcdhConstruction = EmitBoundECDHMethodTypeDefinition(moduleBuilder, runtime.RequireCrypto());
+            dhConstruction = EmitTSDHTypeDefinition(moduleBuilder, runtime);
+            boundDhConstruction = EmitBoundDHMethodTypeDefinition(moduleBuilder, runtime.RequireCrypto());
         }
 
         // Emit $EventLoop singleton (must come before timer types and net/http types that call Ref/Unref/Schedule)
@@ -920,12 +928,12 @@ public partial class RuntimeEmitter
         // emission above.
         if (features.UsesCrypto)
         {
-            EmitTSSignFinalize(runtime);
-            EmitTSVerifyFinalize(runtime);
-            EmitTSECDHFinalize(runtime.RequireCrypto());
-            EmitBoundECDHMethodFinalize(runtime.RequireCrypto());
-            EmitTSDHFinalize(runtime);
-            EmitBoundDHMethodFinalize(runtime.RequireCrypto());
+            EmitTSSignFinalize(signConstruction!, runtime);
+            EmitTSVerifyFinalize(verifyConstruction!, runtime);
+            EmitTSECDHFinalize(ecdhConstruction!, runtime.RequireCrypto());
+            EmitBoundECDHMethodFinalize(boundEcdhConstruction!, runtime.RequireCrypto());
+            EmitTSDHFinalize(dhConstruction!, runtime);
+            EmitBoundDHMethodFinalize(boundDhConstruction!, runtime.RequireCrypto());
         }
 
         runtime.ArrayBuffer?.CompleteEmission();

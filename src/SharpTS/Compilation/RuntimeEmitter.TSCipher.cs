@@ -11,20 +11,20 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // Fields for $Cipher class
-    private FieldBuilder _tsCipherAlgorithmField = null!;
-    private FieldBuilder _tsCipherKeyField = null!;
-    private FieldBuilder _tsCipherIvField = null!;
-    private FieldBuilder _tsCipherIsGcmField = null!;
-    private FieldBuilder _tsCipherAesField = null!;
-    private FieldBuilder _tsCipherEncryptorField = null!;
-    private FieldBuilder _tsCipherAesGcmField = null!;
-    private FieldBuilder _tsCipherPlaintextBufferField = null!;
-    private FieldBuilder _tsCipherFinalizedField = null!;
-    private FieldBuilder _tsCipherAutoPaddingField = null!;
-    private FieldBuilder _tsCipherAuthTagField = null!;
-    private FieldBuilder _tsCipherAadField = null!;
-    private MethodBuilder _tsCipherGcmEncryptHelper = null!;
+    private sealed record CipherConstruction(
+        FieldBuilder Algorithm,
+        FieldBuilder Key,
+        FieldBuilder Iv,
+        FieldBuilder IsGcm,
+        FieldBuilder Aes,
+        FieldBuilder Encryptor,
+        FieldBuilder AesGcm,
+        FieldBuilder PlaintextBuffer,
+        FieldBuilder Finalized,
+        FieldBuilder AutoPadding,
+        FieldBuilder AuthTag,
+        FieldBuilder Aad,
+        MethodBuilder GcmEncryptHelper);
 
     private void EmitTSCipherClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
@@ -38,32 +38,34 @@ public partial class RuntimeEmitter
         _ = typeBuilder;
 
         // Fields
-        _tsCipherAlgorithmField = typeBuilder.DefineField("_algorithm", _types.String, FieldAttributes.Private);
-        _tsCipherKeyField = typeBuilder.DefineField("_key", _types.MakeArrayType(_types.Byte), FieldAttributes.Private);
-        _tsCipherIvField = typeBuilder.DefineField("_iv", _types.MakeArrayType(_types.Byte), FieldAttributes.Private);
-        _tsCipherIsGcmField = typeBuilder.DefineField("_isGcm", _types.Boolean, FieldAttributes.Private);
-        _tsCipherAesField = typeBuilder.DefineField("_aes", _types.Aes, FieldAttributes.Private);
-        _tsCipherEncryptorField = typeBuilder.DefineField("_encryptor", _types.ICryptoTransform, FieldAttributes.Private);
-        _tsCipherAesGcmField = typeBuilder.DefineField("_aesGcm", _types.AesGcm, FieldAttributes.Private);
-        _tsCipherPlaintextBufferField = typeBuilder.DefineField("_plaintextBuffer", _types.ListOfByte, FieldAttributes.Private);
-        _tsCipherFinalizedField = typeBuilder.DefineField("_finalized", _types.Boolean, FieldAttributes.Private);
-        _tsCipherAutoPaddingField = typeBuilder.DefineField("_autoPadding", _types.Boolean, FieldAttributes.Private);
-        _tsCipherAuthTagField = typeBuilder.DefineField("_authTag", _types.MakeArrayType(_types.Byte), FieldAttributes.Private);
-        _tsCipherAadField = typeBuilder.DefineField("_aad", _types.MakeArrayType(_types.Byte), FieldAttributes.Private);
+        var algorithm = typeBuilder.DefineField("_algorithm", _types.String, FieldAttributes.Private);
+        var key = typeBuilder.DefineField("_key", _types.MakeArrayType(_types.Byte), FieldAttributes.Private);
+        var iv = typeBuilder.DefineField("_iv", _types.MakeArrayType(_types.Byte), FieldAttributes.Private);
+        var isGcm = typeBuilder.DefineField("_isGcm", _types.Boolean, FieldAttributes.Private);
+        var aes = typeBuilder.DefineField("_aes", _types.Aes, FieldAttributes.Private);
+        var encryptor = typeBuilder.DefineField("_encryptor", _types.ICryptoTransform, FieldAttributes.Private);
+        var aesGcm = typeBuilder.DefineField("_aesGcm", _types.AesGcm, FieldAttributes.Private);
+        var plaintextBuffer = typeBuilder.DefineField("_plaintextBuffer", _types.ListOfByte, FieldAttributes.Private);
+        var finalized = typeBuilder.DefineField("_finalized", _types.Boolean, FieldAttributes.Private);
+        var autoPadding = typeBuilder.DefineField("_autoPadding", _types.Boolean, FieldAttributes.Private);
+        var authTag = typeBuilder.DefineField("_authTag", _types.MakeArrayType(_types.Byte), FieldAttributes.Private);
+        var aad = typeBuilder.DefineField("_aad", _types.MakeArrayType(_types.Byte), FieldAttributes.Private);
 
         // Emit GCM helper method first (needed by Final)
-        EmitTSCipherGcmEncryptHelper(typeBuilder, runtime);
+        var gcmEncryptHelper = EmitTSCipherGcmEncryptHelper(typeBuilder, runtime);
+        var construction = new CipherConstruction(algorithm, key, iv, isGcm, aes, encryptor, aesGcm,
+            plaintextBuffer, finalized, autoPadding, authTag, aad, gcmEncryptHelper);
 
         // Constructor
-        EmitTSCipherCtor(typeBuilder, runtime.RequireCrypto());
+        EmitTSCipherCtor(construction, typeBuilder, runtime.RequireCrypto());
 
         // Methods
-        EmitTSCipherUpdate(typeBuilder, runtime);
-        EmitTSCipherFinal(typeBuilder, runtime);
+        EmitTSCipherUpdate(construction, typeBuilder, runtime);
+        EmitTSCipherFinal(construction, typeBuilder, runtime);
         EmitTSCipherSetAutoPadding(typeBuilder, runtime);
-        EmitTSCipherGetAuthTag(typeBuilder, runtime);
-        EmitTSCipherSetAAD(typeBuilder, runtime);
-        EmitTSCipherDispose(typeBuilder, runtime);
+        EmitTSCipherGetAuthTag(construction, typeBuilder, runtime);
+        EmitTSCipherSetAAD(construction, typeBuilder, runtime);
+        EmitTSCipherDispose(construction, typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }
@@ -71,31 +73,31 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public $Cipher(string algorithm, byte[] key, byte[] iv)
     /// </summary>
-    private void EmitTSCipherCtor(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
+    private void EmitTSCipherCtor(CipherConstruction construction, TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
-        crypto.CipherCtor = EmitStreamingCipherCtor(typeBuilder, CipherFields(), isEncrypt: true,
-            [_tsCipherPlaintextBufferField]);
+        crypto.CipherCtor = EmitStreamingCipherCtor(typeBuilder, CipherFields(construction), isEncrypt: true,
+            [construction.PlaintextBuffer]);
     }
 
-    private StreamingCipherFields CipherFields() => new(
-        _tsCipherAlgorithmField, _tsCipherKeyField, _tsCipherIvField, _tsCipherIsGcmField,
-        _tsCipherAesField, _tsCipherEncryptorField, _tsCipherAesGcmField,
-        _tsCipherFinalizedField, _tsCipherAutoPaddingField, _tsCipherAuthTagField, _tsCipherAadField);
+    private StreamingCipherFields CipherFields(CipherConstruction construction) => new(
+        construction.Algorithm, construction.Key, construction.Iv, construction.IsGcm,
+        construction.Aes, construction.Encryptor, construction.AesGcm,
+        construction.Finalized, construction.AutoPadding, construction.AuthTag, construction.Aad);
 
     /// <summary>
     /// Emits: private static void GcmEncryptHelper(AesGcm gcm, byte[] nonce, byte[] plaintext, byte[] ciphertext, byte[] tag, byte[] aad)
     /// via the shared <see cref="EmitGcmTransformHelper"/>.
     /// </summary>
-    private void EmitTSCipherGcmEncryptHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitTSCipherGcmEncryptHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        _tsCipherGcmEncryptHelper = EmitGcmTransformHelper(typeBuilder, "GcmEncryptHelper", isEncrypt: true);
+        return EmitGcmTransformHelper(typeBuilder, "GcmEncryptHelper", isEncrypt: true);
     }
 
     /// <summary>
     /// Emits: public object Update(object data, string? inputEncoding, string? outputEncoding)
     /// Simplified: buffers all data and processes in Final()
     /// </summary>
-    private void EmitTSCipherUpdate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSCipherUpdate(CipherConstruction construction, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Parameter types are object to allow $Undefined to be passed for encoding
         var method = typeBuilder.DefineMethod(
@@ -108,7 +110,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitThrowIfFinalized(il, _tsCipherFinalizedField, "Cipher has already been finalized");
+        EmitThrowIfFinalized(il, construction.Finalized, "Cipher has already been finalized");
 
         // Convert input to bytes
         var inputBytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
@@ -118,7 +120,7 @@ public partial class RuntimeEmitter
         // Buffer data in _plaintextBuffer (used for both CBC and GCM)
         // This simplifies Update to just buffer, and Final does all the work
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsCipherPlaintextBufferField);
+        il.Emit(OpCodes.Ldfld, construction.PlaintextBuffer);
         il.Emit(OpCodes.Ldloc, inputBytesLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfByte, "AddRange", [_types.IEnumerableOfByte])!);
 
@@ -134,7 +136,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object Final(string? outputEncoding)
     /// </summary>
-    private void EmitTSCipherFinal(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSCipherFinal(CipherConstruction construction, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Final",
@@ -146,24 +148,24 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitThrowIfFinalized(il, _tsCipherFinalizedField, "Cipher has already been finalized");
+        EmitThrowIfFinalized(il, construction.Finalized, "Cipher has already been finalized");
 
         // Set finalized
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsCipherFinalizedField);
+        il.Emit(OpCodes.Stfld, construction.Finalized);
 
         // Check if GCM mode
         var cbcModeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsCipherIsGcmField);
+        il.Emit(OpCodes.Ldfld, construction.IsGcm);
         il.Emit(OpCodes.Brfalse, cbcModeLabel);
 
         // GCM mode: Perform encryption using helper method
         // Get plaintext from buffer
         var plaintextLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsCipherPlaintextBufferField);
+        il.Emit(OpCodes.Ldfld, construction.PlaintextBuffer);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfByte, "ToArray")!);
         il.Emit(OpCodes.Stloc, plaintextLocal);
 
@@ -183,20 +185,20 @@ public partial class RuntimeEmitter
 
         // Call GcmEncryptHelper(_aesGcm, _iv, plaintext, ciphertext, tag, _aad)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsCipherAesGcmField);  // gcm
+        il.Emit(OpCodes.Ldfld, construction.AesGcm);  // gcm
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsCipherIvField);       // nonce
+        il.Emit(OpCodes.Ldfld, construction.Iv);       // nonce
         il.Emit(OpCodes.Ldloc, plaintextLocal);         // plaintext
         il.Emit(OpCodes.Ldloc, ciphertextLocal);        // ciphertext
         il.Emit(OpCodes.Ldloc, tagLocal);               // tag
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsCipherAadField);      // aad (can be null)
-        il.Emit(OpCodes.Call, _tsCipherGcmEncryptHelper);
+        il.Emit(OpCodes.Ldfld, construction.Aad);      // aad (can be null)
+        il.Emit(OpCodes.Call, construction.GcmEncryptHelper);
 
         // Store tag in _authTag field
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, tagLocal);
-        il.Emit(OpCodes.Stfld, _tsCipherAuthTagField);
+        il.Emit(OpCodes.Stfld, construction.AuthTag);
 
         // Return formatted ciphertext
         EmitCipherFormatOutput(il, runtime, ciphertextLocal, OpCodes.Ldarg_1, supportUtf8: false);
@@ -208,14 +210,14 @@ public partial class RuntimeEmitter
         // bufferedData = _plaintextBuffer.ToArray()
         var bufferedDataLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsCipherPlaintextBufferField);
+        il.Emit(OpCodes.Ldfld, construction.PlaintextBuffer);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfByte, "ToArray")!);
         il.Emit(OpCodes.Stloc, bufferedDataLocal);
 
         // result = _encryptor.TransformFinalBlock(bufferedData, 0, bufferedData.Length)
         var finalBlockLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsCipherEncryptorField);
+        il.Emit(OpCodes.Ldfld, construction.Encryptor);
         il.Emit(OpCodes.Ldloc, bufferedDataLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, bufferedDataLocal);
@@ -237,7 +239,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object GetAuthTag()
     /// </summary>
-    private void EmitTSCipherGetAuthTag(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSCipherGetAuthTag(CipherConstruction construction, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetAuthTag",
@@ -252,7 +254,7 @@ public partial class RuntimeEmitter
         // Check if GCM
         var isGcmLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsCipherIsGcmField);
+        il.Emit(OpCodes.Ldfld, construction.IsGcm);
         il.Emit(OpCodes.Brtrue, isGcmLabel);
         il.Emit(OpCodes.Ldstr, "getAuthTag is only available for GCM mode ciphers");
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.InvalidOperationException, [_types.String])!);
@@ -263,7 +265,7 @@ public partial class RuntimeEmitter
         // Check if finalized
         var isFinalizedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsCipherFinalizedField);
+        il.Emit(OpCodes.Ldfld, construction.Finalized);
         il.Emit(OpCodes.Brtrue, isFinalizedLabel);
         il.Emit(OpCodes.Ldstr, "getAuthTag must be called after final()");
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.InvalidOperationException, [_types.String])!);
@@ -273,7 +275,7 @@ public partial class RuntimeEmitter
 
         // Return new $Buffer(_authTag)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsCipherAuthTagField);
+        il.Emit(OpCodes.Ldfld, construction.AuthTag);
         il.Emit(OpCodes.Newobj, runtime.RequireBuffer().Ctor);
         il.Emit(OpCodes.Ret);
     }
@@ -281,13 +283,13 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public $Cipher SetAAD(object aad) — accepts $Buffer or byte[].
     /// </summary>
-    private void EmitTSCipherSetAAD(TypeBuilder typeBuilder, EmittedRuntime runtime)
-        => EmitCipherStoreBytesArg(typeBuilder, runtime, "SetAAD", _tsCipherAadField);
+    private void EmitTSCipherSetAAD(CipherConstruction construction, TypeBuilder typeBuilder, EmittedRuntime runtime)
+        => EmitCipherStoreBytesArg(typeBuilder, runtime, "SetAAD", construction.Aad);
 
     /// <summary>
     /// Emits: public void Dispose()
     /// </summary>
-    private void EmitTSCipherDispose(TypeBuilder typeBuilder, EmittedRuntime runtime)
-        => EmitCipherDispose(typeBuilder, _tsCipherEncryptorField, _tsCipherAesField, _tsCipherAesGcmField);
+    private void EmitTSCipherDispose(CipherConstruction construction, TypeBuilder typeBuilder, EmittedRuntime runtime)
+        => EmitCipherDispose(typeBuilder, construction.Encryptor, construction.Aes, construction.AesGcm);
 
 }

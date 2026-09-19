@@ -11,8 +11,9 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private FieldBuilder _tsHmacField = null!;
-    private FieldBuilder _tsHmacFinalizedField = null!;
+    private sealed record HmacConstruction(
+        FieldBuilder Hmac,
+        FieldBuilder Finalized);
 
     private void EmitTSHmacClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
@@ -25,15 +26,16 @@ public partial class RuntimeEmitter
         _ = typeBuilder;
 
         // Fields
-        _tsHmacField = typeBuilder.DefineField("_hmac", _types.IncrementalHash, FieldAttributes.Private);
-        _tsHmacFinalizedField = typeBuilder.DefineField("_finalized", _types.Boolean, FieldAttributes.Private);
+        var hmac = typeBuilder.DefineField("_hmac", _types.IncrementalHash, FieldAttributes.Private);
+        var finalized = typeBuilder.DefineField("_finalized", _types.Boolean, FieldAttributes.Private);
+        var construction = new HmacConstruction(hmac, finalized);
 
         // Constructor: $Hmac(string algorithm, byte[] key)
-        EmitTSHmacCtor(typeBuilder, runtime.RequireCrypto());
+        EmitTSHmacCtor(construction, typeBuilder, runtime.RequireCrypto());
 
         // Methods
-        EmitTSHmacUpdate(typeBuilder, runtime);
-        EmitTSHmacDigest(typeBuilder, runtime);
+        EmitTSHmacUpdate(construction, typeBuilder, runtime);
+        EmitTSHmacDigest(construction, typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }
@@ -41,7 +43,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public $Hmac(string algorithm, byte[] key)
     /// </summary>
-    private void EmitTSHmacCtor(TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
+    private void EmitTSHmacCtor(HmacConstruction construction, TypeBuilder typeBuilder, EmittedCryptoRuntime crypto)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
@@ -153,12 +155,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, hashNameLocal);
         il.Emit(OpCodes.Ldarg_2); // key (byte[])
         il.Emit(OpCodes.Call, _types.GetMethod(_types.IncrementalHash, "CreateHMAC", [_types.HashAlgorithmName, _types.MakeArrayType(_types.Byte)])!);
-        il.Emit(OpCodes.Stfld, _tsHmacField);
+        il.Emit(OpCodes.Stfld, construction.Hmac);
 
         // _finalized = false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsHmacFinalizedField);
+        il.Emit(OpCodes.Stfld, construction.Finalized);
 
         il.Emit(OpCodes.Ret);
     }
@@ -166,7 +168,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public $Hmac Update(string data)
     /// </summary>
-    private void EmitTSHmacUpdate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSHmacUpdate(HmacConstruction construction, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Update",
@@ -178,7 +180,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitThrowIfFinalized(il, _tsHmacFinalizedField, "Cannot update HMAC after digest() has been called");
+        EmitThrowIfFinalized(il, construction.Finalized, "Cannot update HMAC after digest() has been called");
 
         // var bytes = Encoding.UTF8.GetBytes(data)
         var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
@@ -189,7 +191,7 @@ public partial class RuntimeEmitter
 
         // _hmac.AppendData(bytes)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsHmacField);
+        il.Emit(OpCodes.Ldfld, construction.Hmac);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IncrementalHash, "AppendData", [_types.MakeArrayType(_types.Byte)])!);
 
@@ -201,7 +203,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object Digest(string? encoding)
     /// </summary>
-    private void EmitTSHmacDigest(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTSHmacDigest(HmacConstruction construction, TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Digest",
@@ -213,17 +215,17 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitThrowIfFinalized(il, _tsHmacFinalizedField, "digest() has already been called");
+        EmitThrowIfFinalized(il, construction.Finalized, "digest() has already been called");
 
         // _finalized = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stfld, _tsHmacFinalizedField);
+        il.Emit(OpCodes.Stfld, construction.Finalized);
 
         // var hmacBytes = _hmac.GetHashAndReset()
         var hmacBytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsHmacField);
+        il.Emit(OpCodes.Ldfld, construction.Hmac);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IncrementalHash, "GetHashAndReset", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, hmacBytesLocal);
 
