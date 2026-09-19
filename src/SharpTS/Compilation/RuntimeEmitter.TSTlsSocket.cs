@@ -15,7 +15,7 @@ namespace SharpTS.Compilation;
 /// stored in the base <c>_stream</c> field. TLS-specific introspection (getCipher/getProtocol/
 /// getPeerCertificate/authorized) reads the retained SslStream. All handshake + introspection is
 /// emitted as pure-BCL IL (SslStream is BCL), so a --compile'd tls program is genuinely standalone —
-/// no SharpTS.dll dependency, no <c>RequireSharpTSRuntime</c>.
+/// no SharpTS.dll dependency, no <c>Deployment.Require</c>.
 /// </summary>
 /// <remarks>
 /// NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTlsSocket

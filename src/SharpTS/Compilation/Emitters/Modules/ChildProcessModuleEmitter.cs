@@ -309,7 +309,7 @@ public sealed class ChildProcessModuleEmitter : IBuiltInModuleEmitter
 
         // fork runs a child .ts module through the interpreter, which a standalone binary
         // can't do — co-locate SharpTS.dll (suppressed by --standalone, which then throws).
-        ctx.Runtime!.RequireSharpTSRuntime(
+        ctx.Runtime!.Deployment.Require(
             "child_process.fork",
             SharpTSRuntimeRequirements.FullDependencyClosure |
             SharpTSRuntimeRequirements.ManagedCompilerHost);

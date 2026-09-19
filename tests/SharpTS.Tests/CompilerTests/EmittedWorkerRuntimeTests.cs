@@ -104,7 +104,7 @@ public class EmittedWorkerRuntimeTests
         var references = reader.AssemblyReferences.Select(handle => reader.GetString(reader.GetAssemblyReference(handle).Name)).ToArray();
         Assert.DoesNotContain("SharpTS", references);
         Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
-        Assert.DoesNotContain(runtime.RequiredSharpTSRuntimeReasons, reason =>
+        Assert.DoesNotContain(runtime.Deployment.Reasons, reason =>
             reason == "Worker" || reason.StartsWith("worker_threads.", StringComparison.Ordinal));
         var type = Assembly.Load(bytes.ToArray()).GetType("$Runtime")!;
         var create = type.GetMethod("CreateWorker")!;

@@ -143,8 +143,8 @@ public class EmittedCryptoRuntimeTests
     public void CryptoDoesNotIntroduceGuestRuntimeDependencies()
     {
         var runtime = EmitRuntime("import * as crypto from 'crypto';");
-        Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
-        Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
+        Assert.Empty(runtime.Deployment.Reasons);
+        Assert.Equal(SharpTSRuntimeRequirements.None, runtime.Deployment.Requirements);
         using var stream = new MemoryStream();
         ((PersistedAssemblyBuilder)runtime.RuntimeClass.Type.Assembly).Save(stream);
         stream.Position = 0;

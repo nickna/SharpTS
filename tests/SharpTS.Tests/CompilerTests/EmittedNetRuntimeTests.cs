@@ -159,8 +159,8 @@ public class EmittedNetRuntimeTests
         Assert.Throws<InvalidOperationException>(net.CompleteEmission);
         if (source == "import * as net from 'net';")
         {
-            Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
-            Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
+            Assert.Empty(runtime.Deployment.Reasons);
+            Assert.Equal(SharpTSRuntimeRequirements.None, runtime.Deployment.Requirements);
         }
     }
 

@@ -164,8 +164,8 @@ public class EmittedDgramRuntimeTests
         Assert.Throws<InvalidOperationException>(dgram.CompleteEmission);
         if (!emitEverything)
         {
-            Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
-            Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
+            Assert.Empty(runtime.Deployment.Reasons);
+            Assert.Equal(SharpTSRuntimeRequirements.None, runtime.Deployment.Requirements);
         }
     }
 

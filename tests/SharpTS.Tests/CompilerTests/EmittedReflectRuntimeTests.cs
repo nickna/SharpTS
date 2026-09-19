@@ -172,7 +172,7 @@ public class EmittedReflectRuntimeTests
         Assert.Equal((mask & 3) != 0, runtime.Reflect.Assignment is not null);
         Assert.Equal((mask & 1) != 0, runtime.Reflect.Namespace is not null);
         Assert.Equal((mask & 4) != 0, runtime.Reflect.Metadata is not null);
-        Assert.Equal((mask & 2) != 0, runtime.RequiredSharpTSRuntimeReasons.Contains("Proxy"));
+        Assert.Equal((mask & 2) != 0, runtime.Deployment.Reasons.Contains("Proxy"));
         AssertFrozen(runtime.Reflect);
         using var bytes = Save(runtime);
         Verify(bytes);

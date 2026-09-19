@@ -104,13 +104,13 @@ public partial class ILCompiler
     /// this to decide whether to co-locate SharpTS.dll with the output.
     /// </summary>
     public IReadOnlyCollection<string> RequiredSharpTSRuntimeReasons =>
-        _runtime?.RequiredSharpTSRuntimeReasons ?? (IReadOnlyCollection<string>)Array.Empty<string>();
+        _runtime?.Deployment.Reasons ?? (IReadOnlyCollection<string>)Array.Empty<string>();
 
     /// <summary>
     /// Stable deployment capabilities required by the emitted SharpTS runtime bridges.
     /// </summary>
     public SharpTSRuntimeRequirements RequiredSharpTSRuntimeRequirements =>
-        _runtime?.RequiredSharpTSRuntimeRequirements ?? SharpTSRuntimeRequirements.None;
+        _runtime?.Deployment.Requirements ?? SharpTSRuntimeRequirements.None;
 
     /// <summary>
     /// Non-fatal compilation warnings (e.g. an unresolvable external .NET type).
@@ -1137,6 +1137,7 @@ public partial class ILCompiler
         _hostedRuntimeType?.CreateType();
         _hostedFactoryType?.CreateType();
         _runtime.JsonShapes.CompleteEmission();
+        _runtime.Deployment.CompleteEmission();
     }
 
     /// <summary>
@@ -1816,6 +1817,7 @@ public partial class ILCompiler
         _hostedRuntimeType?.CreateType();
         _hostedFactoryType?.CreateType();
         _runtime.JsonShapes.CompleteEmission();
+        _runtime.Deployment.CompleteEmission();
     }
 
     #endregion

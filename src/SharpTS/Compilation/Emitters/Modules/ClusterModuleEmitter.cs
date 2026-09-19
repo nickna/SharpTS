@@ -11,7 +11,7 @@ namespace SharpTS.Compilation.Emitters.Modules;
 /// script interpreted on a worker thread (the worker_threads pattern), and the rest of
 /// the surface routes to the same ClusterSingleton those workers use — one coherent
 /// workers map / settings / scheduling policy / event stream across the boundary.
-/// Every bridge-routed emit site records RequireSharpTSRuntime("cluster") so the CLI
+/// Every bridge-routed emit site records Deployment.Require("cluster") so the CLI
 /// co-locates SharpTS.dll; under --standalone the helpers throw a clear error (#1171).
 ///
 /// isPrimary/isWorker/isMaster and the SCHED_* constants stay pure IL: a compiled
@@ -100,7 +100,7 @@ public sealed class ClusterModuleEmitter : IBuiltInModuleEmitter
 
         var ctx = emitter.Context;
         var il = ctx.IL;
-        ctx.Runtime!.RequireSharpTSRuntime("cluster");
+        ctx.Runtime!.Deployment.Require("cluster");
 
         emitter.EmitExpression(value);
         emitter.EmitBoxIfNeeded(value);
@@ -153,7 +153,7 @@ public sealed class ClusterModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
-        ctx.Runtime!.RequireSharpTSRuntime("cluster");
+        ctx.Runtime!.Deployment.Require("cluster");
 
         if (arguments.Count > 0)
         {
@@ -175,7 +175,7 @@ public sealed class ClusterModuleEmitter : IBuiltInModuleEmitter
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
-        ctx.Runtime!.RequireSharpTSRuntime("cluster");
+        ctx.Runtime!.Deployment.Require("cluster");
 
         il.Emit(OpCodes.Ldstr, member);
         il.Emit(OpCodes.Ldc_I4, arguments.Count);

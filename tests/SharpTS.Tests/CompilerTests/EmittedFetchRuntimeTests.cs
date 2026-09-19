@@ -196,8 +196,8 @@ public class EmittedFetchRuntimeTests
     {
         var runtime = EmitRuntime("fetch('http://127.0.0.1/');");
         var client = runtime.Fetch.RequireImplementation().RequireClient();
-        Assert.Empty(runtime.RequiredSharpTSRuntimeReasons);
-        Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
+        Assert.Empty(runtime.Deployment.Reasons);
+        Assert.Equal(SharpTSRuntimeRequirements.None, runtime.Deployment.Requirements);
         using var stream = Save(runtime);
         using var pe = new PEReader(stream);
         var reader = pe.GetMetadataReader();
