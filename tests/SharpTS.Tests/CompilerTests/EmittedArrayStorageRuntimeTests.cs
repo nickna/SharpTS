@@ -58,6 +58,26 @@ public class EmittedArrayStorageRuntimeTests
         Assert.Contains($"'{missingHandle}'", Assert.IsType<InvalidOperationException>(readError.InnerException).Message);
         Assert.Contains($"'{missingHandle}'", Assert.Throws<InvalidOperationException>(arrays.CompleteEmission).Message);
         Assert.False(arrays.IsComplete);
+        var nullError = Assert.Throws<TargetInvocationException>(() => property.SetValue(arrays, null));
+        Assert.IsType<ArgumentNullException>(nullError.InnerException);
+
+        var declarations = CreateDeclarations();
+        var value = property.GetValue(declarations);
+        property.SetValue(arrays, value);
+        var replacement = property.GetValue(CreateDeclarations());
+        var duplicate = Assert.Throws<TargetInvocationException>(() => property.SetValue(arrays, replacement));
+        Assert.Contains($"'{missingHandle}'", Assert.IsType<InvalidOperationException>(duplicate.InnerException).Message);
+        Assert.Same(value, property.GetValue(arrays));
+        arrays.CompleteEmission();
+        Assert.True(arrays.IsComplete);
+        Assert.Throws<InvalidOperationException>(arrays.CompleteEmission);
+        foreach (var handle in Handles)
+        {
+            var frozen = handle.GetValue(arrays);
+            var error = Assert.Throws<TargetInvocationException>(() => handle.SetValue(arrays, frozen));
+            Assert.IsType<InvalidOperationException>(error.InnerException);
+            Assert.Same(frozen, handle.GetValue(arrays));
+        }
     }
 
     public static IEnumerable<object[]> QueueHandleNames =>
@@ -184,6 +204,124 @@ public class EmittedArrayStorageRuntimeTests
             """;
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
         Assert.Equal("20 true 4 4\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReusedEmitterKeepsPackedSparseAndRestStorageWithinEachAssembly(bool hosted)
+    {
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
+        var owners = new HashSet<EmittedArrayStorageRuntime>();
+        var saved = new List<(Assembly Assembly, object Numeric, object Sparse, object RestValues, double Marker)>();
+        const BindingFlags members = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+        object? Call(object instance, string name, params object?[] arguments)
+        {
+            var type = instance.GetType();
+            var method = name switch
+            {
+                "GetLong" => type.GetMethod("Get", [typeof(long)]),
+                "SetLong" => type.GetMethod("Set", [typeof(long), typeof(object)]),
+                _ => type.GetMethod(name, members)
+            };
+            return Assert.IsAssignableFrom<MethodInfo>(method).Invoke(instance, arguments);
+        }
+
+        foreach (string? source in new[]
+        {
+            "console.log(1);", "const values: number[] = [1, 2];", "import * as dns from 'dns';",
+            "new Uint8Array(2);", null, "console.log(1);", "Promise.resolve([1, 2]);"
+        })
+        {
+            var builder = new PersistedAssemblyBuilder(new AssemblyName($"array_construction_{Guid.NewGuid():N}"), typeof(object).Assembly);
+            var module = builder.DefineDynamicModule("main");
+            var features = source is null ? null : new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
+            var runtime = features is null ? emitter.EmitAll(module) : emitter.EmitAll(module, features);
+            using var bytes = new MemoryStream();
+            builder.Save(bytes);
+            bytes.Position = 0;
+            using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+            Assert.Empty(verifier.Verify(bytes));
+            var assembly = Assembly.Load(bytes.ToArray());
+            var references = assembly.GetReferencedAssemblies();
+            Assert.DoesNotContain(references, reference => reference.Name == "SharpTS");
+            Assert.DoesNotContain(references, reference => saved.Any(previous => previous.Assembly.GetName().Name == reference.Name));
+            Assert.Equal(hosted, references.Any(reference => reference.Name == "SharpTS.Hosting.Abstractions"));
+            Assert.True(owners.Add(runtime.ArrayStorage));
+            Assert.True(runtime.ArrayStorage.IsComplete);
+            foreach (var property in Handles)
+            {
+                var handle = property.GetValue(runtime.ArrayStorage);
+                if (handle is MemberInfo member)
+                    Assert.Same(builder, member.Module.Assembly);
+                else
+                {
+                    var queue = Assert.IsType<ArrayQueueTypeInfo>(handle);
+                    foreach (var queueMember in typeof(ArrayQueueTypeInfo).GetProperties().Select(p => p.GetValue(queue)).OfType<MemberInfo>())
+                        Assert.Same(builder, queueMember.Module.Assembly);
+                }
+            }
+            if (source == "console.log(1);")
+                Assert.Equal(hosted, runtime.Promise is not null);
+
+            var type = assembly.GetType("$Array")!;
+            var numeric = type.GetConstructor(members, null, [typeof(double[])], null)!.Invoke([new double[] { 1, 2, 3 }]);
+            Assert.Equal(true, Call(numeric, "get_IsNumeric"));
+            var sparse = type.GetConstructor([typeof(List<object>)])!.Invoke([new List<object> { "start", 2d }]);
+            double marker = 20 + saved.Count;
+            Call(sparse, "DeleteAt", 1L);
+            Call(sparse, "SetLong", 100_000L, marker);
+            var rest = type.GetMethod("CreateNumericRest", members)!.Invoke(null, [2])!;
+            Call(rest, "AppendRestDouble", 5d);
+            Call(rest, "AppendRestDouble", 6d);
+            saved.Add((assembly, numeric, sparse, rest, marker));
+        }
+
+        // Exercise each earlier assembly's live stores after subsequent emissions.
+        foreach (var (assembly, numeric, sparse, rest, marker) in saved)
+        {
+            var type = assembly.GetType("$Array")!;
+            type.GetMethod("ReserveRest", members)!.Invoke(null, [rest, 20]);
+            type.GetMethod("AppendNumericRestSource", members)!.Invoke(null, [rest, numeric]);
+            Assert.Equal(true, Call(rest, "get_IsNumeric"));
+            Assert.Equal(5, Call(rest, "get_NumericCount"));
+            type.GetMethod("AppendRestValue", members)!.Invoke(null, [rest, "boxed"]);
+            Call(rest, "AppendRestDouble", 9d);
+            Call(rest, "FinishRest", 2);
+            Assert.Equal(false, Call(rest, "get_IsNumeric"));
+            Assert.Equal(new object[] { 1d, 2d, 3d, "boxed", 9d }, Assert.IsAssignableFrom<List<object>>(rest));
+
+            Assert.Equal(true, Call(numeric, "get_IsNumeric"));
+            Assert.Equal(3, Call(numeric, "get_NumericCount"));
+            Call(numeric, "EnsureDoubleCapacity", 16);
+            Call(numeric, "PushDouble", 4d);
+            Call(numeric, "SetDouble", 1, 8d);
+            Assert.Equal(8d, Call(numeric, "GetDouble", 1));
+            Call(numeric, "EnsureBoxed");
+            Assert.Equal(false, Call(numeric, "get_IsNumeric"));
+            Assert.Equal(new object[] { 1d, 8d, 3d, 4d }, Assert.IsAssignableFrom<List<object>>(numeric));
+            Call(numeric, "Freeze");
+            Assert.Equal(true, Call(numeric, "get_IsFrozen"));
+            Assert.Equal(true, Call(numeric, "get_IsSealed"));
+
+            Assert.Equal(100_001L, Call(sparse, "get_LongLength"));
+            Assert.Equal(false, Call(sparse, "HasIndex", 1L));
+            Assert.Equal(marker, Call(sparse, "GetLong", 100_000L));
+            Call(sparse, "DeleteAt", 100_000L);
+            Call(sparse, "SetLength", 1L);
+            Assert.Equal(false, Call(sparse, "HasIndex", 100_000L));
+            Assert.Equal(1L, Call(sparse, "get_LongLength"));
+            Assert.Equal(new object[] { "start" }, Assert.IsAssignableFrom<List<object>>(sparse));
+            Call(sparse, "Seal");
+            Assert.Equal(true, Call(sparse, "get_IsSealed"));
+
+            var restricted = type.GetConstructor(members, null, [typeof(double[])], null)!.Invoke([new double[] { 7 }]);
+            Call(restricted, "MarkNonExtensible");
+            // The internal packed append preserves its existing no-op guard.
+            Call(restricted, "PushDouble", 8d);
+            Assert.Equal(1, Call(restricted, "get_NumericCount"));
+            Assert.Equal(7d, Call(restricted, "GetDouble", 0));
+        }
     }
 
     private static EmittedArrayStorageRuntime CreateDeclarations(string? missingHandle = null)
