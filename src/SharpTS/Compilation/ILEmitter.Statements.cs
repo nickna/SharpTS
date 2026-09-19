@@ -1647,7 +1647,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, DoubleListSetCount);
 
         IL.Emit(OpCodes.Ldloc, promoted.Local);
-        IL.Emit(OpCodes.Call, RuntimeEmitter.DoubleListAsSpan);
+        IL.Emit(OpCodes.Call, FrameworkEmitMetadata.DoubleListAsSpan);
         IL.Emit(OpCodes.Stloc, spanLocal);
         IL.Emit(OpCodes.Ldc_I4_0);
         IL.Emit(OpCodes.Stloc, indexLocal);
