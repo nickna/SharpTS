@@ -304,7 +304,11 @@ public partial class RuntimeEmitter
     /// ThreadPool (pure-BCL), populates the $TlsSocket, then schedules the OK/Err closure.
     /// Fields: _socket, _port(int), _host, _reject(bool), _alpn(string[])
     /// </summary>
-    private void EmitTlsConnectClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTlsConnectClosureClass(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        FieldBuilder netClientField,
+        FieldBuilder netStreamField)
     {
         // The OK/Err dispatch closures are defined first (referenced from Connect()).
         EmitTlsConnectOkClosureClass(moduleBuilder, runtime);
@@ -438,7 +442,7 @@ public partial class RuntimeEmitter
         EmitTlsPopulateSocket(il,
             loadSocket: () => { il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, socketField); },
             loadClient: () => il.Emit(OpCodes.Ldloc, tcpClientLocal),
-            loadSslStream: () => il.Emit(OpCodes.Ldloc, sslStreamLocal));
+            loadSslStream: () => il.Emit(OpCodes.Ldloc, sslStreamLocal), netClientField, netStreamField);
 
         // _socket._authorized = (_policyErrors == None)
         il.Emit(OpCodes.Ldarg_0);
@@ -499,12 +503,18 @@ public partial class RuntimeEmitter
     /// Shared IL: populate a $TlsSocket from a negotiated TcpClient + SslStream.
     /// Sets base _client/_stream and the TLS _sslStream/_authorized/_peerCert/_alpnProtocol fields.
     /// </summary>
-    private void EmitTlsPopulateSocket(ILGenerator il, Action loadSocket, Action loadClient, Action loadSslStream)
+    private void EmitTlsPopulateSocket(
+        ILGenerator il,
+        Action loadSocket,
+        Action loadClient,
+        Action loadSslStream,
+        FieldBuilder netClientField,
+        FieldBuilder netStreamField)
     {
         // socket._client = tcpClient   (base $NetSocket field)
-        loadSocket(); loadClient(); il.Emit(OpCodes.Stfld, _netSocketClientField);
+        loadSocket(); loadClient(); il.Emit(OpCodes.Stfld, netClientField);
         // socket._stream = sslStream   (base $NetSocket field — SslStream is a Stream)
-        loadSocket(); loadSslStream(); il.Emit(OpCodes.Stfld, _netSocketStreamField);
+        loadSocket(); loadSslStream(); il.Emit(OpCodes.Stfld, netStreamField);
         // socket._sslStream = sslStream
         loadSocket(); loadSslStream(); il.Emit(OpCodes.Stfld, _tlsSocketSslStreamField);
         // NOTE: _authorized/_authError are set by the caller (connect: chain policy; server: IsAuthenticated).
@@ -525,7 +535,7 @@ public partial class RuntimeEmitter
     /// A per-client handshake failure is swallowed (the client is closed) and the loop continues,
     /// matching interp's tlsClientError-and-continue behavior; only a listener fault breaks the loop.
     /// </summary>
-    private void EmitTlsServerAcceptWorkerBody(EmittedRuntime runtime)
+    private void EmitTlsServerAcceptWorkerBody(EmittedRuntime runtime, FieldBuilder netClientField, FieldBuilder netStreamField)
     {
         var il = _tlsServerAcceptWorkerMethod.GetILGenerator();
 
@@ -615,7 +625,7 @@ public partial class RuntimeEmitter
         EmitTlsPopulateSocket(il,
             loadSocket: () => il.Emit(OpCodes.Ldloc, socketLocal),
             loadClient: () => il.Emit(OpCodes.Ldloc, tcpClientLocal),
-            loadSslStream: () => il.Emit(OpCodes.Ldloc, sslStreamLocal));
+            loadSslStream: () => il.Emit(OpCodes.Ldloc, sslStreamLocal), netClientField, netStreamField);
         // server-side: socket._authorized = sslStream.IsAuthenticated
         il.Emit(OpCodes.Ldloc, socketLocal);
         il.Emit(OpCodes.Ldloc, sslStreamLocal);

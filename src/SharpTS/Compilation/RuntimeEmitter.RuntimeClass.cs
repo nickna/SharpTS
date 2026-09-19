@@ -35,7 +35,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Int32, _types.Int32]);
     }
 
-    private void EmitRuntimeClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitRuntimeClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime, NetConstruction? netConstruction)
     {
         // $Runtime TypeBuilder + early helper-method signatures (Stringify,
         // CreateException) were forward-declared by DefineRuntimeClassPhase1
@@ -2972,7 +2972,10 @@ public partial class RuntimeEmitter
             EmitHttpModuleMethods(typeBuilder, runtime);
         // Net module methods (net.createServer, net.connect, etc.)
         if (_features.UsesNet)
-            EmitNetModuleMethods(typeBuilder, runtime);
+        {
+            var net = RequireNetConstruction(netConstruction);
+            EmitNetModuleMethods(typeBuilder, runtime, net.Socket.Fields, net.Server.Fields);
+        }
         // TLS module methods (tls.createServer, tls.connect, etc.)
         if (_features.UsesTls)
             EmitTlsModuleMethods(typeBuilder, runtime);

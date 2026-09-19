@@ -14,20 +14,26 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    // 'drop' payload builder on $TcpAcceptClosure (#1070)
-    private MethodBuilder _tcpAcceptBuildDropDataMethod = null!;
-
-    private void EmitNetClosureTypes(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private NetClosureConstruction EmitNetClosureTypes(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        NetSocketFields socketFields,
+        NetSocketMethods socketMethods,
+        NetServerFields serverFields)
     {
-        EmitTcpAcceptClosure(moduleBuilder, runtime);
-        EmitIpcAcceptClosure(moduleBuilder, runtime);
-        EmitSocketReadDataClosure(moduleBuilder, runtime);
-        EmitSocketReadEndClosure(moduleBuilder, runtime);
-        EmitSocketConnectOkClosure(moduleBuilder, runtime);
-        EmitSocketConnectErrClosure(moduleBuilder, runtime);
+        var tcpAccept = EmitTcpAcceptClosure(moduleBuilder, runtime, socketFields, serverFields);
+        var ipcAccept = EmitIpcAcceptClosure(moduleBuilder, runtime, socketFields, serverFields);
+        var readData = EmitSocketReadDataClosure(moduleBuilder, runtime);
+        var readEnd = EmitSocketReadEndClosure(moduleBuilder, runtime, socketFields, socketMethods);
+        var connectOk = EmitSocketConnectOkClosure(moduleBuilder, runtime, socketFields);
+        var connectErr = EmitSocketConnectErrClosure(moduleBuilder, runtime, socketFields);
         // $HttpAcceptClosure references $HttpServer, which is gated on UsesHttp.
         if (_features.UsesHttp)
             EmitHttpAcceptClosure(moduleBuilder, runtime);
+
+        return new(
+            new NetSocketClosures(readData, readEnd, connectOk, connectErr),
+            new NetServerClosures(tcpAccept, ipcAccept));
     }
 
     /// <summary>
@@ -35,7 +41,11 @@ public partial class RuntimeEmitter
     /// Run() creates a $NetSocket, adds it to connections, fires connectionListener + "connection" event,
     /// then starts reading.
     /// </summary>
-    private void EmitTcpAcceptClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private NetClosureMethods EmitTcpAcceptClosure(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        NetSocketFields socketFields,
+        NetServerFields serverFields)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$TcpAcceptClosure",
@@ -65,7 +75,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        EmitTcpAcceptBuildDropData(typeBuilder);
+        var buildDropData = EmitTcpAcceptBuildDropData(typeBuilder);
 
         // Run()
         var run = typeBuilder.DefineMethod(
@@ -85,7 +95,7 @@ public partial class RuntimeEmitter
                 var epLocal = il.DeclareLocal(typeof(System.Net.IPEndPoint));
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, serverField);
-                il.Emit(OpCodes.Ldfld, _netServerBlockListField);
+                il.Emit(OpCodes.Ldfld, serverFields.BlockList);
                 il.Emit(OpCodes.Brfalse, noBlock);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, clientField);
@@ -97,7 +107,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Brfalse, noBlock);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, serverField);
-                il.Emit(OpCodes.Ldfld, _netServerBlockListField);
+                il.Emit(OpCodes.Ldfld, serverFields.BlockList);
                 il.Emit(OpCodes.Castclass, runtime.RequireNet().BlockListType);
                 il.Emit(OpCodes.Ldloc, epLocal);
                 il.Emit(OpCodes.Callvirt, typeof(System.Net.IPEndPoint).GetProperty("Address")!.GetGetMethod()!);
@@ -126,7 +136,7 @@ public partial class RuntimeEmitter
                 // for (i = _connections.Count - 1; i >= 0; i--)
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, serverField);
-                il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
+                il.Emit(OpCodes.Ldfld, serverFields.Connections);
                 il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Sub);
@@ -138,7 +148,7 @@ public partial class RuntimeEmitter
                 var sockLocal = il.DeclareLocal(runtime.RequireNet().SocketType);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, serverField);
-                il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
+                il.Emit(OpCodes.Ldfld, serverFields.Connections);
                 il.Emit(OpCodes.Ldloc, iLocal);
                 il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
                 il.Emit(OpCodes.Isinst, runtime.RequireNet().SocketType);
@@ -146,11 +156,11 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldloc, sockLocal);
                 il.Emit(OpCodes.Brfalse, nextIter);
                 il.Emit(OpCodes.Ldloc, sockLocal);
-                il.Emit(OpCodes.Ldfld, _netSocketDestroyedField);
+                il.Emit(OpCodes.Ldfld, socketFields.Destroyed);
                 il.Emit(OpCodes.Brfalse, nextIter);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, serverField);
-                il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
+                il.Emit(OpCodes.Ldfld, serverFields.Connections);
                 il.Emit(OpCodes.Ldloc, iLocal);
                 il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "RemoveAt")!);
 
@@ -172,11 +182,11 @@ public partial class RuntimeEmitter
                 var underLimit = il.DefineLabel();
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, serverField);
-                il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
+                il.Emit(OpCodes.Ldfld, serverFields.Connections);
                 il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, serverField);
-                il.Emit(OpCodes.Ldfld, _netServerMaxConnectionsField);
+                il.Emit(OpCodes.Ldfld, serverFields.MaxConnections);
                 il.Emit(OpCodes.Blt, underLimit);
 
                 // _server.Emit("drop", [ _BuildDropData(_client) ])
@@ -189,7 +199,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, clientField);
-                il.Emit(OpCodes.Call, _tcpAcceptBuildDropDataMethod);
+                il.Emit(OpCodes.Call, buildDropData);
                 il.Emit(OpCodes.Stelem_Ref);
                 il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
                 il.Emit(OpCodes.Pop);
@@ -213,12 +223,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, runtime.RequireNet().SocketCtorTcpClient);
             il.Emit(OpCodes.Stloc, socketLocal);
 
-            EmitApplyServerSocketOptions(il, serverField, socketLocal);
+            EmitApplyServerSocketOptions(il, serverField, socketLocal, socketFields, serverFields);
 
             // _server._connections.Add(socket)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, serverField);
-            il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
+            il.Emit(OpCodes.Ldfld, serverFields.Connections);
             il.Emit(OpCodes.Ldloc, socketLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
@@ -226,7 +236,7 @@ public partial class RuntimeEmitter
             var noListener = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, serverField);
-            il.Emit(OpCodes.Ldfld, _netServerConnectionListenerField);
+            il.Emit(OpCodes.Ldfld, serverFields.ConnectionListener);
             il.Emit(OpCodes.Brfalse, noListener);
 
             EmitDgramCallbackInvocation(il, runtime,
@@ -234,7 +244,7 @@ public partial class RuntimeEmitter
                 {
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldfld, serverField);
-                    il.Emit(OpCodes.Ldfld, _netServerConnectionListenerField);
+                    il.Emit(OpCodes.Ldfld, serverFields.ConnectionListener);
                 },
                 1,
                 (il2) =>
@@ -270,15 +280,18 @@ public partial class RuntimeEmitter
         }
 
         typeBuilder.CreateType();
-        _tcpAcceptClosureCtor = ctor;
-        _tcpAcceptClosureRun = run;
+        return new(ctor, run);
     }
 
     /// <summary>
     /// Emits $IpcAcceptClosure: wraps a Stream accepted by $NetServer for IPC (named pipe / unix socket).
     /// Same as TcpAcceptClosure but constructs $NetSocket with (Stream, pipePath).
     /// </summary>
-    private void EmitIpcAcceptClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private NetClosureMethods EmitIpcAcceptClosure(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        NetSocketFields socketFields,
+        NetServerFields serverFields)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$IpcAcceptClosure",
@@ -331,12 +344,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, runtime.RequireNet().SocketCtorStream);
             il.Emit(OpCodes.Stloc, socketLocal);
 
-            EmitApplyServerSocketOptions(il, serverField, socketLocal);
+            EmitApplyServerSocketOptions(il, serverField, socketLocal, socketFields, serverFields);
 
             // _server._connections.Add(socket)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, serverField);
-            il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
+            il.Emit(OpCodes.Ldfld, serverFields.Connections);
             il.Emit(OpCodes.Ldloc, socketLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
@@ -347,10 +360,10 @@ public partial class RuntimeEmitter
             // socket._readReady?.Wait(5000) — wait for read worker to be ready
             var skipWait = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, socketLocal);
-            il.Emit(OpCodes.Ldfld, _netSocketReadReadyField);
+            il.Emit(OpCodes.Ldfld, socketFields.ReadReady);
             il.Emit(OpCodes.Brfalse, skipWait);
             il.Emit(OpCodes.Ldloc, socketLocal);
-            il.Emit(OpCodes.Ldfld, _netSocketReadReadyField);
+            il.Emit(OpCodes.Ldfld, socketFields.ReadReady);
             il.Emit(OpCodes.Ldc_I4, 5000);
             il.Emit(OpCodes.Callvirt, typeof(System.Threading.ManualResetEventSlim).GetMethod("Wait", [typeof(int)])!);
             il.Emit(OpCodes.Pop); // Wait(int) returns bool
@@ -360,7 +373,7 @@ public partial class RuntimeEmitter
             var noListener = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, serverField);
-            il.Emit(OpCodes.Ldfld, _netServerConnectionListenerField);
+            il.Emit(OpCodes.Ldfld, serverFields.ConnectionListener);
             il.Emit(OpCodes.Brfalse, noListener);
 
             EmitDgramCallbackInvocation(il, runtime,
@@ -368,7 +381,7 @@ public partial class RuntimeEmitter
                 {
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldfld, serverField);
-                    il.Emit(OpCodes.Ldfld, _netServerConnectionListenerField);
+                    il.Emit(OpCodes.Ldfld, serverFields.ConnectionListener);
                 },
                 1,
                 (il2) =>
@@ -400,15 +413,14 @@ public partial class RuntimeEmitter
         }
 
         typeBuilder.CreateType();
-        _ipcAcceptClosureCtor = ctor;
-        _ipcAcceptClosureRun = run;
+        return new(ctor, run);
     }
 
     /// <summary>
     /// Emits: private static Dictionary&lt;string, object&gt; _BuildDropData(TcpClient client)
     /// The 'drop' event payload: local/remote endpoint triads (Node shape, #1070).
     /// </summary>
-    private void EmitTcpAcceptBuildDropData(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTcpAcceptBuildDropData(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "_BuildDropData",
@@ -416,7 +428,6 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             [typeof(TcpClient)]
         );
-        _tcpAcceptBuildDropDataMethod = method;
 
         var il = method.GetILGenerator();
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -481,6 +492,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
     /// <summary>
@@ -489,32 +501,37 @@ public partial class RuntimeEmitter
     /// socket._allowHalfOpen = server._socketAllowHalfOpen (#1070).
     /// The closure's Run() has the server in a field and the socket in a local.
     /// </summary>
-    private void EmitApplyServerSocketOptions(ILGenerator il, FieldBuilder serverField, LocalBuilder socketLocal)
+    private void EmitApplyServerSocketOptions(
+        ILGenerator il,
+        FieldBuilder serverField,
+        LocalBuilder socketLocal,
+        NetSocketFields socketFields,
+        NetServerFields serverFields)
     {
         var skipHwm = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, serverField);
-        il.Emit(OpCodes.Ldfld, _netServerSocketHwmField);
+        il.Emit(OpCodes.Ldfld, serverFields.SocketHwm);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, skipHwm);
         il.Emit(OpCodes.Ldloc, socketLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, serverField);
-        il.Emit(OpCodes.Ldfld, _netServerSocketHwmField);
-        il.Emit(OpCodes.Stfld, _netSocketWritableHwmField);
+        il.Emit(OpCodes.Ldfld, serverFields.SocketHwm);
+        il.Emit(OpCodes.Stfld, socketFields.WritableHwm);
         il.MarkLabel(skipHwm);
 
         il.Emit(OpCodes.Ldloc, socketLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, serverField);
-        il.Emit(OpCodes.Ldfld, _netServerSocketAllowHalfOpenField);
-        il.Emit(OpCodes.Stfld, _netSocketAllowHalfOpenField);
+        il.Emit(OpCodes.Ldfld, serverFields.SocketAllowHalfOpen);
+        il.Emit(OpCodes.Stfld, socketFields.AllowHalfOpen);
     }
 
     /// <summary>
     /// Emits $SocketReadDataClosure: dispatches a "data" event with the read chunk on the main thread.
     /// </summary>
-    private void EmitSocketReadDataClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private NetClosureMethods EmitSocketReadDataClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$SocketReadDataClosure",
@@ -572,15 +589,18 @@ public partial class RuntimeEmitter
         }
 
         typeBuilder.CreateType();
-        _socketReadDataClosureCtor = ctor;
-        _socketReadDataClosureRun = run;
+        return new(ctor, run);
     }
 
     /// <summary>
     /// Emits $SocketReadEndClosure: fires "end" and "close" events when the read loop finishes,
     /// and unrefs the event loop if reading was started.
     /// </summary>
-    private void EmitSocketReadEndClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private NetClosureMethods EmitSocketReadEndClosure(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        NetSocketFields socketFields,
+        NetSocketMethods socketMethods)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$SocketReadEndClosure",
@@ -629,14 +649,14 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Ldfld, _netSocketDestroyedField);
+            il.Emit(OpCodes.Ldfld, socketFields.Destroyed);
             il.Emit(OpCodes.Brtrue, destroyedPath);
 
             // _socket._endReceived = true
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
             il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Stfld, _netSocketEndReceivedField);
+            il.Emit(OpCodes.Stfld, socketFields.EndReceived);
 
             // _socket.Emit("end", new object[0])
             il.Emit(OpCodes.Ldarg_0);
@@ -657,7 +677,7 @@ public partial class RuntimeEmitter
             var notEnded = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Ldfld, _netSocketEndedField);
+            il.Emit(OpCodes.Ldfld, socketFields.Ended);
             il.Emit(OpCodes.Brfalse, notEnded);
             {
                 var destroyNowLocal = il.DeclareLocal(_types.Boolean);
@@ -667,11 +687,11 @@ public partial class RuntimeEmitter
 
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, socketField);
-                il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+                il.Emit(OpCodes.Ldfld, socketFields.WriteQueue);
                 il.Emit(OpCodes.Call, typeof(System.Threading.Monitor).GetMethod("Enter", [_types.Object])!);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, socketField);
-                il.Emit(OpCodes.Ldfld, _netSocketWriteWorkerRunningField);
+                il.Emit(OpCodes.Ldfld, socketFields.WriteWorkerRunning);
                 il.Emit(OpCodes.Brtrue, workerActive);
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Stloc, destroyNowLocal);
@@ -680,17 +700,17 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, socketField);
                 il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Stfld, _netSocketFinishAfterEndField);
+                il.Emit(OpCodes.Stfld, socketFields.FinishAfterEnd);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, socketField);
                 il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Stfld, _netSocketShutdownAfterFlushField);
+                il.Emit(OpCodes.Stfld, socketFields.ShutdownAfterFlush);
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Stloc, destroyNowLocal);
                 il.MarkLabel(lockDone);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, socketField);
-                il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+                il.Emit(OpCodes.Ldfld, socketFields.WriteQueue);
                 il.Emit(OpCodes.Call, typeof(System.Threading.Monitor).GetMethod("Exit", [_types.Object])!);
 
                 il.Emit(OpCodes.Ldloc, destroyNowLocal);
@@ -698,7 +718,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, socketField);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Callvirt, _netSocketDestroyMethod);
+                il.Emit(OpCodes.Callvirt, socketMethods.Destroy);
                 il.Emit(OpCodes.Pop);
                 il.MarkLabel(noDestroy);
                 il.Emit(OpCodes.Ret);
@@ -709,7 +729,7 @@ public partial class RuntimeEmitter
             var autoFinish = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Ldfld, _netSocketAllowHalfOpenField);
+            il.Emit(OpCodes.Ldfld, socketFields.AllowHalfOpen);
             il.Emit(OpCodes.Brfalse, autoFinish);
             il.Emit(OpCodes.Ret);
 
@@ -718,13 +738,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
             il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Stfld, _netSocketFinishAfterEndField);
+            il.Emit(OpCodes.Stfld, socketFields.FinishAfterEnd);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Callvirt, _netSocketEndMethod);
+            il.Emit(OpCodes.Callvirt, socketMethods.End);
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
 
@@ -733,12 +753,12 @@ public partial class RuntimeEmitter
             var done = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Ldfld, _netSocketReadingStartedField);
+            il.Emit(OpCodes.Ldfld, socketFields.ReadingStarted);
             il.Emit(OpCodes.Brfalse, done);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Stfld, _netSocketReadingStartedField);
+            il.Emit(OpCodes.Stfld, socketFields.ReadingStarted);
             il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
             il.Emit(OpCodes.Call, runtime.EventLoop.Unref);
             il.MarkLabel(done);
@@ -746,14 +766,16 @@ public partial class RuntimeEmitter
         }
 
         typeBuilder.CreateType();
-        _socketReadEndClosureCtor = ctor;
-        _socketReadEndClosureRun = run;
+        return new(ctor, run);
     }
 
     /// <summary>
     /// Emits $SocketConnectOkClosure: fires "connect" event and starts reading on successful connection.
     /// </summary>
-    private void EmitSocketConnectOkClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private NetClosureMethods EmitSocketConnectOkClosure(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        NetSocketFields socketFields)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$SocketConnectOkClosure",
@@ -794,7 +816,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Stfld, _netSocketConnectingField);
+            il.Emit(OpCodes.Stfld, socketFields.Connecting);
 
             // IPC pipes need read-before-connect to avoid blocking writes
             var tcpPath = il.DefineLabel();
@@ -803,7 +825,7 @@ public partial class RuntimeEmitter
             // if (_socket._isIpc) goto ipcPath, else goto tcpPath
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Ldfld, _netSocketIsIpcField);
+            il.Emit(OpCodes.Ldfld, socketFields.IsIpc);
             il.Emit(OpCodes.Brfalse, tcpPath);
 
             // ── IPC path: StartReading → wait → emit connect ──
@@ -815,11 +837,11 @@ public partial class RuntimeEmitter
             var skipIpcWait = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Ldfld, _netSocketReadReadyField);
+            il.Emit(OpCodes.Ldfld, socketFields.ReadReady);
             il.Emit(OpCodes.Brfalse, skipIpcWait);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Ldfld, _netSocketReadReadyField);
+            il.Emit(OpCodes.Ldfld, socketFields.ReadReady);
             il.Emit(OpCodes.Ldc_I4, 5000);
             il.Emit(OpCodes.Callvirt, typeof(System.Threading.ManualResetEventSlim).GetMethod("Wait", [typeof(int)])!);
             il.Emit(OpCodes.Pop);
@@ -865,15 +887,17 @@ public partial class RuntimeEmitter
         }
 
         typeBuilder.CreateType();
-        _socketConnectOkClosureCtor = ctor;
-        _socketConnectOkClosureRun = run;
+        return new(ctor, run);
     }
 
     /// <summary>
     /// Emits $SocketConnectErrClosure: sets _connecting = false and fires "error" event with error dict.
     /// Error dict has { message, code, syscall } properties matching Node.js system errors.
     /// </summary>
-    private void EmitSocketConnectErrClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private NetClosureMethods EmitSocketConnectErrClosure(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        NetSocketFields socketFields)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$SocketConnectErrClosure",
@@ -921,7 +945,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Stfld, _netSocketConnectingField);
+            il.Emit(OpCodes.Stfld, socketFields.Connecting);
 
             // var error = new $Error(_errorMsg); error.Code = _errorCode; error.Syscall = "connect";
             var errorLocal = il.DeclareLocal(runtime.Errors.Type);
@@ -964,8 +988,7 @@ public partial class RuntimeEmitter
         }
 
         typeBuilder.CreateType();
-        _socketConnectErrClosureCtor = ctor;
-        _socketConnectErrClosureRun = run;
+        return new(ctor, run);
     }
 
     /// <summary>

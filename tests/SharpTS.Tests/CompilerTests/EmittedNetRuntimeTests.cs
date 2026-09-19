@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Net;
 using SharpTS.Compilation;
 using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
@@ -162,6 +163,122 @@ public class EmittedNetRuntimeTests
             Assert.Equal(SharpTSRuntimeRequirements.None, runtime.RequiredSharpTSRuntimeRequirements);
         }
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReusedEmitterKeepsNetConstructionAndClosuresWithinEachAssembly(bool hosted)
+    {
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
+        var owners = new HashSet<EmittedNetRuntime>();
+        var saved = new List<(Assembly Assembly, object Socket, object Server, object BlockList, int Index)>();
+        foreach (string? source in new[]
+        {
+            "import * as net from 'net';", "console.log(1);",
+            "import * as tls from 'tls';", "import * as http from 'http';",
+            null, "console.log(1);", "import * as net from 'net';"
+        })
+        {
+            var builder = new PersistedAssemblyBuilder(new AssemblyName($"net_reuse_{Guid.NewGuid():N}"), typeof(object).Assembly);
+            var module = builder.DefineDynamicModule("main");
+            var features = source is null ? null : new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
+            var runtime = features is null ? emitter.EmitAll(module) : emitter.EmitAll(module, features);
+            using var bytes = new MemoryStream();
+            builder.Save(bytes);
+            bytes.Position = 0;
+            using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+            Assert.Empty(verifier.Verify(bytes));
+            var assembly = Assembly.Load(bytes.ToArray());
+            Assert.DoesNotContain(assembly.GetReferencedAssemblies(), reference => reference.Name == "SharpTS");
+            Assert.Equal(hosted, assembly.GetReferencedAssemblies().Any(reference => reference.Name == "SharpTS.Hosting.Abstractions"));
+            if (source == "console.log(1);")
+            {
+                Assert.Null(runtime.Net);
+                Assert.Null(assembly.GetType("$NetSocket"));
+                Assert.Null(assembly.GetType("$BlockList"));
+                Assert.Null(assembly.GetType("$SocketReadEndClosure"));
+                continue;
+            }
+
+            var net = runtime.RequireNet();
+            Assert.True(owners.Add(net));
+            Assert.True(net.IsComplete);
+            foreach (var property in typeof(EmittedNetRuntime).GetProperties().Where(p => p.Name != nameof(EmittedNetRuntime.IsComplete)))
+                Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(net)).Module.Assembly);
+            var socketType = assembly.GetType("$NetSocket")!;
+            if (runtime.Tls is not null)
+                Assert.Same(socketType, assembly.GetType("$TlsSocket")!.BaseType);
+            foreach (string name in new[] { "$SocketReadDataClosure", "$SocketReadEndClosure", "$SocketConnectOkClosure", "$SocketConnectErrClosure" })
+                Assert.Same(socketType, assembly.GetType(name)!.GetConstructors().Single().GetParameters()[0].ParameterType);
+            foreach (string name in new[] { "$TcpAcceptClosure", "$IpcAcceptClosure" })
+                Assert.Same(assembly.GetType("$NetServer"), assembly.GetType(name)!.GetConstructors().Single().GetParameters()[0].ParameterType);
+
+            int index = saved.Count;
+            var blockList = assembly.ManifestModule.ResolveMethod(net.CreateBlockList.MetadataToken)!.Invoke(null, null)!;
+            var socket = assembly.ManifestModule.ResolveMethod(net.CreateSocket.MetadataToken)!.Invoke(null,
+                [new Dictionary<string, object> { ["highWaterMark"] = 32d + index, ["allowHalfOpen"] = true }])!;
+            var server = assembly.ManifestModule.ResolveMethod(net.CreateServer.MetadataToken)!.Invoke(null,
+                [new Dictionary<string, object> { ["highWaterMark"] = 64d + index, ["allowHalfOpen"] = true, ["blockList"] = blockList }, null])!;
+            saved.Add((assembly, socket, server, blockList, index));
+        }
+
+        // Use objects and closures from earlier emissions after all later assemblies exist.
+        foreach (var (assembly, socket, server, blockList, index) in saved)
+        {
+            Assert.Equal(32 + index, ReadNetField(socket, "_writableHwm"));
+            Assert.Equal(64 + index, ReadNetField(server, "_socketHwm"));
+            Assert.Equal(true, ReadNetField(socket, "_allowHalfOpen"));
+            Assert.Equal(true, ReadNetField(server, "_socketAllowHalfOpen"));
+            Assert.Same(blockList, ReadNetField(server, "_blockList"));
+            Assert.Empty(Assert.IsType<Queue<object[]>>(ReadNetField(socket, "_writeQueue")));
+            server.GetType().GetMethod("SetMember")!.Invoke(server, ["maxConnections", 2d]);
+            Assert.Equal(2d, server.GetType().GetMethod("GetMember")!.Invoke(server, ["maxConnections"]));
+
+            var blockType = blockList.GetType();
+            blockType.GetMethod("AddAddress")!.Invoke(blockList, ["127.0.0.2", "ipv4"]);
+            blockType.GetMethod("AddRange")!.Invoke(blockList, ["10.0.0.1", "10.0.0.3", "ipv4"]);
+            blockType.GetMethod("AddSubnet")!.Invoke(blockList, ["2001:db8::", 32d, "ipv6"]);
+            foreach (string address in new[] { "127.0.0.2", "::ffff:127.0.0.2", "10.0.0.2", "2001:db8::5" })
+                Assert.Equal(true, blockType.GetMethod("CheckIp")!.Invoke(blockList, [IPAddress.Parse(address)]));
+            Assert.Equal(false, blockType.GetMethod("CheckIp")!.Invoke(blockList, [IPAddress.Parse("10.0.0.4")]));
+
+            using var stream = new MemoryStream();
+            var ipcSocket = Activator.CreateInstance(socket.GetType(), stream, "construction-pipe")!;
+            Assert.Same(stream, ReadNetField(ipcSocket, "_stream"));
+            Assert.Equal(true, ReadNetField(ipcSocket, "_isIpc"));
+            Assert.Equal("construction-pipe", ReadNetField(ipcSocket, "_pipePath"));
+            Assert.Equal(16384, ReadNetField(ipcSocket, "_writableHwm"));
+
+            var loopType = assembly.GetType("$EventLoop")!;
+            var loop = loopType.GetMethod("GetInstance")!.Invoke(null, null)!;
+            loopType.GetMethod("Ref")!.Invoke(loop, null);
+            socket.GetType().GetField("_readingStarted", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(socket, true);
+            var readEnd = Activator.CreateInstance(assembly.GetType("$SocketReadEndClosure")!, socket)!;
+            readEnd.GetType().GetMethod("Run")!.Invoke(readEnd, null);
+            Assert.Equal(true, ReadNetField(socket, "_endReceived"));
+            Assert.Equal(false, ReadNetField(socket, "_destroyed"));
+            Assert.Equal(true, loopType.GetMethod("HasPendingWork")!.Invoke(loop, null));
+            socket.GetType().GetMethod("Destroy")!.Invoke(socket, [null]);
+            Assert.Equal(true, ReadNetField(socket, "_destroyed"));
+            Assert.Equal(false, loopType.GetMethod("HasPendingWork")!.Invoke(loop, null));
+
+            var automaticSocket = Activator.CreateInstance(socket.GetType())!;
+            var automaticEnd = Activator.CreateInstance(readEnd.GetType(), automaticSocket)!;
+            automaticEnd.GetType().GetMethod("Run")!.Invoke(automaticEnd, null);
+            loopType.GetMethod("PumpOnce")!.Invoke(loop, null);
+            Assert.Equal(true, ReadNetField(automaticSocket, "_ended"));
+            Assert.Equal(true, ReadNetField(automaticSocket, "_destroyed"));
+            Assert.Equal(false, loopType.GetMethod("HasPendingWork")!.Invoke(loop, null));
+        }
+
+        var first = saved[0].BlockList;
+        first.GetType().GetMethod("AddAddress")!.Invoke(first, ["192.0.2.1", "ipv4"]);
+        foreach (var later in saved.Skip(1))
+            Assert.Equal(false, later.BlockList.GetType().GetMethod("CheckIp")!.Invoke(later.BlockList, [IPAddress.Parse("192.0.2.1")]));
+    }
+
+    private static object? ReadNetField(object instance, string name)
+        => instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(instance);
 
     private static EmittedRuntime EmitRuntime(string? source)
     {

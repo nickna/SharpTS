@@ -11,12 +11,16 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits all net module methods.
     /// </summary>
-    private void EmitNetModuleMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetModuleMethods(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime,
+        NetSocketFields socketFields,
+        NetServerFields serverFields)
     {
         var net = runtime.RequireNet();
-        EmitNetCreateServer(typeBuilder, net);
+        EmitNetCreateServer(typeBuilder, net, serverFields);
         EmitNetCreateConnection(typeBuilder, net);
-        EmitNetCreateSocket(typeBuilder, net);
+        EmitNetCreateSocket(typeBuilder, net, socketFields);
         EmitNetCreateBlockList(typeBuilder, net);
         runtime.RegisterBuiltInModuleMethod("primitive:net", "createServer", net.CreateServer);
         runtime.RegisterBuiltInModuleMethod("primitive:net", "createConnection", net.CreateConnection);
@@ -50,7 +54,7 @@ public partial class RuntimeEmitter
     /// as the first arg carries per-socket settings (highWaterMark) applied to
     /// accepted connections.
     /// </summary>
-    private void EmitNetCreateServer(TypeBuilder typeBuilder, EmittedNetRuntime net)
+    private void EmitNetCreateServer(TypeBuilder typeBuilder, EmittedNetRuntime net, NetServerFields serverFields)
     {
         var method = typeBuilder.DefineMethod(
             "NetCreateServer",
@@ -106,7 +110,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Unbox_Any, _types.Double);
             il.Emit(OpCodes.Conv_I4);
-            il.Emit(OpCodes.Stfld, _netServerSocketHwmField);
+            il.Emit(OpCodes.Stfld, serverFields.SocketHwm);
             il.MarkLabel(noHwm);
 
             // blockList ($BlockList) → server._blockList (#1069)
@@ -122,7 +126,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, noBlockList);
             il.Emit(OpCodes.Ldloc, serverLocal);
             il.Emit(OpCodes.Ldloc, valLocal);
-            il.Emit(OpCodes.Stfld, _netServerBlockListField);
+            il.Emit(OpCodes.Stfld, serverFields.BlockList);
             il.MarkLabel(noBlockList);
 
             // allowHalfOpen (bool) → server._socketAllowHalfOpen (#1070)
@@ -139,7 +143,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, serverLocal);
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Unbox_Any, _types.Boolean);
-            il.Emit(OpCodes.Stfld, _netServerSocketAllowHalfOpenField);
+            il.Emit(OpCodes.Stfld, serverFields.SocketAllowHalfOpen);
             il.MarkLabel(noAho);
         }
         il.MarkLabel(noOptions);
@@ -195,7 +199,7 @@ public partial class RuntimeEmitter
     /// Creates an unconnected native Socket and applies constructor options.
     /// The public callable/newable Socket export lives in stdlib/node/net.ts.
     /// </summary>
-    private void EmitNetCreateSocket(TypeBuilder typeBuilder, EmittedNetRuntime net)
+    private void EmitNetCreateSocket(TypeBuilder typeBuilder, EmittedNetRuntime net, NetSocketFields socketFields)
     {
         var method = typeBuilder.DefineMethod(
             "NetCreateSocket",
@@ -246,7 +250,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stfld, _netSocketWritableHwmField);
+        il.Emit(OpCodes.Stfld, socketFields.WritableHwm);
         il.MarkLabel(noHwm);
 
         var noAllowHalfOpen = il.DefineLabel();
@@ -262,7 +266,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, socketLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
-        il.Emit(OpCodes.Stfld, _netSocketAllowHalfOpenField);
+        il.Emit(OpCodes.Stfld, socketFields.AllowHalfOpen);
         il.MarkLabel(noAllowHalfOpen);
 
         il.MarkLabel(done);

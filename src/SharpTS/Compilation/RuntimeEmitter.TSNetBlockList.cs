@@ -12,13 +12,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private FieldBuilder _blockListRulesField = null!;
-    private MethodBuilder _blockListParseAddrMethod = null!;
-    private MethodBuilder _blockListCompareBytesMethod = null!;
-    private MethodBuilder _blockListSubnetBoundsMethod = null!;
-    private MethodBuilder _blockListAddRuleMethod = null!;
-    private MethodBuilder _blockListMatchBytesMethod = null!;
-
     private void EmitTSNetBlockListTypes(ModuleBuilder moduleBuilder, EmittedNetRuntime net)
     {
         var typeBuilder = moduleBuilder.DefineType(
@@ -28,7 +21,7 @@ public partial class RuntimeEmitter
         net.BlockListType = typeBuilder;
 
         // Each rule is object[3] { boxed bool isV6, byte[] start, byte[] end }.
-        _blockListRulesField = typeBuilder.DefineField(
+        var rulesField = typeBuilder.DefineField(
             "_rules", _types.ListOfObject, FieldAttributes.Private);
 
         var ctor = typeBuilder.DefineConstructor(
@@ -42,31 +35,30 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
-            il.Emit(OpCodes.Stfld, _blockListRulesField);
+            il.Emit(OpCodes.Stfld, rulesField);
             il.Emit(OpCodes.Ret);
         }
 
-        EmitBlockListParseAddr(typeBuilder);
-        EmitBlockListCompareBytes(typeBuilder);
-        EmitBlockListSubnetBounds(typeBuilder);
-        EmitBlockListAddRule(typeBuilder);
-        EmitBlockListMatchBytes(typeBuilder);
-        EmitBlockListAddAddress(typeBuilder);
-        EmitBlockListAddRange(typeBuilder);
-        EmitBlockListAddSubnet(typeBuilder);
-        EmitBlockListCheckIp(typeBuilder, net);
+        var parseAddr = EmitBlockListParseAddr(typeBuilder);
+        var compareBytes = EmitBlockListCompareBytes(typeBuilder);
+        var subnetBounds = EmitBlockListSubnetBounds(typeBuilder);
+        var addRule = EmitBlockListAddRule(typeBuilder, rulesField);
+        var matchBytes = EmitBlockListMatchBytes(typeBuilder, rulesField, compareBytes);
+        EmitBlockListAddAddress(typeBuilder, parseAddr, addRule);
+        EmitBlockListAddRange(typeBuilder, parseAddr, compareBytes, addRule);
+        EmitBlockListAddSubnet(typeBuilder, parseAddr, subnetBounds, addRule);
+        EmitBlockListCheckIp(typeBuilder, net, matchBytes);
 
         typeBuilder.CreateType();
     }
 
-    private void EmitBlockListParseAddr(TypeBuilder typeBuilder)
+    private MethodBuilder EmitBlockListParseAddr(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "_ParseAddr",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.ByteArray,
             [_types.String, _types.Boolean]);
-        _blockListParseAddrMethod = method;
 
         var il = method.GetILGenerator();
         var ipLocal = il.DeclareLocal(typeof(IPAddress));
@@ -111,16 +103,16 @@ public partial class RuntimeEmitter
         il.MarkLabel(retNull);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
-    private void EmitBlockListCompareBytes(TypeBuilder typeBuilder)
+    private MethodBuilder EmitBlockListCompareBytes(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "_CompareBytes",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Int32,
             [_types.ByteArray, _types.ByteArray]);
-        _blockListCompareBytesMethod = method;
 
         var il = method.GetILGenerator();
         var index = il.DeclareLocal(_types.Int32);
@@ -165,16 +157,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt, loop);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
-    private void EmitBlockListSubnetBounds(TypeBuilder typeBuilder)
+    private MethodBuilder EmitBlockListSubnetBounds(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "_SubnetBounds",
             MethodAttributes.Private | MethodAttributes.Static,
             typeof(void),
             [_types.ByteArray, _types.Int32, _types.ByteArray, _types.ByteArray]);
-        _blockListSubnetBoundsMethod = method;
 
         var il = method.GetILGenerator();
         var index = il.DeclareLocal(_types.Int32);
@@ -252,16 +244,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Blt, loop);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
-    private void EmitBlockListAddRule(TypeBuilder typeBuilder)
+    private MethodBuilder EmitBlockListAddRule(TypeBuilder typeBuilder, FieldBuilder rulesField)
     {
         var method = typeBuilder.DefineMethod(
             "_AddRule",
             MethodAttributes.Private,
             typeof(void),
             [_types.Boolean, _types.ByteArray, _types.ByteArray]);
-        _blockListAddRuleMethod = method;
 
         var il = method.GetILGenerator();
         var rule = il.DeclareLocal(typeof(object[]));
@@ -282,20 +274,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _blockListRulesField);
+        il.Emit(OpCodes.Ldfld, rulesField);
         il.Emit(OpCodes.Ldloc, rule);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
-    private void EmitBlockListMatchBytes(TypeBuilder typeBuilder)
+    private MethodBuilder EmitBlockListMatchBytes(TypeBuilder typeBuilder, FieldBuilder rulesField, MethodBuilder compareBytes)
     {
         var method = typeBuilder.DefineMethod(
             "_MatchBytes",
             MethodAttributes.Private,
             _types.Boolean,
             [_types.ByteArray, _types.Boolean]);
-        _blockListMatchBytesMethod = method;
 
         var il = method.GetILGenerator();
         var index = il.DeclareLocal(_types.Int32);
@@ -308,7 +300,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, condition);
         il.MarkLabel(loop);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _blockListRulesField);
+        il.Emit(OpCodes.Ldfld, rulesField);
         il.Emit(OpCodes.Ldloc, index);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
         il.Emit(OpCodes.Castclass, typeof(object[]));
@@ -324,7 +316,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Castclass, _types.ByteArray);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _blockListCompareBytesMethod);
+        il.Emit(OpCodes.Call, compareBytes);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, next);
         il.Emit(OpCodes.Ldarg_1);
@@ -332,7 +324,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Castclass, _types.ByteArray);
-        il.Emit(OpCodes.Call, _blockListCompareBytesMethod);
+        il.Emit(OpCodes.Call, compareBytes);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, next);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -345,14 +337,15 @@ public partial class RuntimeEmitter
         il.MarkLabel(condition);
         il.Emit(OpCodes.Ldloc, index);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _blockListRulesField);
+        il.Emit(OpCodes.Ldfld, rulesField);
         il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
         il.Emit(OpCodes.Blt, loop);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
-    private void EmitBlockListAddAddress(TypeBuilder typeBuilder)
+    private void EmitBlockListAddAddress(TypeBuilder typeBuilder, MethodBuilder parseAddr, MethodBuilder addRule)
     {
         var method = typeBuilder.DefineMethod(
             "AddAddress", MethodAttributes.Public, _types.Object,
@@ -365,7 +358,7 @@ public partial class RuntimeEmitter
         EmitBlockListAddressAndFamily(il, 1, 2, address, isV6, invalid);
         il.Emit(OpCodes.Ldloc, address);
         il.Emit(OpCodes.Ldloc, isV6);
-        il.Emit(OpCodes.Call, _blockListParseAddrMethod);
+        il.Emit(OpCodes.Call, parseAddr);
         il.Emit(OpCodes.Stloc, bytes);
         il.Emit(OpCodes.Ldloc, bytes);
         il.Emit(OpCodes.Brfalse, invalid);
@@ -373,13 +366,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, isV6);
         il.Emit(OpCodes.Ldloc, bytes);
         il.Emit(OpCodes.Ldloc, bytes);
-        il.Emit(OpCodes.Call, _blockListAddRuleMethod);
+        il.Emit(OpCodes.Call, addRule);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
         EmitInvalidBlockListMutation(il, invalid);
     }
 
-    private void EmitBlockListAddRange(TypeBuilder typeBuilder)
+    private void EmitBlockListAddRange(
+        TypeBuilder typeBuilder,
+        MethodBuilder parseAddr,
+        MethodBuilder compareBytes,
+        MethodBuilder addRule)
     {
         var method = typeBuilder.DefineMethod(
             "AddRange", MethodAttributes.Public, _types.Object,
@@ -400,32 +397,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, endAddress);
         il.Emit(OpCodes.Ldloc, startAddress);
         il.Emit(OpCodes.Ldloc, isV6);
-        il.Emit(OpCodes.Call, _blockListParseAddrMethod);
+        il.Emit(OpCodes.Call, parseAddr);
         il.Emit(OpCodes.Stloc, start);
         il.Emit(OpCodes.Ldloc, start);
         il.Emit(OpCodes.Brfalse, invalid);
         il.Emit(OpCodes.Ldloc, endAddress);
         il.Emit(OpCodes.Ldloc, isV6);
-        il.Emit(OpCodes.Call, _blockListParseAddrMethod);
+        il.Emit(OpCodes.Call, parseAddr);
         il.Emit(OpCodes.Stloc, end);
         il.Emit(OpCodes.Ldloc, end);
         il.Emit(OpCodes.Brfalse, invalid);
         il.Emit(OpCodes.Ldloc, start);
         il.Emit(OpCodes.Ldloc, end);
-        il.Emit(OpCodes.Call, _blockListCompareBytesMethod);
+        il.Emit(OpCodes.Call, compareBytes);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, invalid);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, isV6);
         il.Emit(OpCodes.Ldloc, start);
         il.Emit(OpCodes.Ldloc, end);
-        il.Emit(OpCodes.Call, _blockListAddRuleMethod);
+        il.Emit(OpCodes.Call, addRule);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
         EmitInvalidBlockListMutation(il, invalid);
     }
 
-    private void EmitBlockListAddSubnet(TypeBuilder typeBuilder)
+    private void EmitBlockListAddSubnet(
+        TypeBuilder typeBuilder,
+        MethodBuilder parseAddr,
+        MethodBuilder subnetBounds,
+        MethodBuilder addRule)
     {
         var method = typeBuilder.DefineMethod(
             "AddSubnet", MethodAttributes.Public, _types.Object,
@@ -464,7 +465,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(limitDone);
         il.Emit(OpCodes.Ldloc, address);
         il.Emit(OpCodes.Ldloc, isV6);
-        il.Emit(OpCodes.Call, _blockListParseAddrMethod);
+        il.Emit(OpCodes.Call, parseAddr);
         il.Emit(OpCodes.Stloc, bytes);
         il.Emit(OpCodes.Ldloc, bytes);
         il.Emit(OpCodes.Brfalse, invalid);
@@ -474,18 +475,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, prefix);
         il.Emit(OpCodes.Ldloc, start);
         il.Emit(OpCodes.Ldloc, end);
-        il.Emit(OpCodes.Call, _blockListSubnetBoundsMethod);
+        il.Emit(OpCodes.Call, subnetBounds);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, isV6);
         il.Emit(OpCodes.Ldloc, start);
         il.Emit(OpCodes.Ldloc, end);
-        il.Emit(OpCodes.Call, _blockListAddRuleMethod);
+        il.Emit(OpCodes.Call, addRule);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
         EmitInvalidBlockListMutation(il, invalid);
     }
 
-    private void EmitBlockListCheckIp(TypeBuilder typeBuilder, EmittedNetRuntime net)
+    private void EmitBlockListCheckIp(TypeBuilder typeBuilder, EmittedNetRuntime net, MethodBuilder matchBytes)
     {
         var method = typeBuilder.DefineMethod(
             "CheckIp", MethodAttributes.Public, _types.Boolean, [typeof(IPAddress)]);
@@ -509,7 +510,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetProperty("AddressFamily")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4, (int)AddressFamily.InterNetworkV6);
         il.Emit(OpCodes.Ceq);
-        il.Emit(OpCodes.Call, _blockListMatchBytesMethod);
+        il.Emit(OpCodes.Call, matchBytes);
         il.Emit(OpCodes.Ret);
     }
 
