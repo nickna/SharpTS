@@ -1574,6 +1574,16 @@ that generated type is created; the reusable emitter and the public Promise comp
 retain a second construction handle. The existing optional Promise lifecycle, declaration
 order, field attributes and generated task identity remain unchanged.
 
+DNS construction handles are scoped to each emission: the result-order field and CNAME
+chase helper remain local to `EmitDnsModuleMethods`; the one- and two-argument promise
+worker declarations are immutable construction values passed to their wrappers. The async
+runner keeps its completion constructor and scheduling method local and returns only the
+runner handle. Its event-loop peer and the wrappers' DNS/Promise peers are explicit inputs.
+The reusable emitter retains none of these sixteen handles. Declaration and creation order,
+both existing DNS module emission points, reflection exception unwrapping and settlement
+before event-loop release are preserved. The checked DNS component still owns public
+declarations and the promise-wrapper registry; construction values do not duplicate ownership.
+
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only
 need that family's metadata (for example, DNS resolver declaration); retain `EmittedRuntime` where

@@ -16,14 +16,12 @@ public partial class RuntimeEmitter
     // Kept in the output assembly so dns.lookup ordering works standalone; the
     // setter also best-effort syncs SharpTS.dll's DnsConfig (late-bound) so the
     // Resolver/promises paths observe it.
-    private FieldBuilder _dnsResultOrderField = null!;
-
     private void EmitDnsModuleMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        _dnsResultOrderField = typeBuilder.DefineField("_dnsResultOrder", _types.String,
+        var resultOrderField = typeBuilder.DefineField("_dnsResultOrder", _types.String,
             FieldAttributes.Private | FieldAttributes.Static);
-        EmitDnsResultOrderAccessors(typeBuilder, runtime);
-        EmitDnsLookup(typeBuilder, runtime);
+        EmitDnsResultOrderAccessors(typeBuilder, runtime, resultOrderField);
+        EmitDnsLookup(typeBuilder, runtime, resultOrderField);
         EmitDnsLookupService(typeBuilder, runtime);
         EmitDnsGetLookup(typeBuilder, runtime);
         EmitDnsGetLookupService(typeBuilder, runtime);
@@ -47,8 +45,8 @@ public partial class RuntimeEmitter
 
         // DNS record resolution (MX, TXT, SRV, CNAME, NS, SOA, PTR, CAA, NAPTR)
         EmitDnsConvertList(typeBuilder, runtime);
-        EmitDnsFindChaseTarget(typeBuilder, runtime);
-        EmitDnsDoQuery(typeBuilder, runtime);
+        var findChaseTarget = EmitDnsFindChaseTarget(typeBuilder, runtime.RequireDns());
+        EmitDnsDoQuery(typeBuilder, runtime, findChaseTarget);
         EmitDnsResolveRecord(typeBuilder, runtime);
 
         // Async (callback-based) DNS resolution wrappers
@@ -69,7 +67,7 @@ public partial class RuntimeEmitter
     /// records the "dns module" soft-dependency; when SharpTS.dll is absent the
     /// sync silently no-ops and the standalone lookup path still honors the order.
     /// </summary>
-    private void EmitDnsResultOrderAccessors(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDnsResultOrderAccessors(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder resultOrderField)
     {
         // getDefaultResultOrder(): return _dnsResultOrder ?? "verbatim"
         {
@@ -85,12 +83,12 @@ public partial class RuntimeEmitter
 
             var il = method.GetILGenerator();
             var haveValue = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
+            il.Emit(OpCodes.Ldsfld, resultOrderField);
             il.Emit(OpCodes.Brtrue, haveValue);
             il.Emit(OpCodes.Ldstr, "verbatim");
             il.Emit(OpCodes.Ret);
             il.MarkLabel(haveValue);
-            il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
+            il.Emit(OpCodes.Ldsfld, resultOrderField);
             il.Emit(OpCodes.Ret);
         }
 
@@ -130,7 +128,7 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(valid);
             il.Emit(OpCodes.Ldloc, strLocal);
-            il.Emit(OpCodes.Stsfld, _dnsResultOrderField);
+            il.Emit(OpCodes.Stsfld, resultOrderField);
 
             // try { Type.GetType("SharpTS.Compilation.RuntimeTypes, SharpTS")
             //           ?.GetMethod("DnsSetDefaultResultOrder")?.Invoke(null, [order]) } catch { }
@@ -181,7 +179,7 @@ public partial class RuntimeEmitter
     /// Returns a Dictionary with { address: string, family: number }.
     /// Options can be a number (4 or 6) to request a specific address family.
     /// </summary>
-    private void EmitDnsLookup(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDnsLookup(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder resultOrderField)
     {
         var method = typeBuilder.DefineMethod(
             "DnsLookup",
@@ -261,10 +259,10 @@ public partial class RuntimeEmitter
             var tryV6First = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, requestedFamilyLocal);
             il.Emit(OpCodes.Brtrue, orderDone); // explicit family wins
-            il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
+            il.Emit(OpCodes.Ldsfld, resultOrderField);
             il.Emit(OpCodes.Brfalse, orderDone); // unset = verbatim
 
-            il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
+            il.Emit(OpCodes.Ldsfld, resultOrderField);
             il.Emit(OpCodes.Ldstr, "ipv4first");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brfalse, tryV6First);
@@ -275,7 +273,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, orderDone);
 
             il.MarkLabel(tryV6First);
-            il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
+            il.Emit(OpCodes.Ldsfld, resultOrderField);
             il.Emit(OpCodes.Ldstr, "ipv6first");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brfalse, orderDone);
@@ -914,27 +912,18 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits DnsDoQuery: orchestrator that builds query, sends, and parses response.
-    /// Uses emitted wire protocol helpers — no DnsClient dependency.
-    /// Signature: object DnsDoQuery(string hostname, int queryType)
-    /// </summary>
-    // Emitted mirror of DnsWireProtocol.FindChaseTarget (#1073)
-    private MethodBuilder _dnsFindChaseTargetMethod = null!;
-
-    /// <summary>
     /// Emits DnsFindChaseTarget: returns the first CNAME target when the answer
     /// section has no records of the query type but does contain CNAMEs; null
     /// otherwise. Mirrors DnsWireProtocol.FindChaseTarget (#1073).
     /// Signature: string DnsFindChaseTarget(byte[] data, int queryType)
     /// </summary>
-    private void EmitDnsFindChaseTarget(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitDnsFindChaseTarget(TypeBuilder typeBuilder, EmittedDnsRuntime dns)
     {
         var method = typeBuilder.DefineMethod(
             "DnsFindChaseTarget",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [typeof(byte[]), _types.Int32]);
-        _dnsFindChaseTargetMethod = method;
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.String);
@@ -1015,7 +1004,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(qLoopTop);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, offArrLocal);
-            il.Emit(OpCodes.Call, runtime.RequireDns().SkipName);
+            il.Emit(OpCodes.Call, dns.SkipName);
             il.Emit(OpCodes.Ldloc, offArrLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, offArrLocal);
@@ -1048,7 +1037,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(aLoopTop);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, offArrLocal);
-            il.Emit(OpCodes.Call, runtime.RequireDns().SkipName);
+            il.Emit(OpCodes.Call, dns.SkipName);
 
             // off = offArr[0]
             il.Emit(OpCodes.Ldloc, offArrLocal);
@@ -1120,7 +1109,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Stelem_I4);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldloc, nameOffLocal);
-                il.Emit(OpCodes.Call, runtime.RequireDns().ReadName);
+                il.Emit(OpCodes.Call, dns.ReadName);
                 il.Emit(OpCodes.Stloc, resultLocal);
             }
             il.MarkLabel(notCname);
@@ -1154,9 +1143,15 @@ public partial class RuntimeEmitter
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
-    private void EmitDnsDoQuery(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    /// <summary>
+    /// Emits DnsDoQuery: orchestrator that builds query, sends, and parses response.
+    /// Uses emitted wire protocol helpers — no DnsClient dependency.
+    /// Signature: object DnsDoQuery(string hostname, int queryType)
+    /// </summary>
+    private void EmitDnsDoQuery(TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder findChaseTarget)
     {
         var method = typeBuilder.DefineMethod(
             "DnsDoQuery",
@@ -1211,7 +1206,7 @@ public partial class RuntimeEmitter
         // target = DnsFindChaseTarget(response, queryType); if (target == null) parse
         il.Emit(OpCodes.Ldloc, responseLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _dnsFindChaseTargetMethod);
+        il.Emit(OpCodes.Call, findChaseTarget);
         il.Emit(OpCodes.Stloc, targetLocal);
         il.Emit(OpCodes.Ldloc, targetLocal);
         il.Emit(OpCodes.Brfalse, parseLabel);
