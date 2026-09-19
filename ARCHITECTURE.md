@@ -1781,6 +1781,19 @@ catalogs, reflection annotations, and generated closed .NET interop catalogs; th
 not discover arbitrary application types at runtime. See [Embedding](docs/embedding.md) and
 [Native AOT](docs/native-aot.md).
 
+### Built-in module emission strategies
+
+`BuiltInModuleEmitterRegistry` owns the module-name dispatch index for one compiler.
+`CreateDefault` registers each strategy and its intentional aliases, then completes
+registration before the compiler exposes a context. Registration rejects null strategies,
+invalid names and duplicate keys; completion rejects further writes. Lookups preserve
+registered instance identity both before and after completion, and unknown names remain
+an optional miss. Alias-only primitive names do not require a canonical registration.
+The index stores strategies, not generated metadata; strategies resolve per-compilation
+handles through the supplied emission context. `EmittedBuiltInModuleRegistry` separately
+indexes generated callable declarations. Nested strategy export tables and other compiler
+registries remain part of the broader ownership audit.
+
 ## Architectural invariants
 
 Changes should preserve these rules:
