@@ -1847,6 +1847,25 @@ checked declarations remain resolvable for as long as they are retained. This
 shared reflection cache does not own per-compilation alias registration, which
 remains in `ExternalTypeRegistry`.
 
+### Shared CLR reflection lookups
+
+`DotNetTypeRegistry` owns one replaceable cache generation. Name resolution caches
+only non-collectible types: a string key cannot express the lifetime of a CLR type.
+Collectible types, including constructed generics with collectible arguments, are
+resolved without adding a strong name-cache entry. Member lookups use weak type
+keys, with one member-cache owner per type for methods, properties/fields, events,
+and indexers. Reflection results may refer back to their type without making the
+cache a root for otherwise unused collectible metadata.
+
+Completed lookup results and misses are cached; exceptions publish nothing and
+remain retryable. Concurrent readers share the published result. Reset atomically
+replaces the entire generation, so an in-flight lookup cannot populate the new
+generation. Previously returned reflection metadata remains usable while retained.
+Method and indexer arrays retain their existing shared, read-only-by-contract API;
+callers must not mutate them. Managed/native feature checks and member filtering
+remain at the lookup boundary. This shared cache owns no emitted declarations or
+per-compilation CLR alias bindings.
+
 ### Generated union metadata
 
 `UnionTypeGenerator` fixes its type mapper and marker interface at construction. The

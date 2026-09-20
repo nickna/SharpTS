@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using SharpTS.Declaration;
 
 namespace SharpTS.Runtime.DotNet;
@@ -10,22 +11,37 @@ namespace SharpTS.Runtime.DotNet;
 /// </summary>
 public static class DotNetTypeRegistry
 {
-    private static readonly ConcurrentDictionary<string, Type> _cache = new(StringComparer.Ordinal);
+    private static CacheGeneration _current = new();
 
-    // Member lookups are pure functions of (type, jsName, isStatic); callers never mutate
-    // the returned arrays/infos, so results are cached process-wide. Interop member access
-    // resolves through here on every call, making uncached reflection queries a hot path.
-    private static readonly ConcurrentDictionary<(Type, string, bool), MethodInfo[]> _methodCache = new();
-    private static readonly ConcurrentDictionary<(Type, string, bool), MemberInfo?> _propertyOrFieldCache = new();
-    private static readonly ConcurrentDictionary<(Type, string, bool), EventInfo?> _eventCache = new();
-    private static readonly ConcurrentDictionary<(Type, bool), PropertyInfo[]> _indexerCache = new();
+    // A reset replaces all lookup state together. In-flight calls can finish against
+    // their captured generation without repopulating the replacement.
+    private sealed class CacheGeneration
+    {
+        public readonly ConcurrentDictionary<string, Type> Names = new(StringComparer.Ordinal);
+        public readonly ConditionalWeakTable<Type, MemberCache> Members = new();
+    }
+
+    // The weak-table key owns these completed reflection results, including misses.
+    // Values can refer back to the type without keeping an otherwise unused type alive.
+    // Arrays retain the existing shared, read-only-by-contract lookup semantics.
+    private sealed class MemberCache
+    {
+        public readonly ConcurrentDictionary<(string, bool), MethodInfo[]> Methods = new();
+        public readonly ConcurrentDictionary<(string, bool), MemberInfo?> PropertiesOrFields = new();
+        public readonly ConcurrentDictionary<(string, bool), EventInfo?> Events = new();
+        public readonly ConcurrentDictionary<bool, PropertyInfo[]> Indexers = new();
+    }
+
+    private static MemberCache GetMembers(Type type) =>
+        Volatile.Read(ref _current).Members.GetValue(type, static _ => new());
 
     /// <summary>
     /// Resolves a fully-qualified .NET type name, searching all currently loaded assemblies.
     /// </summary>
     public static Type? Resolve(string clrTypeName)
     {
-        if (_cache.TryGetValue(clrTypeName, out var cached)) return cached;
+        var generation = Volatile.Read(ref _current);
+        if (generation.Names.TryGetValue(clrTypeName, out var cached)) return cached;
 
         var type = ManagedDotNetInterop.ResolveType(clrTypeName);
         if (type == null && System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
@@ -46,9 +62,11 @@ public static class DotNetTypeRegistry
             }
         }
 
-        if (type != null)
+        // A string key has no CLR lifetime relationship. Never root collectible types
+        // through name resolution; their member results are cached under weak type keys.
+        if (type != null && !type.IsCollectible)
         {
-            _cache[clrTypeName] = type;
+            generation.Names[clrTypeName] = type;
         }
         return type;
     }
@@ -174,11 +192,7 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static void ClearCache()
     {
-        _cache.Clear();
-        _methodCache.Clear();
-        _propertyOrFieldCache.Clear();
-        _eventCache.Clear();
-        _indexerCache.Clear();
+        Interlocked.Exchange(ref _current, new());
     }
 
     private static List<string> SplitGenericArguments(string arguments)
@@ -266,9 +280,9 @@ public static class DotNetTypeRegistry
     public static MethodInfo[] GetMethods(Type type, string jsName, bool isStatic)
     {
         ManagedDotNetInterop.RequireManagedRuntime(type);
-        return _methodCache.GetOrAdd((type, jsName, isStatic), static key =>
+        return GetMembers(type).Methods.GetOrAdd((jsName, isStatic), static (key, t) =>
         {
-            var (t, name, stat) = key;
+            var (name, stat) = key;
             string pascal = ToPascalCase(name);
             var flags = BindingFlags.Public | (stat ? BindingFlags.Static : BindingFlags.Instance);
             return ManagedDotNetInterop.GetMethods(t, flags)
@@ -276,7 +290,7 @@ public static class DotNetTypeRegistry
                     (m.Name == name || m.Name == pascal) &&
                     DotNetInteropClassifier.UnsupportedMethodReason(m) == null)
                 .ToArray();
-        });
+        }, type);
     }
 
     /// <summary>
@@ -285,9 +299,9 @@ public static class DotNetTypeRegistry
     public static MemberInfo? GetPropertyOrField(Type type, string jsName, bool isStatic)
     {
         ManagedDotNetInterop.RequireManagedRuntime(type);
-        return _propertyOrFieldCache.GetOrAdd((type, jsName, isStatic), static key =>
+        return GetMembers(type).PropertiesOrFields.GetOrAdd((jsName, isStatic), static (key, t) =>
         {
-            var (t, name, stat) = key;
+            var (name, stat) = key;
             string pascal = ToPascalCase(name);
             var flags = BindingFlags.Public | (stat ? BindingFlags.Static : BindingFlags.Instance);
 
@@ -305,7 +319,7 @@ public static class DotNetTypeRegistry
                    DotNetInteropClassifier.UnsupportedSlotReason(field.FieldType) == null
                 ? field
                 : null;
-        });
+        }, type);
     }
 
     /// <summary>
@@ -315,14 +329,14 @@ public static class DotNetTypeRegistry
     public static EventInfo? GetEvent(Type type, string jsName, bool isStatic)
     {
         ManagedDotNetInterop.RequireManagedRuntime(type);
-        return _eventCache.GetOrAdd((type, jsName, isStatic), static key =>
+        return GetMembers(type).Events.GetOrAdd((jsName, isStatic), static (key, t) =>
         {
-            var (t, name, stat) = key;
+            var (name, stat) = key;
             string pascal = ToPascalCase(name);
             var flags = BindingFlags.Public | (stat ? BindingFlags.Static : BindingFlags.Instance);
             return ManagedDotNetInterop.GetEvent(t, pascal, flags) ??
                    ManagedDotNetInterop.GetEvent(t, name, flags);
-        });
+        }, type);
     }
 
     /// <summary>
@@ -331,9 +345,8 @@ public static class DotNetTypeRegistry
     internal static PropertyInfo[] GetIndexers(Type type, bool writable)
     {
         ManagedDotNetInterop.RequireManagedRuntime(type);
-        return _indexerCache.GetOrAdd((type, writable), static key =>
+        return GetMembers(type).Indexers.GetOrAdd(writable, static (write, target) =>
         {
-            var (target, write) = key;
             return ManagedDotNetInterop.GetProperties(
                     target, BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.GetIndexParameters().Length == 1 &&
@@ -343,7 +356,7 @@ public static class DotNetTypeRegistry
                             DotNetInteropClassifier.UnsupportedSlotReason(
                                 p.GetIndexParameters()[0].ParameterType) == null)
                 .ToArray();
-        });
+        }, type);
     }
 
     /// <summary>
