@@ -25,7 +25,6 @@ public partial class RuntimeEmitter
             _types.Object
         );
         runtime.RuntimeClass.Type = typeBuilder;
-        DefineCancellationCheck(typeBuilder, runtime.Cancellation);
 
         // Reserve Stringify(object) → string. EmitStringify fills the body
         // later; it must skip its own DefineMethod call when this signature
@@ -51,6 +50,9 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Exception,
             [_types.Object]);
+
+        // Preserve the leading runtime declarations while reserving the event-loop guard.
+        DefineCancellationCheck(typeBuilder, runtime.Cancellation);
 
         // Reserve GetProperty(object, string) → object — generic property
         // reader used by $RegExp's Symbol.* protocol slow path to read
