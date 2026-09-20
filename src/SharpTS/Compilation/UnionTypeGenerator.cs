@@ -46,6 +46,11 @@ public class UnionTypeGenerator
         if (getter is null || getter.IsStatic || getter.GetParameters().Length != 0
             || getter.ReturnType != _typeMapper.Types.Object)
             throw new ArgumentException("Union metadata requires an instance object Value getter.", nameof(unionTypeInterface));
+        var contracts = UnionTypeInterface.GetInterfaces().Prepend(UnionTypeInterface);
+        if (contracts.SelectMany(contract => _typeMapper.Types.GetMethods(contract,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
+            .Any(method => method.IsAbstract && !method.Equals(getter)))
+            throw new ArgumentException("Union metadata cannot implement required members beyond the Value getter.", nameof(unionTypeInterface));
     }
 
     /// <summary>

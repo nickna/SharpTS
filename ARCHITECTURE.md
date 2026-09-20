@@ -1813,6 +1813,8 @@ alias are removed. Other compiler registries and shared infrastructure still req
 
 `UnionTypeGenerator` fixes its type mapper and marker interface at construction. The
 interface must expose the instance `object Value` getter used by generated carriers.
+Additional abstract requirements, including inherited members, setters, events and static
+abstract methods, are rejected before declaration; default interface methods remain valid.
 Every declaration belongs to the mapper's module. One ordinal cache owns each union's
 forward type builder and replaces it with the finalized type at completion, rather than
 retaining parallel declaration and finalized-type indexes. Conversion method builders

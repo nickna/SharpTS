@@ -8,8 +8,27 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class UnionTypeGeneratorLifecycleTests
 {
-    public interface CustomUnion { object Value { get; } }
+    public interface CustomUnion { object Value { get; } object Read() => Value; }
     public interface InvalidUnion { string Value { get; } }
+    public interface WritableUnion { object Value { get; set; } }
+    public interface ExtraMemberUnion { object Value { get; } void Run(); }
+    public interface InheritedMemberUnion : IMissingUnionMember { object Value { get; } }
+    public interface StaticMemberUnion { object Value { get; } static abstract void Run(); }
+    public interface EventMemberUnion { object Value { get; } event Action Changed; }
+
+    [Fact]
+    public void UnsupportedRequiredInterfaceMembersAreRejectedBeforeDeclaration()
+    {
+        var module = NewModule();
+        var mapper = new TypeMapper(module);
+        foreach (var contract in new[] { typeof(WritableUnion), typeof(ExtraMemberUnion),
+            typeof(InheritedMemberUnion), typeof(StaticMemberUnion), typeof(EventMemberUnion) })
+        {
+            var error = Assert.Throws<ArgumentException>(() => new UnionTypeGenerator(mapper, contract));
+            Assert.Equal("unionTypeInterface", error.ParamName);
+            Assert.Empty(module.GetTypes());
+        }
+    }
 
     [Fact]
     public void SuppliedInterfaceOwnsTheGeneratedValueContract()
@@ -29,6 +48,7 @@ public sealed class UnionTypeGeneratorLifecycleTests
             && m.GetParameters()[0].ParameterType == typeof(string));
         var value = Assert.IsAssignableFrom<CustomUnion>(conversion.Invoke(null, ["hello"]));
         Assert.Equal("hello", value.Value);
+        Assert.Equal("hello", value.Read());
     }
 
     [Fact]
