@@ -1167,6 +1167,7 @@ public partial class RuntimeEmitter
         // headers
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fetch.FetchResponseHeadersField);
+        il.Emit(OpCodes.Newobj, fetch.HeadersCtor);
 
         // bodyBytes
         il.Emit(OpCodes.Ldarg_0);

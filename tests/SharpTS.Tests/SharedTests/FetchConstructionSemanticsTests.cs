@@ -45,6 +45,30 @@ public class FetchConstructionSemanticsTests
         Assert.Equal("one, two\none, two\none, two\n2\n2\n2\none, two, three\none, two\none, two\none, two\nGET\nGET\n", output);
     }
 
+    [Theory]
+    [InlineData("interpreted")]
+    [InlineData("compiled")]
+    [InlineData("standalone")]
+    public void FetchedResponseCloneHasDistinctHeaders(string mode)
+    {
+        using var server = new MockHttpServer();
+        server.AddTextRoute("/body", "body");
+        server.Start();
+        var source = $$"""
+            async function main() {
+                const response = await fetch('{{server.BaseUrl}}body');
+                const clone = response.clone();
+                console.log(response.headers === clone.headers);
+                console.log(await response.text());
+                console.log(await clone.text());
+            }
+            main();
+            """;
+        var output = mode == "standalone" ? TestHarness.RunCompiledStandalone(source)
+            : TestHarness.Run(source, mode == "compiled" ? ExecutionMode.Compiled : ExecutionMode.Interpreted);
+        Assert.Equal("false\nbody\nbody\n", output);
+    }
+
     [Fact]
     public void StandaloneFetchDefaultsMissingAndUndefinedMethods()
     {
