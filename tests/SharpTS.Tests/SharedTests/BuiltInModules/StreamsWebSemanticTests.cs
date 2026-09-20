@@ -81,19 +81,51 @@ public class StreamsWebSemanticTests
         {
             ["main.ts"] = """
                 async function main() {
+                    let rejectCancel: any;
                     const stream = new ReadableStream({
-                        cancel() { return Promise.reject("source-failed"); }
+                        cancel() {
+                            return new Promise((_, reject) => { rejectCancel = reject; });
+                        }
                     });
                     const reader = stream.getReader();
                     const read = reader.read();
-                    try { await reader.cancel(); }
-                    catch (reason) { console.log(reason); }
+                    const cancellation = reader.cancel();
                     console.log((await read).done);
+                    rejectCancel("source-failed");
+                    try { await cancellation; }
+                    catch (reason) { console.log(reason); }
                 }
                 main();
                 """
         };
-        Assert.Equal("source-failed\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+        Assert.Equal("true\nsource-failed\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void ReadableStream_CancelReturnsRejectedPromiseForSynchronousSourceThrow(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                async function main() {
+                    const stream = new ReadableStream({
+                        cancel() { throw new Error("source-failed"); }
+                    });
+                    const reader = stream.getReader();
+                    const read = reader.read();
+                    let cancellation: any;
+                    try {
+                        cancellation = reader.cancel();
+                        console.log("returned");
+                    } catch { console.log("synchronous-throw"); }
+                    console.log((await read).done);
+                    try { await cancellation; }
+                    catch (reason: any) { console.log(reason.message); }
+                }
+                main();
+                """
+        };
+        Assert.Equal("returned\ntrue\nsource-failed\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
     [Theory, ModeData]

@@ -373,7 +373,12 @@ public class SharpTSReadableStream : ITypeCategorized
         }
         catch (Exception ex)
         {
-            return SharpTSPromise.Reject(ex is SharpTSPromiseRejectedException pre ? pre.Reason : ex);
+            return SharpTSPromise.Reject(ex switch
+            {
+                Exceptions.ThrowException thrown => thrown.Value,
+                SharpTSPromiseRejectedException rejected => rejected.Reason,
+                _ => ex
+            });
         }
     }
 

@@ -948,6 +948,8 @@ public partial class RuntimeEmitter
         // Invoke the source synchronously, then adopt its cancellation result.
         var noCbLabel = il.DefineLabel();
         var completeLabel = il.DefineLabel();
+        var cancellationTask = il.DeclareLocal(_types.TaskOfObject);
+        il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadableCancelCbField);
         il.Emit(OpCodes.Brfalse, noCbLabel);
@@ -968,6 +970,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
         il.MarkLabel(completeLabel);
+        il.Emit(OpCodes.Stloc, cancellationTask);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(
+            typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!, typeof(object)));
+        il.Emit(OpCodes.Stloc, cancellationTask);
+        il.EndExceptionBlock();
+        il.Emit(OpCodes.Ldloc, cancellationTask);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldftn, fulfill);
         il.Emit(OpCodes.Newobj, typeof(Func<object, object>).GetConstructor([typeof(object), typeof(IntPtr)])!);
