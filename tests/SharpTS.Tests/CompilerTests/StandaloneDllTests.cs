@@ -14178,9 +14178,11 @@ public class StandaloneDllTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public void Isolated_DnsLookupOptions_PreserveLiteralsAndStableOrdering()
     {
+        // The isolated child uses the same machine's OS resolver configuration.
+        SharpTS.Tests.SharedTests.DnsLookupOptionsTests.RequireLocalhostIPv4();
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = SharpTS.Tests.SharedTests.DnsLookupOptionsTests.Program

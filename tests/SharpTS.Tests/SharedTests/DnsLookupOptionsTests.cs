@@ -58,9 +58,20 @@ public class DnsLookupOptionsTests
     internal const string Expected = "127.0.0.1\n4\n1\n127.0.0.1\n4\n2001:DB8::1\n6\n::FFFF:192.0.2.1\n6\n"
         + "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n4\ntrue\n1\n127.0.0.1\n4\n";
 
-    [Theory, ModeData]
+    internal static void RequireLocalhostIPv4()
+    {
+        // Query the OS resolver before running guest code: this is a host
+        // prerequisite, not a reason to hide a failed SharpTS lookup.
+        var addresses = System.Net.Dns.GetHostAddresses("localhost");
+        Skip.IfNot(addresses.Any(address =>
+            address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork),
+            "DNS lookup options require localhost to resolve to IPv4.");
+    }
+
+    [SkippableTheory, ModeData]
     public void LookupPreservesLiteralsAndHonorsFamilyAndResultOptions(ExecutionMode mode)
     {
+        RequireLocalhostIPv4();
         var output = TestHarness.RunModules(new Dictionary<string, string> { ["main.ts"] = Program }, "main.ts", mode);
         Assert.Equal(Expected, output);
     }
