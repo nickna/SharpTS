@@ -250,6 +250,27 @@ public class EmittedWebStreamRuntimeTests
             var ctor = type.GetConstructor([typeof(object), typeof(object)])!;
             var read = type.GetMethod("Read")!;
             var enqueue = type.GetMethod("Enqueue")!;
+            void AssertCancellationCompletes(Task<object> cancellation)
+            {
+                var loopType = assembly.GetType("$EventLoop")!;
+                var loop = loopType.GetMethod("GetInstance")!.Invoke(null, null);
+                var pump = loopType.GetMethod("PumpOnce")!;
+                var drain = assembly.GetType(runtime.RuntimeClass.Type.Name)!
+                    .GetMethod(runtime.Microtasks.ProcessMicrotasks.Name)!;
+                Assert.True(SpinWait.SpinUntil(() =>
+                {
+                    // Hosted entry points provide this drain hook separately
+                    // from the event-loop queue; this test invokes the runtime directly.
+                    drain.Invoke(null, null);
+                    pump.Invoke(loop, null);
+                    return cancellation.IsCompleted;
+                }, TimeSpan.FromSeconds(5)), "Cancellation did not complete after pumping its promise reaction.");
+                Assert.True(cancellation.IsCompletedSuccessfully);
+                var sentinel = runtime.Sentinels.UndefinedInstance;
+                var undefined = assembly.GetType(sentinel.DeclaringType!.Name)!
+                    .GetField(sentinel.Name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!.GetValue(null);
+                Assert.Same(undefined, cancellation.Result);
+            }
             string marker = $"assembly-{assemblies.Count}";
             var buffered = ctor.Invoke([null, null]);
             enqueue.Invoke(buffered, [marker]);
@@ -261,13 +282,13 @@ public class EmittedWebStreamRuntimeTests
                 Assert.Equal(false, result["done"]);
                 Assert.Equal(marker, result["value"]);
                 var cancelled = Assert.IsAssignableFrom<Task<object>>(type.GetMethod("Cancel")!.Invoke(buffered, [null]));
-                Assert.True(cancelled.IsCompletedSuccessfully);
+                AssertCancellationCompletes(cancelled);
                 var eof = Assert.IsAssignableFrom<Task<object>>(read.Invoke(buffered, null));
                 Assert.True(eof.IsCompletedSuccessfully);
                 Assert.Equal(true, Assert.IsType<Dictionary<string, object?>>(eof.Result)["done"]);
             });
 
-            foreach (string operation in new[] { "Enqueue", "CloseStream", "ErrorStream" })
+            foreach (string operation in new[] { "Enqueue", "CloseStream", "Cancel", "ErrorStream" })
             {
                 var stream = ctor.Invoke([null, null]);
                 var first = Assert.IsAssignableFrom<Task<object>>(read.Invoke(stream, null));
@@ -288,9 +309,9 @@ public class EmittedWebStreamRuntimeTests
                         Assert.Equal(marker + "-first", Assert.IsType<Dictionary<string, object?>>(first.Result)["value"]);
                         Assert.Equal(marker + "-second", Assert.IsType<Dictionary<string, object?>>(second.Result)["value"]);
                     }
-                    else if (operation == "CloseStream")
+                    else if (operation is "CloseStream" or "Cancel")
                     {
-                        type.GetMethod(operation)!.Invoke(stream, null);
+                        var completion = type.GetMethod(operation)!.Invoke(stream, operation == "Cancel" ? [null] : null);
                         var sentinel = runtime.Sentinels.UndefinedInstance;
                         var undefined = assembly.GetType(sentinel.DeclaringType!.Name)!
                             .GetField(sentinel.Name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!.GetValue(null);
@@ -301,6 +322,8 @@ public class EmittedWebStreamRuntimeTests
                             Assert.Equal(true, result["done"]);
                             Assert.Same(undefined, result["value"]);
                         }
+                        if (operation == "Cancel")
+                            AssertCancellationCompletes(Assert.IsAssignableFrom<Task<object>>(completion));
                     }
                     else
                     {

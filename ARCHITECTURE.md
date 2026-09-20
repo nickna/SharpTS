@@ -1135,9 +1135,20 @@ three BCL construction types (`List<object>`, `TaskCompletionSource<object>`, an
 form an immutable value local to readable-stream emission, passed explicitly to twelve helpers.
 All 45 checked Web stream declarations reject duplicate assignment before completion. Hosted and
 standalone reuse tests verify saved IL, current-assembly ownership, buffered values and earlier
-pending reads settled by enqueue, close and error after subsequent emissions. Method-local
+pending reads settled by enqueue, close, cancellation and error after subsequent emissions. Method-local
 declaration builders and shared dispatch registries remain within the full #1599 ownership audit.
 No migrated flat aliases or emitter-held Web stream construction handles remain.
+
+Readable cancellation closes parked reads before waiting for the source cancellation result.
+Its completion reaction discards a fulfilled source value and returns `undefined`; a rejected
+source promise rejects cancellation. The interpreter queues completion through its existing
+promise jobs and defers reaction consumers so they cannot overtake already posted read
+continuations. Both stream and reader cancellation accept an omitted reason.
+Compiled pipe abort returns a continuation of source cancellation instead of synchronously
+blocking the event-loop thread. The emitted `$ReadableStreamAbortContinuation` owns its reason
+per invocation; its declaration builders and the cancellation fulfillment helper stay local
+to emission. They add no persistent emitter metadata fields. Direct runtime tests drive the
+promise queue explicitly, including the drain hook normally supplied by hosted entry points.
 
 Six backing fields are assembly-visible because peer emitted classes access them: writable
 `_state`, `_storedError`, `_writer`, `_highWaterMark`, and readable `_locked`, `_reader`.

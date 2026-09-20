@@ -453,7 +453,9 @@ public partial class Interpreter
         // already settled.  Relying on an async-method await is insufficient:
         // TaskAwaiter continues inline for a completed task, which lets a then
         // handler run in the middle of the current JavaScript job (#1440).
-        var completion = new TaskCompletionSource<object?>();
+        // Likewise, consumers must resume after this job, rather than inline
+        // when it completes and ahead of previously posted continuations.
+        var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         ExecutionContext? registrationContext = ExecutionContext.Capture();
         lock (_microtaskQueueLock)
         {
