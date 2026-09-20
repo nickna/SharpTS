@@ -2235,16 +2235,10 @@ public partial class TypeChecker
                 ReportImplicitAnyVariableCapture(name, symbol);
                 ThrowIfUsedBeforeAssigned(name, symbol);
             }
-            // Declaration merging replaces an interface binding as later lib files are
-            // loaded, while the `Object: ObjectConstructor` value retains the earlier
-            // interface instance it was declared with. Expose Object's latest merged
-            // shape through the value side as TypeScript does.
-            if (name.Lexeme == "Object" &&
-                declared is TypeInfo.Interface declaredInterface &&
-                _environment.GetTypeBinding(declaredInterface.Name) is TypeInfo.Interface mergedInterface)
-            {
-                declared = mergedInterface;
-            }
+            // Values may retain an interface from before later declarations merged.
+            // Follow that exact interface's completion, never a same-named type in
+            // the use site's scope (which may shadow the original declaration).
+            declared = RefreshCompletedInterfaceBinding(declared);
             var declaredPath = new Narrowing.NarrowingPath.Variable(name.Lexeme);
             return GetNarrowing(declaredPath) ?? declared;
         }

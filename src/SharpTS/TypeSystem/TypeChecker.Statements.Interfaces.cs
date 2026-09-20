@@ -18,11 +18,30 @@ public partial class TypeChecker
         new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> _completedInterfaces =
         new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<TypeInfo.Interface, TypeInfo.Interface> _completedInterfaceBindings =
+        new(ReferenceEqualityComparer.Instance);
 
     private void ResetInterfaceDeclarationTracking()
     {
         _preRegisteredInterfaces.Clear();
         _completedInterfaces.Clear();
+        _completedInterfaceBindings.Clear();
+    }
+
+    private TypeInfo RefreshCompletedInterfaceBinding(TypeInfo type)
+    {
+        while (type is TypeInfo.Interface current &&
+            _completedInterfaceBindings.TryGetValue(current, out var completed))
+            type = completed;
+        return type;
+    }
+
+    private void DefineInterfaceBinding(string name, TypeInfo type)
+    {
+        if (_environment.GetLocalTypeBinding(name) is TypeInfo.Interface previous &&
+            type is TypeInfo.Interface completed && !ReferenceEquals(previous, completed))
+            _completedInterfaceBindings[previous] = completed;
+        _environment.DefineType(name, type);
     }
 
     private static TypeInfo.Interface RecordAsInterfaceBase(string name, TypeInfo.Record record) =>
@@ -60,7 +79,7 @@ public partial class TypeChecker
         bool replacesPreRegistration =
             InterfaceDeclarationsFor(_preRegisteredInterfaces, _environment).Contains(declaration);
         if (replacesPreRegistration)
-            _environment.DefineType(declaration.Name.Lexeme, type);
+            DefineInterfaceBinding(declaration.Name.Lexeme, type);
         else
             DefineOrMergeInterface(declaration.Name.Lexeme, type);
     }
@@ -100,7 +119,7 @@ public partial class TypeChecker
     private void DefineOrMergeInterface(string name, TypeInfo incoming)
     {
         TypeInfo? existing = _environment.GetLocalTypeBinding(name);
-        _environment.DefineType(name, (existing, incoming) switch
+        DefineInterfaceBinding(name, (existing, incoming) switch
         {
             (TypeInfo.Interface left, TypeInfo.Interface right) => MergeInterfaces(left, right),
             (TypeInfo.GenericInterface left, TypeInfo.GenericInterface right)
