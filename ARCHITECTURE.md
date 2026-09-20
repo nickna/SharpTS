@@ -1809,6 +1809,23 @@ compiler; different compilers have distinct instances. `globalThis` retains its 
 registry for delegated dispatch. The former late registration block and unused external-type
 alias are removed. Other compiler registries and shared infrastructure still require audit.
 
+### Generated union metadata
+
+`UnionTypeGenerator` fixes its type mapper and marker interface at construction. The
+interface must expose the instance `object Value` getter used by generated carriers.
+Additional abstract requirements, including inherited members, setters, events and static
+abstract methods, are rejected before declaration; default interface methods remain valid.
+Every declaration belongs to the mapper's module. One ordinal cache owns each union's
+forward type builder and replaces it with the finalized type at completion, rather than
+retaining parallel declaration and finalized-type indexes. Conversion method builders
+remain the stable handles used by callers before and after type finalization.
+Finalization completes even an empty generator and rejects repeated completion or new
+union declarations afterward; existing type and conversion lookups remain available.
+An incomplete finalization retains completed types and remaining builders; retries reject
+null results from builders damaged by a prior type-load failure. Member ordering, canonical
+keys, generated bodies and deployment rules are unchanged. Other generator and mapper
+state remains part of the residual ownership audit under #1599.
+
 ### Promoted object shape metadata
 
 Each compilation owns an `ObjectShapeRegistry` for its promoted object-literal and
