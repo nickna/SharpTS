@@ -37,6 +37,96 @@ public class DotNetImportTests
         return checker.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
     }
 
+    [Theory, ModeData]
+    public void AliasedImport_WithSameNamedGuestClass_PreservesReceiverIdentity(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { StringBuilder as SB } from "dotnet:System.Text.StringBuilder";
+                class StringBuilder {
+                    value(): string { return "guest"; }
+                }
+                console.log(new StringBuilder().value());
+                const sb: SB = new SB();
+                sb.append("external").append("!");
+                console.log(sb.toString());
+                console.log(sb.length);
+                sb.length = 3;
+                console.log(sb.toString());
+                console.log(sb[0]);
+                sb[0] = "E";
+                console.log(sb.toString());
+                console.log(new StringBuilder().value());
+                """
+        };
+
+        Assert.Empty(CheckErrors(files, "./main.ts"));
+        Assert.Equal("guest\nexternal!\n9\next\ne\nExt\nguest\n",
+            TestHarness.RunModules(files, "./main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void AliasedImport_CrossModuleResult_RetainsClrIdentity(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./external.ts"] = """
+                import { StringBuilder as SB } from "dotnet:System.Text.StringBuilder";
+                export function create(): SB { return new SB(); }
+                """,
+            ["./main.ts"] = """
+                import { create } from "./external";
+                class StringBuilder {
+                    value(): string { return "guest"; }
+                }
+                const sb = create();
+                sb.append("cross-module");
+                console.log(sb.length);
+                console.log(sb.toString());
+                console.log(new StringBuilder().value());
+                """
+        };
+
+        Assert.Empty(CheckErrors(files, "./main.ts"));
+        Assert.Equal("12\ncross-module\nguest\n",
+            TestHarness.RunModules(files, "./main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void ImportedCharIndexer_PreservesStringAndNumericConversions(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { StringBuilder as SB } from "dotnet:System.Text.StringBuilder";
+                const sb = new SB();
+                sb.append("abc");
+                const text: string = "XYZ";
+                sb[0] = text;
+                console.log(sb.toString());
+                const dynamicText: any = "Ytail";
+                sb[1] = dynamicText;
+                console.log(sb.toString());
+                const code: any = 90;
+                sb[2] = code;
+                console.log(sb.toString());
+                try {
+                    const empty: any = "";
+                    sb[0] = empty;
+                    console.log("unexpected-success");
+                } catch (error) {
+                    console.log("rejected-empty");
+                }
+                console.log(sb.toString());
+                """
+        };
+
+        Assert.Empty(CheckErrors(files, "./main.ts"));
+        Assert.Equal("Xbc\nXYc\nXYZ\nrejected-empty\nXYZ\n",
+            TestHarness.RunModules(files, "./main.ts", mode));
+    }
+
     #region Single-type form
 
     [Theory, ModeData]
