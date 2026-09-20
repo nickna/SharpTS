@@ -1445,6 +1445,18 @@ public class TypeProvider
     }
 
     /// <summary>
+    /// Gets implemented interfaces for validating emitted type contracts.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public Type[] GetInterfaces(Type type)
+    {
+        return type.GetInterfaces();
+    }
+
+    /// <summary>
     /// Gets all public methods from a type.
     /// </summary>
     [UnconditionalSuppressMessage(
