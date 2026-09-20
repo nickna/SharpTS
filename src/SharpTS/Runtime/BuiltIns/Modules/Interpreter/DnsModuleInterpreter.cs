@@ -235,8 +235,21 @@ public static class DnsModuleInterpreter
     {
         try
         {
-            var hostEntry = Dns.GetHostEntry(hostname);
-            var addresses = hostEntry.AddressList;
+            // Literal addresses are already resolved. In particular, GetHostEntry
+            // would reverse-resolve a loopback literal and return another host address.
+            if (IPAddress.TryParse(hostname, out var literal)
+                && (hostname == literal.ToString()
+                    || (hostname.Contains(':') && !hostname.StartsWith('['))))
+            {
+                var result = new SharpTSObject(new Dictionary<string, object?>
+                {
+                    ["address"] = hostname,
+                    ["family"] = literal.AddressFamily == AddressFamily.InterNetwork ? 4.0 : 6.0
+                });
+                return all ? new SharpTSArray([result]) : result;
+            }
+
+            var addresses = Dns.GetHostAddresses(hostname);
 
             // Filter by family if specified
             if (family == 4)
