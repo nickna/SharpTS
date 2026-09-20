@@ -224,32 +224,32 @@ public class SharpTSHeaders : ITypeCategorized
     {
         return name switch
         {
-            "get" => BuiltInMethod.CreateV2("get", 1, (_, _, args) =>
+            "get" => BuiltInMethod.CreateV2("get", 1, (interp, _, args) =>
             {
-                var headerName = args[0].ToObject()?.ToString() ?? "";
+                var headerName = interp.ToStringForBuiltInArgument(args[0].ToObject());
                 return RuntimeValue.FromBoxed(Get(headerName));
             }),
-            "set" => BuiltInMethod.CreateV2("set", 2, (_, _, args) =>
+            "set" => BuiltInMethod.CreateV2("set", 2, (interp, _, args) =>
             {
-                var headerName = args[0].ToObject()?.ToString() ?? "";
-                var headerValue = args.Length > 1 ? args[1].ToObject()?.ToString() ?? "" : "";
+                var headerName = interp.ToStringForBuiltInArgument(args[0].ToObject());
+                var headerValue = interp.ToStringForBuiltInArgument(args.Length > 1 ? args[1].ToObject() : SharpTSUndefined.Instance);
                 Set(headerName, headerValue);
                 return RuntimeValue.Undefined;
             }),
-            "has" => BuiltInMethod.CreateV2("has", 1, (_, _, args) =>
+            "has" => BuiltInMethod.CreateV2("has", 1, (interp, _, args) =>
             {
-                var headerName = args[0].ToObject()?.ToString() ?? "";
+                var headerName = interp.ToStringForBuiltInArgument(args[0].ToObject());
                 return RuntimeValue.FromBoolean(Has(headerName));
             }),
-            "delete" => BuiltInMethod.CreateV2("delete", 1, (_, _, args) =>
+            "delete" => BuiltInMethod.CreateV2("delete", 1, (interp, _, args) =>
             {
-                var headerName = args[0].ToObject()?.ToString() ?? "";
+                var headerName = interp.ToStringForBuiltInArgument(args[0].ToObject());
                 return RuntimeValue.FromBoolean(Delete(headerName));
             }),
-            "append" => BuiltInMethod.CreateV2("append", 2, (_, _, args) =>
+            "append" => BuiltInMethod.CreateV2("append", 2, (interp, _, args) =>
             {
-                var headerName = args[0].ToObject()?.ToString() ?? "";
-                var headerValue = args.Length > 1 ? args[1].ToObject()?.ToString() ?? "" : "";
+                var headerName = interp.ToStringForBuiltInArgument(args[0].ToObject());
+                var headerValue = interp.ToStringForBuiltInArgument(args.Length > 1 ? args[1].ToObject() : SharpTSUndefined.Instance);
                 Append(headerName, headerValue);
                 return RuntimeValue.Undefined;
             }),
