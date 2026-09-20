@@ -19,7 +19,7 @@ public abstract partial class ExpressionEmitterBase
     /// Shared call handler registry used by all emitter types.
     /// Handlers are stateless — all state comes from IEmitterContext.Context.
     /// </summary>
-    protected static readonly CallHandlerRegistry _callHandlers = new();
+    protected static readonly CallHandlerRegistry _callHandlers = CallHandlerRegistry.CreateDefault();
 
     #region Shared Call Dispatch
 

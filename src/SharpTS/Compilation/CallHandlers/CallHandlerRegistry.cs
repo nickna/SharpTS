@@ -10,14 +10,14 @@ namespace SharpTS.Compilation.CallHandlers;
 /// </summary>
 public class CallHandlerRegistry
 {
-    private readonly List<ICallHandler> _handlers;
+    private readonly List<ICallHandler> _handlers = [];
+
+    public bool IsComplete { get; private set; }
 
     /// <summary>
     /// Creates a new registry with the default set of handlers.
     /// </summary>
-    public CallHandlerRegistry()
-    {
-        _handlers =
+    public CallHandlerRegistry() : this(
         [
             new SuperConstructorHandler(),   // Priority 10 - super() calls
             new ObjectRestHandler(),         // Priority 15 - Internal helpers first
@@ -37,10 +37,37 @@ public class CallHandlerRegistry
             new ClassExprStaticHandler(),    // Priority 74 - class expression statics
             new ThisStaticContextHandler(),  // Priority 76 - this.method() in static context
             new AsyncFunctionCallHandler(),  // Priority 80 - async function dispatch
-        ];
+        ])
+    {
+    }
 
-        // Sort by priority (lower = earlier)
-        _handlers.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+    /// <summary>Creates a registry with a checked snapshot of the supplied handlers.</summary>
+    public CallHandlerRegistry(IEnumerable<ICallHandler> handlers)
+    {
+        ArgumentNullException.ThrowIfNull(handlers);
+        foreach (var handler in handlers)
+            Register(handler);
+    }
+
+    /// <summary>Creates the completed, stateless default dispatch chain.</summary>
+    public static CallHandlerRegistry CreateDefault()
+    {
+        var registry = new CallHandlerRegistry();
+        registry.CompleteRegistration();
+        return registry;
+    }
+
+    /// <summary>Freezes handler membership and order before dispatch begins.</summary>
+    public void CompleteRegistration()
+    {
+        EnsureRegistrationOpen();
+        IsComplete = true;
+    }
+
+    private void EnsureRegistrationOpen()
+    {
+        if (IsComplete)
+            throw new InvalidOperationException("Call handler registration is complete.");
     }
 
     /// <summary>
@@ -51,6 +78,9 @@ public class CallHandlerRegistry
     /// <returns>True if any handler handled the call.</returns>
     public bool TryHandle(IEmitterContext emitter, Expr.Call call)
     {
+        if (!IsComplete)
+            throw new InvalidOperationException("Call handler registration must complete before dispatch.");
+
         foreach (var handler in _handlers)
         {
             if (handler.TryHandle(emitter, call))
@@ -60,11 +90,19 @@ public class CallHandlerRegistry
     }
 
     /// <summary>
-    /// Registers a custom handler.
+    /// Registers a custom handler before completion. Equal priorities retain registration order.
     /// </summary>
     public void Register(ICallHandler handler)
     {
-        _handlers.Add(handler);
-        _handlers.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+        EnsureRegistrationOpen();
+        ArgumentNullException.ThrowIfNull(handler);
+        if (_handlers.Any(existing => ReferenceEquals(existing, handler)))
+            throw new InvalidOperationException("The call handler is already registered.");
+
+        int index = _handlers.FindIndex(existing => existing.Priority > handler.Priority);
+        if (index < 0)
+            _handlers.Add(handler);
+        else
+            _handlers.Insert(index, handler);
     }
 }

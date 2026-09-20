@@ -1809,6 +1809,16 @@ compiler; different compilers have distinct instances. `globalThis` retains its 
 registry for delegated dispatch. The former late registration block and unused external-type
 alias are removed. Other compiler registries and shared infrastructure still require audit.
 
+### Shared call handler registry
+
+All emitter types share a completed default `CallHandlerRegistry`. Its eighteen handlers
+are stateless; generated metadata and compilation state come from the supplied context.
+Registration rejects null handlers and duplicate object identities. Distinct handlers may
+share types or priorities; equal priorities retain registration order. Custom registries
+snapshot their input sequence and must complete registration before dispatch. Completion
+freezes membership and dispatch order, rejects later registrations, and prevents callbacks
+from changing the chain during dispatch. Custom handler state remains the caller's responsibility.
+
 ## Architectural invariants
 
 Changes should preserve these rules:
