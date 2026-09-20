@@ -902,6 +902,17 @@ Hosted and standalone reuse tests verify assembly ownership, saved IL and active
 earlier emissions. The shared built-in module registry still owns crypto named-import wrappers
 and aliases; its contract and the full residual-state audit remain required under #1599.
 
+X509 `checkIssued` compares issuer metadata independently from signature verification. The interpreter
+uses `X509IssuerMetadata`; standalone output contains equivalent BCL-only helpers declared locally
+inside the generated certificate type. Canonical names retain RDN grouping and normalize supported
+ASN.1 string encodings with ASCII case and whitespace rules. Issuance also checks signature/key
+algorithm compatibility, authority identifiers, issuer key usage, proxy restrictions, and the twelve
+extension families decoded by Node's OpenSSL issuance path. Duplicate decoded extensions and malformed
+nested names are rejected; trust-chain constraints and signature verification remain separate operations.
+These helpers add no retained emitter metadata or duplicate ownership. Cross-mode tests cover the
+original discrepancy, malformed and duplicate extensions, forward-compatible unknown extensions,
+large serial/path values, and name grouping/encoding. The broader #1599 residual audit remains open.
+
 WebCrypto uses required `WebCrypto` metadata for the `GetObject` accessor, which is declared in runtime
 phase 1 even when crypto is disabled. Its optional `Implementation` owns 49 helper, type, constructor,
 and key-field declarations. `EmitAll` starts that implementation only for `UsesCrypto`;

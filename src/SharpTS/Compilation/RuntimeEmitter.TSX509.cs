@@ -46,14 +46,18 @@ public partial class RuntimeEmitter
         var nameToObject = EmitX509NameToObject(tb);
         var verifyWithPem = EmitX509VerifyWithPem(tb);
 
+        var normalizeIssuerName = EmitX509NormalizeIssuerNameValue(tb);
+        var canonicalIssuerName = EmitX509CanonicalIssuerName(tb, normalizeIssuerName);
+        var validateGeneralNames = EmitX509ValidateGeneralNames(tb, canonicalIssuerName);
+        var renderAlternativeNames = EmitX509RenderAlternativeNames(tb, validateGeneralNames);
         var ctor = EmitX509Ctor(tb, runtime, certField, subjectField, issuerField, cnField,
-            sanField, dnsField, ipsField, emailsField, caField, formatName, extractCn);
+            sanField, dnsField, ipsField, emailsField, caField, formatName, extractCn, renderAlternativeNames);
         crypto.X509CertificateCtor = ctor;
 
         // --- simple string/bool property getters over precomputed fields ---
         EmitX509FieldGetter(tb, "subject", "get_Subject", subjectField);
         EmitX509FieldGetter(tb, "issuer", "get_Issuer", issuerField);
-        EmitX509FieldGetter(tb, "subjectAltName", "get_SubjectAltName", sanField);
+        EmitX509FieldGetter(tb, "subjectAltName", "get_SubjectAltName", sanField, runtime.Sentinels.UndefinedInstance);
 
         EmitX509CaGetter(tb, caField);
         EmitX509SerialGetter(tb, certField);
@@ -65,7 +69,7 @@ public partial class RuntimeEmitter
         EmitX509FingerprintGetter(tb, "fingerprint256", "get_Fingerprint256", certField, colonHex, "SHA256");
         EmitX509FingerprintGetter(tb, "fingerprint512", "get_Fingerprint512", certField, colonHex, "SHA512");
         EmitX509RawGetter(tb, runtime, certField);
-        var spkiPem = EmitX509PublicKeyGetter(tb, crypto, certField);
+        EmitX509PublicKeyGetter(tb, crypto, certField);
         EmitX509KeyUsageGetter(tb, runtime, certField);
         EmitX509ExtKeyUsageGetter(tb, runtime, certField);
         EmitX509InfoAccessGetter(tb);
@@ -75,7 +79,8 @@ public partial class RuntimeEmitter
         EmitX509CheckHost(tb, runtime, dnsField, cnField, hostMatches);
         EmitX509CheckIp(tb, runtime, ipsField);
         EmitX509CheckEmail(tb, runtime, emailsField);
-        EmitX509CheckIssued(spkiPem, tb, certField, subjectField, issuerField, verifyWithPem);
+        var issuerMetadata = EmitX509IssuerMetadata(tb, canonicalIssuerName, validateGeneralNames);
+        EmitX509CheckIssued(tb, certField, issuerMetadata);
         EmitX509ToString(tb, certField);
         EmitX509ToLegacyObject(tb, runtime, certField, subjectField, issuerField, sanField,
             caField, formatValidity, colonHex, nameToObject);
@@ -112,7 +117,7 @@ public partial class RuntimeEmitter
         FieldBuilder certField, FieldBuilder subjectField, FieldBuilder issuerField,
         FieldBuilder cnField, FieldBuilder sanField, FieldBuilder dnsField,
         FieldBuilder ipsField, FieldBuilder emailsField, FieldBuilder caField,
-        MethodBuilder formatName, MethodBuilder extractCn)
+        MethodBuilder formatName, MethodBuilder extractCn, MethodBuilder renderAlternativeNames)
     {
         var ctor = tb.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.Object]);
         var il = ctor.GetILGenerator();
@@ -251,11 +256,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, extLocal);
         il.Emit(OpCodes.Isinst, typeof(X509BasicConstraintsExtension));
         il.Emit(OpCodes.Brfalse, notBcLabel);
+        var endBasicConstraints = il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, extLocal);
         il.Emit(OpCodes.Castclass, typeof(X509BasicConstraintsExtension));
         il.Emit(OpCodes.Callvirt, typeof(X509BasicConstraintsExtension).GetProperty("CertificateAuthority")!.GetGetMethod()!);
         il.Emit(OpCodes.Stfld, caField);
+        il.Emit(OpCodes.Leave, endBasicConstraints);
+        il.BeginCatchBlock(typeof(CryptographicException));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Leave, endBasicConstraints);
+        il.EndExceptionBlock();
         il.MarkLabel(notBcLabel);
 
         // if (ext.Oid?.Value == "2.5.29.17") parse SAN via X509SubjectAlternativeNameExtension
@@ -272,91 +283,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Brfalse, notSanLabel);
 
-        // var sanExt = new X509SubjectAlternativeNameExtension(ext.RawData, false)
-        var sanExtLocal = il.DeclareLocal(typeof(X509SubjectAlternativeNameExtension));
         il.Emit(OpCodes.Ldloc, extLocal);
-        il.Emit(OpCodes.Callvirt, typeof(AsnEncodedData).GetProperty("RawData")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, typeof(X509SubjectAlternativeNameExtension).GetConstructor([typeof(byte[]), typeof(bool)])!);
-        il.Emit(OpCodes.Stloc, sanExtLocal);
-
-        // var dnsList = sanExt.EnumerateDnsNames().ToList()
-        var toListString = EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethod("ToList")!, typeof(string));
-        var dnsListLocal = il.DeclareLocal(typeof(List<string>));
-        il.Emit(OpCodes.Ldloc, sanExtLocal);
-        il.Emit(OpCodes.Callvirt, typeof(X509SubjectAlternativeNameExtension).GetMethod("EnumerateDnsNames", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Call, toListString);
-        il.Emit(OpCodes.Stloc, dnsListLocal);
-
-        // foreach dns: _dnsNames.Add(d); parts.Add("DNS:" + d)
-        var jLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, jLocal);
-        var dnsCheck = il.DefineLabel();
-        var dnsBody = il.DefineLabel();
-        il.Emit(OpCodes.Br, dnsCheck);
-        il.MarkLabel(dnsBody);
+        il.Emit(OpCodes.Callvirt, typeof(AsnEncodedData).GetProperty("RawData")!.GetMethod!);
+        il.Emit(OpCodes.Ldloc, partsLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, dnsField);
-        il.Emit(OpCodes.Ldloc, dnsListLocal);
-        il.Emit(OpCodes.Ldloc, jLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<string>).GetProperty("Item")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, listStringAdd);
-        il.Emit(OpCodes.Ldloc, partsLocal);
-        il.Emit(OpCodes.Ldstr, "DNS:");
-        il.Emit(OpCodes.Ldloc, dnsListLocal);
-        il.Emit(OpCodes.Ldloc, jLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<string>).GetProperty("Item")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Callvirt, listStringAdd);
-        il.Emit(OpCodes.Ldloc, jLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, jLocal);
-        il.MarkLabel(dnsCheck);
-        il.Emit(OpCodes.Ldloc, jLocal);
-        il.Emit(OpCodes.Ldloc, dnsListLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<string>).GetProperty("Count")!.GetGetMethod()!);
-        il.Emit(OpCodes.Blt, dnsBody);
-
-        // var ipList = sanExt.EnumerateIPAddresses().ToList()
-        var toListIp = EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethod("ToList")!, typeof(IPAddress));
-        var ipListLocal = il.DeclareLocal(typeof(List<IPAddress>));
-        il.Emit(OpCodes.Ldloc, sanExtLocal);
-        il.Emit(OpCodes.Callvirt, typeof(X509SubjectAlternativeNameExtension).GetMethod("EnumerateIPAddresses", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Call, toListIp);
-        il.Emit(OpCodes.Stloc, ipListLocal);
-
-        var ipStrLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, jLocal);
-        var ipCheck = il.DefineLabel();
-        var ipBody = il.DefineLabel();
-        il.Emit(OpCodes.Br, ipCheck);
-        il.MarkLabel(ipBody);
-        il.Emit(OpCodes.Ldloc, ipListLocal);
-        il.Emit(OpCodes.Ldloc, jLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<IPAddress>).GetProperty("Item")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.Emit(OpCodes.Stloc, ipStrLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, ipsField);
-        il.Emit(OpCodes.Ldloc, ipStrLocal);
-        il.Emit(OpCodes.Callvirt, listStringAdd);
-        il.Emit(OpCodes.Ldloc, partsLocal);
-        il.Emit(OpCodes.Ldstr, "IP Address:");
-        il.Emit(OpCodes.Ldloc, ipStrLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Callvirt, listStringAdd);
-        il.Emit(OpCodes.Ldloc, jLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, jLocal);
-        il.MarkLabel(ipCheck);
-        il.Emit(OpCodes.Ldloc, jLocal);
-        il.Emit(OpCodes.Ldloc, ipListLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<IPAddress>).GetProperty("Count")!.GetGetMethod()!);
-        il.Emit(OpCodes.Blt, ipBody);
+        il.Emit(OpCodes.Call, renderAlternativeNames);
 
         il.MarkLabel(notSanLabel);
 
@@ -1072,7 +1006,7 @@ public partial class RuntimeEmitter
     // Property getters
     // ------------------------------------------------------------------
 
-    private void EmitX509FieldGetter(TypeBuilder tb, string propName, string getterName, FieldBuilder field)
+    private void EmitX509FieldGetter(TypeBuilder tb, string propName, string getterName, FieldBuilder field, FieldInfo? undefined = null)
     {
         var prop = tb.DefineProperty(propName, PropertyAttributes.None, _types.Object, Type.EmptyTypes);
         var getter = tb.DefineMethod(getterName,
@@ -1081,6 +1015,15 @@ public partial class RuntimeEmitter
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, field);
+        if (undefined is not null)
+        {
+            var present = il.DefineLabel();
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, present);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldsfld, undefined);
+            il.MarkLabel(present);
+        }
         il.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
     }
@@ -1637,8 +1580,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitX509CheckIssued(MethodBuilder spkiPem, TypeBuilder tb, FieldBuilder certField,
-        FieldBuilder subjectField, FieldBuilder issuerField, MethodBuilder verifyWithPem)
+    private void EmitX509CheckIssued(TypeBuilder tb, FieldBuilder certField, MethodBuilder issuerMetadata)
     {
         var method = tb.DefineMethod("CheckIssued",
             MethodAttributes.Public | MethodAttributes.HideBySig,
@@ -1654,22 +1596,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, otherLocal);
         il.Emit(OpCodes.Brfalse, returnFalse);
 
-        // if (_issuer != other._subject) return false
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, issuerField);
-        il.Emit(OpCodes.Ldloc, otherLocal);
-        il.Emit(OpCodes.Ldfld, subjectField);
-        il.Emit(OpCodes.Call, _types.StringOpEquality);
-        il.Emit(OpCodes.Brfalse, returnFalse);
-
-        // return VerifyWithPem(_cert.RawData, SpkiPem(other._cert))
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, certField);
-        il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetProperty("RawData")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, otherLocal);
         il.Emit(OpCodes.Ldfld, certField);
-        il.Emit(OpCodes.Call, spkiPem);
-        il.Emit(OpCodes.Call, verifyWithPem);
+        il.Emit(OpCodes.Call, issuerMetadata);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
