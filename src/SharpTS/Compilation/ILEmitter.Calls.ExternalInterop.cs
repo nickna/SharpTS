@@ -31,6 +31,12 @@ public partial class ILEmitter
         if (typeInfo is not TypeSystem.TypeInfo.Instance instance)
             return false;
 
+        // Imported types retain their CLR identity independently of local aliases or
+        // guest classes with the same simple name. Decorated guest declarations
+        // still use the registered-name fallback below.
+        if (DotNetTypeSynthesizer.TryGetClrType(instance, out externalType))
+            return true;
+
         string? simpleName = instance.ResolvedClassType switch
         {
             TypeSystem.TypeInfo.Class c => c.Name,
@@ -754,16 +760,39 @@ public partial class ILEmitter
         }
         else if (targetType == _ctx.Types.Char || targetType == typeof(char))
         {
-            // Char (16-bit Unicode character, treated as unsigned)
             if (_stackType == StackType.Double)
             {
                 IL.Emit(OpCodes.Conv_I4);
                 IL.Emit(OpCodes.Conv_U2);
                 return;
             }
+
+            // Match the marshaller: strings supply their first UTF-16 character;
+            // numeric values supply a character code. Preserve the original object
+            // for the numeric path when a dynamically typed value is not a string.
+            var numeric = IL.DefineLabel();
+            var nonEmpty = IL.DefineLabel();
+            var done = IL.DefineLabel();
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Isinst, _ctx.Types.String);
+            IL.Emit(OpCodes.Brfalse, numeric);
+            IL.Emit(OpCodes.Castclass, _ctx.Types.String);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.String, "get_Length", Type.EmptyTypes)!);
+            IL.Emit(OpCodes.Brtrue, nonEmpty);
+            IL.Emit(OpCodes.Pop);
+            IL.Emit(OpCodes.Ldstr, "Cannot convert empty string to char.");
+            IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(typeof(InvalidCastException), [_ctx.Types.String])!);
+            IL.Emit(OpCodes.Throw);
+            IL.MarkLabel(nonEmpty);
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.String, "get_Chars", [_ctx.Types.Int32])!);
+            IL.Emit(OpCodes.Br, done);
+            IL.MarkLabel(numeric);
             EmitUnboxToDouble();
             IL.Emit(OpCodes.Conv_I4);
             IL.Emit(OpCodes.Conv_U2);
+            IL.MarkLabel(done);
         }
         else if (targetType == _ctx.Types.Decimal || targetType == typeof(decimal))
         {

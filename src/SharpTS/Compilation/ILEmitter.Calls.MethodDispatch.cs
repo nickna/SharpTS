@@ -745,8 +745,7 @@ public partial class ILEmitter
         if (simpleClassName == null)
             return false;
 
-        // Check if this is an external .NET type (@DotNetType)
-        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(simpleClassName, out var externalType))
+        if (TryResolveExternalTypeInfo(instance, out var externalType))
         {
             EmitExternalInstanceMethodCall(
                 receiver, externalType, methodName, arguments,
@@ -754,17 +753,7 @@ public partial class ILEmitter
             return true;
         }
 
-        // Resolve to qualified name for multi-module compilation
         string className = _ctx.ResolveClassName(simpleClassName);
-
-        // Also check if the qualified name is an external type
-        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(className, out externalType))
-        {
-            EmitExternalInstanceMethodCall(
-                receiver, externalType, methodName, arguments,
-                genericTypeArguments, contextualResultType);
-            return true;
-        }
 
         // Look up the method and its owner in the class hierarchy. An inherited
         // primitive core is registered on the declaring base, not the exact

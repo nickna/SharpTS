@@ -2452,30 +2452,22 @@ public partial class ILEmitter
             return false;
 
         // Extract the class name from the instance's class type
-        string? simpleClassName = instance.ClassType switch
+        string? simpleClassName = instance.ResolvedClassType switch
         {
             TypeInfo.Class c => c.Name,
+            TypeInfo.MutableClass mc => mc.Name,
             _ => null
         };
         if (simpleClassName == null)
             return false;
 
-        // Check if this is an external .NET type (@DotNetType)
-        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(simpleClassName, out var externalType))
+        if (TryResolveExternalTypeInfo(instance, out var externalType))
         {
             EmitExternalPropertyGet(receiver, externalType, propertyName);
             return true;
         }
 
-        // Resolve to qualified name for multi-module compilation
         string className = _ctx.ResolveClassName(simpleClassName);
-
-        // Also check if the qualified name is an external type
-        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(className, out externalType))
-        {
-            EmitExternalPropertyGet(receiver, externalType, propertyName);
-            return true;
-        }
 
         // Convert TypeScript camelCase property name to .NET PascalCase for lookup
         string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);
@@ -2547,30 +2539,22 @@ public partial class ILEmitter
             return false;
 
         // Extract the class name from the instance's class type
-        string? simpleClassName = instance.ClassType switch
+        string? simpleClassName = instance.ResolvedClassType switch
         {
             TypeInfo.Class c => c.Name,
+            TypeInfo.MutableClass mc => mc.Name,
             _ => null
         };
         if (simpleClassName == null)
             return false;
 
-        // Check if this is an external .NET type (@DotNetType)
-        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(simpleClassName, out var externalType))
+        if (TryResolveExternalTypeInfo(instance, out var externalType))
         {
             EmitExternalPropertySet(receiver, externalType, propertyName, value);
             return true;
         }
 
-        // Resolve to qualified name for multi-module compilation
         string className = _ctx.ResolveClassName(simpleClassName);
-
-        // Also check if the qualified name is an external type
-        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(className, out externalType))
-        {
-            EmitExternalPropertySet(receiver, externalType, propertyName, value);
-            return true;
-        }
 
         // Convert TypeScript camelCase property name to .NET PascalCase for lookup
         string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);
