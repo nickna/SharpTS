@@ -53,11 +53,7 @@ public partial class ILCompiler
 
             if (externalType != null)
             {
-                // Register the external type mapping
-                _classes.ExternalTypes[qualifiedClassName] = externalType;
-                _classes.ExternalTypes[classStmt.Name.Lexeme] = externalType; // Also register simple name
-
-                // Register in TypeMapper for type resolution during IL emission
+                // Register both aliases with the single external metadata owner.
                 _typeMapper.RegisterExternalType(qualifiedClassName, externalType);
                 _typeMapper.RegisterExternalType(classStmt.Name.Lexeme, externalType);
 

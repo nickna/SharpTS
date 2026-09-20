@@ -267,11 +267,11 @@ public partial class ILCompiler
 
     /// <summary>
     /// Registers the external .NET types imported via <c>dotnet:</c> specifiers in this module,
-    /// routing them through the same <see cref="TypeMapper"/>/ExternalTypes registries an
+    /// routing them through the same <see cref="TypeMapper"/> external type registry an
     /// <c>@DotNetType declare class</c> uses — so construction, member calls, and static access
     /// compile to the identical direct-IL external-interop paths (fully standalone output).
     /// Resolution happened at module-load time (<see cref="DotNetImports.EnsureImports"/>);
-    /// this only transfers the resolved types into the compilation registries.
+    /// this only transfers the resolved types into the compilation registry.
     /// </summary>
     private void RegisterDotNetImports(ParsedModule module)
     {
@@ -310,7 +310,7 @@ public partial class ILCompiler
     {
         if (_modules.ClassToModule.ContainsKey(name))
         {
-            if (!_classes.ExternalTypes.TryGetValue(name, out var existing) || existing != externalType)
+            if (!_typeMapper.ExternalTypes.TryGetValue(name, out var existing) || existing != externalType)
             {
                 AddWarning(
                     $"dotnet: import '{name}' ({externalType.FullName}) conflicts with a " +
@@ -320,7 +320,6 @@ public partial class ILCompiler
             return;
         }
 
-        _classes.ExternalTypes.TryAdd(name, externalType);
         _typeMapper.RegisterExternalType(name, externalType);
     }
 

@@ -24,7 +24,6 @@ public partial class ILCompiler
         public Dictionary<string, TypeBuilder> Builders { get; } = [];
         public Dictionary<Stmt.Class, string> BlockScopedNames { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Stmt.Class, TypeBuilder> BlockScopedBuilders { get; } = new(ReferenceEqualityComparer.Instance);
-        public Dictionary<string, Type> ExternalTypes { get; } = [];
         public Dictionary<string, string?> Superclass { get; } = [];
         /// <summary>
         /// Qualified names of classes that (directly or transitively) extend a built-in Error type.
