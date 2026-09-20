@@ -1829,6 +1829,24 @@ completion fail. User-class import-collision checks continue to run before alias
 registration. Other class state, mapper configuration and the final ownership audit
 remain separate required work.
 
+### Synthesized CLR type identity
+
+`DotNetSynthesisCache` owns completed reflection-derived class declarations and
+reference-identity associations back to CLR types. The shared cache uses weak keys:
+unused collectible CLR types are not rooted by the cache, while a retained checked
+declaration keeps the CLR type needed for later dispatch alive. Guest declarations
+with equal record contents never acquire an imported declaration's CLR identity.
+
+Synthesis freezes the class and resolves self-return forward references before
+publication. Reverse identity is registered before any importer receives the class.
+Concurrent importers within a generation receive one published identity; competing
+factories may build temporary declarations that are never returned. Failed factories
+publish nothing and can be retried. Reset atomically starts a new forward-cache
+generation. In-flight synthesis finishes against its captured generation, and old
+checked declarations remain resolvable for as long as they are retained. This
+shared reflection cache does not own per-compilation alias registration, which
+remains in `ExternalTypeRegistry`.
+
 ### Generated union metadata
 
 `UnionTypeGenerator` fixes its type mapper and marker interface at construction. The

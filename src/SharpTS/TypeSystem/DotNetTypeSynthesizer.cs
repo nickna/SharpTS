@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using SharpTS.Declaration;
 using SharpTS.Parsing;
 using SharpTS.Runtime.DotNet;
@@ -34,9 +33,7 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 public static class DotNetTypeSynthesizer
 {
-    private static readonly ConcurrentDictionary<Type, TypeInfo.Class> _cache = new();
-    private static readonly ConcurrentDictionary<TypeInfo.Class, Type> _clrTypes =
-        new(ReferenceEqualityComparer.Instance);
+    private static readonly DotNetSynthesisCache _cache = new(Build);
 
     /// <summary>
     /// Returns the synthesized class type for a .NET type. Cached per <see cref="Type"/> so all
@@ -44,16 +41,13 @@ public static class DotNetTypeSynthesizer
     /// </summary>
     public static TypeInfo.Class Synthesize(Type type)
     {
-        var synthesized = _cache.GetOrAdd(type, Build);
-        _clrTypes.TryAdd(synthesized, type);
-        return synthesized;
+        return _cache.GetOrCreate(type);
     }
 
-    /// <summary>Clears the synthesis cache. Used by tests to ensure isolation.</summary>
+    /// <summary>Starts a new synthesis generation without invalidating retained checked types.</summary>
     public static void ClearCache()
     {
-        _cache.Clear();
-        _clrTypes.Clear();
+        _cache.Reset();
     }
 
     /// <summary>Resolves a synthesized imported instance type back to its CLR type.</summary>
@@ -61,7 +55,7 @@ public static class DotNetTypeSynthesizer
     {
         if (type is TypeInfo.Instance instance &&
             instance.ResolvedClassType is TypeInfo.Class classType &&
-            _clrTypes.TryGetValue(classType, out clrType!))
+            _cache.TryGetClrType(classType, out clrType!))
         {
             return true;
         }
