@@ -1633,19 +1633,19 @@ inlining, conversion hooks, abrupt completions, undefined defaults and generated
 unchanged. TSFunction's indirect ToNumber lookup retains its generated name and per-assembly cache.
 
 Cooperative cancellation lives in required `EmittedCancellationRuntime`. Its public per-assembly
-flag is declared at the original early runtime-field position; the check and exception factory
-retain their later method positions. Completion requires all three checked declarations and both
+flag is declared at the original early runtime-field position. The check signature is reserved
+in phase one; its body and the exception factory are emitted at the later runtime stage. Completion requires all three checked declarations and both
 body-emission markers, then freezes assignments. Failed completion leaves the owner repairable.
-Three family helpers take the owner directly. Invocation guards receive the declared check;
+Four family helpers take the owner directly. Invocation guards receive the declared check;
 guest loops use the checked flag/factory and preserve volatile reads followed by a separate throw,
 including accumulator flushes on the cold path. Runtime-free emission still omits cancellation.
 The public `_cancelRequested` reflection contract and exception type/message remain unchanged.
 
-Event-loop construction and its Run/WaitForTask helpers receive the event-loop component and an
-explicit nullable cancellation method. Normal orchestration still constructs the event loop before
-cancellation methods exist and passes null, preserving the existing omission; supplying a method
-to these helpers emits the checks. This phase does not change that scheduling behavior. Hosted
-and feature-free assemblies retain independent cancellation state. Class-initializer unwrapping,
+Event-loop construction and its Run/WaitForTask/PumpOnce helpers receive the event-loop component
+and an explicit nullable cancellation method. Normal orchestration supplies the checked phase-one
+`runtime.Cancellation.Check` declaration before its body exists. All three entry points check
+while draining callbacks; Run caps waits at 100 ms so distant timers cannot postpone cancellation.
+Hosted and feature-free assemblies retain independent cancellation state. Class-initializer unwrapping,
 regex hoisting, runtime-type construction and the residual ownership audit remain separate work.
 
 Class-definition initialization lives in required `EmittedClassInitializationRuntime`. Its checked
