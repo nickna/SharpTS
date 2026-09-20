@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
 using SharpTS.Parsing;
@@ -12,7 +13,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "process";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "processObject",
         "platform", "arch", "pid", "ppid", "version", "versions", "env",

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
@@ -15,7 +16,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
     // served by stdlib/node/os.ts, which imports from this primitive.
     public string ModuleName => "primitive:os";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "platform", "arch", "hostname", "homedir", "tmpdir",
         "type", "release", "cpus", "totalmem", "freemem",

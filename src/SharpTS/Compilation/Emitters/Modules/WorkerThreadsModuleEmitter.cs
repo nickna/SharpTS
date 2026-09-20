@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -11,7 +12,7 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "worker_threads";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "Worker", "MessageChannel", "MessagePort", "BroadcastChannel",
         "isMainThread", "threadId", "workerData", "parentPort",

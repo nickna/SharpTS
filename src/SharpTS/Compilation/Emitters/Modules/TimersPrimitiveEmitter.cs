@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -15,7 +16,7 @@ public sealed class TimersPrimitiveEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "primitive:timers";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "setTimeout", "clearTimeout",
         "setInterval", "clearInterval",

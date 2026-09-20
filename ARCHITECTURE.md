@@ -1791,8 +1791,11 @@ registered instance identity both before and after completion, and unknown names
 an optional miss. Alias-only primitive names do not require a canonical registration.
 The index stores strategies, not generated metadata; strategies resolve per-compilation
 handles through the supplied emission context. `EmittedBuiltInModuleRegistry` separately
-indexes generated callable declarations. Nested strategy export tables and other compiler
-registries remain part of the broader ownership audit.
+indexes generated callable declarations. Module strategies keep their ordered export names in immutable arrays boxed once into
+cached read-only views. Callers cannot change later compilations through either generic or
+non-generic list interfaces; HTTPS shares HTTP's immutable view. Cluster property classification
+uses an immutable ordinal set. Strategies retain no generated metadata in these catalogs.
+Other compiler registries remain part of the broader ownership audit.
 
 ## Architectural invariants
 

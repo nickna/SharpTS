@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using System.Security.Cryptography;
 using SharpTS.Parsing;
@@ -11,7 +12,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "crypto";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "createHash", "createHmac", "createCipheriv", "createDecipheriv", "randomBytes", "randomFillSync", "randomUUID", "randomInt",
         "pbkdf2Sync", "scryptSync", "timingSafeEqual", "createSign", "createVerify",

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -8,7 +9,9 @@ public sealed class StreamConsumersPrimitiveEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "primitive:stream/consumers";
 
-    public IReadOnlyList<string> GetExportedMembers() => ["drainQueuedWebStream", "bufferToArrayBuffer"];
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)["drainQueuedWebStream", "bufferToArrayBuffer"];
+
+    public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
 
     public bool TryEmitMethodCall(IEmitterContext emitter, string methodName, List<Expr> arguments)
     {

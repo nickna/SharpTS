@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -11,7 +12,7 @@ public sealed class SourceExecutionModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "sharpts:execution";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
         ["runSourceJson", "configureUntrustedProcess"];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;

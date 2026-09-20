@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -22,7 +23,7 @@ public sealed class ClusterModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "cluster";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "isPrimary", "isWorker", "isMaster",
         "fork", "disconnect", "setupPrimary", "setupMaster",
@@ -33,12 +34,12 @@ public sealed class ClusterModuleEmitter : IBuiltInModuleEmitter
         "listeners", "listenerCount", "eventNames"
     ];
 
-    private static readonly HashSet<string> _properties =
+    private static readonly ImmutableHashSet<string> _properties = ImmutableHashSet.CreateRange(StringComparer.Ordinal,
     [
         "isPrimary", "isWorker", "isMaster",
         "workers", "worker", "settings",
         "schedulingPolicy", "SCHED_NONE", "SCHED_RR"
-    ];
+    ]);
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
 

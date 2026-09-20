@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -19,7 +20,7 @@ public sealed class HttpModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "http";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "createServer",
         "request",

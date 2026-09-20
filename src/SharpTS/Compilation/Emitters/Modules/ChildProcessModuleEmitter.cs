@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -10,7 +11,7 @@ public sealed class ChildProcessModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "child_process";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "execSync", "spawnSync", "exec", "spawn",
         "execFileSync", "execFile", "fork"

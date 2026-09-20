@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -17,7 +18,7 @@ public sealed class TlsModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "tls";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "createServer",
         "connect",

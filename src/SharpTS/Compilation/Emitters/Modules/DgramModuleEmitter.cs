@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -10,7 +11,7 @@ public sealed class DgramModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "dgram";
 
-    private static readonly string[] _exportedMembers = ["createSocket", "Socket"];
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>) ["createSocket", "Socket"];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
 

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -14,7 +15,7 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
 {
     public string ModuleName => "primitive:dns";
 
-    private static readonly string[] _exportedMembers =
+    private static readonly IReadOnlyList<string> _exportedMembers = (ImmutableArray<string>)
     [
         "lookup", "lookupService",
         "resolve", "resolve4", "resolve6", "reverse",
