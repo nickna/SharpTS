@@ -1809,6 +1809,21 @@ compiler; different compilers have distinct instances. `globalThis` retains its 
 registry for delegated dispatch. The former late registration block and unused external-type
 alias are removed. Other compiler registries and shared infrastructure still require audit.
 
+### Promoted object shape metadata
+
+Each compilation owns an `ObjectShapeRegistry` for its promoted object-literal and
+scalar-replaced class carriers. Declaration begins with a snapshot of selected canonical
+keys; repeated keys intentionally share one generated type. Registration rejects unknown
+keys and duplicate keys or CLR types before changing either lookup index. Completion
+requires every selected shape, including explicit completion of an empty selection, and
+freezes registration before guest bodies are emitted. Failed completion remains repairable.
+Both stable lookup views are read-only, and each shape snapshots its ordered field list
+and field-handle map. Consumers cannot mutate another context's metadata through aliases.
+Forward type and field handles remain readable during declaration and after completion.
+Generated names and field order are unchanged; script and module finalization still create
+the shape types before their consumers. Other construction state and the full residual
+ownership audit remain separate work under #1599.
+
 ### Shared call handler registry
 
 All emitter types share a completed default `CallHandlerRegistry`. Its eighteen handlers
