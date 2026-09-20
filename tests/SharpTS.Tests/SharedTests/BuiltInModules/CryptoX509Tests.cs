@@ -119,7 +119,7 @@ KQIDAQAB
                 console.log(cert.publicKey.type === 'public');
                 console.log(cert.publicKey.asymmetricKeyType === 'rsa');
                 console.log(cert.toString().startsWith('-----BEGIN CERTIFICATE-----'));
-                console.log(cert.checkIssued(cert) === true); // self-signed
+                console.log(cert.checkIssued(cert) === false); // Key usage does not permit certificate signing
                 """
         };
 

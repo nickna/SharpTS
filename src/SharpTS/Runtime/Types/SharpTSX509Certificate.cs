@@ -56,7 +56,11 @@ public class SharpTSX509Certificate
                 throw new ArgumentException("X509Certificate: argument must be a PEM string or Buffer");
         }
 
-        ParseSubjectAltName();
+        // Invalid extension data does not make the certificate envelope unparseable.
+        // checkIssued validates it independently, while an invalid SAN has no rendered names.
+        try { ParseSubjectAltName(); }
+        catch (AsnContentException) { _san.Clear(); }
+        catch (CryptographicException) { _san.Clear(); }
     }
 
     internal X509Certificate2 Certificate => _cert;
@@ -96,6 +100,7 @@ public class SharpTSX509Certificate
         if (ext == null)
             return;
 
+        X509IssuerMetadata.ValidateGeneralNames(ext.RawData);
         var reader = new AsnReader(ext.RawData, AsnEncodingRules.DER);
         var seq = reader.ReadSequence();
         while (seq.HasData)
@@ -121,7 +126,9 @@ public class SharpTSX509Certificate
                 case SanIpAddress:
                 {
                     var bytes = seq.ReadOctetString(new Asn1Tag(TagClass.ContextSpecific, SanIpAddress));
-                    _san.Add((SanIpAddress, new IPAddress(bytes).ToString()));
+                    var address = bytes.Length is 4 or 16 ? new IPAddress(bytes).ToString()
+                        : "<invalid length=" + bytes.Length.ToString(CultureInfo.InvariantCulture) + ">";
+                    _san.Add((SanIpAddress, address));
                     break;
                 }
                 default:
@@ -456,8 +463,7 @@ public class SharpTSX509Certificate
             {
                 if (args.Length == 0 || args[0].ToObject() is not SharpTSX509Certificate issuer)
                     throw new ArgumentException("X509Certificate.checkIssued requires an X509Certificate argument");
-                var issuedByName = FormatName(_cert.IssuerName) == FormatName(issuer._cert.SubjectName);
-                return RuntimeValue.FromBoolean(issuedByName && VerifySignedBy(issuer.PublicKeyObject()));
+                return RuntimeValue.FromBoolean(X509IssuerMetadata.CheckIssued(_cert, issuer._cert));
             }),
             "toString" => BuiltInMethod.CreateV2("toString", 0, (_, _, _) =>
                 RuntimeValue.FromString(_cert.ExportCertificatePem() + "\n")),
