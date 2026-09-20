@@ -14178,6 +14178,29 @@ public class StandaloneDllTests
         }
     }
 
+    [SkippableFact]
+    public void Isolated_DnsLookupOptions_PreserveLiteralsAndStableOrdering()
+    {
+        // The isolated child uses the same machine's OS resolver configuration.
+        SharpTS.Tests.SharedTests.DnsLookupOptionsTests.RequireLocalhostIPv4();
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = SharpTS.Tests.SharedTests.DnsLookupOptionsTests.Program
+        };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
+            Assert.Equal(SharpTS.Tests.SharedTests.DnsLookupOptionsTests.Expected,
+                ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     private static (string tempDir, string dllPath) CompileStandalone(string source)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_standalone_guard_{Guid.NewGuid()}");

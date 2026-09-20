@@ -1693,6 +1693,15 @@ Consumers use checked wrapper lookup, while forward declarations remain readable
 bodies exist. Reflection exception unwrapping and settlement before event-loop release are
 preserved; construction values do not duplicate ownership.
 
+DNS lookup preserves literal address spelling and its actual family without reverse
+resolution. Hostname lookup uses address resolution directly, applies the requested
+family, and stably partitions results for `ipv4first` or `ipv6first`. Object options
+(`family`, `all`, `order`, and legacy `verbatim`) follow the same path as numeric family
+options in emitted lookup; callbacks and Promise wrappers share that checked method.
+Per-call ordering takes precedence over the module default, with `order` overriding
+`verbatim`. The standalone implementation uses only BCL resolution and emitted object
+and array construction; it does not introduce another metadata owner.
+
 Net construction metadata stays within one `EmitAll` invocation. Socket and server phase-one
 emitters return immutable field/method construction values; closure emission returns separate
 constructor/run pairs for phase two. Early module factories receive their field inputs, and late
