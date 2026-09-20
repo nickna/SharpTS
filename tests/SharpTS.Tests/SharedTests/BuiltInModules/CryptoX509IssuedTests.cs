@@ -679,6 +679,23 @@ public class CryptoX509IssuedTests
             TestHarness.RunModules(new() { ["main.ts"] = source }, "main.ts", mode));
     }
 
+    [Theory, ModeData]
+    public void MalformedBasicConstraintsExposeFalseCa(ExecutionMode mode)
+    {
+        using var key = RSA.Create(2048);
+        var signer = X509SignatureGenerator.CreateForRSA(key, RSASignaturePadding.Pkcs1);
+        var name = new X500DistinguishedName("CN=Issuer");
+        using var certificate = Create(name, name, key, signer, 1,
+            new X509Extension("2.5.29.19", [0x05, 0x00], false));
+        var source = ProgramFor([certificate], """
+            console.log(c[0].ca);
+            console.log(c[0].toLegacyObject().ca);
+            console.log(c[0].checkIssued(c[0]));
+            """);
+        Assert.Equal("false\nfalse\nfalse\n",
+            TestHarness.RunModules(new() { ["main.ts"] = source }, "main.ts", mode));
+    }
+
     private static X500DistinguishedName EncodedName(string value, UniversalTagNumber encoding)
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);

@@ -158,7 +158,10 @@ public class SharpTSX509Certificate
         foreach (var ext in _cert.Extensions)
         {
             if (ext is X509BasicConstraintsExtension bc)
-                return bc.CertificateAuthority;
+            {
+                try { return bc.CertificateAuthority; }
+                catch (CryptographicException) { return false; }
+            }
         }
         return false;
     }
