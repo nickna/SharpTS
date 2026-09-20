@@ -36,8 +36,8 @@ public partial class ILCompiler
             string qualifiedClassName = GetQualifiedClassDeclarationName(classStmt);
 
             // Skip external types
-            if (_classes.ExternalTypes.ContainsKey(qualifiedClassName) ||
-                _classes.ExternalTypes.ContainsKey(classStmt.Name.Lexeme))
+            if (_typeMapper.ExternalTypes.ContainsKey(qualifiedClassName) ||
+                _typeMapper.ExternalTypes.ContainsKey(classStmt.Name.Lexeme))
                 continue;
 
             EmitHasFieldsInterfaceMethodBodies(qualifiedClassName, classStmt);
@@ -58,8 +58,8 @@ public partial class ILCompiler
         string qualifiedClassName = GetQualifiedClassDeclarationName(classStmt, resolve: true);
 
         // Also skip if this is an external type (registered via @DotNetType decorator)
-        if (_classes.ExternalTypes.ContainsKey(qualifiedClassName) ||
-            _classes.ExternalTypes.ContainsKey(classStmt.Name.Lexeme))
+        if (_typeMapper.ExternalTypes.ContainsKey(qualifiedClassName) ||
+            _typeMapper.ExternalTypes.ContainsKey(classStmt.Name.Lexeme))
             return;
 
         if (!_classes.Builders.TryGetValue(qualifiedClassName, out var typeBuilder))
@@ -555,8 +555,8 @@ public partial class ILCompiler
         string qualifiedClassName = GetQualifiedClassDeclarationName(classStmt);
 
         // Also skip if this is an external type (registered via @DotNetType decorator)
-        if (_classes.ExternalTypes.ContainsKey(qualifiedClassName) ||
-            _classes.ExternalTypes.ContainsKey(classStmt.Name.Lexeme))
+        if (_typeMapper.ExternalTypes.ContainsKey(qualifiedClassName) ||
+            _typeMapper.ExternalTypes.ContainsKey(classStmt.Name.Lexeme))
             return;
 
         if (!_classes.Builders.TryGetValue(qualifiedClassName, out var typeBuilder))

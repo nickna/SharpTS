@@ -907,6 +907,7 @@ public partial class ILCompiler
         // them complete no-ops. Give every remaining declaration its own
         // generated block-scoped type and evaluate it at the statement site.
         DefineRemainingClassDeclarations(statements);
+        _typeMapper.ExternalTypeDeclarations.CompleteDeclarations();
 
         // Alias namespace function import aliases to their targets now that every namespace
         // member function is in the registry (#657).
@@ -1364,6 +1365,7 @@ public partial class ILCompiler
         {
             RegisterDotNetImports(module);
         }
+        _typeMapper.ExternalTypeDeclarations.CompleteDeclarations();
 
         // Alias namespace function import aliases to their targets now that every namespace
         // member function is in the registry (#657).

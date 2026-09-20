@@ -1809,6 +1809,26 @@ compiler; different compilers have distinct instances. `globalThis` retains its 
 registry for delegated dispatch. The former late registration block and unused external-type
 alias are removed. Other compiler registries and shared infrastructure still require audit.
 
+### External CLR type declarations
+
+`TypeMapper.ExternalTypeDeclarations` owns one `ExternalTypeRegistry` per compilation.
+Class decorators and `dotnet:` imports register their aliases with this owner; class
+body selection, type mapping, interop call emission and dependency discovery read
+its protected live view. `ClassCompilationState` no longer keeps a second copy of
+these handles. Source-order alias replacement and per-method overload-hint merging
+remain explicit policies. Hints are copied and validated before any changes become
+visible, so caller-owned dictionaries cannot mutate the registry later. Hints for
+an earlier CLR type remain available even if an alias is subsequently rebound.
+
+Script phase 4 completes external declarations after discovering all class
+declarations, including nested and namespace classes. Module phase 5 completes them
+after all classes and `dotnet:` imports are registered. Both boundaries precede
+method-body emission. Empty registries complete normally; reads remain available
+throughout declaration and after completion, while all later writes and repeated
+completion fail. User-class import-collision checks continue to run before alias
+registration. Other class state, mapper configuration and the final ownership audit
+remain separate required work.
+
 ### Generated union metadata
 
 `UnionTypeGenerator` fixes its type mapper and marker interface at construction. The
