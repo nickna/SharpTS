@@ -363,19 +363,32 @@ public class SharpTSReadableStream : ITypeCategorized
 
         if (CancelAlgorithm is null)
         {
-            return SharpTSPromise.Resolve(SharpTSUndefined.Instance);
+            return new SharpTSPromise(CompleteCancellationAsync(null));
         }
 
         try
         {
             var result = RuntimeCallableDispatcher.Invoke(OwnerInterpreter, CancelAlgorithm, reason);
-            if (result is SharpTSPromise p) return p;
-            return SharpTSPromise.Resolve(SharpTSUndefined.Instance);
+            return new SharpTSPromise(CompleteCancellationAsync(result));
         }
         catch (Exception ex)
         {
-            return SharpTSPromise.Reject(ex is SharpTSPromiseRejectedException pre ? pre.Reason : ex);
+            return SharpTSPromise.Reject(ex switch
+            {
+                Exceptions.ThrowException thrown => thrown.Value,
+                SharpTSPromiseRejectedException rejected => rejected.Reason,
+                _ => ex
+            });
         }
+    }
+
+    private async Task<object?> CompleteCancellationAsync(object? result)
+    {
+        if (result is SharpTSPromise promise) await promise.GetValueAsync();
+        else if (result is Task<object?> task) await task;
+        if (OwnerInterpreter is { } interpreter)
+            return await interpreter.QueuePromiseReaction(() => Task.FromResult<object?>(SharpTSUndefined.Instance));
+        return SharpTSUndefined.Instance;
     }
 
     // ------- static helpers -----------------------------------------------
@@ -418,7 +431,7 @@ public class SharpTSReadableStream : ITypeCategorized
                 else if (State == StreamState.Errored) Reader.ClosedTcs.TrySetException(new SharpTSPromiseRejectedException(StoredError));
                 return RuntimeValue.FromObject(Reader);
             }),
-            "cancel" => BuiltInMethod.CreateV2("cancel", 1, (_, _, args) =>
+            "cancel" => BuiltInMethod.CreateV2("cancel", 0, 1, (_, _, args) =>
             {
                 var reason = args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance;
                 return RuntimeValue.FromObject(CancelInternal(reason));
@@ -540,7 +553,7 @@ public class SharpTSReadableStreamDefaultReader : ITypeCategorized
                 }
                 return RuntimeValue.Undefined;
             }),
-            "cancel" => BuiltInMethod.CreateV2("cancel", 1, (_, _, args) =>
+            "cancel" => BuiltInMethod.CreateV2("cancel", 0, 1, (_, _, args) =>
             {
                 if (_stream.Reader != this)
                 {

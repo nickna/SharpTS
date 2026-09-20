@@ -920,6 +920,12 @@ public partial class RuntimeEmitter
 
     private MethodBuilder EmitReadableStreamCancel(ReadableStreamConstruction construction, TypeBuilder t, EmittedRuntime runtime)
     {
+        var fulfill = t.DefineMethod("CancelFulfilled", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
+        var fulfillIl = fulfill.GetILGenerator();
+        fulfillIl.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        fulfillIl.Emit(OpCodes.Ret);
+
         var method = t.DefineMethod(
             "Cancel",
             MethodAttributes.Public,
@@ -936,8 +942,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadableQueueField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.ListOfObject, "Clear")!);
 
-        // If cancel callback present, call it (sync) and return Task.FromResult
+        // Cancellation closes parked reads before invoking the source callback.
+        EmitDrainPendingReadsWithDone(construction, il, runtime);
+
+        // Invoke the source synchronously, then adopt its cancellation result.
         var noCbLabel = il.DefineLabel();
+        var completeLabel = il.DefineLabel();
+        var cancellationTask = il.DeclareLocal(_types.TaskOfObject);
+        il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadableCancelCbField);
         il.Emit(OpCodes.Brfalse, noCbLabel);
@@ -951,12 +963,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.Invocation.Method);
-        il.Emit(OpCodes.Pop);
+        EmitWrapResultAsTask(il, runtime);
+        il.Emit(OpCodes.Br, completeLabel);
 
         il.MarkLabel(noCbLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
+        il.MarkLabel(completeLabel);
+        il.Emit(OpCodes.Stloc, cancellationTask);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(
+            typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!, typeof(object)));
+        il.Emit(OpCodes.Stloc, cancellationTask);
+        il.EndExceptionBlock();
+        il.Emit(OpCodes.Ldloc, cancellationTask);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldftn, fulfill);
+        il.Emit(OpCodes.Newobj, typeof(Func<object, object>).GetConstructor([typeof(object), typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().ThenObjectPrimitive);
         il.Emit(OpCodes.Ret);
         return method;
     }
@@ -983,6 +1007,28 @@ public partial class RuntimeEmitter
     /// </remarks>
     private MethodBuilder EmitReadableStreamPipeTo(TypeBuilder t, MethodInfo readMethod, MethodInfo cancelMethod, EmittedRuntime runtime)
     {
+        // Each abort owns its reason until cancellation settles. Keep this
+        // continuation local to this emitted assembly and this invocation.
+        var abortContinuation = EmitTypeDefinitions.DefineType(
+            (ModuleBuilder)t.Module, "$ReadableStreamAbortContinuation",
+            TypeAttributes.Public | TypeAttributes.Sealed, _types.Object);
+        var abortReason = abortContinuation.DefineField("Reason", _types.Exception, FieldAttributes.Private);
+        var abortCtor = abortContinuation.DefineConstructor(
+            MethodAttributes.Public, CallingConventions.Standard, [_types.Exception]);
+        var ctorIl = abortCtor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Stfld, abortReason);
+        ctorIl.Emit(OpCodes.Ret);
+        var abortRun = abortContinuation.DefineMethod("Run", MethodAttributes.Public, _types.Object, [_types.Object]);
+        var runIl = abortRun.GetILGenerator();
+        runIl.Emit(OpCodes.Ldarg_0);
+        runIl.Emit(OpCodes.Ldfld, abortReason);
+        runIl.Emit(OpCodes.Throw);
+        abortContinuation.CreateType();
+
         var method = t.DefineMethod(
             "PipeTo",
             MethodAttributes.Public,
@@ -1135,31 +1181,20 @@ public partial class RuntimeEmitter
         il.EndExceptionBlock();
         il.MarkLabel(noAbortCbLabel);
 
-        // source.cancel(reason) — calls this.Cancel(reason) on the emitted
-        // stream. Wrap in try/catch for the same reason.
+        // Cancellation now completes through a promise reaction. Return its
+        // continuation instead of blocking the thread that must run that job.
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, reasonLocal);
         il.Emit(OpCodes.Callvirt, cancelMethod);
-        EmitSyncAwaitTaskOfObject(il, awaiterLocal);
-        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Stloc, coopTaskLocal);
         il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(
+            typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!, typeof(object)));
+        il.Emit(OpCodes.Stloc, coopTaskLocal);
         il.EndExceptionBlock();
 
-        // Return a rejected Task<object> rather than throwing synchronously.
-        // PipeTo's caller does `await source.pipeTo(...)`; for the user's
-        // try/catch to observe the rejection, the awaited task must reach
-        // the faulted state. A synchronous throw would escape via
-        // TargetInvocationException before the caller ever sees a Task.
-        //
-        // Build: var tcs = new TCS<object>(); tcs.SetException(new Exception(reason));
-        //        return tcs.Task;
-        var abortTcsLocal = il.DeclareLocal(typeof(TaskCompletionSource<object>));
-        il.Emit(OpCodes.Newobj, typeof(TaskCompletionSource<object>).GetConstructor(Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stloc, abortTcsLocal);
-
-        il.Emit(OpCodes.Ldloc, abortTcsLocal);
+        il.Emit(OpCodes.Ldloc, coopTaskLocal);
         il.Emit(OpCodes.Ldloc, reasonLocal);
         var haveReasonStrLabel = il.DefineLabel();
         var reasonStrDoneLabel = il.DefineLabel();
@@ -1172,10 +1207,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.MarkLabel(reasonStrDoneLabel);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
-        il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object>).GetMethod("SetException", [typeof(Exception)])!);
-
-        il.Emit(OpCodes.Ldloc, abortTcsLocal);
-        il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object>).GetProperty("Task")!.GetGetMethod()!);
+        il.Emit(OpCodes.Newobj, abortCtor);
+        il.Emit(OpCodes.Ldftn, abortRun);
+        il.Emit(OpCodes.Newobj, typeof(Func<object, object>).GetConstructor([typeof(object), typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().ThenObjectPrimitive);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(signalOkLabel);

@@ -23,6 +23,138 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </remarks>
 public class StreamsWebSemanticTests
 {
+    [Theory, ModeData]
+    public void ReadableStream_CancelSettlesEarlierPendingRead(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                async function main() {
+                 const stream=new ReadableStream();const reader=stream.getReader();let settled=false;
+                 reader.read().then(result=>{settled=true;console.log(result.done);});
+                 await reader.cancel('cancelled');await Promise.resolve();console.log(settled);
+                }
+                main();
+                """
+        };
+        Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void ReadableStream_CancelWaitsForSourceAndDiscardsItsResult(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                async function main() {
+                    let finish: any;
+                    const stream = new ReadableStream({
+                        cancel(reason) {
+                            console.log(reason);
+                            return new Promise(resolve => { finish = resolve; });
+                        }
+                    });
+                    const reader = stream.getReader();
+                    const first = reader.read();
+                    const second = reader.read();
+                    let completed = false;
+                    const cancellation = reader.cancel("stop");
+                    cancellation.then(() => { completed = true; });
+                    console.log(completed);
+                    console.log((await first).done);
+                    console.log((await second).done);
+                    console.log(completed);
+                    finish(42);
+                    console.log((await cancellation) === undefined);
+                }
+                main();
+                """
+        };
+        Assert.Equal("stop\nfalse\ntrue\ntrue\nfalse\ntrue\n",
+            TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void ReadableStream_CancelRejectsAfterClosingPendingReads(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                async function main() {
+                    let rejectCancel: any;
+                    const stream = new ReadableStream({
+                        cancel() {
+                            return new Promise((_, reject) => { rejectCancel = reject; });
+                        }
+                    });
+                    const reader = stream.getReader();
+                    const read = reader.read();
+                    const cancellation = reader.cancel();
+                    console.log((await read).done);
+                    rejectCancel("source-failed");
+                    try { await cancellation; }
+                    catch (reason) { console.log(reason); }
+                }
+                main();
+                """
+        };
+        Assert.Equal("true\nsource-failed\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void ReadableStream_CancelReturnsRejectedPromiseForSynchronousSourceThrow(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                async function main() {
+                    const stream = new ReadableStream({
+                        cancel() { throw new Error("source-failed"); }
+                    });
+                    const reader = stream.getReader();
+                    const read = reader.read();
+                    let cancellation: any;
+                    try {
+                        cancellation = reader.cancel();
+                        console.log("returned");
+                    } catch { console.log("synchronous-throw"); }
+                    console.log((await read).done);
+                    try { await cancellation; }
+                    catch (reason: any) { console.log(reason.message); }
+                }
+                main();
+                """
+        };
+        Assert.Equal("returned\ntrue\nsource-failed\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void ReadableStream_PipeAbortWaitsForDelayedCancellation(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                async function main() {
+                    const source = new ReadableStream({
+                        cancel() {
+                            console.log("cancel-start");
+                            return new Promise(resolve => {
+                                setTimeout(() => { console.log("cancel-done"); resolve(42); }, 1);
+                            });
+                        }
+                    });
+                    const controller = new AbortController();
+                    controller.abort();
+                    try { await source.pipeTo(new WritableStream(), { signal: controller.signal }); }
+                    catch { console.log("pipe-rejected"); }
+                }
+                main();
+                """
+        };
+        Assert.Equal("cancel-start\ncancel-done\npipe-rejected\n",
+            TestHarness.RunModules(files, "main.ts", mode));
+    }
+
     #region Pending reads — queue empty, chunk arrives later
 
     /// <summary>
@@ -491,6 +623,14 @@ public class StreamsWebSemanticTests
         abortGate.SetResult(null);
 
         Assert.True(cancelInvoked.Wait(TimeSpan.FromSeconds(5)), "source cancel() was dropped");
+
+        // This direct-runtime test owns the event loop. Cancellation completion
+        // is a promise reaction and must be driven just as the host drives it.
+        Assert.True(SpinWait.SpinUntil(() =>
+        {
+            interp.TickEventLoop();
+            return pipe.Task.IsCompleted;
+        }, TimeSpan.FromSeconds(5)), "pipe teardown did not complete");
 
         // The pipe promise rejects with the abort reason once the pump unwinds.
         var fault = Assert.Throws<AggregateException>(() => pipe.Task.Wait(TimeSpan.FromSeconds(5)));
