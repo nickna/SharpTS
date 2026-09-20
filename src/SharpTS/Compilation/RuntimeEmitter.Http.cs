@@ -261,6 +261,7 @@ public partial class RuntimeEmitter
         var listOfStringType = typeof(List<string>);
         var dictType = typeof(Dictionary<string, List<string>>);
         fetch.HeadersDataField = typeBuilder.DefineField("_data", dictType, FieldAttributes.Assembly);
+        fetch.HeadersImmutableField = typeBuilder.DefineField("_immutable", _types.Boolean, FieldAttributes.Assembly);
 
         // Constructor: $Headers(object? init)
         // If init is Dictionary<string, object?>, populate from it
@@ -448,10 +449,10 @@ public partial class RuntimeEmitter
 
         // Emit instance methods
         EmitHeadersGetMethod(fetch, typeBuilder, listOfStringType, dictType);
-        EmitHeadersSetMethod(fetch, typeBuilder, listOfStringType, dictType);
+        EmitHeadersSetMethod(fetch, runtime.Errors, typeBuilder, listOfStringType, dictType);
         EmitHeadersHasMethod(fetch, typeBuilder, dictType);
-        EmitHeadersDeleteMethod(fetch, typeBuilder, dictType);
-        EmitHeadersAppendMethod(fetch, typeBuilder, listOfStringType, dictType);
+        EmitHeadersDeleteMethod(fetch, runtime.Errors, typeBuilder, dictType);
+        EmitHeadersAppendMethod(fetch, runtime.Errors, typeBuilder, listOfStringType, dictType);
         EmitHeadersForEachMethod(typeBuilder, listOfStringType, dictType, runtime);
         EmitHeadersEntriesMethod(typeBuilder, listOfStringType, dictType, runtime);
         EmitHeadersKeysMethod(typeBuilder, listOfStringType, dictType, runtime);
@@ -558,11 +559,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitHeadersMutationGuard(ILGenerator il, EmittedFetchImplementation fetch, EmittedErrorRuntime errors)
+    {
+        var mutable = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, fetch.HeadersImmutableField);
+        il.Emit(OpCodes.Brfalse, mutable);
+        il.Emit(OpCodes.Ldstr, "immutable");
+        il.Emit(OpCodes.Newobj, errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Call, errors.CreateException);
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(mutable);
+    }
+
     /// <summary>
     /// Emits: public object set(object name, object value) → undefined
     /// </summary>
-
-    private void EmitHeadersSetMethod(EmittedFetchImplementation fetch, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
+    private void EmitHeadersSetMethod(EmittedFetchImplementation fetch, EmittedErrorRuntime errors, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
     {
         var method = typeBuilder.DefineMethod("set", MethodAttributes.Public, _types.Object, [_types.Object, _types.Object]);
         fetch.HeadersSetMethod = method;
@@ -575,6 +588,7 @@ public partial class RuntimeEmitter
         // string value = arg1?.ToString() ?? ""
         var valueLocal = il.DeclareLocal(_types.String);
         EmitArgToString(il, 2, valueLocal);
+        EmitHeadersMutationGuard(il, fetch, errors);
 
         // _data[name] = new List<string> { value }
         il.Emit(OpCodes.Ldarg_0);
@@ -612,13 +626,14 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object delete(object name) → bool
     /// </summary>
-    private void EmitHeadersDeleteMethod(EmittedFetchImplementation fetch, TypeBuilder typeBuilder, Type dictType)
+    private void EmitHeadersDeleteMethod(EmittedFetchImplementation fetch, EmittedErrorRuntime errors, TypeBuilder typeBuilder, Type dictType)
     {
         var method = typeBuilder.DefineMethod("delete", MethodAttributes.Public, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
 
         var nameLocal = il.DeclareLocal(_types.String);
         EmitArgToString(il, 1, nameLocal);
+        EmitHeadersMutationGuard(il, fetch, errors);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
@@ -631,7 +646,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object append(object name, object value) → undefined
     /// </summary>
-    private void EmitHeadersAppendMethod(EmittedFetchImplementation fetch, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
+    private void EmitHeadersAppendMethod(EmittedFetchImplementation fetch, EmittedErrorRuntime errors, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
     {
         var method = typeBuilder.DefineMethod("append", MethodAttributes.Public, _types.Object, [_types.Object, _types.Object]);
         var il = method.GetILGenerator();
@@ -641,6 +656,7 @@ public partial class RuntimeEmitter
 
         var valueLocal = il.DeclareLocal(_types.String);
         EmitArgToString(il, 2, valueLocal);
+        EmitHeadersMutationGuard(il, fetch, errors);
 
         // if (_data.TryGetValue(name, out var list)) list.Add(value); else _data[name] = new List { value }
         var listLocal = il.DeclareLocal(listOfStringType);
@@ -959,6 +975,10 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg, 5);
         ctorIL.Emit(OpCodes.Stfld, fetch.FetchResponseHeadersField);
+        ctorIL.Emit(OpCodes.Ldarg, 5);
+        ctorIL.Emit(OpCodes.Castclass, fetch.HeadersType);
+        ctorIL.Emit(OpCodes.Ldc_I4_1);
+        ctorIL.Emit(OpCodes.Stfld, fetch.HeadersImmutableField);
 
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg, 6);

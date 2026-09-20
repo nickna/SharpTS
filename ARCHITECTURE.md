@@ -943,7 +943,7 @@ library retains client/agent behavior. BCL type lookups and method-local constru
 with the emitter; include those ownership boundaries in the final residual-state audit.
 
 Fetch uses required `EmittedFetchRuntime` metadata for the global function-cache field, which is
-declared even in minimal programs. Its optional `Implementation` contains 31 fetch/Headers/Request/
+declared even in minimal programs. Its optional `Implementation` contains 32 fetch/Headers/Request/
 Response declarations. `EmitAll` enables it for `UsesHttp`, preserving Web API emission for HTTP-only
 imports as well as fetch-family references. The global getter still exposes fetch only for `UsesFetch`.
 The implementation's optional `Client` owns 15 declarations for async dispatch, four cached clients,
@@ -971,6 +971,11 @@ copies its dictionary and individual value lists. Request/Response initializatio
 independent header ownership in both runtimes, including separate Set-Cookie entries. The emitted
 copy loop uses only constructor-local handles; component declarations and feature gates are unchanged.
 This corrects the recorded fetch construction regressions without closing the final #1599 audit.
+Fetched responses cache a stable Headers object and mark its mutation guard immutable; clones have
+separate immutable Headers objects. Explicit Headers copies and Request/Response construction start
+with mutable storage. The checked `HeadersImmutableField` belongs to the optional implementation
+component and is required before completion, while mutation-error construction uses the shared error
+component. The interpreter caches and guards the corresponding wrapper per fetched response.
 
 Node Buffer uses optional `EmittedBufferRuntime`, started only for `UsesBuffer`. It owns 79 checked
 handles: the former 76 flat properties plus the backing-data field and two module coercion helpers.
