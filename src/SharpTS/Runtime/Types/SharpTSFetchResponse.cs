@@ -22,6 +22,7 @@ public class SharpTSFetchResponse : ITypeCategorized
 
     private readonly HttpResponseMessage _response;
     private readonly string _url;
+    private readonly SharpTSHeaders _headers;
     private readonly bool _redirected;
     private byte[]? _bodyBytes;
     private bool _bodyConsumed;
@@ -38,6 +39,8 @@ public class SharpTSFetchResponse : ITypeCategorized
         _response = response ?? throw new ArgumentNullException(nameof(response));
         _url = url ?? throw new ArgumentNullException(nameof(url));
         _redirected = redirected;
+        _headers = new SharpTSHeaders(_response);
+        _headers.MakeImmutable();
     }
 
     /// <summary>
@@ -165,7 +168,7 @@ public class SharpTSFetchResponse : ITypeCategorized
     /// </summary>
     private SharpTSHeaders GetHeadersObject()
     {
-        return new SharpTSHeaders(_response);
+        return _headers;
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
@@ -13,6 +14,15 @@ public class SharpTSHeaders : ITypeCategorized
     public TypeCategory RuntimeCategory => TypeCategory.Record;
 
     private readonly Dictionary<string, List<string>> _headers;
+    private bool _immutable;
+
+    internal void MakeImmutable() => _immutable = true;
+
+    private void EnsureMutable()
+    {
+        if (_immutable)
+            throw new ThrowException(new SharpTSTypeError("immutable"));
+    }
 
     /// <summary>
     /// Creates an empty Headers object.
@@ -144,6 +154,7 @@ public class SharpTSHeaders : ITypeCategorized
     /// </summary>
     public void Set(string name, string value)
     {
+        EnsureMutable();
         _headers[name] = [value];
     }
 
@@ -160,6 +171,7 @@ public class SharpTSHeaders : ITypeCategorized
     /// </summary>
     public bool Delete(string name)
     {
+        EnsureMutable();
         return _headers.Remove(name);
     }
 
@@ -168,6 +180,7 @@ public class SharpTSHeaders : ITypeCategorized
     /// </summary>
     public void Append(string name, string value)
     {
+        EnsureMutable();
         if (_headers.TryGetValue(name, out var values))
         {
             values.Add(value);

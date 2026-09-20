@@ -136,6 +136,13 @@ public sealed class EmittedFetchImplementation
         internal set => Set(ref _fetchResponseBodyConsumedField, value);
     }
 
+    private FieldBuilder? _headersImmutableField;
+    public FieldBuilder HeadersImmutableField
+    {
+        get => Require(_headersImmutableField);
+        internal set => Set(ref _headersImmutableField, value);
+    }
+
     private FieldBuilder? _headersDataField;
     public FieldBuilder HeadersDataField
     {
@@ -280,6 +287,7 @@ public sealed class EmittedFetchImplementation
         _ = FetchResponseBodyBytesField;
         _ = FetchResponseBodyConsumedField;
         _ = HeadersDataField;
+        _ = HeadersImmutableField;
         _ = RequestMethodField;
         _ = RequestUrlField;
         _ = RequestHeadersField;
