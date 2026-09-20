@@ -82,6 +82,12 @@ node identity for checking, debug information, feature detection, and diagnostic
 values and scope chains. They are intentionally separate. Runtime behavior must not depend on a
 mutable checker environment, and the checker must not execute user code to learn a type.
 
+Interface completion and declaration merging replace immutable interface shapes. During one
+checking invocation, the checker tracks those replacements by object identity so existing value
+bindings can follow their original interface to its completed shape. This tracking is reset at
+each checker entry point alongside declaration provenance. It never resolves a retained value's
+type by name in the use site's scope, where a different interface may shadow the declaration.
+
 Class assignment compatibility is structural like TypeScript except where private/protected
 branding requires a nominal relationship. Inheritance lookup is nominal. The compatibility logic,
 not CLR assignability, is authoritative for TypeScript checking.
