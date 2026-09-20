@@ -1013,13 +1013,16 @@ public partial class ILCompiler
     /// </summary>
     private void DefineObjectShapeTypes()
     {
-        if (_typeMap == null) return;
-        foreach (var shape in _typeMap.PromotableObjectLocalShapes)
+        var shapes = _typeMap?.PromotableObjectLocalShapes.ToArray() ?? [];
+        var registry = _closures.ObjectShapes;
+        registry.BeginDeclarations(shapes.Select(shape => shape.CanonicalKey));
+        int index = 0;
+        foreach (var shape in shapes)
         {
-            if (_closures.ObjectShapes.ByKey.ContainsKey(shape.CanonicalKey)) continue;
+            if (registry.ByKey.ContainsKey(shape.CanonicalKey)) continue;
 
             var structType = EmitTypeDefinitions.DefineType(_moduleBuilder,
-                $"$Shape_{_closures.ObjectShapes.Counter++}",
+                $"$Shape_{index++}",
                 TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.SequentialLayout,
                 _types.ValueType);
 
@@ -1041,26 +1044,21 @@ public partial class ILCompiler
             var shapeInitializer = structType.DefineTypeInitializer().GetILGenerator();
             shapeInitializer.Emit(OpCodes.Ldc_I4, shape.Fields.Count);
             shapeInitializer.Emit(OpCodes.Newarr, _types.Object);
-            for (int index = 0; index < shape.Fields.Count; index++)
+            for (int fieldIndex = 0; fieldIndex < shape.Fields.Count; fieldIndex++)
             {
                 shapeInitializer.Emit(OpCodes.Dup);
-                shapeInitializer.Emit(OpCodes.Ldc_I4, index);
-                shapeInitializer.Emit(OpCodes.Ldstr, shape.Fields[index].Name);
+                shapeInitializer.Emit(OpCodes.Ldc_I4, fieldIndex);
+                shapeInitializer.Emit(OpCodes.Ldstr, shape.Fields[fieldIndex].Name);
                 shapeInitializer.Emit(OpCodes.Stelem_Ref);
             }
             shapeInitializer.Emit(OpCodes.Stsfld, keyMetadataField);
             shapeInitializer.Emit(OpCodes.Ret);
 
-            var info = new ObjectShapeTypeInfo
-            {
-                ClrType = structType,
-                Fields = shape.Fields.Select(f => (f.Name, f.Kind)).ToList(),
-                FieldBuilders = fieldBuilders,
-                KeyMetadataField = keyMetadataField,
-            };
-            _closures.ObjectShapes.ByKey[shape.CanonicalKey] = info;
-            _closures.ObjectShapes.ByClrType[structType] = info;
+            var info = new ObjectShapeTypeInfo(structType,
+                shape.Fields.Select(f => (f.Name, f.Kind)), fieldBuilders, keyMetadataField);
+            registry.Declare(shape.CanonicalKey, info);
         }
+        registry.CompleteDeclarations();
     }
 
     /// <summary>
