@@ -1797,6 +1797,18 @@ non-generic list interfaces; HTTPS shares HTTP's immutable view. Cluster propert
 uses an immutable ordinal set. Strategies retain no generated metadata in these catalogs.
 Other compiler registries remain part of the broader ownership audit.
 
+### Type emitter strategy registry
+
+Each compiler creates its completed `TypeEmitterRegistry` before exposing emission contexts.
+The registry checks non-null strategies, unique instance types and ordinal static names, then
+rejects registrations after completion. Existing strategies can be looked up during registration
+for forward references. Missing types remain optional misses, and class instances retain their
+separate fallback dispatch. The table owns strategies, while emitted handles resolve through
+supplied contexts. String/StringLiteral and Iterator/Generator share strategies within one
+compiler; different compilers have distinct instances. `globalThis` retains its own compiler's
+registry for delegated dispatch. The former late registration block and unused external-type
+alias are removed. Other compiler registries and shared infrastructure still require audit.
+
 ## Architectural invariants
 
 Changes should preserve these rules:

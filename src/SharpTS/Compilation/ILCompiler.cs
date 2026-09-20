@@ -49,7 +49,7 @@ public partial class ILCompiler
     private readonly bool _inMemoryOnly;
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeMapper _typeMapper;
-    private readonly TypeEmitterRegistry _typeEmitterRegistry = new();  // Type-first method dispatch registry
+    private readonly TypeEmitterRegistry _typeEmitterRegistry = TypeEmitterRegistry.CreateDefault();  // Type-first method dispatch registry
     private readonly BuiltInModuleEmitterRegistry _builtInModuleEmitterRegistry = BuiltInModuleEmitterRegistry.CreateDefault();  // Built-in module emitters
     private readonly Dictionary<string, string> _builtInModuleNamespaces = [];  // Variable name -> module name for direct dispatch
     // Per-owning-module local-name → (module, method) bindings for named imports.
@@ -918,8 +918,6 @@ public partial class ILCompiler
         // Initialize typed interop support
         InitializeTypedInterop();
 
-        // Initialize type emitter registries
-        InitializeTypeEmitterRegistries();
     }
 
     private void PredefineTopLevelClassExpressionTypes(IEnumerable<Stmt> statements)
@@ -1151,66 +1149,6 @@ public partial class ILCompiler
         _typeMapper.SetUnionGenerator(_unionGenerator);
     }
 
-    /// <summary>
-    /// Initializes type emitter registries for type-first method dispatch.
-    /// </summary>
-    private void InitializeTypeEmitterRegistries()
-    {
-        _typeEmitterRegistry.SetExternalTypes(_classes.ExternalTypes);
-
-        // Instance type emitters
-        var stringEmitter = new StringEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.String>(stringEmitter);
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.StringLiteral>(stringEmitter);
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Array>(new ArrayEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Tuple>(new ArrayEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Buffer>(new BufferEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.EventEmitter>(new EventEmitterEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Date>(new DateEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Map>(new MapEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Set>(new SetEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakMap>(new WeakMapEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakSet>(new WeakSetEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakRef>(new WeakRefEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.FinalizationRegistry>(new FinalizationRegistryEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.RegExp>(new RegExpEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AsyncGenerator>(new AsyncGeneratorEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Error>(new ErrorEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.SharedArrayBuffer>(new SharedArrayBufferEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.ArrayBuffer>(new ArrayBufferEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.DataView>(new DataViewEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AbortController>(new AbortControllerEmitter());
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AbortSignal>(new AbortSignalEmitter());
-        var iteratorEmitter = new IteratorEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Iterator>(iteratorEmitter);
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Generator>(iteratorEmitter);
-
-        // Static type emitters
-        _typeEmitterRegistry.RegisterStatic("Math", new MathStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("JSON", new JSONStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Object", new ObjectStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Array", new ArrayStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Buffer", new BufferStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Number", new NumberStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Error", new ErrorStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Map", new MapStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("String", new StringStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Boolean", new BooleanStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("process", new ProcessStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("globalThis", new GlobalThisStaticEmitter(_typeEmitterRegistry));
-        _typeEmitterRegistry.RegisterStatic("Atomics", new AtomicsStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("ArrayBuffer", new ArrayBufferStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Reflect", new ReflectStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Proxy", new ProxyStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("AbortSignal", new AbortSignalStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Response", new ResponseStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Iterator", new IteratorStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("RegExp", new RegExpStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Date", new DateStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("ReadableStream", new ReadableStreamStaticEmitter());
-    }
 
     #endregion
 
@@ -1233,7 +1171,6 @@ public partial class ILCompiler
             AnalyzeModuleBindings(modules);
             ModulePhase5_DefineDeclarations(modules);
             InitializeTypedInterop();
-            InitializeTypeEmitterRegistries();
             ModulePhase6_CollectArrowFunctions(modules);
             ModulePhase7_EmitArrowBodies(modules);
             ModulePhase8_EmitMethodBodies(modules);
@@ -1259,7 +1196,6 @@ public partial class ILCompiler
         {
             ModulePhase5_DefineDeclarations(modules);
             InitializeTypedInterop();
-            InitializeTypeEmitterRegistries();
         });
         _timingCollector.Measure(ExecutionPhaseTiming.CollectFunctions,
             () => ModulePhase6_CollectArrowFunctions(modules));
