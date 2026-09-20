@@ -971,6 +971,11 @@ copies its dictionary and individual value lists. Request/Response initializatio
 independent header ownership in both runtimes, including separate Set-Cookie entries. The emitted
 copy loop uses only constructor-local handles; component declarations and feature gates are unchanged.
 This corrects the recorded fetch construction regressions without closing the final #1599 audit.
+Headers get/set/has/delete/append use the shared JavaScript string-conversion protocol. Their emitted
+helpers receive the checked string-coercion component explicitly and call its forward-declared
+`ToJsString`; no duplicate conversion metadata is retained. Name conversion precedes value conversion,
+and both precede mutation guards, so guest conversion failures propagate without a write.
+
 Fetched responses cache a stable Headers object and mark its mutation guard immutable; clones have
 separate immutable Headers objects. Explicit Headers copies and Request/Response construction start
 with mutable storage. The checked `HeadersImmutableField` belongs to the optional implementation

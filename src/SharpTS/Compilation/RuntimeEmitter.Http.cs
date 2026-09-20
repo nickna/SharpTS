@@ -448,11 +448,11 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ret);
 
         // Emit instance methods
-        EmitHeadersGetMethod(fetch, typeBuilder, listOfStringType, dictType);
-        EmitHeadersSetMethod(fetch, runtime.Errors, typeBuilder, listOfStringType, dictType);
-        EmitHeadersHasMethod(fetch, typeBuilder, dictType);
-        EmitHeadersDeleteMethod(fetch, runtime.Errors, typeBuilder, dictType);
-        EmitHeadersAppendMethod(fetch, runtime.Errors, typeBuilder, listOfStringType, dictType);
+        EmitHeadersGetMethod(fetch, runtime.StringCoercion, typeBuilder, listOfStringType, dictType);
+        EmitHeadersSetMethod(fetch, runtime.StringCoercion, runtime.Errors, typeBuilder, listOfStringType, dictType);
+        EmitHeadersHasMethod(fetch, runtime.StringCoercion, typeBuilder, dictType);
+        EmitHeadersDeleteMethod(fetch, runtime.StringCoercion, runtime.Errors, typeBuilder, dictType);
+        EmitHeadersAppendMethod(fetch, runtime.StringCoercion, runtime.Errors, typeBuilder, listOfStringType, dictType);
         EmitHeadersForEachMethod(typeBuilder, listOfStringType, dictType, runtime);
         EmitHeadersEntriesMethod(typeBuilder, listOfStringType, dictType, runtime);
         EmitHeadersKeysMethod(typeBuilder, listOfStringType, dictType, runtime);
@@ -472,14 +472,14 @@ public partial class RuntimeEmitter
     /// Per WHATWG fetch, <c>Set-Cookie</c> returns the first value only — use
     /// <c>getSetCookie()</c> to get the full list.
     /// </remarks>
-    private void EmitHeadersGetMethod(EmittedFetchImplementation fetch, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
+    private void EmitHeadersGetMethod(EmittedFetchImplementation fetch, EmittedStringCoercionRuntime coercion, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
     {
         var method = typeBuilder.DefineMethod("get", MethodAttributes.Public, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
 
-        // string name = arg?.ToString() ?? ""
+        // Convert the guest argument before reading or mutating headers.
         var nameLocal = il.DeclareLocal(_types.String);
-        EmitArgToString(il, 1, nameLocal);
+        EmitHeadersArgToString(il, coercion, 1, nameLocal);
 
         // if (_data.TryGetValue(name, out var values))
         var valuesLocal = il.DeclareLocal(listOfStringType);
@@ -575,19 +575,19 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object set(object name, object value) → undefined
     /// </summary>
-    private void EmitHeadersSetMethod(EmittedFetchImplementation fetch, EmittedErrorRuntime errors, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
+    private void EmitHeadersSetMethod(EmittedFetchImplementation fetch, EmittedStringCoercionRuntime coercion, EmittedErrorRuntime errors, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
     {
         var method = typeBuilder.DefineMethod("set", MethodAttributes.Public, _types.Object, [_types.Object, _types.Object]);
         fetch.HeadersSetMethod = method;
         var il = method.GetILGenerator();
 
-        // string name = arg0?.ToString() ?? ""
+        // Convert name first; abrupt completion prevents value conversion.
         var nameLocal = il.DeclareLocal(_types.String);
-        EmitArgToString(il, 1, nameLocal);
+        EmitHeadersArgToString(il, coercion, 1, nameLocal);
 
-        // string value = arg1?.ToString() ?? ""
+        // Convert value before enforcing the immutable guard.
         var valueLocal = il.DeclareLocal(_types.String);
-        EmitArgToString(il, 2, valueLocal);
+        EmitHeadersArgToString(il, coercion, 2, valueLocal);
         EmitHeadersMutationGuard(il, fetch, errors);
 
         // _data[name] = new List<string> { value }
@@ -607,13 +607,13 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object has(object name) → bool
     /// </summary>
-    private void EmitHeadersHasMethod(EmittedFetchImplementation fetch, TypeBuilder typeBuilder, Type dictType)
+    private void EmitHeadersHasMethod(EmittedFetchImplementation fetch, EmittedStringCoercionRuntime coercion, TypeBuilder typeBuilder, Type dictType)
     {
         var method = typeBuilder.DefineMethod("has", MethodAttributes.Public, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
 
         var nameLocal = il.DeclareLocal(_types.String);
-        EmitArgToString(il, 1, nameLocal);
+        EmitHeadersArgToString(il, coercion, 1, nameLocal);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
@@ -626,13 +626,13 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object delete(object name) → bool
     /// </summary>
-    private void EmitHeadersDeleteMethod(EmittedFetchImplementation fetch, EmittedErrorRuntime errors, TypeBuilder typeBuilder, Type dictType)
+    private void EmitHeadersDeleteMethod(EmittedFetchImplementation fetch, EmittedStringCoercionRuntime coercion, EmittedErrorRuntime errors, TypeBuilder typeBuilder, Type dictType)
     {
         var method = typeBuilder.DefineMethod("delete", MethodAttributes.Public, _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
 
         var nameLocal = il.DeclareLocal(_types.String);
-        EmitArgToString(il, 1, nameLocal);
+        EmitHeadersArgToString(il, coercion, 1, nameLocal);
         EmitHeadersMutationGuard(il, fetch, errors);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -646,16 +646,16 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public object append(object name, object value) → undefined
     /// </summary>
-    private void EmitHeadersAppendMethod(EmittedFetchImplementation fetch, EmittedErrorRuntime errors, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
+    private void EmitHeadersAppendMethod(EmittedFetchImplementation fetch, EmittedStringCoercionRuntime coercion, EmittedErrorRuntime errors, TypeBuilder typeBuilder, Type listOfStringType, Type dictType)
     {
         var method = typeBuilder.DefineMethod("append", MethodAttributes.Public, _types.Object, [_types.Object, _types.Object]);
         var il = method.GetILGenerator();
 
         var nameLocal = il.DeclareLocal(_types.String);
-        EmitArgToString(il, 1, nameLocal);
+        EmitHeadersArgToString(il, coercion, 1, nameLocal);
 
         var valueLocal = il.DeclareLocal(_types.String);
-        EmitArgToString(il, 2, valueLocal);
+        EmitHeadersArgToString(il, coercion, 2, valueLocal);
         EmitHeadersMutationGuard(il, fetch, errors);
 
         // if (_data.TryGetValue(name, out var list)) list.Add(value); else _data[name] = new List { value }
@@ -895,6 +895,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, listOfObjectType.GetMethod("ToArray")!);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.Create);
         il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitHeadersArgToString(ILGenerator il, EmittedStringCoercionRuntime coercion,
+        int argIndex, LocalBuilder local)
+    {
+        il.Emit(OpCodes.Ldarg, argIndex);
+        il.Emit(OpCodes.Call, coercion.ToJsString);
+        il.Emit(OpCodes.Stloc, local);
     }
 
     /// <summary>
