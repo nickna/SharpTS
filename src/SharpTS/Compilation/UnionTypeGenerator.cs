@@ -23,20 +23,29 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public class UnionTypeGenerator
 {
-    private readonly Dictionary<string, TypeBuilder> _unionTypeBuilders = new();
-    private readonly Dictionary<string, Type> _finalizedUnions = new();
+    private readonly Dictionary<string, Type> _unionTypes = new(StringComparer.Ordinal);
     private readonly Dictionary<(string unionKey, Type fromType), MethodBuilder> _implicitConversions = new();
     private readonly TypeMapper _typeMapper;
 
     /// <summary>
     /// The union type marker interface to implement. When compiling to standalone DLLs,
-    /// this is set to the emitted $IUnionType interface. Otherwise, defaults to IUnionType.
+    /// this is supplied as the emitted $IUnionType interface. Otherwise, defaults to IUnionType.
     /// </summary>
-    public Type UnionTypeInterface { get; set; } = typeof(IUnionType);
+    public Type UnionTypeInterface { get; }
 
-    public UnionTypeGenerator(TypeMapper typeMapper)
+    public bool IsComplete { get; private set; }
+
+    public UnionTypeGenerator(TypeMapper typeMapper, Type? unionTypeInterface = null)
     {
+        ArgumentNullException.ThrowIfNull(typeMapper);
         _typeMapper = typeMapper;
+        UnionTypeInterface = unionTypeInterface ?? typeof(IUnionType);
+        if (!UnionTypeInterface.IsInterface)
+            throw new ArgumentException("Union metadata requires an interface type.", nameof(unionTypeInterface));
+        var getter = _typeMapper.Types.TryGetProperty(UnionTypeInterface, "Value")?.GetGetMethod();
+        if (getter is null || getter.IsStatic || getter.GetParameters().Length != 0
+            || getter.ReturnType != _typeMapper.Types.Object)
+            throw new ArgumentException("Union metadata requires an instance object Value getter.", nameof(unionTypeInterface));
     }
 
     /// <summary>
@@ -57,22 +66,24 @@ public class UnionTypeGenerator
 
     /// <summary>
     /// Gets or creates a discriminated union type for the given TypeScript union.
-    /// Returns a TypeBuilder that will be finalized later.
+    /// Returns the forward TypeBuilder or the finalized type after completion.
     /// </summary>
     public Type GetOrCreateUnionType(TSTypeInfo.Union union, ModuleBuilder moduleBuilder)
     {
+        ArgumentNullException.ThrowIfNull(union);
+        ArgumentNullException.ThrowIfNull(moduleBuilder);
+        if (!ReferenceEquals(moduleBuilder, _typeMapper.ModuleBuilder))
+            throw new InvalidOperationException("Union declarations must belong to the type mapper's module.");
         string key = GetUnionKey(union);
 
-        // Return finalized type if already created
-        if (_finalizedUnions.TryGetValue(key, out var finalized))
-            return finalized;
-
-        // Return existing TypeBuilder if already defined
-        if (_unionTypeBuilders.TryGetValue(key, out var existing))
+        // One entry owns the forward declaration, then its finalized type.
+        if (_unionTypes.TryGetValue(key, out var existing))
             return existing;
+        if (IsComplete)
+            throw new InvalidOperationException("Union type emission is already complete.");
 
         var typeBuilder = GenerateUnionTypeBuilder(union, moduleBuilder, key);
-        _unionTypeBuilders[key] = typeBuilder;
+        _unionTypes.Add(key, typeBuilder);
         return typeBuilder;
     }
 
@@ -82,13 +93,15 @@ public class UnionTypeGenerator
     /// </summary>
     public void FinalizeAllUnionTypes()
     {
-        foreach (var (key, typeBuilder) in _unionTypeBuilders)
+        if (IsComplete)
+            throw new InvalidOperationException("Union type emission is already complete.");
+        foreach (var (key, type) in _unionTypes.ToArray())
         {
-            if (!_finalizedUnions.ContainsKey(key))
-            {
-                _finalizedUnions[key] = typeBuilder.CreateType()!;
-            }
+            if (type is TypeBuilder builder)
+                _unionTypes[key] = builder.CreateType()
+                    ?? throw new InvalidOperationException($"Union type '{key}' could not be finalized.");
         }
+        IsComplete = true;
     }
 
     /// <summary>
