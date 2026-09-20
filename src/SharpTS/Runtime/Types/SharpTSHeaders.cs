@@ -23,6 +23,15 @@ public class SharpTSHeaders : ITypeCategorized
     }
 
     /// <summary>
+    /// Copies headers without sharing mutable value lists.
+    /// </summary>
+    public SharpTSHeaders(SharpTSHeaders source) : this()
+    {
+        foreach (var (name, values) in source._headers)
+            _headers[name] = [.. values];
+    }
+
+    /// <summary>
     /// Creates a Headers object from a dictionary (e.g., from response headers).
     /// Values may be strings, string[], <see cref="List{T}"/> of string, or other
     /// objects (ToString'd). Array/list values are stored as multi-value entries —

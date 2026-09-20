@@ -50,7 +50,7 @@ public class SharpTSResponse : ITypeCategorized
             {
                 _headers = headersObj switch
                 {
-                    SharpTSHeaders h => h,
+                    SharpTSHeaders h => new SharpTSHeaders(h),
                     SharpTSObject obj => new SharpTSHeaders(obj),
                     _ => new SharpTSHeaders()
                 };
@@ -160,7 +160,7 @@ public class SharpTSResponse : ITypeCategorized
         if (_bodyConsumed)
             throw new Exception("Runtime Error: cannot clone Response after body has been consumed");
 
-        return new SharpTSResponse(_status, _statusText, _headers, _bodyBytes, _type);
+        return new SharpTSResponse(_status, _statusText, new SharpTSHeaders(_headers), _bodyBytes, _type);
     }
 
     public override string ToString() => $"Response {{ status: {Status}, ok: {Ok} }}";

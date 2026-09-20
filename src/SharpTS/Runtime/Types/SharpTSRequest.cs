@@ -48,7 +48,7 @@ public class SharpTSRequest : ITypeCategorized
         {
             _headers = headersObj switch
             {
-                SharpTSHeaders h => h,
+                SharpTSHeaders h => new SharpTSHeaders(h),
                 SharpTSObject obj => new SharpTSHeaders(obj),
                 _ => new SharpTSHeaders()
             };
@@ -161,7 +161,7 @@ public class SharpTSRequest : ITypeCategorized
         if (_bodyConsumed)
             throw new Exception("Runtime Error: cannot clone Request after body has been consumed");
 
-        return new SharpTSRequest(_url, _method, _headers, _body, _credentials, _bodyBytes);
+        return new SharpTSRequest(_url, _method, new SharpTSHeaders(_headers), _body, _credentials, _bodyBytes);
     }
 
     public override string ToString() => $"Request {{ method: {Method}, url: {Url} }}";
