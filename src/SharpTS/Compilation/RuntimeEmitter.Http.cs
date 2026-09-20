@@ -282,6 +282,46 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Newobj, dictCtorWithComparer);
         ctorIL.Emit(OpCodes.Stfld, fetch.HeadersDataField);
 
+        // Copy a Headers instance into independent storage, including each value list.
+        var dictionaryInput = ctorIL.DefineLabel();
+        var sourceHeaders = ctorIL.DeclareLocal(typeBuilder);
+        ctorIL.Emit(OpCodes.Ldarg_1);
+        ctorIL.Emit(OpCodes.Isinst, typeBuilder);
+        ctorIL.Emit(OpCodes.Stloc, sourceHeaders);
+        ctorIL.Emit(OpCodes.Ldloc, sourceHeaders);
+        ctorIL.Emit(OpCodes.Brfalse, dictionaryInput);
+        var headerEnumeratorType = typeof(Dictionary<string, List<string>>.Enumerator);
+        var headerEnumerator = ctorIL.DeclareLocal(headerEnumeratorType);
+        var headerPairType = typeof(KeyValuePair<string, List<string>>);
+        var headerPair = ctorIL.DeclareLocal(headerPairType);
+        ctorIL.Emit(OpCodes.Ldloc, sourceHeaders);
+        ctorIL.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
+        ctorIL.Emit(OpCodes.Callvirt, dictType.GetMethod("GetEnumerator")!);
+        ctorIL.Emit(OpCodes.Stloc, headerEnumerator);
+        var copyNext = ctorIL.DefineLabel();
+        var copyDone = ctorIL.DefineLabel();
+        ctorIL.MarkLabel(copyNext);
+        ctorIL.Emit(OpCodes.Ldloca, headerEnumerator);
+        ctorIL.Emit(OpCodes.Call, headerEnumeratorType.GetMethod("MoveNext")!);
+        ctorIL.Emit(OpCodes.Brfalse, copyDone);
+        ctorIL.Emit(OpCodes.Ldloca, headerEnumerator);
+        ctorIL.Emit(OpCodes.Call, headerEnumeratorType.GetProperty("Current")!.GetMethod!);
+        ctorIL.Emit(OpCodes.Stloc, headerPair);
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldfld, fetch.HeadersDataField);
+        ctorIL.Emit(OpCodes.Ldloca, headerPair);
+        ctorIL.Emit(OpCodes.Call, headerPairType.GetProperty("Key")!.GetMethod!);
+        ctorIL.Emit(OpCodes.Ldloca, headerPair);
+        ctorIL.Emit(OpCodes.Call, headerPairType.GetProperty("Value")!.GetMethod!);
+        ctorIL.Emit(OpCodes.Newobj, listOfStringType.GetConstructor([typeof(IEnumerable<string>)])!);
+        ctorIL.Emit(OpCodes.Callvirt, dictType.GetMethod("Add")!);
+        ctorIL.Emit(OpCodes.Br, copyNext);
+        ctorIL.MarkLabel(copyDone);
+        ctorIL.Emit(OpCodes.Ldloca, headerEnumerator);
+        ctorIL.Emit(OpCodes.Call, headerEnumeratorType.GetMethod("Dispose")!);
+        ctorIL.Emit(OpCodes.Ret);
+        ctorIL.MarkLabel(dictionaryInput);
+
         // if (init is Dictionary<string, object?>) populate
         var initLocal = ctorIL.DeclareLocal(_types.DictionaryStringObject);
         var endCtorLabel = ctorIL.DefineLabel();
@@ -1988,6 +2028,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, useDefaultMethod2Label);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Brtrue, useDefaultMethod2Label);
         il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, methodStrLocal);
         il.Emit(OpCodes.Br, methodDoneLabel);
@@ -3411,6 +3454,9 @@ public partial class RuntimeEmitter
         var skipMethod = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Brfalse, skipMethod);
+        il.Emit(OpCodes.Ldloc, methodLocal);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Brtrue, skipMethod);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
@@ -3603,6 +3649,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fetch.RequestHeadersField);
+        il.Emit(OpCodes.Newobj, fetch.HeadersCtor);
         il.Emit(OpCodes.Stfld, fetch.RequestHeadersField);
 
         // Copy _body
@@ -3923,6 +3970,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fetch.ResponseHeadersField);
+        il.Emit(OpCodes.Newobj, fetch.HeadersCtor);
         il.Emit(OpCodes.Stfld, fetch.ResponseHeadersField);
 
         // Copy body bytes

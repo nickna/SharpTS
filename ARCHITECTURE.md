@@ -965,6 +965,13 @@ property/coercion helpers retain their owners. Construction inputs and method-lo
 local to emission. Declaration order, feature implications, emitted signatures, and cache/cookie behavior are
 unchanged.
 
+Fetch and Request method defaults distinguish the emitted undefined sentinel from supplied values:
+missing or undefined methods retain GET. Headers construction accepts another Headers instance and
+copies its dictionary and individual value lists. Request/Response initialization and cloning preserve
+independent header ownership in both runtimes, including separate Set-Cookie entries. The emitted
+copy loop uses only constructor-local handles; component declarations and feature gates are unchanged.
+This corrects the recorded fetch construction regressions without closing the final #1599 audit.
+
 Node Buffer uses optional `EmittedBufferRuntime`, started only for `UsesBuffer`. It owns 79 checked
 handles: the former 76 flat properties plus the backing-data field and two module coercion helpers.
 `HasTypedArrayCopy` captures the existing `HasAnyTypedArray` gate at creation; `CopyBytesFrom` rejects

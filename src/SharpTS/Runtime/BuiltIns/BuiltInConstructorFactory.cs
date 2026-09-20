@@ -322,6 +322,9 @@ public static class BuiltInConstructorFactory
         if (args.Count == 0)
             return new SharpTSHeaders();
 
+        if (args[0] is SharpTSHeaders headers)
+            return new SharpTSHeaders(headers);
+
         // Handle new Headers({ "content-type": "text/html", ... })
         if (args[0] is SharpTSObject obj)
             return new SharpTSHeaders(obj);
