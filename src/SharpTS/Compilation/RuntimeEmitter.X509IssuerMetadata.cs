@@ -643,12 +643,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, failure);
         il.Emit(OpCodes.Br, next);
         il.MarkLabel(notBasicConstraints);
-        (string Oid, Type Type, string Property)[] decoders =
+        (string Oid, ConstructorInfo Constructor, MethodInfo Getter, bool Authority, bool Usage)[] decoders =
         [
-            ("2.5.29.35", typeof(X509AuthorityKeyIdentifierExtension), "KeyIdentifier"),
-            ("2.5.29.14", typeof(X509SubjectKeyIdentifierExtension), "SubjectKeyIdentifier"),
-            ("2.5.29.15", typeof(X509KeyUsageExtension), "KeyUsages"),
-            ("2.5.29.37", typeof(X509EnhancedKeyUsageExtension), "EnhancedKeyUsages")
+            ("2.5.29.35", typeof(X509AuthorityKeyIdentifierExtension).GetConstructor([typeof(byte[]), typeof(bool)])!,
+                typeof(X509AuthorityKeyIdentifierExtension).GetProperty("KeyIdentifier")!.GetMethod!, true, false),
+            ("2.5.29.14", typeof(X509SubjectKeyIdentifierExtension).GetConstructor([typeof(AsnEncodedData), typeof(bool)])!,
+                typeof(X509SubjectKeyIdentifierExtension).GetProperty("SubjectKeyIdentifier")!.GetMethod!, false, false),
+            ("2.5.29.15", typeof(X509KeyUsageExtension).GetConstructor([typeof(AsnEncodedData), typeof(bool)])!,
+                typeof(X509KeyUsageExtension).GetProperty("KeyUsages")!.GetMethod!, false, true),
+            ("2.5.29.37", typeof(X509EnhancedKeyUsageExtension).GetConstructor([typeof(AsnEncodedData), typeof(bool)])!,
+                typeof(X509EnhancedKeyUsageExtension).GetProperty("EnhancedKeyUsages")!.GetMethod!, false, false)
         ];
         foreach (var decoder in decoders)
         {
@@ -662,12 +666,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, typeof(HashSet<string>).GetMethod("Add")!);
             il.Emit(OpCodes.Brfalse, failure);
             il.Emit(OpCodes.Ldloc, extension);
-            bool rawDataConstructor = decoder.Type == typeof(X509AuthorityKeyIdentifierExtension);
+            bool rawDataConstructor = decoder.Authority;
             if (rawDataConstructor)
                 il.Emit(OpCodes.Callvirt, typeof(AsnEncodedData).GetProperty("RawData")!.GetMethod!);
             il.Emit(OpCodes.Ldloc, extension);
             il.Emit(OpCodes.Callvirt, typeof(X509Extension).GetProperty("Critical")!.GetMethod!);
-            il.Emit(OpCodes.Newobj, decoder.Type.GetConstructor([rawDataConstructor ? typeof(byte[]) : typeof(AsnEncodedData), typeof(bool)])!);
+            il.Emit(OpCodes.Newobj, decoder.Constructor);
             if (rawDataConstructor)
             {
                 var rawIssuer = il.DeclareLocal(typeof(ReadOnlyMemory<byte>?));
@@ -694,8 +698,8 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Call, validateGeneralNames);
                 il.MarkLabel(noIssuer);
             }
-            il.Emit(OpCodes.Callvirt, decoder.Type.GetProperty(decoder.Property)!.GetMethod!);
-            if (decoder.Type == typeof(X509KeyUsageExtension)) il.Emit(OpCodes.Brfalse, failure);
+            il.Emit(OpCodes.Callvirt, decoder.Getter);
+            if (decoder.Usage) il.Emit(OpCodes.Brfalse, failure);
             else il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Br, next);
             il.MarkLabel(other);
