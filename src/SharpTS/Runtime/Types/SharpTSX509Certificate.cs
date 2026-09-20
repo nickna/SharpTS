@@ -423,7 +423,7 @@ public class SharpTSX509Certificate
             "fingerprint256" => Fingerprint(HashAlgorithmName.SHA256),
             "fingerprint512" => Fingerprint(HashAlgorithmName.SHA512),
             "serialNumber" => _cert.SerialNumber,
-            "subjectAltName" => SubjectAltNameString(),
+            "subjectAltName" => (object?)SubjectAltNameString() ?? SharpTSUndefined.Instance,
             "infoAccess" => InfoAccessString(),
             "keyUsage" => KeyUsageArray(),
             "extKeyUsage" => ExtKeyUsageArray(),

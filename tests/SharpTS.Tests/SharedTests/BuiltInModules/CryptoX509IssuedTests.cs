@@ -662,6 +662,23 @@ public class CryptoX509IssuedTests
             TestHarness.RunModules(new() { ["main.ts"] = source }, "main.ts", mode));
     }
 
+    [Theory, ModeData]
+    public void AbsentSubjectAlternativeNameIsUndefined(ExecutionMode mode)
+    {
+        using var key = RSA.Create(2048);
+        var signer = X509SignatureGenerator.CreateForRSA(key, RSASignaturePadding.Pkcs1);
+        var name = new X500DistinguishedName("CN=Issuer");
+        using var certificate = Create(name, name, key, signer, 1);
+        var source = ProgramFor([certificate], """
+            console.log(typeof c[0].subjectAltName);
+            console.log(c[0].subjectAltName === undefined);
+            console.log(c[0].subjectAltName === null);
+            console.log(c[0]["subjectAltName"] === undefined);
+            """);
+        Assert.Equal("undefined\ntrue\nfalse\ntrue\n",
+            TestHarness.RunModules(new() { ["main.ts"] = source }, "main.ts", mode));
+    }
+
     private static X500DistinguishedName EncodedName(string value, UniversalTagNumber encoding)
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
