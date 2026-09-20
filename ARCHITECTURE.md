@@ -1120,7 +1120,9 @@ its hosted child, when present, after runtime finalization; incomplete declarati
 retryable, while successful completion freezes handles and prevents enabling hosted hooks later.
 
 Ten event-loop helpers accept the component or hosted child directly. The class orchestrator,
-Run, and WaitForTask retain shared cancellation metadata. `$EventLoop` still precedes its
+Run, WaitForTask, and PumpOnce use the cancellation helper forward-declared on `$Runtime`.
+Its later body reads the per-assembly flag with volatile semantics; all three entry points
+check before draining each callback so a replenished queue remains cancellable. `$EventLoop` still precedes its
 synchronization context and the runtime's timer helpers: its public timer-processor field remains
 the bridge to the later timer delegate. Hosted await consumers test component availability
 instead of an undeclared method handle. Plain output, including full-feature emission, omits the

@@ -124,14 +124,72 @@ public sealed class EmittedCancellationRuntimeTests
                     : method == runtime.Invocation.Method ? [null, callee, Array.Empty<object>()] : [null, callee];
                 Expect<OperationCanceledException>(() => type.GetMethod(method.Name)!.Invoke(null, args));
             }
-            // Early event-loop emission deliberately has no cancellation method dependency.
+            // Early event-loop emission uses the checked forward declaration.
             var eventLoop = loaded.GetType(runtime.EventLoop.Type.Name)!;
             foreach (string method in new[] { "Run", "WaitForTask" })
-                Assert.DoesNotContain(ReadInstructions(eventLoop.GetMethod(method)!), i => i.Member?.Name == "CheckCancellation");
+                Assert.Equal(2, ReadInstructions(eventLoop.GetMethod(method)!).Count(i => i.Member?.Name == "CheckCancellation"));
             Assert.All(flags, old => Assert.True((bool)old.GetValue(null)!)); flags.Add(flag);
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
             Assert.Equal(hosted, loaded.GetReferencedAssemblies().Any(a => a.Name == "SharpTS.Hosting.Abstractions"));
         }
+    }
+
+    [Theory]
+    [InlineData(false, "PumpOnce")]
+    [InlineData(true, "PumpOnce")]
+    [InlineData(false, "Run")]
+    [InlineData(true, "Run")]
+    [InlineData(false, "WaitForTask")]
+    [InlineData(true, "WaitForTask")]
+    public void EventLoopCancellationStopsCallbackDrain(bool hosted, string methodName)
+    {
+        var builder = NewAssembly();
+        var runtime = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted)
+            .EmitAll(builder.DefineDynamicModule("main"), new RuntimeFeatureSet());
+        var loaded = SaveVerifyLoad(builder);
+        var flag = loaded.GetType("$Runtime")!.GetField("_cancelRequested")!;
+        var loopType = loaded.GetType(runtime.EventLoop.Type.Name)!;
+        var instance = loopType.GetMethod("GetInstance")!.Invoke(null, null);
+        var schedule = loopType.GetMethod("Schedule")!;
+        var pending = new TaskCompletionSource();
+        int callbacks = 0;
+        Action callback = null!;
+        callback = () =>
+        {
+            callbacks++;
+            flag.SetValue(null, true);
+            // Bound the broken implementation so a regression cannot orphan a worker.
+            if (callbacks < 5) schedule.Invoke(instance, [callback]);
+            else pending.SetResult();
+        };
+        schedule.Invoke(instance, [callback]);
+        var method = loopType.GetMethod(methodName)!;
+        Expect<OperationCanceledException>(() => method.Invoke(instance,
+            methodName == "WaitForTask" ? [pending.Task] : null));
+        Assert.Equal(1, callbacks);
+        flag.SetValue(null, false);
+        Assert.False((bool)flag.GetValue(null)!);
+        Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DistantTimerDoesNotDelayCancellation(bool hosted)
+    {
+        var builder = NewAssembly();
+        var runtime = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted)
+            .EmitAll(builder.DefineDynamicModule("main"), new RuntimeFeatureSet());
+        var loaded = SaveVerifyLoad(builder);
+        var flag = loaded.GetType("$Runtime")!.GetField("_cancelRequested")!;
+        var loopType = loaded.GetType(runtime.EventLoop.Type.Name)!;
+        var instance = loopType.GetMethod("GetInstance")!.Invoke(null, null);
+        loopType.GetMethod("Ref")!.Invoke(instance, null);
+        Func<int> timerProcessor = () => { flag.SetValue(null, true); return 2000; };
+        loopType.GetField(runtime.EventLoop.TimerProcessorField.Name)!.SetValue(null, timerProcessor);
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        Expect<OperationCanceledException>(() => loopType.GetMethod("Run")!.Invoke(instance, null));
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(1), $"Cancellation took {elapsed.Elapsed}.");
     }
 
     [Theory]
@@ -142,7 +200,7 @@ public sealed class EmittedCancellationRuntimeTests
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
         var emitter = new RuntimeEmitter(TypeProvider.Runtime); var owner = new EmittedRuntime().Cancellation;
         var type = module.DefineType("Cancel", TypeAttributes.Public);
-        foreach (string helper in new[] { "DefineCancellationFlag", "EmitCancellationCheck", "EmitCancellationExceptionFactory" })
+        foreach (string helper in new[] { "DefineCancellationFlag", "DefineCancellationCheck", "EmitCancellationCheck", "EmitCancellationExceptionFactory" })
             typeof(RuntimeEmitter).GetMethod(helper, Members)!.Invoke(emitter, [type, owner]);
         owner.CompleteEmission(); type.CreateType();
         var loop = new EmittedEventLoopRuntime();
@@ -153,7 +211,7 @@ public sealed class EmittedCancellationRuntimeTests
         foreach (string name in new[] { "Run", "WaitForTask" })
         {
             var method = loopType.GetMethod(name)!;
-            Assert.Equal(supplied ? name == "Run" ? 2 : 1 : 0, ReadInstructions(method).Count(i => i.Member?.Name == "CheckCancellation"));
+            Assert.Equal(supplied ? 2 : 0, ReadInstructions(method).Count(i => i.Member?.Name == "CheckCancellation"));
             if (supplied)
                 Expect<OperationCanceledException>(() => method.Invoke(instance, name == "Run" ? null : [new TaskCompletionSource().Task]));
             else if (name == "Run") method.Invoke(instance, null);
@@ -198,7 +256,7 @@ public sealed class EmittedCancellationRuntimeTests
         Assert.Null(typeof(EmittedRuntime).GetProperty("Cancellation")!.SetMethod);
         foreach (string name in new[] { "CancelRequestedField", "CheckCancellationMethod", "BuildCancellationExceptionMethod" })
             Assert.Null(typeof(EmittedRuntime).GetProperty(name));
-        foreach (string name in new[] { "DefineCancellationFlag", "EmitCancellationCheck", "EmitCancellationExceptionFactory", "EmitTSEventLoopClass", "EmitEventLoopRun", "EmitEventLoopWaitForTask" })
+        foreach (string name in new[] { "DefineCancellationFlag", "DefineCancellationCheck", "EmitCancellationCheck", "EmitCancellationExceptionFactory", "EmitTSEventLoopClass", "EmitEventLoopRun", "EmitEventLoopWaitForTask", "EmitEventLoopPumpOnce" })
             Assert.DoesNotContain(typeof(RuntimeEmitter).GetMethod(name, Members)!.GetParameters(),
                 p => p.ParameterType == typeof(EmittedRuntime) || p.ParameterType == typeof(RuntimeFeatureSet));
     }

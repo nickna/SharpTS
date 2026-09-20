@@ -25,6 +25,7 @@ public partial class RuntimeEmitter
             _types.Object
         );
         runtime.RuntimeClass.Type = typeBuilder;
+        DefineCancellationCheck(typeBuilder, runtime.Cancellation);
 
         // Reserve Stringify(object) → string. EmitStringify fills the body
         // later; it must skip its own DefineMethod call when this signature

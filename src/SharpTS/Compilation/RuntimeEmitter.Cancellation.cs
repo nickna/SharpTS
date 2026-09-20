@@ -18,20 +18,24 @@ public partial class RuntimeEmitter
         cancellation.Requested = cancelRequestedField;
     }
 
-    private void EmitCancellationCheck(TypeBuilder typeBuilder, EmittedCancellationRuntime cancellation)
+    private void DefineCancellationCheck(TypeBuilder typeBuilder, EmittedCancellationRuntime cancellation)
     {
-        // CheckCancellation(): if (_cancelRequested) throw new
-        //   OperationCanceledException("Compiled execution cancelled.");
-        // Used by invocation guards after this declaration stage.
-        var checkCancellation = typeBuilder.DefineMethod(
+        // Reserve the helper before the event loop is emitted. Its body is filled
+        // after the cancellation flag has been declared on the same runtime type.
+        cancellation.Check = typeBuilder.DefineMethod(
             "CheckCancellation",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             Type.EmptyTypes);
-        cancellation.Check = checkCancellation;
+    }
+
+    private void EmitCancellationCheck(TypeBuilder typeBuilder, EmittedCancellationRuntime cancellation)
+    {
+        var checkCancellation = cancellation.Check;
         {
             var il = checkCancellation.GetILGenerator();
             var returnLabel = il.DefineLabel();
+            il.Emit(OpCodes.Volatile);
             il.Emit(OpCodes.Ldsfld, cancellation.Requested);
             il.Emit(OpCodes.Brfalse, returnLabel);
             il.Emit(OpCodes.Ldstr, "Compiled execution cancelled.");
