@@ -3286,7 +3286,8 @@ public partial class ILEmitter
         if (!isBlockScoped)
         {
             string qualifiedName = _ctx.GetQualifiedClassName(classStmt.Name.Lexeme);
-            if (!_ctx.Classes.TryGetValue(qualifiedName, out var topLevelBuilder))
+            if (!_ctx.Classes.TryGetValue(qualifiedName, out var topLevelBuilder)
+                && !_ctx.Classes.TryGetValue(_ctx.ResolveClassName(classStmt.Name.Lexeme), out topLevelBuilder))
                 return;
             builder = topLevelBuilder;
         }
@@ -3306,6 +3307,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
             _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
         IL.Emit(OpCodes.Call, _ctx.Runtime!.ClassInitialization.RunDefinition);
+        if (_ctx.DeferredComputedClassKeys?.TryGetValue(classStmt, out var deferred) == true)
+            EmitDeferredComputedKeys(deferred.Method, deferred.Keys);
 
         // Top-level classes are lexical declarations, so they may also be present
         // in BlockScopedClassBuilders. Regardless of that implementation detail,

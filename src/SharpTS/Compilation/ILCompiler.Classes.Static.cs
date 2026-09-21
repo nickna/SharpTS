@@ -329,15 +329,19 @@ public partial class ILCompiler
                 deferred.Add((accessor.ComputedKey!, builder, accessor.IsStatic, accessor.Kind.Type == TokenType.GET, accessor.Name.Start, null));
         foreach (var field in fields.Where(field => field.ComputedKey != null && !field.IsDeclare))
             deferred.Add((field.ComputedKey!, null, field.IsStatic, null, field.Name.Start, field));
-        if (!deferred.Any(entry => ExpressionContainsSuspension(entry.Key)))
+        // Field names are evaluated with the definition, even when no key suspends.
+        if (!deferred.Any(entry => entry.Field != null || ExpressionContainsSuspension(entry.Key)))
             return null;
 
         deferred = deferred.OrderBy(entry => entry.Position).ToList();
         var initializer = typeBuilder.DefineMethod("$initializeDeferredClass",
             MethodAttributes.Assembly | MethodAttributes.Static, _types.Void, Type.EmptyTypes);
 
-        var registrar = typeBuilder.DefineMethod(
-            "$registerDeferredComputedKeys",
+        // TypeScript type arguments do not create separate class definitions. Keep
+        // captured keys outside generic CLR instantiations so all instances share them.
+        var keyOwner = typeBuilder.IsGenericTypeDefinition ? _programType : typeBuilder;
+        var registrar = keyOwner.DefineMethod(
+            typeBuilder.IsGenericTypeDefinition ? $"$registerDeferredComputedKeys_{typeBuilder.Name}" : "$registerDeferredComputedKeys",
             MethodAttributes.Assembly | MethodAttributes.Static,
             _types.Void,
             [_types.ObjectArray]);
@@ -349,8 +353,8 @@ public partial class ILCompiler
             var (_key, builder, isStatic, isGetter, _position, field) = deferred[i];
             if (field != null)
             {
-                var keyField = typeBuilder.DefineField($"$computedFieldKey_{i}", _types.Object,
-                    FieldAttributes.Private | FieldAttributes.Static);
+                var keyField = keyOwner.DefineField($"$computedFieldKey_{typeBuilder.Name}_{i}", _types.Object,
+                    FieldAttributes.Assembly | FieldAttributes.Static);
                 _classes.ComputedFieldKeys.Add(field, keyField);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldc_I4, i);
@@ -374,7 +378,10 @@ public partial class ILCompiler
                 : _runtime.SymbolAccessors.RegisterMethod);
         }
 
-        il.Emit(OpCodes.Call, initializer);
+        il.Emit(OpCodes.Call, typeBuilder.IsGenericTypeDefinition
+            ? EmitterTypeHelpers.ResolveMethod(
+                EmitGenerics.MakeGenericType(typeBuilder, typeBuilder.GetGenericArguments().Select(_ => _types.Object).ToArray()), initializer)
+            : initializer);
         il.Emit(OpCodes.Ret);
         var keys = deferred.Select(entry => entry.Key).ToArray();
         _classes.DeferredClassDefinitions.Add(typeBuilder.Name, (initializer, registrar, keys));

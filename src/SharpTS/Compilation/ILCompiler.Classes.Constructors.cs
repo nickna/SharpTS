@@ -276,14 +276,8 @@ public partial class ILCompiler
                     // Computed keys use dynamic SetIndex to support Symbol keys
                     // Stack: this
                     il.Emit(OpCodes.Ldarg_0);
-                    // Evaluate computed key expression (e.g., the Symbol)
-                    if (_classes.ComputedFieldKeys.TryGetValue(field, out var computedKey))
-                        il.Emit(OpCodes.Ldsfld, computedKey);
-                    else
-                    {
-                        initEmitter.EmitExpression(field.ComputedKey);
-                        initEmitter.EmitBoxIfNeeded(field.ComputedKey);
-                    }
+                    // Load the key captured when the class definition was evaluated.
+                    il.Emit(OpCodes.Ldsfld, _classes.ComputedFieldKeys[field]);
                     // Emit initializer value; a field with no initializer is still an own
                     // property whose value is undefined.
                     if (field.Initializer != null)

@@ -1825,8 +1825,8 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         TypeBuilder? builder = null;
         if (Ctx.BlockScopedClassBuilders?.TryGetValue(classStmt, out var scopedBuilder) == true)
             builder = scopedBuilder;
-        else
-            Ctx.Classes.TryGetValue(Ctx.GetQualifiedClassName(classStmt.Name.Lexeme), out builder);
+        else if (!Ctx.Classes.TryGetValue(Ctx.GetQualifiedClassName(classStmt.Name.Lexeme), out builder))
+            Ctx.Classes.TryGetValue(Ctx.ResolveClassName(classStmt.Name.Lexeme), out builder);
         if (builder == null)
             return;
 
@@ -1856,7 +1856,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Stloc, local);
     }
 
-    private void EmitDeferredComputedKeys(MethodBuilder method, IReadOnlyList<Expr> keys)
+    protected void EmitDeferredComputedKeys(MethodBuilder method, IReadOnlyList<Expr> keys)
     {
         var values = new List<LocalBuilder>(keys.Count);
         foreach (var key in keys)

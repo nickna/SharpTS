@@ -694,9 +694,9 @@ public partial class ILCompiler
 
         foreach (var stmt in module.Statements)
         {
-            // Skip class, function, interface, type alias, and enum declarations
-            // (they are compiled separately in earlier phases)
-            if (stmt is Stmt.Class or Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
+            // Class definitions still execute at their source position. Other
+            // declarations are compiled separately in earlier phases.
+            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
             {
                 continue;
             }
@@ -773,9 +773,9 @@ public partial class ILCompiler
 
         foreach (var stmt in script.Statements)
         {
-            // Skip class, function, interface, type alias, and enum declarations
-            // (they are compiled separately in earlier phases)
-            if (stmt is Stmt.Class or Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
+            // Class definitions still execute at their source position. Other
+            // declarations are compiled separately in earlier phases.
+            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
             {
                 continue;
             }
@@ -1195,8 +1195,9 @@ public partial class ILCompiler
         string? defaultBinding,
         string? exportAssignmentBinding) => statement switch
     {
-        // Declarations are defined in the compiler's normal declaration phases.
-        Stmt.Class or Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum or
+        // Class declarations retain their executable definition work.
+        // Other declarations are defined in the normal declaration phases.
+        Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum or
             Stmt.Namespace or Stmt.DeclareModule => null,
 
         // Module imports are emitted in a synchronous prelude using the normal

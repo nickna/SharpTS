@@ -840,18 +840,12 @@ public partial class ILCompiler
 
         void EmitInstanceFieldInitializers()
         {
-            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && (f.Initializer != null || f.ComputedKey != null)))
+            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsDeclare && (f.Initializer != null || f.ComputedKey != null)))
             {
                 if (field.ComputedKey != null)
                 {
                     il.Emit(OpCodes.Ldarg_0);
-                    if (_classes.ComputedFieldKeys.TryGetValue(field, out var computedKey))
-                        il.Emit(OpCodes.Ldsfld, computedKey);
-                    else
-                    {
-                        emitter.EmitExpression(field.ComputedKey);
-                        emitter.EmitBoxIfNeeded(field.ComputedKey);
-                    }
+                    il.Emit(OpCodes.Ldsfld, _classes.ComputedFieldKeys[field]);
                     if (field.Initializer != null)
                     {
                         emitter.EmitExpression(field.Initializer);

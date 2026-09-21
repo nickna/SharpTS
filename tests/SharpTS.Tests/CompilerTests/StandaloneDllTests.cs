@@ -18,6 +18,33 @@ namespace SharpTS.Tests.CompilerTests;
 /// </summary>
 public class StandaloneDllTests
 {
+    [Theory]
+    [InlineData("main.ts")]
+    [InlineData("main.cts")]
+    [InlineData("main.mts")]
+    public void Isolated_ComputedClassFieldKeys_AreCapturedAtDefinition(string entryPoint)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, """
+            let counter = 0;
+            class Box<T> { [counter++] = 5; }
+            const key = "value";
+            class Static { static [key] = 7; }
+            console.log(counter);
+            const a: any = new Box<number>();
+            const b: any = new Box<string>();
+            const cls: any = Static;
+            console.log(counter, a[0], b[0], b[1], cls.value);
+            """);
+        var dllPath = tempDir.GetPath("computed_class_keys.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal("1\n1 5 5 undefined 7\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
     // Allowlist of files that contain intentional SharpTS late-binding patterns.
     // These use graceful fallback: emit tries emitted types first, falls back to
     // interpreter types via Type.GetType() if available. This allows compiled code

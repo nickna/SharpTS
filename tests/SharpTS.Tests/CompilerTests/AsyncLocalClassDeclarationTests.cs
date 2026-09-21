@@ -6,6 +6,42 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class AsyncLocalClassDeclarationTests
 {
     [Theory, ModeData]
+    public void GenericComputedFieldKeys_AreSharedAcrossTypeArguments(ExecutionMode mode)
+    {
+        const string source = """
+            let counter = 0;
+            class Box<T> { [counter++] = 5; }
+            console.log(counter);
+            const numberBox: any = new Box<number>();
+            const stringBox: any = new Box<string>();
+            console.log(counter, numberBox[0], stringBox[0], stringBox[1]);
+            """;
+        Assert.Equal("1\n1 5 5 undefined\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ComputedFieldKeysWithoutAwait_AreCapturedAtDefinition(ExecutionMode mode)
+    {
+        const string source = """
+            async function run() {
+                let counter = 0;
+                const C = class { [counter++] = 5; };
+                console.log(counter);
+                const a: any = new C();
+                const b: any = new C();
+                console.log(counter, a[0], b[0], b[1]);
+                class D { [counter++] = 7; }
+                console.log(counter);
+                const d: any = new D();
+                const e: any = new D();
+                console.log(counter, d[1], e[1], e[2]);
+            }
+            run().then(() => {}, e => console.log("rejected", e.message));
+            """;
+        Assert.Equal("1\n1 5 5 undefined\n2\n2 7 7 undefined\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ClassExpressionComputedStaticAccessors_StayOnConstructor(ExecutionMode mode)
     {
         const string source = """
