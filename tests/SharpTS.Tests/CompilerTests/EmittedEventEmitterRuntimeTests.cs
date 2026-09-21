@@ -55,6 +55,29 @@ public class EmittedEventEmitterRuntimeTests
         AssertFrozen(events);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CapturedErrorRestoresPreviousFlagWhenDispatchThrows(bool previous)
+    {
+        var runtime = EmitRuntime("console.log(1);");
+        using var stream = Save(runtime);
+        var assembly = Assembly.Load(stream.ToArray());
+        var emitterType = assembly.GetType("$EventEmitter")!;
+        var emitter = Activator.CreateInstance(emitterType)!;
+        var capture = emitterType.GetField("_captureRejections", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        capture.SetValue(emitter, previous);
+        var closureType = emitterType.GetNestedType("CaptureRejection", BindingFlags.NonPublic)!;
+        var closure = Activator.CreateInstance(closureType)!;
+        closureType.GetField("Target")!.SetValue(closure, emitter);
+        closureType.GetField("Source")!.SetValue(closure, Task.FromException<object>(new Exception("unhandled")));
+
+        // With no error listener, dispatch throws. The temporary suppression
+        // must still restore either possible original value.
+        Assert.Throws<TargetInvocationException>(() => closureType.GetMethod("Run")!.Invoke(closure, null));
+        Assert.Equal(previous, capture.GetValue(emitter));
+    }
+
     [Fact]
     public void RejectionRoutingAndEmitSupportMutualForwardCalls()
     {

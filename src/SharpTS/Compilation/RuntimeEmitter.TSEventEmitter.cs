@@ -394,9 +394,8 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Fills <c>RouteCaptureRejection</c>: when captureRejections is on and a
-    /// listener returned an already-faulted promise, re-emits its rejection as
-    /// 'error'. Synchronous-only (SharpTS drains microtasks eagerly, so a
-    /// listener that throws is already settled when it returns).
+    /// listener returned a promise, queues its rejection as an 'error' event
+    /// after the Promise checkpoint. Pending listeners are observed on settlement.
     /// </summary>
     private void FillTSEventEmitterRouteCaptureRejection(EmittedRuntime runtime)
     {
@@ -435,14 +434,74 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, taskLocal);
         il.MarkLabel(haveTask);
 
-        // if (!task.IsCompleted) return; if (!task.IsFaulted) return;
+        // This closure belongs only to this emission. Its dispatch runs after a
+        // Promise reaction checkpoint, including for already-settled listeners.
+        var closure = events.Type.DefineNestedType("CaptureRejection",
+            TypeAttributes.NestedPrivate | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
+        var target = closure.DefineField("Target", events.Type, FieldAttributes.Public);
+        var source = closure.DefineField("Source", _types.TaskOfObject, FieldAttributes.Public);
+        var ctor = closure.DefineDefaultConstructor(MethodAttributes.Public);
+        var run = closure.DefineMethod("Run", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        var post = closure.DefineMethod("Post", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        var enqueue = closure.DefineMethod("Enqueue", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        var actionCtor = typeof(Action).GetConstructor([typeof(object), typeof(IntPtr)])!;
+        var postIl = post.GetILGenerator();
+        postIl.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        postIl.Emit(OpCodes.Ldarg_0);
+        postIl.Emit(OpCodes.Ldftn, run);
+        postIl.Emit(OpCodes.Newobj, actionCtor);
+        postIl.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+        postIl.Emit(OpCodes.Ret);
+        var enqueueIl = enqueue.GetILGenerator();
+        var enqueueDone = enqueueIl.DefineLabel();
+        enqueueIl.Emit(OpCodes.Ldarg_0);
+        enqueueIl.Emit(OpCodes.Ldfld, source);
+        enqueueIl.Emit(OpCodes.Callvirt, isFaultedGetter);
+        enqueueIl.Emit(OpCodes.Brfalse, enqueueDone);
+        enqueueIl.Emit(OpCodes.Ldarg_0);
+        enqueueIl.Emit(OpCodes.Ldftn, post);
+        enqueueIl.Emit(OpCodes.Newobj, actionCtor);
+        enqueueIl.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
+        enqueueIl.MarkLabel(enqueueDone);
+        enqueueIl.Emit(OpCodes.Ret);
+
+        var state = il.DeclareLocal(closure);
+        il.Emit(OpCodes.Newobj, ctor);
+        il.Emit(OpCodes.Stloc, state);
+        il.Emit(OpCodes.Ldloc, state);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stfld, target);
+        il.Emit(OpCodes.Ldloc, state);
+        il.Emit(OpCodes.Ldloc, taskLocal);
+        il.Emit(OpCodes.Stfld, source);
+        var pending = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, taskLocal);
         il.Emit(OpCodes.Callvirt, isCompletedGetter);
-        il.Emit(OpCodes.Brfalse, ret);
+        il.Emit(OpCodes.Brfalse, pending);
+        il.Emit(OpCodes.Ldloc, state);
+        il.Emit(OpCodes.Call, enqueue);
+        il.Emit(OpCodes.Br, ret);
+        il.MarkLabel(pending);
+        // Capture the caller's synchronization/execution context, as an await
+        // does, before posting the reaction to the shared Promise job queue.
+        var awaiterType = typeof(System.Runtime.CompilerServices.TaskAwaiter<object>);
+        var awaiter = il.DeclareLocal(awaiterType);
         il.Emit(OpCodes.Ldloc, taskLocal);
-        il.Emit(OpCodes.Callvirt, isFaultedGetter);
-        il.Emit(OpCodes.Brfalse, ret);
+        il.Emit(OpCodes.Callvirt, typeof(Task<object>).GetMethod("GetAwaiter")!);
+        il.Emit(OpCodes.Stloc, awaiter);
+        il.Emit(OpCodes.Ldloca, awaiter);
+        il.Emit(OpCodes.Ldloc, state);
+        il.Emit(OpCodes.Ldftn, enqueue);
+        il.Emit(OpCodes.Newobj, actionCtor);
+        il.Emit(OpCodes.Call, awaiterType.GetMethod("OnCompleted")!);
+        il.MarkLabel(ret);
+        il.Emit(OpCodes.Ret);
 
+        il = run.GetILGenerator();
+        taskLocal = il.DeclareLocal(_types.TaskOfObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, source);
+        il.Emit(OpCodes.Stloc, taskLocal);
         // Exception inner = task.Exception.InnerException;
         var innerLocal = il.DeclareLocal(_types.Exception);
         il.Emit(OpCodes.Ldloc, taskLocal);
@@ -500,13 +559,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, reasonLocal);
         il.MarkLabel(haveReason);
 
-        // Disable capture during the routed emit to avoid recursion, then restore.
+        // Restore the actual prior value even if an error listener throws.
+        var previous = il.DeclareLocal(_types.Boolean);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, target);
+        il.Emit(OpCodes.Ldfld, events.CaptureRejectionsField);
+        il.Emit(OpCodes.Stloc, previous);
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, target);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, events.CaptureRejectionsField);
 
         // this.Emit("error", new object[]{ reason });
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, target);
         il.Emit(OpCodes.Ldstr, "error");
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -517,13 +584,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, events.Emit);
         il.Emit(OpCodes.Pop);
 
-        // Restore capture.
+        il.BeginFinallyBlock();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldfld, target);
+        il.Emit(OpCodes.Ldloc, previous);
         il.Emit(OpCodes.Stfld, events.CaptureRejectionsField);
 
-        il.MarkLabel(ret);
+        il.EndExceptionBlock();
         il.Emit(OpCodes.Ret);
+        closure.CreateType();
     }
 
     private void EmitTSEventEmitterEmit(EventEmitterGenericMethods methods, TypeBuilder typeBuilder, EmittedRuntime runtime, Type listType)

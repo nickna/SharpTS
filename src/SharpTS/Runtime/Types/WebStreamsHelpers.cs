@@ -318,7 +318,21 @@ internal static class WebStreamsHelpers
                     // starves timers and mid-pipe aborts hang. Scoped to the
                     // signal path so non-aborting pipes keep their existing
                     // async ordering (pipeThrough/transform, etc.).
-                    if (signal != null) await Task.Yield();
+                    if (signal != null && !signal.Aborted)
+                    {
+                        if (interp == null)
+                        {
+                            await Task.Yield();
+                        }
+                        else
+                        {
+                            // Task.Yield resumes as a microtask on the interpreter.
+                            // An abort timer needs a real event-loop turn instead.
+                            var turn = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                            interp.ScheduleTimer(0, 0, () => turn.TrySetResult(null), false);
+                            await turn.Task;
+                        }
+                    }
 
                     if (signal != null && signal.Aborted)
                     {

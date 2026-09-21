@@ -13595,7 +13595,7 @@ public class StandaloneDllTests
         try
         {
             Assert.DoesNotContain(GetAssemblyReferences(dllPath), name => name == "SharpTS");
-            Assert.Equal("monitor true\nerror true\nunhandled-monitor\nboom\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+            Assert.Equal("unhandled-monitor\nboom\nmonitor true\nerror true\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
         }
         finally
         {

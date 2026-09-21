@@ -13,6 +13,79 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 public class EventsRejectionMonitorTests
 {
     [Theory, ModeData]
+    public void RejectionDispatchPrecedesTimers(ExecutionMode mode)
+    {
+        var source = """
+            import { EventEmitter } from 'events';
+            const events = new EventEmitter({ captureRejections: true });
+            events.on('error', error => console.log(error));
+            events.on('task', async () => { throw 'captured'; });
+            events.emit('task');
+            setTimeout(() => console.log('timer'), 0);
+            Promise.resolve().then(() => console.log('reaction'));
+            console.log('scheduled');
+            """;
+        Assert.Equal("scheduled\nreaction\ncaptured\ntimer\n", TestHarness.RunModules(
+            new Dictionary<string, string> { ["main.ts"] = source }, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void RejectionDispatchFollowsPromiseCheckpoint(ExecutionMode mode)
+    {
+        var source = """
+            import { EventEmitter } from 'events';
+            const events = new EventEmitter({ captureRejections: true });
+            events.on('error', error => console.log(error));
+            events.on('task', async () => { throw 'captured'; });
+            events.emit('task');
+            Promise.resolve().then(() => console.log('reaction')).then(() => console.log('nested'));
+            console.log('scheduled');
+            """;
+        Assert.Equal("scheduled\nreaction\nnested\ncaptured\n", TestHarness.RunModules(
+            new Dictionary<string, string> { ["main.ts"] = source }, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void CompletedRejectionRunsAfterEmitReturns(ExecutionMode mode)
+    {
+        var source = """
+            import { EventEmitter, errorMonitor } from 'events';
+            const events = new EventEmitter({ captureRejections: true });
+            events.on(errorMonitor, (error) => { console.log('monitor:' + error); });
+            events.on('error', (error) => { console.log('handled:' + error); });
+            async function fail() { throw 'rejected'; }
+            events.on('task', fail);
+            events.emit('task');
+            console.log('scheduled');
+            """;
+        Assert.Equal("scheduled\nmonitor:rejected\nhandled:rejected\n", TestHarness.RunModules(
+            new Dictionary<string, string> { ["main.ts"] = source }, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void PendingListenerRejectionIsCaptured(ExecutionMode mode)
+    {
+        var source = """
+            import { EventEmitter } from 'events';
+            const events = new EventEmitter({ captureRejections: true });
+            let captured = false;
+            let observed = false;
+            async function failLater() {
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                throw 'late';
+            }
+            const pending = failLater();
+            pending.catch(() => { observed = true; });
+            events.on('error', () => { captured = true; });
+            events.on('task', () => pending);
+            events.emit('task');
+            setTimeout(() => { console.log(observed); console.log(captured); }, 50);
+            """;
+        Assert.Equal("true\ntrue\n", TestHarness.RunModules(
+            new Dictionary<string, string> { ["main.ts"] = source }, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
     public void CaptureRejections_RoutesAsyncListenerRejectionToError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

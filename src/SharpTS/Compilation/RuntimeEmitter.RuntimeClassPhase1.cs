@@ -54,6 +54,15 @@ public partial class RuntimeEmitter
         // Preserve the leading runtime declarations while reserving the event-loop guard.
         DefineCancellationCheck(typeBuilder, runtime.Cancellation);
 
+        // EventEmitter capture and Promise reactions are emitted before the microtask
+        // infrastructure. Reserve the shared FIFO job-enqueue token now; its
+        // body is filled by EmitQueueMicrotaskMethod later in EmitRuntimeClass.
+        runtime.Microtasks.QueuePromiseJob = typeBuilder.DefineMethod(
+            "QueuePromiseJob",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [typeof(Action)]);
+
         // Reserve GetProperty(object, string) → object — generic property
         // reader used by $RegExp's Symbol.* protocol slow path to read
         // `exec`/`flags`/`lastIndex` etc. via the spec-aligned chain.

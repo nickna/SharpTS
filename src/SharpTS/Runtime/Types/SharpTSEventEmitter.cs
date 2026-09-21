@@ -296,17 +296,28 @@ public class SharpTSEventEmitter : ITypeCategorized, IMemberProvider
             }
         }
 
+        void QueueFault(Task<object?> completed)
+        {
+            if (!completed.IsFaulted) return;
+            var exception = completed.Exception!.InnerException ?? completed.Exception!;
+            _ = interpreter!.QueuePromiseReaction(() =>
+            {
+                // Like nextTick, dispatch follows the current Promise checkpoint.
+                interpreter.EnqueueAfterPromiseCheckpoint(() => HandleFault(exception));
+                return Task.FromResult<object?>(null);
+            });
+        }
+
         if (task.IsCompleted)
         {
-            if (task.IsFaulted)
-                HandleFault(task.Exception!.InnerException ?? task.Exception!);
+            QueueFault(task);
             return;
         }
 
-        task.ContinueWith(
-            t => HandleFault(t.Exception!.InnerException ?? t.Exception!),
+        _ = task.ContinueWith(
+            QueueFault,
             CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
     }
 
