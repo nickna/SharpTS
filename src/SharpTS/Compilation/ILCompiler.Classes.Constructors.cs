@@ -99,7 +99,7 @@ public partial class ILCompiler
         // Dynamic property storage stays absent until a write needs it. Generated
         // SetProperty overrides use $EnsureFields, including when a base constructor
         // dispatches through the derived override before this constructor resumes.
-        var ensureFields = _classes.HasFieldsStubs[className].EnsureFields;
+        var ensureFields = _classes.PropertyDispatch.Require(className).EnsureFields;
 
         // Initialize @lock decorator fields if present
         if (_locks.SyncLockFields.TryGetValue(className, out var syncLockField))
