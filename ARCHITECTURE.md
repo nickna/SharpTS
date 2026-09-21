@@ -1083,7 +1083,14 @@ Listener-array results, callback invocation, errors, and Promise-aware rejection
 their other runtime dependencies. The listener wrapper is still emitted first; the virtual
 listener-added hook precedes registration, and the mutually recursive Emit/rejection-routing
 methods preserve their declaration/body order. Promise-specific rejection branches keep their
-existing feature gate even though EventEmitter itself is always present. Listener ordering,
+existing feature gate even though EventEmitter itself is always present. Rejection capture
+observes both settled and pending tasks. A construction-local nested closure queues a Promise
+reaction and then posts error dispatch to the event loop; its finally block restores the prior
+capture flag even if a listener throws. The interpreter drains async continuations as Promise
+jobs and captured errors after that checkpoint, before timers. Module and shared-script
+execution honor the existing suppression of implicit waits for reaction results.
+The shared checked `QueuePromiseJob` signature is
+reserved in runtime phase 1 so this early EventEmitter body can reference it. Listener ordering,
 once/removal behavior, subclass hooks, error monitoring, and emitted signatures remain unchanged.
 No EventEmitter flat aliases or emitter-held guest declarations remain. The twelve open-generic
 BCL method caches, constant monitor key, and method-local construction state remain with the
@@ -1100,7 +1107,7 @@ components remove 37 flat properties without changing guest type or member signa
 Twelve timer-only, microtask-only, and promise-timer-only helpers accept their component directly.
 Helpers that invoke callbacks, wrap promises, inspect abort signals, or interact with the event
 loop retain their other runtime dependencies. `$VirtualTimer` still precedes `$TSTimeout`, and
-the shared `QueuePromiseJob` declaration still precedes Promise reaction emission. Its body is
+the shared `QueuePromiseJob` declaration precedes EventEmitter and Promise reaction emission. Its body is
 filled after `ProcessMicrotasks` is declared, preserving the forward call and common FIFO queue.
 Completion validates and freezes all enabled handles after runtime finalization. Plain timer and
 microtask programs still omit Promise timer types; hosted and full emission complete them.

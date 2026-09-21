@@ -193,6 +193,7 @@ public partial class Interpreter : IDisposable
     // Microtasks execute before any macrotasks (setTimeout/setInterval) - this is the JavaScript spec behavior.
     // Processed after each top-level statement and in the event loop before processing timers.
     private readonly Queue<Action> _microtaskQueue = new();
+    private readonly Queue<Action> _afterPromiseCheckpointQueue = new();
     private readonly object _microtaskQueueLock = new();
     // Producers publish this flag while holding the queue lock. Empty checks on
     // ordinary loop iterations can then avoid acquiring that lock altogether.
@@ -500,20 +501,61 @@ public partial class Interpreter : IDisposable
         if (Volatile.Read(ref _hasMicrotasks) == 0)
             return;
 
+        bool drainingCheckpointCallbacks = false;
         while (true)
         {
-            Action? microtask;
+            Action? callback;
             lock (_microtaskQueueLock)
             {
-                if (_microtaskQueue.Count == 0 || _isDisposed)
+                if (_isDisposed)
                 {
                     Volatile.Write(ref _hasMicrotasks, 0);
                     return;
                 }
-                microtask = _microtaskQueue.Dequeue();
+                if (drainingCheckpointCallbacks && _afterPromiseCheckpointQueue.TryDequeue(out callback))
+                {
+                    // Finish this callback batch before running jobs it created.
+                }
+                else if (_microtaskQueue.TryDequeue(out callback))
+                {
+                    drainingCheckpointCallbacks = false;
+                }
+                else if (_afterPromiseCheckpointQueue.TryDequeue(out callback))
+                {
+                    drainingCheckpointCallbacks = true;
+                }
+                else
+                {
+                    Volatile.Write(ref _hasMicrotasks, 0);
+                    return;
+                }
             }
-            microtask();
+            callback();
         }
+    }
+
+    internal void EnqueueAfterPromiseCheckpoint(Action callback)
+    {
+        lock (_microtaskQueueLock)
+        {
+            if (_isDisposed || (_hostedWorkAvailable != null && !_hostedAcceptingWork)) return;
+            _afterPromiseCheckpointQueue.Enqueue(callback);
+            Volatile.Write(ref _hasMicrotasks, 1);
+        }
+        WakeEventLoop();
+    }
+
+    // Async continuations settle Promise chains inside the same checkpoint,
+    // before timers and captured listener errors are dispatched.
+    private void EnqueueAsyncContinuation(Action continuation)
+    {
+        lock (_microtaskQueueLock)
+        {
+            if (_isDisposed || (_hostedWorkAvailable != null && !_hostedAcceptingWork)) return;
+            _microtaskQueue.Enqueue(continuation);
+            Volatile.Write(ref _hasMicrotasks, 1);
+        }
+        WakeEventLoop();
     }
 
     private bool HasMicrotasks()
@@ -804,7 +846,7 @@ public partial class Interpreter : IDisposable
     /// </summary>
     private SynchronizationContext? InstallEventLoopSyncContext()
     {
-        _eventLoopSyncContext ??= new InterpreterSynchronizationContext(EnqueueCallback);
+        _eventLoopSyncContext ??= new InterpreterSynchronizationContext(EnqueueAsyncContinuation);
         var previous = SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(_eventLoopSyncContext);
         return previous;
@@ -1554,7 +1596,8 @@ public partial class Interpreter : IDisposable
                 {
                     DebugController?.OnSafePoint(this, stmt, _environment, _currentModule);
                     object? result = Evaluate(exprStmt.Expr);
-                    if (_waitForTopLevelPromises && result is SharpTSPromise promise)
+                    if (_waitForTopLevelPromises && result is SharpTSPromise promise
+                        && !promise.SuppressImplicitTopLevelWait)
                     {
                         WaitForPromise(promise);
                     }
@@ -1761,7 +1804,8 @@ public partial class Interpreter : IDisposable
                     DebugController?.OnSafePoint(this, stmt, _environment, _currentModule);
                     object? result = Evaluate(exprStmt.Expr);
                     // Wait for top-level Promises to complete before continuing
-                    if (_waitForTopLevelPromises && result is SharpTSPromise promise)
+                    if (_waitForTopLevelPromises && result is SharpTSPromise promise
+                        && !promise.SuppressImplicitTopLevelWait)
                     {
                         WaitForPromise(promise);
                     }
