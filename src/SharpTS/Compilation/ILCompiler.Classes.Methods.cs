@@ -402,6 +402,9 @@ public partial class ILCompiler
             // Create PropertyBuilders for explicit accessors
             CreateExplicitAccessorProperties(typeBuilder, className);
         }
+
+        if (DefineDeferredComputedMethodKeyRegistrar(typeBuilder, classStmt.Fields) is { } deferred)
+            _classes.DeferredComputedClassKeys[classStmt] = deferred;
     }
 
     private bool TryResolveTypedPrimitiveMethodCoreReturnType(
@@ -938,7 +941,7 @@ public partial class ILCompiler
             // Unique, deterministic name: multiple computed methods must not collide, and the synthetic
             // `<computed>` lexeme is not a dispatchable name.
             string uniqueName = $"$symmethod_{i}";
-            var renamed = method with { Name = new Token(TokenType.IDENTIFIER, uniqueName, null, method.Name.Line) };
+            var renamed = method with { Name = new Token(TokenType.IDENTIFIER, uniqueName, null, method.Name.Line, method.Name.Start) };
 
             // Display-class analysis/registration ran against the original computed-method AST.
             // Body emission uses the renamed copy so it can resolve the synthetic MethodBuilder;
@@ -989,8 +992,6 @@ public partial class ILCompiler
             list.Add((renamed, method.ComputedKey!, mb));
         }
         _classes.SymbolMethods[className] = list;
-        if (DefineDeferredComputedMethodKeyRegistrar(typeBuilder) is { } deferred)
-            _classes.DeferredComputedClassKeys[classStmt] = deferred;
     }
 
     /// <summary>

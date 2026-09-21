@@ -41,7 +41,7 @@ internal sealed record BlockScopeRenameResult(
 }
 
 /// <summary>
-/// Computes per-binding storage names for block-scoped (<c>let</c>/<c>const</c>) declarations inside a
+/// Computes per-binding storage names for block-scoped (<c>let</c>/<c>const</c>/class) declarations inside a
 /// suspension state-machine body that <em>shadow</em> an enclosing binding of the same name.
 /// </summary>
 /// <remarks>
@@ -73,7 +73,7 @@ internal sealed record BlockScopeRenameResult(
 ///
 /// Restrictions that keep the rewrite sound:
 /// <list type="bullet">
-/// <item>Only <c>let</c>/<c>const</c> (<see cref="Stmt.Const"/>, <see cref="Stmt.Var"/> with
+/// <item>Only class and <c>let</c>/<c>const</c> (<see cref="Stmt.Const"/>, <see cref="Stmt.Var"/> with
 /// <c>IsVar == false</c>) declarations are renamed. <c>for</c>/<c>for-of</c>/<c>for-in</c>/<c>catch</c>
 /// introduce scopes (so shadowing is detected accurately) but their loop-variable / catch-parameter
 /// bindings are left alone.</item>
@@ -391,8 +391,20 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
     // capture pivot does not cover, so a binding they read is already OFF-LIMITS (CaptureClassifier).
     // Their interiors contribute no renames or pivots; do not descend.
     protected override void VisitFunction(Stmt.Function stmt) { }
-    protected override void VisitClass(Stmt.Class stmt) { }
-    protected override void VisitClassExpr(Expr.ClassExpr expr) { }
+    protected override void VisitClass(Stmt.Class stmt)
+    {
+        if (_arrowDepth == 0)
+            DeclareBlockScoped(stmt, stmt.Name.Lexeme);
+        else
+            CurrentScope[stmt.Name.Lexeme] = stmt.Name.Lexeme;
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(stmt))
+            Visit(expression);
+    }
+    protected override void VisitClassExpr(Expr.ClassExpr expr)
+    {
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(expr))
+            Visit(expression);
+    }
 
     #endregion
 

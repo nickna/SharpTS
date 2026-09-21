@@ -2175,6 +2175,26 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noTypePdsLabel);
 
+            // Computed static accessors also use synthetic CLR names. Resolve
+            // their evaluated string keys after own descriptors, just as the
+            // symbol-index path resolves the same accessor registry.
+            var noComputedStaticGetterLabel = il.DefineLabel();
+            var computedStaticGetterLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindGetter);
+            il.Emit(OpCodes.Stloc, computedStaticGetterLocal);
+            il.Emit(OpCodes.Ldloc, computedStaticGetterLocal);
+            il.Emit(OpCodes.Brfalse, noComputedStaticGetterLabel);
+            il.Emit(OpCodes.Ldloc, computedStaticGetterLocal);
+            il.Emit(OpCodes.Castclass, _types.MethodBase);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noComputedStaticGetterLabel);
+
             // Computed static methods are emitted under synthetic CLR names
             // and registered by their evaluated JavaScript property key. They
             // therefore cannot be found by the ordinary name-based reflection

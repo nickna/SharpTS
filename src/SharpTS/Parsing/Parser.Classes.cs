@@ -550,7 +550,7 @@ public partial class Parser
         Consume(TokenType.RIGHT_BRACKET, "Expect ']' after computed property name.");
 
         // Synthetic name token for error reporting; the real key lives in ComputedKey.
-        Token syntheticName = new Token(TokenType.IDENTIFIER, "<computed>", null, Previous().Line);
+        Token syntheticName = new Token(TokenType.IDENTIFIER, "<computed>", null, Previous().Line, Previous().Start);
 
         // A '(' or '<' after ']' marks a method ([Symbol.iterator]() {} / generic form);
         // anything else is a computed-name field ([expr]: T = v).

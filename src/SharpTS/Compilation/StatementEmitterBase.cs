@@ -1813,13 +1813,20 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
     #region Class Expressions
 
+    /// <summary>
+    /// Selects the storage name for a class binding. Overrides may select a
+    /// suspension-safe binding slot, but must preserve the original declaration
+    /// node used to look up its class builder.
+    /// </summary>
+    protected virtual string GetClassStorageName(Stmt.Class classStmt) => classStmt.Name.Lexeme;
+
     private void EmitStateMachineClassDeclaration(Stmt.Class classStmt)
     {
         TypeBuilder? builder = null;
         if (Ctx.BlockScopedClassBuilders?.TryGetValue(classStmt, out var scopedBuilder) == true)
             builder = scopedBuilder;
-        else
-            Ctx.Classes.TryGetValue(Ctx.GetQualifiedClassName(classStmt.Name.Lexeme), out builder);
+        else if (!Ctx.Classes.TryGetValue(Ctx.GetQualifiedClassName(classStmt.Name.Lexeme), out builder))
+            Ctx.Classes.TryGetValue(Ctx.ResolveClassName(classStmt.Name.Lexeme), out builder);
         if (builder == null)
             return;
 
@@ -1831,7 +1838,8 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         if (Ctx.DeferredComputedClassKeys?.TryGetValue(classStmt, out var deferred) == true)
             EmitDeferredComputedKeys(deferred.Method, deferred.Keys);
 
-        var field = GetHoistedVariableField(classStmt.Name.Lexeme);
+        string storageName = GetClassStorageName(classStmt);
+        var field = GetHoistedVariableField(storageName);
         if (field != null)
         {
             IL.Emit(OpCodes.Ldarg_0);
@@ -1841,20 +1849,32 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             return;
         }
 
-        var local = Ctx.Locals.GetLocal(classStmt.Name.Lexeme)
-            ?? Ctx.Locals.DeclareLocal(classStmt.Name.Lexeme, Types.Object, classStmt);
+        var local = Ctx.Locals.GetLocal(storageName)
+            ?? Ctx.Locals.DeclareLocal(storageName, Types.Object, classStmt);
         IL.Emit(OpCodes.Ldtoken, builder);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         IL.Emit(OpCodes.Stloc, local);
     }
 
-    private void EmitDeferredComputedKeys(MethodBuilder method, IReadOnlyList<Expr> keys)
+    /// <summary>
+    /// Evaluates class keys in order, preserving Symbol keys and coercing all
+    /// other keys through <c>Ctx.Runtime.StringCoercion.ToJsString</c>. Spills each
+    /// resulting value before evaluating the next key, then passes the collected
+    /// values to <paramref name="method"/> as an object array.
+    /// </summary>
+    protected void EmitDeferredComputedKeys(MethodBuilder method, IReadOnlyList<Expr> keys)
     {
         var values = new List<LocalBuilder>(keys.Count);
         foreach (var key in keys)
         {
             EmitExpression(key);
             EnsureBoxed();
+            var isSymbol = IL.DefineLabel();
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Symbols.Type);
+            IL.Emit(OpCodes.Brtrue, isSymbol);
+            IL.Emit(OpCodes.Call, Ctx.Runtime.StringCoercion.ToJsString);
+            IL.MarkLabel(isSymbol);
             values.Add(_helpers.SpillStoreObject());
         }
 

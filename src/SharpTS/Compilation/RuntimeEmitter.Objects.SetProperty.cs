@@ -63,6 +63,7 @@ public partial class RuntimeEmitter
         bool ProxySelected,
         EmittedReflectAssignment? ReflectAssignment,
         EmittedRegExpRuntime RegExps,
+        EmittedSymbolAccessorRuntime SymbolAccessors,
         MethodBuilder TSFunctionInvokeWithThis,
         TypeBuilder TSFunctionType,
         Type UndefinedType
@@ -1201,6 +1202,33 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(newTypeDescriptorLabel);
+            var noComputedSetter = il.DefineLabel();
+            var computedSetter = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindSetter);
+            il.Emit(OpCodes.Stloc, computedSetter);
+            il.Emit(OpCodes.Ldloc, computedSetter);
+            il.Emit(OpCodes.Brfalse, noComputedSetter);
+            il.Emit(OpCodes.Ldloc, computedSetter);
+            il.Emit(OpCodes.Castclass, _types.MethodBase);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noComputedSetter);
+            // A registered getter without a setter rejects ordinary assignment,
+            // just like other getter-only properties; do not create a shadow.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindGetter);
+            il.Emit(OpCodes.Brtrue, typeSetSkipLabel);
             var newTypeDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             var newTypeEnumerableLocal = il.DeclareLocal(_types.Boolean);
             il.Emit(OpCodes.Ldc_I4_1);

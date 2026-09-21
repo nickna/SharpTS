@@ -1333,8 +1333,9 @@ public abstract partial class ExpressionEmitterBase
         Expr.Satisfies sa => ExprContainsSuspension(sa.Expression),
         Expr.NonNullAssertion nn => ExprContainsSuspension(nn.Expression),
         Expr.DynamicImport di => ExprContainsSuspension(di.PathExpression),
-        // Leaves (Literal/Variable/This/Super/ImportMeta/RegexLiteral) and lambda/class
-        // boundaries (ArrowFunction/ClassExpr) cannot surface a suspension to the current frame.
+        Expr.ClassExpr ce => AnyContainsSuspension(ClassDefinitionExpressions.Enumerate(ce)),
+        // Leaves and nested function bodies cannot suspend the current frame.
+        // Class heritage and computed names execute in the current frame.
         _ => false
     };
 
@@ -1365,6 +1366,7 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected static bool StmtContainsSuspension(Stmt stmt) => stmt switch
     {
+        Stmt.Class c => AnyContainsSuspension(ClassDefinitionExpressions.Enumerate(c)),
         Stmt.Expression e => ExprContainsSuspension(e.Expr),
         Stmt.Var v => v.Initializer != null && ExprContainsSuspension(v.Initializer),
         Stmt.Const c => ExprContainsSuspension(c.Initializer),

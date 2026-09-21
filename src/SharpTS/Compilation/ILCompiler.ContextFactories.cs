@@ -268,6 +268,8 @@ public partial class ILCompiler
             ClassExprBuilders = parentCtx.ClassExprBuilders,
             ClassExprCaptureFields = parentCtx.ClassExprCaptureFields,
             BlockScopedClassBuilders = parentCtx.BlockScopedClassBuilders,
+            DeferredComputedClassKeys = parentCtx.DeferredComputedClassKeys,
+            DeferredComputedClassExprKeys = parentCtx.DeferredComputedClassExprKeys,
             IsStrictMode = parentCtx.IsStrictMode,
             // ES2022 Private Class Elements support - inherit from parent context
             CurrentClassName = parentCtx.CurrentClassName,

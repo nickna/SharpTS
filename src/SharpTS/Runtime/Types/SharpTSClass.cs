@@ -184,7 +184,7 @@ public class SharpTSClass(
         {
             object? value = field.Initializer != null
                 ? interpreter.Evaluate(field.Initializer)
-                : null;
+                : field.ComputedKey != null ? SharpTSUndefined.Instance : null;
 
             // Check if this is a computed property name
             if (field.ComputedKey != null)

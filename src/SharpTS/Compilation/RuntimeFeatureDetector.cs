@@ -766,7 +766,8 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Stmt.Class cls:
-                if (cls.SuperclassExpr is not null) VisitExpr(cls.SuperclassExpr);
+                foreach (var expression in ClassDefinitionExpressions.Enumerate(cls))
+                    VisitExpr(expression);
                 foreach (var m in cls.Methods)
                 {
                     // Class methods can be `async *foo()` — async generators.
@@ -1694,7 +1695,8 @@ public sealed class RuntimeFeatureDetector
                 VisitExpr(nn.Expression);
                 break;
             case Expr.ClassExpr ce:
-                if (ce.SuperclassExpr is not null) VisitExpr(ce.SuperclassExpr);
+                foreach (var expression in ClassDefinitionExpressions.Enumerate(ce))
+                    VisitExpr(expression);
                 foreach (var m in ce.Methods)
                 {
                     if (m.IsAsync)

@@ -862,6 +862,16 @@ public partial class ILCompiler
     {
         switch (stmt)
         {
+            case Stmt.Class classStmt:
+            {
+                var name = ArrowStorageName(classStmt, classStmt.Name.Lexeme);
+                declaredVariables.Add(name);
+                if (!seenAwait)
+                    declaredBeforeAwait.Add(name);
+                foreach (var expression in ClassDefinitionExpressions.Enumerate(classStmt))
+                    AnalyzeArrowExprForAwaits(expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
+            }
             case Stmt.Var v:
             {
                 var name = ArrowStorageName(v, v.Name.Lexeme);   // #766: per-binding storage name
@@ -972,6 +982,10 @@ public partial class ILCompiler
     {
         switch (expr)
         {
+            case Expr.ClassExpr classExpr:
+                foreach (var expression in ClassDefinitionExpressions.Enumerate(classExpr))
+                    AnalyzeArrowExprForAwaits(expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
             case Expr.Await a:
                 awaitCount++;
                 seenAwait = true;
@@ -1008,6 +1022,10 @@ public partial class ILCompiler
                 break;
             case Expr.Grouping g:
                 AnalyzeArrowExprForAwaits(g.Expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
+            case Expr.Comma comma:
+                AnalyzeArrowExprForAwaits(comma.Left, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                AnalyzeArrowExprForAwaits(comma.Right, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
             case Expr.Call c:
                 AnalyzeArrowExprForAwaits(c.Callee, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
@@ -1242,8 +1260,7 @@ public partial class ILCompiler
                     coreParameters[index].ParameterType);
             }
             var coreEmitter = new SuspensionFreeAsyncCoreEmitter(coreContext);
-            foreach (Stmt statement in function.Body!)
-                coreEmitter.EmitStatement(statement);
+            coreEmitter.EmitStatements(function.Body!);
 
             MethodBuilder stubMethod = _functions.Builders[functionName];
             ILGenerator il = stubMethod.GetILGenerator();

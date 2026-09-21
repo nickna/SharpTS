@@ -473,6 +473,23 @@ public sealed class SuspensionFreePrimitiveAsyncTests
         Assert.Equal("12\n", TestHarness.RunCompiledStandalone(source));
     }
 
+    [Fact]
+    public void LocalClassBinding_PreservesTypedCoreAndStandaloneOutput()
+    {
+        const string source = """
+            async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}
+            run().then(v=>console.log(v));
+            """;
+        Assembly assembly = Compile(source);
+        Assert.Contains(assembly.GetType("$Program")!.GetMethods(
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static),
+            method => method.Name.Contains("$asyncCore$run", StringComparison.Ordinal));
+        Assert.DoesNotContain(assembly.GetTypes(), type =>
+            type.Name.Contains("<run>d__", StringComparison.Ordinal));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal("5\n", TestHarness.RunCompiledStandalone(source));
+    }
+
     private static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();

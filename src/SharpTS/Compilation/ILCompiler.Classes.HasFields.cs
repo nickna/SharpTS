@@ -504,6 +504,9 @@ public partial class ILCompiler
             }
         }
 
+        if (classStmt.Accessors?.Any(accessor => accessor.ComputedKey != null && !accessor.IsStatic) == true)
+            EmitComputedInstanceGetterFallback(il);
+
         // 3b. #791: non-symbol (string/number) computed method keys. Their bodies are emitted as
         // $symmethod_N and registered in the symbol-method registry under the property-key string
         // (RegisterSymbolMethod), but named/string-index access (obj.dyn, obj["dyn"]) funnels here
@@ -866,6 +869,9 @@ public partial class ILCompiler
             }
         }
 
+        if (classExpr.Accessors?.Any(accessor => accessor.ComputedKey != null && !accessor.IsStatic) == true)
+            EmitComputedInstanceGetterFallback(il);
+
         // Computed non-symbol methods use synthetic CLR names and are
         // registered under their evaluated JavaScript property-key string.
         // Class declarations already consult this registry; class expressions
@@ -1114,4 +1120,24 @@ public partial class ILCompiler
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
         il.Emit(OpCodes.Ret);
     }
+    private void EmitComputedInstanceGetterFallback(ILGenerator il)
+    {
+        var missing = il.DefineLabel();
+        var getter = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _runtime.SymbolAccessors.FindGetter);
+        il.Emit(OpCodes.Stloc, getter);
+        il.Emit(OpCodes.Ldloc, getter);
+        il.Emit(OpCodes.Brfalse, missing);
+        il.Emit(OpCodes.Ldloc, getter);
+        il.Emit(OpCodes.Castclass, _types.MethodBase);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(missing);
+    }
+
 }

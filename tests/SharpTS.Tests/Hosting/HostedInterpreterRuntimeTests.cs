@@ -15,6 +15,30 @@ namespace SharpTS.Tests.Hosting;
 [Collection("ProcessLifecycleTests")]
 public sealed class HostedInterpreterRuntimeTests
 {
+    [Theory]
+    [InlineData("await Promise.resolve(0);class C{static value=5;}return C.value;")]
+    [InlineData("class C{static value=5;}await new Promise(r=>setTimeout(r,1));return C.value;")]
+    public void CompiledAsyncLocalClass_ResolvesInHostedRuntime(string body)
+    {
+        SharpTSProgram program = CreateProgram(
+            "async function run(){" + body + "}" +
+            "run().then(v=>console.log(v),e=>console.log('rejected',e.message));export {};");
+        var compiler = new ILCompiler($"hosted_async_class_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(program.RuntimeModules.ToList(), program.Resolver, program.TypeMap);
+        var dispatcher = new DeterministicHostDispatcher();
+        var errors = new RecordingErrorSink();
+        using var output = Infrastructure.AsyncLocalConsoleRedirector.Capture();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(compiler.SaveToBytes()),
+            dispatcher, new RecordingLifetime(), errors);
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted && output.GetOutput().Length > 0);
+        initialization.GetAwaiter().GetResult();
+        Assert.Equal("5\n", output.GetOutput().Replace("\r\n", "\n"));
+        Assert.Empty(errors.Errors);
+    }
+
     [Fact]
     public void SynchronousLoopsDoNotPumpHostedTimersOrMicrotasks()
     {

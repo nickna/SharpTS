@@ -1147,7 +1147,10 @@ public partial class TypeChecker
                 // Promise<T>, Array). Create a placeholder class so super()
                 // calls and constructor validation type-check correctly
                 // (accept any number of args).
-                var leafName = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!;
+                // A dynamic heritage expression (for example an awaited promise)
+                // has no lexical leaf name. Its permissive placeholder must not
+                // masquerade as a named built-in or dereference a missing name.
+                var leafName = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr) ?? "<dynamic superclass>";
                 var placeholder = new TypeInfo.MutableClass(leafName);
                 var permissiveConstructor = new TypeInfo.Function(
                     [TypeInfo.Any.Shared], TypeInfo.Void.Shared, RequiredParams: 0, HasRestParam: true);

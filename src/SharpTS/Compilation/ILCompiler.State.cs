@@ -75,6 +75,8 @@ public partial class ILCompiler
         // RegisterSymbolMethod call.
         public Dictionary<string, List<(Parsing.Stmt.Function Method, Parsing.Expr Key, MethodBuilder Builder)>> SymbolMethods { get; } = [];
         public Dictionary<Stmt.Class, (MethodBuilder Method, IReadOnlyList<Expr> Keys)> DeferredComputedClassKeys { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<string, (MethodBuilder Initializer, MethodBuilder Registrar, IReadOnlyList<Expr> Keys)> DeferredClassDefinitions { get; } = [];
+        public Dictionary<Stmt.Field, FieldBuilder> ComputedFieldKeys { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, FieldBuilder> InstanceFieldsField { get; } = [];
         public HashSet<Stmt.Class> CompactStorageClasses { get; } =
             new(ReferenceEqualityComparer.Instance);

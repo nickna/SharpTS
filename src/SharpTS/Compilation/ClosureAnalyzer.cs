@@ -662,6 +662,8 @@ public class ClosureAnalyzer : AstVisitorBase
     protected override void VisitClass(Stmt.Class stmt)
     {
         DeclareVariable(stmt.Name.Lexeme);
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(stmt))
+            Visit(expression);
         foreach (var method in stmt.Methods)
         {
             // Skip overload signatures (no body)
@@ -672,6 +674,8 @@ public class ClosureAnalyzer : AstVisitorBase
 
     protected override void VisitClassExpr(Expr.ClassExpr expr)
     {
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(expr))
+            Visit(expression);
         // Class expressions don't declare the class name in the outer scope
         // (unlike class declarations), but we still need to analyze all bodies
 

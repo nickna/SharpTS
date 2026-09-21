@@ -428,9 +428,13 @@ public partial class ILCompiler
                 // by this class's generated name. It is registered in the class-
                 // expression .cctor and dispatched through the $Runtime symbol-
                 // accessor registry, mirroring the class-declaration path (#266).
-                if (accessor.ComputedKey != null)
+                if (accessor.ComputedKey != null || accessor.IsStatic)
                 {
-                    DefineSymbolAccessorMethod(typeBuilder, accessor);
+                    // Static accessors use the runtime constructor registry rather
+                    // than the instance CLR property table, including literal names.
+                    DefineSymbolAccessorMethod(typeBuilder, accessor.ComputedKey != null
+                        ? accessor
+                        : accessor with { ComputedKey = new Expr.Literal(accessor.Name.Lexeme) });
                     continue;
                 }
                 string accessorName = accessor.Name.Lexeme;
@@ -461,6 +465,9 @@ public partial class ILCompiler
                     _classExprs.Setters[classExpr][pascalName] = methodBuilder;
             }
         }
+
+        if (DefineDeferredComputedMethodKeyRegistrar(typeBuilder, classExpr.Fields) is { } deferred)
+            _classExprs.DeferredComputedKeys[classExpr] = deferred;
     }
 
     /// <summary>
@@ -521,7 +528,7 @@ public partial class ILCompiler
             {
                 // Symbol-keyed accessors are emitted below from _classes.SymbolAccessors
                 // (their synthetic methods aren't in _classExprs.Getters/Setters).
-                if (!accessor.IsAbstract && accessor.ComputedKey == null)
+                if (!accessor.IsAbstract && accessor.ComputedKey == null && !accessor.IsStatic)
                 {
                     EmitClassExpressionAccessor(classExpr, typeBuilder, accessor, fieldsField);
                 }
@@ -621,6 +628,15 @@ public partial class ILCompiler
         EmitClassPrototypeRegistration(
             il, typeBuilder, GetClassConstructorLength(classExpr.Methods));
 
+        if (_classes.DeferredClassDefinitions.TryGetValue(typeBuilder.Name, out var deferredDefinition))
+        {
+            il.Emit(OpCodes.Ret);
+            il = deferredDefinition.Initializer.GetILGenerator();
+            ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null, deferredDefinition.Initializer);
+            ctx.IsStaticConstructorContext = true;
+            emitter = new ILEmitter(ctx);
+        }
+
         // Process StaticInitializers if available (preserves declaration order)
         if (hasStaticInitializers)
         {
@@ -628,6 +644,11 @@ public partial class ILCompiler
             {
                 switch (initializer)
                 {
+                    case Stmt.Field field when field.IsStatic && field.ComputedKey != null:
+                        _classes.ComputedFieldKeys.TryGetValue(field, out var computedKey);
+                        EmitComputedStaticFieldInitializer(emitter, il, typeBuilder, field, computedKey);
+                        break;
+
                     case Stmt.Field field when field.IsStatic && field.Initializer != null:
                         var staticField = _classExprs.StaticFields[classExpr][field.Name.Lexeme];
                         emitter.EmitExpression(field.Initializer);
@@ -819,8 +840,24 @@ public partial class ILCompiler
 
         void EmitInstanceFieldInitializers()
         {
-            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && f.Initializer != null))
+            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsDeclare && (f.Initializer != null || f.ComputedKey != null)))
             {
+                if (field.ComputedKey != null)
+                {
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldsfld, _classes.ComputedFieldKeys[field]);
+                    if (field.Initializer != null)
+                    {
+                        emitter.EmitExpression(field.Initializer);
+                        emitter.EmitBoxIfNeeded(field.Initializer);
+                    }
+                    else
+                        il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Call, _runtime.ObjectWrite.Index);
+                    continue;
+                }
+                if (field.Initializer == null)
+                    continue;
                 string fieldName = field.Name.Lexeme;
                 string pascalName = NamingConventions.ToPascalCase(fieldName);
 
@@ -1177,7 +1214,7 @@ public partial class ILCompiler
             // Unique, deterministic name so multiple computed methods don't collide and the synthetic
             // `<computed>` lexeme (not a dispatchable name) is replaced by a real IL name.
             string uniqueName = $"$symmethod_{i}";
-            var renamed = method with { Name = new Token(TokenType.IDENTIFIER, uniqueName, null, method.Name.Line) };
+            var renamed = method with { Name = new Token(TokenType.IDENTIFIER, uniqueName, null, method.Name.Line, method.Name.Start) };
 
             // Class-expression methods use all-object parameter slots (computed iterator methods are
             // typically parameterless anyway). Async generator FIRST since it sets both flags.
@@ -1203,8 +1240,6 @@ public partial class ILCompiler
             list.Add((renamed, method.ComputedKey!, mb));
         }
         _classes.SymbolMethods[className] = list;
-        if (DefineDeferredComputedMethodKeyRegistrar(typeBuilder) is { } deferred)
-            _classExprs.DeferredComputedKeys[classExpr] = deferred;
     }
 
     /// <summary>

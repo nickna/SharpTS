@@ -181,7 +181,7 @@ public partial class Interpreter
     internal ValueTask<RuntimeValue> VisitImportMetaAsync(Expr.ImportMeta im) => new(EvaluateImportMeta(im));
     internal ValueTask<RuntimeValue> VisitYieldAsync(Expr.Yield yieldExpr) => new(EvaluateYieldAsync(yieldExpr));
     internal ValueTask<RuntimeValue> VisitRegexLiteralAsync(Expr.RegexLiteral regex) => new(RuntimeValue.FromObject(new SharpTSRegExp(regex.Pattern, regex.Flags)));
-    internal ValueTask<RuntimeValue> VisitClassExprAsync(Expr.ClassExpr classExpr) => new(EvaluateClassExpression(classExpr));
+    internal ValueTask<RuntimeValue> VisitClassExprAsync(Expr.ClassExpr classExpr) => EvaluateClassExpressionCore(_asyncContext, classExpr);
 
     /// <summary>
     /// Evaluates a yield expression, throwing YieldException for control flow.
@@ -2040,7 +2040,10 @@ public partial class Interpreter
     /// Evaluates a class expression and returns the SharpTSClass object.
     /// Unlike class declarations, the class is not added to the environment.
     /// </summary>
-    private RuntimeValue EvaluateClassExpression(Expr.ClassExpr classExpr)
+    private RuntimeValue EvaluateClassExpression(Expr.ClassExpr classExpr) =>
+        EvaluateClassExpressionCore(_syncContext, classExpr).GetAwaiter().GetResult();
+
+    private async ValueTask<RuntimeValue> EvaluateClassExpressionCore(IEvaluationContext ctx, Expr.ClassExpr classExpr)
     {
         // Generate name for anonymous classes
         string className = classExpr.Name?.Lexeme ?? $"$ClassExpr_{++_classExprCounter}";
@@ -2049,7 +2052,7 @@ public partial class Interpreter
         object? superclass = null;
         if (classExpr.SuperclassExpr != null)
         {
-            superclass = Evaluate(classExpr.SuperclassExpr);
+            superclass = (await ctx.EvaluateExprAsync(classExpr.SuperclassExpr)).ToObject();
             // `extends Array` (#233): substitute the SharpTSArrayClass bridge,
             // mirroring VisitClass.
             if (superclass is SharpTSArrayGlobal)
@@ -2099,6 +2102,15 @@ public partial class Interpreter
             bool hasStaticInitializers = classExpr.StaticInitializers != null && classExpr.StaticInitializers.Count > 0;
 
             // Process fields
+            // Evaluate every computed key exactly once, in source order, before
+            // applying static values or symbol-keyed methods and accessors.
+            var computedMemberKeys = new Dictionary<Expr, object?>(System.Collections.Generic.ReferenceEqualityComparer.Instance);
+            foreach (var key in Compilation.ClassDefinitionExpressions.MemberKeys(classExpr.Fields, classExpr.Methods, classExpr.Accessors))
+            {
+                object? value = (await ctx.EvaluateExprAsync(key)).ToObject();
+                computedMemberKeys[key] = value is SharpTSSymbol ? value : PropertyKeyConverter.ToPropertyKeyString(value);
+            }
+
             foreach (Stmt.Field field in classExpr.Fields)
             {
                 if (field.IsStatic)
@@ -2115,7 +2127,8 @@ public partial class Interpreter
                 }
                 else
                 {
-                    instanceFields.Add(field);
+                    instanceFields.Add(field.ComputedKey == null ? field
+                    : field with { ComputedKey = new Expr.Literal(computedMemberKeys[field.ComputedKey]) });
                 }
             }
 
@@ -2140,7 +2153,7 @@ public partial class Interpreter
                 // table; other keys fold to a string-named method (parallels the class-declaration path).
                 if (method.ComputedKey != null)
                 {
-                    object? key = Evaluate(method.ComputedKey);
+                    object? key = computedMemberKeys[method.ComputedKey];
                     if (key is SharpTSSymbol symbolKey)
                     {
                         (symbolMethods ??= []).Add((symbolKey, func, method.IsStatic));
@@ -2164,6 +2177,8 @@ public partial class Interpreter
             // Create accessor functions
             Dictionary<string, SharpTSFunction> getters = [];
             Dictionary<string, SharpTSFunction> setters = [];
+            Dictionary<string, SharpTSFunction> staticGetters = [];
+            Dictionary<string, SharpTSFunction> staticSetters = [];
             List<(SharpTSSymbol Symbol, SharpTSFunction Func, bool IsStatic, bool IsGetter)>? symbolAccessors = null;
 
             if (classExpr.Accessors != null)
@@ -2186,7 +2201,7 @@ public partial class Interpreter
                     // (mirrors VisitClass).
                     if (accessor.ComputedKey != null)
                     {
-                        object? key = Evaluate(accessor.ComputedKey);
+                        object? key = computedMemberKeys[accessor.ComputedKey];
                         if (key is SharpTSSymbol symbolKey)
                         {
                             (symbolAccessors ??= []).Add((symbolKey, func, accessor.IsStatic, isGetter));
@@ -2197,11 +2212,11 @@ public partial class Interpreter
 
                     if (isGetter)
                     {
-                        getters[nameKey] = func;
+                        (accessor.IsStatic ? staticGetters : getters)[nameKey] = func;
                     }
                     else
                     {
-                        setters[nameKey] = func;
+                        (accessor.IsStatic ? staticSetters : setters)[nameKey] = func;
                     }
                 }
             }
@@ -2218,7 +2233,9 @@ public partial class Interpreter
                     getters,
                     setters,
                     classExpr.IsAbstract,
-                    instanceFields)
+                    instanceFields,
+                    staticGetters: staticGetters.Count > 0 ? staticGetters : null,
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null)
                 : superclass is SharpTSArrayClass arraySuper
                 ? new SharpTSArrayClass(
                     className,
@@ -2229,7 +2246,9 @@ public partial class Interpreter
                     getters,
                     setters,
                     classExpr.IsAbstract,
-                    instanceFields)
+                    instanceFields,
+                    staticGetters: staticGetters.Count > 0 ? staticGetters : null,
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null)
                 : superclass is SharpTSPromiseClass promiseSuper
                 ? new SharpTSPromiseClass(
                     className,
@@ -2240,7 +2259,9 @@ public partial class Interpreter
                     getters,
                     setters,
                     classExpr.IsAbstract,
-                    instanceFields)
+                    instanceFields,
+                    staticGetters: staticGetters.Count > 0 ? staticGetters : null,
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null)
                 : new SharpTSClass(
                     className,
                     (SharpTSClass?)superclass,
@@ -2250,7 +2271,9 @@ public partial class Interpreter
                     getters,
                     setters,
                     classExpr.IsAbstract,
-                    instanceFields);
+                    instanceFields,
+                    staticGetters: staticGetters.Count > 0 ? staticGetters : null,
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null);
 
             if (symbolAccessors != null)
             {
@@ -2289,8 +2312,12 @@ public partial class Interpreter
                             case Stmt.Field field when field.IsStatic:
                                 object? fieldValue = field.Initializer != null
                                     ? Evaluate(field.Initializer)
-                                    : null;
-                                klass.SetStaticProperty(field.Name.Lexeme, fieldValue);
+                                    : field.ComputedKey != null ? SharpTSUndefined.Instance : null;
+                                if (field.ComputedKey != null && computedMemberKeys[field.ComputedKey] is SharpTSSymbol symbol)
+                                    klass.SetStaticBySymbol(symbol, fieldValue);
+                                else
+                                    klass.SetStaticProperty(field.ComputedKey != null
+                                        ? (string)computedMemberKeys[field.ComputedKey]! : field.Name.Lexeme, fieldValue);
                                 break;
 
                             case Stmt.StaticBlock block:

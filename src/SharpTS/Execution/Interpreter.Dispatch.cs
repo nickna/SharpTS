@@ -189,6 +189,7 @@ public partial class Interpreter
     /// </summary>
     internal ValueTask<ExecutionResult> DispatchStmtAsync(Stmt stmt) => stmt switch
     {
+        Stmt.Class s => VisitClassCore(_asyncContext, s),
         Stmt.Block s => ExecuteBlockAsyncVT(s),
         Stmt.Sequence s => ExecuteSequenceAsyncVT(s),
         Stmt.Expression s => ExecuteExpressionAsyncVT(s),

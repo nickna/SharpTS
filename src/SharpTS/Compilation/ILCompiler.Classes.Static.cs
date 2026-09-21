@@ -123,6 +123,19 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stsfld, privateFieldStorage);
         }
 
+        if (_classes.DeferredClassDefinitions.TryGetValue(typeBuilder.Name, out var deferredDefinition))
+        {
+            il.Emit(OpCodes.Ret);
+            il = deferredDefinition.Initializer.GetILGenerator();
+            ctx = CreateModuleMemberContext(il, deferredDefinition.Initializer);
+            ctx.CurrentClassBuilder = typeBuilder;
+            ctx.EmittingTypeBuilder = typeBuilder;
+            ctx.CurrentClassName = qualifiedClassName;
+            ctx.IsStaticConstructorContext = true;
+            ApplyCapturedTopLevelVariableAccess(ctx);
+            emitter = new ILEmitter(ctx);
+        }
+
         // Use StaticInitializers for proper declaration order if available
         if (hasStaticInitializers)
         {
@@ -136,6 +149,12 @@ public partial class ILCompiler
                 switch (initializer)
                 {
                     case Stmt.Field field when field.IsStatic:
+                        if (field.ComputedKey != null)
+                        {
+                            _classes.ComputedFieldKeys.TryGetValue(field, out var computedKey);
+                            EmitComputedStaticFieldInitializer(emitter, il, typeBuilder, field, computedKey);
+                            break;
+                        }
                         if (field.Initializer != null)
                         {
                             emitter.EmitExpression(field.Initializer);
@@ -232,6 +251,8 @@ public partial class ILCompiler
 
         foreach (var (accessor, method) in list)
         {
+            if (_classes.DeferredClassDefinitions.ContainsKey(typeBuilder.Name))
+                continue;
             bool isGetter = accessor.Kind.Type == TokenType.GET;
 
             // owner: typeof(ThisClass)
@@ -275,7 +296,7 @@ public partial class ILCompiler
 
         foreach (var (method, key, builder) in list)
         {
-            if (ExpressionContainsYield(key))
+            if (_classes.DeferredClassDefinitions.ContainsKey(typeBuilder.Name))
                 continue;
             // owner: typeof(ThisClass)
             il.Emit(OpCodes.Ldtoken, typeBuilder);
@@ -295,17 +316,32 @@ public partial class ILCompiler
         }
     }
 
-    private (MethodBuilder Method, IReadOnlyList<Expr> Keys)? DefineDeferredComputedMethodKeyRegistrar(TypeBuilder typeBuilder)
+    private (MethodBuilder Method, IReadOnlyList<Expr> Keys)? DefineDeferredComputedMethodKeyRegistrar(TypeBuilder typeBuilder, IReadOnlyList<Stmt.Field> fields)
     {
-        if (!_classes.SymbolMethods.TryGetValue(typeBuilder.Name, out var methods))
+        if (_classes.DeferredClassDefinitions.TryGetValue(typeBuilder.Name, out var existing))
+            return (existing.Registrar, existing.Keys);
+        var deferred = new List<(Expr Key, MethodBuilder? Builder, bool IsStatic, bool? IsGetter, int Position, Stmt.Field? Field)>();
+        if (_classes.SymbolMethods.TryGetValue(typeBuilder.Name, out var methods))
+            foreach (var (method, key, builder) in methods)
+                deferred.Add((key, builder, method.IsStatic, null, method.Name.Start, null));
+        if (_classes.SymbolAccessors.TryGetValue(typeBuilder.Name, out var accessors))
+            foreach (var (accessor, builder) in accessors)
+                deferred.Add((accessor.ComputedKey!, builder, accessor.IsStatic, accessor.Kind.Type == TokenType.GET, accessor.Name.Start, null));
+        foreach (var field in fields.Where(field => field.ComputedKey != null && !field.IsDeclare))
+            deferred.Add((field.ComputedKey!, null, field.IsStatic, null, field.Name.Start, field));
+        // Field names are evaluated with the definition, even when no key suspends.
+        if (!deferred.Any(entry => entry.Field != null || ExpressionContainsSuspension(entry.Key)))
             return null;
 
-        var deferred = methods.Where(entry => ExpressionContainsYield(entry.Key)).ToList();
-        if (deferred.Count == 0)
-            return null;
+        deferred = deferred.OrderBy(entry => entry.Position).ToList();
+        var initializer = typeBuilder.DefineMethod("$initializeDeferredClass",
+            MethodAttributes.Assembly | MethodAttributes.Static, _types.Void, Type.EmptyTypes);
 
-        var registrar = typeBuilder.DefineMethod(
-            "$registerDeferredComputedKeys",
+        // TypeScript type arguments do not create separate class definitions. Keep
+        // captured keys outside generic CLR instantiations so all instances share them.
+        var keyOwner = typeBuilder.IsGenericTypeDefinition ? _programType : typeBuilder;
+        var registrar = keyOwner.DefineMethod(
+            typeBuilder.IsGenericTypeDefinition ? $"$registerDeferredComputedKeys_{typeBuilder.Name}" : "$registerDeferredComputedKeys",
             MethodAttributes.Assembly | MethodAttributes.Static,
             _types.Void,
             [_types.ObjectArray]);
@@ -314,31 +350,95 @@ public partial class ILCompiler
 
         for (int i = 0; i < deferred.Count; i++)
         {
-            var (method, _key, builder) = deferred[i];
+            var (_key, builder, isStatic, isGetter, _position, field) = deferred[i];
+            if (field != null)
+            {
+                var keyField = keyOwner.DefineField($"$computedFieldKey_{typeBuilder.Name}_{i}", _types.Object,
+                    FieldAttributes.Assembly | FieldAttributes.Static);
+                _classes.ComputedFieldKeys.Add(field, keyField);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldc_I4, i);
+                il.Emit(OpCodes.Ldelem_Ref);
+                il.Emit(OpCodes.Stsfld, keyField);
+                continue;
+            }
             il.Emit(OpCodes.Ldtoken, typeBuilder);
             il.Emit(OpCodes.Call, getTypeFromHandle);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldc_I4, i);
             il.Emit(OpCodes.Ldelem_Ref);
-            EmitMethodInfoLiteral(il, builder, typeBuilder);
-            il.Emit(method.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Call, _runtime.SymbolAccessors.RegisterMethod);
+            if (isGetter == false)
+                il.Emit(OpCodes.Ldnull);
+            EmitMethodInfoLiteral(il, builder!, typeBuilder);
+            if (isGetter == true)
+                il.Emit(OpCodes.Ldnull);
+            il.Emit(isStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, isGetter.HasValue
+                ? _runtime.SymbolAccessors.RegisterAccessor
+                : _runtime.SymbolAccessors.RegisterMethod);
         }
 
+        il.Emit(OpCodes.Call, typeBuilder.IsGenericTypeDefinition
+            ? EmitterTypeHelpers.ResolveMethod(
+                EmitGenerics.MakeGenericType(typeBuilder, typeBuilder.GetGenericArguments().Select(_ => _types.Object).ToArray()), initializer)
+            : initializer);
         il.Emit(OpCodes.Ret);
-        return (registrar, deferred.Select(entry => entry.Key).ToArray());
+        var keys = deferred.Select(entry => entry.Key).ToArray();
+        _classes.DeferredClassDefinitions.Add(typeBuilder.Name, (initializer, registrar, keys));
+        return (registrar, keys);
     }
 
-    private static bool ExpressionContainsYield(Expr expression)
+    private void EmitComputedStaticFieldInitializer(ILEmitter emitter, ILGenerator il,
+        TypeBuilder owner, Stmt.Field field, FieldBuilder? key)
     {
-        var visitor = new YieldPresenceVisitor();
+        il.Emit(OpCodes.Ldtoken, owner);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        if (key != null)
+            il.Emit(OpCodes.Ldsfld, key);
+        else
+        {
+            emitter.EmitExpression(field.ComputedKey!);
+            emitter.EmitBoxIfNeeded(field.ComputedKey!);
+        }
+        if (field.Initializer != null)
+        {
+            emitter.EmitExpression(field.Initializer);
+            emitter.EmitBoxIfNeeded(field.Initializer);
+        }
+        else
+            il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Call, _runtime.ObjectWrite.Index);
+    }
+
+    private static bool ExpressionContainsSuspension(Expr expression)
+    {
+        var visitor = new SuspensionPresenceVisitor();
         visitor.Visit(expression);
         return visitor.Found;
     }
 
-    private sealed class YieldPresenceVisitor : Parsing.Visitors.AstVisitorBase
+    private sealed class SuspensionPresenceVisitor : Parsing.Visitors.AstVisitorBase
     {
         public bool Found { get; private set; }
+
+        protected override void VisitArrowFunction(Expr.ArrowFunction expr) { }
+        protected override void VisitFunction(Stmt.Function stmt) { }
+        protected override void VisitClass(Stmt.Class stmt)
+        {
+            foreach (var expression in ClassDefinitionExpressions.Enumerate(stmt))
+                Visit(expression);
+        }
+        protected override void VisitClassExpr(Expr.ClassExpr expr)
+        {
+            foreach (var expression in ClassDefinitionExpressions.Enumerate(expr))
+                Visit(expression);
+        }
+
+        protected override void VisitAwait(Expr.Await expr)
+        {
+            Found = true;
+            ShouldContinue = false;
+        }
 
         protected override void VisitYield(Expr.Yield expr)
         {

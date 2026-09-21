@@ -275,40 +275,21 @@ public class GeneratorStateAnalyzer : AstVisitorBase
     protected override void VisitFunction(Stmt.Function stmt) { }
     protected override void VisitClass(Stmt.Class stmt)
     {
-        _declaredVariables.Add(stmt.Name.Lexeme);
+        string name = StorageName(stmt, stmt.Name.Lexeme);
+        _declaredVariables.Add(name);
         if (!_seenYield)
-            _variablesDeclaredBeforeYield.Add(stmt.Name.Lexeme);
+            _variablesDeclaredBeforeYield.Add(name);
 
         // Class bodies are nested callable/initializer scopes, but heritage and
         // computed element names are evaluated eagerly in the enclosing generator.
-        if (stmt.SuperclassExpr != null)
-            Visit(stmt.SuperclassExpr);
-        foreach (var field in stmt.Fields)
-            if (field.ComputedKey != null)
-                Visit(field.ComputedKey);
-        foreach (var method in stmt.Methods)
-            if (method.ComputedKey != null)
-                Visit(method.ComputedKey);
-        if (stmt.Accessors != null)
-            foreach (var accessor in stmt.Accessors)
-                if (accessor.ComputedKey != null)
-                    Visit(accessor.ComputedKey);
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(stmt))
+            Visit(expression);
     }
 
     protected override void VisitClassExpr(Expr.ClassExpr expr)
     {
-        if (expr.SuperclassExpr != null)
-            Visit(expr.SuperclassExpr);
-        foreach (var field in expr.Fields)
-            if (field.ComputedKey != null)
-                Visit(field.ComputedKey);
-        foreach (var method in expr.Methods)
-            if (method.ComputedKey != null)
-                Visit(method.ComputedKey);
-        if (expr.Accessors != null)
-            foreach (var accessor in expr.Accessors)
-                if (accessor.ComputedKey != null)
-                    Visit(accessor.ComputedKey);
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(expr))
+            Visit(expression);
     }
     protected override void VisitInterface(Stmt.Interface stmt) { }
     protected override void VisitTypeAlias(Stmt.TypeAlias stmt) { }
