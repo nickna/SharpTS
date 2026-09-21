@@ -2302,7 +2302,7 @@ public partial class Interpreter
                             case Stmt.Field field when field.IsStatic:
                                 object? fieldValue = field.Initializer != null
                                     ? Evaluate(field.Initializer)
-                                    : null;
+                                    : field.ComputedKey != null ? SharpTSUndefined.Instance : null;
                                 if (field.ComputedKey != null && computedMemberKeys[field.ComputedKey] is SharpTSSymbol symbol)
                                     klass.SetStaticBySymbol(symbol, fieldValue);
                                 else

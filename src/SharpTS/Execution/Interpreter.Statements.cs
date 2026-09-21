@@ -2364,7 +2364,7 @@ public partial class Interpreter
                         case Stmt.Field field when field.IsStatic:
                             object? fieldValue = field.Initializer != null
                                 ? Evaluate(field.Initializer)
-                                : null;
+                                : field.ComputedKey != null ? SharpTSUndefined.Instance : null;
                             if (field.IsPrivate)
                                 klass.SetStaticPrivateField(field.Name.Lexeme, fieldValue);
                             else if (field.ComputedKey != null && computedMemberKeys[field.ComputedKey] is SharpTSSymbol symbol)

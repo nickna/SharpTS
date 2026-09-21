@@ -20,8 +20,8 @@ public sealed class AsyncLocalClassDeclarationTests
         Assert.Equal("5 7 9\n", TestHarness.Run(source, mode));
     }
 
-    [Fact]
-    public void CompiledComputedFieldsWithoutInitializers_StoreUndefined()
+    [Theory, ModeData]
+    public void ComputedFieldsWithoutInitializers_StoreUndefined(ExecutionMode mode)
     {
         const string source = """
             const key = "empty";
@@ -32,7 +32,7 @@ public sealed class AsyncLocalClassDeclarationTests
             const instance: any = new Expression();
             console.log(d.empty, e.empty, instance.empty);
             """;
-        Assert.Equal("undefined undefined undefined\n", TestHarness.Run(source, ExecutionMode.Compiled));
+        Assert.Equal("undefined undefined undefined\n", TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]
