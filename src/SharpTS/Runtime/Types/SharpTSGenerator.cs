@@ -61,13 +61,16 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     private readonly List<Stmt> _body;
     private readonly RuntimeEnvironment _environment;
     private readonly Interpreter _interpreter;
+    private readonly CancellationToken _shutdownToken;
     private readonly string _debugFrameName;
     private readonly object _debugDeclaration;
 
-    // Coroutine synchronization
+    // Coroutine synchronization. Block rather than repeatedly yielding through
+    // the default spin phase: under contention, either peer can otherwise spend
+    // most of its time yielding to unrelated runnable threads at every handoff.
     private Thread? _workerThread;
-    private readonly ManualResetEventSlim _callerReady = new(false);
-    private readonly ManualResetEventSlim _workerReady = new(false);
+    private readonly ManualResetEventSlim _callerReady = new(false, 0);
+    private readonly ManualResetEventSlim _workerReady = new(false, 0);
 
     // State
     private enum State { NotStarted, Suspended, Running, Completed }
@@ -90,7 +93,7 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     // Value carried by an abrupt resume: the return value for Return, the error for Throw.
     private object? _injectedValue;
 
-    private bool _closed;
+    private volatile bool _closed;
     private Exception? _workerException;
 
     // Caller state save/restore across yield points
@@ -107,6 +110,7 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
         _body = body;
         _environment = environment;
         _interpreter = interpreter;
+        _shutdownToken = interpreter.ShutdownToken;
         _debugFrameName = debugFrameName;
         _debugDeclaration = debugDeclaration;
     }
@@ -150,7 +154,7 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
         // A finished or disposed generator yields nothing more. The completion value is
         // delivered exactly once (when the body finishes); later next() calls report
         // undefined (ECMA-262 §27.5.3.3 → CreateIterResultObject(undefined, true)).
-        if (_closed || _state == State.Completed)
+        if (_closed || _state == State.Completed || _shutdownToken.IsCancellationRequested)
             return new SharpTSIteratorResult(SharpTSUndefined.Instance, done: true);
 
         // Save caller's environment
@@ -194,7 +198,7 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
         }
 
         // Already finished/disposed: report { value, done: true } (no body to resume).
-        if (_closed || _state == State.Completed)
+        if (_closed || _state == State.Completed || _shutdownToken.IsCancellationRequested)
             return new SharpTSIteratorResult(value, done: true);
 
         // Suspended: inject the return at the yield point so finally blocks run. The body's
@@ -219,7 +223,7 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
         ThrowIfExecuting();
 
         // Never started or already finished/disposed: nothing to resume — just throw.
-        if (_state == State.NotStarted || _closed || _state == State.Completed)
+        if (_state == State.NotStarted || _closed || _state == State.Completed || _shutdownToken.IsCancellationRequested)
         {
             _state = State.Completed;
             throw ThrowException.FromResult(error);
@@ -266,6 +270,9 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     /// </summary>
     private void RunBody()
     {
+        // Register once for the worker lifetime, rather than once per yield. Shutdown
+        // wakes a parked worker; SuspendCore recognizes it as a host abort.
+        using var shutdownRegistration = _shutdownToken.Register(_callerReady.Set);
         RuntimeEnvironment previousEnv = _interpreter.Environment;
         _interpreter.SetEnvironment(_environment);
         using var debugFrame = _interpreter.EnterDebugFrame(
@@ -293,6 +300,12 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
                 // to the resuming next()/throw() caller.
                 _workerException = ThrowException.FromResult(result.Value.ToObject());
             }
+        }
+        catch (WorkerTerminatedException) when (_closed || _shutdownToken.IsCancellationRequested)
+        {
+            // Host shutdown abandons the suspended execution; it is not a guest throw
+            // or return and must not resume guest catch/finally code.
+            _closed = true;
         }
         catch (Exception ex) when (ex is not ThreadInterruptedException)
         {
@@ -501,7 +514,11 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
         _interpreter.YieldCallback = _callerYieldCallback;
 
         _workerReady.Set();    // Signal caller that value is ready
-        _callerReady.Wait();   // Wait for the resuming next/return/throw call
+        if (_closed || _shutdownToken.IsCancellationRequested)
+            throw new WorkerTerminatedException();
+        _callerReady.Wait();
+        if (_closed || _shutdownToken.IsCancellationRequested)
+            throw new WorkerTerminatedException();
         _callerReady.Reset();
 
         // Save caller state (may have changed), restore generator state
@@ -538,10 +555,11 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     public void Dispose()
     {
         _closed = true;
-        if (_state == State.Suspended)
-            _callerReady.Set();
-        _callerReady.Dispose();
-        _workerReady.Dispose();
+        _callerReady.Set();
+        // Either side can still be using the handoff events while the worker unwinds.
+        // We never request their WaitHandle (which would allocate a native handle),
+        // so leave these managed synchronization objects alive until the generator is
+        // reclaimed rather than racing Wait/Set/Reset with Dispose.
         GC.SuppressFinalize(this);
     }
 }

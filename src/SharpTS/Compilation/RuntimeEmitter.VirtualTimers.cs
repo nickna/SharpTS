@@ -634,6 +634,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(skipFireUnref);
 
         il.MarkLabel(afterHandleLabel);
+        // Complete the fired timer's Promise checkpoint before another due timer.
+        il.Emit(OpCodes.Call, microtasks.ProcessMicrotasks);
         il.Emit(OpCodes.Br, loopStartLabel);
 
         il.MarkLabel(loopEndLabel);
