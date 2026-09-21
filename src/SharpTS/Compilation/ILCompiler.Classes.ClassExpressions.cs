@@ -428,9 +428,13 @@ public partial class ILCompiler
                 // by this class's generated name. It is registered in the class-
                 // expression .cctor and dispatched through the $Runtime symbol-
                 // accessor registry, mirroring the class-declaration path (#266).
-                if (accessor.ComputedKey != null)
+                if (accessor.ComputedKey != null || accessor.IsStatic)
                 {
-                    DefineSymbolAccessorMethod(typeBuilder, accessor);
+                    // Static accessors use the runtime constructor registry rather
+                    // than the instance CLR property table, including literal names.
+                    DefineSymbolAccessorMethod(typeBuilder, accessor.ComputedKey != null
+                        ? accessor
+                        : accessor with { ComputedKey = new Expr.Literal(accessor.Name.Lexeme) });
                     continue;
                 }
                 string accessorName = accessor.Name.Lexeme;
@@ -524,7 +528,7 @@ public partial class ILCompiler
             {
                 // Symbol-keyed accessors are emitted below from _classes.SymbolAccessors
                 // (their synthetic methods aren't in _classExprs.Getters/Setters).
-                if (!accessor.IsAbstract && accessor.ComputedKey == null)
+                if (!accessor.IsAbstract && accessor.ComputedKey == null && !accessor.IsStatic)
                 {
                     EmitClassExpressionAccessor(classExpr, typeBuilder, accessor, fieldsField);
                 }

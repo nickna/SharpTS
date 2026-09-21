@@ -6,6 +6,26 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class AsyncLocalClassDeclarationTests
 {
     [Theory, ModeData]
+    public void ClassExpressionComputedStaticAccessors_StayOnConstructor(ExecutionMode mode)
+    {
+        const string source = """
+            async function run() {
+                const C = class {
+                    static get [await new Promise(r => setTimeout(() => r("value"), 1))]() { return 5; }
+                    static set ["value"](v) { console.log("static", v); }
+                    get ["value"]() { return 7; }
+                };
+                const cls: any = C;
+                const instance: any = new C();
+                console.log(cls.value, instance.value);
+                cls.value = 9;
+            }
+            run().then(() => {}, e => console.log("rejected", e.message));
+            """;
+        Assert.Equal("5 7\nstatic 9\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ComputedFieldsWithoutSuspension_UseRuntimeKeys(ExecutionMode mode)
     {
         const string source = """

@@ -2177,6 +2177,8 @@ public partial class Interpreter
             // Create accessor functions
             Dictionary<string, SharpTSFunction> getters = [];
             Dictionary<string, SharpTSFunction> setters = [];
+            Dictionary<string, SharpTSFunction> staticGetters = [];
+            Dictionary<string, SharpTSFunction> staticSetters = [];
             List<(SharpTSSymbol Symbol, SharpTSFunction Func, bool IsStatic, bool IsGetter)>? symbolAccessors = null;
 
             if (classExpr.Accessors != null)
@@ -2210,11 +2212,11 @@ public partial class Interpreter
 
                     if (isGetter)
                     {
-                        getters[nameKey] = func;
+                        (accessor.IsStatic ? staticGetters : getters)[nameKey] = func;
                     }
                     else
                     {
-                        setters[nameKey] = func;
+                        (accessor.IsStatic ? staticSetters : setters)[nameKey] = func;
                     }
                 }
             }
@@ -2231,7 +2233,9 @@ public partial class Interpreter
                     getters,
                     setters,
                     classExpr.IsAbstract,
-                    instanceFields)
+                    instanceFields,
+                    staticGetters: staticGetters.Count > 0 ? staticGetters : null,
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null)
                 : superclass is SharpTSArrayClass arraySuper
                 ? new SharpTSArrayClass(
                     className,
@@ -2242,7 +2246,9 @@ public partial class Interpreter
                     getters,
                     setters,
                     classExpr.IsAbstract,
-                    instanceFields)
+                    instanceFields,
+                    staticGetters: staticGetters.Count > 0 ? staticGetters : null,
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null)
                 : superclass is SharpTSPromiseClass promiseSuper
                 ? new SharpTSPromiseClass(
                     className,
@@ -2253,7 +2259,9 @@ public partial class Interpreter
                     getters,
                     setters,
                     classExpr.IsAbstract,
-                    instanceFields)
+                    instanceFields,
+                    staticGetters: staticGetters.Count > 0 ? staticGetters : null,
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null)
                 : new SharpTSClass(
                     className,
                     (SharpTSClass?)superclass,
@@ -2263,7 +2271,9 @@ public partial class Interpreter
                     getters,
                     setters,
                     classExpr.IsAbstract,
-                    instanceFields);
+                    instanceFields,
+                    staticGetters: staticGetters.Count > 0 ? staticGetters : null,
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null);
 
             if (symbolAccessors != null)
             {
