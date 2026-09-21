@@ -1856,6 +1856,12 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Stloc, local);
     }
 
+    /// <summary>
+    /// Evaluates class keys in order, preserving Symbol keys and coercing all
+    /// other keys through <c>Ctx.Runtime.StringCoercion.ToJsString</c>. Spills each
+    /// resulting value before evaluating the next key, then passes the collected
+    /// values to <paramref name="method"/> as an object array.
+    /// </summary>
     protected void EmitDeferredComputedKeys(MethodBuilder method, IReadOnlyList<Expr> keys)
     {
         var values = new List<LocalBuilder>(keys.Count);
