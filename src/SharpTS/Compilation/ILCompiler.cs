@@ -1094,6 +1094,7 @@ public partial class ILCompiler
     /// </summary>
     private void Phase9_FinalizeTypes()
     {
+        _classes.PropertyDispatch.CompleteEmission();
         _classes.ComputedMembers.CompleteEmission();
         _classes.DeferredDefinitions.CompleteEmission();
         _unionGenerator?.FinalizeAllUnionTypes();
@@ -1654,6 +1655,7 @@ public partial class ILCompiler
     /// </summary>
     private void ModulePhase11_FinalizeTypes()
     {
+        _classes.PropertyDispatch.CompleteEmission();
         _classes.ComputedMembers.CompleteEmission();
         _classes.DeferredDefinitions.CompleteEmission();
         _unionGenerator?.FinalizeAllUnionTypes();

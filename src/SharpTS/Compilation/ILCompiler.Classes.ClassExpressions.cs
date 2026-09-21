@@ -705,7 +705,7 @@ public partial class ILCompiler
         // Dynamic property storage is materialized only by the first expando write.
         // This is also safe for base-constructor virtual dispatch because SetProperty
         // calls the derived type's ensure helper before touching its private field.
-        var ensureFields = _classes.HasFieldsStubs[className].EnsureFields;
+        var ensureFields = _classes.PropertyDispatch.Require(className).EnsureFields;
 
         // Emit constructor body first if present (contains super() call)
         var emitter = new ILEmitter(ctx);
