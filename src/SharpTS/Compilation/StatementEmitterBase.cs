@@ -1813,6 +1813,8 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
     #region Class Expressions
 
+    protected virtual string GetClassStorageName(Stmt.Class classStmt) => classStmt.Name.Lexeme;
+
     private void EmitStateMachineClassDeclaration(Stmt.Class classStmt)
     {
         TypeBuilder? builder = null;
@@ -1831,7 +1833,8 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         if (Ctx.DeferredComputedClassKeys?.TryGetValue(classStmt, out var deferred) == true)
             EmitDeferredComputedKeys(deferred.Method, deferred.Keys);
 
-        var field = GetHoistedVariableField(classStmt.Name.Lexeme);
+        string storageName = GetClassStorageName(classStmt);
+        var field = GetHoistedVariableField(storageName);
         if (field != null)
         {
             IL.Emit(OpCodes.Ldarg_0);
@@ -1841,8 +1844,8 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             return;
         }
 
-        var local = Ctx.Locals.GetLocal(classStmt.Name.Lexeme)
-            ?? Ctx.Locals.DeclareLocal(classStmt.Name.Lexeme, Types.Object, classStmt);
+        var local = Ctx.Locals.GetLocal(storageName)
+            ?? Ctx.Locals.DeclareLocal(storageName, Types.Object, classStmt);
         IL.Emit(OpCodes.Ldtoken, builder);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         IL.Emit(OpCodes.Stloc, local);

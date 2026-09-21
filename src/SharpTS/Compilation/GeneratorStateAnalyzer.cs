@@ -275,9 +275,10 @@ public class GeneratorStateAnalyzer : AstVisitorBase
     protected override void VisitFunction(Stmt.Function stmt) { }
     protected override void VisitClass(Stmt.Class stmt)
     {
-        _declaredVariables.Add(stmt.Name.Lexeme);
+        string name = StorageName(stmt, stmt.Name.Lexeme);
+        _declaredVariables.Add(name);
         if (!_seenYield)
-            _variablesDeclaredBeforeYield.Add(stmt.Name.Lexeme);
+            _variablesDeclaredBeforeYield.Add(name);
 
         // Class bodies are nested callable/initializer scopes, but heritage and
         // computed element names are evaluated eagerly in the enclosing generator.

@@ -106,6 +106,10 @@ public abstract partial class StateMachineExitRoutingEmitter
     /// </summary>
     protected abstract IReadOnlyDictionary<object, string> BlockScopeRenames { get; }
 
+    protected override string GetClassStorageName(Stmt.Class classStmt) =>
+        BlockScopeRenames.TryGetValue(classStmt, out var renamed)
+            ? renamed : classStmt.Name.Lexeme;
+
     /// <summary>Shared empty map for analyses built without the renamer.</summary>
     protected static readonly IReadOnlyDictionary<object, string> NoRenames = new Dictionary<object, string>();
 

@@ -1242,8 +1242,7 @@ public partial class ILCompiler
                     coreParameters[index].ParameterType);
             }
             var coreEmitter = new SuspensionFreeAsyncCoreEmitter(coreContext);
-            foreach (Stmt statement in function.Body!)
-                coreEmitter.EmitStatement(statement);
+            coreEmitter.EmitStatements(function.Body!);
 
             MethodBuilder stubMethod = _functions.Builders[functionName];
             ILGenerator il = stubMethod.GetILGenerator();
