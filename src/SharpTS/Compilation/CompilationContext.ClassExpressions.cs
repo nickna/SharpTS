@@ -34,6 +34,5 @@ public partial class CompilationContext
     // Variable name to class expression mapping (for static member access)
     public Dictionary<string, Expr.ClassExpr>? VarToClassExpr { get; set; }
 
-    public IReadOnlyDictionary<Stmt.Class, (MethodBuilder Method, IReadOnlyList<Expr> Keys)>? DeferredComputedClassKeys { get; set; }
-    public IReadOnlyDictionary<Expr.ClassExpr, (MethodBuilder Method, IReadOnlyList<Expr> Keys)>? DeferredComputedClassExprKeys { get; set; }
+    public DeferredClassDefinitionRegistry? DeferredClassDefinitions { get; set; }
 }

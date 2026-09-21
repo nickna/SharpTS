@@ -277,7 +277,7 @@ public partial class ILCompiler
                     // Stack: this
                     il.Emit(OpCodes.Ldarg_0);
                     // Load the key captured when the class definition was evaluated.
-                    il.Emit(OpCodes.Ldsfld, _classes.ComputedFieldKeys[field]);
+                    il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field));
                     // Emit initializer value; a field with no initializer is still an own
                     // property whose value is undefined.
                     if (field.Initializer != null)

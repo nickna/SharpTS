@@ -403,8 +403,7 @@ public partial class ILCompiler
             CreateExplicitAccessorProperties(typeBuilder, className);
         }
 
-        if (DefineDeferredComputedMethodKeyRegistrar(typeBuilder, classStmt.Fields) is { } deferred)
-            _classes.DeferredComputedClassKeys[classStmt] = deferred;
+        DefineDeferredComputedMethodKeyRegistrar(classStmt, typeBuilder, classStmt.Fields);
     }
 
     private bool TryResolveTypedPrimitiveMethodCoreReturnType(

@@ -466,8 +466,7 @@ public partial class ILCompiler
             }
         }
 
-        if (DefineDeferredComputedMethodKeyRegistrar(typeBuilder, classExpr.Fields) is { } deferred)
-            _classExprs.DeferredComputedKeys[classExpr] = deferred;
+        DefineDeferredComputedMethodKeyRegistrar(classExpr, typeBuilder, classExpr.Fields);
     }
 
     /// <summary>
@@ -628,7 +627,7 @@ public partial class ILCompiler
         EmitClassPrototypeRegistration(
             il, typeBuilder, GetClassConstructorLength(classExpr.Methods));
 
-        if (_classes.DeferredClassDefinitions.TryGetValue(typeBuilder.Name, out var deferredDefinition))
+        if (_classes.DeferredDefinitions.TryGet(typeBuilder, out var deferredDefinition))
         {
             il.Emit(OpCodes.Ret);
             il = deferredDefinition.Initializer.GetILGenerator();
@@ -645,7 +644,7 @@ public partial class ILCompiler
                 switch (initializer)
                 {
                     case Stmt.Field field when field.IsStatic && field.ComputedKey != null:
-                        _classes.ComputedFieldKeys.TryGetValue(field, out var computedKey);
+                        _classes.DeferredDefinitions.TryGetFieldKey(field, out var computedKey);
                         EmitComputedStaticFieldInitializer(emitter, il, typeBuilder, field, computedKey);
                         break;
 
@@ -683,6 +682,8 @@ public partial class ILCompiler
         EmitSymbolMethodRegistrations(emitter, il, typeBuilder);
 
         il.Emit(OpCodes.Ret);
+        if (deferredDefinition != null)
+            _classes.DeferredDefinitions.MarkInitializerEmitted(deferredDefinition);
     }
 
     /// <summary>
@@ -845,7 +846,7 @@ public partial class ILCompiler
                 if (field.ComputedKey != null)
                 {
                     il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldsfld, _classes.ComputedFieldKeys[field]);
+                    il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field));
                     if (field.Initializer != null)
                     {
                         emitter.EmitExpression(field.Initializer);
