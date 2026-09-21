@@ -51,6 +51,9 @@ public partial class RuntimeEmitter
             _types.Exception,
             [_types.Object]);
 
+        // Preserve the leading runtime declarations while reserving the event-loop guard.
+        DefineCancellationCheck(typeBuilder, runtime.Cancellation);
+
         // Reserve GetProperty(object, string) → object — generic property
         // reader used by $RegExp's Symbol.* protocol slow path to read
         // `exec`/`flags`/`lastIndex` etc. via the spec-aligned chain.

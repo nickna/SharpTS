@@ -1120,7 +1120,9 @@ its hosted child, when present, after runtime finalization; incomplete declarati
 retryable, while successful completion freezes handles and prevents enabling hosted hooks later.
 
 Ten event-loop helpers accept the component or hosted child directly. The class orchestrator,
-Run, and WaitForTask retain shared cancellation metadata. `$EventLoop` still precedes its
+Run, WaitForTask, and PumpOnce use the cancellation helper forward-declared on `$Runtime`.
+Its later body reads the per-assembly flag with volatile semantics; all three entry points
+check before draining each callback so a replenished queue remains cancellable. `$EventLoop` still precedes its
 synchronization context and the runtime's timer helpers: its public timer-processor field remains
 the bridge to the later timer delegate. Hosted await consumers test component availability
 instead of an undeclared method handle. Plain output, including full-feature emission, omits the
@@ -1631,19 +1633,19 @@ inlining, conversion hooks, abrupt completions, undefined defaults and generated
 unchanged. TSFunction's indirect ToNumber lookup retains its generated name and per-assembly cache.
 
 Cooperative cancellation lives in required `EmittedCancellationRuntime`. Its public per-assembly
-flag is declared at the original early runtime-field position; the check and exception factory
-retain their later method positions. Completion requires all three checked declarations and both
+flag is declared at the original early runtime-field position. The check signature is reserved
+in phase one; its body and the exception factory are emitted at the later runtime stage. Completion requires all three checked declarations and both
 body-emission markers, then freezes assignments. Failed completion leaves the owner repairable.
-Three family helpers take the owner directly. Invocation guards receive the declared check;
+Four family helpers take the owner directly. Invocation guards receive the declared check;
 guest loops use the checked flag/factory and preserve volatile reads followed by a separate throw,
 including accumulator flushes on the cold path. Runtime-free emission still omits cancellation.
 The public `_cancelRequested` reflection contract and exception type/message remain unchanged.
 
-Event-loop construction and its Run/WaitForTask helpers receive the event-loop component and an
-explicit nullable cancellation method. Normal orchestration still constructs the event loop before
-cancellation methods exist and passes null, preserving the existing omission; supplying a method
-to these helpers emits the checks. This phase does not change that scheduling behavior. Hosted
-and feature-free assemblies retain independent cancellation state. Class-initializer unwrapping,
+Event-loop construction and its Run/WaitForTask/PumpOnce helpers receive the event-loop component
+and an explicit nullable cancellation method. Normal orchestration supplies the checked phase-one
+`runtime.Cancellation.Check` declaration before its body exists. All three entry points check
+while draining callbacks; Run caps waits at 100 ms so distant timers cannot postpone cancellation.
+Hosted and feature-free assemblies retain independent cancellation state. Class-initializer unwrapping,
 regex hoisting, runtime-type construction and the residual ownership audit remain separate work.
 
 Class-definition initialization lives in required `EmittedClassInitializationRuntime`. Its checked

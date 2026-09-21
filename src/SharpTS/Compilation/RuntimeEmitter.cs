@@ -412,8 +412,8 @@ public partial class RuntimeEmitter
         }
 
         // Emit $EventLoop singleton (must come before timer types and net/http types that call Ref/Unref/Schedule)
-        // Cancellation methods are declared later in EmitRuntimeClass; preserve the early loop dependency.
-        EmitTSEventLoopClass(moduleBuilder, runtime.EventLoop, checkCancellation: null);
+        // The checked cancellation signature is available before its body is emitted.
+        EmitTSEventLoopClass(moduleBuilder, runtime.EventLoop, runtime.Cancellation.Check);
 
         // Emit $VirtualTimer class for virtual timer support (single-threaded semantics)
         // Must come after TSFunction (uses TSFunctionType)

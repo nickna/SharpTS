@@ -109,7 +109,7 @@ public partial class RuntimeEmitter
         EmitEventLoopWaitForTask(typeBuilder, eventLoop, checkCancellation);
 
         // PumpOnce() — single cooperative tick for the PipeTo pump (#448)
-        EmitEventLoopPumpOnce(typeBuilder, eventLoop);
+        EmitEventLoopPumpOnce(typeBuilder, eventLoop, checkCancellation);
 
         // HasPendingWork() — used by the beforeExit lifecycle (#1080) to decide
         // whether a listener scheduled new work at loop drain.
@@ -660,6 +660,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, waitMsLocal);
         il.MarkLabel(useTimerDelay);
 
+        // A distant timer must not postpone cooperative cancellation indefinitely.
+        il.Emit(OpCodes.Ldloc, waitMsLocal);
+        il.Emit(OpCodes.Ldc_I4, 100);
+        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Stloc, waitMsLocal);
+
         // _wake.Wait(waitMs)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, eventLoop.WakeField);
@@ -755,6 +761,9 @@ public partial class RuntimeEmitter
         // complete and would be misjudged as never-settling once the queue
         // looked empty. Re-checks task completion after each callback.
         il.MarkLabel(drainTop);
+        // A replenished callback queue must not starve the outer cancellation poll.
+        if (checkCancellation != null)
+            il.Emit(OpCodes.Call, checkCancellation);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Ldloca, actionLocal);
@@ -844,10 +853,11 @@ public partial class RuntimeEmitter
     /// Abort-signal and quiescence handling stay in the pump itself: <c>$EventLoop</c>
     /// is emitted before <c>$Runtime</c>, so it cannot reference
     /// <c>AbortSignalGetAborted</c>, whereas the later-emitted pump can. References
-    /// only this type's own fields plus the BCL, so the pure-IL stream stays
+    /// this type's fields, the emitted cancellation helper and the BCL, so the pure-IL stream stays
     /// standalone (no SharpTS.dll dependency).
     /// </remarks>
-    private void EmitEventLoopPumpOnce(TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop)
+    private void EmitEventLoopPumpOnce(
+        TypeBuilder typeBuilder, EmittedEventLoopRuntime eventLoop, MethodBuilder? checkCancellation)
     {
         var method = typeBuilder.DefineMethod(
             "PumpOnce",
@@ -871,6 +881,8 @@ public partial class RuntimeEmitter
         // WaitForTask: Posted await continuations / TCS resolutions live here and
         // running them may settle the read/write the pump is waiting on.
         il.MarkLabel(drainTop);
+        if (checkCancellation != null)
+            il.Emit(OpCodes.Call, checkCancellation);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, eventLoop.QueueField);
         il.Emit(OpCodes.Ldloca, actionLocal);
