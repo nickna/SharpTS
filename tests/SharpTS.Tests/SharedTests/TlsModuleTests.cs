@@ -10,6 +10,61 @@ namespace SharpTS.Tests.SharedTests;
 public class TlsModuleTests
 {
     [Theory, ModeData]
+    public void SecureContextFactoryRemainsConstructible(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { createSecureContext } from 'tls';
+                const Context: any = createSecureContext;
+                console.log(typeof new Context({}) === 'object');
+                """
+        };
+        Assert.Equal("true\n", TestHarness.RunModules(files, "./main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void PrefixedSocketAliasIsConstructibleButCipherQueryIsNot(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { TLSSocket, getCiphers } from 'node:tls';
+                const Socket = TLSSocket;
+                const socket = new Socket();
+                console.log(socket.encrypted);
+                socket.destroy();
+                try {
+                    const query: any = getCiphers;
+                    new query();
+                    console.log('unexpected constructor');
+                } catch (error) {
+                    console.log('rejected');
+                }
+                """
+        };
+        Assert.Equal("true\nrejected\n", TestHarness.RunModules(files, "./main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void NamedSocketConstructorPreservesTlsIdentityAcrossDestroy(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { TLSSocket } from 'tls';
+                const socket = new TLSSocket();
+                console.log(socket.encrypted);
+                console.log(socket.getProtocol());
+                socket.destroy();
+                console.log(socket.encrypted);
+                console.log(socket.getProtocol());
+                """
+        };
+        Assert.Equal("true\nTLSv1.3\ntrue\nnull\n", TestHarness.RunModules(files, "./main.ts", mode));
+    }
+
+    [Theory, ModeData]
     public void TlsModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -136,7 +191,7 @@ public class TlsModuleTests
                 """
         };
         var output = TestHarness.RunModules(files, "./main.ts", mode);
-        Assert.Equal("false\nfalse\n", output);
+        Assert.Equal("true\nfalse\n", output);
     }
 
     [Theory, ModeData]

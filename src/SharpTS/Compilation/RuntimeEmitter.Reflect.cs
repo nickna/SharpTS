@@ -1124,6 +1124,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "CreateIntl");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", _types.String));
         il.Emit(OpCodes.Brtrue, notRuntimeLabel);
+        // Node exposes TLSSocket and createSecureContext as constructible functions.
+        // Restrict the exception to their exact runtime factories.
+        il.Emit(OpCodes.Ldloc, dtNameLocal);
+        il.Emit(OpCodes.Ldstr, "$Runtime");
+        il.Emit(OpCodes.Call, stringEqMethod);
+        var notTlsConstructor = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notTlsConstructor);
+        il.Emit(OpCodes.Ldloc, miLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(System.Reflection.MemberInfo), "Name").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "TlsCreateSocket");
+        il.Emit(OpCodes.Call, stringEqMethod);
+        il.Emit(OpCodes.Brtrue, notRuntimeLabel);
+        il.Emit(OpCodes.Ldloc, miLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(System.Reflection.MemberInfo), "Name").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "TlsCreateSecureContext");
+        il.Emit(OpCodes.Call, stringEqMethod);
+        il.Emit(OpCodes.Brtrue, notRuntimeLabel);
+        il.MarkLabel(notTlsConstructor);
         // → not constructable
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
