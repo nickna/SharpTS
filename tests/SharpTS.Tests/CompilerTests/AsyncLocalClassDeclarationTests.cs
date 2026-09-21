@@ -6,6 +6,51 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class AsyncLocalClassDeclarationTests
 {
     [Theory, ModeData]
+    public void ComputedFieldsWithoutSuspension_UseRuntimeKeys(ExecutionMode mode)
+    {
+        const string source = """
+            const key = "value";
+            class Declaration { static [key] = 5; }
+            const Expression = class { static [key] = 7; [key] = 9; };
+            const d: any = Declaration;
+            const e: any = Expression;
+            const instance: any = new Expression();
+            console.log(d.value, e.value, instance.value);
+            """;
+        Assert.Equal("5 7 9\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void CompiledComputedFieldsWithoutInitializers_StoreUndefined()
+    {
+        const string source = """
+            const key = "empty";
+            class Declaration { static [key]; }
+            const Expression = class { static [key]; [key]; };
+            const d: any = Declaration;
+            const e: any = Expression;
+            const instance: any = new Expression();
+            console.log(d.empty, e.empty, instance.empty);
+            """;
+        Assert.Equal("undefined undefined undefined\n", TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
+    [Theory, ModeData]
+    public void AwaitedStaticGetterOnlyKey_AssignmentPreservesGetter(ExecutionMode mode)
+    {
+        const string source = """
+            async function run() {
+                class C { static get [await new Promise(r => setTimeout(() => r("value"), 1))]() { return 5; } }
+                const cls: any = C;
+                cls.value = 9;
+                console.log(cls.value);
+            }
+            run().then(() => {}, e => console.log("rejected", e.message));
+            """;
+        Assert.Equal("5\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void AwaitedInstanceGetterKey_IsReadableByName(ExecutionMode mode)
     {
         const string source = """

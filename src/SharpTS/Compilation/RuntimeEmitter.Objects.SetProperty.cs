@@ -1223,6 +1223,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noComputedSetter);
+            // A registered getter without a setter rejects ordinary assignment,
+            // just like other getter-only properties; do not create a shadow.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindGetter);
+            il.Emit(OpCodes.Brtrue, typeSetSkipLabel);
             var newTypeDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             var newTypeEnumerableLocal = il.DeclareLocal(_types.Boolean);
             il.Emit(OpCodes.Ldc_I4_1);

@@ -149,8 +149,9 @@ public partial class ILCompiler
                 switch (initializer)
                 {
                     case Stmt.Field field when field.IsStatic:
-                        if (_classes.ComputedFieldKeys.TryGetValue(field, out var computedKey))
+                        if (field.ComputedKey != null)
                         {
+                            _classes.ComputedFieldKeys.TryGetValue(field, out var computedKey);
                             EmitComputedStaticFieldInitializer(emitter, il, typeBuilder, field, computedKey);
                             break;
                         }
@@ -381,11 +382,17 @@ public partial class ILCompiler
     }
 
     private void EmitComputedStaticFieldInitializer(ILEmitter emitter, ILGenerator il,
-        TypeBuilder owner, Stmt.Field field, FieldBuilder key)
+        TypeBuilder owner, Stmt.Field field, FieldBuilder? key)
     {
         il.Emit(OpCodes.Ldtoken, owner);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-        il.Emit(OpCodes.Ldsfld, key);
+        if (key != null)
+            il.Emit(OpCodes.Ldsfld, key);
+        else
+        {
+            emitter.EmitExpression(field.ComputedKey!);
+            emitter.EmitBoxIfNeeded(field.ComputedKey!);
+        }
         if (field.Initializer != null)
         {
             emitter.EmitExpression(field.Initializer);

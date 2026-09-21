@@ -640,8 +640,9 @@ public partial class ILCompiler
             {
                 switch (initializer)
                 {
-                    case Stmt.Field field when field.IsStatic && _classes.ComputedFieldKeys.ContainsKey(field):
-                        EmitComputedStaticFieldInitializer(emitter, il, typeBuilder, field, _classes.ComputedFieldKeys[field]);
+                    case Stmt.Field field when field.IsStatic && field.ComputedKey != null:
+                        _classes.ComputedFieldKeys.TryGetValue(field, out var computedKey);
+                        EmitComputedStaticFieldInitializer(emitter, il, typeBuilder, field, computedKey);
                         break;
 
                     case Stmt.Field field when field.IsStatic && field.Initializer != null:
@@ -837,10 +838,16 @@ public partial class ILCompiler
         {
             foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && (f.Initializer != null || f.ComputedKey != null)))
             {
-                if (_classes.ComputedFieldKeys.TryGetValue(field, out var computedKey))
+                if (field.ComputedKey != null)
                 {
                     il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldsfld, computedKey);
+                    if (_classes.ComputedFieldKeys.TryGetValue(field, out var computedKey))
+                        il.Emit(OpCodes.Ldsfld, computedKey);
+                    else
+                    {
+                        emitter.EmitExpression(field.ComputedKey);
+                        emitter.EmitBoxIfNeeded(field.ComputedKey);
+                    }
                     if (field.Initializer != null)
                     {
                         emitter.EmitExpression(field.Initializer);

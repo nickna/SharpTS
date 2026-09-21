@@ -2057,6 +2057,8 @@ public partial class Interpreter
         // so they'll be added with null/undefined values and can be set externally later.
         bool hasStaticInitializers = classStmt.StaticInitializers != null && classStmt.StaticInitializers.Count > 0;
 
+        // Evaluate every computed key exactly once, in source order, before
+        // applying static values or symbol-keyed methods and accessors.
         var computedMemberKeys = new Dictionary<Expr, object?>(System.Collections.Generic.ReferenceEqualityComparer.Instance);
         foreach (var key in Compilation.ClassDefinitionExpressions.MemberKeys(classStmt.Fields, classStmt.Methods, classStmt.Accessors))
         {

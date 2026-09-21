@@ -2102,6 +2102,8 @@ public partial class Interpreter
             bool hasStaticInitializers = classExpr.StaticInitializers != null && classExpr.StaticInitializers.Count > 0;
 
             // Process fields
+            // Evaluate every computed key exactly once, in source order, before
+            // applying static values or symbol-keyed methods and accessors.
             var computedMemberKeys = new Dictionary<Expr, object?>(System.Collections.Generic.ReferenceEqualityComparer.Instance);
             foreach (var key in Compilation.ClassDefinitionExpressions.MemberKeys(classExpr.Fields, classExpr.Methods, classExpr.Accessors))
             {
