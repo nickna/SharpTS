@@ -424,8 +424,8 @@ public partial class ILCompiler
             foreach (var accessor in classExpr.Accessors)
             {
                 // Symbol-keyed computed accessor (#281): define a synthetic
-                // $sym_get/set_N method recorded in _classes.SymbolAccessors keyed
-                // by this class's generated name. It is registered in the class-
+                // $sym_get/set_N method recorded in _classes.ComputedMembers keyed
+                // by this class's emitted type. It is registered in the class-
                 // expression .cctor and dispatched through the $Runtime symbol-
                 // accessor registry, mirroring the class-declaration path (#266).
                 if (accessor.ComputedKey != null || accessor.IsStatic)
@@ -525,7 +525,7 @@ public partial class ILCompiler
         {
             foreach (var accessor in classExpr.Accessors)
             {
-                // Symbol-keyed accessors are emitted below from _classes.SymbolAccessors
+                // Symbol-keyed accessors are emitted below from _classes.ComputedMembers
                 // (their synthetic methods aren't in _classExprs.Getters/Setters).
                 if (!accessor.IsAbstract && accessor.ComputedKey == null && !accessor.IsStatic)
                 {
@@ -608,10 +608,6 @@ public partial class ILCompiler
     {
         bool hasStaticFields = classExpr.Fields.Any(f => f.IsStatic && f.Initializer != null);
         bool hasStaticInitializers = classExpr.StaticInitializers?.Count > 0;
-        // Symbol-keyed computed accessors (#281) and methods (#755) register in the .cctor, keyed by
-        // this class's generated name (mirrors the class-declaration path #266/#647).
-        bool hasSymbolAccessors = _classes.SymbolAccessors.ContainsKey(typeBuilder.Name);
-        bool hasSymbolMethods = _classes.SymbolMethods.ContainsKey(typeBuilder.Name);
 
         var cctor = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -1155,8 +1151,7 @@ public partial class ILCompiler
         TypeBuilder typeBuilder,
         FieldInfo fieldsField)
     {
-        if (!_classes.SymbolAccessors.TryGetValue(typeBuilder.Name, out var list))
-            return;
+        var list = _classes.ComputedMembers.GetAccessors(typeBuilder);
 
         foreach (var (accessor, methodBuilder) in list)
         {
@@ -1186,6 +1181,7 @@ public partial class ILCompiler
                 EmitDefaultReturnValue(il, methodBuilder.ReturnType);
                 il.Emit(OpCodes.Ret);
             }
+            _classes.ComputedMembers.MarkBodyEmitted(methodBuilder);
         }
     }
 
@@ -1193,14 +1189,13 @@ public partial class ILCompiler
     /// Pre-defines a uniquely-named .NET method for each computed symbol-keyed method of a class
     /// EXPRESSION (<c>*[Symbol.iterator]() {…}</c> and the async/generator forms), mirroring the
     /// class-declaration <see cref="DefineSymbolMethods"/> (#755). Recorded in the shared
-    /// <see cref="ClassState.SymbolMethods"/> registry (keyed by the generated type name) so the
+    /// <see cref="ComputedClassMemberRegistry"/> registry (keyed by emitted type identity) so the
     /// bodies emit through the normal class-expression per-method emitters and the .cctor registers
     /// them in the runtime symbol-method registry.
     /// </summary>
     private void DefineClassExpressionSymbolMethods(Expr.ClassExpr classExpr, TypeBuilder typeBuilder)
     {
-        string className = typeBuilder.Name;
-        if (_classes.SymbolMethods.ContainsKey(className))
+        if (_classes.ComputedMembers.HasMethods(typeBuilder))
             return;  // already defined (idempotent across multi-module pre-define/emit passes)
 
         var computed = classExpr.Methods.Where(m =>
@@ -1240,7 +1235,7 @@ public partial class ILCompiler
 
             list.Add((renamed, method.ComputedKey!, mb));
         }
-        _classes.SymbolMethods[className] = list;
+        _classes.ComputedMembers.DeclareMethods(typeBuilder, list);
     }
 
     /// <summary>
@@ -1250,14 +1245,14 @@ public partial class ILCompiler
     /// </summary>
     private void EmitClassExpressionSymbolMethods(Expr.ClassExpr classExpr, TypeBuilder typeBuilder, FieldInfo fieldsField)
     {
-        if (!_classes.SymbolMethods.TryGetValue(typeBuilder.Name, out var list))
-            return;
+        var list = _classes.ComputedMembers.GetMethods(typeBuilder);
         foreach (var (method, _key, _builder) in list)
         {
             if (method.IsStatic)
                 EmitClassExpressionStaticMethodBody(classExpr, method);
             else
                 EmitClassExpressionMethod(classExpr, typeBuilder, method, fieldsField);
+            _classes.ComputedMembers.MarkBodyEmitted(_builder);
         }
     }
 

@@ -919,13 +919,13 @@ public partial class ILCompiler
     /// <summary>
     /// Pre-defines a uniquely-named .NET method for each computed symbol-keyed class method
     /// (<c>[Symbol.iterator]() {…}</c>, incl. the generator/async forms) so they flow through the
-    /// normal per-method emitters. Recorded in <see cref="ClassState.SymbolMethods"/> for body emission
+    /// normal per-method emitters. Recorded in <see cref="ComputedClassMemberRegistry"/> for body emission
     /// (<see cref="EmitSymbolMethods"/>) and for runtime symbol-method registration in the class .cctor (#647).
     /// </summary>
     private void DefineSymbolMethods(TypeBuilder typeBuilder, Stmt.Class classStmt, string qualifiedClassName)
     {
         string className = typeBuilder.Name;
-        if (_classes.SymbolMethods.ContainsKey(className))
+        if (_classes.ComputedMembers.HasMethods(typeBuilder))
             return;  // already defined (idempotent across multi-module pre-define/emit passes)
 
         var computed = classStmt.Methods.Where(m =>
@@ -990,7 +990,7 @@ public partial class ILCompiler
 
             list.Add((renamed, method.ComputedKey!, mb));
         }
-        _classes.SymbolMethods[className] = list;
+        _classes.ComputedMembers.DeclareMethods(typeBuilder, list);
     }
 
     /// <summary>
@@ -999,14 +999,14 @@ public partial class ILCompiler
     /// </summary>
     private void EmitSymbolMethods(TypeBuilder typeBuilder, string qualifiedClassName, FieldInfo fieldsField)
     {
-        if (!_classes.SymbolMethods.TryGetValue(typeBuilder.Name, out var list))
-            return;
+        var list = _classes.ComputedMembers.GetMethods(typeBuilder);
         foreach (var (method, _key, _builder) in list)
         {
             if (method.IsStatic)
                 EmitStaticMethodBody(qualifiedClassName, method);
             else
                 EmitMethod(typeBuilder, method, fieldsField);
+            _classes.ComputedMembers.MarkBodyEmitted(_builder);
         }
     }
 

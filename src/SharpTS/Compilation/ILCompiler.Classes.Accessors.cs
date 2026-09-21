@@ -13,17 +13,17 @@ public partial class ILCompiler
     /// Pre-defines a synthetic method for a symbol-keyed computed accessor (#266),
     /// e.g. <c>static get [Symbol.species]()</c>. The method has no spec-visible
     /// name; it is invoked reflectively via the runtime symbol-accessor registry.
-    /// Recorded in <see cref="ClassState.SymbolAccessors"/> for body emission and
+    /// Recorded in <see cref="ComputedClassMemberRegistry"/> for body emission and
     /// for registration in the class .cctor.
     /// </summary>
     private void DefineSymbolAccessorMethod(TypeBuilder typeBuilder, Stmt.Accessor accessor)
     {
         string className = typeBuilder.Name;
-        if (!_classes.SymbolAccessors.TryGetValue(className, out var list))
-        {
-            list = [];
-            _classes.SymbolAccessors[className] = list;
-        }
+        var list = _classes.ComputedMembers.GetAccessors(typeBuilder);
+        // Accessor-only declarations can be visited again by the CLI's signature
+        // pass. Reuse the canonical declaration instead of defining another body.
+        if (list.Any(entry => ReferenceEquals(entry.Accessor, accessor)))
+            return;
 
         bool isGetter = accessor.Kind.Type == TokenType.GET;
         // Non-virtual instance methods so MethodBase.Invoke targets exactly the
@@ -38,7 +38,7 @@ public partial class ILCompiler
             typeof(object),
             paramTypes);
 
-        list.Add((accessor, methodBuilder));
+        _classes.ComputedMembers.DeclareAccessor(typeBuilder, accessor, methodBuilder);
 
         // A statically known computed string/number key also participates in normal named-member
         // dispatch. Register it in source order so later definitions replace earlier ones, matching
@@ -85,11 +85,11 @@ public partial class ILCompiler
     /// </summary>
     private void EmitSymbolAccessors(TypeBuilder typeBuilder, FieldInfo fieldsField)
     {
-        if (!_classes.SymbolAccessors.TryGetValue(typeBuilder.Name, out var list))
-            return;
+        var list = _classes.ComputedMembers.GetAccessors(typeBuilder);
         foreach (var (accessor, methodBuilder) in list)
         {
             EmitAccessorBody(typeBuilder, accessor, methodBuilder, fieldsField);
+            _classes.ComputedMembers.MarkBodyEmitted(methodBuilder);
         }
     }
 
