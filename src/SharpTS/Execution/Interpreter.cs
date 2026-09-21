@@ -1160,6 +1160,9 @@ public partial class Interpreter : IDisposable
                 if (!timer.IsCancelled && !_isDisposed)
                 {
                     timer.Callback();
+                    // Each timer is its own task, even when multiple timers became
+                    // due before this tick. Drain its Promise jobs before the next.
+                    ProcessMicrotasks();
                 }
             }
         }
