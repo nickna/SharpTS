@@ -1768,6 +1768,11 @@ module emitter. `EmittedTlsRuntime` rejects duplicate declarations as well as nu
 writes; failed completion remains repairable. Existing declaration/body order, visibility,
 feature selection, Net field inputs and deployment rules are preserved. The broader construction,
 registry, semantic and final ownership audit remains required under #1599.
+TLS socket protocol emission receives the existing Net destruction field explicitly.
+Unconnected sockets expose the default protocol; destroyed sockets expose null, while
+`encrypted` continues to identify TLS sockets. The constructor predicate accepts the exact
+`$Runtime.TlsCreateSocket` and `$Runtime.TlsCreateSecureContext` factories without admitting
+ordinary TLS query helpers.
 
 Follow this pattern for subsequent families: explicit optional availability, checked declarations,
 one completion boundary, and no retained flat aliases. Pass the component to helpers that only

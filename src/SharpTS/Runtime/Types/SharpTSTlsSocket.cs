@@ -54,7 +54,7 @@ public class SharpTSTlsSocket : SharpTSSocket
             // TLS-specific properties
             "authorized" => _authorized,
             "authorizationError" => (object?)_authorizationError,
-            "encrypted" => _sslStream != null,
+            "encrypted" => true,
             "alpnProtocol" => (object?)_alpnProtocol ?? SharpTSUndefined.Instance,
             "servername" => (object?)_servername ?? SharpTSUndefined.Instance,
 
@@ -285,7 +285,8 @@ public class SharpTSTlsSocket : SharpTSSocket
 
     private RuntimeValue GetProtocol(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        if (_sslStream == null) return RuntimeValue.Null;
+        if (_destroyed) return RuntimeValue.Null;
+        if (_sslStream == null || !_sslStream.IsAuthenticated) return RuntimeValue.FromBoxed("TLSv1.3");
         return RuntimeValue.FromBoxed(GetProtocolString(_sslStream.SslProtocol));
     }
 
@@ -355,5 +356,5 @@ public class SharpTSTlsSocket : SharpTSSocket
         };
     }
 
-    public override string ToString() => $"TLSSocket {{ encrypted: {_sslStream != null}, authorized: {_authorized} }}";
+    public override string ToString() => $"TLSSocket {{ encrypted: true, authorized: {_authorized} }}";
 }

@@ -52,7 +52,7 @@ public static class TlsModuleInterpreter
             ["connect"] = BuiltInMethod.CreateV2("connect", 1, 4, Connect),
             ["createSecureContext"] = BuiltInMethod.CreateV2("createSecureContext", 0, 1, CreateSecureContext),
             ["checkServerIdentity"] = BuiltInMethod.CreateV2("checkServerIdentity", 2, CheckServerIdentity),
-            ["getCiphers"] = BuiltInMethod.CreateV2("getCiphers", 0, GetCiphers),
+            ["getCiphers"] = BuiltInMethod.CreateV2("getCiphers", 0, GetCiphers).AsNonConstructor(),
             ["rootCertificates"] = RootCertificatesArray(),
             ["Server"] = BuiltInMethod.CreateV2("Server", 0, 2, CreateServer),
             ["TLSSocket"] = BuiltInMethod.CreateV2("TLSSocket", 0, 1, CreateTlsSocket),

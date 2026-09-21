@@ -28,9 +28,9 @@ public partial class RuntimeEmitter
     /// but defers CreateType() to <see cref="EmitTlsSocketFinalize"/> / <see cref="EmitTlsServerFinalize"/>.
     /// Must be called after $NetSocket Phase 1 ($TlsSocket extends it) and $EventEmitter.
     /// </summary>
-    private TlsConstruction EmitTlsTypesPhase1(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private TlsConstruction EmitTlsTypesPhase1(ModuleBuilder moduleBuilder, EmittedRuntime runtime, FieldInfo destroyed)
     {
-        var socket = EmitTlsSocketClass(moduleBuilder, runtime);
+        var socket = EmitTlsSocketClass(moduleBuilder, runtime, destroyed);
         var server = EmitTlsServerClass(moduleBuilder, runtime);
 
         return new(socket, server);
@@ -49,7 +49,7 @@ public partial class RuntimeEmitter
     // $TlsSocket : $NetSocket
     // ========================================================================
 
-    private TlsSocketConstruction EmitTlsSocketClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private TlsSocketConstruction EmitTlsSocketClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime, FieldInfo destroyed)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsSocket",
@@ -96,7 +96,7 @@ public partial class RuntimeEmitter
 
         // TLS-specific methods
         EmitTlsSocketGetCipher(typeBuilder, socketFields, protoString);
-        EmitTlsSocketGetProtocol(typeBuilder, socketFields, protoString);
+        EmitTlsSocketGetProtocol(typeBuilder, socketFields, protoString, destroyed);
         EmitTlsSocketGetPeerCertificate(typeBuilder, socketFields, sanString);
         EmitTlsSocketRenegotiate(typeBuilder);
         // Advanced TLS APIs not exposed by .NET SslStream — throw a clear error (not a silent
@@ -532,18 +532,31 @@ public partial class RuntimeEmitter
     private void EmitTlsSocketGetProtocol(
         TypeBuilder typeBuilder,
         TlsSocketFields socketFields,
-        MethodBuilder protoString)
+        MethodBuilder protoString, FieldInfo destroyed)
     {
         var method = typeBuilder.DefineMethod("GetProtocol", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
 
-        var hasStream = il.DefineLabel();
+        var alive = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, socketFields.SslStream);
-        il.Emit(OpCodes.Brtrue, hasStream);
+        il.Emit(OpCodes.Ldfld, destroyed);
+        il.Emit(OpCodes.Brfalse, alive);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
-        il.MarkLabel(hasStream);
+        il.MarkLabel(alive);
+        var defaultProtocol = il.DefineLabel();
+        var negotiated = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, socketFields.SslStream);
+        il.Emit(OpCodes.Brfalse, defaultProtocol);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, socketFields.SslStream);
+        il.Emit(OpCodes.Callvirt, typeof(SslStream).GetProperty("IsAuthenticated")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, negotiated);
+        il.MarkLabel(defaultProtocol);
+        il.Emit(OpCodes.Ldstr, "TLSv1.3");
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(negotiated);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, socketFields.SslStream);
@@ -680,12 +693,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
-        // encrypted -> _sslStream != null
+        // encrypted identifies a TLS socket, including before handshake and after destroy.
         il.MarkLabel(encryptedLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, socketFields.SslStream);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Cgt_Un);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
 

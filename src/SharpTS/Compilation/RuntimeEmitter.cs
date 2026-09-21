@@ -642,7 +642,7 @@ public partial class RuntimeEmitter
         // after $NetSocket Phase 1 ($TlsSocket : $NetSocket) and before EmitRuntimeClass
         // (the tls module methods reference TlsSocketCtor/TlsServerCtor). UsesTls ⇒ UsesNet.
         if (features.UsesTls)
-            tlsConstruction = EmitTlsTypesPhase1(moduleBuilder, runtime);
+            tlsConstruction = EmitTlsTypesPhase1(moduleBuilder, runtime, RequireNetConstruction(netConstruction).Socket.Fields.Destroyed);
         DgramSocketFields? dgramFields = null;
         if (features.UsesDgram)
             dgramFields = EmitDatagramSocketTypeDefinition(moduleBuilder, runtime);
