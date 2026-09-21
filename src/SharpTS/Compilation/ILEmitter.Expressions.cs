@@ -1129,8 +1129,8 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldtoken, typeBuilder);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.ClassInitialization.RunDefinition);
-            if (_ctx.DeferredComputedClassExprKeys?.TryGetValue(ce, out var deferred) == true)
-                EmitDeferredComputedKeys(deferred.Method, deferred.Keys);
+            if (_ctx.DeferredClassDefinitions?.TryGet(ce, out var deferred) == true)
+                EmitDeferredComputedKeys(deferred.Registrar, deferred.Keys);
 
             // Load the Type object using ldtoken + GetTypeFromHandle
             IL.Emit(OpCodes.Ldtoken, typeBuilder);

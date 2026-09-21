@@ -19,6 +19,7 @@ public partial class ILCompiler
     /// </summary>
     private sealed class ClassCompilationState
     {
+        public DeferredClassDefinitionRegistry DeferredDefinitions { get; } = new();
         public HashSet<Stmt.Class> Declarations { get; } = new(ReferenceEqualityComparer.Instance);
         public HashSet<Stmt.Class> EmittedMethodBodies { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, TypeBuilder> Builders { get; } = [];
@@ -74,9 +75,6 @@ public partial class ILCompiler
         // machinery (incl. generator/async state machines); the key drives the .cctor
         // RegisterSymbolMethod call.
         public Dictionary<string, List<(Parsing.Stmt.Function Method, Parsing.Expr Key, MethodBuilder Builder)>> SymbolMethods { get; } = [];
-        public Dictionary<Stmt.Class, (MethodBuilder Method, IReadOnlyList<Expr> Keys)> DeferredComputedClassKeys { get; } = new(ReferenceEqualityComparer.Instance);
-        public Dictionary<string, (MethodBuilder Initializer, MethodBuilder Registrar, IReadOnlyList<Expr> Keys)> DeferredClassDefinitions { get; } = [];
-        public Dictionary<Stmt.Field, FieldBuilder> ComputedFieldKeys { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, FieldBuilder> InstanceFieldsField { get; } = [];
         public HashSet<Stmt.Class> CompactStorageClasses { get; } =
             new(ReferenceEqualityComparer.Instance);
@@ -442,7 +440,6 @@ public partial class ILCompiler
         public Dictionary<Expr.ClassExpr, string?> Superclass { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, string> EnclosingClass { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>> CaptureFields { get; } = new(ReferenceEqualityComparer.Instance);
-        public Dictionary<Expr.ClassExpr, (MethodBuilder Method, IReadOnlyList<Expr> Keys)> DeferredComputedKeys { get; } = new(ReferenceEqualityComparer.Instance);
     }
 
     /// <summary>

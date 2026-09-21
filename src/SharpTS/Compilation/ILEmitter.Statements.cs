@@ -3307,8 +3307,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
             _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
         IL.Emit(OpCodes.Call, _ctx.Runtime!.ClassInitialization.RunDefinition);
-        if (_ctx.DeferredComputedClassKeys?.TryGetValue(classStmt, out var deferred) == true)
-            EmitDeferredComputedKeys(deferred.Method, deferred.Keys);
+        if (_ctx.DeferredClassDefinitions?.TryGet(classStmt, out var deferred) == true)
+            EmitDeferredComputedKeys(deferred.Registrar, deferred.Keys);
 
         // Top-level classes are lexical declarations, so they may also be present
         // in BlockScopedClassBuilders. Regardless of that implementation detail,

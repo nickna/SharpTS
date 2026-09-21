@@ -1094,6 +1094,7 @@ public partial class ILCompiler
     /// </summary>
     private void Phase9_FinalizeTypes()
     {
+        _classes.DeferredDefinitions.CompleteEmission();
         _unionGenerator?.FinalizeAllUnionTypes();
 
         // Finalize generated object-literal shape structs (#862) before any type that uses them.
@@ -1652,6 +1653,7 @@ public partial class ILCompiler
     /// </summary>
     private void ModulePhase11_FinalizeTypes()
     {
+        _classes.DeferredDefinitions.CompleteEmission();
         _unionGenerator?.FinalizeAllUnionTypes();
 
         // Finalize generated object-literal shape structs (#862) before any type that uses them.

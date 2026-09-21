@@ -1835,8 +1835,8 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassInitialization.RunDefinition);
 
-        if (Ctx.DeferredComputedClassKeys?.TryGetValue(classStmt, out var deferred) == true)
-            EmitDeferredComputedKeys(deferred.Method, deferred.Keys);
+        if (Ctx.DeferredClassDefinitions?.TryGet(classStmt, out var deferred) == true)
+            EmitDeferredComputedKeys(deferred.Registrar, deferred.Keys);
 
         string storageName = GetClassStorageName(classStmt);
         var field = GetHoistedVariableField(storageName);
@@ -1902,8 +1902,8 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             IL.Emit(OpCodes.Ldtoken, typeBuilder);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassInitialization.RunDefinition);
-            if (Ctx.DeferredComputedClassExprKeys?.TryGetValue(ce, out var deferred) == true)
-                EmitDeferredComputedKeys(deferred.Method, deferred.Keys);
+            if (Ctx.DeferredClassDefinitions?.TryGet(ce, out var deferred) == true)
+                EmitDeferredComputedKeys(deferred.Registrar, deferred.Keys);
             IL.Emit(OpCodes.Ldtoken, typeBuilder);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             SetStackUnknown();

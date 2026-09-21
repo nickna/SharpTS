@@ -123,7 +123,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stsfld, privateFieldStorage);
         }
 
-        if (_classes.DeferredClassDefinitions.TryGetValue(typeBuilder.Name, out var deferredDefinition))
+        if (_classes.DeferredDefinitions.TryGet(typeBuilder, out var deferredDefinition))
         {
             il.Emit(OpCodes.Ret);
             il = deferredDefinition.Initializer.GetILGenerator();
@@ -151,7 +151,7 @@ public partial class ILCompiler
                     case Stmt.Field field when field.IsStatic:
                         if (field.ComputedKey != null)
                         {
-                            _classes.ComputedFieldKeys.TryGetValue(field, out var computedKey);
+                            _classes.DeferredDefinitions.TryGetFieldKey(field, out var computedKey);
                             EmitComputedStaticFieldInitializer(emitter, il, typeBuilder, field, computedKey);
                             break;
                         }
@@ -236,6 +236,8 @@ public partial class ILCompiler
         EmitSymbolMethodRegistrations(emitter, il, typeBuilder);
 
         il.Emit(OpCodes.Ret);
+        if (deferredDefinition != null)
+            _classes.DeferredDefinitions.MarkInitializerEmitted(deferredDefinition);
     }
 
     /// <summary>
@@ -251,7 +253,7 @@ public partial class ILCompiler
 
         foreach (var (accessor, method) in list)
         {
-            if (_classes.DeferredClassDefinitions.ContainsKey(typeBuilder.Name))
+            if (_classes.DeferredDefinitions.TryGet(typeBuilder, out _))
                 continue;
             bool isGetter = accessor.Kind.Type == TokenType.GET;
 
@@ -296,7 +298,7 @@ public partial class ILCompiler
 
         foreach (var (method, key, builder) in list)
         {
-            if (_classes.DeferredClassDefinitions.ContainsKey(typeBuilder.Name))
+            if (_classes.DeferredDefinitions.TryGet(typeBuilder, out _))
                 continue;
             // owner: typeof(ThisClass)
             il.Emit(OpCodes.Ldtoken, typeBuilder);
@@ -316,10 +318,14 @@ public partial class ILCompiler
         }
     }
 
-    private (MethodBuilder Method, IReadOnlyList<Expr> Keys)? DefineDeferredComputedMethodKeyRegistrar(TypeBuilder typeBuilder, IReadOnlyList<Stmt.Field> fields)
+    private void DefineDeferredComputedMethodKeyRegistrar(object source, TypeBuilder typeBuilder, IReadOnlyList<Stmt.Field> fields)
     {
-        if (_classes.DeferredClassDefinitions.TryGetValue(typeBuilder.Name, out var existing))
-            return (existing.Registrar, existing.Keys);
+        if (_classes.DeferredDefinitions.TryGet(typeBuilder, out var existing))
+        {
+            if (!_classes.DeferredDefinitions.TryGet(source, out var bySource) || !ReferenceEquals(existing, bySource))
+                throw new InvalidOperationException("The deferred class type belongs to a different declaration.");
+            return;
+        }
         var deferred = new List<(Expr Key, MethodBuilder? Builder, bool IsStatic, bool? IsGetter, int Position, Stmt.Field? Field)>();
         if (_classes.SymbolMethods.TryGetValue(typeBuilder.Name, out var methods))
             foreach (var (method, key, builder) in methods)
@@ -331,7 +337,7 @@ public partial class ILCompiler
             deferred.Add((field.ComputedKey!, null, field.IsStatic, null, field.Name.Start, field));
         // Field names are evaluated with the definition, even when no key suspends.
         if (!deferred.Any(entry => entry.Field != null || ExpressionContainsSuspension(entry.Key)))
-            return null;
+            return;
 
         deferred = deferred.OrderBy(entry => entry.Position).ToList();
         var initializer = typeBuilder.DefineMethod("$initializeDeferredClass",
@@ -345,6 +351,7 @@ public partial class ILCompiler
             MethodAttributes.Assembly | MethodAttributes.Static,
             _types.Void,
             [_types.ObjectArray]);
+        var fieldKeys = new Dictionary<Stmt.Field, FieldBuilder>(ReferenceEqualityComparer.Instance);
         var il = registrar.GetILGenerator();
         var getTypeFromHandle = _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle);
 
@@ -355,7 +362,7 @@ public partial class ILCompiler
             {
                 var keyField = keyOwner.DefineField($"$computedFieldKey_{typeBuilder.Name}_{i}", _types.Object,
                     FieldAttributes.Assembly | FieldAttributes.Static);
-                _classes.ComputedFieldKeys.Add(field, keyField);
+                fieldKeys.Add(field, keyField);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldc_I4, i);
                 il.Emit(OpCodes.Ldelem_Ref);
@@ -384,8 +391,7 @@ public partial class ILCompiler
             : initializer);
         il.Emit(OpCodes.Ret);
         var keys = deferred.Select(entry => entry.Key).ToArray();
-        _classes.DeferredClassDefinitions.Add(typeBuilder.Name, (initializer, registrar, keys));
-        return (registrar, keys);
+        _classes.DeferredDefinitions.Declare(source, typeBuilder, initializer, registrar, keys, fieldKeys);
     }
 
     private void EmitComputedStaticFieldInitializer(ILEmitter emitter, ILGenerator il,
