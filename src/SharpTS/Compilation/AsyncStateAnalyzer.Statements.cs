@@ -186,7 +186,15 @@ public partial class AsyncStateAnalyzer
         // The class body has its own scope, but its binding belongs to this
         // function and must survive a suspension when subsequently referenced.
         _declaredVariables.Add(StorageName(stmt, stmt.Name.Lexeme));
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(stmt))
+            Visit(expression);
     }
+    protected override void VisitClassExpr(Expr.ClassExpr expr)
+    {
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(expr))
+            Visit(expression);
+    }
+
     protected override void VisitInterface(Stmt.Interface stmt) { }
     protected override void VisitTypeAlias(Stmt.TypeAlias stmt) { }
     protected override void VisitEnum(Stmt.Enum stmt) { }

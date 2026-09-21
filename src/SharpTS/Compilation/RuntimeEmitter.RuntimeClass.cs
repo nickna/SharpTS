@@ -1340,6 +1340,7 @@ public partial class RuntimeEmitter
                 _features.UsesProxy,
                 runtime.Reflect.Assignment,
                 runtime.RegExps,
+                runtime.SymbolAccessors,
                 runtime.FunctionValues.InvokeWithThis,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType

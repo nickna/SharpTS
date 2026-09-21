@@ -1813,6 +1813,11 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
     #region Class Expressions
 
+    /// <summary>
+    /// Selects the storage name for a class binding. Overrides may select a
+    /// suspension-safe binding slot, but must preserve the original declaration
+    /// node used to look up its class builder.
+    /// </summary>
     protected virtual string GetClassStorageName(Stmt.Class classStmt) => classStmt.Name.Lexeme;
 
     private void EmitStateMachineClassDeclaration(Stmt.Class classStmt)
@@ -1858,6 +1863,12 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         {
             EmitExpression(key);
             EnsureBoxed();
+            var isSymbol = IL.DefineLabel();
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Symbols.Type);
+            IL.Emit(OpCodes.Brtrue, isSymbol);
+            IL.Emit(OpCodes.Call, Ctx.Runtime.StringCoercion.ToJsString);
+            IL.MarkLabel(isSymbol);
             values.Add(_helpers.SpillStoreObject());
         }
 

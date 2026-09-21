@@ -397,8 +397,14 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
             DeclareBlockScoped(stmt, stmt.Name.Lexeme);
         else
             CurrentScope[stmt.Name.Lexeme] = stmt.Name.Lexeme;
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(stmt))
+            Visit(expression);
     }
-    protected override void VisitClassExpr(Expr.ClassExpr expr) { }
+    protected override void VisitClassExpr(Expr.ClassExpr expr)
+    {
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(expr))
+            Visit(expression);
+    }
 
     #endregion
 

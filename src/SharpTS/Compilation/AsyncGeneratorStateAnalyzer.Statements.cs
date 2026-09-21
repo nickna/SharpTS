@@ -115,7 +115,15 @@ public partial class AsyncGeneratorStateAnalyzer
         _declaredVariables.Add(name);
         if (!_seenSuspension)
             _variablesDeclaredBeforeSuspension.Add(name);
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(stmt))
+            Visit(expression);
     }
+    protected override void VisitClassExpr(Expr.ClassExpr expr)
+    {
+        foreach (var expression in ClassDefinitionExpressions.Enumerate(expr))
+            Visit(expression);
+    }
+
     protected override void VisitInterface(Stmt.Interface stmt) { }
     protected override void VisitTypeAlias(Stmt.TypeAlias stmt) { }
     protected override void VisitEnum(Stmt.Enum stmt) { }

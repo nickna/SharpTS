@@ -443,7 +443,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
                 return (new Token(TokenType.IDENTIFIER, d.ToString(System.Globalization.CultureInfo.InvariantCulture), null, Previous().Line), null);
             }
 
-            return (new Token(TokenType.IDENTIFIER, "<computed>", null, Previous().Line), computedKey);
+            return (new Token(TokenType.IDENTIFIER, "<computed>", null, Previous().Line, Previous().Start), computedKey);
         }
         return (ConsumePropertyNameOrLiteral("Expect property name after 'get'/'set'."), null);
     }

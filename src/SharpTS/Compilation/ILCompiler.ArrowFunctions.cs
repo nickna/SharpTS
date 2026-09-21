@@ -591,6 +591,8 @@ public partial class ILCompiler
                 }
                 break;
             case Stmt.Class c:
+                foreach (var expression in ClassDefinitionExpressions.Enumerate(c))
+                    CollectArrowsFromExpr(expression);
                 var previousClassName = _currentCollectClassName;
                 _currentCollectClassName = c.Name.Lexeme;
                 foreach (var method in c.Methods)
@@ -604,8 +606,6 @@ public partial class ILCompiler
                 // get MethodBuilders instead of EmitArrowFunction's null fallback.
                 foreach (var field in c.Fields)
                 {
-                    if (field.ComputedKey != null)
-                        CollectArrowsFromExpr(field.ComputedKey);
                     if (field.Initializer != null)
                         CollectArrowsFromExpr(field.Initializer);
                 }
@@ -1080,6 +1080,8 @@ public partial class ILCompiler
                 CollectArrowsFromExpr(sp2.Value);
                 break;
             case Expr.ClassExpr ce:
+                foreach (var expression in ClassDefinitionExpressions.Enumerate(ce))
+                    CollectArrowsFromExpr(expression);
                 // Collect the class expression for later definition
                 CollectClassExpression(ce);
                 var previousClassNameCE = _currentCollectClassName;

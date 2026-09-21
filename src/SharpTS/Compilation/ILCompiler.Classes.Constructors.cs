@@ -277,8 +277,13 @@ public partial class ILCompiler
                     // Stack: this
                     il.Emit(OpCodes.Ldarg_0);
                     // Evaluate computed key expression (e.g., the Symbol)
-                    initEmitter.EmitExpression(field.ComputedKey);
-                    initEmitter.EmitBoxIfNeeded(field.ComputedKey);
+                    if (_classes.ComputedFieldKeys.TryGetValue(field, out var computedKey))
+                        il.Emit(OpCodes.Ldsfld, computedKey);
+                    else
+                    {
+                        initEmitter.EmitExpression(field.ComputedKey);
+                        initEmitter.EmitBoxIfNeeded(field.ComputedKey);
+                    }
                     // Emit initializer value; a field with no initializer is still an own
                     // property whose value is undefined.
                     if (field.Initializer != null)
