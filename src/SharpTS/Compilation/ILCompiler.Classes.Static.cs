@@ -49,9 +49,6 @@ public partial class ILCompiler
         bool hasPrivateFieldStorage = _classes.PrivateFieldStorage.ContainsKey(qualifiedClassName);
         bool hasStaticPrivateFields = _classes.StaticPrivateFields.TryGetValue(qualifiedClassName, out var staticPrivateFields) && staticPrivateFields.Count > 0;
         bool hasStaticInitializers = classStmt.StaticInitializers != null && classStmt.StaticInitializers.Count > 0;
-        // Symbol-keyed computed accessors (#266) and methods (#647) register in the .cctor.
-        bool hasSymbolAccessors = _classes.SymbolAccessors.ContainsKey(typeBuilder.Name);
-        bool hasSymbolMethods = _classes.SymbolMethods.ContainsKey(typeBuilder.Name);
 
         var cctor = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -246,7 +243,8 @@ public partial class ILCompiler
     /// </summary>
     private void EmitSymbolAccessorRegistrations(ILEmitter emitter, ILGenerator il, TypeBuilder typeBuilder)
     {
-        if (!_classes.SymbolAccessors.TryGetValue(typeBuilder.Name, out var list))
+        var list = _classes.ComputedMembers.GetAccessors(typeBuilder);
+        if (list.Count == 0)
             return;
 
         var getTypeFromHandle = _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle);
@@ -291,7 +289,8 @@ public partial class ILCompiler
     /// </summary>
     private void EmitSymbolMethodRegistrations(ILEmitter emitter, ILGenerator il, TypeBuilder typeBuilder)
     {
-        if (!_classes.SymbolMethods.TryGetValue(typeBuilder.Name, out var list))
+        var list = _classes.ComputedMembers.GetMethods(typeBuilder);
+        if (list.Count == 0)
             return;
 
         var getTypeFromHandle = _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle);
@@ -327,12 +326,10 @@ public partial class ILCompiler
             return;
         }
         var deferred = new List<(Expr Key, MethodBuilder? Builder, bool IsStatic, bool? IsGetter, int Position, Stmt.Field? Field)>();
-        if (_classes.SymbolMethods.TryGetValue(typeBuilder.Name, out var methods))
-            foreach (var (method, key, builder) in methods)
-                deferred.Add((key, builder, method.IsStatic, null, method.Name.Start, null));
-        if (_classes.SymbolAccessors.TryGetValue(typeBuilder.Name, out var accessors))
-            foreach (var (accessor, builder) in accessors)
-                deferred.Add((accessor.ComputedKey!, builder, accessor.IsStatic, accessor.Kind.Type == TokenType.GET, accessor.Name.Start, null));
+        foreach (var (method, key, builder) in _classes.ComputedMembers.GetMethods(typeBuilder))
+            deferred.Add((key, builder, method.IsStatic, null, method.Name.Start, null));
+        foreach (var (accessor, builder) in _classes.ComputedMembers.GetAccessors(typeBuilder))
+            deferred.Add((accessor.ComputedKey!, builder, accessor.IsStatic, accessor.Kind.Type == TokenType.GET, accessor.Name.Start, null));
         foreach (var field in fields.Where(field => field.ComputedKey != null && !field.IsDeclare))
             deferred.Add((field.ComputedKey!, null, field.IsStatic, null, field.Name.Start, field));
         // Field names are evaluated with the definition, even when no key suspends.

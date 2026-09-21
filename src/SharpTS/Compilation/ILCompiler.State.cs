@@ -65,16 +65,7 @@ public partial class ILCompiler
         public Dictionary<string, Dictionary<string, MethodBuilder>> PreDefinedAccessors { get; } = [];
         public Dictionary<Parsing.Stmt.Accessor, MethodBuilder> AccessorBuilders { get; } =
             new(ReferenceEqualityComparer.Instance);
-        // Symbol-keyed computed accessors (#266): class name (typeBuilder.Name) ->
-        // list of (accessor AST node, emitted getter/setter MethodBuilder). Used to
-        // emit the bodies and to register them in the class .cctor.
-        public Dictionary<string, List<(Parsing.Stmt.Accessor Accessor, MethodBuilder Method)>> SymbolAccessors { get; } = [];
-        // Symbol-keyed computed methods (#647): class name (typeBuilder.Name) -> list of
-        // (renamed method AST with a unique $symmethod_N name, computed key expression,
-        // emitted MethodBuilder). The renamed method flows through the normal method-body
-        // machinery (incl. generator/async state machines); the key drives the .cctor
-        // RegisterSymbolMethod call.
-        public Dictionary<string, List<(Parsing.Stmt.Function Method, Parsing.Expr Key, MethodBuilder Builder)>> SymbolMethods { get; } = [];
+        public ComputedClassMemberRegistry ComputedMembers { get; } = new();
         public Dictionary<string, FieldBuilder> InstanceFieldsField { get; } = [];
         public HashSet<Stmt.Class> CompactStorageClasses { get; } =
             new(ReferenceEqualityComparer.Instance);

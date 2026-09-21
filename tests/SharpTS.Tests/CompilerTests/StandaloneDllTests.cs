@@ -22,6 +22,35 @@ public class StandaloneDllTests
     [InlineData("main.ts")]
     [InlineData("main.cts")]
     [InlineData("main.mts")]
+    public void Isolated_ComputedAccessors_ReuseDeclarationsAcrossSignaturePasses(string entryPoint)
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile(entryPoint, """
+            class Tagged {
+                stored: any = null;
+                get [Symbol.toStringTag]() { return "Tagged!"; }
+                set [Symbol.toPrimitive](value: any) { this.stored = value; }
+            }
+            class Base { static get [Symbol.species]() { return Base; } }
+            class Sub extends Base {}
+            const item: any = new Tagged();
+            item[Symbol.toPrimitive] = 42;
+            console.log(item[Symbol.toStringTag], item.stored);
+            console.log((Sub as any)[Symbol.species] === Base);
+            """);
+        var dllPath = tempDir.GetPath("computed_accessors.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal("Tagged! 42\ntrue\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [InlineData("main.ts")]
+    [InlineData("main.cts")]
+    [InlineData("main.mts")]
     public void Isolated_ComputedClassFieldKeys_AreCapturedAtDefinition(string entryPoint)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
