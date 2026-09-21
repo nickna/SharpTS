@@ -468,7 +468,7 @@ public class StreamsWebSemanticTests
 
     /// <remarks>
     /// Mid-pipe abort: a <c>setTimeout</c>-driven <c>ac.abort()</c> fires while
-    /// the pump is parked, the pump's per-iteration <c>Task.Yield</c> lets it
+    /// the pump is parked, the pump's per-iteration event-loop turn lets it
     /// observe the signal, and it runs the abort/cancel/reject teardown.
     /// Previously flaky under CI load: the teardown awaits ran as un-Ref'd
     /// thread-pool continuations after the abort timer had Unref'd the loop, so
@@ -596,8 +596,8 @@ public class StreamsWebSemanticTests
 
         Assert.False(interp.HasActiveHandles, "no active handles before piping starts");
 
-        // The pump's first `await Task.Yield()` captures the ambient
-        // SynchronizationContext; null it so the pump runs free on the thread
+        // The pump's awaits capture the ambient SynchronizationContext;
+        // null it so the gated teardown runs free on the thread
         // pool rather than on any xUnit-installed context that this synchronous
         // test thread would never pump.
         SharpTSPromise pipe;
