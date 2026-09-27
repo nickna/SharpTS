@@ -1384,6 +1384,9 @@ public partial class TypeChecker
                 ? funcType.ParamTypes[i]
                 : funcType.ParamTypes[^1]; // Rest parameter type
 
+            if (funcType.HasRestParam && i >= funcType.ParamTypes.Count - 1 && paramType is TypeInfo.Array restArray)
+                paramType = restArray.ElementType;
+
             // Optional/default params accept an explicit `undefined` (#668). A rest parameter's
             // elements are not optional in that sense, so only widen for non-rest positions.
             bool optional = i >= funcType.MinArity &&

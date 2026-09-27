@@ -405,6 +405,9 @@ public sealed class ClassRegistry
         return _privateElements.TryGet(qualifiedClassName, out var declaration) ? declaration.Storage : null;
     }
 
+    public PrivateInstanceBridge? GetPrivateInstanceBridge(string qualifiedClassName)
+        => _privateElements.TryGet(qualifiedClassName, out var declaration) ? declaration.InstanceBridge : null;
+
     /// <summary>
     /// Gets the list of private field names for a class.
     /// </summary>

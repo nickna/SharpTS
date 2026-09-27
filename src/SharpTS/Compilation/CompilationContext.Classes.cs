@@ -160,6 +160,14 @@ public partial class CompilationContext
     /// </remarks>
     public string ResolveClassName(string simpleClassName)
     {
+        // A local declaration wins over the shared import/name index, which can
+        // also contain a same-named class from another module.
+        if (CurrentModulePath is not null)
+        {
+            var localName = GetQualifiedClassName(simpleClassName);
+            if (Classes.ContainsKey(localName))
+                return localName;
+        }
         // Delegate to ClassRegistry if available
         if (ClassRegistry != null)
         {
