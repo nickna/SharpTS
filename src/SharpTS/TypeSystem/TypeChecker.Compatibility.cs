@@ -428,6 +428,9 @@ public partial class TypeChecker
     /// </summary>
     private bool IsCompatibleCore(TypeInfo expected, TypeInfo actual)
     {
+        // A generic constructor retains its declaration identity through typeof and aliases.
+        if (expected is TypeInfo.GenericClass && ReferenceEquals(expected, actual)) return true;
+
         if (expected is TypeInfo.Any or TypeInfo.Inferred || actual is TypeInfo.Any or TypeInfo.Inferred) return true;
 
         // strictNullChecks: off — null/undefined are assignable to every type except `never`.

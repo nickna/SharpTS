@@ -36,7 +36,7 @@ public sealed class ModuleGenericClassExpressionTests
         }) as any as typeof Box;
         console.log(new First(1).read());
         console.log(new Box(2).read());
-        """, "first:1\nsecond:2\n", true)]
+        """, "first:1\nsecond:2\n")]
     [InlineData("""
         const Box = class<T> {
             constructor(public value: T) {}
@@ -48,7 +48,7 @@ public sealed class ModuleGenericClassExpressionTests
             console.log(new Box("inner").value);
         }
         console.log(new Box(42).value);
-        """, "inner\n42\n", false)]
+        """, "inner\n42\n")]
     [InlineData("""
         const Pair = class<T, U> {
             constructor(public first: T, public second: U) { console.log("ctor"); }
@@ -58,22 +58,19 @@ public sealed class ModuleGenericClassExpressionTests
         const pair = new Pair(numberArg(), stringArg());
         console.log(pair.first);
         console.log(pair.second);
-        """, "first\nsecond\nctor\n42\nhello\n", false)]
+        """, "first\nsecond\nctor\n42\nhello\n")]
     [InlineData("""
         const Box = class<T extends { name: string }> {
             constructor(public value: T) {}
         };
         const box = new Box({ name: "record" });
         console.log(box.value.name);
-        """, "record\n", false)]
-    public void RuntimeBindingsAndArgumentsArePreserved(string source, string expected, bool allowTypeErrors)
+        """, "record\n")]
+    public void RuntimeBindingsAndArgumentsArePreserved(string source, string expected)
     {
-        // Generic class reassignment currently fails compatibility checking,
-        // even for an assertion to the original type. Exercise runtime binding
-        // identity independently; the remaining cases require clean typing.
         var files = new Dictionary<string, string> { ["main.ts"] = source };
-        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts", allowTypeErrors));
-        Assert.Equal(expected, TestHarness.RunModulesCompiled(files, "main.ts", allowTypeErrors: allowTypeErrors));
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        Assert.Equal(expected, TestHarness.RunModulesCompiled(files, "main.ts"));
     }
 
     [Theory]
