@@ -123,7 +123,7 @@ public partial class TypeChecker
     /// <summary>
     /// Type checks static member access on a class type (Foo.staticProp).
     /// </summary>
-    private TypeInfo CheckGetOnClass(TypeInfo.Class classType, Token memberName)
+    private TypeInfo CheckGetOnClass(TypeInfo classType, Token memberName)
     {
         TypeInfo? current = classType;
         while (current != null)
@@ -169,13 +169,17 @@ public partial class TypeChecker
             return;
 
         var declName = GetClassName(declaringClass);
-        if (access == AccessModifier.Private && _currentClass?.Name != declName)
+        var declaringId = EnumerateClassCores(declaringClass).First().DeclarationId;
+        if (access == AccessModifier.Private && _currentClass?.Core.DeclarationId != declaringId)
         {
             throw new TypeCheckException($" Property '{memberName.Lexeme}' is private and only accessible within class '{declName}'.", tsCode: "TS2341");
         }
-        var declClass = AsClass(declaringClass);
-        if (access == AccessModifier.Protected && declClass != null && !IsSubclassOf(_currentClass, declClass))
+        if (access == AccessModifier.Protected)
         {
+            // Generic definitions and instantiated generic bases participate in
+            // the same lexical access check as ordinary class declarations.
+            if (_currentClass != null && SourceDerivesFromDeclaration(_currentClass, declaringId))
+                return;
             throw new TypeCheckException($" Property '{memberName.Lexeme}' is protected and only accessible within class '{declName}' and its subclasses.", tsCode: "TS2445");
         }
     }

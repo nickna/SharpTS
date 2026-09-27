@@ -377,8 +377,8 @@ public partial class TypeChecker
         {
             TypeCategory.TypeParameter when objType is TypeInfo.TypeParameter tp =>
                 CheckGetOnTypeParameter(tp, get.Name),
-            TypeCategory.Class when objType is TypeInfo.Class classType =>
-                CheckGetOnClass(classType, get.Name),
+            TypeCategory.Class when objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric =>
+                CheckGetOnClass(objType, get.Name),
             TypeCategory.Instance when objType is TypeInfo.Instance instance =>
                 CheckGetOnInstance(instance, get.Name),
             TypeCategory.Interface when objType is TypeInfo.Interface itf =>
@@ -806,16 +806,27 @@ public partial class TypeChecker
             throw new TypeCheckException($" Property '{set.Name.Lexeme}' does not exist on type '{tp.Name}'. Consider adding a constraint to the type parameter.", tsCode: "TS2339");
         }
 
-        // Handle static property assignment
-        if (objType is TypeInfo.Class classType)
+        // Generic class values expose the same checked static property metadata.
+        if (objType is TypeInfo.Class or TypeInfo.GenericClass)
         {
-            TypeInfo? current = classType;
+            TypeInfo? current = objType;
             while (current != null)
             {
+                var staticMethods = GetStaticMethods(current);
+                if (staticMethods != null && staticMethods.TryGetValue(set.Name.Lexeme, out var staticMethodType))
+                {
+                    EnforceStaticMemberAccess(current, set.Name);
+                    TypeInfo methodValueType = CheckExpr(set.Value);
+                    if (!IsCompatible(staticMethodType, methodValueType))
+                        throw new TypeCheckException($" Cannot assign '{methodValueType}' to static method '{set.Name.Lexeme}' of type '{staticMethodType}'.", tsCode: "TS2322");
+                    return methodValueType;
+                }
                 var staticProps = GetStaticProperties(current);
                 if (staticProps != null && staticProps.TryGetValue(set.Name.Lexeme, out var staticPropType))
                 {
                     EnforceStaticMemberAccess(current, set.Name);
+                    if (ClassInfoAccessor.Get(current, c => c.Core.StaticReadonlyFields, gc => gc.Core.StaticReadonlyFields)?.Contains(set.Name.Lexeme) == true)
+                        throw new TypeCheckException($" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.", tsCode: "TS2540");
                     TypeInfo valueType = CheckExpr(set.Value);
                     if (!IsCompatible(staticPropType, valueType))
                     {
@@ -1197,9 +1208,9 @@ public partial class TypeChecker
         }
 
         // Handle Class type - check static members
-        if (objType is TypeInfo.Class classType)
+        if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
         {
-            return CheckGetOnClass(classType, memberName);
+            return CheckGetOnClass(objType, memberName);
         }
 
         // Handle Instance type - check instance members

@@ -50,6 +50,7 @@ public partial class RuntimeEmitter
         EmittedErrorRuntime Errors,
         MethodBuilder GlobalThisSetProperty,
         FieldBuilder GlobalThisSingletonField,
+        Type IHasFieldsInterface,
         MethodBuilder InvokeMethodUnwrapped,
         MethodBuilder InvokeMethodValue,
         MethodBuilder LookupBuiltInStaticMember,
@@ -79,6 +80,7 @@ public partial class RuntimeEmitter
         EmittedErrorRuntime Errors,
         MethodBuilder GlobalThisSetProperty,
         FieldBuilder GlobalThisSingletonField,
+        Type IHasFieldsInterface,
         MethodBuilder InvokeMethodUnwrapped,
         MethodBuilder InvokeMethodValue,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
@@ -1229,6 +1231,42 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindGetter);
             il.Emit(OpCodes.Brtrue, typeSetSkipLabel);
+            // A generic class's own static field is shared with direct CLR loads.
+            // Update that storage instead of creating an alias-only descriptor shadow.
+            var noOwnGenericField = il.DefineLabel();
+            var originalOwner = il.DeclareLocal(_types.Type);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.Type);
+            il.Emit(OpCodes.Stloc, originalOwner);
+            il.Emit(OpCodes.Ldloc, originalOwner);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "ContainsGenericParameters")!.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, noOwnGenericField);
+            il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldloc, originalOwner);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+            il.Emit(OpCodes.Brfalse, noOwnGenericField);
+            var fieldOwner = EmitStaticMemberLookupOwner(il, originalOwner, inputs.IHasFieldsInterface);
+            var ownField = il.DeclareLocal(typeof(FieldInfo));
+            il.Emit(OpCodes.Ldloc, fieldOwner);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+            il.Emit(OpCodes.Stloc, ownField);
+            il.Emit(OpCodes.Ldloc, ownField);
+            il.Emit(OpCodes.Brfalse, noOwnGenericField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
+            il.Emit(OpCodes.Brtrue, typeSetSkipLabel);
+            il.Emit(OpCodes.Ldloc, ownField);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(FieldInfo), "IsInitOnly")!.GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, typeSetSkipLabel);
+            il.Emit(OpCodes.Ldloc, ownField);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(FieldInfo), "SetValue", _types.Object, _types.Object));
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noOwnGenericField);
             var newTypeDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             var newTypeEnumerableLocal = il.DeclareLocal(_types.Boolean);
             il.Emit(OpCodes.Ldc_I4_1);
@@ -1939,6 +1977,76 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, arraySetStrictLabel);
+
+        // Class bodies are strict. Generic static data-field writes must use the
+        // same storage/shadow path as value-position writes outside the class.
+        // Restrict this bridge to emitted generic classes with a reflected data
+        // field; other receiver kinds retain their dedicated assignment paths.
+        var notGenericStaticField = il.DefineLabel();
+        var genericOwner = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Stloc, genericOwner);
+        il.Emit(OpCodes.Ldloc, genericOwner);
+        il.Emit(OpCodes.Brfalse, notGenericStaticField);
+        il.Emit(OpCodes.Ldloc, genericOwner);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "ContainsGenericParameters")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, notGenericStaticField);
+        il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldloc, genericOwner);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+        il.Emit(OpCodes.Brfalse, notGenericStaticField);
+        var genericFieldOwner = EmitStaticMemberLookupOwner(il, genericOwner, inputs.IHasFieldsInterface);
+        var genericField = il.DeclareLocal(typeof(FieldInfo));
+        il.Emit(OpCodes.Ldloc, genericFieldOwner);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        il.Emit(OpCodes.Stloc, genericField);
+        il.Emit(OpCodes.Ldloc, genericField);
+        il.Emit(OpCodes.Brfalse, notGenericStaticField);
+
+        var genericSetter = il.DeclareLocal(_types.Object);
+        var genericNoSetter = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, genericSetter);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.TryGetSetter);
+        il.Emit(OpCodes.Brfalse, genericNoSetter);
+        EmitInvokePdsSetterWithValueAndReturn(il, inputs.InvokeMethodValue, genericSetter);
+        il.MarkLabel(genericNoSetter);
+
+        var rejectGenericWrite = il.DefineLabel();
+        var storeGenericField = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsWritable);
+        il.Emit(OpCodes.Brfalse, rejectGenericWrite);
+        il.Emit(OpCodes.Ldloc, genericField);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(FieldInfo), "IsInitOnly")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, rejectGenericWrite);
+        // An own CLR field already exists even without a descriptor. An
+        // inherited field needs a new own shadow and therefore extensibility.
+        il.Emit(OpCodes.Ldloc, genericField);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(FieldInfo), "DeclaringType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, genericFieldOwner);
+        il.Emit(OpCodes.Beq, storeGenericField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.CanAddProperty);
+        il.Emit(OpCodes.Brtrue, storeGenericField);
+        il.MarkLabel(rejectGenericWrite);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, nullLabel);
+        EmitThrowTypeErrorWithName(il, inputs.Errors, "Cannot assign to read only property '", "' of class");
+        il.MarkLabel(storeGenericField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, objectWrite.Property);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notGenericStaticField);
 
         // Not a dict or $Object or $TSFunction or $CJSModule or array - fall back to SetFieldsPropertyStrict.
         // NOTE (#1131): unlike the non-strict SetProperty, this variant has no

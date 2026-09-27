@@ -2600,7 +2600,7 @@ public partial class TypeChecker
 
                 (field.IsStatic ? mutableClass.StaticFieldAccess : mutableClass.FieldAccess)[fieldName] = field.Access;
                 if (field.IsReadonly)
-                    mutableClass.ReadonlyFields.Add(fieldName);
+                    (field.IsStatic ? mutableClass.StaticReadonlyFields : mutableClass.ReadonlyFields).Add(fieldName);
             }
 
             // Collect accessor types

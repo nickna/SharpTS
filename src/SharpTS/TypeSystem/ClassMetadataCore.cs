@@ -32,7 +32,8 @@ public sealed record ClassMetadataCore(
     TypeInfo? SymbolIndexType = null,
     int DeclarationId = 0,
     FrozenDictionary<string, AccessModifier>? StaticMethodAccess = null,
-    FrozenDictionary<string, AccessModifier>? StaticFieldAccess = null
+    FrozenDictionary<string, AccessModifier>? StaticFieldAccess = null,
+    FrozenSet<string>? StaticReadonlyFields = null
 )
 {
     /// <summary>True when the class declares any index signature.</summary>
