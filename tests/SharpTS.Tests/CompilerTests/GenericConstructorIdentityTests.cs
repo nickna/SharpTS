@@ -5,6 +5,23 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class GenericConstructorIdentityTests
 {
+    [Fact]
+    public void SameNamedGenericInstancesKeepDistinctPrivateBrandsAfterSelfComparison()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                const Left = class Same<T> { private value: number = 1; };
+                const Right = class Same<T> { private value: number = 1; };
+                let left = new Left<number>();
+                const right = new Right<number>();
+                left = left;
+                left = right;
+                """
+        };
+        Assert.Throws<TypeCheckDiagnosticException>(() => TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+    }
+
     [Theory]
     [InlineData("class Box<T> {}")]
     [InlineData("class Box<T extends { name: string }> { private value: number = 1; }")]
