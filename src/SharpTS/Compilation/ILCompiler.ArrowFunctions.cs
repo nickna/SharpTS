@@ -1214,8 +1214,10 @@ public partial class ILCompiler
         if (_classExprs.Names.ContainsKey(classExpr))
             return; // Already collected
 
-        // Generate unique name
-        string className = classExpr.Name?.Lexeme ?? $"$ClassExpr_{++_classExprs.Counter}";
+        // The lexical self-name is not a unique metadata owner. Put named expressions
+        // in a generated namespace so their CLR short name remains the source name.
+        string identity = $"$ClassExpr_{++_classExprs.Counter}";
+        string className = classExpr.Name is { } name ? $"{identity}.{name.Lexeme}" : identity;
         _classExprs.Names[classExpr] = className;
         _classExprs.ToDefine.Add(classExpr);
     }
