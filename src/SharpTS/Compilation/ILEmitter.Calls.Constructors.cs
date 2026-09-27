@@ -633,7 +633,10 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Ldc_I4, i);
-                IL.Emit(OpCodes.Ldtoken, _ctx.TypeMapper.MapTypeInfo(instantiated.TypeArguments[i]));
+                Type genericArgument = _ctx.TypeMapper.MapTypeInfo(instantiated.TypeArguments[i]);
+                if (_ctx.Types.IsVoid(genericArgument))
+                    genericArgument = _ctx.Types.Object;
+                IL.Emit(OpCodes.Ldtoken, genericArgument);
                 IL.Emit(OpCodes.Call, _ctx.Types.TypeGetTypeFromHandle);
                 IL.Emit(OpCodes.Stelem_Ref);
             }

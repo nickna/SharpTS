@@ -6,6 +6,24 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class ModuleGenericClassExpressionTests
 {
     [Theory]
+    [InlineData("void")]
+    [InlineData("never")]
+    public void ErasedGenericArgumentsCanCloseRuntimeConstructors(string typeArgument)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = $$"""
+                const Box = class<T> {
+                    read(): string { return "ok"; }
+                };
+                console.log(new Box<{{typeArgument}}>().read());
+                """
+        };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        Assert.Equal("ok\n", TestHarness.RunModulesCompiled(files, "main.ts"));
+    }
+
+    [Theory]
     [InlineData("""
         let Box = class<T> {
             constructor(public value: T) {}
