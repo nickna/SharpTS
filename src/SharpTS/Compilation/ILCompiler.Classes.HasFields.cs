@@ -76,16 +76,9 @@ public partial class ILCompiler
         typeBuilder.DefineMethodOverride(setPropertyMethod, _runtime.ObjectFields.SetProperty);
         typeBuilder.DefineMethodOverride(hasPropertyMethod, _runtime.ObjectFields.HasProperty);
 
-        // Store stubs for later body emission
-        _classes.HasFieldsStubs[className] = new HasFieldsMethodStubs
-        {
-            EnsureFields = ensureFields,
-            GetFields = fieldsGetter,
-            GetProperty = getPropertyMethod,
-            SetProperty = setPropertyMethod,
-            HasProperty = hasPropertyMethod,
-            FieldsField = fieldsField
-        };
+        _classes.PropertyDispatch.Declare(className, typeBuilder, new ClassPropertyDispatch(
+            ensureFields, fieldsGetter, getPropertyMethod, setPropertyMethod,
+            hasPropertyMethod, fieldsField));
     }
 
     private void EmitEnsureFieldsBody(MethodBuilder method, FieldInfo fieldsField)
@@ -155,8 +148,7 @@ public partial class ILCompiler
     /// </summary>
     private void EmitHasFieldsInterfaceMethodBodies(string className, Stmt.Class classStmt)
     {
-        if (!_classes.HasFieldsStubs.TryGetValue(className, out var stubs))
-            return;
+        var stubs = _classes.PropertyDispatch.Require(className);
 
         var fieldsField = stubs.FieldsField;
 
@@ -171,6 +163,7 @@ public partial class ILCompiler
 
         // Emit HasProperty body with compile-time dispatch for typed backing fields
         EmitHasPropertyBody(stubs.HasProperty, className, fieldsField);
+        _classes.PropertyDispatch.MarkBodiesEmitted(className);
     }
 
     /// <summary>
@@ -686,8 +679,7 @@ public partial class ILCompiler
     /// </summary>
     private void EmitHasFieldsInterfaceMethodBodies(string className, Expr.ClassExpr classExpr)
     {
-        if (!_classes.HasFieldsStubs.TryGetValue(className, out var stubs))
-            return;
+        var stubs = _classes.PropertyDispatch.Require(className);
 
         var fieldsField = stubs.FieldsField;
 
@@ -705,6 +697,7 @@ public partial class ILCompiler
 
         // Emit HasProperty body with compile-time dispatch for typed backing fields
         EmitHasPropertyBodyCore(stubs.HasProperty, backingFields, fieldsField);
+        _classes.PropertyDispatch.MarkBodiesEmitted(className);
     }
 
     /// <summary>
@@ -915,7 +908,7 @@ public partial class ILCompiler
     /// </summary>
     private void EmitGetPropertyBaseFallthrough(ILGenerator il, string? baseClassName, Type? baseType)
     {
-        if (baseClassName != null && _classes.HasFieldsStubs.TryGetValue(baseClassName, out var baseStubs))
+        if (baseClassName != null && _classes.PropertyDispatch.TryGet(baseClassName, out var baseStubs))
         {
             // return base.GetProperty(name);  — non-virtual `call` to the
             // specific base implementation (not callvirt, which would recurse
@@ -999,7 +992,7 @@ public partial class ILCompiler
         if (leaf == null)
             return null;
         var resolved = GetDefinitionContext().ResolveClassName(leaf);
-        return _classes.HasFieldsStubs.ContainsKey(resolved) ? resolved : null;
+        return _classes.PropertyDispatch.Contains(resolved) ? resolved : null;
     }
 
     /// <summary>
@@ -1019,7 +1012,7 @@ public partial class ILCompiler
         else
             baseClassName = GetDefinitionContext().ResolveClassName(superName);
 
-        return baseClassName != null && _classes.HasFieldsStubs.ContainsKey(baseClassName)
+        return baseClassName != null && _classes.PropertyDispatch.Contains(baseClassName)
             ? baseClassName
             : null;
     }

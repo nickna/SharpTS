@@ -83,22 +83,7 @@ public partial class ILCompiler
         // Static private methods: class name -> method name (without #) -> MethodBuilder
         public Dictionary<string, Dictionary<string, MethodBuilder>> StaticPrivateMethods { get; } = [];
 
-        // $IHasFields interface method stubs (bodies emitted later after method definitions)
-        public Dictionary<string, HasFieldsMethodStubs> HasFieldsStubs { get; } = [];
-    }
-
-    /// <summary>
-    /// Holds the MethodBuilder stubs for $IHasFields interface methods.
-    /// Bodies are emitted later when method definitions are available.
-    /// </summary>
-    private sealed class HasFieldsMethodStubs
-    {
-        public required MethodBuilder EnsureFields { get; init; }
-        public required MethodBuilder GetFields { get; init; }
-        public required MethodBuilder GetProperty { get; init; }
-        public required MethodBuilder SetProperty { get; init; }
-        public required MethodBuilder HasProperty { get; init; }
-        public required FieldInfo FieldsField { get; init; }
+        public ClassPropertyDispatchRegistry PropertyDispatch { get; } = new();
     }
 
     /// <summary>
