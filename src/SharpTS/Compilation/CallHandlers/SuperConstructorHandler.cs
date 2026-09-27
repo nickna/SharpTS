@@ -23,6 +23,22 @@ public class SuperConstructorHandler : ICallHandler
 
         var ctx = emitter.Context;
 
+        // The emitted base is chosen from checked declaration identity. Prefer its
+        // expression-owned constructor before any same-named lexical declaration.
+        if (ctx.CurrentClassExpr != null && ctx.CurrentClassBuilder?.BaseType is { } baseType &&
+            ctx.ClassExprConstructors != null)
+        {
+            var baseDefinition = baseType.IsConstructedGenericType
+                ? baseType.GetGenericTypeDefinition() : baseType;
+            var expressionCtor = ctx.ClassExprConstructors.Values.FirstOrDefault(
+                candidate => candidate.DeclaringType == baseDefinition);
+            if (expressionCtor != null)
+            {
+                EmitSuperCtorCall(emitter, expressionCtor, call.Arguments);
+                return true;
+            }
+        }
+
         // Try class declaration constructors first
         var parentCtor = ctx.CurrentSuperclassName != null
             ? ctx.ClassRegistry?.GetConstructor(ctx.CurrentSuperclassName)

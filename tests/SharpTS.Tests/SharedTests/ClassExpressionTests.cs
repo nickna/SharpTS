@@ -9,6 +9,20 @@ namespace SharpTS.Tests.SharedTests;
 public class ClassExpressionTests
 {
     [Theory, ModeData]
+    public void SameNamedExpressionsKeepIndependentStateAndNames(ExecutionMode mode)
+    {
+        var source = """
+            const Left = class Same { value: number = 1; };
+            const Right = class Same { value: number = 2; };
+            console.log((Left as any).name);
+            console.log((Right as any).name);
+            console.log(new Left().value);
+            console.log(new Right().value);
+            """;
+        Assert.Equal("Same\nSame\n1\n2\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GenericForwardConstructorAliasPreservesInferredReturn(ExecutionMode mode)
     {
         var source = """

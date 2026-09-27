@@ -1006,7 +1006,7 @@ public partial class ILCompiler
             return null;
 
         string? baseClassName;
-        if (_classExprs.VarToClassExpr.TryGetValue(superName, out var parentExpr)
+        if (ResolveClassExpressionParent(classExpr) is { } parentExpr
             && _classExprs.Names.TryGetValue(parentExpr, out var generatedName))
             baseClassName = generatedName;
         else
