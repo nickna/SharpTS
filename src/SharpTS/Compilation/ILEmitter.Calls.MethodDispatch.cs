@@ -956,8 +956,31 @@ public partial class ILEmitter
         // Resolve from the immediate superclass, walking farther up only when it does
         // not declare the method. Keep the declaring class so its typed core can be
         // selected rather than looking in the current derived class.
-        if (!_ctx.TryResolveInstanceMethod(
-                resolvedSuperName, methodName, out string declaringClassName, out var methodBuilder))
+        MethodBuilder? methodBuilder = null;
+        string declaringClassName = resolvedSuperName;
+        if (_ctx.CurrentClassExpr != null &&
+            _ctx.VarToClassExpr?.TryGetValue(superclassName, out var parentExpression) == true &&
+            _ctx.ClassExprBuilders?.TryGetValue(parentExpression, out var parentBuilder) == true)
+        {
+            // Class expressions have AST-owned methods rather than ClassRegistry entries.
+            // Walk the actual emitted parent chain so super bypasses virtual dispatch.
+            for (Type? owner = parentBuilder; owner != null; owner = owner.BaseType)
+            {
+                var expression = _ctx.ClassExprBuilders.FirstOrDefault(pair => pair.Value == owner).Key;
+                if (expression != null &&
+                    _ctx.ClassExprInstanceMethods?.TryGetValue(expression, out var methods) == true &&
+                    methods.TryGetValue(methodName, out methodBuilder))
+                {
+                    declaringClassName = owner.FullName!;
+                    break;
+                }
+                if (_ctx.TryResolveInstanceMethod(owner.FullName!, methodName,
+                        out declaringClassName, out methodBuilder))
+                    break;
+            }
+        }
+        if (methodBuilder == null && !_ctx.TryResolveInstanceMethod(
+                resolvedSuperName, methodName, out declaringClassName, out methodBuilder))
             return false;
 
         MethodBuilder dispatchBuilder = methodBuilder;

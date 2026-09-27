@@ -5,6 +5,32 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class ClassExpressionOwnerIdentityTests
 {
+    [Theory]
+    [InlineData("")]
+    [InlineData("constructor() { super(); }")]
+    public void SameNamedBaseBindingsAcrossModulesKeepTheirOwnParents(string constructor)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["left.ts"] = $$"""
+                const Base = class Same { value: number = 1; read(): number { return this.value; } };
+                export const Child = class extends Base { {{constructor}} read(): number { return super.read(); } };
+                """,
+            ["right.ts"] = $$"""
+                const Base = class Same { value: number = 2; read(): number { return this.value; } };
+                export const Child = class extends Base { {{constructor}} read(): number { return super.read(); } };
+                """,
+            ["main.ts"] = """
+                import { Child as Left } from './left';
+                import { Child as Right } from './right';
+                console.log(new Left().read());
+                console.log(new Right().read());
+                """
+        };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        Assert.Equal("1\n2\n", TestHarness.RunModulesCompiled(files, "main.ts"));
+    }
+
     [Fact]
     public void SameNamedBaseExpressionsKeepDerivedPropertyDispatch()
     {

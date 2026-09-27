@@ -91,21 +91,14 @@ public partial class ILCompiler
             var resolvedSuperName = GetDefinitionContext().ResolveClassName(superclassName);
             TypeBuilder? superTypeBuilder = null;
 
-            if (_classes.Builders.TryGetValue(resolvedSuperName, out superTypeBuilder))
+            if (ResolveClassExpressionParent(classExpr) is { } checkedParent &&
+                _classExprs.Builders.TryGetValue(checkedParent, out var checkedParentBuilder))
+            {
+                superTypeBuilder = checkedParentBuilder;
+            }
+            else if (_classes.Builders.TryGetValue(resolvedSuperName, out superTypeBuilder))
             {
                 // Found in class declarations
-            }
-            else if (_classExprs.VarToClassExpr.TryGetValue(superclassName, out var parentClassExpr)
-                     && _classExprs.Builders.TryGetValue(parentClassExpr, out var parentExprBuilder))
-            {
-                // Superclass is another class expression bound to a variable
-                // (e.g. `const A = class {}; const B = class extends A {}`).
-                // _classExprs.Names holds GENERATED names ($ClassExpr_N), so the
-                // by-generated-name scan below never matches the source variable
-                // name — without this, B's parent defaults to System.Object while
-                // super() still chains A..ctor, tripping ILVerify CallCtor /
-                // ThisUninitReturn (#287 family).
-                superTypeBuilder = parentExprBuilder;
             }
             else
             {
@@ -584,6 +577,17 @@ public partial class ILCompiler
         ctx.ClassExprSuperclass = _classExprs.Superclass;
         ctx.CurrentClassExpr = classExpr;
         ctx.VarToClassExpr = _classExprs.VarToClassExpr;
+        if (ResolveClassExpressionParent(classExpr) is { } parentExpression &&
+            _classExprs.Superclass.GetValueOrDefault(classExpr) is { } parentName)
+        {
+            // Super-call consumers see this class's checked parent binding, not
+            // whichever same-named binding was collected last in another module.
+            ctx.VarToClassExpr = new Dictionary<string, Expr.ClassExpr>(
+                ctx.VarToClassExpr ?? _classExprs.VarToClassExpr, StringComparer.Ordinal)
+            {
+                [parentName] = parentExpression
+            };
+        }
         // Module-level / captured top-level variable access — without these a
         // class-expression method or accessor body referencing a top-level
         // binding throws ReferenceError at runtime (same omission #300 fixed
@@ -912,7 +916,7 @@ public partial class ILCompiler
             return null;
 
         // Parent is another class expression bound to a variable.
-        if (_classExprs.VarToClassExpr.TryGetValue(superName, out var parentExpr)
+        if (ResolveClassExpressionParent(classExpr) is { } parentExpr
             && _classExprs.Constructors.TryGetValue(parentExpr, out var exprCtor))
             return exprCtor;
 
@@ -922,6 +926,29 @@ public partial class ILCompiler
             return declCtor;
 
         return null;
+    }
+
+    private Expr.ClassExpr? ResolveClassExpressionParent(Expr.ClassExpr classExpr)
+    {
+        static int DeclarationId(TSTypeInfo? type) => type switch
+        {
+            TSTypeInfo.Class cls => cls.Core.DeclarationId,
+            TSTypeInfo.GenericClass cls => cls.Core.DeclarationId,
+            TSTypeInfo.MutableClass cls => cls.DeclarationId,
+            TSTypeInfo.InstantiatedGeneric generic => DeclarationId(generic.GenericDefinition),
+            TSTypeInfo.Instance instance => DeclarationId(instance.ClassType),
+            _ => 0
+        };
+
+        int parentId = DeclarationId(_typeMap.GetClassExprType(classExpr)?.Superclass);
+        if (parentId != 0)
+            return _classExprs.ToDefine.FirstOrDefault(candidate =>
+                _typeMap.GetClassExprType(candidate)?.Core.DeclarationId == parentId);
+
+        // Untyped heritage retains the existing fallback until its runtime value
+        // can be represented as a CLR base; checked declarations never use it.
+        return _classExprs.Superclass.GetValueOrDefault(classExpr) is { } name
+            ? _classExprs.VarToClassExpr.GetValueOrDefault(name) : null;
     }
 
     /// <summary>
