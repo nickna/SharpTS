@@ -616,6 +616,33 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Brtrue, constructionDone);
         IL.Emit(OpCodes.Pop);
 
+        // Preserve the evaluated constructor binding (including module aliases
+        // and reassignment), while closing its generic definition using the
+        // type arguments resolved for this particular new-expression.
+        if (_ctx.TypeMap?.Get(n) is SharpTS.TypeSystem.TypeInfo.Instance
+            { ClassType: SharpTS.TypeSystem.TypeInfo.InstantiatedGeneric instantiated })
+        {
+            var alreadyClosed = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, typeLocal);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.Type, "get_IsGenericTypeDefinition"));
+            IL.Emit(OpCodes.Brfalse, alreadyClosed);
+            IL.Emit(OpCodes.Ldloc, typeLocal);
+            IL.Emit(OpCodes.Ldc_I4, instantiated.TypeArguments.Count);
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Type);
+            for (int i = 0; i < instantiated.TypeArguments.Count; i++)
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                IL.Emit(OpCodes.Ldtoken, _ctx.TypeMapper.MapTypeInfo(instantiated.TypeArguments[i]));
+                IL.Emit(OpCodes.Call, _ctx.Types.TypeGetTypeFromHandle);
+                IL.Emit(OpCodes.Stelem_Ref);
+            }
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
+                _ctx.Types.Type, "MakeGenericType", _ctx.Types.MakeArrayType(_ctx.Types.Type)));
+            IL.Emit(OpCodes.Stloc, typeLocal);
+            IL.MarkLabel(alreadyClosed);
+        }
+
         // ctor = type.GetConstructors()[0]
         var getConstructorsMethod = _ctx.Types.GetMethod(
             typeof(Type),
