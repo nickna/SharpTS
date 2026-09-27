@@ -505,7 +505,7 @@ public partial class ILCompiler
                  lifted.Contains(name));
     }
 
-    private void CollectArrowsFromStmt(Stmt stmt)
+    private void CollectArrowsFromStmt(Stmt stmt, bool isClassMember = false)
     {
         switch (stmt)
         {
@@ -545,8 +545,8 @@ public partial class ILCompiler
                 // Skip overload signatures (no body)
                 if (f.Body != null)
                 {
-                    // Track inner function declarations (nested inside another function)
-                    if (_functionNestingDepth > 0 || _topLevelBlockDepth > 0)
+                    // Class members already have class-owned builders, even inside a function.
+                    if (!isClassMember && (_functionNestingDepth > 0 || _topLevelBlockDepth > 0))
                     {
                         CollectInnerFunction(f);
                     }
@@ -599,7 +599,7 @@ public partial class ILCompiler
                 {
                     // Skip overload signatures (no body)
                     if (method.Body != null)
-                        CollectArrowsFromStmt(method);
+                        CollectArrowsFromStmt(method, isClassMember: true);
                 }
                 // Field initializers are evaluated in the class's lexical context, but are
                 // not part of a method body. Walk them explicitly so function/arrow values
@@ -1104,7 +1104,7 @@ public partial class ILCompiler
                 // its function display class (#789). Mirrors the Stmt.Class declaration path above.
                 foreach (var method in ce.Methods)
                     if (method.Body != null)
-                        CollectArrowsFromStmt(method);
+                        CollectArrowsFromStmt(method, isClassMember: true);
                 // Collect arrows in field initializers
                 foreach (var field in ce.Fields)
                     if (field.Initializer != null)

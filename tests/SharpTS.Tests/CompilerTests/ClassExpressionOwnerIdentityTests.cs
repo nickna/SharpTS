@@ -8,6 +8,26 @@ public sealed class ClassExpressionOwnerIdentityTests
     [Theory]
     [InlineData("")]
     [InlineData("constructor() { super(); }")]
+    public void ExpressionParentShadowsSameNamedClassDeclaration(string constructor)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = $$"""
+                class Base { value: number = 99; }
+                function make() {
+                    const Base = class { value: number = 7; };
+                    const Child = class extends Base { {{constructor}} read(): number { return this.value; } };
+                    return new Child().read();
+                }
+                console.log(make());
+                """
+        };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        Assert.Equal("7\n", TestHarness.RunModulesCompiled(files, "main.ts"));
+    }
+    [Theory]
+    [InlineData("")]
+    [InlineData("constructor() { super(); }")]
     public void SameNamedBaseBindingsAcrossModulesKeepTheirOwnParents(string constructor)
     {
         var files = new Dictionary<string, string>
