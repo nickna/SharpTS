@@ -768,37 +768,16 @@ public partial class ILCompiler
     /// </summary>
     private void EmitPrivateMethodBodies(TypeBuilder typeBuilder, Stmt.Class classStmt, FieldInfo fieldsField, string qualifiedClassName)
     {
-        // Emit instance private method bodies
-        if (_classes.PrivateMethods.TryGetValue(qualifiedClassName, out var instancePrivateMethods))
+        var declaration = _classes.PrivateElements.Require(qualifiedClassName);
+        foreach (var method in classStmt.Methods.Where(m => m.IsPrivate && m.Body != null && m.Name.Lexeme != "constructor").OrderBy(m => m.IsStatic))
         {
-            foreach (var method in classStmt.Methods.Where(m => m.IsPrivate && !m.IsStatic && m.Body != null))
-            {
-                string methodName = method.Name.Lexeme;
-                if (methodName.StartsWith('#'))
-                    methodName = methodName[1..];
-
-                if (instancePrivateMethods.TryGetValue(methodName, out var methodBuilder))
-                {
-                    EmitPrivateMethodBody(typeBuilder, methodBuilder, method, fieldsField, qualifiedClassName, isStatic: false);
-                }
-            }
+            string methodName = method.Name.Lexeme.TrimStart('#');
+            var methods = method.IsStatic ? declaration.StaticMethods : declaration.Methods;
+            if (!methods.TryGetValue(methodName, out var methodBuilder))
+                throw new InvalidOperationException($"Private method '{qualifiedClassName}.{methodName}' has not been declared.");
+            EmitPrivateMethodBody(typeBuilder, methodBuilder, method, fieldsField, qualifiedClassName, method.IsStatic);
         }
-
-        // Emit static private method bodies
-        if (_classes.StaticPrivateMethods.TryGetValue(qualifiedClassName, out var staticPrivateMethods))
-        {
-            foreach (var method in classStmt.Methods.Where(m => m.IsPrivate && m.IsStatic && m.Body != null))
-            {
-                string methodName = method.Name.Lexeme;
-                if (methodName.StartsWith('#'))
-                    methodName = methodName[1..];
-
-                if (staticPrivateMethods.TryGetValue(methodName, out var methodBuilder))
-                {
-                    EmitPrivateMethodBody(typeBuilder, methodBuilder, method, fieldsField, qualifiedClassName, isStatic: true);
-                }
-            }
-        }
+        _classes.PrivateElements.MarkBodiesEmitted(qualifiedClassName);
     }
 
     /// <summary>

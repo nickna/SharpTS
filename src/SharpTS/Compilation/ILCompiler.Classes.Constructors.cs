@@ -444,12 +444,11 @@ public partial class ILCompiler
         CompilationContext ctx)
     {
         // Check if this class has instance private fields
-        if (!_classes.PrivateFieldStorage.TryGetValue(className, out var storageField))
+        var privateElements = _classes.PrivateElements.Require(className);
+        if (privateElements.Storage is not { } storageField)
             return;
 
-        // Get the list of private field names
-        if (!_classes.PrivateFieldNames.TryGetValue(className, out var fieldNames))
-            fieldNames = [];
+        var fieldNames = privateElements.FieldNames;
 
         var instancePrivateFields = classStmt.Fields
             .Where(f => f.IsPrivate && !f.IsStatic)

@@ -33,11 +33,7 @@ public sealed class ClassRegistry
     private readonly Dictionary<string, GenericTypeParameterBuilder[]> _genericParams;
 
     // ES2022 Private class elements
-    private readonly Dictionary<string, FieldBuilder> _privateFieldStorage;
-    private readonly Dictionary<string, List<string>> _privateFieldNames;
-    private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _staticPrivateFields;
-    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _privateMethods;
-    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _staticPrivateMethods;
+    private readonly PrivateClassElementRegistry _privateElements;
 
     // Module mapping for qualified name resolution
     private readonly Dictionary<string, string>? _classToModule;
@@ -59,11 +55,7 @@ public sealed class ClassRegistry
         Dictionary<string, Dictionary<string, MethodBuilder>> staticGetters,
         Dictionary<string, Dictionary<string, MethodBuilder>> staticSetters,
         Dictionary<string, GenericTypeParameterBuilder[]> genericParams,
-        Dictionary<string, FieldBuilder> privateFieldStorage,
-        Dictionary<string, List<string>> privateFieldNames,
-        Dictionary<string, Dictionary<string, FieldBuilder>> staticPrivateFields,
-        Dictionary<string, Dictionary<string, MethodBuilder>> privateMethods,
-        Dictionary<string, Dictionary<string, MethodBuilder>> staticPrivateMethods,
+        PrivateClassElementRegistry privateElements,
         Dictionary<string, string>? classToModule = null,
         Func<string?>? getCurrentModulePath = null,
         Func<string?>? getDotNetNamespace = null)
@@ -79,11 +71,7 @@ public sealed class ClassRegistry
         _staticGetters = staticGetters;
         _staticSetters = staticSetters;
         _genericParams = genericParams;
-        _privateFieldStorage = privateFieldStorage;
-        _privateFieldNames = privateFieldNames;
-        _staticPrivateFields = staticPrivateFields;
-        _privateMethods = privateMethods;
-        _staticPrivateMethods = staticPrivateMethods;
+        _privateElements = privateElements;
         _classToModule = classToModule;
         _getCurrentModulePath = getCurrentModulePath;
         _getDotNetNamespace = getDotNetNamespace;
@@ -414,15 +402,15 @@ public sealed class ClassRegistry
     /// </summary>
     public FieldBuilder? GetPrivateFieldStorage(string qualifiedClassName)
     {
-        return _privateFieldStorage.GetValueOrDefault(qualifiedClassName);
+        return _privateElements.TryGet(qualifiedClassName, out var declaration) ? declaration.Storage : null;
     }
 
     /// <summary>
     /// Gets the list of private field names for a class.
     /// </summary>
-    public List<string>? GetPrivateFieldNames(string qualifiedClassName)
+    public IReadOnlyList<string>? GetPrivateFieldNames(string qualifiedClassName)
     {
-        return _privateFieldNames.GetValueOrDefault(qualifiedClassName);
+        return _privateElements.TryGet(qualifiedClassName, out var declaration) ? declaration.FieldNames : null;
     }
 
     /// <summary>
@@ -430,8 +418,8 @@ public sealed class ClassRegistry
     /// </summary>
     public bool TryGetStaticPrivateField(string qualifiedClassName, string fieldName, out FieldBuilder? field)
     {
-        if (_staticPrivateFields.TryGetValue(qualifiedClassName, out var classFields) &&
-            classFields.TryGetValue(fieldName, out var f))
+        if (_privateElements.TryGet(qualifiedClassName, out var declaration) &&
+            declaration.StaticFields.TryGetValue(fieldName, out var f))
         {
             field = f;
             return true;
@@ -446,8 +434,8 @@ public sealed class ClassRegistry
     /// </summary>
     public bool TryGetPrivateMethod(string qualifiedClassName, string methodName, out MethodBuilder? method)
     {
-        if (_privateMethods.TryGetValue(qualifiedClassName, out var classMethods) &&
-            classMethods.TryGetValue(methodName, out var m))
+        if (_privateElements.TryGet(qualifiedClassName, out var declaration) &&
+            declaration.Methods.TryGetValue(methodName, out var m))
         {
             method = m;
             return true;
@@ -462,8 +450,8 @@ public sealed class ClassRegistry
     /// </summary>
     public bool TryGetStaticPrivateMethod(string qualifiedClassName, string methodName, out MethodBuilder? method)
     {
-        if (_staticPrivateMethods.TryGetValue(qualifiedClassName, out var classMethods) &&
-            classMethods.TryGetValue(methodName, out var m))
+        if (_privateElements.TryGet(qualifiedClassName, out var declaration) &&
+            declaration.StaticMethods.TryGetValue(methodName, out var m))
         {
             method = m;
             return true;

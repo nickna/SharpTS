@@ -562,11 +562,7 @@ public partial class ILCompiler
             staticGetters: _classes.StaticGetters,
             staticSetters: _classes.StaticSetters,
             genericParams: _classes.GenericParams,
-            privateFieldStorage: _classes.PrivateFieldStorage,
-            privateFieldNames: _classes.PrivateFieldNames,
-            staticPrivateFields: _classes.StaticPrivateFields,
-            privateMethods: _classes.PrivateMethods,
-            staticPrivateMethods: _classes.StaticPrivateMethods,
+            privateElements: _classes.PrivateElements,
             classToModule: _modules.ClassToModule,
             getCurrentModulePath: () => _modules.CurrentPath,
             getDotNetNamespace: () => _modules.CurrentDotNetNamespace
@@ -1094,6 +1090,7 @@ public partial class ILCompiler
     /// </summary>
     private void Phase9_FinalizeTypes()
     {
+        _classes.PrivateElements.CompleteEmission();
         _classes.PropertyDispatch.CompleteEmission();
         _classes.ComputedMembers.CompleteEmission();
         _classes.DeferredDefinitions.CompleteEmission();
@@ -1655,6 +1652,7 @@ public partial class ILCompiler
     /// </summary>
     private void ModulePhase11_FinalizeTypes()
     {
+        _classes.PrivateElements.CompleteEmission();
         _classes.PropertyDispatch.CompleteEmission();
         _classes.ComputedMembers.CompleteEmission();
         _classes.DeferredDefinitions.CompleteEmission();
