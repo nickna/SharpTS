@@ -91,11 +91,28 @@ solution test loop unless that policy is changed deliberately.
 
 ### Running Tests
 
-Tests are xUnit tests in the `tests/SharpTS.Tests/` directory:
+Run the complete local suite with PowerShell 7:
 
 ```bash
-dotnet test
+pwsh ./scripts/test-local.ps1
 ```
+
+This builds Release, runs core and GUI tests separately, then runs all standalone
+deployment cases in three concurrent shards. Each stage writes progress, a full
+log and TRX results under `artifacts/tests/`; inactivity produces a hang dump,
+and a 30-minute stage budget bounds continued but excessive work. All categories
+are included by default. `-Hermetic` applies CI's network/npm/load exclusions.
+
+Use `-Suite Core`, `-Suite Gui`, or `-Suite Standalone` for focused work,
+`-NoBuild` to reuse a build, and `-Configuration Debug` to test Debug outputs.
+`-DescribeOnly` prints the exact partitions from an existing build without
+running them. `-ShardCount 1` reduces standalone resource usage.
+
+Plain `dotnet test` remains supported and includes all coverage, but its 1,200+
+standalone cases run sequentially inside one xUnit class and can add tens of
+minutes with little default console output. Add `--logger 'console;verbosity=normal'`
+when diagnosing that path. A passing sequence resets the inactivity guard;
+the local runner's stage deadline provides the aggregate bound.
 
 On Windows, the filesystem tests create real symbolic links. Enable Developer
 Mode (`ms-settings:developers`) and restart the terminal or IDE that runs the

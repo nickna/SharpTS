@@ -1,3 +1,4 @@
+using SharpTS.Testing;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
@@ -353,104 +354,98 @@ public static class TestHarness
     /// parallel tests don't fight over <see cref="Console.Out"/>.
     /// </summary>
     private static string RunCompiledInProcess(string source, DecoratorMode decoratorMode, TimeSpan timeout)
+        => RunCompiledWithTimeout(() =>
+        {
+            var assemblyName = $"test_{Guid.NewGuid():N}";
+
+            var lexer = new Lexer(source);
+            var tokens = lexer.ScanTokens();
+            var parser = new Parser(tokens, decoratorMode);
+            var statements = parser.ParseOrThrow();
+
+            var checker = new TypeChecker();
+            checker.SetDecoratorMode(decoratorMode);
+            var typeMap = checker.Check(statements);
+
+            var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
+            var deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
+
+            var compiler = new ILCompiler(assemblyName);
+            compiler.SetDecoratorMode(decoratorMode);
+            compiler.Compile(statements, typeMap, deadCodeInfo);
+
+            // Skip the disk roundtrip — load the assembly straight from the in-memory PE bytes.
+            var bytes = compiler.SaveToBytes();
+
+            // Systemic guardrail (#886): with SHARPTS_VERIFY_COMPILED=1, run ILVerify on every
+            // in-process compiled program so the whole compiled-mode suite becomes a provable check
+            // for IL-correctness regressions (stale _stackType, double-box, etc.). Opt-in because the
+            // suite may still contain pre-existing unverifiable-but-runnable programs that need triage
+            // before this can be enabled by default.
+            if (Environment.GetEnvironmentVariable("SHARPTS_VERIFY_COMPILED") == "1")
+            {
+                var verifyErrors = VerifyILBytes(bytes)
+                    .Where(e => !e.Contains("Failed to load assembly"))
+                    .ToList();
+                if (verifyErrors.Count > 0)
+                    throw new InvalidOperationException(
+                        "IL verification failed for compiled program:\n  " + string.Join("\n  ", verifyErrors));
+            }
+
+            return Assembly.Load(bytes);
+        }, timeout);
+
+    // The budget includes parsing, checking, emission and loading. A timed-out
+    // compiler cannot be forcibly aborted in-process, but it must never start
+    // guest code when it eventually finishes. The supervised runner also has a
+    // process-level hang guard for genuinely stuck compiler workers.
+    internal static string RunCompiledWithTimeout(Func<Assembly> compile, TimeSpan timeout, Action? cleanup = null)
     {
-        var assemblyName = $"test_{Guid.NewGuid():N}";
-
-        var lexer = new Lexer(source);
-        var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens, decoratorMode);
-        var statements = parser.ParseOrThrow();
-
-        var checker = new TypeChecker();
-        checker.SetDecoratorMode(decoratorMode);
-        var typeMap = checker.Check(statements);
-
-        var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
-        var deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
-
-        var compiler = new ILCompiler(assemblyName);
-        compiler.SetDecoratorMode(decoratorMode);
-        compiler.Compile(statements, typeMap, deadCodeInfo);
-
-        // Skip the disk roundtrip — load the assembly straight from the in-memory PE bytes.
-        var bytes = compiler.SaveToBytes();
-
-        // Systemic guardrail (#886): with SHARPTS_VERIFY_COMPILED=1, run ILVerify on every
-        // in-process compiled program so the whole compiled-mode suite becomes a provable check
-        // for IL-correctness regressions (stale _stackType, double-box, etc.). Opt-in because the
-        // suite may still contain pre-existing unverifiable-but-runnable programs that need triage
-        // before this can be enabled by default.
-        if (Environment.GetEnvironmentVariable("SHARPTS_VERIFY_COMPILED") == "1")
+        Assembly? assembly = null;
+        int expired = 0;
+        // Compilation and guest execution are synchronous CPU/blocking work.
+        // Keep them off the shared pool used by Promise/task continuations;
+        // otherwise a parallel suite can make live promises look quiescent.
+        var task = Task.Factory.StartNew(() =>
         {
-            var verifyErrors = VerifyILBytes(bytes)
-                .Where(e => !e.Contains("Failed to load assembly"))
-                .ToList();
-            if (verifyErrors.Count > 0)
-                throw new InvalidOperationException(
-                    "IL verification failed for compiled program:\n  " + string.Join("\n  ", verifyErrors));
-        }
-
-        var assembly = Assembly.Load(bytes);
-        var programType = assembly.GetType("$Program")
-            ?? throw new InvalidOperationException("Compiled assembly has no $Program type");
-        var mainMethod = programType.GetMethod("Main", BindingFlags.Public | BindingFlags.Static)
-            ?? throw new InvalidOperationException("$Program has no public static Main method");
-
-        // Run on a worker so we can enforce a timeout. AsyncLocal flows into Task.Run,
-        // so the redirector's capture buffer follows the test through the task boundary.
-        var task = Task.Run(() =>
-        {
-            using var capture = AsyncLocalConsoleRedirector.Capture();
-            // The compiled Main installs an event-loop SynchronizationContext on
-            // this thread; restore the previous one so it doesn't leak onto the
-            // recycled Task.Run pool thread and disturb a sibling test.
-            var prevCtx = System.Threading.SynchronizationContext.Current;
+            var previousContext = SynchronizationContext.Current;
             try
             {
-                mainMethod.Invoke(null, null);
-            }
-            catch (TargetInvocationException tie) when (tie.InnerException is not null)
-            {
-                ExceptionDispatchInfo.Capture(tie.InnerException).Throw();
+                var loaded = compile();
+                Volatile.Write(ref assembly, loaded);
+                if (Volatile.Read(ref expired) != 0) return string.Empty;
+                using var capture = AsyncLocalConsoleRedirector.Capture();
+                var main = loaded.GetType("$Program")?.GetMethod("Main", BindingFlags.Public | BindingFlags.Static)
+                    ?? throw new InvalidOperationException("Compiled assembly has no public $Program.Main method");
+                try { main.Invoke(null, null); }
+                catch (TargetInvocationException exception) when (exception.InnerException is not null)
+                { ExceptionDispatchInfo.Capture(exception.InnerException).Throw(); }
+                return capture.GetOutput().Replace("\r\n", "\n");
             }
             finally
             {
-                System.Threading.SynchronizationContext.SetSynchronizationContext(prevCtx);
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+                cleanup?.Invoke();
             }
-            return capture.GetOutput().Replace("\r\n", "\n");
-        });
-
+        }, CancellationToken.None, TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
         try
         {
-            if (task.Wait(timeout))
-                return task.Result;
-
-            // Cooperatively cancel: the compiled $Runtime polls _cancelRequested at every
-            // loop backedge (issue #74). Tripping it lets a runaway loop unwind itself
-            // without orphan-threading the testhost. Best-effort wait for the unwind so
-            // the worker thread doesn't stay pinned, but always surface a TimeoutException
-            // to callers — that's the contract the subprocess path established and tests
-            // assert against.
-            try
-            {
-                var cancelField = assembly.GetType("$Runtime")?.GetField("_cancelRequested",
-                    BindingFlags.Public | BindingFlags.Static);
-                cancelField?.SetValue(null, true);
-            }
-            catch { /* best-effort */ }
-
-            try { task.Wait(TimeSpan.FromSeconds(2)); } catch { /* ignore — we're throwing TimeoutException anyway */ }
-
-            throw new TimeoutException(
-                $"Compiled program execution exceeded {timeout.TotalSeconds}s timeout. " +
-                "This likely indicates an infinite loop bug (e.g., Promise double-wrapping in async iterators).");
+            if (task.Wait(timeout)) return task.GetAwaiter().GetResult();
         }
-        catch (AggregateException ex) when (ex.InnerExceptions.Count == 1)
+        catch (AggregateException) { return task.GetAwaiter().GetResult(); }
+
+        Interlocked.Exchange(ref expired, 1);
+        try
         {
-            // Unwrap so Assert.Throws<SpecificException> still works.
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException!).Throw();
-            throw; // unreachable
+            Volatile.Read(ref assembly)?.GetType("$Runtime")?
+                .GetField("_cancelRequested", BindingFlags.Public | BindingFlags.Static)?.SetValue(null, true);
         }
+        catch { /* cancellation is best effort; preserve the timeout */ }
+        try { task.Wait(TimeSpan.FromSeconds(2)); } catch (AggregateException) { }
+        _ = task.ContinueWith(static completed => _ = completed.Exception,
+            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        throw new TimeoutException($"Compilation/execution exceeded {timeout.TotalSeconds}s timeout.");
     }
 
     /// <summary>
@@ -543,21 +538,9 @@ public static class TestHarness
                     psi.ArgumentList.Add(arg);
             }
 
-            using var process = Process.Start(psi)!;
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            var errorTask = process.StandardError.ReadToEndAsync();
-
-            // Use timeout to catch infinite loop bugs
-            if (!process.WaitForExit((int)timeout.TotalMilliseconds))
-            {
-                ProcessTreeTermination.Terminate(process);
-                throw new TimeoutException(
-                    $"Compiled program execution exceeded {timeout.TotalSeconds}s timeout. " +
-                    "This likely indicates an infinite loop bug (e.g., Promise double-wrapping in async iterators).");
-            }
-
-            var output = outputTask.Result;
-            var error = errorTask.Result;
+            var process = TestProcess.Run(psi, timeout);
+            var output = process.StandardOutput;
+            var error = process.StandardError;
 
             if (process.ExitCode != 0)
             {
@@ -727,19 +710,9 @@ public static class TestHarness
             WorkingDirectory = workingDir
         };
 
-        using var process = Process.Start(psi)!;
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
-
-        if (!process.WaitForExit((int)DefaultTimeout.TotalMilliseconds))
-        {
-            ProcessTreeTermination.Terminate(process);
-            throw new TimeoutException(
-                $"Compiled DLL execution exceeded {DefaultTimeout.TotalSeconds}s timeout.");
-        }
-
-        var output = outputTask.Result;
-        var error = errorTask.Result;
+        var process = TestProcess.Run(psi, DefaultTimeout);
+        var output = process.StandardOutput;
+        var error = process.StandardError;
 
         if (process.ExitCode != 0)
         {
@@ -926,12 +899,10 @@ public static class TestHarness
     /// </summary>
     private static string RunModulesCompiledInProcessOnDisk(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null, bool allowTypeErrors = false)
     {
-        var effectiveTimeout = timeout ?? DefaultTimeout;
         var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_module_test_{Guid.NewGuid()}");
-        Directory.CreateDirectory(tempDir);
-
-        try
+        return RunCompiledWithTimeout(() =>
         {
+            Directory.CreateDirectory(tempDir);
             foreach (var (path, content) in files)
             {
                 var fullPath = Path.Combine(tempDir, path.TrimStart('.', '/', '\\'));
@@ -959,53 +930,17 @@ public static class TestHarness
             compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
 
             var bytes = compiler.SaveToBytes();
-            var assembly = Assembly.Load(bytes);
-            var programType = assembly.GetType("$Program")
-                ?? throw new InvalidOperationException("Compiled assembly has no $Program type");
-            var mainMethod = programType.GetMethod("Main", BindingFlags.Public | BindingFlags.Static)
-                ?? throw new InvalidOperationException("$Program has no public static Main method");
-
-            var task = Task.Run(() =>
-            {
-                using var capture = AsyncLocalConsoleRedirector.Capture();
-                var prevCtx = System.Threading.SynchronizationContext.Current;
-                try { mainMethod.Invoke(null, null); }
-                catch (TargetInvocationException tie) when (tie.InnerException is not null)
-                {
-                    ExceptionDispatchInfo.Capture(tie.InnerException).Throw();
-                }
-                finally { System.Threading.SynchronizationContext.SetSynchronizationContext(prevCtx); }
-                return capture.GetOutput().Replace("\r\n", "\n");
-            });
-
-            try
-            {
-                if (task.Wait(effectiveTimeout))
-                    return task.Result;
-                throw new TimeoutException(
-                    $"Compiled module execution exceeded {effectiveTimeout.TotalSeconds}s timeout.");
-            }
-            catch (AggregateException ex) when (ex.InnerExceptions.Count == 1)
-            {
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException!).Throw();
-                throw;
-            }
-        }
-        finally
+            return Assembly.Load(bytes);
+        }, timeout ?? DefaultTimeout, cleanup: () =>
         {
             try { Directory.Delete(tempDir, true); } catch { /* ignore cleanup errors */ }
-        }
+        });
     }
 
     private static string RunModulesCompiledInProcess(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null, bool allowTypeErrors = false)
-    {
-        var effectiveTimeout = timeout ?? DefaultTimeout;
-        // In-memory virtual file system — see BuildVirtualModuleFs and the comment on
-        // RunModulesInterpreted for the rationale.
-        var (virtualFiles, entryPath) = BuildVirtualModuleFs(files, entryPoint);
-
-        try
+        => RunCompiledWithTimeout(() =>
         {
+            var (virtualFiles, entryPath) = BuildVirtualModuleFs(files, entryPoint);
             var assemblyName = $"test_modules_{Guid.NewGuid():N}";
 
             var resolver = new ModuleResolver(entryPath, virtualFiles);
@@ -1023,64 +958,8 @@ public static class TestHarness
             compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
 
             var bytes = compiler.SaveToBytes();
-            var assembly = Assembly.Load(bytes);
-            var programType = assembly.GetType("$Program")
-                ?? throw new InvalidOperationException("Compiled assembly has no $Program type");
-            var mainMethod = programType.GetMethod("Main", BindingFlags.Public | BindingFlags.Static)
-                ?? throw new InvalidOperationException("$Program has no public static Main method");
-
-            var task = Task.Run(() =>
-            {
-                using var capture = AsyncLocalConsoleRedirector.Capture();
-                // The compiled Main installs an event-loop SynchronizationContext on
-                // this thread; restore the previous one so it doesn't leak onto the
-                // recycled Task.Run pool thread and disturb a sibling test.
-                var prevCtx = System.Threading.SynchronizationContext.Current;
-                try
-                {
-                    mainMethod.Invoke(null, null);
-                }
-                catch (TargetInvocationException tie) when (tie.InnerException is not null)
-                {
-                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(tie.InnerException).Throw();
-                }
-                finally
-                {
-                    System.Threading.SynchronizationContext.SetSynchronizationContext(prevCtx);
-                }
-                return capture.GetOutput().Replace("\r\n", "\n");
-            });
-
-            try
-            {
-                if (task.Wait(effectiveTimeout))
-                    return task.Result;
-
-                try
-                {
-                    var cancelField = assembly.GetType("$Runtime")?.GetField("_cancelRequested",
-                        BindingFlags.Public | BindingFlags.Static);
-                    cancelField?.SetValue(null, true);
-                }
-                catch { /* best-effort */ }
-
-                try { task.Wait(TimeSpan.FromSeconds(2)); } catch { /* surfacing TimeoutException below */ }
-
-                throw new TimeoutException(
-                    $"Compiled module execution exceeded {effectiveTimeout.TotalSeconds}s timeout. " +
-                    "This likely indicates an infinite loop bug.");
-            }
-            catch (AggregateException ex) when (ex.InnerExceptions.Count == 1)
-            {
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException!).Throw();
-                throw;
-            }
-        }
-        finally
-        {
-            // No-op: virtual file system, nothing to clean on disk.
-        }
-    }
+            return Assembly.Load(bytes);
+        }, timeout ?? DefaultTimeout);
 
     /// <summary>
     /// Subprocess fallback for <see cref="RunModulesCompiled"/>. Used when a module's source
@@ -1180,22 +1059,9 @@ public static class TestHarness
                 WorkingDirectory = tempDir
             };
 
-            using var process = Process.Start(psi)!;
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            var errorTask = process.StandardError.ReadToEndAsync();
-
-            if (!process.WaitForExit((int)DefaultTimeout.TotalMilliseconds))
-            {
-                var partialOut = outputTask.IsCompleted ? outputTask.Result : "(reading)";
-                var partialErr = errorTask.IsCompleted ? errorTask.Result : "(reading)";
-                ProcessTreeTermination.Terminate(process);
-                throw new TimeoutException(
-                    $"Compiled module execution exceeded {DefaultTimeout.TotalSeconds}s timeout. " +
-                    $"Stdout: [{partialOut}] Stderr: [{partialErr}]");
-            }
-
-            var output = outputTask.Result;
-            var error = errorTask.Result;
+            var process = TestProcess.Run(psi, DefaultTimeout);
+            var output = process.StandardOutput;
+            var error = process.StandardError;
 
             if (process.ExitCode != 0)
             {
@@ -1425,10 +1291,9 @@ public static class TestHarness
                 WorkingDirectory = tempDir
             };
 
-            using var process = Process.Start(psi)!;
-            var output = process.StandardOutput.ReadToEnd();
-            var error = process.StandardError.ReadToEnd();
-            process.WaitForExit();
+            var process = TestProcess.Run(psi, DefaultTimeout);
+            var output = process.StandardOutput;
+            var error = process.StandardError;
 
             if (process.ExitCode != 0)
             {

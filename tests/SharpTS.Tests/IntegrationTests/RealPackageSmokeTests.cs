@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using SharpTS.Runtime;
+using SharpTS.Testing;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -104,17 +104,8 @@ public class NpmFixture : IDisposable
             WorkingDirectory = workingDir
         };
 
-        using var process = Process.Start(psi)!;
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-
-        if (!process.WaitForExit(timeoutMs))
-        {
-            ProcessTreeTermination.Terminate(process);
-            throw new TimeoutException($"{fileName} {arguments} exceeded {timeoutMs}ms");
-        }
-
-        return (process.ExitCode, stdoutTask.Result, stderrTask.Result);
+        var process = TestProcess.Run(psi, TimeSpan.FromMilliseconds(timeoutMs));
+        return (process.ExitCode, process.StandardOutput, process.StandardError);
     }
 }
 

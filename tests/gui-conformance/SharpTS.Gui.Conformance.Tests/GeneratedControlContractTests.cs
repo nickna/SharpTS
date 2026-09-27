@@ -1,3 +1,4 @@
+using SharpTS.Testing;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -79,9 +80,8 @@ public sealed class GeneratedControlContractTests
         var start = new ProcessStartInfo("dotnet") { WorkingDirectory = root, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(generator);
         start.ArgumentList.Add("verify");
-        using Process process = Process.Start(start)!;
-        string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-        process.WaitForExit();
+        var process = TestProcess.Run(start, TimeSpan.FromSeconds(30), "GUI control generator verify");
+        string output = process.StandardOutput + process.StandardError;
         Assert.True(process.ExitCode == 0, output);
     }
 

@@ -1,6 +1,6 @@
+using SharpTS.Testing;
 using System.Diagnostics;
 using System.Reflection;
-using SharpTS.Runtime;
 
 namespace SharpTS.Tests.IntegrationTests;
 
@@ -41,22 +41,8 @@ public static class CliTestHelper
             WorkingDirectory = workingDirectory
         };
 
-        using var process = Process.Start(psi)!;
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-
-        if (!process.WaitForExit((int)effectiveTimeout.TotalMilliseconds))
-        {
-            ProcessTreeTermination.Terminate(process);
-            throw new TimeoutException(
-                $"CLI execution exceeded {effectiveTimeout.TotalSeconds}s timeout. " +
-                $"Arguments: {arguments}");
-        }
-
-        var stdout = stdoutTask.Result;
-        var stderr = stderrTask.Result;
-
-        return new CliResult(process.ExitCode, NormalizeOutput(stdout), NormalizeOutput(stderr));
+        var result = TestProcess.Run(psi, effectiveTimeout, $"CLI execution: {arguments}");
+        return new CliResult(result.ExitCode, NormalizeOutput(result.StandardOutput), NormalizeOutput(result.StandardError));
     }
 
     /// <summary>

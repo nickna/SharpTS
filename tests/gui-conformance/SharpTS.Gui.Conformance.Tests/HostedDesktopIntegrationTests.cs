@@ -1,10 +1,12 @@
+using SharpTS.Testing;
+using Xunit.Abstractions;
 using System.Diagnostics;
 using System.Text.Json;
 using Xunit;
 
 namespace SharpTS.Gui.Conformance.Tests;
 
-public sealed class HostedDesktopIntegrationTests
+public sealed class HostedDesktopIntegrationTests(ITestOutputHelper testOutput)
 {
     [Fact]
     public async Task ManagedHostedCompilation_CoLocatesHostedAbiSidecar()
@@ -45,22 +47,9 @@ public sealed class HostedDesktopIntegrationTests
             startInfo.ArgumentList.Add("-o");
             startInfo.ArgumentList.Add(outputPath);
 
-            using Process process = Process.Start(startInfo)
-                ?? throw new InvalidOperationException("Could not start the managed hosted compiler.");
-            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
-            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            try
-            {
-                await process.WaitForExitAsync(timeout.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                process.Kill(entireProcessTree: true);
-                throw new TimeoutException("Managed hosted compilation exceeded 30 seconds.");
-            }
-            string stdout = await stdoutTask;
-            string stderr = await stderrTask;
+            var process = await TestProcess.RunAsync(startInfo, TimeSpan.FromSeconds(30));
+            string stdout = process.StandardOutput;
+            string stderr = process.StandardError;
 
             Assert.True(process.ExitCode == 0,
                 $"Hosted compilation failed with {process.ExitCode}.{Environment.NewLine}" +
@@ -73,7 +62,7 @@ public sealed class HostedDesktopIntegrationTests
         }
         finally
         {
-            Directory.Delete(stageDirectory, recursive: true);
+            await TestDirectory.TryDeleteAsync(stageDirectory, testOutput.WriteLine);
         }
     }
 
@@ -111,23 +100,9 @@ public sealed class HostedDesktopIntegrationTests
         startInfo.ArgumentList.Add("--trace");
         startInfo.ArgumentList.Add(tracePath);
 
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Could not start the GUI host.");
-        Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
-        Task<string> stderrTask = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"GUI {mode} headless host exceeded 30 seconds.");
-        }
-
-        string stdout = await stdoutTask;
-        string stderr = await stderrTask;
+        var process = await TestProcess.RunAsync(startInfo, TimeSpan.FromSeconds(30));
+        string stdout = process.StandardOutput;
+        string stderr = process.StandardError;
         Assert.True(process.ExitCode == 0,
             $"GUI {mode} host failed with {process.ExitCode}.{Environment.NewLine}" +
             $"stdout:{Environment.NewLine}{stdout}{Environment.NewLine}stderr:{Environment.NewLine}{stderr}");
@@ -225,23 +200,9 @@ public sealed class HostedDesktopIntegrationTests
         startInfo.ArgumentList.Add("--trace");
         startInfo.ArgumentList.Add(tracePath);
 
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Could not start the GUI host.");
-        Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
-        Task<string> stderrTask = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"GUI {scenario} close scenario exceeded 30 seconds.");
-        }
-
-        string stdout = await stdoutTask;
-        string stderr = await stderrTask;
+        var process = await TestProcess.RunAsync(startInfo, TimeSpan.FromSeconds(30));
+        string stdout = process.StandardOutput;
+        string stderr = process.StandardError;
         Assert.True(process.ExitCode == 0,
             $"GUI {scenario} close failed with {process.ExitCode}.{Environment.NewLine}" +
             $"stdout:{Environment.NewLine}{stdout}{Environment.NewLine}stderr:{Environment.NewLine}{stderr}");
@@ -301,14 +262,9 @@ public sealed class HostedDesktopIntegrationTests
                 startInfo.ArgumentList.Add(Path.Combine(blocker, "trace.json"));
             }
 
-            using var process = Process.Start(startInfo)
-                ?? throw new InvalidOperationException("Could not start the GUI host.");
-            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
-            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            await process.WaitForExitAsync(timeout.Token);
-            string stdout = await stdoutTask;
-            string stderr = await stderrTask;
+            var process = await TestProcess.RunAsync(startInfo, TimeSpan.FromSeconds(30));
+            string stdout = process.StandardOutput;
+            string stderr = process.StandardError;
 
             Assert.Equal(0, process.ExitCode);
             Assert.DoesNotContain("SharpTS GUI Interpreted trace:", stdout, StringComparison.Ordinal);
@@ -319,7 +275,7 @@ public sealed class HostedDesktopIntegrationTests
         }
         finally
         {
-            Directory.Delete(stage, recursive: true);
+            await TestDirectory.TryDeleteAsync(stage, testOutput.WriteLine);
         }
     }
 
@@ -411,13 +367,9 @@ public sealed class HostedDesktopIntegrationTests
                 compile.ArgumentList.Add("--quiet");
                 compile.ArgumentList.Add("-o");
                 compile.ArgumentList.Add(Path.Combine(stageDirectory, "SharpTS.Gui.Guest.dll"));
-                using var compileProcess = Process.Start(compile)
-                    ?? throw new InvalidOperationException("Could not start the GUI guest compiler.");
-                Task<string> compileStdoutTask = compileProcess.StandardOutput.ReadToEndAsync();
-                Task<string> compileStderrTask = compileProcess.StandardError.ReadToEndAsync();
-                await compileProcess.WaitForExitAsync();
-                string compileStdout = await compileStdoutTask;
-                string compileStderr = await compileStderrTask;
+                var compileProcess = await TestProcess.RunAsync(compile, TimeSpan.FromSeconds(30), "GUI guest compiler");
+                string compileStdout = compileProcess.StandardOutput;
+                string compileStderr = compileProcess.StandardError;
                 Assert.True(compileProcess.ExitCode == 0,
                     $"Hosted top-level-await compilation failed with {compileProcess.ExitCode}." +
                     $"{Environment.NewLine}stdout:{Environment.NewLine}{compileStdout}" +
@@ -438,22 +390,9 @@ public sealed class HostedDesktopIntegrationTests
             startInfo.ArgumentList.Add("--trace");
             startInfo.ArgumentList.Add(tracePath);
 
-            using var process = Process.Start(startInfo)
-                ?? throw new InvalidOperationException("Could not start the GUI host.");
-            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
-            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            try
-            {
-                await process.WaitForExitAsync(timeout.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                process.Kill(entireProcessTree: true);
-                throw new TimeoutException("Hosted top-level-await scenario exceeded 30 seconds.");
-            }
-            string stdout = await stdoutTask;
-            string stderr = await stderrTask;
+            var process = await TestProcess.RunAsync(startInfo, TimeSpan.FromSeconds(30));
+            string stdout = process.StandardOutput;
+            string stderr = process.StandardError;
 
             Assert.True(process.ExitCode == 0,
                 $"Hosted top-level await failed with {process.ExitCode}.{Environment.NewLine}" +
@@ -497,9 +436,7 @@ public sealed class HostedDesktopIntegrationTests
         }
         finally
         {
-            try { Directory.Delete(stageDirectory, recursive: true); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            await TestDirectory.TryDeleteAsync(stageDirectory, testOutput.WriteLine);
         }
     }
 

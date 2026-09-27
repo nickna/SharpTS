@@ -1,3 +1,4 @@
+using SharpTS.Testing;
 using System.Diagnostics;
 using SharpTS.Runtime;
 using System.Reflection.Metadata;
@@ -212,17 +213,10 @@ public class CliManifestTests(ExternalAssemblyFixture fixture)
             UseShellExecute = false,
             WorkingDirectory = workingDirectory ?? Path.GetDirectoryName(dllPath)!
         };
-        using var process = Process.Start(psi)!;
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        if (!process.WaitForExit(TimeSpan.FromSeconds(60)))
-        {
-            ProcessTreeTermination.Terminate(process);
-            throw new TimeoutException($"Compiled program timed out: {dllPath}");
-        }
+        var result = TestProcess.Run(psi, TimeSpan.FromSeconds(60));
         return new CliTestHelper.CliResult(
-            process.ExitCode,
-            CliTestHelper.NormalizeOutput(stdout),
-            CliTestHelper.NormalizeOutput(stderr));
+            result.ExitCode,
+            CliTestHelper.NormalizeOutput(result.StandardOutput),
+            CliTestHelper.NormalizeOutput(result.StandardError));
     }
 }

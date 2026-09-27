@@ -1,3 +1,4 @@
+using SharpTS.Testing;
 using Xunit;
 
 namespace SharpTS.Tests.IntegrationTests;
@@ -29,11 +30,8 @@ public class CliVarTests
             WorkingDirectory = tempDir.Path
         };
 
-        using var process = System.Diagnostics.Process.Start(psi)!;
-        var stdOut = process.StandardOutput.ReadToEnd();
-        var stdErr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        return (process.ExitCode, stdOut + stdErr);
+        var result = TestProcess.Run(psi, CliTestHelper.DefaultTimeout);
+        return (result.ExitCode, result.StandardOutput + result.StandardError);
     }
 
     [Fact]

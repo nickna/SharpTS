@@ -1,3 +1,4 @@
+using SharpTS.Testing;
 using System.Diagnostics;
 using System.Text.Json;
 using Xunit;
@@ -194,23 +195,9 @@ public sealed class RetainedRendererIntegrationTests
         startInfo.ArgumentList.Add("--trace");
         startInfo.ArgumentList.Add(tracePath);
 
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Could not start the GUI host.");
-        Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
-        Task<string> stderrTask = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"GUI {mode} headless host exceeded 30 seconds.");
-        }
-
-        string stdout = await stdoutTask;
-        string stderr = await stderrTask;
+        var process = await TestProcess.RunAsync(startInfo, TimeSpan.FromSeconds(30));
+        string stdout = process.StandardOutput;
+        string stderr = process.StandardError;
         Assert.True(process.ExitCode == 0,
             $"GUI {mode} host failed with {process.ExitCode}.{Environment.NewLine}" +
             $"stdout:{Environment.NewLine}{stdout}{Environment.NewLine}stderr:{Environment.NewLine}{stderr}");
