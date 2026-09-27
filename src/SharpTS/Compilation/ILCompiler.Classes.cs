@@ -74,6 +74,11 @@ public partial class ILCompiler
             return;
         }
 
+        // Ambient declarations describe types but have no runtime class or emitted bodies.
+        // Decorated external mappings above still participate in type resolution.
+        if (classStmt.IsDeclare)
+            return;
+
         // Plain methods need the same shared function environment as free functions when a nested
         // closure captures a method-local binding.
         RegisterSyncMethodFunctionDisplayClasses(classStmt.Methods, qualifiedClassName);

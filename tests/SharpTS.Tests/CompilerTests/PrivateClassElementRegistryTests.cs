@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Compilation;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
@@ -70,6 +71,31 @@ public sealed class PrivateClassElementRegistryTests
         var independent = new PrivateClassElementRegistry();
         Assert.False(independent.TryGet("C", out _));
         independent.CompleteEmission();
+    }
+
+    [Fact]
+    public void AmbientClassesDoNotRequireRuntimeBodiesInSingleFileCompilation()
+    {
+        const string source = """
+            declare class Ambient {}
+            class C { #value = 42; read() { return this.#value; } }
+            console.log(new C().read());
+            """;
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+        Assert.Empty(errors);
+        Assert.Equal("42\n", output);
+    }
+
+    [Fact]
+    public void AmbientClassesDoNotRequireRuntimeBodiesInModuleCompilation()
+    {
+        Dictionary<string, string> files = new()
+        {
+            ["types.ts"] = "declare class Ambient {} export const value = 42;",
+            ["main.ts"] = "import { value } from './types'; class C { #value = value; read() { return this.#value; } } console.log(new C().read());"
+        };
+        Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+        Assert.Equal("42\n", TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled));
     }
 
     private static void DeclareEmpty(PrivateClassElementRegistry registry, string name, TypeBuilder owner)
