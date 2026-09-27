@@ -9,6 +9,38 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class PrivateClassElementRegistryTests
 {
     [Fact]
+    public void GenericBridgeRejectsForeignOwnerAndRequiresItsStorageBody()
+    {
+        var module = new PersistedAssemblyBuilder(new AssemblyName(Guid.NewGuid().ToString("N")), typeof(object).Assembly)
+            .DefineDynamicModule("Main");
+        var owner = module.DefineType("Box", TypeAttributes.Public);
+        owner.DefineGenericParameters("T");
+        var foreign = module.DefineType("Other", TypeAttributes.Public);
+        foreign.DefineGenericParameters("T");
+        var contract = module.DefineType("PrivateBox", TypeAttributes.Interface | TypeAttributes.Abstract);
+        var getter = contract.DefineMethod("GetStorage", MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Abstract,
+            typeof(object), Type.EmptyTypes);
+        var implementation = owner.DefineMethod("GetStorage", MethodAttributes.Private | MethodAttributes.Virtual | MethodAttributes.Final,
+            typeof(object), Type.EmptyTypes);
+        var storage = owner.DefineField("brand", typeof(object), FieldAttributes.Static);
+        var bridge = new PrivateInstanceBridge(contract, getter, implementation, new Dictionary<string, MethodInfo>());
+        var registry = new PrivateClassElementRegistry();
+        var foreignStorage = foreign.DefineField("brand", typeof(object), FieldAttributes.Static);
+        Assert.Throws<InvalidOperationException>(() => registry.Declare("Other", foreign, foreignStorage, ["value"],
+            new Dictionary<string, FieldBuilder>(), new Dictionary<string, MethodBuilder>(), new Dictionary<string, MethodBuilder>(), bridge));
+        Assert.False(registry.TryGet("Other", out _));
+        registry.Declare("Box", owner, storage, ["value"], new Dictionary<string, FieldBuilder>(),
+            new Dictionary<string, MethodBuilder>(), new Dictionary<string, MethodBuilder>(), bridge);
+        Assert.Throws<NotSupportedException>(() => ((IDictionary<string, MethodInfo>)bridge.Methods).Clear());
+        Assert.Throws<InvalidOperationException>(() => registry.MarkBodiesEmitted("Box"));
+        implementation.GetILGenerator().Emit(OpCodes.Ldnull);
+        implementation.GetILGenerator().Emit(OpCodes.Ret);
+        registry.MarkBodiesEmitted("Box");
+        registry.CompleteEmission();
+        Assert.Same(bridge, registry.Require("Box").InstanceBridge);
+    }
+
+    [Fact]
     public void DeclarationSnapshotsPreserveForwardReferencesAndRequireCompleteBodies()
     {
         var registry = new PrivateClassElementRegistry();

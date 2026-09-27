@@ -490,7 +490,8 @@ public partial class ILCompiler
             // Use Assembly (internal) visibility so nested async/generator state machines can access this method
             var methodBuilder = typeBuilder.DefineMethod(
                 $"__private_{methodName}",
-                MethodAttributes.Assembly | MethodAttributes.HideBySig,
+                MethodAttributes.Assembly | MethodAttributes.HideBySig
+                    | (typeBuilder.IsGenericTypeDefinition ? MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.NewSlot : 0),
                 returnType,
                 paramTypes
             );
@@ -517,8 +518,35 @@ public partial class ILCompiler
             privateStaticMethods.Add(methodName, methodBuilder);
         }
 
+        var instanceBridge = typeBuilder.IsGenericTypeDefinition && privateStorage is not null
+            ? DefinePrivateInstanceBridge(typeBuilder, privateStorage, privateMethods) : null;
         _classes.PrivateElements.Declare(className, typeBuilder, privateStorage,
-            privateFieldNames, privateStaticFields, privateMethods, privateStaticMethods);
+            privateFieldNames, privateStaticFields, privateMethods, privateStaticMethods, instanceBridge);
+    }
+
+    private PrivateInstanceBridge DefinePrivateInstanceBridge(TypeBuilder owner, FieldBuilder storage,
+        IReadOnlyDictionary<string, MethodBuilder> methods)
+    {
+        var contract = _moduleBuilder.DefineType($"<>Private_{owner.Name}",
+            TypeAttributes.NotPublic | TypeAttributes.Interface | TypeAttributes.Abstract);
+        const MethodAttributes attributes = MethodAttributes.Public | MethodAttributes.Abstract | MethodAttributes.Virtual | MethodAttributes.NewSlot;
+        var getter = contract.DefineMethod("GetStorage", attributes, storage.FieldType, Type.EmptyTypes);
+        Dictionary<string, MethodInfo> declarations = new(StringComparer.Ordinal);
+        foreach (var (name, method) in methods)
+            declarations.Add(name, contract.DefineMethod(method.Name, attributes, method.ReturnType,
+                method.GetParameters().Select(p => p.ParameterType).ToArray()));
+        EmitTypeDefinitions.AddInterfaceImplementation(owner, contract);
+        var implementation = owner.DefineMethod("<>GetPrivateStorage",
+            MethodAttributes.Private | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.NewSlot,
+            storage.FieldType, Type.EmptyTypes);
+        var il = implementation.GetILGenerator();
+        il.Emit(OpCodes.Ldsfld, EmitterTypeHelpers.SelfFieldReference(storage));
+        il.Emit(OpCodes.Ret);
+        owner.DefineMethodOverride(implementation, getter);
+        foreach (var (name, method) in methods)
+            owner.DefineMethodOverride(method, declarations[name]);
+        contract.CreateType();
+        return new PrivateInstanceBridge(contract, getter, implementation, declarations);
     }
 
     /// <summary>

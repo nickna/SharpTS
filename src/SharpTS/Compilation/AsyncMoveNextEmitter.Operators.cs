@@ -117,6 +117,8 @@ public partial class AsyncMoveNextEmitter
 
     protected override void EmitGetPrivate(Expr.GetPrivate gp)
     {
+        if (TryEmitGenericPrivateGet(gp))
+            return;
         // Get the field name without the # prefix
         string fieldName = gp.Name.Lexeme;
         if (fieldName.StartsWith('#'))
@@ -186,6 +188,8 @@ public partial class AsyncMoveNextEmitter
 
     protected override void EmitSetPrivate(Expr.SetPrivate sp)
     {
+        if (TryEmitGenericPrivateSet(sp, SpillBoxed))
+            return;
         // Get the field name without the # prefix
         string fieldName = sp.Name.Lexeme;
         if (fieldName.StartsWith('#'))
@@ -268,6 +272,8 @@ public partial class AsyncMoveNextEmitter
 
     protected override void EmitCallPrivate(Expr.CallPrivate cp)
     {
+        if (TryEmitGenericPrivateCall(cp, SpillBoxed))
+            return;
         // Get the method name without the # prefix
         string methodName = cp.Name.Lexeme;
         if (methodName.StartsWith('#'))

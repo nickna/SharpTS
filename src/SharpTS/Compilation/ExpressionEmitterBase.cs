@@ -996,6 +996,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitGetPrivate(Expr.GetPrivate gp)
     {
+        if (TryEmitGenericPrivateGet(gp))
+            return;
         string fieldName = gp.Name.Lexeme;
         if (fieldName.StartsWith('#'))
             fieldName = fieldName[1..];
@@ -1064,6 +1066,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitSetPrivate(Expr.SetPrivate sp)
     {
+        if (TryEmitGenericPrivateSet(sp))
+            return;
         string fieldName = sp.Name.Lexeme;
         if (fieldName.StartsWith('#'))
             fieldName = fieldName[1..];
@@ -1144,6 +1148,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitCallPrivate(Expr.CallPrivate cp)
     {
+        if (TryEmitGenericPrivateCall(cp))
+            return;
         string methodName = cp.Name.Lexeme;
         if (methodName.StartsWith('#'))
             methodName = methodName[1..];
