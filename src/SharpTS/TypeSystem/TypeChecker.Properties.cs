@@ -377,8 +377,8 @@ public partial class TypeChecker
         {
             TypeCategory.TypeParameter when objType is TypeInfo.TypeParameter tp =>
                 CheckGetOnTypeParameter(tp, get.Name),
-            TypeCategory.Class when objType is TypeInfo.Class classType =>
-                CheckGetOnClass(classType, get.Name),
+            TypeCategory.Class when objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric =>
+                CheckGetOnClass(objType, get.Name),
             TypeCategory.Instance when objType is TypeInfo.Instance instance =>
                 CheckGetOnInstance(instance, get.Name),
             TypeCategory.Interface when objType is TypeInfo.Interface itf =>
@@ -1208,9 +1208,9 @@ public partial class TypeChecker
         }
 
         // Handle Class type - check static members
-        if (objType is TypeInfo.Class classType)
+        if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
         {
-            return CheckGetOnClass(classType, memberName);
+            return CheckGetOnClass(objType, memberName);
         }
 
         // Handle Instance type - check instance members

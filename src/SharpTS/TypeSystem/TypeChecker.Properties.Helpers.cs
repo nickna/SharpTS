@@ -123,7 +123,7 @@ public partial class TypeChecker
     /// <summary>
     /// Type checks static member access on a class type (Foo.staticProp).
     /// </summary>
-    private TypeInfo CheckGetOnClass(TypeInfo.Class classType, Token memberName)
+    private TypeInfo CheckGetOnClass(TypeInfo classType, Token memberName)
     {
         TypeInfo? current = classType;
         while (current != null)

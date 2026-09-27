@@ -66,4 +66,17 @@ public sealed class GenericStaticFieldModuleTests
         Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
     }
 
+
+    [Theory]
+    [InlineData("const Box = class<T> { private static count: number = 4; }; console.log(Box.count);")]
+    [InlineData("const Box = class<T> { protected static count: number = 4; }; console.log(Box.count);")]
+    [InlineData("const Box = class<T> { static count: number = 4; }; const text: string = Box.count;")]
+    [InlineData("const Outer = class Box<T> { protected static count: number = 4; }; const Other = class Box<T> { static read(): number { return Outer.count; } };")]
+    [InlineData("class Box<T> { private static count: number = 4; } console.log(Box.count);")]
+    public void GenericStaticReadsPreserveTypeAndDeclarationAccess(string source)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Throws<TypeCheckDiagnosticException>(() => TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
+    }
+
 }
