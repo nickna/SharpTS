@@ -76,9 +76,23 @@ public abstract partial class ExpressionEmitterBase
             arguments.Add(spill(argument));
         IL.Emit(OpCodes.Ldloc, receiver);
         IL.Emit(OpCodes.Castclass, bridge.InterfaceType);
-        foreach (var argument in arguments)
-            IL.Emit(OpCodes.Ldloc, argument);
-        EmitPrivateCallUndefinedPadding(call.Arguments.Count, method.GetParameters().Length);
+        var parameters = method.GetParameters();
+        bool hasRest = parameters.Length > 0 && parameters[^1].ParameterType == typeof(List<object>);
+        int regularCount = parameters.Length - (hasRest ? 1 : 0);
+        for (int i = 0; i < Math.Min(arguments.Count, regularCount); i++)
+            IL.Emit(OpCodes.Ldloc, arguments[i]);
+        EmitPrivateCallUndefinedPadding(arguments.Count, regularCount);
+        if (hasRest)
+        {
+            IL.Emit(OpCodes.Ldc_I4, Math.Max(0, arguments.Count - regularCount));
+            IL.Emit(OpCodes.Newobj, Ctx.Runtime!.ArrayStorage.RestCtor);
+            for (int i = regularCount; i < arguments.Count; i++)
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldloc, arguments[i]);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.ArrayStorage.AppendRest);
+            }
+        }
         IL.Emit(OpCodes.Callvirt, method);
         SetStackUnknown();
         return true;

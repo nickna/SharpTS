@@ -5,6 +5,56 @@ namespace SharpTS.Tests.CompilerTests;
 
 public class GenericPrivateOwnerTests
 {
+    [Fact]
+    public void PrivateRestArgumentsRejectWrongElementTypes()
+    {
+        const string invalid = "class Box<T> { #sum(...rest: number[]) { return rest.length; } read() { return this.#sum(1, 'wrong'); } }";
+        var error = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(invalid));
+        Assert.Contains("expected 'number'", error.Message);
+    }
+
+    [Fact]
+    public void PrivateRestArgumentsPreserveDefaultsAndNestedCalls()
+    {
+        const string source = """
+            class Box<T> {
+                #sum(first: number = 10, ...rest: number[]) { return first + ":" + rest.join(","); }
+                read() { return this.#sum(); }
+                closure() { const f = () => this.#sum(1, 2, 3); return f(); }
+                *values() { yield this.#sum(4, 5, 6); }
+            }
+            const box = new Box<number>();
+            console.log(box.read());
+            console.log(box.closure());
+            console.log(box.values().next().value);
+            """;
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+        Assert.Empty(errors);
+        Assert.Equal("10:\n1:2,3\n4:5,6\n", output);
+    }
+
+    [Fact]
+    public void PrivateRestArgumentsAreEvaluatedOnceAndPackedAfterSuspension()
+    {
+        const string source = """
+            let order = "";
+            function value(n: number) { order += n; return n; }
+            class Box<T> {
+                #sum(first: any, ...rest: any[]) { return first + ":" + rest.join(","); }
+                async read() {
+                    console.log(this.#sum(value(1)));
+                    return this.#sum(value(2), value(3), await new Promise(resolve => setTimeout(() => resolve(value(4)), 1)));
+                }
+            }
+            const box = new Box<number>();
+            async function main() { console.log(await box.read()); console.log(order); }
+            main();
+            """;
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+        Assert.Empty(errors);
+        Assert.Equal("1:\n2:3,4\n1234\n", output);
+    }
+
     [Theory]
     [InlineData("read() { const f = () => this.#read(); return f(); }", "console.log(new Box<number>(42).read());")]
     [InlineData("async read() { await Promise.resolve(0); return this.#read(); }", "const box = new Box<number>(42); async function main() { console.log(await box.read()); } main();")]

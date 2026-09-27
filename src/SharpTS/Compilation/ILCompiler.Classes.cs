@@ -484,7 +484,8 @@ public partial class ILCompiler
             if (methodName.StartsWith('#'))
                 methodName = methodName[1..];
 
-            var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
+            var paramTypes = method.Parameters.Select(p =>
+                typeBuilder.IsGenericTypeDefinition && p.IsRest ? typeof(List<object>) : typeof(object)).ToArray();
             Type returnType = ResolvePrivateMethodReturnType(method, isStatic: false);
 
             // Use Assembly (internal) visibility so nested async/generator state machines can access this method
