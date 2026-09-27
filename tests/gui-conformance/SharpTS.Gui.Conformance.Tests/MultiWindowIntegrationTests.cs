@@ -1,3 +1,5 @@
+using SharpTS.Testing;
+using Xunit.Abstractions;
 using System.Diagnostics;
 using System.Text.Json;
 using Xunit;
@@ -5,7 +7,7 @@ using Xunit;
 namespace SharpTS.Gui.Conformance.Tests;
 
 [Collection(DesktopRendererCollection.Name)]
-public sealed class MultiWindowIntegrationTests
+public sealed class MultiWindowIntegrationTests(ITestOutputHelper testOutput)
 {
     [Fact]
     public async Task OwnedWindowsAndIsolatedFailuresMatchInBothGuestModes()
@@ -66,8 +68,7 @@ public sealed class MultiWindowIntegrationTests
         }
         finally
         {
-            if (Directory.Exists(temporaryRoot))
-                Directory.Delete(temporaryRoot, recursive: true);
+            await TestDirectory.TryDeleteAsync(temporaryRoot, testOutput.WriteLine);
         }
     }
 
@@ -88,15 +89,10 @@ public sealed class MultiWindowIntegrationTests
         start.ArgumentList.Add("--trace");
         start.ArgumentList.Add(tracePath);
 
-        using var process = Process.Start(start)
-            ?? throw new InvalidOperationException("Could not start the multi-window GUI host.");
-        Task<string> stdout = process.StandardOutput.ReadToEndAsync();
-        Task<string> stderr = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await process.WaitForExitAsync(timeout.Token);
+        var process = await TestProcess.RunAsync(start, TimeSpan.FromSeconds(30), $"Multi-window GUI {mode}");
         Assert.True(process.ExitCode == 0,
             $"GUI {mode} multi-window host failed with {process.ExitCode}.\n" +
-            $"stdout:\n{await stdout}\nstderr:\n{await stderr}");
+            $"stdout:\n{process.StandardOutput}\nstderr:\n{process.StandardError}");
 
         using JsonDocument trace = JsonDocument.Parse(await File.ReadAllTextAsync(tracePath));
         return trace.RootElement.EnumerateArray()

@@ -22,6 +22,8 @@ internal static class Program
             {
                 [ParentMode] => RunParent(),
                 [ChildMode] => RunChild(),
+                ["output"] => RunOutput(),
+                ["orphan"] => RunOrphan(),
                 _ => ReportUsage()
             };
         }
@@ -48,6 +50,21 @@ internal static class Program
     {
         Thread.Sleep(Timeout.Infinite);
         return 0;
+    }
+
+    private static int RunOutput()
+    {
+        // More than an OS pipe buffer, with stdout held open until stderr drains.
+        Console.Error.Write(new string('e', 256 * 1024));
+        Console.Out.Write("stdout without a final newline");
+        return 7;
+    }
+
+    private static int RunOrphan()
+    {
+        using Process child = Process.Start(CreateSelfStartInfo(ChildMode))!;
+        Console.WriteLine($"CHILD:{child.Id}");
+        return 0; // Child deliberately retains our inherited output handles.
     }
 
     private static ProcessStartInfo CreateSelfStartInfo(string mode)

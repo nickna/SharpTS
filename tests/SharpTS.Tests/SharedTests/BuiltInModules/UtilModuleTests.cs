@@ -1,3 +1,4 @@
+using SharpTS.Testing;
 using System.Diagnostics;
 using SharpTS.Compilation;
 using SharpTS.Modules;
@@ -1482,9 +1483,9 @@ public class UtilModuleTests
                 WorkingDirectory = tempDir
             };
 
-            using var process = Process.Start(psi)!;
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit(30000);
+            var result = TestProcess.Run(psi, TestHarness.DefaultTimeout);
+            Assert.True(result.ExitCode == 0, result.StandardError);
+            var output = result.StandardOutput;
 
             Assert.Equal("true\ntrue\ntrue\n", output.Replace("\r\n", "\n"));
         }
@@ -1545,9 +1546,9 @@ public class UtilModuleTests
                 WorkingDirectory = tempDir
             };
 
-            using var process = Process.Start(psi)!;
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit(30000);
+            var result = TestProcess.Run(psi, TestHarness.DefaultTimeout);
+            Assert.True(result.ExitCode == 0, result.StandardError);
+            var output = result.StandardOutput;
 
             Assert.Equal("true\ntrue\ntrue\ntrue\n", output.Replace("\r\n", "\n"));
         }

@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using SharpTS.Runtime;
+using SharpTS.Testing;
 using Xunit;
 
 namespace SharpTS.Tests.IntegrationTests;
@@ -52,15 +52,7 @@ public class CliWorkerThreadsTests
             WorkingDirectory = workingDirectory
         };
 
-        using var process = Process.Start(startInfo)!;
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(60_000))
-        {
-            ProcessTreeTermination.Terminate(process);
-            throw new TimeoutException("Compiled worker host did not exit within 60 seconds.");
-        }
-
-        return (process.ExitCode, stdoutTask.Result + stderrTask.Result);
+        var process = TestProcess.Run(startInfo, TimeSpan.FromSeconds(60));
+        return (process.ExitCode, process.StandardOutput + process.StandardError);
     }
 }

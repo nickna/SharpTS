@@ -1,6 +1,7 @@
 #pragma warning disable SHARPTS_HOSTING001
 
 using SharpTS.Hosting;
+using System.Diagnostics;
 
 namespace SharpTS.Tests.Hosting;
 
@@ -120,18 +121,28 @@ internal sealed class DeterministicHostDispatcher : ISharpTSHostDispatcher
             _nowTicks = checked(_nowTicks + duration.Ticks);
     }
 
-    public void RunUntil(Func<bool> condition, int maximumTurns = 10_000)
+    public void RunUntil(Func<bool> condition, int maximumTurns = 10_000, TimeSpan? timeout = null)
     {
-        for (int turn = 0; turn < maximumTurns && !condition(); turn++)
+        var clock = Stopwatch.StartNew();
+        TimeSpan budget = timeout ?? TimeSpan.FromSeconds(5);
+        int turns = 0;
+        while (!condition())
         {
+            if (turns >= maximumTurns)
+                throw new TimeoutException($"Deterministic dispatcher exceeded {maximumTurns} turns.");
+            if (clock.Elapsed >= budget)
+                throw new TimeoutException($"Deterministic dispatcher exceeded {budget.TotalSeconds}s while waiting for work.");
             if (RunNext())
+            {
+                turns++;
                 continue;
+            }
             if (AdvanceToNextScheduled())
                 continue;
-            Thread.Yield();
+            // An external Task can post later. Empty polls are not dispatcher
+            // turns, and a tight Yield loop can exhaust 10,000 polls in milliseconds.
+            Thread.Sleep(1);
         }
-        if (!condition())
-            throw new TimeoutException($"Deterministic dispatcher exceeded {maximumTurns} turns.");
     }
 
     public void RunUntilIdle(int maximumTurns = 10_000)

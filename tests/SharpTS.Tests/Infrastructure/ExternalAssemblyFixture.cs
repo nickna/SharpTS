@@ -1,5 +1,5 @@
+using SharpTS.Testing;
 using System.Diagnostics;
-using SharpTS.Runtime;
 using Xunit;
 
 namespace SharpTS.Tests.Infrastructure;
@@ -145,19 +145,10 @@ public sealed class ExternalAssemblyFixture : IDisposable
             RedirectStandardError = true,
             UseShellExecute = false
         };
-        using var process = Process.Start(psi)!;
-        string stdout = process.StandardOutput.ReadToEnd();
-        string stderr = process.StandardError.ReadToEnd();
-        if (!process.WaitForExit(TimeSpan.FromMinutes(5)))
-        {
-            ProcessTreeTermination.Terminate(process);
-            throw new TimeoutException($"'dotnet {arguments}' timed out in {workingDirectory}");
-        }
-        if (process.ExitCode != 0)
-        {
+        var result = TestProcess.Run(psi, TimeSpan.FromMinutes(5), $"dotnet {arguments} in {workingDirectory}");
+        if (result.ExitCode != 0)
             throw new InvalidOperationException(
-                $"'dotnet {arguments}' failed ({process.ExitCode}) in {workingDirectory}:\n{stdout}\n{stderr}");
-        }
+                $"'dotnet {arguments}' failed ({result.ExitCode}) in {workingDirectory}:\n{result.StandardOutput}\n{result.StandardError}");
     }
 
     public void Dispose()

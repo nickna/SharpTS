@@ -17,8 +17,9 @@ async function settled(driver: DesktopTestDriver): Promise<void> {
     await new Promise<void>((resolve) => setTimeout(() => resolve(), 500));
     await rendered(driver);
 }
-export async function runPresentationChecks(app: DesktopApplication): Promise<void> {
+export async function runPresentationChecks(app: DesktopApplication, selectedTheme?: "light" | "dark"): Promise<void> {
     for (const theme of ["light", "dark"] as const) {
+        if (selectedTheme !== undefined && theme !== selectedTheme) continue;
         let window: DesktopWindow;
         window = app.createWindow(
             <SharpPaintShowcase

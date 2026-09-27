@@ -1,3 +1,4 @@
+using SharpTS.Testing;
 using System.Diagnostics;
 using Xunit;
 
@@ -66,12 +67,8 @@ public sealed class GuiJsxDeclarationTests
         start.ArgumentList.Add(bridge);
         start.ArgumentList.Add("--noEmit");
 
-        using var process = Process.Start(start)
-            ?? throw new InvalidOperationException("Could not start the SharpTS JSX checker.");
-        string stdout = await process.StandardOutput.ReadToEndAsync();
-        string stderr = await process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return new ProcessResult(process.ExitCode, stdout + stderr);
+        var process = await TestProcess.RunAsync(start, TimeSpan.FromSeconds(30), "GUI JSX checker");
+        return new ProcessResult(process.ExitCode, process.StandardOutput + process.StandardError);
     }
 
     private static string FindRepositoryRoot()

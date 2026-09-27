@@ -1,10 +1,12 @@
+using SharpTS.Testing;
+using Xunit.Abstractions;
 using System.Diagnostics;
 using Xunit;
 
 namespace SharpTS.Gui.Conformance.Tests;
 
 [Collection(DesktopRendererCollection.Name)]
-public sealed class VisualRegressionIntegrationTests
+public sealed class VisualRegressionIntegrationTests(ITestOutputHelper testOutput)
 {
     [Fact]
     public async Task HeadlessHost_CapturesAndVerifiesSkiaPngBaseline()
@@ -23,7 +25,6 @@ public sealed class VisualRegressionIntegrationTests
             "VisualRegression",
             "main.tsx");
         string temporaryRoot = Path.Combine(Path.GetTempPath(), $"sharpts-gui-visual-{Guid.NewGuid():N}");
-        Process? process = null;
         try
         {
             CopyDirectory(hostSource, temporaryRoot);
@@ -43,32 +44,18 @@ public sealed class VisualRegressionIntegrationTests
             start.ArgumentList.Add("--mode");
             start.ArgumentList.Add("interpreted");
             start.ArgumentList.Add("--headless");
-            process = Process.Start(start)
-                ?? throw new InvalidOperationException("Could not start the visual-regression GUI host.");
-            Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
-            Task<string> errorTask = process.StandardError.ReadToEndAsync();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            await process.WaitForExitAsync(timeout.Token);
-            string output = await outputTask;
-            string errors = await errorTask;
+            var process = await TestProcess.RunAsync(start, TimeSpan.FromSeconds(30), "Visual regression GUI host");
+            string output = process.StandardOutput;
+            string errors = process.StandardError;
             Assert.True(process.ExitCode == 0,
                 $"Visual-regression host failed with {process.ExitCode}.\nstdout:\n{output}\nstderr:\n{errors}");
             Assert.Contains("VISUAL_SNAPSHOT_", output, StringComparison.Ordinal);
-            byte[] png = await File.ReadAllBytesAsync(Path.Combine(temporaryRoot, "visual-baseline.png"), timeout.Token);
+            byte[] png = await File.ReadAllBytesAsync(Path.Combine(temporaryRoot, "visual-baseline.png"));
             Assert.True(png.AsSpan().StartsWith(new byte[] { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a }));
         }
         finally
         {
-            if (process is not null)
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                    await process.WaitForExitAsync();
-                }
-                process.Dispose();
-            }
-            if (Directory.Exists(temporaryRoot)) Directory.Delete(temporaryRoot, recursive: true);
+            await TestDirectory.TryDeleteAsync(temporaryRoot, testOutput.WriteLine);
         }
     }
 

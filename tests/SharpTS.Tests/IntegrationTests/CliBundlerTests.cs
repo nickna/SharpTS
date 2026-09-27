@@ -1,3 +1,4 @@
+using SharpTS.Testing;
 using PEPacker.Bundling;
 using Xunit;
 
@@ -58,11 +59,10 @@ public class CliBundlerTests
             WorkingDirectory = tempDir.Path
         };
 
-        using var process = System.Diagnostics.Process.Start(psi)!;
-        var output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
+        var result = TestProcess.Run(psi, CliTestHelper.DefaultTimeout);
+        var output = result.StandardOutput;
 
-        Assert.Equal(0, process.ExitCode);
+        Assert.True(result.ExitCode == 0, result.StandardError);
         Assert.Contains("Hello, World!", output);
     }
 
@@ -123,11 +123,10 @@ public class CliBundlerTests
             WorkingDirectory = tempDir.Path
         };
 
-        using var process = System.Diagnostics.Process.Start(psi)!;
-        var output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
+        var result = TestProcess.Run(psi, CliTestHelper.DefaultTimeout);
+        var output = result.StandardOutput;
 
-        Assert.Equal(0, process.ExitCode);
+        Assert.True(result.ExitCode == 0, result.StandardError);
         Assert.Contains("Hello, World!", output);
     }
 
@@ -153,11 +152,10 @@ public class CliBundlerTests
             WorkingDirectory = tempDir.Path
         };
 
-        using var process = System.Diagnostics.Process.Start(psi)!;
-        var output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
+        var result = TestProcess.Run(psi, CliTestHelper.DefaultTimeout);
+        var output = result.StandardOutput;
 
-        Assert.Equal(0, process.ExitCode);
+        Assert.True(result.ExitCode == 0, result.StandardError);
         Assert.Contains("15", output); // 1+2+3+4+5 = 15
     }
 
@@ -268,11 +266,10 @@ public class CliBundlerTests
             WorkingDirectory = tempDir.Path
         };
 
-        using var process = System.Diagnostics.Process.Start(psi)!;
-        var output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
+        var result = TestProcess.Run(psi, CliTestHelper.DefaultTimeout);
+        var output = result.StandardOutput;
 
-        Assert.Equal(0, process.ExitCode);
+        Assert.True(result.ExitCode == 0, result.StandardError);
         Assert.Contains("Hello, World!", output);
     }
 

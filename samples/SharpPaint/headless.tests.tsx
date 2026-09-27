@@ -58,7 +58,14 @@ async function draw(): Promise<void> {
     await rendered();
 }
 async function run(): Promise<void> {
-    console.log("Starting workflows");
+    const scenario = process.env.SHARPAINT_TEST_SCENARIO || "all";
+    console.log("Starting workflows: " + scenario);
+    if (scenario === "light" || scenario === "dark") {
+        await runPresentationChecks(app, scenario);
+        console.log("SharpPaint headless workflows passed.");
+        return;
+    }
+    if (scenario !== "all" && scenario !== "editing") throw new Error("Unknown workflow: " + scenario);
     await rendered();
     await delay(100);
     console.log("Initial render ready");
@@ -265,7 +272,7 @@ async function run(): Promise<void> {
         "canceling Save As cancels document replacement",
         driver.getText("status") === "Recovered document · Save As to keep a new copy"
     );
-    await runPresentationChecks(app);
+    if (scenario === "all") await runPresentationChecks(app);
     console.log("SharpPaint headless workflows passed.");
 }
 setTimeout(() => {

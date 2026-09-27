@@ -1,3 +1,5 @@
+using SharpTS.Testing;
+using Xunit.Abstractions;
 using System.Diagnostics;
 using System.Text.Json;
 using Xunit;
@@ -5,7 +7,7 @@ using Xunit;
 namespace SharpTS.Gui.Conformance.Tests;
 
 [Collection(DesktopRendererCollection.Name)]
-public sealed class HotReloadIntegrationTests
+public sealed class HotReloadIntegrationTests(ITestOutputHelper testOutput)
 {
     [Fact]
     public async Task InterpretedWatch_RemountsFreshStateAfterSourceChange()
@@ -22,7 +24,6 @@ public sealed class HotReloadIntegrationTests
             repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.Conformance.Tests", "Fixtures", "HotReload", "main.tsx");
         string temporaryRoot = Path.Combine(
             Path.GetTempPath(), $"sharpts-gui-hot-reload-{Guid.NewGuid():N}");
-        Process? process = null;
         try
         {
             CopyDirectory(hostSource, temporaryRoot);
@@ -48,12 +49,9 @@ public sealed class HotReloadIntegrationTests
             start.ArgumentList.Add("--trace");
             start.ArgumentList.Add(tracePath);
 
-            process = Process.Start(start)
-                ?? throw new InvalidOperationException("Could not start the hot-reload GUI host.");
-            Task<string> stderr = process.StandardError.ReadToEndAsync();
+            await using var process = new TestProcess(start, TimeSpan.FromSeconds(30), "Hot reload GUI host");
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            string? readyLine = await process.StandardOutput.ReadLineAsync(timeout.Token);
-            Assert.Equal("HOT_RELOAD_VERSION_1", readyLine);
+            await process.WaitForOutputAsync("HOT_RELOAD_VERSION_1");
             Assert.False(process.HasExited, "Hot-reload host exited during initial mount.");
             string source = await File.ReadAllTextAsync(entry, timeout.Token);
             Assert.Contains("const version = 1", source, StringComparison.Ordinal);
@@ -62,12 +60,13 @@ public sealed class HotReloadIntegrationTests
                 source.Replace("const version = 1", "const version = 2", StringComparison.Ordinal),
                 timeout.Token);
             Assert.Contains("const version = 2", await File.ReadAllTextAsync(entry, timeout.Token), StringComparison.Ordinal);
-            await process.WaitForExitAsync(timeout.Token);
-            string output = readyLine + Environment.NewLine + await process.StandardOutput.ReadToEndAsync(timeout.Token);
-            string errors = await stderr;
+            var result = await process.WaitForExitAsync();
+            string output = result.StandardOutput;
+            string errors = result.StandardError;
+            testOutput.WriteLine(result.Timeline);
             string traceDebug = File.Exists(tracePath) ? await File.ReadAllTextAsync(tracePath) : "<missing>";
-            Assert.True(process.ExitCode == 0,
-                $"Hot-reload host failed with {process.ExitCode}.\nstdout:\n{output}\nstderr:\n{errors}\ntrace:\n{traceDebug}");
+            Assert.True(result.ExitCode == 0,
+                $"Hot-reload host failed with {result.ExitCode}.\nstdout:\n{output}\nstderr:\n{errors}\ntrace:\n{traceDebug}");
 
             using JsonDocument trace = JsonDocument.Parse(await File.ReadAllTextAsync(tracePath));
             string[] stages = trace.RootElement.EnumerateArray()
@@ -79,17 +78,7 @@ public sealed class HotReloadIntegrationTests
         }
         finally
         {
-            if (process is not null)
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                    await process.WaitForExitAsync();
-                }
-                process.Dispose();
-            }
-            if (Directory.Exists(temporaryRoot))
-                Directory.Delete(temporaryRoot, recursive: true);
+            await TestDirectory.TryDeleteAsync(temporaryRoot, testOutput.WriteLine);
         }
     }
 

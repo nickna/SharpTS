@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using SharpTS.Runtime;
+using SharpTS.Testing;
 using Xunit;
 
 namespace SharpTS.Tests.IntegrationTests;
@@ -137,19 +137,12 @@ public class CliShebangTests
         startInfo.Environment["PATH"] = launcherDirectory + System.IO.Path.PathSeparator
             + startInfo.Environment["PATH"];
 
-        using var process = Process.Start(startInfo)!;
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit((int)CliTestHelper.DefaultTimeout.TotalMilliseconds))
-        {
-            ProcessTreeTermination.Terminate(process);
-            throw new TimeoutException("Executable shebang example did not exit within 30 seconds.");
-        }
+        var process = TestProcess.Run(startInfo, CliTestHelper.DefaultTimeout);
 
         return new CliTestHelper.CliResult(
             process.ExitCode,
-            CliTestHelper.NormalizeOutput(stdoutTask.Result),
-            CliTestHelper.NormalizeOutput(stderrTask.Result));
+            CliTestHelper.NormalizeOutput(process.StandardOutput),
+            CliTestHelper.NormalizeOutput(process.StandardError));
     }
 
     private static CliTestHelper.CliResult RunDll(string dllPath, string workingDirectory)
@@ -162,18 +155,11 @@ public class CliShebangTests
             WorkingDirectory = workingDirectory
         };
 
-        using var process = Process.Start(startInfo)!;
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit((int)CliTestHelper.DefaultTimeout.TotalMilliseconds))
-        {
-            ProcessTreeTermination.Terminate(process);
-            throw new TimeoutException("Compiled shebang script did not exit within 30 seconds.");
-        }
+        var process = TestProcess.Run(startInfo, CliTestHelper.DefaultTimeout);
 
         return new CliTestHelper.CliResult(
             process.ExitCode,
-            CliTestHelper.NormalizeOutput(stdoutTask.Result),
-            CliTestHelper.NormalizeOutput(stderrTask.Result));
+            CliTestHelper.NormalizeOutput(process.StandardOutput),
+            CliTestHelper.NormalizeOutput(process.StandardError));
     }
 }

@@ -1,17 +1,17 @@
+using SharpTS.Testing;
+using Xunit.Abstractions;
 using System.Diagnostics;
 using System.Text.Json;
 using Xunit;
 
 namespace SharpTS.Gui.Conformance.Tests;
 
-public sealed class SharpPaintHeadlessTests
+public sealed class SharpPaintHeadlessTests(ITestOutputHelper testOutput)
 {
     private static readonly TimeSpan ModelTestTimeout = TimeSpan.FromSeconds(30);
-    // The workflow now includes both themes, compact layouts, and DPI transitions.
-    // Leave room for hosted Windows runners; this is a hang guard, not a benchmark.
+    // Each editing/theme scenario has its own guard and retained phase timings.
     private static readonly TimeSpan WorkflowTestTimeout = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan SmokeTestTimeout = TimeSpan.FromSeconds(90);
-    private static readonly TimeSpan ProcessCleanupTimeout = TimeSpan.FromSeconds(5);
 
     [Fact]
     public async Task ModelTestsPassThroughSharpTSInterpreter()
@@ -50,49 +50,27 @@ public sealed class SharpPaintHeadlessTests
         };
         start.ArgumentList.Add(compiler);
         start.ArgumentList.Add(Path.Combine(root, "samples", "SharpPaint", "document.tests.ts"));
-        using var process = Process.Start(start)
-            ?? throw new InvalidOperationException("Could not start the SharpPaint model tests.");
-        Task<string> stdout = process.StandardOutput.ReadToEndAsync();
-        Task<string> stderr = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(executionTimeout);
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException exception) when (timeout.IsCancellationRequested)
-        {
-            string diagnostics = await TerminateAndObserveProcessAsync(
-                process,
-                stdout,
-                stderr,
-                ProcessCleanupTimeout);
-            throw new TimeoutException(
-                $"SharpPaint model tests exceeded {executionTimeout.TotalSeconds:F0} seconds. {diagnostics}",
-                exception);
-        }
-
-        string output = await stdout;
-        string errors = await stderr;
+        var process = await TestProcess.RunAsync(start, executionTimeout, "SharpPaint model tests");
+        string output = process.StandardOutput;
+        string errors = process.StandardError;
         Assert.True(process.ExitCode == 0,
             $"SharpPaint model tests failed.{Environment.NewLine}{output}{Environment.NewLine}{errors}");
         return output;
     }
 
-    [Fact]
-    public async Task InteractionsPassInInterpretedAndCompiledModes()
+    [Theory]
+    [InlineData("interpreted", "editing", 2)]
+    [InlineData("compiled", "editing", 2)]
+    [InlineData("interpreted", "light", 3)]
+    [InlineData("compiled", "light", 3)]
+    [InlineData("interpreted", "dark", 3)]
+    [InlineData("compiled", "dark", 3)]
+    public async Task WorkflowsPass(string mode, string scenario, int expectedWindows)
     {
-        TraceEvent[] interpreted = await RunAsync("interpreted");
-        TraceEvent[] compiled = await RunAsync("compiled");
-
-        Assert.Single(interpreted, item => item.Stage == "guest-init-end");
-        Assert.Single(compiled, item => item.Stage == "guest-init-end");
-        Assert.Contains(interpreted, item => item.Stage == "headless-window-shown");
-        Assert.Contains(compiled, item => item.Stage == "headless-window-shown");
-        Assert.Equal(
-            interpreted.Count(item => item.Stage == "headless-window-shown"),
-            compiled.Count(item => item.Stage == "headless-window-shown"));
-        Assert.True(interpreted.Count(item => item.Stage == "render-commit") >= 8);
-        Assert.True(compiled.Count(item => item.Stage == "render-commit") >= 8);
+        TraceEvent[] events = await RunAsync(mode, scenario: scenario);
+        Assert.Single(events, item => item.Stage == "guest-init-end");
+        Assert.Equal(expectedWindows, events.Count(item => item.Stage == "headless-window-shown"));
+        Assert.True(events.Count(item => item.Stage == "render-commit") >= 8);
     }
 
     [Fact]
@@ -123,11 +101,12 @@ public sealed class SharpPaintHeadlessTests
         Assert.Contains("stderr:", exception.Message, StringComparison.Ordinal);
     }
 
-    private static async Task<TraceEvent[]> RunAsync(
+    private async Task<TraceEvent[]> RunAsync(
         string mode,
         string entryPoint = "headless.tests.tsx",
         bool smokeClose = false,
-        TimeSpan? executionTimeout = null)
+        TimeSpan? executionTimeout = null,
+        string scenario = "editing")
     {
         string root = FindRepositoryRoot();
 #if DEBUG
@@ -160,6 +139,7 @@ public sealed class SharpPaintHeadlessTests
             start.ArgumentList.Add(Path.Combine(stage, "SharpTS.Gui.Host.dll"));
             start.ArgumentList.Add("--mode");
             start.ArgumentList.Add(mode);
+            start.Environment["SHARPAINT_TEST_SCENARIO"] = scenario;
             start.Environment["SHARPAINT_STORAGE_DIRECTORY"] = Path.Combine(stage, "settings");
             start.ArgumentList.Add("--headless");
             start.ArgumentList.Add("--trace");
@@ -167,27 +147,11 @@ public sealed class SharpPaintHeadlessTests
             if (smokeClose)
                 start.Environment["SHARPTS_GUI_SMOKE_CLOSE"] = "1";
 
-            using var process = Process.Start(start)
-                ?? throw new InvalidOperationException("Could not start the SharpPaint Headless host.");
-            Task<string> stdout = process.StandardOutput.ReadToEndAsync();
-            Task<string> stderr = process.StandardError.ReadToEndAsync();
             TimeSpan limit = executionTimeout ?? (smokeClose ? SmokeTestTimeout : WorkflowTestTimeout);
-            using var timeout = new CancellationTokenSource(limit);
-            try { await process.WaitForExitAsync(timeout.Token); }
-            catch (OperationCanceledException exception) when (timeout.IsCancellationRequested)
-            {
-                string diagnostics = await TerminateAndObserveProcessAsync(
-                    process,
-                    stdout,
-                    stderr,
-                    ProcessCleanupTimeout);
-                throw new TimeoutException(
-                    $"SharpPaint {mode} Headless run exceeded {limit.TotalSeconds:F0} seconds. {diagnostics}",
-                    exception);
-            }
-
-            string output = await stdout;
-            string errors = await stderr;
+            var process = await TestProcess.RunAsync(start, limit, $"SharpPaint {mode} Headless run");
+            testOutput.WriteLine($"{mode} / {scenario}:\n{process.Timeline}");
+            string output = process.StandardOutput;
+            string errors = process.StandardError;
             Assert.True(process.ExitCode == 0,
                 $"SharpPaint {mode} Headless run failed with {process.ExitCode}.{Environment.NewLine}" +
                 $"stdout:{Environment.NewLine}{output}{Environment.NewLine}stderr:{Environment.NewLine}{errors}");
@@ -204,9 +168,7 @@ public sealed class SharpPaintHeadlessTests
         }
         finally
         {
-            try { Directory.Delete(stage, recursive: true); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            await TestDirectory.TryDeleteAsync(stage, testOutput.WriteLine);
         }
     }
 
@@ -220,107 +182,6 @@ public sealed class SharpPaintHeadlessTests
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Copy(file, target, true);
         }
-    }
-
-    private static async Task<string> TerminateAndObserveProcessAsync(
-        Process process,
-        Task<string> stdout,
-        Task<string> stderr,
-        TimeSpan timeout)
-    {
-        int processId = process.Id;
-        var cleanupNotes = new List<string>();
-
-        try
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-        }
-        catch (Exception exception) when (exception is
-            InvalidOperationException or
-            NotSupportedException or
-            System.ComponentModel.Win32Exception)
-        {
-            cleanupNotes.Add($"termination failed with {exception.GetType().Name}: {exception.Message}");
-        }
-
-        Task exit;
-        try
-        {
-            exit = process.WaitForExitAsync();
-        }
-        catch (Exception exception) when (exception is
-            InvalidOperationException or
-            System.ComponentModel.Win32Exception)
-        {
-            cleanupNotes.Add($"exit observation failed with {exception.GetType().Name}: {exception.Message}");
-            exit = Task.CompletedTask;
-        }
-
-        Task observation = Task.WhenAll(exit, stdout, stderr);
-        try
-        {
-            await observation.WaitAsync(timeout);
-        }
-        catch (TimeoutException)
-        {
-            cleanupNotes.Add($"cleanup did not complete within {timeout.TotalSeconds:F0} seconds");
-        }
-        catch (Exception exception)
-        {
-            cleanupNotes.Add($"cleanup observation failed with {exception.GetType().Name}: {exception.Message}");
-        }
-
-        if (!observation.IsCompleted)
-        {
-            _ = observation.ContinueWith(
-                static task => _ = task.Exception,
-                CancellationToken.None,
-                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
-        }
-
-        string notes = cleanupNotes.Count == 0 ? "cleanup completed" : string.Join("; ", cleanupNotes);
-        return $"PID {processId}; {DescribeExit(process)}; {notes}; " +
-            $"{DescribeOutput("stdout", stdout)}; {DescribeOutput("stderr", stderr)}";
-    }
-
-    private static string DescribeExit(Process process)
-    {
-        try
-        {
-            return process.HasExited
-                ? $"exited with code {process.ExitCode}"
-                : "still running";
-        }
-        catch (Exception exception) when (exception is
-            InvalidOperationException or
-            System.ComponentModel.Win32Exception)
-        {
-            return $"exit state unavailable ({exception.GetType().Name}: {exception.Message})";
-        }
-    }
-
-    private static string DescribeOutput(string name, Task<string> output)
-    {
-        if (output.IsCompletedSuccessfully)
-        {
-            string text = output.Result;
-            const int limit = 2_000;
-            if (text.Length > limit)
-                text = text[..limit] + "... <truncated>";
-            return $"{name}: {(string.IsNullOrWhiteSpace(text) ? "<empty>" : text.Trim())}";
-        }
-
-        if (output.IsCanceled)
-            return $"{name}: read canceled";
-        if (output.IsFaulted)
-        {
-            Exception exception = output.Exception!.GetBaseException();
-            return $"{name}: read failed with {exception.GetType().Name}: {exception.Message}";
-        }
-
-        return $"{name}: read did not complete";
     }
 
     private static string FindRepositoryRoot()

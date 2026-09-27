@@ -1,10 +1,12 @@
+using SharpTS.Testing;
+using Xunit.Abstractions;
 using System.Diagnostics;
 using System.Text.Json;
 using Xunit;
 
 namespace SharpTS.Gui.Conformance.Tests;
 
-public sealed class CalculatorHeadlessTests
+public sealed class CalculatorHeadlessTests(ITestOutputHelper testOutput)
 {
     [Fact]
     public async Task CalculatorInteractionsPassInInterpretedAndCompiledModes()
@@ -21,7 +23,7 @@ public sealed class CalculatorHeadlessTests
             compiled.Count(item => item.Stage == "render-commit"));
     }
 
-    private static async Task<TraceEvent[]> RunAsync(string mode)
+    private async Task<TraceEvent[]> RunAsync(string mode)
     {
         string root = FindRepositoryRoot();
 #if DEBUG
@@ -59,20 +61,9 @@ public sealed class CalculatorHeadlessTests
             start.ArgumentList.Add("--trace");
             start.ArgumentList.Add(tracePath);
 
-            using var process = Process.Start(start)
-                ?? throw new InvalidOperationException("Could not start the Calculator Headless host.");
-            Task<string> stdout = process.StandardOutput.ReadToEndAsync();
-            Task<string> stderr = process.StandardError.ReadToEndAsync();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            try { await process.WaitForExitAsync(timeout.Token); }
-            catch (OperationCanceledException)
-            {
-                process.Kill(entireProcessTree: true);
-                throw new TimeoutException($"Calculator {mode} Headless run exceeded 30 seconds.");
-            }
-
-            string output = await stdout;
-            string errors = await stderr;
+            var process = await TestProcess.RunAsync(start, TimeSpan.FromSeconds(30), $"Calculator {mode} Headless run");
+            string output = process.StandardOutput;
+            string errors = process.StandardError;
             Assert.True(process.ExitCode == 0,
                 $"Calculator {mode} Headless run failed with {process.ExitCode}.{Environment.NewLine}" +
                 $"stdout:{Environment.NewLine}{output}{Environment.NewLine}stderr:{Environment.NewLine}{errors}");
@@ -86,9 +77,7 @@ public sealed class CalculatorHeadlessTests
         }
         finally
         {
-            try { Directory.Delete(stage, recursive: true); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            await TestDirectory.TryDeleteAsync(stage, testOutput.WriteLine);
         }
     }
 
