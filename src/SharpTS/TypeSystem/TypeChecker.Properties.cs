@@ -812,10 +812,21 @@ public partial class TypeChecker
             TypeInfo? current = objType;
             while (current != null)
             {
+                var staticMethods = GetStaticMethods(current);
+                if (staticMethods != null && staticMethods.TryGetValue(set.Name.Lexeme, out var staticMethodType))
+                {
+                    EnforceStaticMemberAccess(current, set.Name);
+                    TypeInfo methodValueType = CheckExpr(set.Value);
+                    if (!IsCompatible(staticMethodType, methodValueType))
+                        throw new TypeCheckException($" Cannot assign '{methodValueType}' to static method '{set.Name.Lexeme}' of type '{staticMethodType}'.", tsCode: "TS2322");
+                    return methodValueType;
+                }
                 var staticProps = GetStaticProperties(current);
                 if (staticProps != null && staticProps.TryGetValue(set.Name.Lexeme, out var staticPropType))
                 {
                     EnforceStaticMemberAccess(current, set.Name);
+                    if (ClassInfoAccessor.Get(current, c => c.Core.StaticReadonlyFields, gc => gc.Core.StaticReadonlyFields)?.Contains(set.Name.Lexeme) == true)
+                        throw new TypeCheckException($" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.", tsCode: "TS2540");
                     TypeInfo valueType = CheckExpr(set.Value);
                     if (!IsCompatible(staticPropType, valueType))
                     {

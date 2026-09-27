@@ -368,6 +368,7 @@ public abstract record TypeInfo
         public Dictionary<string, AccessModifier> FieldAccess { get; } = [];
         public Dictionary<string, AccessModifier> StaticFieldAccess { get; } = [];
         public HashSet<string> ReadonlyFields { get; } = [];
+        public HashSet<string> StaticReadonlyFields { get; } = [];
         public Dictionary<string, TypeInfo> Getters { get; } = [];
         public Dictionary<string, TypeInfo> Setters { get; } = [];
         public Dictionary<string, TypeInfo> FieldTypes { get; } = [];
@@ -420,7 +421,8 @@ public abstract record TypeInfo
                 SymbolIndexType,
                 DeclarationId,
                 StaticMethodAccess.Count > 0 ? StaticMethodAccess.ToFrozenDictionary() : null,
-                StaticFieldAccess.Count > 0 ? StaticFieldAccess.ToFrozenDictionary() : null);
+                StaticFieldAccess.Count > 0 ? StaticFieldAccess.ToFrozenDictionary() : null,
+                StaticReadonlyFields.ToFrozenSet());
             return _frozenCore;
         }
 

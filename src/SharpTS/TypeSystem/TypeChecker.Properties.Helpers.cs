@@ -169,7 +169,8 @@ public partial class TypeChecker
             return;
 
         var declName = GetClassName(declaringClass);
-        if (access == AccessModifier.Private && _currentClass?.Name != declName)
+        var declaringId = EnumerateClassCores(declaringClass).First().DeclarationId;
+        if (access == AccessModifier.Private && _currentClass?.Core.DeclarationId != declaringId)
         {
             throw new TypeCheckException($" Property '{memberName.Lexeme}' is private and only accessible within class '{declName}'.", tsCode: "TS2341");
         }
@@ -177,9 +178,8 @@ public partial class TypeChecker
         {
             // Generic definitions and instantiated generic bases participate in
             // the same lexical access check as ordinary class declarations.
-            for (TypeInfo? current = _currentClass; current != null; current = GetSuperclass(current))
-                if (GetClassName(current) == declName)
-                    return;
+            if (_currentClass != null && SourceDerivesFromDeclaration(_currentClass, declaringId))
+                return;
             throw new TypeCheckException($" Property '{memberName.Lexeme}' is protected and only accessible within class '{declName}' and its subclasses.", tsCode: "TS2445");
         }
     }
