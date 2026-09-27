@@ -69,7 +69,7 @@ public partial class ILCompiler
         public Dictionary<string, FieldBuilder> InstanceFieldsField { get; } = [];
         public HashSet<Stmt.Class> CompactStorageClasses { get; } =
             new(ReferenceEqualityComparer.Instance);
-        public Dictionary<string, GenericTypeParameterBuilder[]> GenericParams { get; } = [];
+        public ClassGenericParameterRegistry GenericParameters { get; } = new();
 
         public PrivateClassElementRegistry PrivateElements { get; } = new();
 
@@ -402,7 +402,6 @@ public partial class ILCompiler
         public Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> Getters { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> Setters { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, ConstructorBuilder> Constructors { get; } = new(ReferenceEqualityComparer.Instance);
-        public Dictionary<Expr.ClassExpr, GenericTypeParameterBuilder[]> GenericParams { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, string?> Superclass { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, string> EnclosingClass { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>> CaptureFields { get; } = new(ReferenceEqualityComparer.Instance);

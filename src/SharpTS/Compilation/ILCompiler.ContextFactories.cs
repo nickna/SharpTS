@@ -206,7 +206,7 @@ public partial class ILCompiler
         ctx.ClassExprStaticFields = _classExprs.StaticFields;
         ctx.ClassExprStaticMethods = _classExprs.StaticMethods;
         ctx.ClassExprConstructors = _classExprs.Constructors;
-        ctx.ClassExprGenericParams = _classExprs.GenericParams;
+        ctx.ClassGenericParameters = _classes.GenericParameters;
         ctx.ClassExprSuperclass = _classExprs.Superclass;
         ctx.UnionGenerator = _unionGenerator;
         // Entry-point display class for captured top-level variables

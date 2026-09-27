@@ -132,7 +132,7 @@ public partial class ILEmitter
     private void EmitTypedClassConstruction(TypeBuilder typeBuilder, ConstructorBuilder ctorBuilder, string resolvedClassName, Expr.New n)
     {
         var genericParams = _ctx.ClassRegistry!.GetGenericParams(resolvedClassName);
-        bool isGeneric = genericParams != null && genericParams.Length > 0;
+        bool isGeneric = genericParams != null && genericParams.Count > 0;
 
         // Generic class with inferred type arguments (e.g. `new Box(5)` for `class Box<T>`).
         // Emitting Newobj against the open generic TypeDef throws TypeLoadException at load
@@ -202,7 +202,7 @@ public partial class ILEmitter
     /// </summary>
     private void EmitInferredGenericClassConstruction(
         TypeBuilder typeBuilder, ConstructorBuilder ctorBuilder,
-        GenericTypeParameterBuilder[] genericParams, Expr.New n)
+        IReadOnlyList<GenericTypeParameterBuilder> genericParams, Expr.New n)
     {
         var openParams = ctorBuilder.GetParameters();
 
@@ -228,7 +228,7 @@ public partial class ILEmitter
 
         // 2. Bind each type parameter from a constructor parameter that is exactly that
         //    type parameter (the open ctor's parameter types reference the generic params).
-        var inferred = new Type?[genericParams.Length];
+        var inferred = new Type?[genericParams.Count];
         for (int p = 0; p < openParams.Length && p < argSlots.Count; p++)
         {
             var pt = openParams[p].ParameterType;
@@ -285,8 +285,8 @@ public partial class ILEmitter
     /// </summary>
     private void EmitTypedClassExprConstruction(Expr.ClassExpr classExpr, ConstructorBuilder classExprCtor, Expr.New n)
     {
-        var genericParams = _ctx.ClassExprGenericParams?.GetValueOrDefault(classExpr);
-        bool isGeneric = genericParams != null && genericParams.Length > 0;
+        var genericParams = _ctx.ClassGenericParameters!.Require((TypeBuilder)classExprCtor.DeclaringType!);
+        bool isGeneric = genericParams != null && genericParams.Count > 0;
 
         if (isGeneric && _ctx.ClassExprBuilders != null
             && _ctx.ClassExprBuilders.TryGetValue(classExpr, out var classExprTypeBuilder))
