@@ -422,11 +422,11 @@ public partial class ILCompiler
         var instancePrivateMethods = classStmt.Methods.Where(m => m.IsPrivate && !m.IsStatic && m.Name.Lexeme != "constructor").ToList();
         var staticPrivateMethods = classStmt.Methods.Where(m => m.IsPrivate && m.IsStatic).ToList();
 
-        // Initialize tracking dictionaries
-        _classes.PrivateFieldNames[className] = [];
-        _classes.StaticPrivateFields[className] = [];
-        _classes.PrivateMethods[className] = [];
-        _classes.StaticPrivateMethods[className] = [];
+        FieldBuilder? privateStorage = null;
+        List<string> privateFieldNames = [];
+        Dictionary<string, FieldBuilder> privateStaticFields = new(StringComparer.Ordinal);
+        Dictionary<string, MethodBuilder> privateMethods = new(StringComparer.Ordinal);
+        Dictionary<string, MethodBuilder> privateStaticMethods = new(StringComparer.Ordinal);
 
         // The table is also the per-instance brand for private methods.  A class with only
         // private methods still needs an entry for each constructed instance so brand checks
@@ -442,7 +442,7 @@ public partial class ILCompiler
                 cwtType,
                 FieldAttributes.Assembly | FieldAttributes.Static | FieldAttributes.InitOnly
             );
-            _classes.PrivateFieldStorage[className] = storageField;
+            privateStorage = storageField;
 
             // Track private field names for initialization (preserve declaration order)
             foreach (var field in instancePrivateFields)
@@ -451,7 +451,7 @@ public partial class ILCompiler
                 string fieldName = field.Name.Lexeme;
                 if (fieldName.StartsWith('#'))
                     fieldName = fieldName[1..];
-                _classes.PrivateFieldNames[className].Add(fieldName);
+                privateFieldNames.Add(fieldName);
             }
         }
 
@@ -469,7 +469,7 @@ public partial class ILCompiler
                 typeof(object),
                 FieldAttributes.Assembly | FieldAttributes.Static
             );
-            _classes.StaticPrivateFields[className][fieldName] = staticField;
+            privateStaticFields.Add(fieldName, staticField);
         }
 
         // Define private instance methods
@@ -489,7 +489,7 @@ public partial class ILCompiler
                 returnType,
                 paramTypes
             );
-            _classes.PrivateMethods[className][methodName] = methodBuilder;
+            privateMethods.Add(methodName, methodBuilder);
         }
 
         // Define static private methods
@@ -509,8 +509,11 @@ public partial class ILCompiler
                 returnType,
                 paramTypes
             );
-            _classes.StaticPrivateMethods[className][methodName] = methodBuilder;
+            privateStaticMethods.Add(methodName, methodBuilder);
         }
+
+        _classes.PrivateElements.Declare(className, typeBuilder, privateStorage,
+            privateFieldNames, privateStaticFields, privateMethods, privateStaticMethods);
     }
 
     /// <summary>
