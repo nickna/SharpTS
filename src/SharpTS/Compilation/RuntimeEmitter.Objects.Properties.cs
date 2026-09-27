@@ -7,6 +7,63 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private LocalBuilder EmitStaticMethodLookupOwner(ILGenerator il, LocalBuilder owner, Type userClassInterface)
+    {
+        var methodOwnerLocal = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Ldloc, owner);
+        il.Emit(OpCodes.Stloc, methodOwnerLocal);
+        // TypeScript class type parameters are erased for static members.
+        // Reflect over the object-instantiated owner without changing the
+        // constructor value used as the descriptor/prototype identity.
+        var methodOwnerReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, methodOwnerLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "ContainsGenericParameters")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, methodOwnerReady);
+        il.Emit(OpCodes.Ldloc, methodOwnerLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsGenericType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, methodOwnerReady);
+        il.Emit(OpCodes.Ldtoken, userClassInterface);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldloc, methodOwnerLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+        il.Emit(OpCodes.Brfalse, methodOwnerReady);
+        il.Emit(OpCodes.Ldloc, methodOwnerLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+        il.Emit(OpCodes.Stloc, methodOwnerLocal);
+        var argumentsLocal = il.DeclareLocal(_types.MakeArrayType(_types.Type));
+        il.Emit(OpCodes.Ldloc, methodOwnerLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericArguments"));
+        il.Emit(OpCodes.Stloc, argumentsLocal);
+        var argumentIndex = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, argumentIndex);
+        var fillArguments = il.DefineLabel();
+        var checkArguments = il.DefineLabel();
+        il.Emit(OpCodes.Br, checkArguments);
+        il.MarkLabel(fillArguments);
+        il.Emit(OpCodes.Ldloc, argumentsLocal);
+        il.Emit(OpCodes.Ldloc, argumentIndex);
+        il.Emit(OpCodes.Ldtoken, _types.Object);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, argumentIndex);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, argumentIndex);
+        il.MarkLabel(checkArguments);
+        il.Emit(OpCodes.Ldloc, argumentIndex);
+        il.Emit(OpCodes.Ldloc, argumentsLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Blt, fillArguments);
+        il.Emit(OpCodes.Ldloc, methodOwnerLocal);
+        il.Emit(OpCodes.Ldloc, argumentsLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "MakeGenericType", _types.MakeArrayType(_types.Type)));
+        il.Emit(OpCodes.Stloc, methodOwnerLocal);
+        il.MarkLabel(methodOwnerReady);
+        return methodOwnerLocal;
+    }
+
     private readonly record struct GetPropertyInputs(
         EmittedAbortRuntime? Abort,
         FieldBuilder ArgumentsLengthField,
@@ -2320,7 +2377,8 @@ public partial class RuntimeEmitter
             // SafeGetMethod handles AmbiguousMatchException deterministically, which matters
             // because user-declared statics can collide with inherited Type overloads.
             var staticMethodLocal = il.DeclareLocal(_types.MethodInfo);
-            il.Emit(OpCodes.Ldloc, typeLocal);
+            var methodOwnerLocal = EmitStaticMethodLookupOwner(il, typeLocal, inputs.IHasFieldsInterface);
+            il.Emit(OpCodes.Ldloc, methodOwnerLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)staticPublic);
             il.Emit(OpCodes.Call, inputs.SafeGetMethod);
@@ -2489,7 +2547,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, baseWalkLoop);
 
             // declared static method → $TSFunction(null, methodInfo)
-            il.Emit(OpCodes.Ldloc, walkTypeLocal);
+            var baseMethodOwner = EmitStaticMethodLookupOwner(il, walkTypeLocal, inputs.IHasFieldsInterface);
+            il.Emit(OpCodes.Ldloc, baseMethodOwner);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)declaredStaticPublic);
             il.Emit(OpCodes.Call, inputs.SafeGetMethod);
