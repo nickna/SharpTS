@@ -634,6 +634,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Ldc_I4, i);
                 Type genericArgument = _ctx.TypeMapper.MapTypeInfo(instantiated.TypeArguments[i]);
+                // CLR generic arguments cannot be System.Void; erase void/never to object here.
                 if (_ctx.Types.IsVoid(genericArgument))
                     genericArgument = _ctx.Types.Object;
                 IL.Emit(OpCodes.Ldtoken, genericArgument);
