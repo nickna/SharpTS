@@ -7,7 +7,7 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private LocalBuilder EmitStaticMethodLookupOwner(ILGenerator il, LocalBuilder owner, Type userClassInterface)
+    private LocalBuilder EmitStaticMemberLookupOwner(ILGenerator il, LocalBuilder owner, Type userClassInterface)
     {
         var methodOwnerLocal = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldloc, owner);
@@ -2377,7 +2377,7 @@ public partial class RuntimeEmitter
             // SafeGetMethod handles AmbiguousMatchException deterministically, which matters
             // because user-declared statics can collide with inherited Type overloads.
             var staticMethodLocal = il.DeclareLocal(_types.MethodInfo);
-            var methodOwnerLocal = EmitStaticMethodLookupOwner(il, typeLocal, inputs.IHasFieldsInterface);
+            var methodOwnerLocal = EmitStaticMemberLookupOwner(il, typeLocal, inputs.IHasFieldsInterface);
             il.Emit(OpCodes.Ldloc, methodOwnerLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)staticPublic);
@@ -2399,7 +2399,7 @@ public partial class RuntimeEmitter
 
             // Static field: type.GetField(name, Public|Static).
             var staticFieldLocal = il.DeclareLocal(typeof(FieldInfo));
-            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldloc, methodOwnerLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)staticPublic);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
@@ -2547,7 +2547,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, baseWalkLoop);
 
             // declared static method → $TSFunction(null, methodInfo)
-            var baseMethodOwner = EmitStaticMethodLookupOwner(il, walkTypeLocal, inputs.IHasFieldsInterface);
+            var baseMethodOwner = EmitStaticMemberLookupOwner(il, walkTypeLocal, inputs.IHasFieldsInterface);
             il.Emit(OpCodes.Ldloc, baseMethodOwner);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)declaredStaticPublic);
@@ -2563,7 +2563,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(noBaseStaticMethodLabel);
 
             // declared static field → field.GetValue(null)
-            il.Emit(OpCodes.Ldloc, walkTypeLocal);
+            il.Emit(OpCodes.Ldloc, baseMethodOwner);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)declaredStaticPublic);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));

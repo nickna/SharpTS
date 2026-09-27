@@ -173,9 +173,13 @@ public partial class TypeChecker
         {
             throw new TypeCheckException($" Property '{memberName.Lexeme}' is private and only accessible within class '{declName}'.", tsCode: "TS2341");
         }
-        var declClass = AsClass(declaringClass);
-        if (access == AccessModifier.Protected && declClass != null && !IsSubclassOf(_currentClass, declClass))
+        if (access == AccessModifier.Protected)
         {
+            // Generic definitions and instantiated generic bases participate in
+            // the same lexical access check as ordinary class declarations.
+            for (TypeInfo? current = _currentClass; current != null; current = GetSuperclass(current))
+                if (GetClassName(current) == declName)
+                    return;
             throw new TypeCheckException($" Property '{memberName.Lexeme}' is protected and only accessible within class '{declName}' and its subclasses.", tsCode: "TS2445");
         }
     }

@@ -806,10 +806,10 @@ public partial class TypeChecker
             throw new TypeCheckException($" Property '{set.Name.Lexeme}' does not exist on type '{tp.Name}'. Consider adding a constraint to the type parameter.", tsCode: "TS2339");
         }
 
-        // Handle static property assignment
-        if (objType is TypeInfo.Class classType)
+        // Generic class values expose the same checked static property metadata.
+        if (objType is TypeInfo.Class or TypeInfo.GenericClass)
         {
-            TypeInfo? current = classType;
+            TypeInfo? current = objType;
             while (current != null)
             {
                 var staticProps = GetStaticProperties(current);
