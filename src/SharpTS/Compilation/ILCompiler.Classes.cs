@@ -140,9 +140,9 @@ public partial class ILCompiler
                         EmitTypeDefinitions.SetBaseTypeConstraint(classGenericParams[i], constraintType);
                 }
             }
-
-            _classes.GenericParams[qualifiedClassName] = classGenericParams;
         }
+
+        _classes.GenericParameters.Declare(typeBuilder, classGenericParams ?? []);
 
         // NOW resolve the base type (may use our generic params for type arguments)
         Type? baseType = null;

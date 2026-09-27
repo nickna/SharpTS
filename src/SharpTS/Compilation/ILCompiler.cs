@@ -561,7 +561,7 @@ public partial class ILCompiler
             staticMethods: _classes.StaticMethods,
             staticGetters: _classes.StaticGetters,
             staticSetters: _classes.StaticSetters,
-            genericParams: _classes.GenericParams,
+            genericParameters: _classes.GenericParameters,
             privateElements: _classes.PrivateElements,
             classToModule: _modules.ClassToModule,
             getCurrentModulePath: () => _modules.CurrentPath,
@@ -1090,6 +1090,8 @@ public partial class ILCompiler
     /// </summary>
     private void Phase9_FinalizeTypes()
     {
+        _classes.GenericParameters.CompleteEmission(_classes.Builders.Values
+            .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
         _classes.PrivateElements.CompleteEmission();
         _classes.PropertyDispatch.CompleteEmission();
         _classes.ComputedMembers.CompleteEmission();
@@ -1652,6 +1654,8 @@ public partial class ILCompiler
     /// </summary>
     private void ModulePhase11_FinalizeTypes()
     {
+        _classes.GenericParameters.CompleteEmission(_classes.Builders.Values
+            .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
         _classes.PrivateElements.CompleteEmission();
         _classes.PropertyDispatch.CompleteEmission();
         _classes.ComputedMembers.CompleteEmission();

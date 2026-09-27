@@ -1108,7 +1108,7 @@ public partial class ILCompiler
         // work inside class method bodies nested in a CJS module.
         ApplyCommonJsModuleAccess(ctx);
         // Add class generic type parameters to context
-        if (_classes.GenericParams.TryGetValue(typeBuilder.Name, out var classGenericParams))
+        if (_classes.GenericParameters.Require(typeBuilder) is { Count: > 0 } classGenericParams)
         {
             foreach (var gp in classGenericParams)
                 ctx.GenericTypeParameters[gp.Name] = gp;

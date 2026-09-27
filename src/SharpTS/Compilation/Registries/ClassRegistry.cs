@@ -30,7 +30,7 @@ public sealed class ClassRegistry
     private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _staticSetters;
 
     // Generic parameters
-    private readonly Dictionary<string, GenericTypeParameterBuilder[]> _genericParams;
+    private readonly ClassGenericParameterRegistry _genericParameters;
 
     // ES2022 Private class elements
     private readonly PrivateClassElementRegistry _privateElements;
@@ -54,7 +54,7 @@ public sealed class ClassRegistry
         Dictionary<string, Dictionary<string, MethodBuilder>> staticMethods,
         Dictionary<string, Dictionary<string, MethodBuilder>> staticGetters,
         Dictionary<string, Dictionary<string, MethodBuilder>> staticSetters,
-        Dictionary<string, GenericTypeParameterBuilder[]> genericParams,
+        ClassGenericParameterRegistry genericParameters,
         PrivateClassElementRegistry privateElements,
         Dictionary<string, string>? classToModule = null,
         Func<string?>? getCurrentModulePath = null,
@@ -70,7 +70,7 @@ public sealed class ClassRegistry
         _staticMethods = staticMethods;
         _staticGetters = staticGetters;
         _staticSetters = staticSetters;
-        _genericParams = genericParams;
+        _genericParameters = genericParameters;
         _privateElements = privateElements;
         _classToModule = classToModule;
         _getCurrentModulePath = getCurrentModulePath;
@@ -312,9 +312,6 @@ public sealed class ClassRegistry
     /// </summary>
     private Type? GetClosedGenericDeclaringType(string declaringClass, string requestedClass, TypeBuilder requestedBuilder)
     {
-        if (!_genericParams.TryGetValue(declaringClass, out var gps) || gps.Length == 0)
-            return null;
-
         // For the requested (own) class the caller already handed us the builder; otherwise look up
         // the declaring base's builder. Both are entries in the same _builders dictionary.
         var declaringBuilder = declaringClass == requestedClass
@@ -323,8 +320,11 @@ public sealed class ClassRegistry
         if (declaringBuilder == null)
             return null;
 
-        var typeArgs = new Type[gps.Length];
-        for (int i = 0; i < gps.Length; i++)
+        var parameters = _genericParameters.Require(declaringBuilder);
+        if (parameters.Count == 0)
+            return null;
+        var typeArgs = new Type[parameters.Count];
+        for (int i = 0; i < parameters.Count; i++)
             typeArgs[i] = typeof(object);
         return EmitGenerics.MakeGenericType(declaringBuilder, typeArgs);
     }
@@ -388,9 +388,12 @@ public sealed class ClassRegistry
     /// <summary>
     /// Gets generic type parameters for a class.
     /// </summary>
-    public GenericTypeParameterBuilder[]? GetGenericParams(string qualifiedClassName)
+    public IReadOnlyList<GenericTypeParameterBuilder>? GetGenericParams(string qualifiedClassName)
     {
-        return _genericParams.GetValueOrDefault(qualifiedClassName);
+        if (!_builders.TryGetValue(qualifiedClassName, out var owner))
+            return null;
+        var parameters = _genericParameters.Require(owner);
+        return parameters.Count == 0 ? null : parameters;
     }
 
     #endregion

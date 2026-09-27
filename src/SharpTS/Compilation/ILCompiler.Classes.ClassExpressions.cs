@@ -79,9 +79,9 @@ public partial class ILCompiler
                         EmitTypeDefinitions.SetBaseTypeConstraint(classGenericParams[i], constraintType);
                 }
             }
-
-            _classExprs.GenericParams[classExpr] = classGenericParams;
         }
+
+        _classes.GenericParameters.Declare(typeBuilder, classGenericParams ?? []);
 
         // NOW resolve superclass (may use our generic params for type arguments)
         Type? baseType = null;
@@ -580,7 +580,7 @@ public partial class ILCompiler
         ctx.ClassExprGetters = _classExprs.Getters;
         ctx.ClassExprSetters = _classExprs.Setters;
         ctx.ClassExprConstructors = _classExprs.Constructors;
-        ctx.ClassExprGenericParams = _classExprs.GenericParams;
+        ctx.ClassGenericParameters = _classes.GenericParameters;
         ctx.ClassExprSuperclass = _classExprs.Superclass;
         ctx.CurrentClassExpr = classExpr;
         ctx.VarToClassExpr = _classExprs.VarToClassExpr;
@@ -696,7 +696,7 @@ public partial class ILCompiler
         ctx.IsInstanceMethod = true;
 
         // Add generic type parameters to context
-        if (_classExprs.GenericParams.TryGetValue(classExpr, out var genericParams))
+        if (_classes.GenericParameters.Require(typeBuilder) is { Count: > 0 } genericParams)
         {
             foreach (var gp in genericParams)
                 ctx.GenericTypeParameters[gp.Name] = gp;

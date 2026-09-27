@@ -24,7 +24,7 @@ public partial class CompilationContext
     public Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>>? ClassExprGetters { get; set; }
     public Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>>? ClassExprSetters { get; set; }
     public Dictionary<Expr.ClassExpr, ConstructorBuilder>? ClassExprConstructors { get; set; }
-    public Dictionary<Expr.ClassExpr, GenericTypeParameterBuilder[]>? ClassExprGenericParams { get; set; }
+    public ClassGenericParameterRegistry? ClassGenericParameters { get; set; }
     public Dictionary<Expr.ClassExpr, string?>? ClassExprSuperclass { get; set; }
     public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>>? ClassExprCaptureFields { get; set; }
 

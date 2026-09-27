@@ -64,7 +64,7 @@ public partial class ILCompiler
         ApplyCapturedTopLevelVariableAccess(ctx);
 
         // Add class generic type parameters to context (required for static blocks in generic classes)
-        if (_classes.GenericParams.TryGetValue(qualifiedClassName, out var classGenericParams))
+        if (_classes.GenericParameters.Require(typeBuilder) is { Count: > 0 } classGenericParams)
         {
             foreach (var gp in classGenericParams)
                 ctx.GenericTypeParameters[gp.Name] = gp;

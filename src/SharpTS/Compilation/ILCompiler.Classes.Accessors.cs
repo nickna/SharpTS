@@ -228,7 +228,7 @@ public partial class ILCompiler
         ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: true);
 
         // Add class generic type parameters to context
-        if (_classes.GenericParams.TryGetValue(typeBuilder.Name, out var classGenericParams))
+        if (_classes.GenericParameters.Require(typeBuilder) is { Count: > 0 } classGenericParams)
         {
             foreach (var gp in classGenericParams)
                 ctx.GenericTypeParameters[gp.Name] = gp;
