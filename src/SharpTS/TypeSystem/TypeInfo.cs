@@ -740,6 +740,7 @@ public abstract record TypeInfo
         {
             Class { Core.DeclarationId: not 0 and var id } => $"{ToString()}#{id}",
             MutableClass mc => $"{ToString()}#{mc.DeclarationId}",
+            InstantiatedGeneric instantiated => instantiated.CacheKey(),
             _ => base.CacheKey(),
         };
     }
@@ -1507,6 +1508,9 @@ public abstract record TypeInfo
         public override string ToString() => IsAbstract
             ? $"abstract class {Name}<{string.Join(", ", TypeParams)}>"
             : $"class {Name}<{string.Join(", ", TypeParams)}>";
+
+        internal override string CacheKey() =>
+            Core.DeclarationId != 0 ? $"{ToString()}#{Core.DeclarationId}" : base.CacheKey();
     }
 
     // Generic interface (not yet instantiated)
@@ -1557,6 +1561,9 @@ public abstract record TypeInfo
             };
             return $"{baseName}<{string.Join(", ", TypeArguments)}>";
         }
+
+        internal override string CacheKey() =>
+            $"{GenericDefinition.CacheKey()}<{string.Join(", ", TypeArguments.Select(argument => argument.CacheKey()))}>";
     }
 
     /// <summary>

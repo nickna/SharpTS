@@ -2410,8 +2410,10 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckClassExpression(Expr.ClassExpr classExpr)
     {
-        // Generate name for anonymous classes
-        string className = classExpr.Name?.Lexeme ?? $"$ClassExpr_{++_classExprCounter}";
+        // Hoisting can check this AST before the body pass. Reuse only its identity;
+        // signatures and bodies must still be checked in the current environment.
+        TypeInfo.Class? previousClass = _typeMap.GetClassExprType(classExpr);
+        string className = previousClass?.Name ?? classExpr.Name?.Lexeme ?? $"$ClassExpr_{++_classExprCounter}";
 
         // Resolve superclass if present. Stored as TypeInfo so a MutableClass
         // placeholder (for `any`-typed supers like CJS-imported classes) can
@@ -2469,11 +2471,11 @@ public partial class TypeChecker
         }
 
         // Create mutable class early so self-references work
-        var mutableClass = new TypeInfo.MutableClass(className)
-        {
-            Superclass = superclass,
-            IsAbstract = classExpr.IsAbstract
-        };
+        var mutableClass = previousClass is null
+            ? new TypeInfo.MutableClass(className)
+            : new TypeInfo.MutableClass(className, previousClass.Core.DeclarationId);
+        mutableClass.Superclass = superclass;
+        mutableClass.IsAbstract = classExpr.IsAbstract;
 
         // If named, define the name in class body scope for self-reference
         if (classExpr.Name != null)

@@ -8,6 +8,19 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ClassExpressionTests
 {
+    [Theory, ModeData]
+    public void GenericForwardConstructorAliasPreservesInferredReturn(ExecutionMode mode)
+    {
+        var source = """
+            const Box = class<T> { read() { return 42; } };
+            function identity(value: typeof Box): typeof Box { return value; }
+            const Alias = identity(Box);
+            const value: number = new Alias<string>().read();
+            console.log(value);
+            """;
+        Assert.Equal("42\n", TestHarness.Run(source, mode));
+    }
+
     #region Anonymous Class Expressions
 
     [Theory, ModeData]
