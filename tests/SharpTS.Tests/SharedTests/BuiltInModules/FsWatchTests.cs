@@ -15,7 +15,11 @@ public class FsWatchTests
     [Theory, ModeData]
     public void Watch_DetectsFileChange(ExecutionMode mode)
     {
-        var tempFile = Path.GetTempFileName();
+        // FileSystemWatcher buffers changes for the entire parent directory before
+        // applying its filename filter on Windows. Keep parallel tests' temp-file
+        // traffic out of this watcher's buffer.
+        var tempDir = Directory.CreateTempSubdirectory("sharpts_watch_test_");
+        var tempFile = Path.Combine(tempDir.FullName, "watched.txt");
         try
         {
             File.WriteAllText(tempFile, "initial");
@@ -31,8 +35,10 @@ public class FsWatchTests
                     "        detected = true;\n" +
                     "        console.log('event:' + eventType);\n" +
                     "        watcher.close();\n" +
+                    "        clearTimeout(deadline);\n" +
                     "    }\n" +
                     "});\n" +
+                    WatchDiagnostics +
                     "setTimeout(() => {\n" +
                     "    fs.writeFileSync('" + p + "', 'modified');\n" +
                     "}, 100);\n"
@@ -43,7 +49,7 @@ public class FsWatchTests
         }
         finally
         {
-            File.Delete(tempFile);
+            tempDir.Delete(recursive: true);
         }
     }
 
@@ -77,7 +83,8 @@ public class FsWatchTests
     [Theory, ModeData]
     public void Watch_OnMethodForEvents(ExecutionMode mode)
     {
-        var tempFile = Path.GetTempFileName();
+        var tempDir = Directory.CreateTempSubdirectory("sharpts_watch_test_");
+        var tempFile = Path.Combine(tempDir.FullName, "watched.txt");
         try
         {
             File.WriteAllText(tempFile, "initial");
@@ -89,11 +96,13 @@ public class FsWatchTests
                     "import * as fs from 'fs';\n" +
                     "let detected = false;\n" +
                     "const watcher = fs.watch('" + p + "');\n" +
+                    WatchDiagnostics +
                     "watcher.on('change', (eventType: string, filename: string) => {\n" +
                     "    if (!detected) {\n" +
                     "        detected = true;\n" +
                     "        console.log('on:' + eventType);\n" +
                     "        watcher.close();\n" +
+                    "        clearTimeout(deadline);\n" +
                     "    }\n" +
                     "});\n" +
                     "setTimeout(() => {\n" +
@@ -106,9 +115,24 @@ public class FsWatchTests
         }
         finally
         {
-            File.Delete(tempFile);
+            tempDir.Delete(recursive: true);
         }
     }
+
+    // Close on failure as well as success: an open watcher otherwise keeps the
+    // event loop alive until the harness reports an uninformative 30s timeout.
+    private const string WatchDiagnostics = """
+        const deadline = setTimeout(() => {
+            console.log('watch timeout: no change event received');
+            watcher.close();
+        }, 10000);
+        watcher.on('error', (error: any) => {
+            console.log('watch error:' + error);
+            watcher.close();
+            clearTimeout(deadline);
+        });
+
+        """;
 
     #endregion
 
