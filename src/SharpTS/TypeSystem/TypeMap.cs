@@ -73,6 +73,9 @@ public class TypeMap
     /// </summary>
     public void SetClassExprType(Expr.ClassExpr expr, TypeInfo.Class classType) => _classExprTypes[expr] = classType;
 
+    /// <summary>Gets the last published class-expression shape, including its declaration identity.</summary>
+    public TypeInfo.Class? GetClassExprType(Expr.ClassExpr expr) => _classExprTypes.GetValueOrDefault(expr);
+
     /// <summary>
     /// Registers a top-level function type by name.
     /// </summary>

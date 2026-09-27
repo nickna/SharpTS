@@ -430,6 +430,10 @@ public partial class TypeChecker
     {
         // A generic constructor retains its declaration identity through typeof and aliases.
         if (expected is TypeInfo.GenericClass && ReferenceEquals(expected, actual)) return true;
+        if (expected is TypeInfo.GenericClass expectedConstructor &&
+            actual is TypeInfo.GenericClass actualConstructor &&
+            expectedConstructor.Core.DeclarationId != 0 &&
+            expectedConstructor.Core.DeclarationId == actualConstructor.Core.DeclarationId) return true;
 
         if (expected is TypeInfo.Any or TypeInfo.Inferred || actual is TypeInfo.Any or TypeInfo.Inferred) return true;
 
