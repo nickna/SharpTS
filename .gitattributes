@@ -7,3 +7,4 @@ src/SharpTS.Gui.Sdk/GuiPackage/control-surface.generated.ts text eol=lf
 src/SharpTS.Gui.Sdk/GuiPackage/control-docs.generated.json text eol=lf
 src/SharpTS.Gui.Sdk/Sdk/DescriptorContract.Generated.props text eol=lf
 samples/text-stats.ts text eol=lf
+docs/plans/archive/issue-1911/*.ts text eol=lf

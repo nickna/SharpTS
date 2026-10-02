@@ -1,0 +1,32 @@
+{
+  "issue": 1911,
+  "frozenBody": {
+    "url": "https://github.com/nickna/SharpTS/issues/1599",
+    "frozenAt": "2026-09-27T18:53:55Z",
+    "utf16CodeUnits": 261770,
+    "sha256": "420cdca4eaf29b19354bcce748ffa034f4cfaa3400e772fb2089b8d97978c15f",
+    "lines": 843,
+    "nonemptyLines": 459
+  },
+  "excerpts": [
+    {
+      "sha256": "f50a0296252f849ff49dfe27da3a01bcf34e2e1463f8dd29ae15933f21673816",
+      "text": "Fresh Release and unchanged quality/analyzer mutation gates pass. All 12,736 affected regressions pass without skips or failures, including six new lifecycle cases and sixteen standalone/hosted cases; their exact case identities match the preserved implementation's filtered regression suite. All 22 focused cases also pass. Thirty freshly saved baseline/candidate assemblies pass IL verification and preserve normalized metadata and all 38,831 method bodies. Twelve native configurations exercise minimal, optional, deferred, full-feature and reused-emitter paths in hosted and standalone modes. Eighteen independent TypeScript 5.9.3/Node 22.23.2 references yield fourteen passing guest executions and two hosted outputs; two pre-existing grouping observations remain unchanged and are excluded from passing counts.\r",
+      "id": "L339"
+    },
+    {
+      "sha256": "5de73d9196c88ad44cf89b344055ca607817633092c54d16f05d46d24ab8f82c",
+      "text": "Main now has zero flat declarations, 319 construction fields and eight direct collections. All 63 linked semantic transfers, the additional locally retained Map.groupBy alias discrepancy, the early event-loop cancellation omission, migrated owner registries and the complete ownership/construction/registry/shared-infrastructure audit remain required. The grouping observations retain their original sources, reference expectations and deadlines; their separate issue publication was not authorized by automatic approval review and was not retried. Zero final-audit rows are closed. Do not close #1599 after flat-zero.\r",
+      "id": "L343"
+    }
+  ],
+  "originalObservationCount": 2,
+  "disposition": "Original individual sources, diagnostics, reference outputs and numerical deadlines not recovered; historical failure status preserved.",
+  "searched": [
+    "GitHub #1599 body and comments",
+    "GitHub PR #1809 body, comment and committed tests",
+    "docs/plans/archive/1599-historical-reconciliation.*",
+    "D:/nickna/SharpTS/artifacts",
+    "D:/nickna/SharpTS/.perf-runs"
+  ]
+}

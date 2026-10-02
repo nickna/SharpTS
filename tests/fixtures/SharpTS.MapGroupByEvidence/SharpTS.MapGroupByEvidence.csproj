@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- This diagnostic console app drives synchronous, bounded guest execution;
+         it has no host/UI synchronization context. Keep the harness's policy. -->
+    <NoWarn>$(NoWarn);VSTHRD002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../SharpTS.Tests/SharpTS.Tests.csproj" />
+    <Compile Include="../../SharpTS.Tests/Hosting/DeterministicHostDispatcher.cs" Link="DeterministicHostDispatcher.cs" />
+  </ItemGroup>
+</Project>
