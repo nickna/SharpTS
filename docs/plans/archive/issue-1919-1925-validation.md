@@ -51,7 +51,14 @@ that product baseline. Collection was October 2, 2026 (America/Los_Angeles), Win
 - Repository code-quality gates and analyzer/duplicate/dead-emitter mutation fixtures pass:
   28 existing approved duplicate groups, zero errors. `git diff --check` passes.
 
+Run from the repository root. Export the issue body, comments and URL before the frozen
+coverage check; the current response matches the frozen body and original eighteen comments.
+That verifier checks their recorded hashes and intentionally rejects later edits. If the
+issue changes, use a retained original response at the same repository-relative path.
+
 ```powershell
+New-Item -ItemType Directory -Force artifacts/issue-1919-1925 | Out-Null
+gh issue view 1599 --repo nickna/SharpTS --json body,comments,url | Set-Content -Encoding utf8 artifacts/issue-1919-1925/issue-1599.json
 dotnet build tests/fixtures/SharpTS.HistoricalEvidence/SharpTS.HistoricalEvidence.csproj -c Release
 foreach ($issue in 1919..1925) {
     dotnet tests/fixtures/SharpTS.HistoricalEvidence/bin/Release/net10.0/SharpTS.HistoricalEvidence.dll cases "docs/plans/archive/issue-$issue" "artifacts/issue-1919-1925/run-$issue"
@@ -59,11 +66,12 @@ foreach ($issue in 1919..1925) {
 pwsh scripts/verify-reconciled-evidence.ps1
 pwsh scripts/test-reconciled-evidence.ps1
 pwsh scripts/verify-historical-evidence.ps1
-pwsh scripts/verify-1599-reconciliation.ps1 -IssueJson D:/nickna/SharpTS/artifacts/issue-1926/issue-1599.json
+pwsh scripts/verify-1599-reconciliation.ps1 -IssueJson artifacts/issue-1919-1925/issue-1599.json
 pwsh scripts/test-code-quality.ps1
 ```
 
 The collector exit code means collection completed; it does not certify conformance.
-LF checkout rules preserve the new records' byte hashes. Only the repository path prefix is
-normalized in committed reports; raw logs/binaries remain in ignored artifacts. Historical
+LF checkout rules preserve the new records' byte hashes. Repository and home-directory path
+prefixes are normalized to `<repository>` and `<home>` in committed reports; raw logs/binaries
+remain in ignored artifacts. Historical
 evidence gaps, verifier failures and deadlines are not replaced with passing fresh controls.

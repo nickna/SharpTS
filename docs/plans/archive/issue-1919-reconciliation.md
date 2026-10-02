@@ -35,7 +35,8 @@ Product and collection baseline `78931b4add5a6937ab6e63452f2e0ad97fe12adb`, Wind
 .NET SDK 10.0.401/runtime 10.0.12, TypeScript 7.0.2 and Node 25.5.0; collected October 2,
 2026 (America/Los_Angeles). [results.json](issue-1919/results.json) retains source hashes,
 outputs, diagnostics, runtime/deployment metadata and the 30-second collection budget.
-Only the absolute repository prefix is replaced with `<repository>`; the raw report is
+The absolute repository and home-directory prefixes are replaced with `<repository>` and
+`<home>`; the diagnostic, exit code and raw report remain intact. The raw report is
 under `artifacts/issue-1919-1925/run-1919`. The original alias fixtures also used 30-second
 execution deadlines; no historical compilation deadline is inferred. Original saved binary
 bundles are absent from the searched retained checkout artifacts and linked PR evidence.
