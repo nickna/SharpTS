@@ -1,0 +1,35 @@
+{
+  "typescript": "Version 7.0.2",
+  "cases": [
+    {
+      "File": "array-length.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    },
+    {
+      "File": "string-length.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    },
+    {
+      "File": "primitive-string-length.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    },
+    {
+      "File": "primitive-string-predicate.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    },
+    {
+      "File": "promise-name.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    }
+  ]
+}

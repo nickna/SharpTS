@@ -1,0 +1,654 @@
+{
+  "baseline": "73567503ecd4a9bac5ef111410d190e701cae033",
+  "recordedAtUtc": "2026-10-02T07:24:35.0740105+00:00",
+  "runtime": "10.0.12",
+  "dotnet": {
+    "ExitCode": 0,
+    "StandardOutput": "10.0.401\n",
+    "StandardError": ""
+  },
+  "node": {
+    "ExitCode": 0,
+    "StandardOutput": "v25.5.0\n",
+    "StandardError": ""
+  },
+  "deadlineSeconds": 30,
+  "results": [
+    {
+      "File": "array-length.ts",
+      "Provenance": "New array length descriptor/enumeration probe; original #1701 exploratory program is unavailable.",
+      "ExpectedStdout": "2 true false false\nfalse 0,1\n",
+      "sourceSha256": "190b8397e04e8d32fe40772c773ecdbf348b47be85d37fd1fb94551c408f727e",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 true false false\nfalse 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "2 true false false\ntrue 0,1\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "2 true false false\ntrue 0,1\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 true false false\ntrue 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 true false false\ntrue 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 true false false\ntrue 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\array-length\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 true false false\ntrue 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\array-length\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 true false false\ntrue 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\array-length\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Core",
+            "System.Memory",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "2 true false false\ntrue 0,1\n"
+        }
+      ]
+    },
+    {
+      "File": "string-length.ts",
+      "Provenance": "New boxed string length descriptor/enumeration probe; original #1701 exploratory program is unavailable.",
+      "ExpectedStdout": "2 false false false\nfalse 0,1\n",
+      "sourceSha256": "5e5ff8dd86a56a5d0d3ecc9e4c25a2878e23999953c8d151701ebfb8310b461b",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 false false false\nfalse 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "2 false false false\nfalse 0,1\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "2 false false false\nfalse 0,1\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 false false false\nfalse 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 false false false\nfalse 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 false false false\nfalse 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\string-length\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 false false false\nfalse 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\string-length\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 false false false\nfalse 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\string-length\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Core",
+            "System.Memory",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "2 false false false\nfalse 0,1\n"
+        }
+      ]
+    },
+    {
+      "File": "primitive-string-length.ts",
+      "Provenance": "New primitive string length descriptor/enumeration probe; original #1701 exploratory program is unavailable.",
+      "ExpectedStdout": "2 false false false\nfalse 0,1\n",
+      "sourceSha256": "e3fb28ee6e7f0ea798d8fc3c17cff8d6cbd26e1ea751db6f340951549b8fac5d",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 false false false\nfalse 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "2 false false false\nfalse 0,1\n"
+        },
+        {
+          "mode": "compiled-api",
+          "exceptionType": "$ThrownValueException",
+          "error": "$ThrownValueException: TypeError: Cannot read properties of undefined (reading 'value')\r\n   at $Program.Main()\r\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\r\n--- End of stack trace from previous location ---\r\n   at SharpTS.Tests.Infrastructure.TestHarness.<>c__DisplayClass21_0.<RunCompiledWithTimeout>b__0() in <repository>\\tests\\SharpTS.Tests\\Infrastructure\\TestHarness.cs:line 422\r\n   at System.Threading.Tasks.Task`1.InnerInvoke()\r\n   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)\r\n--- End of stack trace from previous location ---\r\n   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)\r\n   at System.Threading.Tasks.Task.ExecuteWithThreadLocal(Task& currentTaskSlot, Thread threadPoolThread)\r\n--- End of stack trace from previous location ---\r\n   at SharpTS.Tests.Infrastructure.TestHarness.RunCompiledWithTimeout(Func`1 compile, TimeSpan timeout, Action cleanup) in <repository>\\tests\\SharpTS.Tests\\Infrastructure\\TestHarness.cs:line 435\r\n   at SharpTS.Tests.Infrastructure.TestHarness.RunCompiledInProcess(String source, DecoratorMode decoratorMode, TimeSpan timeout) in <repository>\\tests\\SharpTS.Tests\\Infrastructure\\TestHarness.cs:line 357\r\n   at SharpTS.Tests.Infrastructure.TestHarness.RunCompiled(String source, DecoratorMode decoratorMode, TimeSpan timeout, String[] scriptArgs, Boolean includeTestsAssembly, Boolean copySharpTsRuntime) in <repository>\\tests\\SharpTS.Tests\\Infrastructure\\TestHarness.cs:line 345\r\n   at SharpTS.Tests.Infrastructure.TestHarness.RunCompiled(String source, TimeSpan timeout) in <repository>\\tests\\SharpTS.Tests\\Infrastructure\\TestHarness.cs:line 287\r\n   at CaseEvidence.<>c__DisplayClass0_1.<Collect>b__3() in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\CaseEvidence.cs:line 38\r\n   at CaseEvidence.Observe(String mode, Func`1 action) in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\CaseEvidence.cs:line 94"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 false false false\nfalse 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 false false false\nfalse 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 false false false\nfalse 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\primitive-string-length\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "exceptionType": "System.TimeoutException",
+          "error": "System.TimeoutException: The operation has timed out.\r\n   at CaseEvidence.RunProcess(String command, String[] arguments) in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\CaseEvidence.cs:line 115\r\n   at CaseEvidence.<>c__DisplayClass0_1.<Collect>b__0() in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\CaseEvidence.cs:line 50\r\n   at CaseEvidence.Observe(String mode, Func`1 action) in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\CaseEvidence.cs:line 94"
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\primitive-string-length\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "exceptionType": "System.TimeoutException",
+          "error": "System.TimeoutException: The operation has timed out.\r\n   at CaseEvidence.RunProcess(String command, String[] arguments) in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\CaseEvidence.cs:line 115\r\n   at CaseEvidence.<>c__DisplayClass0_2.<Collect>b__8() in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\CaseEvidence.cs:line 77\r\n   at CaseEvidence.Observe(String mode, Func`1 action) in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\CaseEvidence.cs:line 94"
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\primitive-string-length\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Core",
+            "System.Memory",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "exceptionType": "$ThrownValueException",
+          "error": "$ThrownValueException: TypeError: Cannot read properties of undefined (reading 'value')\r\n   at SharpTS.Hosting.SharpTSHostedRuntimeBase.ObserveTask(Task task) in <repository>\\src\\SharpTS.Hosting.Abstractions\\SharpTSHostedRuntimeBase.cs:line 908\r\n   at SharpTS.Hosting.SharpTSHostedRuntimeBase.RunInitializationTurn() in <repository>\\src\\SharpTS.Hosting.Abstractions\\SharpTSHostedRuntimeBase.cs:line 630\r\n   at SharpTS.Hosting.SharpTSHostedRuntimeBase.RunOneTurn() in <repository>\\src\\SharpTS.Hosting.Abstractions\\SharpTSHostedRuntimeBase.cs:line 600\r\n   at SharpTS.Hosting.SharpTSHostedRuntimeBase.ExecuteGuestBoundary(Action action) in <repository>\\src\\SharpTS.Hosting.Abstractions\\SharpTSHostedRuntimeBase.cs:line 726\r\n   at SharpTS.Hosting.SharpTSHostedRuntimeBase.RunPostedTurn() in <repository>\\src\\SharpTS.Hosting.Abstractions\\SharpTSHostedRuntimeBase.cs:line 559\r\n--- End of stack trace from previous location ---\r\n   at CaseEvidence.RunHosted(String dll) in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\CaseEvidence.cs:line 139\r\n   at CaseEvidence.<>c__DisplayClass0_2.<Collect>b__7() in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\CaseEvidence.cs:line 76\r\n   at CaseEvidence.Observe(String mode, Func`1 action) in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\CaseEvidence.cs:line 94"
+        }
+      ]
+    },
+    {
+      "File": "primitive-string-predicate.ts",
+      "Provenance": "New primitive string predicate-only control, independent of descriptor lookup; original #1701 exploratory program is unavailable.",
+      "ExpectedStdout": "false 0,1\n",
+      "sourceSha256": "da54d89f97ba656e37e47c38c17932b30b123ba4b3b7568dce56904f170ec0b4",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "false 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "false 0,1\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "true 0,1\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "false 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "false 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "false 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\primitive-string-predicate\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "true 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\primitive-string-predicate\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "true 0,1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\primitive-string-predicate\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Core",
+            "System.Memory",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "true 0,1\n"
+        }
+      ]
+    },
+    {
+      "File": "promise-name.ts",
+      "Provenance": "New Promise resolve/reject name descriptor/enumeration probe; original #1701 exploratory program is unavailable.",
+      "ExpectedStdout": " false false true\nfalse \n false false true\nfalse \n",
+      "sourceSha256": "f8c0306cb249b3948c0e84ad796fb5e872039a157effcc10609de1d77cf6f995",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": " false false true\nfalse \n false false true\nfalse \n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": " false false true\nfalse \n false false true\nfalse \n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": " false false true\ntrue \n false false true\ntrue \n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": " false false true\nfalse \n false false true\nfalse \n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": " false false true\nfalse \n false false true\nfalse \n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": " false false true\nfalse \n false false true\nfalse \n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\promise-name\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": " false false true\ntrue \n false false true\ntrue \n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\promise-name\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": " false false true\ntrue \n false false true\ntrue \n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1925\\promise-name\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Core",
+            "System.Memory",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": " false false true\ntrue \n false false true\ntrue \n"
+        }
+      ]
+    }
+  ]
+}

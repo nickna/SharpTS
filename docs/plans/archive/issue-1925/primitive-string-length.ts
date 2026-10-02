@@ -1,0 +1,1 @@
+const value:any='ab';const d:any=Object.getOwnPropertyDescriptor(value,'length');console.log(d.value,d.writable,d.enumerable,d.configurable);console.log(Object.prototype.propertyIsEnumerable.call(value,'length'),Object.keys(value).join(','));

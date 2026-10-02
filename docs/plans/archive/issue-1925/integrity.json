@@ -1,0 +1,13 @@
+{
+  "files": {
+    "cases.json": "01b2a9870343845443aecc6eb67115e528f1804fdc4a56a323ee14c1e2b0363e",
+    "results.json": "27c1eae3df2b59c3b82d1b957602acc47ca1325ad0db47270a6da048474c892d",
+    "historical.json": "f86db43b907fffdcefba147c3cbff92a7c10eba24dec9062c15a18ff2a9413a5",
+    "reference-compilation.json": "f2d7503a23d6ab94ee95be9a785bf9714f4bc62cc67829ec0d7f0bc7d15b96b5",
+    "array-length.ts": "190b8397e04e8d32fe40772c773ecdbf348b47be85d37fd1fb94551c408f727e",
+    "string-length.ts": "5e5ff8dd86a56a5d0d3ecc9e4c25a2878e23999953c8d151701ebfb8310b461b",
+    "primitive-string-length.ts": "e3fb28ee6e7f0ea798d8fc3c17cff8d6cbd26e1ea751db6f340951549b8fac5d",
+    "primitive-string-predicate.ts": "da54d89f97ba656e37e47c38c17932b30b123ba4b3b7568dce56904f170ec0b4",
+    "promise-name.ts": "f8c0306cb249b3948c0e84ad796fb5e872039a157effcc10609de1d77cf6f995"
+  }
+}
