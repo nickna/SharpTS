@@ -72,3 +72,4 @@ retain the destinations in the
 | [#1875](https://github.com/nickna/SharpTS/issues/1875) | [R08: Scheduling, cancellation and async context](R08.md) | 8 |
 | [#1876](https://github.com/nickna/SharpTS/issues/1876) | [R09: Process, host APIs and text utilities](R09.md) | 12 |
 | [#1877](https://github.com/nickna/SharpTS/issues/1877) | [R10: Filesystem](R10.md) | 4 |
+| [#1878](https://github.com/nickna/SharpTS/issues/1878) | [R11: Networking and fetch](R11.md) | 6 |
