@@ -1,0 +1,1 @@
+const raw:any=String.raw;console.log(raw({raw:['a','b']},9));console.log(raw.call(null,{raw:['x','y']},8));const ctor:any=String;console.log(ctor.raw({raw:['p','q']},7));console.log(raw.length,raw.name);

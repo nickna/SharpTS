@@ -1,0 +1,1 @@
+function tag(strings:any):string{return strings[0].length+':'+strings.raw[0].length+':'+strings.raw[0];}console.log(tag`a\nb`);console.log(String.raw`x\n${3}\t`);

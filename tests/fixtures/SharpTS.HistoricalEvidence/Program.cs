@@ -4,8 +4,13 @@ using System.Text.Json;
 using SharpTS.Compilation;
 using SharpTS.Tests.Compilation;
 
+if (args.Length == 3 && args[0] == "cases")
+{
+    CaseEvidence.Collect(args[1], args[2]);
+    return;
+}
 if (args.Length != 2)
-    throw new ArgumentException("Usage: console|timing <report path>");
+    throw new ArgumentException("Usage: console|timing <report path> OR cases <source directory> <artifact directory>");
 if (args[0] == "timing")
 {
     TimingEvidence.Collect(args[1]);
