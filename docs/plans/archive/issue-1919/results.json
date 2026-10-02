@@ -1,0 +1,348 @@
+{
+  "baseline": "78931b4add5a6937ab6e63452f2e0ad97fe12adb",
+  "recordedAtUtc": "2026-10-02T07:16:15.3343703+00:00",
+  "runtime": "10.0.12",
+  "dotnet": {
+    "ExitCode": 0,
+    "StandardOutput": "10.0.401\n",
+    "StandardError": ""
+  },
+  "node": {
+    "ExitCode": 0,
+    "StandardOutput": "v25.5.0\n",
+    "StandardError": ""
+  },
+  "deadlineSeconds": 30,
+  "results": [
+    {
+      "File": "boolean-alias.cjs",
+      "Provenance": "Recovered verbatim from PR #1684 head 8dc54314472b6e72db7e27338e675905b7a67785, StandaloneDllTests.BooleanMetadataPrograms/cjs.",
+      "ExpectedStdout": "false true false true true\n",
+      "sourceSha256": "60f703780b26cfac12a61d47d5c248651508219ddb9ec290ee80514f4b6cd0b8",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "false true false true true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "false true false true true\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "false true null null true\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "false true false true true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "false true false true true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "false true false true true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1919\\boolean-alias\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "false true null null true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1919\\boolean-alias\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "false true null null true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1919\\boolean-alias\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "false true null null true\n"
+        }
+      ]
+    },
+    {
+      "File": "number-alias.cjs",
+      "Provenance": "Recovered verbatim from PR #1685 head 80679a0c290d88a7e68d12ce00f1446bdaa3d4a7, StandaloneDllTests.NumericCoercionMetadataPrograms/cjs.",
+      "ExpectedStdout": "2 2 true\n",
+      "sourceSha256": "40a55c95565607ecf4b43a8994647b4f2d87d07d0d104cab705cd6675c7f12a0",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 2 true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "2 2 true\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "2 null true\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 2 true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 2 true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 2 true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1919\\number-alias\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 null true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1919\\number-alias\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2 null true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1919\\number-alias\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "2 null true\n"
+        }
+      ]
+    },
+    {
+      "File": "primitive-import.ts",
+      "Provenance": "New probe of the exact reserved user-import form in PR #1666 discussion_r4014488701; original program bytes were not supplied.",
+      "ExpectedStdout": "",
+      "sourceSha256": "af2fd021527a0dda92060c9681e247c7f1e4e54e838f6618980ef12bc13a6923",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "",
+            "StandardError": "(node:38200) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///<repository>/docs/plans/archive/issue-1919/primitive-import.ts is not specified and it doesn't parse as CommonJS.\nReparsing as ES module because module syntax was detected. This incurs a performance overhead.\nTo eliminate this warning, add \"type\": \"module\" to C:\\Users\\NicholasNassiri\\package.json.\n(Use `node --trace-warnings ...` to show where the warning was created)\nnode:internal/modules/esm/load:195\n    throw new ERR_UNSUPPORTED_ESM_URL_SCHEME(parsed, schemes);\n          ^\n\nError [ERR_UNSUPPORTED_ESM_URL_SCHEME]: Only URLs with a scheme in: file, data, and node are supported by the default ESM loader. Received protocol 'primitive:'\n    at throwIfUnsupportedURLScheme (node:internal/modules/esm/load:195:11)\n    at defaultLoadSync (node:internal/modules/esm/load:142:3)\n    at #loadAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:790:12)\n    at #loadSync (node:internal/modules/esm/loader:810:49)\n    at ModuleLoader.load (node:internal/modules/esm/loader:775:26)\n    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:520:31)\n    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:571:36)\n    at afterResolve (node:internal/modules/esm/loader:619:52)\n    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:625:12)\n    at ModuleJob.syncLink (node:internal/modules/esm/module_job:160:33) {\n  code: 'ERR_UNSUPPORTED_ESM_URL_SCHEME'\n}\n\nNode.js v25.5.0\n"
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "exceptionType": "SharpTS.TypeSystem.Exceptions.TypeCheckException",
+          "error": "Type Error at line 1: Import statements require module mode. Use 'dotnet run -- --compile' with multi-file support"
+        },
+        {
+          "mode": "compiled-api",
+          "exceptionType": "SharpTS.TypeSystem.Exceptions.TypeCheckException",
+          "error": "Type Error at line 1: Import statements require module mode. Use 'dotnet run -- --compile' with multi-file support"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "Error: Module Error: Cannot import 'primitive:async_hooks'. The primitive: namespace is reserved for SharpTS stdlib modules and is not available to user code.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "Error: Module Error: Cannot import 'primitive:async_hooks'. The primitive: namespace is reserved for SharpTS stdlib modules and is not available to user code.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "Error: Module Error: Cannot import 'primitive:async_hooks'. The primitive: namespace is reserved for SharpTS stdlib modules and is not available to user code.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "",
+            "StandardError": "Error: Module Error: Cannot import 'primitive:async_hooks'. The primitive: namespace is reserved for SharpTS stdlib modules and is not available to user code.\n"
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "",
+            "StandardError": "Error: Module Error: Cannot import 'primitive:async_hooks'. The primitive: namespace is reserved for SharpTS stdlib modules and is not available to user code.\n"
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "",
+            "StandardError": "Error: Module Error: Cannot import 'primitive:async_hooks'. The primitive: namespace is reserved for SharpTS stdlib modules and is not available to user code.\n"
+          }
+        }
+      ]
+    }
+  ]
+}

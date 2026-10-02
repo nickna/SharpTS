@@ -1,0 +1,1 @@
+import { create } from 'primitive:async_hooks'; const storage = create(); console.log(typeof storage);

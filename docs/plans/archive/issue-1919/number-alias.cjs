@@ -1,0 +1,1 @@
+const N=Number;console.log(Number('2'),N('2'),N===Number);

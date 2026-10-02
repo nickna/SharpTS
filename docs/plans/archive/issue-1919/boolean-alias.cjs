@@ -1,0 +1,1 @@
+const B=Boolean;console.log(Boolean(0),Boolean('x'),B(0),B('x'),B===Boolean);
