@@ -25,3 +25,7 @@ them alongside each reconciliation's historical-evidence limits. In particular N
 25.5.0 lacks Math.sumPrecise: its failure is retained, and that expected result comes from
 the cited TC39 algorithm, not an invented Node success. All subprocess streams are read
 concurrently. Output directories are caller-supplied; use git-ignored artifacts paths.
+
+`pwsh scripts/verify-historical-evidence.ps1` checks the committed source hashes,
+provenance, reference expectations and retained observation/deployment records without
+rerunning guest programs or treating incorrect outputs as conformance assertions.

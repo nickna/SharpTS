@@ -1,0 +1,25 @@
+{
+  "typescript": "7.0.2",
+  "target": "ES2024",
+  "lib": "ESNext,DOM",
+  "results": [
+    {
+      "issue": 1914,
+      "file": "raw.ts",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1914,
+      "file": "computed-tag.ts",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1914,
+      "file": "raw-value.ts",
+      "exitCode": 0,
+      "output": ""
+    }
+  ]
+}

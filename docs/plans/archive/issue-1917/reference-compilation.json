@@ -1,0 +1,31 @@
+{
+  "typescript": "7.0.2",
+  "target": "ES2024",
+  "lib": "ESNext,DOM",
+  "results": [
+    {
+      "issue": 1917,
+      "file": "identity.ts",
+      "exitCode": 2,
+      "output": "docs/plans/archive/issue-1917/identity.ts(1,114): error TS2339: Property 'sumPrecise' does not exist on type 'Math'.\r\n"
+    },
+    {
+      "issue": 1917,
+      "file": "nonfinite.ts",
+      "exitCode": 2,
+      "output": "docs/plans/archive/issue-1917/nonfinite.ts(1,20): error TS2339: Property 'sumPrecise' does not exist on type 'Math'.\r\n"
+    },
+    {
+      "issue": 1917,
+      "file": "sign.ts",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1917,
+      "file": "zero-ties.ts",
+      "exitCode": 0,
+      "output": ""
+    }
+  ]
+}

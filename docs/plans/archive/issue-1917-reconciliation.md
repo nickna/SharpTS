@@ -13,7 +13,7 @@ Frozen #1599 L97 and [PR #1681](https://github.com/nickna/SharpTS/pull/1681) exp
 preserve the original Math identity, aliased nonfinite sum and signed-zero outputs as
 refactor parity. All four [source programs](issue-1917/cases.json) were recovered
 verbatim from `MathMetadataPrograms` at head
-`86e5458151114934ba2b41866f8556b4fc70d3f7`; their original parity expectations remain
+`43baee9c6f99e6b3d55a356c23a68765bb701d07`; their original parity expectations remain
 in the provenance field. They used the existing 30-second standalone execution deadline.
 The old comparison-binary/output bundles were not recovered from linked comments or
 the retained primary checkout's artifact directories. No old compile deadline is invented.
@@ -53,6 +53,11 @@ assemblies and two default CLI assemblies pass IL verification. None references 
 co-locates `SharpTS.dll`; hosted outputs also reference the hosting ABI. Hosted outputs
 come from real runtime initialization, not compilation alone. The four defects coexist
 with valid IL and standalone deployment.
+
+TypeScript 7.0.2 also rejects those two sources' Math.sumPrecise property with ESNext/DOM
+libraries; the other two sources compile. [reference-compilation.json](issue-1917/reference-compilation.json)
+preserves that independent reference declaration limitation. Node's runtime absence and
+TypeScript's declaration absence do not replace the specified summation expectation.
 
 Open/closed searches and current Math history found no exact fixes before #1935–#1938.
 Closed #288 addressed interpreter method identity/enumeration, not this compiled

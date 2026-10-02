@@ -1,0 +1,37 @@
+{
+  "typescript": "7.0.2",
+  "target": "ES2024",
+  "lib": "ESNext,DOM",
+  "results": [
+    {
+      "issue": 1915,
+      "file": "boxed-ordinary.ts",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1915,
+      "file": "boxed-exotic.ts",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1915,
+      "file": "explicit-exotic.ts",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1915,
+      "file": "async-outer-control.ts",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1915,
+      "file": "async-number.ts",
+      "exitCode": 0,
+      "output": ""
+    }
+  ]
+}

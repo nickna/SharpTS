@@ -1,0 +1,13 @@
+{
+  "typescript": "7.0.2",
+  "target": "ES2024",
+  "lib": "ESNext,DOM",
+  "results": [
+    {
+      "issue": 1916,
+      "file": "radix.ts",
+      "exitCode": 0,
+      "output": ""
+    }
+  ]
+}
