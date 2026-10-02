@@ -18,8 +18,9 @@ generated builders must belong to the current output. Sequential reuse is the te
 contract; concurrent use of one emitter is not established.
 
 Declaration makes forward handles readable before bodies or generated types are complete.
-Checked owners reject missing reads, null/duplicate assignments, premature completion
-where they track staged work, and writes after completion. Completion seals metadata,
+Checked owners reject missing reads, null assignments, premature completion
+where they track staged work, and writes after completion. Most owners reject duplicate
+assignments; reports identify intentional replacement during declaration. Completion seals metadata,
 not guest objects: output-local caches, descriptors, prototype tables, thread-static
 contexts and guest collections remain mutable under their individual contracts.
 Optional owners and optional implementations are distinct; a required facade can finish
@@ -63,3 +64,4 @@ retain the destinations in the
 | --- | --- | ---: |
 | [#1868](https://github.com/nickna/SharpTS/issues/1868) | [R01: Calls and function values](R01.md) | 11 |
 | [#1869](https://github.com/nickna/SharpTS/issues/1869) | [R02: Iterator and generator protocols](R02.md) | 8 |
+| [#1870](https://github.com/nickna/SharpTS/issues/1870) | [R03: Objects, descriptors and property access](R03.md) | 17 |
