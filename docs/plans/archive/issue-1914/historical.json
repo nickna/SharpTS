@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/nickna/SharpTS/issues/1599",
+  "frozenBodySha256": "420cdca4eaf29b19354bcce748ffa034f4cfaa3400e772fb2089b8d97978c15f",
+  "excerpts": [
+    {
+      "line": 89,
+      "text": "- [x] Templates and String.raw: required checked owner holds seven declarations for the created strings-list type, constructor/raw getter, concatenation and tag invocation; five emitters use explicit dependencies. Merged in #1677 after CI gates and review passed. Verification covers 462 distinct passing regressions, including 22 component and 15 isolated new cases. Eighteen IL-verified comparisons preserve normalized metadata and all 18,882 method bodies/exception regions, with sixteen exact executions and two hosted assemblies. Early creation, raw/cooked values, list freezing, receiver behavior, rest signatures, substitution/length normalization and evaluation order are unchanged. Guest TypeError tests inspect the existing thrown-value carrier. Probes use existing --noLib built-in typing because the original CLI declaration path rejects String.raw; the original computed-tag receiver behavior is preserved. Coercion, boxed receivers and other remaining ownership work stay in scope. CodeRabbit recorded exact-head coverage with no actionable findings but reported unavailable repository-clone analysis; supplemental local review and immutable-commit source comparison found no additional issue.\r",
+      "sha256": "1d8b94924f0a81471dbd44c5554214b6aab0b809f094f211a1d2271be296886d"
+    }
+  ]
+}

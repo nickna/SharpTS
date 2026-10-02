@@ -1,0 +1,535 @@
+{
+  "baseline": "281b8b37771a9b5e2b0808e10ce240749a844a6c",
+  "recordedAtUtc": "2026-10-02T04:24:34.0185712+00:00",
+  "runtime": "10.0.12",
+  "dotnet": {
+    "ExitCode": 0,
+    "StandardOutput": "10.0.401\n",
+    "StandardError": ""
+  },
+  "node": {
+    "ExitCode": 0,
+    "StandardOutput": "v25.5.0\n",
+    "StandardError": ""
+  },
+  "deadlineSeconds": 30,
+  "results": [
+    {
+      "File": "identity.ts",
+      "Provenance": "Recovered verbatim from PR #1681 head 43baee9c6f99e6b3d55a356c23a68765bb701d07, StandaloneDllTests.MathMetadataPrograms row 9 (zero-based); originalParityStdout=\u0022false true true true\\nfloor 1 0 2 2\\n\u0022",
+      "ExpectedStdout": "true true true true\nfloor 1 0 2 2\n",
+      "sourceSha256": "4e9955a0df1c351df2e163d8f6e6c3b43c7d3cc8a9f8cf0f4644fe2342742c7b",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "true true true true\nfloor 1 0 2 2\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "true true true true\nfloor 1 0 2 2\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "false true true true\nfloor 1 0 2 2\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "Error: Type Error at <repository>\\docs\\plans\\archive\\issue-1917\\identity.ts:1:1:  Property \u0027sumPrecise\u0027 does not exist on interface \u0027Math\u0027.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "true true true true\nfloor 1 0 2 2\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "Error: Type Error at <repository>\\docs\\plans\\archive\\issue-1917\\identity.ts:1:1:  Property \u0027sumPrecise\u0027 does not exist on interface \u0027Math\u0027.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "",
+            "StandardError": "Type Error at <repository>\\docs\\plans\\archive\\issue-1917\\identity.ts:1:1:  Property \u0027sumPrecise\u0027 does not exist on interface \u0027Math\u0027.\n"
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Note: output uses features needing the SharpTS runtime (Intl); --standalone set, so SharpTS.dll was not copied. These features will throw at runtime unless SharpTS.dll is present.\nCompiled to <repository>\\artifacts\\issue-reconciliation\\issue-1917\\identity\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Net.HttpListener",
+            "System.Net.Primitives",
+            "System.Collections.Specialized",
+            "System.Net.WebHeaderCollection",
+            "System.Net.Sockets",
+            "System.Private.Uri",
+            "System.Console",
+            "System.Text.Json",
+            "System.Collections",
+            "System.Net.Http",
+            "System.Diagnostics.Process",
+            "System.Linq",
+            "System.IO.Pipes"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "false true true true\nfloor 1 0 2 2\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Note: output uses features needing the SharpTS runtime (Intl); --standalone set, so SharpTS.dll was not copied. These features will throw at runtime unless SharpTS.dll is present.\nCompiled to <repository>\\artifacts\\issue-reconciliation\\issue-1917\\identity\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Text.Encoding",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Threading.ThreadPool",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Net.HttpListener",
+            "System.Net.Primitives",
+            "System.Collections.Specialized",
+            "System.Net.WebHeaderCollection",
+            "System.Net.Sockets",
+            "System.Private.Uri",
+            "System.Console",
+            "System.Text.Json",
+            "System.Net.Http",
+            "System.Diagnostics.Process",
+            "System.Linq",
+            "System.IO.Pipes"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "false true true true\nfloor 1 0 2 2\n"
+        }
+      ]
+    },
+    {
+      "File": "nonfinite.ts",
+      "Provenance": "Recovered verbatim from PR #1681 head 43baee9c6f99e6b3d55a356c23a68765bb701d07, StandaloneDllTests.MathMetadataPrograms row 15 (zero-based); originalParityStdout=\u00220 -Infinity NaN 0 Infinity\\n\u0022",
+      "ExpectedStdout": "Infinity -Infinity NaN NaN Infinity\n",
+      "sourceSha256": "a090bcde9d0706ac1e78dc1fc6c00d36482fa5af9eae69604cdf08395ca1772a",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "",
+            "StandardError": "<repository>\\docs\\plans\\archive\\issue-1917\\nonfinite.ts:1\nconst sum    =Math.sumPrecise;console.log(sum([Infinity,1]),sum([-Infinity,1]),sum([Infinity,-Infinity]),sum([NaN,1]),sum([Number.MAX_VALUE,Number.MAX_VALUE]));\n                                          ^\n\nTypeError: sum is not a function\n    at Object.\u003Canonymous\u003E (<repository>\\docs\\plans\\archive\\issue-1917\\nonfinite.ts:1:43)\n    at Module._compile (node:internal/modules/cjs/loader:1803:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1934:10)\n    at Module.load (node:internal/modules/cjs/loader:1524:32)\n    at Module._load (node:internal/modules/cjs/loader:1326:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:328:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\n    at node:internal/main/run_main_module:33:47\n\nNode.js v25.5.0\n"
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "Infinity -Infinity NaN NaN Infinity\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "0 -Infinity NaN 0 Infinity\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "Error: Type Error at <repository>\\docs\\plans\\archive\\issue-1917\\nonfinite.ts:1:1:  Property \u0027sumPrecise\u0027 does not exist on interface \u0027Math\u0027.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Infinity -Infinity NaN NaN Infinity\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "Error: Type Error at <repository>\\docs\\plans\\archive\\issue-1917\\nonfinite.ts:1:1:  Property \u0027sumPrecise\u0027 does not exist on interface \u0027Math\u0027.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 1,
+            "StandardOutput": "",
+            "StandardError": "Type Error at <repository>\\docs\\plans\\archive\\issue-1917\\nonfinite.ts:1:1:  Property \u0027sumPrecise\u0027 does not exist on interface \u0027Math\u0027.\n"
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1917\\nonfinite\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "0 -Infinity NaN 0 Infinity\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1917\\nonfinite\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "0 -Infinity NaN 0 Infinity\n"
+        }
+      ]
+    },
+    {
+      "File": "sign.ts",
+      "Provenance": "Recovered verbatim from PR #1681 head 43baee9c6f99e6b3d55a356c23a68765bb701d07, StandaloneDllTests.MathMetadataPrograms row 3 (zero-based); originalParityStdout=\u0022-1 0 1 NaN false\\n8 1 NaN\\n\u0022",
+      "ExpectedStdout": "-1 0 1 NaN true\n8 1 NaN\n",
+      "sourceSha256": "755e5c41e17f3f055ac56659abf8cdf53051e38e91b74af4a9b720ccc686a4bd",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-1 0 1 NaN true\n8 1 NaN\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "-1 0 1 NaN true\n8 1 NaN\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "-1 0 1 NaN false\n8 1 NaN\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-1 0 1 NaN true\n8 1 NaN\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-1 0 1 NaN true\n8 1 NaN\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-1 0 1 NaN true\n8 1 NaN\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1917\\sign\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-1 0 1 NaN false\n8 1 NaN\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1917\\sign\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-1 0 1 NaN false\n8 1 NaN\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1917\\sign\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "-1 0 1 NaN false\n8 1 NaN\n"
+        }
+      ]
+    },
+    {
+      "File": "zero-ties.ts",
+      "Provenance": "Recovered verbatim from PR #1681 head 43baee9c6f99e6b3d55a356c23a68765bb701d07, StandaloneDllTests.MathMetadataPrograms row 6 (zero-based); originalParityStdout=\u0022-Infinity Infinity 9 -2 NaN\\ntrue false\\n\u0022",
+      "ExpectedStdout": "-Infinity Infinity 9 -2 NaN\nfalse true\n",
+      "sourceSha256": "2d75fe26527de52973efa12c50c3aa1db5c9b239e371700bc6022e5fea2d3a73",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-Infinity Infinity 9 -2 NaN\nfalse true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "-Infinity Infinity 9 -2 NaN\nfalse true\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "-Infinity Infinity 9 -2 NaN\ntrue false\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-Infinity Infinity 9 -2 NaN\nfalse true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-Infinity Infinity 9 -2 NaN\nfalse true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-Infinity Infinity 9 -2 NaN\nfalse true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1917\\zero-ties\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-Infinity Infinity 9 -2 NaN\ntrue false\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1917\\zero-ties\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "-Infinity Infinity 9 -2 NaN\ntrue false\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1917\\zero-ties\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "-Infinity Infinity 9 -2 NaN\ntrue false\n"
+        }
+      ]
+    }
+  ]
+}

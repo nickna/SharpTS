@@ -1,0 +1,1 @@
+const sign:any=Math.sign;const pow:any=Math.pow;console.log(sign(-2),sign(0),sign(3),sign(NaN),Object.is(sign(-0),-0));console.log(pow('2','3'),pow(NaN,0),pow(-1,0.5));

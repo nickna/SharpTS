@@ -1,0 +1,43 @@
+{
+  "typescript": "7.0.2",
+  "target": "ES2024",
+  "lib": "ESNext,DOM",
+  "results": [
+    {
+      "issue": 1918,
+      "file": "async-static.ts",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1918,
+      "file": "generator-literal.ts",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1918,
+      "file": "typedarray.ts",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1918,
+      "file": "constructor-alias.cjs",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1918,
+      "file": "async-call-control.ts",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "issue": 1918,
+      "file": "generator-call-control.ts",
+      "exitCode": 0,
+      "output": ""
+    }
+  ]
+}

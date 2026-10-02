@@ -1,0 +1,1 @@
+const obj:any={prefix:'P',tag(strings:any,...values:any[]){return this.prefix+':'+strings.join('|')+':'+values.join(',');}};console.log(obj.tag`a${7}b`);console.log(obj['tag']`c${8}d`);

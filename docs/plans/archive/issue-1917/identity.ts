@@ -1,0 +1,1 @@
+const m:any=Math;console.log(m===globalThis.Math,m.floor===Math.floor,m.random===Math.random,m.sumPrecise===Math.sumPrecise);console.log(m.floor.name,m.floor.length,m.random.length,m.pow.length,m.hypot.length);

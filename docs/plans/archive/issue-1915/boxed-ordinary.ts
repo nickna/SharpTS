@@ -1,0 +1,1 @@
+const box:any=new Number(1);box.valueOf=function(){return 9;};box.toString=function(){return 'own';};console.log(box+2,box==9,String(box));const s:any=new String('base');s.valueOf=function(){return 'value';};console.log(s+'!');

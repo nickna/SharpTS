@@ -1,0 +1,32 @@
+[
+  {
+    "File": "async-static.ts",
+    "Provenance": "Recovered verbatim from PR #1683 head 3e4fb4b256615f53080e6bc88ad9eae8c9238f06, StandaloneDllTests.BigIntMetadataPrograms row 24 (zero-based); originalParityStdout=\"ReferenceError Undefined variable 'BigInt'.\\n\"",
+    "ExpectedStdout": "-1n 9n\n"
+  },
+  {
+    "File": "generator-literal.ts",
+    "Provenance": "Recovered verbatim from PR #1683 head 3e4fb4b256615f53080e6bc88ad9eae8c9238f06, StandaloneDllTests.BigIntMetadataPrograms row 25 (zero-based); originalParityStdout=\"literal generator failed\\n\"",
+    "ExpectedStdout": "14n\n18n\n"
+  },
+  {
+    "File": "typedarray.ts",
+    "Provenance": "Recovered verbatim from PR #1683 head 3e4fb4b256615f53080e6bc88ad9eae8c9238f06, StandaloneDllTests.BigIntMetadataPrograms row 17 (zero-based); originalParityStdout=\"-1n 123n 2 18446744073709551615n 123n\\nassignment failed\\n\"",
+    "ExpectedStdout": "-1n 123n 2 18446744073709551615n 123n\n"
+  },
+  {
+    "File": "constructor-alias.cjs",
+    "Provenance": "Recovered verbatim from PR #1683 head 3e4fb4b256615f53080e6bc88ad9eae8c9238f06, StandaloneDllTests.BigIntMetadataPrograms row 22 (zero-based); originalParityStdout=\"123n null 255n ff\\n\"",
+    "ExpectedStdout": "123n 123n 255n ff\n"
+  },
+  {
+    "File": "async-call-control.ts",
+    "Provenance": "Recovered verbatim from PR #1683 head 3e4fb4b256615f53080e6bc88ad9eae8c9238f06, StandaloneDllTests.BigIntMetadataPrograms row 20 (zero-based); originalParityStdout=\"7n\\n\"",
+    "ExpectedStdout": "7n\n"
+  },
+  {
+    "File": "generator-call-control.ts",
+    "Provenance": "Recovered verbatim from PR #1683 head 3e4fb4b256615f53080e6bc88ad9eae8c9238f06, StandaloneDllTests.BigIntMetadataPrograms row 21 (zero-based); originalParityStdout=\"7n\\n9n\\n\"",
+    "ExpectedStdout": "7n\n9n\n"
+  }
+]

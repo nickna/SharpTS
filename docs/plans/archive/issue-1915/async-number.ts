@@ -1,0 +1,1 @@
+async function run(){await Promise.resolve(0);const box:any=new Number(4);console.log(box+2);}run().catch((e:any)=>console.log(e.name,e.message));

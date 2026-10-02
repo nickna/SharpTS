@@ -1,0 +1,27 @@
+[
+  {
+    "File": "boxed-ordinary.ts",
+    "Provenance": "Recovered verbatim from PR #1679 head c85a5505dc46d315e039857ccf399206a128b407, StandaloneDllTests.BoxedPrimitiveMetadataPrograms row 6 (zero-based); originalParityStdout=\"11 true own\\nvalue!\\n\"",
+    "ExpectedStdout": "11 true own\nvalue!\n"
+  },
+  {
+    "File": "boxed-exotic.ts",
+    "Provenance": "Recovered verbatim from PR #1679 head c85a5505dc46d315e039857ccf399206a128b407, StandaloneDllTests.BoxedPrimitiveMetadataPrograms row 8 (zero-based); originalParityStdout=\"5 true 1 default;default;\\n\"",
+    "ExpectedStdout": "5 true 4 default;default;string;\n"
+  },
+  {
+    "File": "explicit-exotic.ts",
+    "Provenance": "Recovered verbatim from PR #1685 head 80679a0c290d88a7e68d12ce00f1446bdaa3d4a7, StandaloneDllTests.NumericCoercionMetadataPrograms row 4 (zero-based); originalParityStdout=\"NaN 9 number\\n\"",
+    "ExpectedStdout": "9 9 numbernumber\n"
+  },
+  {
+    "File": "async-outer-control.ts",
+    "Provenance": "Recovered verbatim from PR #1679 head c85a5505dc46d315e039857ccf399206a128b407, StandaloneDllTests.BoxedPrimitiveMetadataPrograms row 15 (zero-based); originalParityStdout=\"6\\n\"",
+    "ExpectedStdout": "6\n"
+  },
+  {
+    "File": "async-number.ts",
+    "Provenance": "New matched probe of the async Number lookup described by #1679; original failing source was not recovered.",
+    "ExpectedStdout": "6\n"
+  }
+]

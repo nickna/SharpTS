@@ -1,0 +1,17 @@
+[
+  {
+    "File": "raw.ts",
+    "Provenance": "Recovered verbatim from PR #1677 head 75bc19d2e657fe67b6746630ade814a8f78f79ac, StandaloneDllTests.TemplateMetadataPrograms row 2 (zero-based); originalParityStdout=\"3:4:a\\\\nb\\nx\\\\n3\\\\t\\n\"",
+    "ExpectedStdout": "3:4:a\\nb\nx\\n3\\t\n"
+  },
+  {
+    "File": "computed-tag.ts",
+    "Provenance": "Recovered verbatim from PR #1677 head 75bc19d2e657fe67b6746630ade814a8f78f79ac, StandaloneDllTests.TemplateMetadataPrograms row 3 (zero-based); originalParityStdout=\"P:a|b:7\\nundefined:c|d:8\\n\"",
+    "ExpectedStdout": "P:a|b:7\nP:c|d:8\n"
+  },
+  {
+    "File": "raw-value.ts",
+    "Provenance": "Recovered verbatim from PR #1677 head 75bc19d2e657fe67b6746630ade814a8f78f79ac, StandaloneDllTests.TemplateMetadataPrograms row 8 (zero-based); originalParityStdout=\"a9b\\nx8y\\np7q\\n1 raw\\n\"",
+    "ExpectedStdout": "a9b\nx8y\np7q\n1 raw\n"
+  }
+]

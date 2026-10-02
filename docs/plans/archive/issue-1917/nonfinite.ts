@@ -1,0 +1,1 @@
+const sum:any=Math.sumPrecise;console.log(sum([Infinity,1]),sum([-Infinity,1]),sum([Infinity,-Infinity]),sum([NaN,1]),sum([Number.MAX_VALUE,Number.MAX_VALUE]));

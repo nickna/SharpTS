@@ -1,0 +1,439 @@
+{
+  "baseline": "e622d0c88f9133d10ce6809082a3085e759fb42b",
+  "runtime": "10.0.12",
+  "sdk": "10.0.401",
+  "results": [
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.UnwatchFile_StopsWatching(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.2710671",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.PrimitiveSliceLengths_PreservePositionsUtf16AndOmittedArguments(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0050250",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.AllocationSampling_DistinguishesTransientOverheadFromPersistentAllocations(persistent: True, budget: 4096)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0003428",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.TimerMicrotaskCheckpointTests.OverdueTimersRunPromiseAndMicrotaskCheckpointBetweenCallbacks(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0608033",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.Readable_PauseResume_FlowControl(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0233350",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.TimerMicrotaskCheckpointTests.PendingRejectionIsCapturedBeforeAnotherOverdueTimer(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.3009480",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.Watch_DetectsFileChange(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.2974684",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StablePrimitiveSliceLengths_DoNotAllocateResultStringsOrBoxes",
+      "outcome": "Passed",
+      "duration": "00:00:00.0516343",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.Watch_OnMethodForEvents(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.3104382",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveGeneratorIterationTests.ReassignedExportedGenerator_RetainsLiveBinding(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0588201",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.TimerMicrotaskCheckpointTests.MicrotaskCanCancelTheNextOverdueTimer(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0364689",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.Watch_CloseStopsWatching(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.2271062",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.GenericFallback_PreservesBoxingCoercionAndRegExpRejection(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0162182",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StablePrimitiveCall_UsesTypedFixedArityHelper(functionName: \"takeSubstring\", helperName: \"StringSubstringPrimitive\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0320946",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.RuntimeTests.GeneratorLifetimeTests.DisposingOneInterpreterDoesNotStopAnotherInterpretersGenerator",
+      "outcome": "Passed",
+      "duration": "00:00:00.0353718",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StablePrimitiveCall_UsesTypedFixedArityHelper(functionName: \"find\", helperName: \"StringIndexOfPrimitive\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0417514",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.ReadStream_FlowingMode_AutoDrainsOnDataListener(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.2194233",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveGeneratorIterationTests.StableNumericRange_IsCorrect(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.7147192",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.Watch_OnMethodForEvents(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.1747295",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.PrimitiveSliceLengths_PreservePositionsUtf16AndOmittedArguments(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0562745",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.Watch_DetectsFileChange(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.1570236",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.PrimitiveIntrinsics_PreservePositionsUtf16AndOmittedArguments(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0106389",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.PrimitiveIntrinsics_PreservePositionsUtf16AndOmittedArguments(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.7150217",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveGeneratorIterationTests.PublicNext_RetainsIteratorResultSemantics(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0549253",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StablePrimitiveCall_UsesTypedFixedArityHelper(functionName: \"contains\", helperName: \"StringIncludesPrimitive\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0588617",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.TimerMicrotaskCheckpointTests.MicrotaskCanCancelTheNextOverdueTimer(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0552248",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.NumericTypedArrayUpdate_StaysUnboxedBetweenAccessors",
+      "outcome": "Passed",
+      "duration": "00:00:00.0849569",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveGeneratorIterationTests.StableNumericRange_IsCorrect(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:01.0243334",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.OneByteTypedArrayAccessors_PreserveOffsetAliasingAndNarrowing",
+      "outcome": "Passed",
+      "duration": "00:00:00.0431196",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.BrainfuckN5000_MeetsAllocationGate",
+      "outcome": "Passed",
+      "duration": "00:00:00.4279272",
+      "output": "Brainfuck N=5,000 runBF allocation samples: 4184, 4184, 4184, 4184, 4184 bytes."
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.DynamicOperands_RetainObjectCoercionPath",
+      "outcome": "Passed",
+      "duration": "00:00:00.0424803",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveGeneratorIterationTests.AbruptExit_StillClosesNativeGenerator",
+      "outcome": "Passed",
+      "duration": "00:00:00.0463549",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.RuntimeTests.GeneratorLifetimeTests.DisposalBeforeFirstResumeDoesNotStartWorker",
+      "outcome": "Passed",
+      "duration": "00:00:00.0001329",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StablePrimitiveSliceLength_UsesAllocationFreeBoundsHelper(functionName: \"substringLength\", helperName: \"StringSubstringLengthPrimitive\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0663275",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StablePrimitiveCall_UsesTypedFixedArityHelper(functionName: \"takeSlice\", helperName: \"StringSlicePrimitive\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0353442",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.AllocationSampling_DistinguishesTransientOverheadFromPersistentAllocations(persistent: True, budget: 8192)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0000104",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.Readable_ResumeAfterPause(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0517518",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.OneByteTypedArrayAccessors_UseDirectElementOperations",
+      "outcome": "Passed",
+      "duration": "00:00:00.7119297",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveGeneratorIterationTests.StableNumericRange_PassesIlVerification",
+      "outcome": "Passed",
+      "duration": "00:00:00.1471294",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StablePrimitiveStringLength_RemainsUnboxed",
+      "outcome": "Passed",
+      "duration": "00:00:00.0807600",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.GenericFallback_PreservesBoxingCoercionAndRegExpRejection(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.1029654",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StringPrototypeReplacement_DisablesTypedHelperAndIsObservable",
+      "outcome": "Passed",
+      "duration": "00:00:00.0902451",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveGeneratorIterationTests.ReassignedExportedGenerator_RetainsLiveBinding(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0072348",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StablePrimitiveSliceLength_UsesAllocationFreeBoundsHelper(functionName: \"sliceFromLength\", helperName: \"StringSliceFromLengthPrimitive\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0713317",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.RuntimeTests.GeneratorLifetimeTests.GeneratorCreatedBeforeInterpreterDisposalNeverStartsAfterShutdown",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002549",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.NumericTypedArrayBitwiseLoop_HasNoPerIterationAllocation",
+      "outcome": "Passed",
+      "duration": "00:00:00.1334370",
+      "output": "One million bitwise iterations allocation samples: 96, 96, 96, 96, 96 bytes."
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.AllocationSampling_DistinguishesTransientOverheadFromPersistentAllocations(persistent: False, budget: 4096)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0000056",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.RuntimeTests.GeneratorLifetimeTests.InterpreterDisposalReleasesBothWorkersInYieldStarDelegation",
+      "outcome": "Passed",
+      "duration": "00:00:00.0010466",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StablePrimitiveSliceLength_UsesAllocationFreeBoundsHelper(functionName: \"substringFromLength\", helperName: \"StringSubstringFromLengthPrimitive\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0655213",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.Readable_PauseResume_FlowControl(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.1191120",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.RuntimeTests.GeneratorLifetimeTests.CompletedGeneratorCanBeDisposedBeforeItsInterpreter",
+      "outcome": "Passed",
+      "duration": "00:00:00.0003743",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.Watch_CloseStopsWatching(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0520674",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.ReadStream_FlowingMode_AutoDrainsOnDataListener(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0935314",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StablePrimitiveSliceLength_UsesAllocationFreeBoundsHelper(functionName: \"sliceLength\", helperName: \"StringSliceLengthPrimitive\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0397071",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StableAndFallbackShapesPassIlVerification",
+      "outcome": "Passed",
+      "duration": "00:00:00.3095152",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveGeneratorIterationTests.PublicNext_RetainsIteratorResultSemantics(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0104644",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.Readable_ResumeAfterPause(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0022249",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.AllocationSampling_DistinguishesTransientOverheadFromPersistentAllocations(persistent: False, budget: 8192)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0065587",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.RuntimeTests.GeneratorLifetimeTests.InterpreterDisposalStopsItsSuspendedGeneratorWithoutResumingGuestCode",
+      "outcome": "Passed",
+      "duration": "00:00:00.0005266",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.PromotedStringLength_DoesNotMaterializeStringInScan",
+      "outcome": "Passed",
+      "duration": "00:00:00.0479204",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StringPrototypeReplacement_DisablesSliceLengthHelperAndIsObservable",
+      "outcome": "Passed",
+      "duration": "00:00:00.1008701",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveGeneratorIterationTests.AliasedGeneratorCall_RetainsPublicProtocolPath",
+      "outcome": "Passed",
+      "duration": "00:00:00.0354960",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveGeneratorIterationTests.StableNumericRange_UsesNativeStateAndConsumerBridge",
+      "outcome": "Passed",
+      "duration": "00:00:00.0440338",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.RuntimeTests.GeneratorLifetimeTests.GeneratorDisposalStopsSuspendedWorkerAndIsIdempotent",
+      "outcome": "Passed",
+      "duration": "00:00:00.0014549",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.WatchFile_DetectsStatChange(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.3585516",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.UnwatchFile_StopsWatching(mode: Interpreted)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0689958",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.NumericBitwise_PassesIlVerification",
+      "outcome": "Passed",
+      "duration": "00:00:00.2476898",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.BuiltInModules.FsWatchTests.WatchFile_DetectsStatChange(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.8671843",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.TimerMicrotaskCheckpointTests.PendingRejectionIsCapturedBeforeAnotherOverdueTimer(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.6091126",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.StablePrimitiveStringIntrinsicTests.StablePrimitiveSearch_DoesNotAllocatePerCall",
+      "outcome": "Passed",
+      "duration": "00:00:00.0447238",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.CompilerTests.NumericBitwiseLoweringTests.StringCharCodeAtHelper_IsAggressivelyInlined",
+      "outcome": "Passed",
+      "duration": "00:00:00.0336117",
+      "output": null
+    },
+    {
+      "name": "SharpTS.Tests.SharedTests.TimerMicrotaskCheckpointTests.OverdueTimersRunPromiseAndMicrotaskCheckpointBetweenCallbacks(mode: Compiled)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0552132",
+      "output": null
+    }
+  ]
+}

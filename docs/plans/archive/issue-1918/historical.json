@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/nickna/SharpTS/issues/1599",
+  "frozenBodySha256": "420cdca4eaf29b19354bcce748ffa034f4cfaa3400e772fb2089b8d97978c15f",
+  "excerpts": [
+    {
+      "line": 99,
+      "text": "- [x] BigInt: required checked owner holds three prototype/numeric declarations and an optional implementation holds 24 operation declarations. Merged in #1683 after all main/desktop gates and the full 23-file exact-head review passed with no actionable findings. Fifteen scoped emitter boundaries and shared operator lookup replace flat handles; explicit error, conversion, descriptor and symbol inputs preserve strict-conversion staging, required rounding/prototype shells and optional operation selection. Local verification covers 1,256 cases including 53 new owner/staging/selection/reuse and 26 isolated cases; two sandbox HTTP-listener startup failures passed with normal Windows permissions. All 28 IL-verified saved comparisons preserve metadata and 30,297 method bodies/exception regions, with 26 exact executions and two hosted outputs. Source audit, Release build and quality gates passed. A subsequent XML-only signature correction has its own successful build; prior test/output provenance remains recorded. Final CI passed 21,612 core tests plus 1 existing platform skip on Linux and 21,610 core tests plus 3 existing platform skips on Windows, with 129 GUI passes per platform and zero failures. All 79 new BigInt cases and the unchanged generator, fork IPC and lifecycle controls passed on both platforms. Native signatures, binary64 rounding, conversion order, prototype descriptors/function identity and mutable guest prototypes remain unchanged. Existing async static-dispatch, literal-generator, typed-array assignment and CommonJS alias limitations are preserved, not fixed. All broader ownership and final-audit work remains required.\r",
+      "sha256": "6225f7ff017de454b55e2ae64f0cf5a72aeee78aeee72914aeb68d9e9f17c0f9"
+    }
+  ]
+}

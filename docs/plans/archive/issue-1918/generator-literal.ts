@@ -1,0 +1,1 @@
+function* values():Generator<bigint,void,any>{yield 7n;yield 9n;}try{for(const n of values()){console.log(n*2n);}}catch(e:any){console.log('literal generator failed');}

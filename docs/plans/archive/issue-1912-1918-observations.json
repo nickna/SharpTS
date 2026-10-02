@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "productBaseline": "e622d0c88f9133d10ce6809082a3085e759fb42b",
+  "classification": "Retained evidence observations, including incorrect outputs; not conformance acceptance expectations.",
+  "cases": [
+    {
+      "issue": 1914,
+      "file": "raw.ts",
+      "sourceSha256": "e6f4e9054d7253ac25b4a950bec317d5de4c43e8d5de9cdfe1e97a60a17f169f",
+      "referenceStdout": "3:4:a\\nb\nx\\n3\\t\n",
+      "interpretedStdout": "3:4:a\\nb\nx\\n3\\t\n",
+      "compiledStdout": "3:4:a\\nb\nx\\n3\\t\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1914,
+      "file": "computed-tag.ts",
+      "sourceSha256": "e230d08b87985263e1e31450563a88cf540175602c1ad6d8683411977b198d7c",
+      "referenceStdout": "P:a|b:7\nP:c|d:8\n",
+      "interpretedStdout": "P:a|b:7\nP:c|d:8\n",
+      "compiledStdout": "P:a|b:7\nundefined:c|d:8\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1914,
+      "file": "raw-value.ts",
+      "sourceSha256": "ddf730b237a9e6fd894c855d986552c6365550904078fdf47ff7be9531ce734b",
+      "referenceStdout": "a9b\nx8y\np7q\n1 raw\n",
+      "interpretedStdout": "a9b\nx8y\np7q\n1 raw\n",
+      "compiledStdout": "a9b\nx8y\np7q\n1 raw\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1915,
+      "file": "boxed-ordinary.ts",
+      "sourceSha256": "3da8591c1bbae75a4f8efd271f409e07545070ee9b96f87b752f3c2885aeeeda",
+      "referenceStdout": "11 true own\nvalue!\n",
+      "interpretedStdout": "11 true own\nvalue!\n",
+      "compiledStdout": "11 true own\nvalue!\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1915,
+      "file": "boxed-exotic.ts",
+      "sourceSha256": "6d18ef536b4618303dc2ff636f47be71bed905f4de0fad06669f5f441ceaf1a6",
+      "referenceStdout": "5 true 4 default;default;string;\n",
+      "interpretedStdout": "5 true 4 default;default;string;\n",
+      "compiledStdout": "5 true 1 default;default;\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1915,
+      "file": "explicit-exotic.ts",
+      "sourceSha256": "287d2c4cc2c18f601bed081e33ea5a6281c3329b16e8e15187b46c6e9c03cd59",
+      "referenceStdout": "9 9 numbernumber\n",
+      "interpretedStdout": "9 NaN number\n",
+      "compiledStdout": "NaN 9 number\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1915,
+      "file": "async-outer-control.ts",
+      "sourceSha256": "586ac8ad48493eeb52514fecab198b16eba30c30df5b8d22efccc2cffe010ec6",
+      "referenceStdout": "6\n",
+      "interpretedStdout": "6\n",
+      "compiledStdout": "6\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1915,
+      "file": "async-number.ts",
+      "sourceSha256": "f17fa98ecc50732954b84b3dd4f76092078ec7747a1ae98753b1c56e09b38573",
+      "referenceStdout": "6\n",
+      "interpretedStdout": "6\n",
+      "compiledStdout": "6\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1916,
+      "file": "radix.ts",
+      "sourceSha256": "4b275cab6c832c3619cd8ca085617d31720ad21183aaa77bf604f2713877f5cd",
+      "referenceStdout": "255 21 1295 -9 NaN 16\n",
+      "interpretedStdout": "255 21 NaN -9 NaN 16\n",
+      "compiledStdout": "0 21 1295 -9 NaN 16\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1917,
+      "file": "identity.ts",
+      "sourceSha256": "4e9955a0df1c351df2e163d8f6e6c3b43c7d3cc8a9f8cf0f4644fe2342742c7b",
+      "referenceStdout": "true true true true\nfloor 1 0 2 2\n",
+      "interpretedStdout": "true true true true\nfloor 1 0 2 2\n",
+      "compiledStdout": "false true true true\nfloor 1 0 2 2\n",
+      "defaultDeclarationError": "Property 'sumPrecise' does not exist on interface 'Math'."
+    },
+    {
+      "issue": 1917,
+      "file": "nonfinite.ts",
+      "sourceSha256": "a090bcde9d0706ac1e78dc1fc6c00d36482fa5af9eae69604cdf08395ca1772a",
+      "referenceStdout": "Infinity -Infinity NaN NaN Infinity\n",
+      "interpretedStdout": "Infinity -Infinity NaN NaN Infinity\n",
+      "compiledStdout": "0 -Infinity NaN 0 Infinity\n",
+      "defaultDeclarationError": "Property 'sumPrecise' does not exist on interface 'Math'."
+    },
+    {
+      "issue": 1917,
+      "file": "sign.ts",
+      "sourceSha256": "755e5c41e17f3f055ac56659abf8cdf53051e38e91b74af4a9b720ccc686a4bd",
+      "referenceStdout": "-1 0 1 NaN true\n8 1 NaN\n",
+      "interpretedStdout": "-1 0 1 NaN true\n8 1 NaN\n",
+      "compiledStdout": "-1 0 1 NaN false\n8 1 NaN\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1917,
+      "file": "zero-ties.ts",
+      "sourceSha256": "2d75fe26527de52973efa12c50c3aa1db5c9b239e371700bc6022e5fea2d3a73",
+      "referenceStdout": "-Infinity Infinity 9 -2 NaN\nfalse true\n",
+      "interpretedStdout": "-Infinity Infinity 9 -2 NaN\nfalse true\n",
+      "compiledStdout": "-Infinity Infinity 9 -2 NaN\ntrue false\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1918,
+      "file": "async-static.ts",
+      "sourceSha256": "69d8df066324cfd0534f26dce4a051af9488ed5fed3370a4b7df39e5fb65e4eb",
+      "referenceStdout": "-1n 9n\n",
+      "interpretedStdout": "-1n 9n\n",
+      "compiledStdout": "ReferenceError Undefined variable 'BigInt'.\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1918,
+      "file": "generator-literal.ts",
+      "sourceSha256": "b1aa8cb2b0862b7aa39f835bbbabca6451be2dc06bdb8fef609208fc03301924",
+      "referenceStdout": "14n\n18n\n",
+      "interpretedStdout": "14n\n18n\n",
+      "compiledStdout": "literal generator failed\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1918,
+      "file": "typedarray.ts",
+      "sourceSha256": "d7f2beeac80704cf69521e99ec745a5a5f15f66e5cae596c18ec6b30b947debf",
+      "referenceStdout": "-1n 123n 2 18446744073709551615n 123n\n",
+      "interpretedStdout": "-1n 123n 2 18446744073709551615n 123n\nassignment failed\n",
+      "compiledStdout": "-1n 123n 2 18446744073709551615n 123n\nassignment failed\n",
+      "defaultDeclarationError": "DataView buffer must be an ArrayBuffer or SharedArrayBuffer, got 'interface ArrayBuffer'."
+    },
+    {
+      "issue": 1918,
+      "file": "constructor-alias.cjs",
+      "sourceSha256": "797aa039d4578e47dd8e2545682dcc88bd86dcd7ed212600dc63d74f4f838768",
+      "referenceStdout": "123n 123n 255n ff\n",
+      "interpretedStdout": "123n 123n 255n ff\n",
+      "compiledStdout": "123n null 255n ff\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1918,
+      "file": "async-call-control.ts",
+      "sourceSha256": "b641ced1de6c8983d0b81a078c2e5586cdd37855459bbae023c3928c4ad0cadb",
+      "referenceStdout": "7n\n",
+      "interpretedStdout": "7n\n",
+      "compiledStdout": "7n\n",
+      "defaultDeclarationError": null
+    },
+    {
+      "issue": 1918,
+      "file": "generator-call-control.ts",
+      "sourceSha256": "13a8a34fc6aa7963e4b6e64a79bfa1483605cb0866d1da7616d54ebf2463943f",
+      "referenceStdout": "7n\n9n\n",
+      "interpretedStdout": "7n\n9n\n",
+      "compiledStdout": "7n\n9n\n",
+      "defaultDeclarationError": null
+    }
+  ]
+}

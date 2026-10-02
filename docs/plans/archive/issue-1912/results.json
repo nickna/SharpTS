@@ -1,0 +1,47 @@
+{
+  "baseline": "e622d0c88f9133d10ce6809082a3085e759fb42b",
+  "recordedAtUtc": "2026-10-02T04:15:42.6078702+00:00",
+  "runtime": "10.0.12",
+  "observations": [
+    {
+      "invocation": 1,
+      "failure": "Xunit.Sdk.SameException: Assert.Same() Failure: Values are not the same instance\r\nExpected: ProxyWriter { Encoding = ConsoleEncoding { BodyName = (throws NotSupportedException), CodePage = 65001, DecoderFallback = DecoderReplacementFallback { \u00B7\u00B7\u00B7 }, EncoderFallback = EncoderReplacementFallback { \u00B7\u00B7\u00B7 }, EncodingName = \u0022Unicode (UTF-8)\u0022, \u00B7\u00B7\u00B7 }, FormatProvider = en-US, NewLine = \u0022\\r\\n\u0022 }\r\nActual:   SyncTextWriter { Encoding = ConsoleEncoding { BodyName = (throws NotSupportedException), CodePage = 65001, DecoderFallback = DecoderReplacementFallback { \u00B7\u00B7\u00B7 }, EncoderFallback = EncoderReplacementFallback { \u00B7\u00B7\u00B7 }, EncodingName = \u0022Unicode (UTF-8)\u0022, \u00B7\u00B7\u00B7 }, FormatProvider = en-US, NewLine = \u0022\\r\\n\u0022 }\r\n   at Xunit.Assert.Same(Object expected, Object actual) in /_/src/xunit.assert/Asserts/IdentityAsserts.cs:line 54\r\n   at SharpTS.Tests.Compilation.CompilationServiceTests.Execute_RestoresConsoleAfterRun() in <repository>\\tests\\SharpTS.Tests\\Compilation\\CompilationServiceTests.cs:line 228\r\n   at Program.\u003CMain\u003E$(String[] args) in <repository>\\tests\\fixtures\\SharpTS.HistoricalEvidence\\Program.cs:line 17",
+      "originalOutType": "SharpTS.Tests.Infrastructure.AsyncLocalConsoleRedirector\u002BProxyWriter",
+      "restoredOutType": "System.IO.TextWriter\u002BSyncTextWriter",
+      "originalErrType": "SharpTS.Tests.Infrastructure.AsyncLocalConsoleRedirector\u002BProxyWriter",
+      "restoredErrType": "System.IO.TextWriter\u002BSyncTextWriter",
+      "sameOut": false,
+      "sameErr": false
+    },
+    {
+      "invocation": 2,
+      "failure": null,
+      "originalOutType": "System.IO.TextWriter\u002BSyncTextWriter",
+      "restoredOutType": "System.IO.TextWriter\u002BSyncTextWriter",
+      "originalErrType": "System.IO.TextWriter\u002BSyncTextWriter",
+      "restoredErrType": "System.IO.TextWriter\u002BSyncTextWriter",
+      "sameOut": true,
+      "sameErr": true
+    },
+    {
+      "control": "public-console-writers",
+      "invocation": 1,
+      "Success": true,
+      "runSuccess": true,
+      "Error": null,
+      "output": "x\n",
+      "sameOut": true,
+      "sameErr": true
+    },
+    {
+      "control": "public-console-writers",
+      "invocation": 2,
+      "Success": true,
+      "runSuccess": true,
+      "Error": null,
+      "output": "x\n",
+      "sameOut": true,
+      "sameErr": true
+    }
+  ]
+}

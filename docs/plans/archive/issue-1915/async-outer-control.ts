@@ -1,0 +1,1 @@
+const box:any=new Number(4);async function run(){await Promise.resolve(0);console.log(box+2);}run();
