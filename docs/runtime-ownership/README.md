@@ -62,3 +62,4 @@ retain the destinations in the
 | Goal | Report | Roots |
 | --- | --- | ---: |
 | [#1868](https://github.com/nickna/SharpTS/issues/1868) | [R01: Calls and function values](R01.md) | 11 |
+| [#1869](https://github.com/nickna/SharpTS/issues/1869) | [R02: Iterator and generator protocols](R02.md) | 8 |
