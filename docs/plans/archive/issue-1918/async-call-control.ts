@@ -1,0 +1,1 @@
+async function run(){const n=await Promise.resolve(7);console.log(BigInt(n));}run().catch((e:any)=>console.log(e.name,e.message));

@@ -1,0 +1,1 @@
+function* values():Generator<bigint,void,any>{yield BigInt('7');yield BigInt('9');}for(const n of values()){console.log(n);}
