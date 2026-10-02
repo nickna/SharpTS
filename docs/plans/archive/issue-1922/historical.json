@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/nickna/SharpTS/issues/1599",
+  "frozenBodySha256": "420cdca4eaf29b19354bcce748ffa034f4cfaa3400e772fb2089b8d97978c15f",
+  "excerpts": [
+    {
+      "line": 131,
+      "text": "- [x] Error metadata: merged in #1697 at `b8b61c9b0bd1495c04b25c9d69b1ede0ba8a8dce` after all final-head CI/Desktop gates and exact-head review passed. Required `Errors` owns 68 declarations for guest types, prototypes, factories and exception bridges; nine construction fields become local and 45 helper signatures receive scoped owners and exact peers. Four completion stages preserve early factory/prototype declarations and their later bodies. Supplied optional Promise metadata controls exception wrapping. Error-cause handling receives six explicit Proxy handles; guest objects, the CLR thrown-value carrier and strict SyntaxError representation are unchanged. The original 2,961 regressions passed, and CI exposed twelve dynamic JSON fixture lookups missed locally. A two-line fixture correction has all twelve failing-before/passing-after controls and 430 passing affected cases, for 3,280 distinct local passes. Thirty-two saved assemblies preserve normalized metadata and 34,018 IL-verified bodies. Final CI covers 22,614 core/standalone cases per platform, with one existing Linux skip and three Windows skips, plus 129 GUI passes each and zero failures. Quality and full compiler-source/generator binding pass; the fixture-only follow-up leaves the verified compiler tree unchanged. The callback DelegateCtor verifier finding is retained separately with identical baseline/preview/actual IL and expected execution on all three; original assertions remain intact. Remaining family migrations and the complete final audit stay required.\r",
+      "sha256": "bb8fde5510e19805fa19627ed9f7cceb8e1d11e7b555a3dc9ad56ac5bd6d605f"
+    }
+  ]
+}

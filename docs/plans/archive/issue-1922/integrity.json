@@ -1,0 +1,9 @@
+{
+  "files": {
+    "cases.json": "d7132da7692fdd9badfe95637172eb2cc3f85fe621cdea971e086b246fdcd08f",
+    "results.json": "91e3aca84605ef6561ec601a53fe9d404a1e2b1d0fad38a3f153513e034073f5",
+    "historical.json": "f8e5423c6fde8968e5a424a828a3322c90f7232ad59233092d7fea9497bbbf80",
+    "reference-compilation.json": "b7142cc7a918223b7a735487b7112005cac488442a0db602f2834511bc9183f4",
+    "promise-callback-control.ts": "afde71d8937b539b3f449ec3793b58b0c3be734001072220c3b9962c01b2d945"
+  }
+}
