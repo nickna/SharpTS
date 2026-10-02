@@ -1,0 +1,305 @@
+{
+  "issue": 1911,
+  "baseline": "1e3c86f87ff8ae9b6dcc4656cb6a1a1af69bca0d",
+  "recordedAtUtc": "2026-10-02T03:55:27.2840176+00:00",
+  "dotnet": {
+    "ExitCode": 0,
+    "StandardOutput": "10.0.401\n",
+    "StandardError": ""
+  },
+  "node": {
+    "ExitCode": 0,
+    "StandardOutput": "v25.5.0\n",
+    "StandardError": ""
+  },
+  "deadlineSeconds": 30,
+  "results": [
+    {
+      "name": "direct",
+      "sourceSha256": "446d066274ec001f0ea56de11548146039156c791d5357801709119e5527269a",
+      "expectedStdout": "2\n",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "2\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "2\n"
+        },
+        {
+          "mode": "interpreted-cli",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1911\\probes\\direct\\standalone.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1911\\probes\\direct\\hosted.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Core",
+            "System.Memory",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "2\n"
+        }
+      ]
+    },
+    {
+      "name": "constructor-alias",
+      "sourceSha256": "d2f5c1005ab09d40dbc0e0daefe3391a109b1638e10539dd02ba37b4d1918854",
+      "expectedStdout": "2\n",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "2\n"
+        },
+        {
+          "mode": "compiled-api",
+          "exceptionType": "$ThrownValueException",
+          "error": "$ThrownValueException: TypeError: undefined is not a function\r\n   at $Runtime.InvokeMethodValue(Object, Object, Object[])\r\n   at $Program.Main()\r\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\r\n--- End of stack trace from previous location ---\r\n   at SharpTS.Tests.Infrastructure.TestHarness.\u003C\u003Ec__DisplayClass21_0.\u003CRunCompiledWithTimeout\u003Eb__0() in <repository>\\tests\\SharpTS.Tests\\Infrastructure\\TestHarness.cs:line 422\r\n   at System.Threading.Tasks.Task\u00601.InnerInvoke()\r\n   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)\r\n--- End of stack trace from previous location ---\r\n   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)\r\n   at System.Threading.Tasks.Task.ExecuteWithThreadLocal(Task\u0026 currentTaskSlot, Thread threadPoolThread)\r\n--- End of stack trace from previous location ---\r\n   at SharpTS.Tests.Infrastructure.TestHarness.RunCompiledWithTimeout(Func\u00601 compile, TimeSpan timeout, Action cleanup) in <repository>\\tests\\SharpTS.Tests\\Infrastructure\\TestHarness.cs:line 435\r\n   at SharpTS.Tests.Infrastructure.TestHarness.RunCompiledInProcess(String source, DecoratorMode decoratorMode, TimeSpan timeout) in <repository>\\tests\\SharpTS.Tests\\Infrastructure\\TestHarness.cs:line 357\r\n   at SharpTS.Tests.Infrastructure.TestHarness.RunCompiled(String source, DecoratorMode decoratorMode, TimeSpan timeout, String[] scriptArgs, Boolean includeTestsAssembly, Boolean copySharpTsRuntime) in <repository>\\tests\\SharpTS.Tests\\Infrastructure\\TestHarness.cs:line 345\r\n   at SharpTS.Tests.Infrastructure.TestHarness.RunCompiled(String source, TimeSpan timeout) in <repository>\\tests\\SharpTS.Tests\\Infrastructure\\TestHarness.cs:line 287\r\n   at Program.\u003C\u003Ec__DisplayClass0_1.\u003C\u003CMain\u003E$\u003Eb__6() in <repository>\\tests\\fixtures\\SharpTS.MapGroupByEvidence\\Program.cs:line 34\r\n   at Program.\u003C\u003CMain\u003E$\u003Eg__Observe|0_0(String mode, Func\u00601 action) in <repository>\\tests\\fixtures\\SharpTS.MapGroupByEvidence\\Program.cs:line 87"
+        },
+        {
+          "mode": "interpreted-cli",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1911\\probes\\constructor-alias\\standalone.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": -532462766,
+            "StandardOutput": "",
+            "StandardError": "Unhandled exception. $ThrownValueException: TypeError: undefined is not a function\n   at $Runtime.InvokeMethodValue(Object, Object, Object[])\n   at $Program.$InitScript_constructor_alias()\n   at $Program.Main()\n"
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1911\\probes\\constructor-alias\\hosted.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Core",
+            "System.Memory",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "exceptionType": "$ThrownValueException",
+          "error": "$ThrownValueException: TypeError: undefined is not a function\r\n   at SharpTS.Hosting.SharpTSHostedRuntimeBase.ObserveTask(Task task) in <repository>\\src\\SharpTS.Hosting.Abstractions\\SharpTSHostedRuntimeBase.cs:line 908\r\n   at SharpTS.Hosting.SharpTSHostedRuntimeBase.RunInitializationTurn() in <repository>\\src\\SharpTS.Hosting.Abstractions\\SharpTSHostedRuntimeBase.cs:line 630\r\n   at SharpTS.Hosting.SharpTSHostedRuntimeBase.RunOneTurn() in <repository>\\src\\SharpTS.Hosting.Abstractions\\SharpTSHostedRuntimeBase.cs:line 600\r\n   at SharpTS.Hosting.SharpTSHostedRuntimeBase.ExecuteGuestBoundary(Action action) in <repository>\\src\\SharpTS.Hosting.Abstractions\\SharpTSHostedRuntimeBase.cs:line 726\r\n   at SharpTS.Hosting.SharpTSHostedRuntimeBase.RunPostedTurn() in <repository>\\src\\SharpTS.Hosting.Abstractions\\SharpTSHostedRuntimeBase.cs:line 559\r\n--- End of stack trace from previous location ---\r\n   at Program.\u003C\u003CMain\u003E$\u003Eg__RunHosted|0_2(String dll) in <repository>\\tests\\fixtures\\SharpTS.MapGroupByEvidence\\Program.cs:line 134\r\n   at Program.\u003C\u003Ec__DisplayClass0_2.\u003C\u003CMain\u003E$\u003Eb__8() in <repository>\\tests\\fixtures\\SharpTS.MapGroupByEvidence\\Program.cs:line 64\r\n   at Program.\u003C\u003CMain\u003E$\u003Eg__Observe|0_0(String mode, Func\u00601 action) in <repository>\\tests\\fixtures\\SharpTS.MapGroupByEvidence\\Program.cs:line 87"
+        }
+      ]
+    },
+    {
+      "name": "method-alias",
+      "sourceSha256": "de63b0b9188815fac5e385b293d7bd2ab35e004a0ad4df1f0c0cde76749e847c",
+      "expectedStdout": "2\n",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "2\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "2\n"
+        },
+        {
+          "mode": "interpreted-cli",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1911\\probes\\method-alias\\standalone.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "2\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1911\\probes\\method-alias\\hosted.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Core",
+            "System.Memory",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "2\n"
+        }
+      ]
+    }
+  ]
+}
