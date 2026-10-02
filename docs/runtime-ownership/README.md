@@ -19,7 +19,7 @@ contract; concurrent use of one emitter is not established.
 
 Declaration makes forward handles readable before bodies or generated types are complete.
 Checked owners reject missing reads, null assignments, premature completion
-where they track staged work, and writes after completion. Most owners reject duplicate
+where they track staged work, and writes after completion. Single-assignment owners reject duplicate
 assignments; reports identify intentional replacement during declaration. Completion seals metadata,
 not guest objects: output-local caches, descriptors, prototype tables, thread-static
 contexts and guest collections remain mutable under their individual contracts.
@@ -67,3 +67,4 @@ retain the destinations in the
 | [#1870](https://github.com/nickna/SharpTS/issues/1870) | [R03: Objects, descriptors and property access](R03.md) | 17 |
 | [#1871](https://github.com/nickna/SharpTS/issues/1871) | [R04: JSON and specialized representations](R04.md) | 4 |
 | [#1872](https://github.com/nickna/SharpTS/issues/1872) | [R05: Runtime roots, modules and deployment](R05.md) | 13 |
+| [#1873](https://github.com/nickna/SharpTS/issues/1873) | [R06: Primitive values, conversions and errors](R06.md) | 17 |
