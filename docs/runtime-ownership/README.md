@@ -77,3 +77,36 @@ retain the destinations in the
 | [#1880](https://github.com/nickna/SharpTS/issues/1880) | [R13: Cryptography](R13.md) | 2 |
 | [#1881](https://github.com/nickna/SharpTS/issues/1881) | [R14: Streams, compression and events](R14.md) | 4 |
 | [#1882](https://github.com/nickna/SharpTS/issues/1882) | [R15: Workers and cross-context values](R15.md) | 5 |
+
+All **126 distinct roots** have supported metadata ownership dispositions. Required
+guest mutation, construction-local metadata, intentional aliases and feature-specific
+absence are retained with the evidence recorded in each report. No new unresolved
+ownership defect is transferred by this pass. Historical semantic failures retain
+the concrete linked destinations in the frozen reconciliation; none is silently
+reclassified as repaired by ownership tests.
+
+The fifteen focused selections passed **5,085 test executions** with no skips or
+failures in their final runs. Selections overlap, so this is not a count of distinct
+tests. Supplementary HTTP and dual-mode Node stream execution passed **192/192**.
+R08 adds a missing saved-output execution proof for pending timer/FIFO job/Promise
+state surviving reuse. R11 records the initial two Windows certificate-import failures
+and the unchanged selection's passing run with certificate-store access. No assertion,
+deadline or implementation was relaxed to make that run pass.
+
+The broader hermetic core run completed with **23,419 passed, 1 failed and 3
+skipped** out of 23,423 cases. The unchanged compiled
+`DynamicIteratorResultTests.EscapedNumericClosureKeepsLiveUpdates` throws in
+`$Program.create(Double)`; isolated execution crashes the test host. The same
+crash was independently reproduced after restoring/building an archive of unchanged
+main commit `78931b4a`. The original program, expected `13 14` / `true Infinity`
+output, interpreted passing control and reproduction are preserved in separate
+compiler defect [#1956](https://github.com/nickna/SharpTS/issues/1956). This report
+claims no repair of that defect and no passing full core suite. The three skips
+are the existing Unix shebang case and two Windows wildcard-HttpListener cases
+requiring a provisioned URL ACL. Original core and baseline logs/TRX results are
+retained under `artifacts/epic-1864/`.
+
+`scripts/test-code-quality.ps1` passed its analyzer, mutation, duplicate and
+dead-code checks (zero errors). The complete diff passes `git diff --check`, and
+the ledger's 126 frozen roots and local source/test links were checked for coverage
+and resolution.
