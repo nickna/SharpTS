@@ -54,7 +54,21 @@ foreach ($taskIssue in $Issue) {
             if (@($taskResult.observations | Where-Object mode -eq $taskMode).Count -ne 1) { throw "Missing or duplicated $taskMode" }
         }
         foreach ($taskCompile in $taskResult.observations | Where-Object { $_.mode.EndsWith('-cli-compilation') }) {
-            if ($taskCompile.result.ExitCode -eq 0 -and $taskCompile.result.StandardOutput.Contains('IL verification passed')) { $taskIl++ }
+            if ($taskCompile.result.ExitCode -ne 0) { continue }
+            if (-not $taskCompile.result.StandardOutput.Contains('IL verification passed')) { throw 'Missing recorded IL verification' }
+            $taskIl++
+            $taskPrefix = $taskCompile.mode.Replace('-cli-compilation', '')
+            $taskExecution = switch ($taskPrefix) {
+                'default' { 'default-standalone-execution' }
+                'standalone' { 'standalone-execution' }
+                'hosted' { 'hosted-runtime-initialization' }
+            }
+            if (@($taskResult.observations | Where-Object mode -eq $taskExecution).Count -ne 1) { throw "Missing or duplicated $taskExecution" }
+            if ($taskPrefix -eq 'default') { continue }
+            $taskMetadata = @($taskResult.observations | Where-Object mode -eq "$taskPrefix-metadata")
+            if ($taskMetadata.Count -ne 1) { throw 'Missing or duplicated deployment metadata' }
+            if ($taskMetadata[0].sharpTsDllPresent -or $taskMetadata[0].references -contains 'SharpTS') { throw 'Unexpected SharpTS runtime deployment' }
+            if ($taskPrefix -eq 'hosted' -and $taskMetadata[0].references -notcontains 'SharpTS.Hosting.Abstractions') { throw 'Missing hosted ABI reference' }
         }
         $taskCount++
     }

@@ -36,7 +36,7 @@ exploratory source just because both contain callbacks.
 
 Open/closed DelegateCtor/callback-verifier searches and local function/invocation history
 do not recover an exact successor or repair for this unidentified program. Later ownership
-changes (#1710/#1711 and related invocation components) preserve existing behavior and
+changes to function/invocation ownership preserve existing behavior and
 do not by themselves establish a verifier correction. Other verifier issues such as
 #1781 and closed #1246 have different programs/diagnostics. No confirmed current original-case
 defect is fabricated into a new overlapping fix issue. Recovering the original assembly or
