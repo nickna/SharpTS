@@ -75,3 +75,4 @@ retain the destinations in the
 | [#1878](https://github.com/nickna/SharpTS/issues/1878) | [R11: Networking and fetch](R11.md) | 6 |
 | [#1879](https://github.com/nickna/SharpTS/issues/1879) | [R12: Binary storage and atomics](R12.md) | 6 |
 | [#1880](https://github.com/nickna/SharpTS/issues/1880) | [R13: Cryptography](R13.md) | 2 |
+| [#1881](https://github.com/nickna/SharpTS/issues/1881) | [R14: Streams, compression and events](R14.md) | 4 |
