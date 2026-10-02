@@ -1,0 +1,23 @@
+{
+  "typescript": "Version 7.0.2",
+  "cases": [
+    {
+      "File": "split-species-control.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    },
+    {
+      "File": "matchall-species-control.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    },
+    {
+      "File": "custom-exec-control.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    }
+  ]
+}

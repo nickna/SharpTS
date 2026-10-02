@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/nickna/SharpTS/issues/1599",
+  "frozenBodySha256": "420cdca4eaf29b19354bcce748ffa034f4cfaa3400e772fb2089b8d97978c15f",
+  "excerpts": [
+    {
+      "line": 127,
+      "text": "- [x] RegExp metadata and construction state: merged in #1695 at `c56bdc4824070fd4543aa249c0cd904aa07df06d` after all CI/Desktop gates and exact-head review passed without actionable findings. Required prototype ownership and optional 66-handle implementation remove sixty-six flat declarations and thirty persistent construction fields. Eighty-eight emission signatures receive scoped owners and exact peers; three write-only stores and two duplicate aliases are removed while their generated helpers remain. Selected early prototype/protocol tokens, absent declaration order, late split/matchAll bodies, regex caches and lastIndex behavior are preserved. All 3,319 actual regressions pass with no failures/skips, including 82 new owner cases, forty new isolated cases and all 656 standalone cases. Forty-five saved assemblies preserve normalized metadata and 50,076 IL-verified bodies. Final CI covers 22,458 core/standalone cases per platform, with one existing Linux skip and three Windows skips, plus 129 GUI passes each and no failures. Quality and full committed-source/generator binding pass. Two exploratory pre-existing species/custom-exec differences reproduce unchanged with original Node expectations retained separately. No assertions, deadlines, budgets or coverage changed. The late AST-identity hoist registry and complete final audit remain required.\r",
+      "sha256": "9b6079d45d9649e77252dd4e8f00820ce686bea4caff0b3bc4e35da3f6906e8c"
+    }
+  ]
+}

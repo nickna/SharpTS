@@ -1,0 +1,1 @@
+const r:any=/x/;r.exec=function(input:any){console.log('exec',input);return null;};console.log(r.test('x'));

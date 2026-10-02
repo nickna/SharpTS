@@ -1,0 +1,28 @@
+[
+  {
+    "File": "split-species-control.ts",
+    "Provenance": "Recovered verbatim from PR #1695 head ec126f37ae15bf2f7a127dae904f71da9647b386, StandaloneDllTests.RegExpMetadataPrograms/split_species_constructor.",
+    "ExpectedStdout": "a y\na|c 0\n",
+    "SourceCommit": "ec126f37ae15bf2f7a127dae904f71da9647b386",
+    "SourcePath": "tests/SharpTS.Tests/CompilerTests/StandaloneDllTests.cs",
+    "SourceMember": "RegExpMetadataPrograms/split_species_constructor",
+    "OriginalParityStdout": "a y\na|c 0\n",
+    "SourceSha256": "7974c8dbe5414dfbd0504f4f23b45239814cf69d662028682a544d7aac6b4c43"
+  },
+  {
+    "File": "matchall-species-control.ts",
+    "Provenance": "Recovered verbatim from PR #1695 head ec126f37ae15bf2f7a127dae904f71da9647b386, StandaloneDllTests.RegExpMetadataPrograms/matchall_species_constructor.",
+    "ExpectedStdout": "a g\nb 1 b 2 true 1\n",
+    "SourceCommit": "ec126f37ae15bf2f7a127dae904f71da9647b386",
+    "SourcePath": "tests/SharpTS.Tests/CompilerTests/StandaloneDllTests.cs",
+    "SourceMember": "RegExpMetadataPrograms/matchall_species_constructor",
+    "OriginalParityStdout": "a g\nb 1 b 2 true 1\n",
+    "SourceSha256": "4c84b646ad84e09e9e340152df3dbc320e400f473c6628204c4bca7e8e9c0ab0"
+  },
+  {
+    "File": "custom-exec-control.ts",
+    "Provenance": "New bounded custom-exec control; not identified with either unnamed historical exploratory case.",
+    "ExpectedStdout": "exec x\nfalse\n",
+    "SourceSha256": "b20d46470cc82eab5fbd11da213375b4d5a32b407874a98cd630228365af5a06"
+  }
+]
