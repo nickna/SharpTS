@@ -70,3 +70,4 @@ retain the destinations in the
 | [#1873](https://github.com/nickna/SharpTS/issues/1873) | [R06: Primitive values, conversions and errors](R06.md) | 17 |
 | [#1874](https://github.com/nickna/SharpTS/issues/1874) | [R07: Arrays and collections](R07.md) | 9 |
 | [#1875](https://github.com/nickna/SharpTS/issues/1875) | [R08: Scheduling, cancellation and async context](R08.md) | 8 |
+| [#1876](https://github.com/nickna/SharpTS/issues/1876) | [R09: Process, host APIs and text utilities](R09.md) | 12 |
