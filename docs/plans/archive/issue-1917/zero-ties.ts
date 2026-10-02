@@ -1,0 +1,1 @@
+const m:any=Math;console.log(m.max(),m.min(),m.max(1,9,3),m.min(1,-2,3),m.max(1,NaN));console.log(Object.is(m.max(-0,0),-0),Object.is(m.min(0,-0),-0));

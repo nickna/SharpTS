@@ -1,0 +1,22 @@
+[
+  {
+    "File": "identity.ts",
+    "Provenance": "Recovered verbatim from PR #1681 head 43baee9c6f99e6b3d55a356c23a68765bb701d07, StandaloneDllTests.MathMetadataPrograms row 9 (zero-based); originalParityStdout=\"false true true true\\nfloor 1 0 2 2\\n\"",
+    "ExpectedStdout": "true true true true\nfloor 1 0 2 2\n"
+  },
+  {
+    "File": "nonfinite.ts",
+    "Provenance": "Recovered verbatim from PR #1681 head 43baee9c6f99e6b3d55a356c23a68765bb701d07, StandaloneDllTests.MathMetadataPrograms row 15 (zero-based); originalParityStdout=\"0 -Infinity NaN 0 Infinity\\n\"",
+    "ExpectedStdout": "Infinity -Infinity NaN NaN Infinity\n"
+  },
+  {
+    "File": "sign.ts",
+    "Provenance": "Recovered verbatim from PR #1681 head 43baee9c6f99e6b3d55a356c23a68765bb701d07, StandaloneDllTests.MathMetadataPrograms row 3 (zero-based); originalParityStdout=\"-1 0 1 NaN false\\n8 1 NaN\\n\"",
+    "ExpectedStdout": "-1 0 1 NaN true\n8 1 NaN\n"
+  },
+  {
+    "File": "zero-ties.ts",
+    "Provenance": "Recovered verbatim from PR #1681 head 43baee9c6f99e6b3d55a356c23a68765bb701d07, StandaloneDllTests.MathMetadataPrograms row 6 (zero-based); originalParityStdout=\"-Infinity Infinity 9 -2 NaN\\ntrue false\\n\"",
+    "ExpectedStdout": "-Infinity Infinity 9 -2 NaN\nfalse true\n"
+  }
+]
