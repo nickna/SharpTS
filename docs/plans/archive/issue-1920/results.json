@@ -1,0 +1,530 @@
+{
+  "baseline": "78931b4add5a6937ab6e63452f2e0ad97fe12adb",
+  "recordedAtUtc": "2026-10-02T07:16:38.2055507+00:00",
+  "runtime": "10.0.12",
+  "dotnet": {
+    "ExitCode": 0,
+    "StandardOutput": "10.0.401\n",
+    "StandardError": ""
+  },
+  "node": {
+    "ExitCode": 0,
+    "StandardOutput": "v25.5.0\n",
+    "StandardError": ""
+  },
+  "deadlineSeconds": 30,
+  "results": [
+    {
+      "File": "inherited-getter.ts",
+      "Provenance": "Recovered verbatim from PR #1686 head 892f8829a1fb6eb2375749c799c07062f1fce3c1, StandaloneDllTests.ObjectStorageMetadataPrograms/prototype.",
+      "ExpectedStdout": "7 true false true\n",
+      "sourceSha256": "7d90adaf7aaf23c96ff5f762e351761bfcb1241b44d2d58f0cb469814b2ade94",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "7 true false true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "7 true false true\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "NaN true false true\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "7 true false true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "7 true false true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "7 true false true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\inherited-getter\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "NaN true false true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\inherited-getter\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "NaN true false true\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\inherited-getter\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "NaN true false true\n"
+        }
+      ]
+    },
+    {
+      "File": "inherited-setter.ts",
+      "Provenance": "Recovered verbatim from PR #1686 head 892f8829a1fb6eb2375749c799c07062f1fce3c1, StandaloneDllTests.ObjectStorageMetadataPrograms/inherited_setter.",
+      "ExpectedStdout": "9 true false\n",
+      "sourceSha256": "8c8a480c23e85a5c1b6291ebdece70095a82efb62b7086777ad5286cf013bcb8",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "9 true false\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "undefined false false\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "undefined false false\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "undefined false false\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "undefined false false\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "undefined false false\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\inherited-setter\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "undefined false false\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\inherited-setter\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "undefined false false\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\inherited-setter\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "undefined false false\n"
+        }
+      ]
+    },
+    {
+      "File": "function-strict-control.ts",
+      "Provenance": "Recovered verbatim from PR #1686 head 892f8829a1fb6eb2375749c799c07062f1fce3c1, StandaloneDllTests.ObjectStorageMetadataPrograms/strict_set.",
+      "ExpectedStdout": "TypeError\n1\n",
+      "sourceSha256": "fb559d1f6e6894598fbf2a42f557e2da89565143eb3a22e591c4c56d70ceac20",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "TypeError\n1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "TypeError\n1\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "TypeError\n1\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "TypeError\n1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "TypeError\n1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "TypeError\n1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\function-strict-control\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "TypeError\n1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\function-strict-control\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "TypeError\n1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\function-strict-control\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "TypeError\n1\n"
+        }
+      ]
+    },
+    {
+      "File": "top-level-strict.ts",
+      "Provenance": "New top-level counterpart of the recovered function-strict fixture; original top-level source is unavailable.",
+      "ExpectedStdout": "TypeError\n1\n",
+      "sourceSha256": "bcb6e943cd625fdd186740c86f18da452af8f2f592125b9607486af73694983b",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "TypeError\n1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "TypeError\n1\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "TypeError\n1\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "TypeError\n1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "TypeError\n1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "TypeError\n1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\top-level-strict\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\top-level-strict\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "1\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1920\\top-level-strict\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "1\n"
+        }
+      ]
+    }
+  ]
+}

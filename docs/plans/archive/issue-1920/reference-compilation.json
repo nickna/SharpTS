@@ -1,0 +1,29 @@
+{
+  "typescript": "Version 7.0.2",
+  "cases": [
+    {
+      "File": "inherited-getter.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    },
+    {
+      "File": "inherited-setter.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    },
+    {
+      "File": "function-strict-control.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    },
+    {
+      "File": "top-level-strict.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "File": "inherited-getter.ts",
+    "Provenance": "Recovered verbatim from PR #1686 head 892f8829a1fb6eb2375749c799c07062f1fce3c1, StandaloneDllTests.ObjectStorageMetadataPrograms/prototype.",
+    "ExpectedStdout": "7 true false true\n",
+    "SourceCommit": "892f8829a1fb6eb2375749c799c07062f1fce3c1",
+    "SourcePath": "tests/SharpTS.Tests/CompilerTests/StandaloneDllTests.cs",
+    "SourceMember": "ObjectStorageMetadataPrograms/prototype",
+    "OriginalParityStdout": "NaN true false true\n",
+    "SourceSha256": "7d90adaf7aaf23c96ff5f762e351761bfcb1241b44d2d58f0cb469814b2ade94"
+  },
+  {
+    "File": "inherited-setter.ts",
+    "Provenance": "Recovered verbatim from PR #1686 head 892f8829a1fb6eb2375749c799c07062f1fce3c1, StandaloneDllTests.ObjectStorageMetadataPrograms/inherited_setter.",
+    "ExpectedStdout": "9 true false\n",
+    "SourceCommit": "892f8829a1fb6eb2375749c799c07062f1fce3c1",
+    "SourcePath": "tests/SharpTS.Tests/CompilerTests/StandaloneDllTests.cs",
+    "SourceMember": "ObjectStorageMetadataPrograms/inherited_setter",
+    "OriginalParityStdout": "undefined false false\n",
+    "SourceSha256": "8c8a480c23e85a5c1b6291ebdece70095a82efb62b7086777ad5286cf013bcb8"
+  },
+  {
+    "File": "function-strict-control.ts",
+    "Provenance": "Recovered verbatim from PR #1686 head 892f8829a1fb6eb2375749c799c07062f1fce3c1, StandaloneDllTests.ObjectStorageMetadataPrograms/strict_set.",
+    "ExpectedStdout": "TypeError\n1\n",
+    "SourceCommit": "892f8829a1fb6eb2375749c799c07062f1fce3c1",
+    "SourcePath": "tests/SharpTS.Tests/CompilerTests/StandaloneDllTests.cs",
+    "SourceMember": "ObjectStorageMetadataPrograms/strict_set",
+    "OriginalParityStdout": "TypeError\n1\n",
+    "SourceSha256": "fb559d1f6e6894598fbf2a42f557e2da89565143eb3a22e591c4c56d70ceac20"
+  },
+  {
+    "File": "top-level-strict.ts",
+    "Provenance": "New top-level counterpart of the recovered function-strict fixture; original top-level source is unavailable.",
+    "ExpectedStdout": "TypeError\n1\n",
+    "SourceSha256": "bcb6e943cd625fdd186740c86f18da452af8f2f592125b9607486af73694983b"
+  }
+]
