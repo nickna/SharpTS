@@ -1,0 +1,1 @@
+function parse(value:string,radix:number){return parseInt(value,radix);}console.log(parse('0xff',16),parse('10101',2),parse('zz',36),parse('-11',8),parse('10',1),parse('0X10',0));

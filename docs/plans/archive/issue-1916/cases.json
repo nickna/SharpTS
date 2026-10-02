@@ -1,0 +1,7 @@
+[
+  {
+    "File": "radix.ts",
+    "Provenance": "Recovered verbatim from PR #1680 head f39f2420f799a94f6e5747b43678bb6396d862d0, StandaloneDllTests.NumberMetadataPrograms row 1 (zero-based); originalParityStdout=\"0 21 1295 -9 NaN 16\\n\"",
+    "ExpectedStdout": "255 21 1295 -9 NaN 16\n"
+  }
+]

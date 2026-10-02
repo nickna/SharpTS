@@ -1,0 +1,146 @@
+{
+  "baseline": "281b8b37771a9b5e2b0808e10ce240749a844a6c",
+  "recordedAtUtc": "2026-10-02T04:24:13.8709062+00:00",
+  "runtime": "10.0.12",
+  "dotnet": {
+    "ExitCode": 0,
+    "StandardOutput": "10.0.401\n",
+    "StandardError": ""
+  },
+  "node": {
+    "ExitCode": 0,
+    "StandardOutput": "v25.5.0\n",
+    "StandardError": ""
+  },
+  "deadlineSeconds": 30,
+  "results": [
+    {
+      "File": "radix.ts",
+      "Provenance": "Recovered verbatim from PR #1680 head f39f2420f799a94f6e5747b43678bb6396d862d0, StandaloneDllTests.NumberMetadataPrograms row 1 (zero-based); originalParityStdout=\u00220 21 1295 -9 NaN 16\\n\u0022",
+      "ExpectedStdout": "255 21 1295 -9 NaN 16\n",
+      "sourceSha256": "4b275cab6c832c3619cd8ca085617d31720ad21183aaa77bf604f2713877f5cd",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "255 21 1295 -9 NaN 16\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "255 21 NaN -9 NaN 16\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "0 21 1295 -9 NaN 16\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "255 21 NaN -9 NaN 16\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "255 21 NaN -9 NaN 16\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "255 21 NaN -9 NaN 16\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1916\\radix\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "0 21 1295 -9 NaN 16\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1916\\radix\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "0 21 1295 -9 NaN 16\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1916\\radix\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "0 21 1295 -9 NaN 16\n"
+        }
+      ]
+    }
+  ]
+}
