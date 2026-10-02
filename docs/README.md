@@ -71,6 +71,7 @@ known gaps, use [STATUS.md](../STATUS.md).
 - [Compact-record specialization and shaped-object outcome](plans/archive/shaped-objects-representation.md)
 - [Number-array representation decision](design/number-array-unboxing.md)
 - [Runtime tree-shaking outcome](plans/archive/runtime-tree-shaking-outcome.md)
+- [Frozen runtime-metadata historical reconciliation](plans/archive/1599-historical-reconciliation.md)
 - [Duplicate-logic consolidation](plans/archive/duplicate-logic-consolidation.md)
 - [IL verifier resolution](plans/archive/issue-189-ilverifier-resolution.md)
 - [String accumulator optimization](plans/archive/issue-857-string-accumulator-stringbuilder.md)

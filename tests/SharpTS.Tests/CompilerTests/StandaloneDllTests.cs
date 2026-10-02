@@ -19,6 +19,24 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [InlineData("async_declaration", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v));")]
+    [InlineData("async_rejection_detail", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v),e=>console.log(\"rejected\",e.message));")]
+    [InlineData("async_before_await", "async function run(){class C{static value=5;}const value=C.value;await Promise.resolve(0);return value;}run().then(v=>console.log(v));")]
+    public void Isolated_Issue1805OriginalPrograms_ResolveLocalClassBindings(string name, string source)
+    {
+        // Keep the original #1805 acceptance sources alongside the in-process regressions.
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile("main.ts", source);
+        var dllPath = tempDir.GetPath($"{name}.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{tempDir.GetPath("main.ts")}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.Equal("5\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
     [InlineData("main.ts")]
     [InlineData("main.cts")]
     [InlineData("main.mts")]
