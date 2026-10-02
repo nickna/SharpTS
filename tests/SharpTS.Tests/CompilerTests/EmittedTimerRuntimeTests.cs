@@ -155,6 +155,69 @@ public class EmittedTimerRuntimeTests
             Assert.Equal(hasPromise, methods.Contains(property.Name));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReusedEmitterKeepsEarlierTimerQueuesJobsAndPromiseClosuresIndependent(bool hosted)
+    {
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
+        var owners = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        var outputs = new List<(EmittedRuntime Runtime, Assembly Assembly, List<int> Seen, object Marker, Task<object?>? Promise)>();
+        object? Call(Assembly assembly, MethodBuilder method, params object?[] arguments) =>
+            assembly.GetType(method.DeclaringType!.Name)!.GetMethod(method.Name)!.Invoke(null, arguments);
+
+        foreach (bool selected in new[] { true, false, true })
+        {
+            var builder = new PersistedAssemblyBuilder(new AssemblyName($"timer_reuse_{Guid.NewGuid():N}"), typeof(object).Assembly);
+            var statements = new Parser(new Lexer(selected ? "Promise.resolve(1);" : "const n=1;").ScanTokens()).ParseOrThrow();
+            var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), new RuntimeFeatureDetector().Detect(statements));
+            Assert.Equal(selected || hosted, runtime.TimerPromises is not null);
+            var components = new List<object> { runtime.Timers, runtime.Microtasks, runtime.EventLoop };
+            if (runtime.TimerPromises is { } timers) components.Add(timers);
+            foreach (var component in components)
+            {
+                Assert.True(owners.Add(component));
+                foreach (var property in Handles(component.GetType()))
+                    Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(component)).Module.Assembly);
+            }
+
+            using var stream = new MemoryStream();
+            builder.Save(stream);
+            stream.Position = 0;
+            using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+            Assert.Empty(verifier.Verify(stream));
+            var assembly = Assembly.Load(stream.ToArray());
+            Assert.DoesNotContain(assembly.GetReferencedAssemblies(), reference => reference.Name == "SharpTS");
+            Assert.Equal(hosted, assembly.GetReferencedAssemblies().Any(reference => reference.Name == "SharpTS.Hosting.Abstractions"));
+            var seen = new List<int>();
+            Call(assembly, runtime.Microtasks.QueuePromiseJob, (Action)(() => seen.Add(1)));
+            Call(assembly, runtime.Microtasks.QueuePromiseJob, (Action)(() => seen.Add(2)));
+            Call(assembly, runtime.Timers.SetTimeout, new object(), 100_000d, Array.Empty<object>());
+            var marker = new object();
+            var wrapper = runtime.TimerPromises is { } promises
+                ? Call(assembly, promises.SetImmediatePromise, marker) : null;
+            var promise = wrapper is null ? null
+                : Assert.IsAssignableFrom<Task<object?>>(wrapper.GetType().GetProperty("Task")!.GetValue(wrapper));
+            outputs.Add((runtime, assembly, seen, marker, promise));
+        }
+
+        foreach (var (runtime, assembly, seen, marker, promise) in outputs)
+        {
+            Assert.Empty(seen);
+            Assert.Equal(true, Call(assembly, runtime.Microtasks.HasMicrotasks));
+            Assert.True((int)Call(assembly, runtime.Timers.GetNextTimerDelay)! > 0);
+            Call(assembly, runtime.Timers.CancelAllTimers);
+            Assert.Equal(-1, Call(assembly, runtime.Timers.GetNextTimerDelay));
+            Call(assembly, runtime.Microtasks.ProcessMicrotasks);
+            Assert.Equal(new[] { 1, 2 }, seen);
+            Assert.Equal(false, Call(assembly, runtime.Microtasks.HasMicrotasks));
+            if (promise is not null)
+            {
+                Assert.Same(marker, await promise.WaitAsync(TimeSpan.FromSeconds(10)));
+            }
+        }
+    }
+
     private static object CreateDeclarations(Type type, string? missingHandle = null)
     {
         var component = Activator.CreateInstance(type, nonPublic: true)!;
