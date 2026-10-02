@@ -66,3 +66,4 @@ retain the destinations in the
 | [#1869](https://github.com/nickna/SharpTS/issues/1869) | [R02: Iterator and generator protocols](R02.md) | 8 |
 | [#1870](https://github.com/nickna/SharpTS/issues/1870) | [R03: Objects, descriptors and property access](R03.md) | 17 |
 | [#1871](https://github.com/nickna/SharpTS/issues/1871) | [R04: JSON and specialized representations](R04.md) | 4 |
+| [#1872](https://github.com/nickna/SharpTS/issues/1872) | [R05: Runtime roots, modules and deployment](R05.md) | 13 |
