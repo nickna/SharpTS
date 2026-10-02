@@ -29,13 +29,13 @@ TypeScript compilation are retained separately from actual guest results. The de
 predicate and Object.keys checks distinguish independent attributes instead of assigning
 one broad enumerability defect to every path.
 
-| Case | Reference / interpreted result | Compiled API, default/builtin-typed standalone and actual hosted result | Disposition |
-| --- | --- | --- | --- |
-| Array length descriptor and predicate | Descriptor `2 true false false`; predicate/keys `false 0,1` | Correct descriptor; predicate/keys `true 0,1` in both engines | Current predicate-only discrepancy; #1951. Object.keys correctly omits length. |
-| Boxed string `Object('ab')` length | `2 false false false\nfalse 0,1\n` | Matches in every path | Passing boxing control; no repair of the missing historical string source is claimed. |
-| Primitive string length descriptor then predicate | `2 false false false\nfalse 0,1\n` | API and hosted execution throw `TypeError: Cannot read properties of undefined (reading 'value')`; both standalone executions hit the unchanged 30-second budget | Descriptor lookup does not supply the expected object; #1953. The later predicate cannot be assessed through this failing source. |
-| Primitive string predicate without descriptor lookup | `false 0,1\n` | `true 0,1\n` | Independent compiled predicate failure; #1954. Interpretation and boxed-string control pass. |
-| Promise resolve/reject callback name | Empty name, writable=false, enumerable=false, configurable=true; predicate=false and empty keys for each callback | Correct descriptors and empty Object.keys; predicate=true for both | Compiled predicate-only failure; #1952. Interpretation matches Node. |
+| Case | Node reference | Interpreted API and CLI | Compiled API, default/builtin-typed standalone and actual hosted result | Disposition |
+| --- | --- | --- | --- | --- |
+| Array length descriptor and predicate | Descriptor `2 true false false`; predicate/keys `false 0,1` | Correct descriptor; predicate/keys `true 0,1` | Correct descriptor; predicate/keys `true 0,1` | Current predicate-only discrepancy in both engines; #1951. Object.keys correctly omits length. |
+| Boxed string `Object('ab')` length | `2 false false false\nfalse 0,1\n` | Matches | Matches in every path | Passing boxing control; no repair of the missing historical string source is claimed. |
+| Primitive string length descriptor then predicate | `2 false false false\nfalse 0,1\n` | Matches | API and hosted execution throw `TypeError: Cannot read properties of undefined (reading 'value')`; both standalone executions hit the unchanged 30-second budget | Descriptor lookup does not supply the expected object; #1953. The later predicate cannot be assessed through this failing source. |
+| Primitive string predicate without descriptor lookup | `false 0,1\n` | Matches | `true 0,1\n` | Independent compiled predicate failure; #1954. Interpretation and boxed-string control pass. |
+| Promise resolve/reject callback name | Empty name, writable=false, enumerable=false, configurable=true; predicate=false and empty keys for each callback | Matches | Correct descriptors and empty Object.keys; predicate=true for both | Compiled predicate-only failure; #1952. |
 
 The primitive descriptor failure was observed in two bounded collections. The first raw
 report is retained locally as `artifacts/issue-1919-1925/first-string-observation.json`;
