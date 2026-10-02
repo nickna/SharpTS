@@ -4,8 +4,14 @@ using System.Text.Json;
 using SharpTS.Compilation;
 using SharpTS.Tests.Compilation;
 
-if (args.Length != 2 || args[0] != "console")
-    throw new ArgumentException("Usage: console <report path>");
+if (args.Length != 2)
+    throw new ArgumentException("Usage: console|timing <report path>");
+if (args[0] == "timing")
+{
+    TimingEvidence.Collect(args[1]);
+    return;
+}
+if (args[0] != "console") throw new ArgumentException("Unknown evidence mode.");
 
 var tests = new CompilationServiceTests(); // Runs the original test module initializer.
 var observations = new List<object>();

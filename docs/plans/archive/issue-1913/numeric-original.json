@@ -1,0 +1,12 @@
+{
+  "source": "function hot(iterations: number): number {\n    const tape = new Uint8Array(1);\n    let i: number = 0;\n    while (i \u003C iterations) {\n        tape[0] = (tape[0] \u002B 1) \u0026 255;\n        i = i \u002B 1;\n    }\n    return tape[0];\n}",
+  "runtime": "10.0.12",
+  "warmupIterations": 1000,
+  "expectedWarmup": 232,
+  "warmup": 232,
+  "iterations": 1000000,
+  "expectedResult": 64,
+  "result": 64,
+  "budgetBytes": 4096,
+  "allocated": 96
+}
