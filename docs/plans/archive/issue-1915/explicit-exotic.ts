@@ -1,0 +1,1 @@
+let trace='';const value:any={[Symbol.toPrimitive](hint:any){trace+=hint;return '9';}};console.log(Number(value),+value,trace);

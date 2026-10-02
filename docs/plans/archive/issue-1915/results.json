@@ -1,0 +1,658 @@
+{
+  "baseline": "281b8b37771a9b5e2b0808e10ce240749a844a6c",
+  "recordedAtUtc": "2026-10-02T04:24:08.049822+00:00",
+  "runtime": "10.0.12",
+  "dotnet": {
+    "ExitCode": 0,
+    "StandardOutput": "10.0.401\n",
+    "StandardError": ""
+  },
+  "node": {
+    "ExitCode": 0,
+    "StandardOutput": "v25.5.0\n",
+    "StandardError": ""
+  },
+  "deadlineSeconds": 30,
+  "results": [
+    {
+      "File": "boxed-ordinary.ts",
+      "Provenance": "Recovered verbatim from PR #1679 head c85a5505dc46d315e039857ccf399206a128b407, StandaloneDllTests.BoxedPrimitiveMetadataPrograms row 6 (zero-based); originalParityStdout=\u002211 true own\\nvalue!\\n\u0022",
+      "ExpectedStdout": "11 true own\nvalue!\n",
+      "sourceSha256": "3da8591c1bbae75a4f8efd271f409e07545070ee9b96f87b752f3c2885aeeeda",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "11 true own\nvalue!\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "11 true own\nvalue!\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "11 true own\nvalue!\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "11 true own\nvalue!\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "11 true own\nvalue!\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "11 true own\nvalue!\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\boxed-ordinary\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "11 true own\nvalue!\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\boxed-ordinary\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "11 true own\nvalue!\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\boxed-ordinary\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "11 true own\nvalue!\n"
+        }
+      ]
+    },
+    {
+      "File": "boxed-exotic.ts",
+      "Provenance": "Recovered verbatim from PR #1679 head c85a5505dc46d315e039857ccf399206a128b407, StandaloneDllTests.BoxedPrimitiveMetadataPrograms row 8 (zero-based); originalParityStdout=\u00225 true 1 default;default;\\n\u0022",
+      "ExpectedStdout": "5 true 4 default;default;string;\n",
+      "sourceSha256": "6d18ef536b4618303dc2ff636f47be71bed905f4de0fad06669f5f441ceaf1a6",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "5 true 4 default;default;string;\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "5 true 4 default;default;string;\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "5 true 1 default;default;\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "5 true 4 default;default;string;\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "5 true 4 default;default;string;\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "5 true 4 default;default;string;\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\boxed-exotic\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "5 true 1 default;default;\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\boxed-exotic\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "5 true 1 default;default;\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\boxed-exotic\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "5 true 1 default;default;\n"
+        }
+      ]
+    },
+    {
+      "File": "explicit-exotic.ts",
+      "Provenance": "Recovered verbatim from PR #1685 head 80679a0c290d88a7e68d12ce00f1446bdaa3d4a7, StandaloneDllTests.NumericCoercionMetadataPrograms row 4 (zero-based); originalParityStdout=\u0022NaN 9 number\\n\u0022",
+      "ExpectedStdout": "9 9 numbernumber\n",
+      "sourceSha256": "287d2c4cc2c18f601bed081e33ea5a6281c3329b16e8e15187b46c6e9c03cd59",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "9 9 numbernumber\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "9 NaN number\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "NaN 9 number\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "9 NaN number\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "9 NaN number\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "9 NaN number\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\explicit-exotic\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "NaN 9 number\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\explicit-exotic\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "NaN 9 number\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\explicit-exotic\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "NaN 9 number\n"
+        }
+      ]
+    },
+    {
+      "File": "async-outer-control.ts",
+      "Provenance": "Recovered verbatim from PR #1679 head c85a5505dc46d315e039857ccf399206a128b407, StandaloneDllTests.BoxedPrimitiveMetadataPrograms row 15 (zero-based); originalParityStdout=\u00226\\n\u0022",
+      "ExpectedStdout": "6\n",
+      "sourceSha256": "586ac8ad48493eeb52514fecab198b16eba30c30df5b8d22efccc2cffe010ec6",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "6\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "6\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\async-outer-control\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\async-outer-control\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\async-outer-control\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "6\n"
+        }
+      ]
+    },
+    {
+      "File": "async-number.ts",
+      "Provenance": "New matched probe of the async Number lookup described by #1679; original failing source was not recovered.",
+      "ExpectedStdout": "6\n",
+      "sourceSha256": "f17fa98ecc50732954b84b3dd4f76092078ec7747a1ae98753b1c56e09b38573",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "6\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "6\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\async-number\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\async-number\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "6\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-reconciliation\\issue-1915\\async-number\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "6\n"
+        }
+      ]
+    }
+  ]
+}

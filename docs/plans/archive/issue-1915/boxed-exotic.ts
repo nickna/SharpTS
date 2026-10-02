@@ -1,0 +1,1 @@
+let hints='';const box:any=new Number(1);box[Symbol.toPrimitive]=function(hint:any){hints+=hint+';';return 4;};console.log(box+1,box==4,String(box),hints);
