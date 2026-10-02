@@ -162,7 +162,8 @@ public class EmittedTimerRuntimeTests
     {
         var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
         var owners = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        var outputs = new List<(EmittedRuntime Runtime, Assembly Assembly, List<int> Seen, object Marker, Task<object?>? Promise)>();
+        var outputs = new List<(EmittedRuntime Runtime, Assembly Assembly, List<int> Seen, object Marker,
+            TaskCompletionSource<object?>? Completion, Task<object?>? Promise)>();
         object? Call(Assembly assembly, MethodBuilder method, params object?[] arguments) =>
             assembly.GetType(method.DeclaringType!.Name)!.GetMethod(method.Name)!.Invoke(null, arguments);
 
@@ -194,14 +195,27 @@ public class EmittedTimerRuntimeTests
             Call(assembly, runtime.Microtasks.QueuePromiseJob, (Action)(() => seen.Add(2)));
             Call(assembly, runtime.Timers.SetTimeout, new object(), 100_000d, Array.Empty<object>());
             var marker = new object();
-            var wrapper = runtime.TimerPromises is { } promises
-                ? Call(assembly, promises.SetImmediatePromise, marker) : null;
-            var promise = wrapper is null ? null
-                : Assert.IsAssignableFrom<Task<object?>>(wrapper.GetType().GetProperty("Task")!.GetValue(wrapper));
-            outputs.Add((runtime, assembly, seen, marker, promise));
+            TaskCompletionSource<object?>? completion = null;
+            Task<object?>? promise = null;
+            if (runtime.TimerPromises is { } promises)
+            {
+                // Hold the generated timer closure pending until every output has been emitted.
+                var closureType = assembly.GetType(promises.TimerPromiseClosureType.Name)!;
+                var closure = Activator.CreateInstance(closureType)!;
+                closureType.GetField(promises.TimerPromiseClosureValue.Name)!.SetValue(closure, marker);
+                var onComplete = closureType.GetMethod(promises.TimerPromiseClosureOnComplete.Name)!
+                    .CreateDelegate<Func<Task, object?>>(closure);
+                var loop = Call(assembly, runtime.EventLoop.GetInstance)!;
+                loop.GetType().GetMethod(runtime.EventLoop.Ref.Name)!.Invoke(loop, null);
+                completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var pending = ((Task)completion.Task).ContinueWith(onComplete, TaskScheduler.Default);
+                var wrapper = Call(assembly, runtime.RequirePromise().WrapTaskAsPromise, pending)!;
+                promise = Assert.IsAssignableFrom<Task<object?>>(wrapper.GetType().GetProperty("Task")!.GetValue(wrapper));
+            }
+            outputs.Add((runtime, assembly, seen, marker, completion, promise));
         }
 
-        foreach (var (runtime, assembly, seen, marker, promise) in outputs)
+        foreach (var (runtime, assembly, seen, marker, completion, promise) in outputs)
         {
             Assert.Empty(seen);
             Assert.Equal(true, Call(assembly, runtime.Microtasks.HasMicrotasks));
@@ -213,7 +227,12 @@ public class EmittedTimerRuntimeTests
             Assert.Equal(false, Call(assembly, runtime.Microtasks.HasMicrotasks));
             if (promise is not null)
             {
+                Assert.False(promise.IsCompleted);
+                completion!.SetResult(null);
                 Assert.Same(marker, await promise.WaitAsync(TimeSpan.FromSeconds(10)));
+                var immediate = Call(assembly, runtime.RequireTimerPromises().SetImmediatePromise, marker)!;
+                var immediateTask = Assert.IsAssignableFrom<Task<object?>>(immediate.GetType().GetProperty("Task")!.GetValue(immediate));
+                Assert.Same(marker, await immediateTask.WaitAsync(TimeSpan.FromSeconds(10)));
             }
         }
     }
