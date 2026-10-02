@@ -1,0 +1,16 @@
+{
+  "source": "https://github.com/nickna/SharpTS/issues/1599",
+  "frozenBodySha256": "420cdca4eaf29b19354bcce748ffa034f4cfaa3400e772fb2089b8d97978c15f",
+  "excerpts": [
+    {
+      "line": 135,
+      "text": "- [x] Object and class prototype metadata: merged in #1699 at `b0fb969a3b2951c129cd24a4648aae0a9f39b4c5` after all final-head CI/Desktop gates and exact-head review passed. Required `ObjectPrototypes` and `ClassPrototypes` own thirteen declarations; thirteen helpers receive scoped dependencies, and two late-body stages preserve early tokens. Promise branches follow supplied optional metadata; Proxy branding follows explicit selection. The preview passed 6,458 distinct tests; initial integration passed 2,096 affected cases, including all 27 owner cases, 34 isolated cases, 207 peers and both source guards. Review added names to 26 arguments without changing their mappings, expressions or order. The final compiler passed a fresh Release rebuild, quality and 153 affected cases, giving 2,104 distinct actual cases across both runs. All 39 regenerated assemblies preserve 43,436 IL-verified bodies. Final source/generator binding preserves every declaration/reference, apart from the 26 named-argument context strings. Final CI covers 22,726 core/standalone cases per platform with the existing one Linux/three Windows skips and zero failures, plus 129 GUI passes each. All 779 standalone cases execute exactly once per platform under unchanged deadlines. The custom Symbol tag finding remains separately retained with identical 1,388 metadata/IL bodies; it is not counted as a passing assertion. The ledger retains 228 flat declarations, 323 construction fields and nine collections; zero final-audit rows are closed.\r",
+      "sha256": "41c0a1bdeb56b41d029a0b729dbf7fb544de38f69fab81fac69fe915bab7de0b"
+    },
+    {
+      "line": 143,
+      "text": "- [x] Object construction, spread and rest metadata: merged in #1703 at `b63a7ce141186e109b08c5360954ba5cc77d94f7` after all CI/Desktop gates and exact-head review. Required `ObjectConstruction` owns six declarations; seven helpers receive scoped inputs and explicit Proxy selection. Preview covers 10,088 distinct passing cases: 10,062 unchanged broad passes, twelve JSON cases re-passed after one reflection-path adaptation, and fourteen new owner/reuse/selection cases. Actual integration passes 1,027 affected cases, including all 44 new cases, the allocation guard and both source guards. All 35 regenerated assemblies preserve 39,246 IL-verified bodies. CI covers 22,909 core/standalone cases per platform with existing one Linux/three Windows skips and zero failures, plus 129 GUI passes each; all 908 standalone cases execute exactly once per platform under unchanged deadlines. A review claim that the test setup throws was disproved by all fourteen tests passing on both CI platforms and resolved with linked evidence. Complete source/generator binding passes. The ledger retains 203 flat declarations, 323 construction fields and nine collections; zero final-audit rows are closed. The combined Symbol getter/setter observation retains its original Node expectation and separate 1,001-body parity evidence.\r",
+      "sha256": "d9b4a34876359c121aea9366b52ff5b207fc6e5e8d57038188f008ab20f0964c"
+    }
+  ]
+}

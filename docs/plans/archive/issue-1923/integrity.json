@@ -1,0 +1,10 @@
+{
+  "files": {
+    "cases.json": "5a9d15897c367bc354922450ba8ad48fe36df4de4d1745ce95e48235c4a00011",
+    "results.json": "c23a9f686a69b10388c2f05e8d8e511293be6d350d6123502a392fa989c2985b",
+    "historical.json": "6f0c5c97e0a7b412a4303200f7077d4de88f4962954ac9b6ba73eede66ddfd25",
+    "reference-compilation.json": "e01cb64d4ab8460d961728cd732fa3ee18d2f3100ba75ce9f50a9e9b9b82ff23",
+    "custom-tag.ts": "49db077b7e7c3f00d95de5f1d1fb1ce743f46f48b0173100a47b40581389125c",
+    "combined-accessors.ts": "bdd7638b5c5eb5bbe4acd3f71713b73e75139c7cca6e0e622a6960e7ba806949"
+  }
+}

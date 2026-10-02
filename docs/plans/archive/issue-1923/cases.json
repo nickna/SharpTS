@@ -1,0 +1,17 @@
+[
+  {
+    "File": "custom-tag.ts",
+    "Provenance": "New bounded custom Symbol.toStringTag probe; original #1699 exploratory source is unavailable.",
+    "ExpectedStdout": "[object Widget]\nWidget\n",
+    "SourceSha256": "49db077b7e7c3f00d95de5f1d1fb1ce743f46f48b0173100a47b40581389125c"
+  },
+  {
+    "File": "combined-accessors.ts",
+    "Provenance": "Recovered verbatim from PR #1699 head ffc26b2cc97a4f7156835f1eb99f227489b65651, tests/SharpTS.Tests/SharedTests/ComputedAccessorNameTests.cs/SymbolAccessor_InClassExpression_GetterSetterWithFieldAndModuleLocalKey.",
+    "ExpectedStdout": "tag5 5\ntag99 99\n",
+    "SourceCommit": "ffc26b2cc97a4f7156835f1eb99f227489b65651",
+    "SourcePath": "tests/SharpTS.Tests/SharedTests/ComputedAccessorNameTests.cs",
+    "SourceMember": "SymbolAccessor_InClassExpression_GetterSetterWithFieldAndModuleLocalKey",
+    "SourceSha256": "bdd7638b5c5eb5bbe4acd3f71713b73e75139c7cca6e0e622a6960e7ba806949"
+  }
+]
