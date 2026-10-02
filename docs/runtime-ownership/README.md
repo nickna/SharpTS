@@ -76,3 +76,4 @@ retain the destinations in the
 | [#1879](https://github.com/nickna/SharpTS/issues/1879) | [R12: Binary storage and atomics](R12.md) | 6 |
 | [#1880](https://github.com/nickna/SharpTS/issues/1880) | [R13: Cryptography](R13.md) | 2 |
 | [#1881](https://github.com/nickna/SharpTS/issues/1881) | [R14: Streams, compression and events](R14.md) | 4 |
+| [#1882](https://github.com/nickna/SharpTS/issues/1882) | [R15: Workers and cross-context values](R15.md) | 5 |
