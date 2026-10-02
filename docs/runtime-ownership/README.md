@@ -73,3 +73,4 @@ retain the destinations in the
 | [#1876](https://github.com/nickna/SharpTS/issues/1876) | [R09: Process, host APIs and text utilities](R09.md) | 12 |
 | [#1877](https://github.com/nickna/SharpTS/issues/1877) | [R10: Filesystem](R10.md) | 4 |
 | [#1878](https://github.com/nickna/SharpTS/issues/1878) | [R11: Networking and fetch](R11.md) | 6 |
+| [#1879](https://github.com/nickna/SharpTS/issues/1879) | [R12: Binary storage and atomics](R12.md) | 6 |
