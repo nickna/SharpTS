@@ -1,0 +1,64 @@
+# Runtime ownership verification for #1864
+
+This ledger records the fifteen fixed outcomes of [epic #1864](https://github.com/nickna/SharpTS/issues/1864).
+The inventory is frozen at `83a41096108fe6de739fa7cfcb148c4bb1193121`; this verification
+uses source at `78931b4a` (including the subsequent historical reconciliations).
+Each cohort has its own report and commit. The reports distinguish metadata ownership
+from guest semantics: executing saved output supports the specific tested contracts,
+not full JavaScript or Node compatibility.
+
+## Shared lifetime and evidence conventions
+
+[`RuntimeEmitter.EmitAll`](../../src/SharpTS/Compilation/RuntimeEmitter.cs) creates a fresh
+[`EmittedRuntime`](../../src/SharpTS/Compilation/EmittedRuntime.cs) for each module.
+Its components own that output's declarations; consumers read them through the runtime
+or explicit component inputs. The reusable emitter retains its type provider, hosted
+selection and current feature selection. These configuration references are intentional;
+generated builders must belong to the current output. Sequential reuse is the tested
+contract; concurrent use of one emitter is not established.
+
+Declaration makes forward handles readable before bodies or generated types are complete.
+Checked owners reject missing reads, null/duplicate assignments, premature completion
+where they track staged work, and writes after completion. Completion seals metadata,
+not guest objects: output-local caches, descriptors, prototype tables, thread-static
+contexts and guest collections remain mutable under their individual contracts.
+Optional owners and optional implementations are distinct; a required facade can finish
+without its feature-specific implementation. Each report spells out its selection.
+
+Construction records and method-local builders are retained when their lifetime is one
+emission. They borrow canonical component handles instead of becoming competing owners.
+BCL method/type references belong to the framework/type provider; generated tokens
+belong to the output module. Shared framework resolution remains the independent
+infrastructure scope of [#1866](https://github.com/nickna/SharpTS/issues/1866).
+
+The linked test source is part of the evidence: lifecycle tests exercise failures and
+repairable completion, reuse tests compare assemblies and earlier caches, and saved
+output tests verify IL **and execute** the generated helpers. Hosted tests allow
+`SharpTS.Hosting.Abstractions`; ordinary output must have no `SharpTS` reference.
+Where a cohort has a different completion/identity policy, its report overrides the
+general convention above. A test count alone does not establish an owner contract.
+
+## Reproduction
+
+Build once with `dotnet build tests/SharpTS.Tests/SharpTS.Tests.csproj -c Release`.
+Each report lists the exact test classes used. Join its class names with
+`FullyQualifiedName~ClassName|FullyQualifiedName~OtherClass` and run:
+
+```powershell
+dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj -c Release --no-build --no-restore `
+  --filter $filter --logger 'trx;LogFileName=R01.trx' `
+  --results-directory artifacts/epic-1864 --blame-hang-timeout 2m
+```
+
+Recorded runs use Windows ARM64, .NET SDK 10.0.401/runtime 10.0.12, Release, on
+2026-10-02. Logs and TRX files are local artifacts under `artifacts/epic-1864/`.
+The build passed with the existing `Microsoft.Build.Tasks.Git` NU1902 warning.
+These reports introduce no production changes. Historical unrepaired semantic reports
+retain the destinations in the
+[frozen reconciliation](../plans/archive/1599-historical-reconciliation.md).
+
+## Cohorts
+
+| Goal | Report | Roots |
+| --- | --- | ---: |
+| [#1868](https://github.com/nickna/SharpTS/issues/1868) | [R01: Calls and function values](R01.md) | 11 |
