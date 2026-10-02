@@ -193,7 +193,8 @@ public class EmittedTimerRuntimeTests
             var seen = new List<int>();
             Call(assembly, runtime.Microtasks.QueuePromiseJob, (Action)(() => seen.Add(1)));
             Call(assembly, runtime.Microtasks.QueuePromiseJob, (Action)(() => seen.Add(2)));
-            Call(assembly, runtime.Timers.SetTimeout, new object(), 100_000d, Array.Empty<object>());
+            // Due timers remain queued until an event-loop pump; emission speed cannot expire this assertion.
+            Call(assembly, runtime.Timers.SetTimeout, new object(), 0d, Array.Empty<object>());
             var marker = new object();
             TaskCompletionSource<object?>? completion = null;
             Task<object?>? promise = null;
@@ -219,7 +220,7 @@ public class EmittedTimerRuntimeTests
         {
             Assert.Empty(seen);
             Assert.Equal(true, Call(assembly, runtime.Microtasks.HasMicrotasks));
-            Assert.True((int)Call(assembly, runtime.Timers.GetNextTimerDelay)! > 0);
+            Assert.Equal(0, Call(assembly, runtime.Timers.GetNextTimerDelay));
             Call(assembly, runtime.Timers.CancelAllTimers);
             Assert.Equal(-1, Call(assembly, runtime.Timers.GetNextTimerDelay));
             Call(assembly, runtime.Microtasks.ProcessMicrotasks);
