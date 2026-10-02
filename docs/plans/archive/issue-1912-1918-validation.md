@@ -37,6 +37,7 @@ Recheck the retained evidence without execution:
 
 ```powershell
 pwsh scripts/verify-historical-evidence.ps1
+pwsh scripts/test-historical-evidence.ps1
 pwsh scripts/verify-1599-reconciliation.ps1 -IssueJson <saved-original-1599-response.json>
 ```
 
@@ -47,3 +48,14 @@ worktree's git-ignored `artifacts/issue-reconciliation`. Checked-in execution JS
 replaces only the absolute worktree prefix with `<repository>`; source bytes and source
 hashes are unchanged. Later evidence/collector commits change no product or existing
 test behavior, so their recorded Git HEADs are distinguished from the product baseline.
+
+PR review corrections preserve the original evidence while strengthening its verification.
+The [retained-observation table](issue-1912-1918-observations.json) separately freezes
+reference, interpreted and compiled outputs, including incorrect runtime results, and
+names the three expected declaration rejections. The verifier requires all sixteen other
+default compilations to succeed with IL proof and checks API/CLI/standalone/hosted results
+against those retained observations. Eleven mutation cases demonstrate rejection of
+unexpected compilation failures, hidden reproduced failures, altered outputs/exit codes,
+missing IL proof and changed declaration diagnostics. The original and restored copied
+records pass; committed records are never mutated. Timing mode now creates a new report
+directory independently, with its original workload and measurement unchanged.

@@ -29,3 +29,7 @@ concurrently. Output directories are caller-supplied; use git-ignored artifacts 
 `pwsh scripts/verify-historical-evidence.ps1` checks the committed source hashes,
 provenance, reference expectations and retained observation/deployment records without
 rerunning guest programs or treating incorrect outputs as conformance assertions.
+`pwsh scripts/test-historical-evidence.ps1` checks that altered copies of the records
+fail verification, including an erased original runtime failure or unexpected default
+compilation rejection. Timing mode creates its requested parent directory, so it can run
+independently of console mode on a fresh output path.

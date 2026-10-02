@@ -27,6 +27,8 @@ internal static class TimingEvidence
         long before = GC.GetAllocatedBytesForCurrentThread();
         double result = hot(1_000_000);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        reportPath = Path.GetFullPath(reportPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
         File.WriteAllText(reportPath, JsonSerializer.Serialize(new
         {
             source, runtime = Environment.Version.ToString(),
