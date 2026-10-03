@@ -225,7 +225,7 @@ public static class BuiltInTypes
                 new TypeInfo.Iterator(TypeInfo.Tuple.FromTypes([NumberType, elementType], 2))),
             "keys" => new TypeInfo.Function([],
                 new TypeInfo.Iterator(NumberType)),
-            "values" => new TypeInfo.Function([],
+            "values" or "@@iterator" => new TypeInfo.Function([],
                 new TypeInfo.Iterator(elementType)),
             // ECMA-262 23.1.3.32 / 23.1.3.33: toString and toLocaleString
             // exist on every Array. Without these, `arr.toString()` is a

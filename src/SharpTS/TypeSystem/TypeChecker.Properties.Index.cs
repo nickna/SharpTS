@@ -992,6 +992,14 @@ public partial class TypeChecker
                     throw new TypeCheckException(
                         $" Cannot assign '{valueType}' to symbol index signature type '{wellKnownType}'.",
                         line: TryGetExprLine(setIndex.Value), tsCode: "TS2322");
+                // Arrays require an iterable iterator result. The general
+                // Iterator<T> relation also accepts next-only objects.
+                if (wellKnownName == "@@iterator" && objType is TypeInfo.Array or TypeInfo.Tuple &&
+                    GetCallableReturnType(valueType) is { } iteratorResult &&
+                    !IsArrayIteratorFactoryResult(iteratorResult))
+                    throw new TypeCheckException(
+                        " Array Symbol.iterator must return a synchronous iterable iterator.",
+                        line: TryGetExprLine(setIndex.Value), tsCode: "TS2322");
                 return valueType;
             }
 
@@ -1015,6 +1023,16 @@ public partial class TypeChecker
 
         throw new TypeCheckException($" Index type '{indexType}' is not valid for assigning to '{objType}'.", tsCode: "TS7053");
     }
+
+    private bool IsArrayIteratorFactoryResult(TypeInfo result) => result switch
+    {
+        // Nullish values are already checked by the assignment relation under
+        // the configured strictNullChecks policy.
+        TypeInfo.Any or TypeInfo.Null or TypeInfo.Undefined or TypeInfo.Iterator or TypeInfo.Generator => true,
+        TypeInfo.Union union => union.Types.All(IsArrayIteratorFactoryResult),
+        _ => TryGetStructuralIteratorElement(result, out _) &&
+            TryGetStructuralIterableElement(result, out _)
+    };
 
     private static bool TryGetStringLiteralKeys(TypeInfo indexType, out List<string> keys)
     {

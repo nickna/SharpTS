@@ -1038,3 +1038,32 @@ message matches Node, but general engine message wording is not a contract.
 Incremental closing remains the #1750 design, dynamic array overrides #1753,
 and fresh LINQ acquisition #1754. No interpreter or hosted guest execution
 repair is claimed.
+
+## #1752 — Typed array Symbol.iterator assignments
+
+**Outcome: repaired.** TypeScript accepts both unchanged original programs.
+Array/tuple iterator factories now retain their element type and require a
+synchronous iterable iterator result. Symbol writes use ordinary property
+storage; tuple and unique-symbol key aliases retain iterator mutation detection.
+Seven references execute in both engines and as isolated saved standalone
+outputs with verified IL, exact Node stdout, empty stderr, clean exit within
+the original 30 seconds and no SharpTS reference/copy. Eight negative controls
+are rejected by the checker and CLI before emission. Fresh unchanged main
+retains the original typed rejection and passing any-alias control.
+
+The selected array, tuple, generator-expression and iterator run has **2,992
+passes and one unchanged-main failure (#1956)** with compiled IL verification.
+All 31 focused tests pass. Node and TypeScript check the sixteen test sources.
+Quality gates and the actual AOT analyzer baseline pass with zero analyzer
+warnings.
+
+`tests/fixtures/ArrayIteratorAssignment` separately preserves an accepted
+Array.values factory's runtime failure: unchanged main and current saved
+outputs both throw an undefined-function TypeError with empty stdout and
+exceed the original deadline. Its saved typing/emission control passes, but it
+is excluded from passing runtime counts. Both interpreters also reject it.
+A direct lifted wrong-element assignment remains accepted by the in-process
+checker before declaration refinement, although CLI/TypeScript reject it; a
+preceding named generator supplies the concrete negative element control.
+No general forward-inference, dynamic-source normalization (#1753) or hosted
+guest execution repair is claimed.

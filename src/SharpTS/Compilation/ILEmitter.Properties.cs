@@ -1696,6 +1696,8 @@ public partial class ILEmitter
     /// </summary>
     private bool TryEmitDiscardedNumberArraySetIndex(Expr.SetIndex si, bool discardResult = true)
     {
+        if (_ctx.TypeMap?.Get(si.Index) is not (TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral))
+            return false;
         if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
             return false;
 
@@ -1801,6 +1803,12 @@ public partial class ILEmitter
 
     protected override void EmitSetIndex(Expr.SetIndex si)
     {
+        if (_ctx.TypeMap?.Get(si.Object) is TypeInfo.Array or TypeInfo.Tuple &&
+            _ctx.TypeMap?.Get(si.Index) is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
+        {
+            base.EmitSetIndex(si);
+            return;
+        }
         if (TryResolveExternalReceiverType(si.Object, out var externalIndexerType) &&
             TryEmitExternalIndexerSet(si.Object, externalIndexerType, si.Index, si.Value))
         {

@@ -91,6 +91,56 @@ public class StandaloneDllTests
     }
 
     [Theory]
+    [MemberData(nameof(SharedTests.ArrayIteratorAssignmentTests.Cases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
+    public void Isolated_Issue1752ArrayIteratorAssignment_PreservesTypedFactories(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ArrayIteratorAssignmentTests.TypingOnlyCases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
+    public void Isolated_Issue1752ArrayValuesFactory_AcceptsTypingAndVerifiesEmission(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        // Execution of this extra control remains an independently recorded runtime gap.
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ArrayIteratorAssignmentTests.InvalidCliCases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
+    public void Isolated_Issue1752InvalidArrayIteratorFactory_RejectsBeforeEmission(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.NotEqual(0, compile.ExitCode);
+        Assert.Contains("Type Error", compile.StandardOutput + compile.StandardError);
+        Assert.False(File.Exists(output));
+    }
+
+    [Theory]
     [MemberData(nameof(IteratorLimitTests.Cases), MemberType = typeof(IteratorLimitTests))]
     public void Isolated_Issue1746IteratorLimits_ValidateAndCoerceBeforeIteration(string name, string source, string expected)
     {
