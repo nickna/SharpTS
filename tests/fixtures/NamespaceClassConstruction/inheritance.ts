@@ -1,0 +1,1 @@
+namespace Models {export class Base {read(){return 3;}}export class Point extends Base {extra(){return this.read()+2;}}}const models:any=Models;const C:any=models.Point;console.log(new Models.Point().extra(),new C().extra(),C===Models.Point);

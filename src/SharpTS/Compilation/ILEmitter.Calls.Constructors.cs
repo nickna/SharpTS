@@ -760,10 +760,10 @@ public partial class ILEmitter
 
         IL.Emit(OpCodes.Ldstr, className);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Get);
+        IL.Emit(OpCodes.Castclass, _ctx.Types.Type);
 
         if (typeArgs != null && typeArgs.Count > 0)
         {
-            IL.Emit(OpCodes.Castclass, _ctx.Types.Type);
             IL.Emit(OpCodes.Ldc_I4, typeArgs.Count);
             IL.Emit(OpCodes.Newarr, _ctx.Types.Type);
 

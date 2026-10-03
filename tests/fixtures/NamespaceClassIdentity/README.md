@@ -13,3 +13,9 @@ the duplicate property-dispatch declaration diagnostic. The module sources pass
 IL verification but throw at execution with a null namespace value. Interpretation
 passes the sibling sources but rejects the exported namespace declaration.
 No compiled runtime pass or exact historical-source recovery is claimed.
+
+Following #1776 and #1781, both sibling controls still reject duplicate class
+dispatch. Both module controls now verify IL and exit cleanly with empty stderr
+within 30 seconds, but print `2 2` in left-first order and `1 1` in right-first
+order, compared with the unchanged reference `1 2`. The remaining declaration/
+namespace identity repair stays in #1968; these results are diagnostic failures.

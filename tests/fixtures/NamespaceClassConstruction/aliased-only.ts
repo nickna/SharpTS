@@ -1,0 +1,1 @@
+namespace Models {export class Point {value:number;constructor(value:number){this.value=value;}read(){return this.value;}}}const models:any=Models;const C:any=models.Point;console.log(new C(5).read(),C===Models.Point);

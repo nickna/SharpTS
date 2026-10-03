@@ -35,6 +35,17 @@ All retain object/System.Type StackUnexpected errors, the same boundary recorded
 by #1781. They remain failures, not 130 verified passes. No hosted execution was
 performed for the new controls.
 
+After #1776 and #1781, the same sources were rechecked without changing their
+reference expectations. The six existing namespace-class verifier failures now
+pass, and #1781's exact original prints `3 5 true` after IL verification. Both
+sibling controls still reject duplicate class property dispatch. The module
+controls now verify IL and exit cleanly with empty stderr within 30 seconds,
+but `main-left.ts` prints `2 2` and `main-right.ts` prints `1 1`, compared with
+the unchanged Node expectation `1 2`. This confirms that the remaining design
+boundary is declaration/namespace identity, after fixing export initialization
+and the separate construction stack mismatch. These module diagnostics remain
+excluded from passing behavior counts.
+
 ## Finite implementation boundary
 
 Give namespace class declarations canonical emitted owners tied to checked

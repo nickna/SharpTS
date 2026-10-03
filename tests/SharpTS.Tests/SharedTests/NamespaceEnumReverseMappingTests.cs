@@ -37,6 +37,7 @@ public sealed class NamespaceEnumReverseMappingTests
     }
 
     public static IEnumerable<object[]> SourceCases() => Cases().Select(row => row[1..]);
+    public static IEnumerable<object[]> HostedCases() => Cases().Select(row => row[..2]);
 
     [Theory, MemberData(nameof(SourceCases))]
     public void NamespaceEnumAliasesPreserveNumericReverseMappings(string source, string expected)

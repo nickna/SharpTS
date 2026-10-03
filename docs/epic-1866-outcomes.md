@@ -271,6 +271,11 @@ namespace declaration naming. TypeScript accepts all four; Node prints `1 2 9`
 for sibling controls and `1 2` for module controls. No compiled runtime pass is
 claimed. The module failure is related to #1776, not a proven exact duplicate.
 
+After #1776/#1781, both sibling controls still reject duplicate dispatch. The
+module outputs now verify IL and exit cleanly but print `2 2`/`1 1` by import
+order instead of `1 2`; they remain excluded from passing behavior counts.
+The six retained namespace-class verifier failures now pass under #1781.
+
 The finite successor covers declaration-owned namespace class identity and
 lookup/export paths, coordinates with #1776 and preserves #1781's separate
 construction control. Existing metadata ownership work is not reopened.
@@ -1371,3 +1376,33 @@ actual AOT analyzer baseline pass with zero analyzer warnings.
 `tests/fixtures/NamespaceEnumReverseMappings` preserves originals and controls.
 The negative/negative-zero initializer diagnostic remains separately with #1788,
 excluded from passing counts; valid positive fractional reverse entries now pass.
+
+## #1781 — Verifiable namespace class construction
+
+**Outcome: repaired.** Qualified namespace construction now casts the member
+lookup result to System.Type before Activator.CreateInstance. Isolated controls
+establish that this qualified path causes the original mismatch; the alias-only
+path already verifies and prints `5 true`. Fresh unchanged main and pre-repair
+current retain exactly one original StackUnexpected error at offset 165 and one
+qualified-only error at offset 79. Neither invalid saved output is executed.
+The unchanged combined original now verifies IL and prints `3 5 true`.
+
+All **52 focused cases pass**, including nine compiled references, nine isolated
+saved standalone outputs, existing namespace-class and native namespace checks.
+The seven namespace-class verifier failures retained by earlier epic tasks now
+pass. Controls preserve arguments and evaluation order, instance methods,
+identity, computed aliases, nested namespaces, inheritance, member functions
+and explicit generic arguments. Full TypeScript compilation and Node confirm
+every source. Saved guests verify IL before execution, preserve exact stdout
+and empty stderr, omit SharpTS references/copies and exit within 30 seconds.
+
+The selected namespace/module/constructor/generic suite passes **2,621 tests**
+with zero failures. Quality gates and the actual AOT analyzer baseline pass
+with zero analyzer warnings. `tests/fixtures/NamespaceClassConstruction`
+preserves the original and isolated controls.
+
+The #1908 investigation was reconciled after #1776/#1781: same-name sibling
+classes still collide, and module controls now run with verified IL but print
+import-order-dependent `2 2`/`1 1` instead of `1 2`. They remain diagnostic
+failures in the finite declaration/namespace identity transfer to #1968.
+This construction boundary fix does not claim that separate identity repair.

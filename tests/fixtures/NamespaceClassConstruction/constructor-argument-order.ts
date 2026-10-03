@@ -1,0 +1,1 @@
+let next=0;function take(){next=next+1;return next;}namespace Models {export class Point {value:number;constructor(a:number,b:number){this.value=a*10+b;}read(){return this.value;}}}console.log(new Models.Point(take(),take()).read(),next);
