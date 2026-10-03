@@ -1,6 +1,7 @@
 using System.Text;
 using SharpTS.Execution;
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
 
 namespace SharpTS.Runtime.Types;
 
@@ -158,6 +159,13 @@ public class SharpTSTextDecoder : ISharpTSPropertyAccessor
             return DecodeFromArgs(args);
         }
 
+        internal object? CallWithReceiver(object? receiver, List<object?> arguments)
+        {
+            if (receiver is not SharpTSTextDecoder decoder)
+                throw new ThrowException(new SharpTSTypeError("TextDecoder.decode called on incompatible receiver"));
+            return new TextDecoderDecodeMethod(decoder).DecodeFromArgs(arguments.ToArray());
+        }
+
         private string DecodeFromArgs(object?[] args)
         {
             byte[]? bytes = null;
@@ -169,6 +177,7 @@ public class SharpTSTextDecoder : ISharpTSPropertyAccessor
                 {
                     SharpTSBuffer buf => buf.Data,
                     byte[] arr => arr,
+                    SharpTSTypedArray view => view.Buffer.AsSpan(view.ByteOffset, view.ByteLength).ToArray(),
                     SharpTSArray tsArr => tsArr.Select(e => e switch
                     {
                         double d => (byte)(int)d,

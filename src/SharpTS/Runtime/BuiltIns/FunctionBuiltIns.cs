@@ -189,6 +189,9 @@ public static class FunctionBuiltIns
         if (callable is SharpTSProxy proxy)
             return proxy.TrapApply(thisArg, args, interp);
 
+        if (callable is SharpTSTextDecoder.TextDecoderDecodeMethod decode)
+            return decode.CallWithReceiver(thisArg, args);
+
         // Arrow functions ignore thisArg
         if (callable is SharpTSArrowFunction arrow && !arrow.HasOwnThis)
         {

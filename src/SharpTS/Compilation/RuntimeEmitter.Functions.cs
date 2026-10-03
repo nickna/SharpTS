@@ -48,6 +48,7 @@ public partial class RuntimeEmitter
         EmittedSetRuntime? Set,
         EmittedInvocationRuntime Invocation,
         EmittedTypedArrayRuntime TypedArrays,
+        EmittedTextEncodingRuntime? TextEncoding,
         EmittedErrorRuntime Errors
     );
 
@@ -59,6 +60,7 @@ public partial class RuntimeEmitter
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedInvocationRuntime Invocation,
         EmittedTypedArrayRuntime TypedArrays,
+        EmittedTextEncodingRuntime? TextEncoding,
         EmittedErrorRuntime Errors
     );
 
@@ -538,6 +540,61 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitTextDecoderWrapperCall(
+        ILGenerator il,
+        EmittedFunctionValueRuntime functions,
+        EmittedTextEncodingRuntime? textEncoding,
+        EmittedErrorRuntime errors,
+        FieldBuilder targetField,
+        LocalBuilder receiver,
+        LocalBuilder args)
+    {
+        if (textEncoding is null) return;
+        var otherMethod = il.DefineLabel();
+        var validReceiver = il.DefineLabel();
+        var method = il.DeclareLocal(_types.MethodInfo);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Castclass, functions.Type);
+        il.Emit(OpCodes.Callvirt, functions.GetMethodInfo);
+        il.Emit(OpCodes.Stloc, method);
+        il.Emit(OpCodes.Ldloc, method);
+        il.Emit(OpCodes.Callvirt, typeof(MemberInfo).GetProperty("DeclaringType")!.GetMethod!);
+        il.Emit(OpCodes.Ldtoken, textEncoding.DecoderType);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, otherMethod);
+        il.Emit(OpCodes.Ldloc, method);
+        il.Emit(OpCodes.Callvirt, typeof(MemberInfo).GetProperty("Name")!.GetMethod!);
+        il.Emit(OpCodes.Ldstr, "Decode");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, otherMethod);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Isinst, textEncoding.DecoderType);
+        il.Emit(OpCodes.Brtrue, validReceiver);
+        GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor,
+            "TextDecoder.decode called on incompatible receiver");
+        il.MarkLabel(validReceiver);
+        var input = il.DeclareLocal(_types.Object);
+        var noInput = il.DefineLabel();
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, input);
+        il.Emit(OpCodes.Ldloc, args);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brfalse, noInput);
+        il.Emit(OpCodes.Ldloc, args);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, input);
+        il.MarkLabel(noInput);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Castclass, textEncoding.DecoderType);
+        il.Emit(OpCodes.Ldloc, input);
+        il.Emit(OpCodes.Callvirt, textEncoding.DecoderDecode);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(otherMethod);
     }
 
     private void EmitTypedArrayWrapperCall(
@@ -1725,6 +1782,7 @@ public partial class RuntimeEmitter
 
         // return (($TSFunction)_target).InvokeWithThis(thisArg, callArgs)
         il.MarkLabel(isTSFunctionLabel);
+        EmitTextDecoderWrapperCall(il, inputs.FunctionValues, inputs.TextEncoding, inputs.Errors, targetField, thisArgLocal, callArgsLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
         il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
@@ -1988,6 +2046,7 @@ public partial class RuntimeEmitter
         );
 
         il.MarkLabel(isTSFunctionLabel);
+        EmitTextDecoderWrapperCall(il, inputs.FunctionValues, inputs.TextEncoding, inputs.Errors, targetField, thisArgLocal, callArgsLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
         il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);

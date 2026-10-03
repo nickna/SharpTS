@@ -107,7 +107,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $TextDecoder type for standalone util support.
     /// </summary>
-    internal void EmitTSTextDecoderClass(ModuleBuilder moduleBuilder, EmittedTextEncodingRuntime textEncoding, EmittedBufferRuntime buffer)
+    internal void EmitTSTextDecoderClass(ModuleBuilder moduleBuilder, EmittedTextEncodingRuntime textEncoding, EmittedBufferRuntime buffer, EmittedTypedArrayRuntime typedArrays)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TextDecoder",
@@ -209,7 +209,7 @@ public partial class RuntimeEmitter
         _ = ignoreBOMGetter;
 
         // Method: Decode(object input) -> string
-        // Accepts $Buffer, byte[], or null
+        // Accepts $Buffer, byte[], TypedArray byte views, or null.
         var decodeMethod = typeBuilder.DefineMethod(
             "Decode",
             MethodAttributes.Public | MethodAttributes.HideBySig,
@@ -238,6 +238,30 @@ public partial class RuntimeEmitter
         decodeIL.Emit(OpCodes.Ldarg_1);
         decodeIL.Emit(OpCodes.Isinst, typeof(byte[]));
         decodeIL.Emit(OpCodes.Brtrue, isByteArrayLabel);
+
+        // TypedArrays expose their backing bytes with a separate view offset/length.
+        // Decode the selected byte range, not the whole backing buffer or elements.
+        if (typedArrays.Implementation is { } arrays)
+        {
+            var notTypedArray = decodeIL.DefineLabel();
+            var view = decodeIL.DeclareLocal(arrays.BaseType);
+            decodeIL.Emit(OpCodes.Ldarg_1);
+            decodeIL.Emit(OpCodes.Isinst, arrays.BaseType);
+            decodeIL.Emit(OpCodes.Stloc, view);
+            decodeIL.Emit(OpCodes.Ldloc, view);
+            decodeIL.Emit(OpCodes.Brfalse, notTypedArray);
+            decodeIL.Emit(OpCodes.Ldarg_0);
+            decodeIL.Emit(OpCodes.Ldfld, encodingField);
+            decodeIL.Emit(OpCodes.Ldloc, view);
+            decodeIL.Emit(OpCodes.Callvirt, arrays.GetBuffer);
+            decodeIL.Emit(OpCodes.Ldloc, view);
+            decodeIL.Emit(OpCodes.Callvirt, arrays.ByteOffsetGetter);
+            decodeIL.Emit(OpCodes.Ldloc, view);
+            decodeIL.Emit(OpCodes.Callvirt, arrays.ByteLengthGetter);
+            decodeIL.Emit(OpCodes.Callvirt, typeof(Encoding).GetMethod("GetString", [typeof(byte[]), typeof(int), typeof(int)])!);
+            decodeIL.Emit(OpCodes.Ret);
+            decodeIL.MarkLabel(notTypedArray);
+        }
 
         // Neither - return empty string
         decodeIL.Emit(OpCodes.Br, returnEmptyLabel);
@@ -291,7 +315,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $TextDecoderDecodeMethod wrapper for compiled mode decode calls.
     /// </summary>
-    internal void EmitTSTextDecoderDecodeMethodClass(ModuleBuilder moduleBuilder, EmittedTextEncodingRuntime textEncoding, EmittedBufferRuntime buffer)
+    internal void EmitTSTextDecoderDecodeMethodClass(ModuleBuilder moduleBuilder, EmittedTextEncodingRuntime textEncoding, EmittedBufferRuntime buffer, EmittedTypedArrayRuntime typedArrays)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TextDecoderDecodeMethod",
@@ -329,7 +353,7 @@ public partial class RuntimeEmitter
         textEncoding.DecodeMethodInvoke = invokeMethod;
 
         var invokeIL = invokeMethod.GetILGenerator();
-        var bytesLocal = invokeIL.DeclareLocal(typeof(byte[]));
+        var bytesLocal = invokeIL.DeclareLocal(_types.Object);
         var noArgsLabel = invokeIL.DefineLabel();
         var hasArgsLabel = invokeIL.DefineLabel();
         var isBufferLabel = invokeIL.DefineLabel();
@@ -359,6 +383,22 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldelem_Ref);
         invokeIL.Emit(OpCodes.Isinst, buffer.Type);
         invokeIL.Emit(OpCodes.Brtrue, isBufferLabel);
+
+        if (typedArrays.Implementation is { } arrays)
+        {
+            var notTypedArray = invokeIL.DefineLabel();
+            invokeIL.Emit(OpCodes.Ldarg_1);
+            invokeIL.Emit(OpCodes.Ldc_I4_0);
+            invokeIL.Emit(OpCodes.Ldelem_Ref);
+            invokeIL.Emit(OpCodes.Isinst, arrays.BaseType);
+            invokeIL.Emit(OpCodes.Brfalse, notTypedArray);
+            invokeIL.Emit(OpCodes.Ldarg_1);
+            invokeIL.Emit(OpCodes.Ldc_I4_0);
+            invokeIL.Emit(OpCodes.Ldelem_Ref);
+            invokeIL.Emit(OpCodes.Stloc, bytesLocal);
+            invokeIL.Emit(OpCodes.Br, callDecodeLabel);
+            invokeIL.MarkLabel(notTypedArray);
+        }
 
         // Not a buffer - try to cast to byte[]
         invokeIL.Emit(OpCodes.Ldarg_1);

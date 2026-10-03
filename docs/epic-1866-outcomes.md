@@ -481,3 +481,29 @@ which does not make its stdout correct. This separate decoder gap is #1722.
 `tests/fixtures/ExtractedTypedArrayMethods` preserves both originals, all expected
 outputs and this boundary. No hosted execution or broad unbound-method behavior
 change is claimed.
+
+## #1722 — Extracted TextDecoder.decode through call
+
+**Outcome: repaired with the exact original expectation.** Unchanged `0ad37b57`
+saves and IL-verifies the source, then exits zero with one blank line. The
+decoder now reads a TypedArray's backing bytes using its view offset and byte
+length. Its emitted callable wrapper accepts the same view, and explicit
+call/apply on the reflection-backed decoder method validates and uses the
+selected decoder. Interpreter decoding accepts TypedArray views and explicit
+receiver forwarding as well.
+
+All **267 affected encoding/function-wrapper tests pass** with compiled IL
+verification. Coverage includes the original, call/apply, view bounds,
+multi-byte element views, missing/empty input, invalid-receiver guest TypeErrors,
+isolated standalone outputs without a SharpTS reference, and native saved-wrapper
+checks. Separate TypeScript and Node references accept the fixtures. Release
+builds, quality gates and the actual AOT analyzer baseline pass with zero
+analyzer warnings. The exact combined original from #1721 now also matches
+`7`, `true`, `3 3`, `A`, `9` with zero exit and empty stderr.
+
+The new nested subarray forwarding control still fails due to #1727's pooled
+arguments overwriting the outer receiver. Its source and failed observation
+remain retained; the decoder-specific passing control precomputes views.
+`tests/fixtures/ExtractedTextDecoderMethods` records these boundaries. No
+historical delay root cause, general encoding-label/streaming repair or hosted
+guest execution is claimed.

@@ -528,8 +528,8 @@ public partial class RuntimeEmitter
         if (features.UsesTextEncoding)
         {
             EmitTSTextEncoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer());
-            EmitTSTextDecoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer());
-            EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer());
+            EmitTSTextDecoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer(), runtime.TypedArrays);
+            EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer(), runtime.TypedArrays);
         }
 
         // $StringDecoder class removed — StringDecoder migrated to
@@ -586,6 +586,7 @@ public partial class RuntimeEmitter
                 runtime.Set,
                 runtime.Invocation,
                 runtime.TypedArrays,
+                runtime.TextEncoding,
                 runtime.Errors
             )
         );
@@ -600,6 +601,7 @@ public partial class RuntimeEmitter
                 runtime.ArrayStorage,
                 runtime.Invocation,
                 runtime.TypedArrays,
+                runtime.TextEncoding,
                 runtime.Errors
             )
         );
