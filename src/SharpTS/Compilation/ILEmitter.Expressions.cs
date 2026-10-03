@@ -329,6 +329,15 @@ public partial class ILEmitter
             return;
         }
 
+        if (_ctx.ResolveNamespaceEnumField(name) is { } enumNamespace)
+        {
+            IL.Emit(OpCodes.Ldsfld, enumNamespace);
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Get);
+            SetStackUnknown();
+            return;
+        }
+
         // Check if it's a namespace - load the static field. ResolveNamespaceField walks enclosing
         // namespace prefixes so a nested namespace's member body can name a sibling/enclosing
         // namespace by its simple name (#665), not just a top-level namespace by full path.

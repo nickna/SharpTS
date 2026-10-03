@@ -1,0 +1,1 @@
+namespace Options {export enum Kind {First=2,Second}export const original=Kind;}const first:any=Options;const second:any=Options;const kind:any=first.Kind;console.log(kind===second.Kind,kind===first.original,kind[3]);

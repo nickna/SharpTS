@@ -1,0 +1,1 @@
+namespace First {export namespace Inner {export enum Kind {One=1,Two}}}namespace Second {export enum Kind {Other=2}}const first:any=First;const second:any=Second;console.log(first.Inner.Kind[2],second.Kind[2],first.Inner.Kind===second.Kind);

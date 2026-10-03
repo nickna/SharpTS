@@ -245,6 +245,15 @@ public partial class ILEmitter
             }
 
             IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item"));
+            if (value is double numericValue)
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldc_R8, numericValue);
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.ToJsString);
+                IL.Emit(OpCodes.Ldstr, memberName);
+                IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item"));
+            }
         }
 
         // Store the dictionary in the namespace: nsField.Set(enumName, dict)

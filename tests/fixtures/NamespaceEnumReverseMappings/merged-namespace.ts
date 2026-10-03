@@ -1,0 +1,1 @@
+namespace Options {export enum Kind {First=2,Second}}namespace Options {export const selected=Kind.Second;}const options:any=Options;console.log(options.Kind[options.selected],options.Kind.First,Options.selected);

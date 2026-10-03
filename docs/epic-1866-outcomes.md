@@ -1345,3 +1345,29 @@ independent diagnostics: namespace descriptor-value reads, Reflect's sealed
 deletion fallback and saved script initialization's top-level strict deletion.
 Each reproduces unchanged on fresh main/current and is excluded from passing
 counts. Hosted coverage verifies metadata/deployment rather than guest execution.
+
+## #1780 — Namespace enum numeric reverse mappings
+
+**Outcome: repaired.** Namespace enum objects now publish numeric reverse entries
+using JavaScript numeric key conversion, with later duplicate values replacing
+earlier reverse names. String members do not receive reverse entries. Namespace
+enum registries include the enclosing path, separating same-named declarations;
+bare enum values in namespace initialization load the published object and
+preserve identity. Fresh unchanged main and pre-repair current print `3 2
+undefined`; the unchanged original now prints `3 2 Second`.
+
+All **50 focused cases pass**, including nine compiled references, nine isolated
+saved standalone outputs, nine hosted compilation checks and native scoped enum/
+namespace ownership checks. Controls cover computed/named keys, strings, mixed
+enums, duplicates, fractions/zero, identity, nested/separate same-name declarations
+and namespace merging. Full TypeScript compilation and Node confirm every source.
+Saved guests verify IL, exact stdout, empty stderr, no SharpTS reference/copy and
+clean exit within 30 seconds. Hosted cases append an export to exercise module
+compilation, verify IL and deployment, without claiming exported-function execution.
+
+The selected enum/namespace/module suite passes **2,319 tests**, retaining seven
+established namespace class IL failures owned by #1781. Quality gates and the
+actual AOT analyzer baseline pass with zero analyzer warnings.
+`tests/fixtures/NamespaceEnumReverseMappings` preserves originals and controls.
+The negative/negative-zero initializer diagnostic remains separately with #1788,
+excluded from passing counts; valid positive fractional reverse entries now pass.

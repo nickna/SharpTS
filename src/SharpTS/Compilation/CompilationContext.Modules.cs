@@ -99,6 +99,17 @@ public partial class CompilationContext
     /// </summary>
     public string ResolveEnumName(string simpleEnumName)
     {
+        if (CurrentNamespacePath != null)
+        {
+            var parts = CurrentNamespacePath.Split('.');
+            for (int i = parts.Length; i >= 1; i--)
+            {
+                string key = QualifyNamespaceEnum(string.Join('.', parts.Take(i)), EnumModuleQualify(simpleEnumName));
+                if (EnumMembers?.ContainsKey(key) == true) return key;
+            }
+        }
+        string local = EnumModuleQualify(simpleEnumName);
+        if (EnumMembers?.ContainsKey(local) == true) return local;
         if (EnumToModule != null && EnumToModule.TryGetValue(simpleEnumName, out var modulePath))
         {
             string sanitizedModule = GetSanitizedModuleName(modulePath);
@@ -112,11 +123,26 @@ public partial class CompilationContext
     /// </summary>
     public string GetQualifiedEnumName(string simpleEnumName)
     {
-        if (CurrentModulePath == null)
-            return simpleEnumName;
+        string local = EnumModuleQualify(simpleEnumName);
+        return CurrentNamespacePath == null ? local : QualifyNamespaceEnum(CurrentNamespacePath, local);
+    }
 
-        string sanitizedModule = GetSanitizedModuleName(CurrentModulePath);
-        return $"$M_{sanitizedModule}_{simpleEnumName}";
+    private string EnumModuleQualify(string name) => CurrentModulePath == null || IsScriptTopLevel
+        ? name : $"$M_{GetSanitizedModuleName(CurrentModulePath)}_{name}";
+
+    private static string QualifyNamespaceEnum(string path, string name) => $"$nsenum_{path.Replace('.', '_')}_{name}";
+
+    public FieldBuilder? ResolveNamespaceEnumField(string name)
+    {
+        if (CurrentNamespacePath == null || NamespaceFields == null) return null;
+        var parts = CurrentNamespacePath.Split('.');
+        for (int i = parts.Length; i >= 1; i--)
+        {
+            string path = string.Join('.', parts.Take(i));
+            if (EnumMembers?.ContainsKey(QualifyNamespaceEnum(path, EnumModuleQualify(name))) == true
+                && NamespaceFields.TryGetValue(path, out var field)) return field;
+        }
+        return null;
     }
 
     /// <summary>

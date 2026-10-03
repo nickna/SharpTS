@@ -17,7 +17,7 @@ public partial class ILCompiler
         string qualifiedEnumName = ctx.GetQualifiedEnumName(enumStmt.Name.Lexeme);
 
         // Track simple name -> module mapping for later lookups
-        if (_modules.CurrentPath != null)
+        if (_modules.CurrentPath != null && _currentNamespacePath == null)
         {
             _modules.EnumToModule[enumStmt.Name.Lexeme] = _modules.CurrentPath;
         }
