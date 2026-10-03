@@ -1,0 +1,1 @@
+new Promise((resolve:any,reject:any)=>{for(const fn of [resolve,reject]){const d:any=Object.getOwnPropertyDescriptor(fn,'name');console.log(d.value,d.writable,d.enumerable,d.configurable);console.log(Object.prototype.propertyIsEnumerable.call(fn,'name'),Object.keys(fn).join(','));}resolve(1);});

@@ -1,0 +1,11 @@
+{
+  "files": {
+    "cases.json": "ff2261b8a0fdb7fd280219352b22f956cdaedc03065ad1fb689b360cdbdfec3e",
+    "results.json": "7e1cd5c5a827bf1a35d21e905aea12a33c897e49832055f904772166277c4912",
+    "historical.json": "b1168fe9ce79d126af11ee33e8842f117c8dce4a6000c5ca7fa1a20ad003f603",
+    "reference-compilation.json": "9519e9abbe936238ce37d6c8cd04ca59cb3049ea6c68fcc8b253711e28203359",
+    "boolean-alias.cjs": "60f703780b26cfac12a61d47d5c248651508219ddb9ec290ee80514f4b6cd0b8",
+    "number-alias.cjs": "40a55c95565607ecf4b43a8994647b4f2d87d07d0d104cab705cd6675c7f12a0",
+    "primitive-import.ts": "af2fd021527a0dda92060c9681e247c7f1e4e54e838f6618980ef12bc13a6923"
+  }
+}

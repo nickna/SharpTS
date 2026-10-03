@@ -1,0 +1,32 @@
+[
+  {
+    "File": "array-length.ts",
+    "Provenance": "New array length descriptor/enumeration probe; original #1701 exploratory program is unavailable.",
+    "ExpectedStdout": "2 true false false\nfalse 0,1\n",
+    "SourceSha256": "190b8397e04e8d32fe40772c773ecdbf348b47be85d37fd1fb94551c408f727e"
+  },
+  {
+    "File": "string-length.ts",
+    "Provenance": "New boxed string length descriptor/enumeration probe; original #1701 exploratory program is unavailable.",
+    "ExpectedStdout": "2 false false false\nfalse 0,1\n",
+    "SourceSha256": "5e5ff8dd86a56a5d0d3ecc9e4c25a2878e23999953c8d151701ebfb8310b461b"
+  },
+  {
+    "File": "primitive-string-length.ts",
+    "Provenance": "New primitive string length descriptor/enumeration probe; original #1701 exploratory program is unavailable.",
+    "ExpectedStdout": "2 false false false\nfalse 0,1\n",
+    "SourceSha256": "e3fb28ee6e7f0ea798d8fc3c17cff8d6cbd26e1ea751db6f340951549b8fac5d"
+  },
+  {
+    "File": "primitive-string-predicate.ts",
+    "Provenance": "New primitive string predicate-only control, independent of descriptor lookup; original #1701 exploratory program is unavailable.",
+    "ExpectedStdout": "false 0,1\n",
+    "SourceSha256": "da54d89f97ba656e37e47c38c17932b30b123ba4b3b7568dce56904f170ec0b4"
+  },
+  {
+    "File": "promise-name.ts",
+    "Provenance": "New Promise resolve/reject name descriptor/enumeration probe; original #1701 exploratory program is unavailable.",
+    "ExpectedStdout": " false false true\nfalse \n false false true\nfalse \n",
+    "SourceSha256": "f8c0306cb249b3948c0e84ad796fb5e872039a157effcc10609de1d77cf6f995"
+  }
+]

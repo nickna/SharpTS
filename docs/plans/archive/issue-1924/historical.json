@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/nickna/SharpTS/issues/1599",
+  "frozenBodySha256": "420cdca4eaf29b19354bcce748ffa034f4cfaa3400e772fb2089b8d97978c15f",
+  "excerpts": [
+    {
+      "line": 137,
+      "text": "- [x] Own-property key metadata: merged in #1700 at `8c881699a59fe20c7e09af7af4a02e9b818590e0` after all CI/Desktop gates and exact-head review passed. Required `ObjectKeys` owns six declarations; seven helpers receive scoped inputs and one explicit stage validates the two early Proxy callback bodies. Optional Promise names follow supplied metadata. The preview passed 6,226 distinct tests, including 6,199 broad cases, fifteen owner cases and twelve JSON peer cases with one handle lookup adaptation and unchanged assertions. Actual integration passed a fresh Release rebuild, quality and all 535 affected cases, including all fifty new cases and both source guards. All forty regenerated assemblies preserve 44,574 IL-verified bodies. CI covers 22,776 core/standalone cases per platform with the existing one Linux/three Windows skips and zero failures, plus 129 GUI passes each. Every one of the 814 standalone cases executes exactly once per platform under unchanged deadlines. The committed census binds every compiler and generated file without errors. The ledger retains 222 flat declarations, 323 construction fields and nine collections; zero final-audit rows are closed. The interpreter-only symbol delete/reinsert expectation remains a separately retained compiled difference with identical 1,183 metadata/IL bodies; it is not counted as a passing assertion.\r",
+      "sha256": "f2ad7f2c79aabdc2569f8bb37cb79e3529e4b4bc232b1ec690820a4a95879e9f"
+    }
+  ]
+}

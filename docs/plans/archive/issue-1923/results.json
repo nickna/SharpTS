@@ -1,0 +1,274 @@
+{
+  "baseline": "78931b4add5a6937ab6e63452f2e0ad97fe12adb",
+  "recordedAtUtc": "2026-10-02T07:17:13.695068+00:00",
+  "runtime": "10.0.12",
+  "dotnet": {
+    "ExitCode": 0,
+    "StandardOutput": "10.0.401\n",
+    "StandardError": ""
+  },
+  "node": {
+    "ExitCode": 0,
+    "StandardOutput": "v25.5.0\n",
+    "StandardError": ""
+  },
+  "deadlineSeconds": 30,
+  "results": [
+    {
+      "File": "custom-tag.ts",
+      "Provenance": "New bounded custom Symbol.toStringTag probe; original #1699 exploratory source is unavailable.",
+      "ExpectedStdout": "[object Widget]\nWidget\n",
+      "sourceSha256": "49db077b7e7c3f00d95de5f1d1fb1ce743f46f48b0173100a47b40581389125c",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "[object Widget]\nWidget\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "[object Object]\nWidget\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "[object Object]\nWidget\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "[object Object]\nWidget\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "[object Object]\nWidget\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "[object Object]\nWidget\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1923\\custom-tag\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "[object Object]\nWidget\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1923\\custom-tag\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "[object Object]\nWidget\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1923\\custom-tag\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "[object Object]\nWidget\n"
+        }
+      ]
+    },
+    {
+      "File": "combined-accessors.ts",
+      "Provenance": "Recovered verbatim from PR #1699 head ffc26b2cc97a4f7156835f1eb99f227489b65651, tests/SharpTS.Tests/SharedTests/ComputedAccessorNameTests.cs/SymbolAccessor_InClassExpression_GetterSetterWithFieldAndModuleLocalKey.",
+      "ExpectedStdout": "tag5 5\ntag99 99\n",
+      "sourceSha256": "bdd7638b5c5eb5bbe4acd3f71713b73e75139c7cca6e0e622a6960e7ba806949",
+      "observations": [
+        {
+          "mode": "node-reference",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "tag5 5\ntag99 99\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-api",
+          "result": "tag5 5\ntag99 99\n"
+        },
+        {
+          "mode": "compiled-api",
+          "result": "tag5 5\ntag99 99\n"
+        },
+        {
+          "mode": "interpreted-cli-default",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "tag5 5\ntag99 99\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-noLib",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "tag5 5\ntag99 99\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "interpreted-cli-esnext",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "tag5 5\ntag99 99\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1923\\combined-accessors\\default.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "default-standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "tag5 5\ntag99 99\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1923\\combined-accessors\\standalone\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "standalone-metadata",
+          "references": [
+            "System.Private.CoreLib",
+            "System.Collections.Concurrent",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "standalone-execution",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "tag5 5\ntag99 99\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-cli-compilation",
+          "result": {
+            "ExitCode": 0,
+            "StandardOutput": "Compiled to <repository>\\artifacts\\issue-1919-1925\\run-1923\\combined-accessors\\hosted\\guest.dll\nIL verification passed.\n",
+            "StandardError": ""
+          }
+        },
+        {
+          "mode": "hosted-metadata",
+          "references": [
+            "System.Runtime",
+            "System.Collections",
+            "System.ValueTuple",
+            "System.Threading",
+            "System.Threading.Tasks",
+            "System.Collections.Concurrent",
+            "System.Threading.Thread",
+            "System.Memory",
+            "System.Core",
+            "System.Runtime.InteropServices",
+            "System.Diagnostics.StackTrace",
+            "System.Text.RegularExpressions",
+            "System.Runtime.Numerics",
+            "SharpTS.Hosting.Abstractions",
+            "System.Console",
+            "System.Private.Uri",
+            "System.Diagnostics.Process"
+          ],
+          "sharpTsDllPresent": false
+        },
+        {
+          "mode": "hosted-runtime-initialization",
+          "result": "tag5 5\ntag99 99\n"
+        }
+      ]
+    }
+  ]
+}

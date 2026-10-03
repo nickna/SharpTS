@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/nickna/SharpTS/issues/1599",
+  "frozenBodySha256": "420cdca4eaf29b19354bcce748ffa034f4cfaa3400e772fb2089b8d97978c15f",
+  "excerpts": [
+    {
+      "line": 139,
+      "text": "- [x] Own-property predicates and legacy accessor metadata: merged in #1701 at `872006eb53938a43a1ff057a8f42ee15f1907f46` after all CI/Desktop gates and exact-head review passed. Required `ObjectOwnProperties` owns seven declarations, and six helpers receive scoped inputs. Both Promise callback receiver branches follow supplied optional metadata. The preview passed 6,405 distinct cases, including 6,324 broad cases, fifteen owner cases and 66 peer cases with two handle-path adaptations and unchanged assertions. Actual integration passed a fresh Release rebuild, quality and all 573 affected cases, including all 46 new cases and both source guards. All 36 regenerated assemblies preserve 39,668 IL-verified bodies. CI covers 22,822 core/standalone cases per platform with the existing one Linux/three Windows skips and zero failures, plus 129 GUI passes each. Every one of the 845 standalone cases executes exactly once per platform under unchanged deadlines. Complete committed-source/generator binding passes. The ledger retains 215 flat declarations, 323 construction fields and nine collections; zero final-audit rows are closed. Original Node array/string length and Promise callback name enumerability expectations remain separately retained compiled differences with identical 996 and 1,136 metadata/IL bodies, excluded from passing output totals and requiring general-property/final audit disposition.\r",
+      "sha256": "0f27fc4f768633debf27e4e7d7f95fe2e9c12c86ae734912fd62557a326832ef"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "File": "promise-callback-control.ts",
+    "Provenance": "Recovered verbatim from PR #1697 head 6ab6b254d6726e3274dccf48823998510e114b6b, StandaloneDllTests.ErrorMetadataPrograms/promise.",
+    "ExpectedStdout": "true true reject\n",
+    "SourceCommit": "6ab6b254d6726e3274dccf48823998510e114b6b",
+    "SourcePath": "tests/SharpTS.Tests/CompilerTests/StandaloneDllTests.cs",
+    "SourceMember": "ErrorMetadataPrograms/promise",
+    "OriginalParityStdout": "true true reject\n",
+    "SourceSha256": "afde71d8937b539b3f449ec3793b58b0c3be734001072220c3b9962c01b2d945"
+  }
+]

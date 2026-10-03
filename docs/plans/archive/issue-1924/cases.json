@@ -1,0 +1,11 @@
+[
+  {
+    "File": "symbol-order.ts",
+    "Provenance": "Recovered verbatim from PR #1700 head 97592ce1e309794bd2b1caf5159581abeff96174, tests/SharpTS.Tests/SharedTests/ObjectPrototypeTests.cs/GetOwnPropertySymbols_PreservesCreationOrderAcrossRedefinition.",
+    "ExpectedStdout": "true true\ntrue true\ntrue true\nfalse\n",
+    "SourceCommit": "97592ce1e309794bd2b1caf5159581abeff96174",
+    "SourcePath": "tests/SharpTS.Tests/SharedTests/ObjectPrototypeTests.cs",
+    "SourceMember": "GetOwnPropertySymbols_PreservesCreationOrderAcrossRedefinition",
+    "SourceSha256": "46a79a1a4e42d11b3de99e6310e30121ea32572bca87fddf72fcfc644e2aee3d"
+  }
+]

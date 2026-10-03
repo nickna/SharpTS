@@ -1,0 +1,1 @@
+const value:any={[Symbol.toStringTag]:'Widget'};console.log(Object.prototype.toString.call(value));console.log(value[Symbol.toStringTag]);

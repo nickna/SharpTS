@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/nickna/SharpTS/issues/1599",
+  "frozenBodySha256": "420cdca4eaf29b19354bcce748ffa034f4cfaa3400e772fb2089b8d97978c15f",
+  "excerpts": [
+    {
+      "line": 105,
+      "text": "- [x] Object storage: required `EmittedObjectStorageRuntime` owns 18 declarations with checked access, repairable initialization and validated completion. Merged in #1686 after all CI/Desktop gates and exact-head 54-file review passed with no actionable findings. Six emitter-held fields become local construction inputs; 24 emission boundaries use the owner and exact descriptor, function, undefined, interface and error dependencies. All 246 bound compiler references and seven fixture references migrate. Original builder identity, member order, strictness arguments, early guest TypeError wrapping and mutable guest storage are preserved. All 2,686 local regression cases passed, including 51 new cases (33 owner/staging/selection/hosting/native/reuse and 18 isolated outputs), with zero failures/skips. Twenty IL-verified saved outputs preserve normalized metadata, imports, constants and 21,678 method bodies/exception regions, with 18 matching executions and two hosted outputs. Source audit preserves 26 complete bodies, the whole storage file and orchestration, and 45 other compiler consumers after equivalent substitutions. Final CI passed 21,738 core tests plus 1 existing platform skip on Linux and 21,736 plus 3 existing platform skips on Windows, plus 129 GUI tests per platform and zero failures. All 51 new cases and unchanged generator, fork IPC and lifecycle controls passed on both platforms. Existing inherited-accessor and top-level strict compatibility limitations remain preserved; Proxy uses normal runtime deployment. No CI limits, test assertions or performance budgets changed in this phase. Descriptor/generic Object/Reflect ownership, mandatory JSON reuse and the complete remaining audit scope stay required.\r",
+      "sha256": "77df96a608cdd15b8a78c2f69c40b1bdc74320bd6cfa2f04ea5f44c79b7dd237"
+    }
+  ]
+}

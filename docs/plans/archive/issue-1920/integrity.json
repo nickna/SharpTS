@@ -1,0 +1,12 @@
+{
+  "files": {
+    "cases.json": "688bb3031aeb6827fe0fae126486cdd265d86b1a51163e9ec88d97455b8dee2e",
+    "results.json": "fa33b40c71e23df1d247c380cc6466a2082a84b8ddf623a725690fb6e4b06f48",
+    "historical.json": "e6c3f422c42844c10e1fd7ff38d77ecabab341c8c9d8d7ccf4db31c3bc1b073b",
+    "reference-compilation.json": "cb37913a7d1ba19cccf0e93029bd5571bb70da2a2d8f6de7d6a43fa0cda3ee1d",
+    "inherited-getter.ts": "7d90adaf7aaf23c96ff5f762e351761bfcb1241b44d2d58f0cb469814b2ade94",
+    "inherited-setter.ts": "8c8a480c23e85a5c1b6291ebdece70095a82efb62b7086777ad5286cf013bcb8",
+    "function-strict-control.ts": "fb559d1f6e6894598fbf2a42f557e2da89565143eb3a22e591c4c56d70ceac20",
+    "top-level-strict.ts": "bcb6e943cd625fdd186740c86f18da452af8f2f592125b9607486af73694983b"
+  }
+}

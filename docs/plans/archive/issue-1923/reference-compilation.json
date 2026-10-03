@@ -1,0 +1,17 @@
+{
+  "typescript": "Version 7.0.2",
+  "cases": [
+    {
+      "File": "custom-tag.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    },
+    {
+      "File": "combined-accessors.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    }
+  ]
+}

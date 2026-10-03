@@ -1,0 +1,31 @@
+[
+  {
+    "File": "boolean-alias.cjs",
+    "Provenance": "Recovered verbatim from PR #1684 head 8dc54314472b6e72db7e27338e675905b7a67785, StandaloneDllTests.BooleanMetadataPrograms/cjs.",
+    "ExpectedStdout": "false true false true true\n",
+    "SourceCommit": "8dc54314472b6e72db7e27338e675905b7a67785",
+    "SourcePath": "tests/SharpTS.Tests/CompilerTests/StandaloneDllTests.cs",
+    "SourceMember": "BooleanMetadataPrograms/cjs",
+    "OriginalParityStdout": "false true null null true\n",
+    "SourceSha256": "60f703780b26cfac12a61d47d5c248651508219ddb9ec290ee80514f4b6cd0b8"
+  },
+  {
+    "File": "number-alias.cjs",
+    "Provenance": "Recovered verbatim from PR #1685 head 80679a0c290d88a7e68d12ce00f1446bdaa3d4a7, StandaloneDllTests.NumericCoercionMetadataPrograms/cjs.",
+    "ExpectedStdout": "2 2 true\n",
+    "SourceCommit": "80679a0c290d88a7e68d12ce00f1446bdaa3d4a7",
+    "SourcePath": "tests/SharpTS.Tests/CompilerTests/StandaloneDllTests.cs",
+    "SourceMember": "NumericCoercionMetadataPrograms/cjs",
+    "OriginalParityStdout": "2 null true\n",
+    "SourceSha256": "40a55c95565607ecf4b43a8994647b4f2d87d07d0d104cab705cd6675c7f12a0"
+  },
+  {
+    "File": "primitive-import.ts",
+    "Provenance": "New probe of the exact reserved user-import form in PR #1666 discussion_r4014488701; original program bytes were not supplied.",
+    "ExpectedStdout": "",
+    "ReferenceKind": "reserved-import-rejection",
+    "ReferenceExitCode": 1,
+    "ReferenceDiagnostic": "ERR_UNSUPPORTED_ESM_URL_SCHEME",
+    "SourceSha256": "af2fd021527a0dda92060c9681e247c7f1e4e54e838f6618980ef12bc13a6923"
+  }
+]

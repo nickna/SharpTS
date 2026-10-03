@@ -1,0 +1,11 @@
+{
+  "typescript": "Version 7.0.2",
+  "cases": [
+    {
+      "File": "symbol-order.ts",
+      "ExitCode": 0,
+      "StandardOutput": "",
+      "StandardError": ""
+    }
+  ]
+}

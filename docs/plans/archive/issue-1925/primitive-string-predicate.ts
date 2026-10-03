@@ -1,0 +1,1 @@
+const value:any='ab';console.log(Object.prototype.propertyIsEnumerable.call(value,'length'),Object.keys(value).join(','));
