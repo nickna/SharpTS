@@ -640,6 +640,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // globalThis[key] → GlobalThisGetProperty(key)
         if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis")
         {
+            if (gi.Index is not Expr.Literal { Value: string key } || key == "eval")
+                Ctx.Runtime!.Deployment.Require("indirect eval");
             EmitExpression(gi.Index);
             EnsureBoxed();
             IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
@@ -2125,7 +2127,22 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (TryEmitBuiltInClassType(name)) return true;
         if (TryEmitNamespaceSingleton(name)) return true;
 
+        // A value-form eval can escape through a holder, callback or alias before
+        // receiving dynamic source. Record its soft bridge dependency at acquisition,
+        // including state-machine bodies; direct static eval keeps its own lowering.
+        if (TryEmitIndirectEvalValue(name)) return true;
+
         return false;
+    }
+
+    protected bool TryEmitIndirectEvalValue(string name)
+    {
+        if (name != "eval") return false;
+        Ctx.Runtime!.Deployment.Require("indirect eval");
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.GlobalObject.GetProperty);
+        SetStackUnknown();
+        return true;
     }
 
     /// <summary>

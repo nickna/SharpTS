@@ -1231,6 +1231,8 @@ public partial class ILEmitter
         // globalThis[key] → GlobalThisGetProperty(key)
         if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis")
         {
+            if (gi.Index is not Expr.Literal { Value: string key } || key == "eval")
+                _ctx.Runtime!.Deployment.Require("indirect eval");
             EmitExpression(gi.Index);
             EmitBoxIfNeeded(gi.Index);
             IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.Object, "ToString")!);

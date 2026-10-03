@@ -1151,3 +1151,30 @@ recorded pre-emission diagnostic and remains outside passing execution counts.
 No iterator-next, Windows process-lifetime or hosted guest execution repair is
 claimed. Historical matching-body evidence describes the earlier migration;
 this semantic repair changes emitted method bodies.
+
+## #1771 — Indirect eval optional runtime deployment
+
+**Outcome: repaired.** Emitted value-form eval acquisition now records the
+optional interpreter bridge requirement. Synchronous and state-machine bodies,
+named global reads and computed/dynamic global keys deploy the matching runtime
+in normal mode. Saved outputs retain no hard SharpTS reference. The unchanged
+displayed original now prints `3`, with verified IL, empty stderr and clean exit
+within its 30-second deadline. Fresh unchanged main and pre-repair current both
+retain the missing-runtime error; those fresh processes finish within 30 seconds.
+The historical timeout remains a separate #1772 observation.
+
+All **21 focused tests pass**. The broader selected suite passes **307 tests**
+and retains the independently established unchanged-main async-arrow mutation
+IL failure (readonly address at offset 90); it remains outside passing counts.
+Nine references run in both engines and isolated normal outputs. Three isolated
+standalone controls preserve non-string identity, caught missing-bridge failure,
+runtime omission and direct static eval's caller-local access. Node and
+TypeScript independently check twelve sources, including the intentionally
+different standalone missing-bridge control. Quality gates and the actual AOT
+analyzer baseline pass with zero analyzer warnings.
+
+`tests/fixtures/IndirectEvalDeployment` preserves the issue body's displayed
+source and independent controls. Normal deployment is conservative when eval
+escapes as a value, even if a particular later input is non-string. Explicit
+standalone behavior and non-string identity remain intact. No broader dynamic
+direct-eval lexical-scope, hosted execution or Windows lifetime repair is claimed.

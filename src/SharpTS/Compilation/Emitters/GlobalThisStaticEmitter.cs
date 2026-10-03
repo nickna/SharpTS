@@ -149,6 +149,8 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         }
 
         // For user-assigned properties, use runtime helper
+        if (propertyName == "eval")
+            ctx.Runtime!.Deployment.Require("indirect eval");
         il.Emit(OpCodes.Ldstr, propertyName);
         il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
         return true;

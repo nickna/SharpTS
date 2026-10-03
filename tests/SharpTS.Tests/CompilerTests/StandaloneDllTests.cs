@@ -19,6 +19,45 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.IndirectEvalDeploymentTests.Cases), MemberType = typeof(SharedTests.IndirectEvalDeploymentTests))]
+    public void Isolated_Issue1771IndirectEval_DeploysMatchingOptionalRuntime(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        var runtime = directory.GetPath("SharpTS.dll");
+        Assert.True(File.Exists(runtime));
+        Assert.Equal(File.ReadAllBytes(typeof(TypeChecker).Assembly.Location), File.ReadAllBytes(runtime));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.IndirectEvalDeploymentTests.StandaloneCases), MemberType = typeof(SharedTests.IndirectEvalDeploymentTests))]
+    public void Isolated_Issue1771StandaloneEval_PreservesIdentityLexicalLoweringAndOmission(string name, string source, string expected, bool usesBridge)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.Equal(usesBridge, (compile.StandardOutput + compile.StandardError).Contains("indirect eval"));
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.BuiltInModules.PrefixedStreamImportTests.Cases), MemberType = typeof(SharedTests.BuiltInModules.PrefixedStreamImportTests))]
     public void Isolated_Issue1740StreamImports_ResolveStaticCallsAndConstructors(string name, string source, string expected)
     {
