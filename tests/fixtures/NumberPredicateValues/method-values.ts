@@ -1,0 +1,10 @@
+const N=Number;
+const nan:(value:unknown)=>boolean=Number.isNaN;
+const finite:(value:unknown)=>boolean=N.isFinite;
+const integer:(value:unknown)=>boolean=Number.isInteger;
+const safe:(value:unknown)=>boolean=N.isSafeInteger;
+console.log(nan===N.isNaN,finite===Number.isFinite,integer===N.isInteger,safe===Number.isSafeInteger);
+console.log(nan.name,nan.length,finite.name,finite.length,integer.name,integer.length,safe.name,safe.length);
+console.log(nan(NaN),finite(3),integer(3),safe(3));
+console.log(nan('NaN'),finite('3'),integer('3'),safe('3'));
+console.log(finite(Infinity),integer(3.5),safe(9007199254740992));

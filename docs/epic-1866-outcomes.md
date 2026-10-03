@@ -637,3 +637,29 @@ accept all nine positive fixtures. Quality gates and the actual AOT analyzer
 baseline pass with zero analyzer warnings. `tests/fixtures/ProxyConstructors`
 retains original observations and boundaries. No general Reflect.construct
 alternate-prototype or hosted guest execution repair is claimed.
+
+## #1801 — Number predicate values
+
+**Outcome: verified prior repair.** The unchanged original and call control
+already compile and standalone IL-verify on `0ad37b57`, match both Node output
+lines and exit zero with empty stderr within 30 seconds. Prior commit
+`1ed687cb` refreshes retained interface values after declaration merging. The
+original's direct `Number.isNaN` value lookup now sees the ES2015 additions;
+an explicit ES5-only member-value control still reports the missing member.
+No historical compiler execution or new production repair is claimed.
+
+All **95 selected scoped tests pass** with compiled IL verification. New
+coverage retains originals, all four method values, inferred aliases, cached
+identity, names/arities, non-coercing predicate results, invalid members/types,
+library selection and declaration-merge shadowing. Three isolated standalone
+outputs omit runtime references/copies and match Node with clean exits.
+Four positive references pass TypeScript and Node; namespace syntax uses Node
+transformation. Quality gates pass. Production is unchanged from #1799's
+actual zero-warning AOT baseline check.
+
+`tests/fixtures/NumberPredicateValues` preserves separate new-control failures
+reproduced unchanged on main: typeof Number choosing its instance interface,
+compiled namespace initializer output omission, and saved exported-namespace
+function invocation throwing object-is-not-a-function. Their Node expectations
+remain intact and they are excluded from passing saved conformance counts.
+No typeof-query, namespace execution or hosted guest execution repair is claimed.
