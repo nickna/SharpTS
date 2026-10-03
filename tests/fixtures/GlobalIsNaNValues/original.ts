@@ -1,0 +1,1 @@
+const root:any=globalThis;console.log(root.parseInt===parseInt,root.parseFloat===parseFloat,root.isNaN===isNaN,root.isFinite===isFinite);console.log(root.parseInt("21"),root.parseFloat("2.5"),root.isNaN("x"),root.isFinite(4));console.log(root.encodeURIComponent===encodeURIComponent,root.decodeURIComponent===decodeURIComponent,root.eval===eval);

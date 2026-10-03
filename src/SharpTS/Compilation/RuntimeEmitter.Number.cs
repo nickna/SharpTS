@@ -20,7 +20,9 @@ public partial class RuntimeEmitter
         Type SymbolType,
         MethodInfo CreateException,
         ConstructorInfo TypeErrorCtor,
-        ConstructorInfo RangeErrorCtor);
+        ConstructorInfo RangeErrorCtor,
+        MethodInfo ToNumber,
+        ConstructorBuilder PadUndefinedCtor);
 
     private void DefineNumberFixedFormattingInfrastructure(
         TypeBuilder typeBuilder,
@@ -175,7 +177,7 @@ public partial class RuntimeEmitter
         EmitNumberIsFinite(typeBuilder, numbers);
         EmitNumberIsInteger(typeBuilder, numbers);
         EmitNumberIsSafeInteger(typeBuilder, numbers);
-        EmitGlobalIsNaN(typeBuilder, numbers);
+        EmitGlobalIsNaN(typeBuilder, numbers, peers.ToNumber, peers.PadUndefinedCtor);
         EmitGlobalIsFinite(typeBuilder, numbers);
         EmitNumberToFixedDouble(typeBuilder, numbers, peers.CreateException, peers.RangeErrorCtor);
         EmitNumberToFixed(typeBuilder, numbers, peers.GetProperty, peers.UndefinedType, peers.ToIntegerOrInfinity, peers.CreateException, peers.TypeErrorCtor, peers.RangeErrorCtor);
@@ -1396,7 +1398,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGlobalIsNaN(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
+    private void EmitGlobalIsNaN(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
+        MethodInfo toNumber, ConstructorBuilder padUndefined)
     {
         // Global isNaN coerces to number first
         var method = typeBuilder.DefineMethod(
@@ -1406,58 +1409,12 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         numbers.GlobalIsNaN = method;
+        method.SetCustomAttribute(padUndefined, CustomAttributeEncoder.EmptyBlob);
 
         var il = method.GetILGenerator();
-        var checkStringLabel = il.DefineLabel();
-        var checkNullLabel = il.DefineLabel();
-        var checkBoolLabel = il.DefineLabel();
-        var returnTrueLabel = il.DefineLabel();
-        var parsedLocal = il.DeclareLocal(_types.Double);
-
-        // if (value is double d) return double.IsNaN(d)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brfalse, checkStringLabel);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Call, toNumber);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
-        il.Emit(OpCodes.Ret);
-
-        // if (value is string s) return !double.TryParse(s, ...)
-        il.MarkLabel(checkStringLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brfalse, checkNullLabel);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Ldc_I4, (int)NumberStyles.Float);
-        il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldloca, parsedLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "TryParse", [_types.String, typeof(NumberStyles), typeof(IFormatProvider), _types.Double.MakeByRefType()])!);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ceq); // NOT the result
-        il.Emit(OpCodes.Ret);
-
-        // if (value is null) return true
-        il.MarkLabel(checkNullLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brtrue, checkBoolLabel);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ret);
-
-        // if (value is bool) return false
-        il.MarkLabel(checkBoolLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Boolean);
-        il.Emit(OpCodes.Brfalse, returnTrueLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ret);
-
-        // default: return true
-        il.MarkLabel(returnTrueLabel);
-        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
     }
 

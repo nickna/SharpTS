@@ -526,7 +526,7 @@ public partial class RuntimeEmitter
 
         // isNaN
         il.MarkLabel(isNaNLabel);
-        EmitGetOrCreateTSFn(inputs.Numbers.IsNaN, "isNaN", 1);
+        EmitGetOrCreateTSFn(inputs.Numbers.GlobalIsNaN, "isNaN", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         // isFinite

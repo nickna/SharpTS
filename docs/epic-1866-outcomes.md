@@ -1687,3 +1687,27 @@ A separate compound string-index source is retained under
 `GlobalAccessorWrites/independent`. TypeScript/Node accept it with `6 2`; fresh
 unchanged-main/current reject it before emission with `Array index must be a
 number`. It is excluded from passing coverage and no checker repair is claimed.
+
+## #1770 — Numeric coercion for global isNaN values
+
+**Outcome: repaired.** Global isNaN wrappers target the global predicate rather
+than Number.isNaN. That predicate uses the shared ToNumber helper, preserving
+coercion, side effects and abrupt completions for both direct and value calls.
+Its value-call padding supplies undefined for omitted arguments. Number.isNaN
+remains non-coercing with its own cached function identity. Fresh unchanged-main/
+pre-repair current verify the original but print false for `root.isNaN("x")`;
+current prints true and preserves all other original outputs, with empty stderr
+and clean exit within the original 30 seconds.
+
+All **183 selected checks pass**, including eight compiled references, eight
+isolated standalone outputs, eight hosted module controls and existing native
+number, globalThis and strict-predicate checks. TypeScript/Node confirm every
+reference. Coverage includes numeric strings, empty/whitespace strings, null,
+undefined, omitted arguments, object coercion order, thrown error identity,
+Symbol/BigInt TypeErrors, borrowed call/apply/bind and global property/index calls.
+Cached identity, function metadata and Number.isNaN controls remain covered.
+Saved guests verify IL, exact stdout, empty stderr, no SharpTS reference/copy and
+clean exit within 30 seconds. Hosted exports are not executed. Native number
+declaration signatures, ownership and formatter boundaries remain frozen; the
+coercion helper and padding constructor are precise scoped inputs. Quality gates
+and the actual AOT analyzer baseline pass with zero analyzer warnings.
