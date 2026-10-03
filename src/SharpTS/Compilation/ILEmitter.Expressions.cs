@@ -792,10 +792,21 @@ public partial class ILEmitter
 
         var storageName = _ctx.ResolveFunctionDCFieldName(name);
         if (_ctx.CapturedFunctionLocals?.Contains(storageName) == true
-            && _ctx.FunctionDisplayClassFields?.TryGetValue(storageName, out var functionField) == true
-            && _ctx.FunctionDisplayClassLocal != null)
+            && _ctx.FunctionDisplayClassFields?.TryGetValue(storageName, out var functionField) == true)
         {
-            IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+            // Promoted value slots are proven initialized before their closure
+            // is created and cannot contain the object-valued TDZ sentinel.
+            if (functionField.FieldType.IsValueType)
+                return;
+            if (_ctx.FunctionDisplayClassLocal != null)
+                IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+            else if (_ctx.CurrentArrowFunctionDCField != null)
+            {
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
+            }
+            else
+                return;
             IL.Emit(OpCodes.Ldfld, functionField);
         }
         else if (_ctx.CapturedArrowLocals?.Contains(name) == true

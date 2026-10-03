@@ -6,6 +6,11 @@ independently and committed after its verification. The starting baseline is
 The epic's frozen source baseline remains `83a41096108fe6de739fa7cfcb148c4bb1193121`.
 Design results and prior repairs are distinguished from new behavior repairs.
 
+Verification counts describe each child's run. Later repairs supersede earlier
+retained diagnostics: #1781 resolves the seven namespace-class verifier failures,
+#1757 resolves four direct async super-call failures, and #1761 resolves #1956's
+promoted numeric closure verifier failure.
+
 ## #1900 — Interpreter non-writable static descriptors
 
 **Outcome: repaired.** The original progress note links #1861 but contains no
@@ -1530,3 +1535,39 @@ is preserved under `tests/fixtures/AsyncArrowSuperValues/independent`; invalid
 outputs are not executed and these diagnostics are excluded from passing counts.
 Quality gates and the actual AOT analyzer baseline pass with zero analyzer
 warnings. This receiver fix does not claim those separate lowering repairs.
+
+## #1761 — Assignment before a captured let declaration
+
+**Outcome: repaired.** The assignment guard reaches the shared parent function
+display object through a closure's `$functionDC` reference. It evaluates the
+right-hand side before checking the existing binding and storing, preserving
+side effects and exception precedence. Fresh unchanged-main/pre-repair current
+verify the original but omit ReferenceError and print `2`/`3`; current preserves
+the unchanged `ReferenceError`/`2`/`3` expectation. Read, typeof and nested-read
+controls preserve their prior verified behavior and clean execution.
+
+All **58 focused checks pass**, including twelve compiled references, twelve
+isolated standalone outputs, twelve hosted module controls and existing native/
+saved sentinel ownership checks. Coverage includes nested setters, right-hand
+side ordering/throws, undefined initialization, assignment expression results,
+declared var bindings, shadowing and initializer re-entry. Full TypeScript
+compilation and Node confirm all twelve expectations. Saved guests verify IL,
+exact stdout, empty stderr, no SharpTS reference/copy and clean exit within the
+original 30 seconds. Hosted exports are not executed. Sentinel metadata and
+constructor ownership boundaries remain unchanged.
+
+The same guard skips object-sentinel probes on promoted value-type fields,
+whose promotion proves initialization precedes closure creation. This resolves
+the previously retained #1956 failure: fresh unchanged main rejects the numeric
+closure source with StackObjRef at offset 98, while current verifies/runs it
+standalone with `13 14`/`true Infinity`, matching TypeScript/Node, empty stderr,
+clean exit and no SharpTS reference/copy. Both existing execution-mode tests pass.
+
+The broader lexical/capture/closure/arrow/sentinel selection passes **1,555 tests**,
+retaining two unchanged-main verifier failures excluded from passing counts:
+nested async arrow mutation and the typed callback mismatch retained with #1757.
+A separate forward-var source is preserved under
+`tests/fixtures/CapturedLexicalAssignments/independent`: TypeScript/Node accept
+it, while fresh unchanged-main/current reject `x` before emission. The declared
+var control passes; no separate forward-var checker repair is claimed. Quality
+gates and the actual AOT analyzer baseline pass with zero analyzer warnings.
