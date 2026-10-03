@@ -1,0 +1,1 @@
+async function* values(){try{yield 1;}catch(e:any){yield e.tag;}finally{console.log("closed");}}async function run(){const g=values();console.log((await g.next()).value);try{const r=await g.throw({tag:7});console.log("resolved",r.value,r.done);}catch(e:any){console.log("rejected",e.tag);}console.log("after");}run();

@@ -30,6 +30,49 @@ public partial class AsyncGeneratorMoveNextEmitter
     // be routed). Saved/restored around each region so nesting is handled correctly.
     private bool _inHandlerBody;
 
+    private void EmitInjectedYieldThrow()
+    {
+        var normalResumeLabel = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, _builder.ThrowRequestedField);
+        _il.Emit(OpCodes.Brfalse, normalResumeLabel);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Stfld, _builder.ThrowRequestedField);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4_M1);
+        _il.Emit(OpCodes.Stfld, _builder.StateField);
+
+        void LoadThrownValue()
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, _builder.ThrowValueField);
+        }
+
+        if (_currentTryExceptionLocal is not null)
+        {
+            EmitThrowIntoEnclosingTry(LoadThrownValue);
+        }
+        else if (ActiveFinallyFrames() is { Count: > 0 } chain)
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            LoadThrownValue();
+            _il.Emit(OpCodes.Stfld, GetPendingExceptionField());
+            RegisterThrowTerminal();
+            RouteThroughFinallys(chain, ExitCodeThrow, OpCodes.Br);
+        }
+        else
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldc_I4, -2);
+            _il.Emit(OpCodes.Stfld, _builder.StateField);
+            LoadThrownValue();
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.CreateException);
+            _il.Emit(OpCodes.Throw);
+        }
+        _il.MarkLabel(normalResumeLabel);
+    }
+
     // `<>pendingException` (object): the value of a `throw` being routed through finally(s), held
     // across any suspension in those finallys until the terminal dispatch rethrows it.
     private FieldBuilder? _pendingExceptionField;

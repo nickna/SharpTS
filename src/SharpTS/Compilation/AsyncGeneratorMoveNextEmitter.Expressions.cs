@@ -58,6 +58,8 @@ public partial class AsyncGeneratorMoveNextEmitter
         // Restore spill temps from their fields on the resumed path (reached only via the state switch).
         _helpers.RehydrateLiveSpillsAfterResume();
 
+        EmitInjectedYieldThrow();
+
         // 5a. Check __returnRequested flag (set by generator.return())
         // If true, jump to the enclosing finally cleanup path or complete the generator
         _il.Emit(OpCodes.Ldarg_0);

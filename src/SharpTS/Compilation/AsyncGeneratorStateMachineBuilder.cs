@@ -53,6 +53,10 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
     // Flag set by return() to trigger finally blocks during MoveNextAsync resume
     public FieldBuilder ReturnRequestedField { get; private set; } = null!;
 
+    // Abrupt completion delivered at an ordinary yield's resume point.
+    public FieldBuilder ThrowRequestedField { get; private set; } = null!;
+    public FieldBuilder ThrowValueField { get; private set; } = null!;
+
     // Re-entrancy flag: true only while the generator body is synchronously advancing (the window of a
     // MoveNextAsync call before it suspends or completes). A guest next()/return()/throw() observing it
     // means the body is advancing itself; without the guard that synchronous re-entry recurses into
@@ -170,6 +174,11 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
             _types.Boolean,
             FieldAttributes.Public
         );
+
+        ThrowRequestedField = _stateMachineType.DefineField(
+            "<>throwRequested", _types.Boolean, FieldAttributes.Private);
+        ThrowValueField = _stateMachineType.DefineField(
+            "<>throwValue", _types.Object, FieldAttributes.Private);
 
         // Define the re-entrancy guard flag (#542); see EmitThrowIfExecutingAsync.
         ExecutingField = _stateMachineType.DefineField(
@@ -686,10 +695,45 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
     {
         var il = ThrowMethod.GetILGenerator();
 
-        // Reject throw() while a request is in flight (the body executing, or a next() still pending):
-        // throw() completes the generator immediately, so letting it run concurrently with a pending
-        // next() would settle that next() against an already-closed generator. (#542)
+        // Preserve the existing guard against overlapping in-flight requests.
         EmitThrowIfBusyAsync(il);
+
+        // A suspended yield receives an abrupt completion inside the body.
+        // Drive the ordinary result path so catches can yield/await and uncaught
+        // exceptions reject the returned promise with their original value.
+        var rejectWithoutResumeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, StateField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, rejectWithoutResumeLabel);
+        // Delegation needs its own throw-method forwarding protocol. Preserve
+        // that path until it can consume the request rather than leaving a
+        // pending injection for an unrelated later ordinary yield.
+        if (DelegatedAsyncEnumeratorField is not null)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, DelegatedAsyncEnumeratorField);
+            il.Emit(OpCodes.Brtrue, rejectWithoutResumeLabel);
+        }
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, ThrowValueField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, ThrowRequestedField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, ReturnRequestedField);
+        var resultLocal = il.DeclareLocal(_types.TaskOfObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _driveOnceMethod);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Stfld, PendingTailField);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(rejectWithoutResumeLabel);
 
         // Set state to -2 (completed)
         il.Emit(OpCodes.Ldarg_0);

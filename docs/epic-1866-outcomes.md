@@ -729,3 +729,30 @@ method TypeError mismatch, reproduced unchanged on main, outside passing counts.
 Completion, return/finally and operand exception controls pass. No correction of
 that separate throw protocol, compiled async string delegation or hosted guest
 execution is claimed.
+
+## #1732 — Async-generator throw injection
+
+**Outcome: repaired.** Compiled `throw()` injects its value at an ordinary
+suspended yield, resumes existing catch/finally routing and settles the
+ordinary step/promise result. The exact original and caller-control outputs
+match Node. Fresh unchanged main reproduces the original's lone `1` and the
+caller's `rejected 7` with verified IL, clean exit and empty stderr.
+
+All **824 selected tests pass** with compiled IL verification, including
+awaiting catches/cleanup, nested finally blocks, original error identity,
+nullish/falsy caught values, repeated throws from a suspended catch,
+not-started/completed controls, native runtime ownership and retained iterator
+regressions. Nine references run in both engines; the compiled next/return
+control and ten isolated standalone outputs also pass. Saved tests omit
+runtime references/copies and require exact Node stdout, clean exit and empty
+stderr within the original 30-second deadline. All eleven references pass
+Node and TypeScript; quality gates and the actual AOT analyzer baseline pass
+with zero analyzer warnings.
+
+`tests/fixtures/AsyncGeneratorInjectedThrow` retains unchanged-main evidence
+for two separate failures: compiled awaiting of completed `throw(null)` misses
+the catch, and interpreted `return()` leaks `GeneratorReturnException`. Neither
+is included in passing counts for that engine. No general request queue,
+delegated throw-method protocol or hosted execution repair is claimed. Active
+delegation retains its existing throw path so a request cannot linger until
+an unrelated ordinary yield.
