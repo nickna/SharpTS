@@ -501,9 +501,10 @@ builds, quality gates and the actual AOT analyzer baseline pass with zero
 analyzer warnings. The exact combined original from #1721 now also matches
 `7`, `true`, `3 3`, `A`, `9` with zero exit and empty stderr.
 
-The new nested subarray forwarding control still fails due to #1727's pooled
-arguments overwriting the outer receiver. Its source and failed observation
-remain retained; the decoder-specific passing control precomputes views.
+The new nested subarray forwarding control failed at this task's commit due to
+#1727's pooled arguments overwriting the outer receiver. Its source and failed
+observation remain retained; #1727 subsequently repairs that unchanged control.
+The decoder-specific passing control precomputes views.
 `tests/fixtures/ExtractedTextDecoderMethods` records these boundaries. No
 historical delay root cause, general encoding-label/streaming repair or hosted
 guest execution is claimed.
@@ -553,3 +554,30 @@ failure: generator prototype properties are already absent there. Its source
 and unchanged Node expectation remain outside passing conformance counts.
 `tests/fixtures/NonConstructibleFunctions` records that boundary. No interpreter
 generator-prototype repair or hosted guest execution is claimed.
+
+## #1727 — Nested pooled method-call arguments
+
+**Outcome: repaired with unchanged originals.** Unchanged `0ad37b57` compiles
+and IL-verifies the exact source, then prints `64` instead of `154`, with
+normal exit and empty stderr. Dynamic method-call emission now evaluates
+arguments left to right into locals before acquiring and filling its pooled
+array. Receiver and callee evaluation retain their original order. The pool
+continues to reuse the same thread-local arrays for arities one through four.
+
+All **129 selected affected tests pass** with compiled IL verification. The
+exact source and three exact independent controls match Node. New coverage
+checks same/different arities, deeper nesting, independent retained arguments
+objects, observable receiver/callee/argument getters, exceptions during argument
+evaluation, indirect callbacks and compiled guest numeric coercion. A native
+call-site control proves repeated non-nested calls receive the same pooled
+array; existing thread-local ownership/spread checks remain green. Nine isolated
+outputs verify IL, omit SharpTS references and exit zero with empty stderr.
+The exact nested decoder control retained under #1722 now passes as well.
+
+Separate TypeScript/Node references accept all sources. Required quality gates
+and the actual AOT analyzer baseline pass with zero analyzer warnings.
+`tests/fixtures/NestedMethodArguments` retains the original baseline output and
+boundaries. Its compiled coercion control has a separate interpreter `NaN`
+discrepancy, reproduced unchanged on main; that expectation is not weakened
+or counted as passing interpreter conformance. No interpreter unary-object
+coercion repair or hosted guest execution is claimed.

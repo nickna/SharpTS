@@ -1,0 +1,1 @@
+let saved:any;const o:any={f:function(a:any,b:any){if(saved===undefined)saved=arguments;return a*10+b;}};console.log(o.f(1,2),o.f(3,4),saved[0],saved[1]);console.log(o.f(o.f(1,2),o.f(3,4)));console.log(saved[0],saved[1]);

@@ -11,8 +11,9 @@ offset/length, a multi-byte element view, missing/empty input and guest TypeErro
 for invalid receivers. Views are precomputed to isolate decoder behavior.
 `nested-arguments-control.ts` preserves the first version of that new control:
 Node expects the same output, but the compiled same-arity nested subarray call
-overwrites the outer receiver and throws before stdout. This remains a failed
-comparison belonging to the separately tracked argument-pool issue #1727.
+overwrites the outer receiver and throws before stdout at the #1722 commit.
+The separately tracked argument-pool repair in #1727 subsequently makes this
+unchanged control pass in both engines and isolated standalone execution.
 
 Compile each source separately with TypeScript, then run Node:
 

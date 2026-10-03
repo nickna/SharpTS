@@ -681,6 +681,18 @@ public partial class ILEmitter
         }
         else
         {
+            // Argument evaluation can re-enter any same-arity method call via a
+            // nested call, getter or callback. Retain values in locals until all
+            // guest evaluation is complete, then fill the pooled array once.
+            var argumentLocals = new LocalBuilder[arguments.Count];
+            for (int i = 0; i < arguments.Count; i++)
+            {
+                argumentLocals[i] = IL.DeclareLocal(_ctx.Types.Object);
+                EmitExpression(arguments[i]);
+                EmitBoxIfNeeded(arguments[i]);
+                IL.Emit(OpCodes.Stloc, argumentLocals[i]);
+            }
+
             // For arity > 0, route through the per-thread $CallArgsPool to skip per-call
             // newarr — the dispatch chain (InvokeMethodValue → $TSFunction.Invoke →
             // MethodInvoker.Invoke) reads values out of the array without retaining a
@@ -700,8 +712,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Ldc_I4, i);
-                EmitExpression(arguments[i]);
-                EmitBoxIfNeeded(arguments[i]);
+                IL.Emit(OpCodes.Ldloc, argumentLocals[i]);
                 IL.Emit(OpCodes.Stelem_Ref);
             }
         }

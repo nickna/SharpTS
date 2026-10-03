@@ -18,7 +18,9 @@ public partial class RuntimeEmitter
     /// <c>[ThreadStatic]</c> fields were added to <c>$Runtime</c>, so the
     /// pool went on a fresh class. Harmless to keep it here.
     ///
-    /// Safety / aliasing: the call site fills the array, then dispatches
+    /// Safety / aliasing: the call site evaluates all arguments into locals
+    /// before acquiring and filling the array, so nested calls during argument
+    /// evaluation cannot overwrite an outer argument. It then dispatches
     /// through <c>$TSFunction.Invoke → MethodInvoker.Invoke(target, Span&lt;object?&gt;)</c>.
     /// MethodInvoker reads values into the call frame and does not retain
     /// a reference. Compiled function bodies build their own
