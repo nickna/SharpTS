@@ -48,6 +48,15 @@ warnings without changing either baseline. Each of the 74 child sections has
 one distinct completion commit. The consolidated PR is
 [#1969](https://github.com/nickna/SharpTS/pull/1969).
 
+The first complete CI run passes both Core/build jobs, all three Linux
+standalone shards, Windows standalone shard 2, and the native and desktop gates.
+Windows standalone shards 0 and 1 continue passing tests until their unchanged
+20-minute step budgets expire. CI now uses six deterministic method shards per
+platform: each prior three-way partition splits in two, preserving the full
+test inventory, theory rows and all individual and aggregate step deadlines.
+The local runner retains its configurable three-shard default to limit local
+resource contention.
+
 ## #1900 — Interpreter non-writable static descriptors
 
 **Outcome: repaired.** The original progress note links #1861 but contains no
