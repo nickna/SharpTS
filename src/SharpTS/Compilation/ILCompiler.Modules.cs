@@ -1211,9 +1211,9 @@ public partial class ILCompiler
         string? defaultBinding,
         string? exportAssignmentBinding) => statement switch
     {
-        // Class declarations retain their executable definition work.
+        // Class and ordinary enum declarations retain their executable definition work.
         // Other declarations are defined in the normal declaration phases.
-        Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum or
+        Stmt.Function or Stmt.Interface or Stmt.TypeAlias or
             Stmt.Namespace or Stmt.DeclareModule => null,
 
         // Module imports are emitted in a synchronous prelude using the normal
@@ -1237,6 +1237,7 @@ public partial class ILCompiler
                 IsVarRedeclaration: declaration.IsVar,
                 IsLexicalInitialization: !declaration.IsVar)),
         Stmt.Var => null,
+        Stmt.Export { Declaration: Stmt.Enum { IsConst: false } declaration } => declaration,
         Stmt.Sequence sequence => new Stmt.Sequence(
             sequence.Statements
                 .Select(item => LowerHostedTopLevelStatement(
@@ -1300,6 +1301,8 @@ public partial class ILCompiler
         if (statement is not Stmt.Export export || export.IsTypeOnly)
             return false;
         if (export.Declaration is Stmt.Const or Stmt.Var or Stmt.Sequence)
+            return false;
+        if (export.Declaration is Stmt.Enum { IsConst: false })
             return false;
         if (export.DefaultExpr is not null || export.ExportAssignment is not null)
             return false;

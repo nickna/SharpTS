@@ -19,6 +19,14 @@ inspection contract. All 90 focused architecture, sort, compact-object and
 Windows output/shutdown checks pass; the actual AOT/trim/single-file analyzer
 inventory remains at zero warnings.
 
+Final #1790 integration also preserves ordinary enum declarations in hosted
+top-level-await runners. A new saved hosted control first IL-verifies and then
+reproduces undefined enum reads before the correction. Shared declaration
+emission initializes values in source order across suspension, and runner export
+metadata publishes the canonical object without repeating initializers. Two
+TypeScript 7.0.2 / Node 25.5.0 references precede the SharpTS checks; all 139
+selected hosted runtime, enum and architecture tests pass with verification.
+
 ## #1900 — Interpreter non-writable static descriptors
 
 **Outcome: repaired.** The original progress note links #1861 but contains no

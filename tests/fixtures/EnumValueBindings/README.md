@@ -21,3 +21,9 @@ Saved standalone outputs require verified IL, exact stdout, empty stderr, clean
 exit and no SharpTS reference/copy within the original 30 seconds. Hosted checks
 verify declarations and deployment without executing exported functions. The
 outcome record gives the selected regression and analyzer results.
+
+Final integration controls execute hosted top-level-await modules. Their enum
+declarations run in source order on either side of suspension, and exported
+objects retain alias identity without repeating initializer side effects.
+TypeScript/Node references precede the saved hosted IL verification and runtime
+checks; these additional controls extend the earlier declaration-only evidence.

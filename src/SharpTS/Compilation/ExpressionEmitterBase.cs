@@ -806,6 +806,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     {
         string name = v.Name.Lexeme;
 
+        if (TryEmitEnumInitializerMember(name))
+            return;
+
         if (TryEmitDefaultParameterTdz(name))
             return;
 
