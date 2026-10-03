@@ -5,7 +5,8 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitTSNamespaceClass(ModuleBuilder moduleBuilder, EmittedNamespaceRuntime namespaces)
+    private void EmitTSNamespaceClass(ModuleBuilder moduleBuilder, EmittedNamespaceRuntime namespaces,
+        FieldInfo undefinedInstance)
     {
         // Define class: public sealed class $TSNamespace
         // Mirrors SharpTSNamespace but is emitted into the compiled assembly
@@ -50,7 +51,7 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Stfld, bindingsField);
         ctorIL.Emit(OpCodes.Ret);
 
-        // Get method: public object? Get(string name) => _members.TryGetValue(name, out var value) ? value : null;
+        // Missing properties return undefined; explicitly stored null remains null.
         var getBuilder = typeBuilder.DefineMethod(
             "Get",
             MethodAttributes.Public,
@@ -62,7 +63,6 @@ public partial class RuntimeEmitter
         var getIL = getBuilder.GetILGenerator();
         var valueLocal = getIL.DeclareLocal(_types.Object);
         var foundLabel = getIL.DefineLabel();
-        var notFoundLabel = getIL.DefineLabel();
 
         // Namespace bodies and object aliases share the exported backing field.
         var bindingLocal = getIL.DeclareLocal(_types.FieldInfo);
@@ -85,7 +85,7 @@ public partial class RuntimeEmitter
         getIL.Emit(OpCodes.Ldloca, valueLocal);
         getIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
         getIL.Emit(OpCodes.Brtrue, foundLabel);
-        getIL.Emit(OpCodes.Ldnull);
+        getIL.Emit(OpCodes.Ldsfld, undefinedInstance);
         getIL.Emit(OpCodes.Ret);
         getIL.MarkLabel(foundLabel);
         getIL.Emit(OpCodes.Ldloc, valueLocal);

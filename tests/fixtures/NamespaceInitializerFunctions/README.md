@@ -17,7 +17,9 @@ and no SharpTS assembly reference or copy. Full TypeScript compilation and Node
 confirm every expected result.
 
 `private-typeof-independent.ts` retains #1778's separate missing-member behavior:
-Node prints `5 undefined`, while current prints `5 object` because a missing
-member still returns CLR null. It is excluded from passing counts. No broader
+Node prints `5 undefined`, while current before #1778 prints `5 object` because
+a missing member returns CLR null. #1778 repairs it and includes the unchanged
+source in its compiled and saved regression coverage. The seven #1775 references
+above retain their original counts. No broader
 private-variable publication, cross-declaration private scope, namespace
 mutation, class identity or hosted guest execution repair is claimed here.

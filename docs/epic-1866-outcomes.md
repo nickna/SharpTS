@@ -1228,8 +1228,9 @@ class IL failures owned by #1781. Quality gates and the actual AOT analyzer
 baseline pass with zero analyzer warnings.
 
 `tests/fixtures/NamespaceInitializerFunctions` retains the unchanged originals
-and the separate missing-member typeof reproduction for #1778, excluded from
-passing counts. Fresh original diagnostics finish within 30 seconds; historical
+and the separate missing-member typeof reproduction, subsequently repaired and
+covered by #1778. The seven #1775 references retain their original counts.
+Fresh original diagnostics finish within 30 seconds; historical
 Windows lifetime observations remain with #1772. No broader private-variable
 publication, cross-declaration private scope, mutation or hosted execution
 repair is claimed.
@@ -1289,3 +1290,29 @@ analyzer baseline pass with zero analyzer warnings.
 private-variable publication, cross-module namespace identity, missing-value,
 deletion or hosted guest execution repair is claimed. Missing values and actual
 deletion remain the separate #1778/#1779 tasks.
+
+## #1778 — Missing namespace properties
+
+**Outcome: repaired.** Missing namespace lookups now return the assembly's
+undefined sentinel. Existing entries retain their values, including explicit
+null and bound undefined. Fresh unchanged main and pre-repair current print
+`false object 3` for the exact original; current prints `true undefined 3`.
+The private-function typeof reproduction retained by #1775 now prints its
+unchanged reference result, `5 undefined`.
+
+All **47 focused cases pass**, including seven compiled references, seven
+isolated saved standalone outputs, scoped namespace declarations and native
+object-writing controls. Native helpers compare exact sentinel identity for
+missing keys and preserve present null, live fields and instance isolation.
+The helper receives only its module, namespace owner and undefined field;
+reused standalone/hosted emitters retain per-output ownership and deployment.
+Full TypeScript compilation and Node confirm all seven expectations. Saved
+guest outputs verify IL, exact stdout, empty stderr, no SharpTS reference/copy
+and clean exit within the original 30-second deadline.
+
+The selected suite passes **2,007 tests**, retaining the seven established
+namespace class IL failures owned by #1781. Quality gates and the actual AOT
+analyzer baseline pass with zero analyzer warnings.
+`tests/fixtures/NamespaceMissingMembers` preserves originals and controls.
+Hosted checks cover metadata/deployment, without claiming guest execution.
+Actual deletion remains the separate #1779 task.

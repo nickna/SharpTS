@@ -43,14 +43,14 @@ public sealed class EmittedNamespaceRuntimeTests
     }
 
     [Fact]
-    public void HelperAcceptsOnlyItsModuleAndNamespaceOwner()
+    public void HelperAcceptsOnlyItsModuleNamespaceOwnerAndUndefinedField()
     {
         Assert.Equal(5, Handles.Length);
         Assert.NotSame(new EmittedRuntime().Namespaces, new EmittedRuntime().Namespaces);
         Assert.Null(typeof(EmittedRuntime).GetProperty("Namespaces")!.SetMethod);
         foreach (string name in new[] { "TSNamespaceType", "TSNamespaceCtor", "TSNamespaceGet", "TSNamespaceSet" })
             Assert.Null(typeof(EmittedRuntime).GetProperty(name));
-        Assert.Equal(new[] { typeof(ModuleBuilder), typeof(EmittedNamespaceRuntime) },
+        Assert.Equal(new[] { typeof(ModuleBuilder), typeof(EmittedNamespaceRuntime), typeof(FieldInfo) },
             typeof(RuntimeEmitter).GetMethod("EmitTSNamespaceClass", Members)!.GetParameters().Select(p => p.ParameterType));
     }
 
@@ -59,13 +59,16 @@ public sealed class EmittedNamespaceRuntimeTests
     {
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
         var owner = new EmittedRuntime().Namespaces;
+        var undefined = DefineUndefined(module);
         typeof(RuntimeEmitter).GetMethod("EmitTSNamespaceClass", Members)!
-            .Invoke(new RuntimeEmitter(TypeProvider.Runtime), [module, owner]);
+            .Invoke(new RuntimeEmitter(TypeProvider.Runtime), [module, owner, undefined]);
         Assert.False(owner.IsComplete); Assert.True(owner.Type.IsCreated());
         Assert.Same(owner.Type, owner.Constructor.DeclaringType);
         Assert.Same(owner.Type, owner.Get.DeclaringType); Assert.Same(owner.Type, owner.Set.DeclaringType);
         Assert.Same(owner.Type, owner.Bind.DeclaringType);
-        Complete(owner); VerifyNamespace(SaveVerifyLoad(builder).GetType("$TSNamespace")!);
+        Complete(owner);
+        var loaded = SaveVerifyLoad(builder);
+        VerifyNamespace(loaded.GetType("$TSNamespace")!, ReadField(loaded, undefined));
     }
 
     [Theory]
@@ -85,13 +88,14 @@ public sealed class EmittedNamespaceRuntimeTests
             Assert.Same(builder, owner.Type.Assembly); Assert.Same(owner.Type, owner.Constructor.DeclaringType);
             Assert.Same(owner.Type, owner.Get.DeclaringType); Assert.Same(owner.Type, owner.Set.DeclaringType);
             Assert.Same(owner.Type, owner.Bind.DeclaringType);
-            var loaded = SaveVerifyLoad(builder); VerifyNamespace(loaded.GetType("$TSNamespace")!);
+            var loaded = SaveVerifyLoad(builder);
+            VerifyNamespace(loaded.GetType("$TSNamespace")!, ReadField(loaded, runtime.Sentinels.UndefinedInstance));
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
             Assert.Equal(hosted, loaded.GetReferencedAssemblies().Any(a => a.Name == "SharpTS.Hosting.Abstractions"));
         }
     }
 
-    private static void VerifyNamespace(Type type)
+    private static void VerifyNamespace(Type type, object undefined)
     {
         Assert.True(type.IsPublic && type.IsSealed); Assert.True((type.Attributes & TypeAttributes.BeforeFieldInit) != 0);
         var fields = type.GetFields(Members).OrderBy(f => f.MetadataToken).ToArray();
@@ -108,8 +112,8 @@ public sealed class EmittedNamespaceRuntimeTests
         Assert.True(constructor.MetadataToken < get.MetadataToken && get.MetadataToken < set.MetadataToken && set.MetadataToken < display.MetadataToken);
         Assert.True(display.IsVirtual); Assert.Equal(typeof(string), display.ReturnType); Assert.Empty(display.GetParameters());
         var first = constructor.Invoke(["First"]); var second = constructor.Invoke(["Second"]); var value = new object();
-        Assert.Null(get.Invoke(first, ["missing"]));
-        set.Invoke(first, ["value", value]); Assert.Same(value, get.Invoke(first, ["value"])); Assert.Null(get.Invoke(second, ["value"]));
+        Assert.Same(undefined, get.Invoke(first, ["missing"]));
+        set.Invoke(first, ["value", value]); Assert.Same(value, get.Invoke(first, ["value"])); Assert.Same(undefined, get.Invoke(second, ["value"]));
         set.Invoke(first, ["value", 9.0]); Assert.Equal(9.0, get.Invoke(first, ["value"]));
         set.Invoke(first, ["nil", null]); Assert.Null(get.Invoke(first, ["nil"]));
         Assert.Equal("[namespace First]", first.ToString()); Assert.Equal("[namespace Second]", second.ToString());
@@ -124,8 +128,23 @@ public sealed class EmittedNamespaceRuntimeTests
         Assert.Equal(7.0, NamespaceBindingCell.Value);
         NamespaceBindingCell.Value = 9.0;
         Assert.Equal(9.0, get.Invoke(first, ["live"]));
-        Assert.Null(get.Invoke(second, ["live"]));
+        Assert.Same(undefined, get.Invoke(second, ["live"]));
     }
+
+    private static FieldBuilder DefineUndefined(ModuleBuilder module)
+    {
+        var type = module.DefineType("UndefinedValue", TypeAttributes.Public);
+        var field = type.DefineField("Instance", typeof(object), FieldAttributes.Public | FieldAttributes.Static);
+        var il = type.DefineTypeInitializer().GetILGenerator();
+        il.Emit(OpCodes.Newobj, typeof(object).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stsfld, field); il.Emit(OpCodes.Ret);
+        type.CreateType();
+        return field;
+    }
+
+    private static object ReadField(Assembly assembly, FieldInfo field) =>
+        assembly.GetType(field.DeclaringType!.FullName!)!.GetField(field.Name,
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
 
     public static class NamespaceBindingCell
     {

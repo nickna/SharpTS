@@ -237,7 +237,7 @@ public partial class RuntimeEmitter
 
         // Emit TSNamespace class for namespace support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSNamespace
-        EmitTSNamespaceClass(moduleBuilder, runtime.Namespaces);
+        EmitTSNamespaceClass(moduleBuilder, runtime.Namespaces, runtime.Sentinels.UndefinedInstance);
         runtime.Namespaces.CompleteEmission();
 
         // Emit TSSymbol class for symbol support
