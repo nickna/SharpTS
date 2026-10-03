@@ -196,3 +196,32 @@ construct-signature/result/static-side relation, declaration-sensitive caching,
 private origin preservation and runtime binding checks. No production code
 changed; reference fixture commands and `git diff --check` passed. Hosted
 execution was not exercised.
+
+## #1906 — Repeated class evaluation identity and captured keys
+
+**Outcome: investigation/design completed, implementation transferred to
+[#1964](https://github.com/nickna/SharpTS/issues/1964) and dependent
+[#1965](https://github.com/nickna/SharpTS/issues/1965); compiled behavior remains wrong.**
+The historical notes do not expose the original source/deadline. New labelled
+probes establish both gaps on unchanged `0ad37b57` and `9a431d62`: interpretation
+matches Node, but IL-verified standalone output reuses one constructor (`true`
+instead of `false`) and replaces the earlier constructor's computed-key snapshot.
+The existing generic one-definition program still matches its original output
+across different type arguments. TypeScript accepts the identity probes and
+rejects the dynamic computed field keys with TS1166; those keys are explicitly
+JavaScript runtime controls, not TypeScript acceptance claims.
+
+The bounded decision in `docs/plans/repeated-class-evaluation.md` uses fresh guest
+definition values with pre-emitted CLR templates, definition-associated instances
+and per-definition keys/captures. It rejects runtime type emission and shared
+"current definition" state. The two implementation issues have finite controls,
+dependencies and stopping rules; this design is not described as a repair.
+
+All 153 retained class-expression/computed/local-class/initialization tests pass
+with compiled IL verification. The inline prototype comparison additionally
+fails CLI verification with BackwardBranch at Offset 709 on both baselines;
+that complete failure is retained in `identity.ts` and separately tracked as
+[#1966](https://github.com/nickna/SharpTS/issues/1966), outside the frozen epic.
+No runtime pass is credited to that artifact. No production code changed;
+reference commands and `git diff --check` passed. The new probes were not
+executed through a hosted factory or separately via in-process compilation.
