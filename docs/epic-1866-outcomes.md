@@ -581,3 +581,26 @@ boundaries. Its compiled coercion control has a separate interpreter `NaN`
 discrepancy, reproduced unchanged on main; that expectation is not weakened
 or counted as passing interpreter conformance. No interpreter unary-object
 coercion repair or hosted guest execution is claimed.
+
+## #1798 — Reflect.apply generic result typing
+
+**Outcome: repaired with the unchanged original.** Unchanged `0ad37b57`
+rejects the exact asserted Proxy source before saving an assembly with
+`Cannot assert type 'R' to 'number'.` Ambient overload groups now retain each
+signature's own generic binder. Function rest inference collects argument
+tuples, homomorphic readonly tuple/array projections preserve their container,
+and generic call instantiation preserves call/construct signatures. Typed
+targets retain their result type; the original any-valued target's valid
+assertion compiles and produces `function 6`.
+
+All **1,051 selected affected tests pass** with compiled IL verification,
+including generic/overload/tuple/readonly/utility typing, invalid result
+assertions, constraint fallback, scope isolation and existing Reflect.construct
+target rejection. Six normally deployed saved outputs verify IL, compare
+matching runtime bytes and exit zero with empty stderr within the original
+30-second execution deadline. Node and TypeScript accept the six positive
+fixtures. Required quality gates and actual AOT analyzer baseline pass with
+zero analyzer warnings. `tests/fixtures/TypedReflectApply` retains the original
+sources, negative typing controls and the earlier TS2365 preparation diagnostic
+without inventing its missing exact source. No standalone Proxy independence,
+hosted guest execution or #1799 construction repair is claimed.

@@ -19,6 +19,28 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.TypedReflectApplyTests.Cases), MemberType = typeof(SharedTests.TypedReflectApplyTests))]
+    public void Isolated_Issue1798ReflectApply_PreservesTypedAndDynamicResults(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var runtime = typeof(TypeChecker).Assembly.Location;
+        var deployed = directory.GetPath("SharpTS.dll");
+        if (name is "original" or "direct-control")
+            Assert.True(File.Exists(deployed), "Proxy output must deploy its matching runtime.");
+        if (!File.Exists(deployed)) File.Copy(runtime, deployed);
+        Assert.Equal(File.ReadAllBytes(runtime), File.ReadAllBytes(deployed));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.NestedMethodArgumentTests.CompiledCases), MemberType = typeof(SharedTests.NestedMethodArgumentTests))]
     public void Isolated_Issue1727NestedMethodArguments_PreserveValuesAndOrder(string name, string source, string expected)
     {

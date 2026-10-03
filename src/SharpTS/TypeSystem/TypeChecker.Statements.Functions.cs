@@ -621,13 +621,17 @@ public partial class TypeChecker
             // following ambient overload of the same name re-defines with the grown set.
             if (funcStmt.IsDeclare)
             {
-                TypeInfo ambientType = signatures.Count > 1
-                    ? new TypeInfo.OverloadedFunction(new List<TypeInfo.Function>(signatures), signatures[^1])
-                    : typeParams is { Count: > 0 }
-                        ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
-                        : thisFuncType;
-                if (typeParams is { Count: > 0 } && signatures.Count > 1)
-                    ambientType = new TypeInfo.GenericOverloadedFunction(typeParams, new List<TypeInfo.Function>(signatures), signatures[^1]);
+                if (!_ambientOverloadSignatures.TryGetValue(overloadKey, out var ambientSignatures))
+                {
+                    ambientSignatures = [];
+                    _ambientOverloadSignatures[overloadKey] = ambientSignatures;
+                }
+                ambientSignatures.Add(typeParams is { Count: > 0 }
+                    ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
+                    : thisFuncType);
+                TypeInfo ambientType = ambientSignatures.Count == 1
+                    ? ambientSignatures[0]
+                    : new TypeInfo.OverloadSet(new List<TypeInfo>(ambientSignatures));
                 _environment.Define(funcName, ambientType);
             }
             return;

@@ -1276,6 +1276,10 @@ public partial class TypeChecker
     // Track type parameters for generic overloaded functions
     private readonly Dictionary<(TypeEnvironment Environment, string Name), List<TypeInfo.TypeParameter>> _pendingOverloadTypeParams = [];
 
+    // Ambient overloads may mix generic/non-generic signatures, each with its
+    // own type-parameter bindings (for example Reflect.apply's broad fallback).
+    private readonly Dictionary<(TypeEnvironment Environment, string Name), List<TypeInfo>> _ambientOverloadSignatures = [];
+
     // Decorator mode configuration
     private DecoratorMode _decoratorMode = DecoratorMode.None;
 

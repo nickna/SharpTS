@@ -124,6 +124,10 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo ExpandReadonly(TypeInfo sourceType)
     {
+        if (sourceType is TypeInfo.Tuple tuple)
+            return tuple with { IsReadonly = true };
+        if (sourceType is TypeInfo.Array array)
+            return array with { IsReadonly = true };
         if (IsAbstractTypeReference(sourceType))
         {
             return new TypeInfo.MappedType(
