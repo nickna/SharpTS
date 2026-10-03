@@ -1466,6 +1466,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.FunctionPrototypes.Prototype,
                 runtime.FunctionPrototypes.Populate,
+                runtime.Generators,
                 runtime.GlobalObject.GetProperty,
                 runtime.GlobalObject.SingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,

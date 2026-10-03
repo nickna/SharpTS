@@ -683,3 +683,25 @@ native checks also compare descriptor values across emitter reuse,
 optional families and hosted declarations. `tests/fixtures/ArrayStaticDescriptorValues`
 retains originals and boundaries; no compiled Array.from/fromAsync/of descriptor
 or hosted guest execution repair is claimed.
+
+## #1729 — Dynamic generator iterator lookup
+
+**Outcome: repaired.** Dynamic compiled symbol lookup now exposes the existing
+generator iterator interface method through the ordinary callable wrapper;
+the interpreter exposes its corresponding built-in iterator. The unchanged
+original, independent lookup, captured invocation and public-next control now
+match Node. Fresh unchanged-main original/captured failures reproduce the
+reported TypeErrors but exit before the original deadline; the historical
+timeout is retained without an inferred process-shutdown cause.
+
+All **902 selected tests pass** with compiled IL verification, including
+generator sent/return/throw/finally behavior, iterator protocol, stable numeric
+iteration, native ownership, emitter reuse and hosted declarations. Seven
+isolated standalone outputs omit runtime references/copies and require exact
+Node stdout, zero exit and empty stderr within 30 seconds. All seven references
+pass Node and TypeScript with non-strict settings preserving the unchanged
+unannotated originals. Quality gates and the actual AOT analyzer baseline pass
+with zero analyzer warnings. `tests/fixtures/DynamicGeneratorIterator`
+retains evidence and scope boundaries; no general receiver-rebinding, intrinsic
+method metadata/identity, async-generator symbol or hosted execution repair is
+claimed.

@@ -1,0 +1,1 @@
+function* values(){yield 1;const sent:any=yield 2;return sent;}const g:any=values();console.log(g[Symbol.iterator]()===g);const a=g.next();const b=g.next();const c=g.next(9);console.log(a.value,a.done,b.value,b.done,c.value,c.done);

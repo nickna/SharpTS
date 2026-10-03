@@ -1152,6 +1152,9 @@ public partial class Interpreter
                 return RuntimeValue.FromBoxed(symbolBag.GetBySymbol(bagSymbol));
         }
 
+        if (obj is SharpTSGenerator && ReferenceEquals(index, SharpTSSymbol.Iterator))
+            return RuntimeValue.FromObject(GeneratorBuiltIns.IteratorMethod);
+
         // JS functions are objects — bracket access reads user properties.
         if (obj is SharpTSFunction fn)
         {
