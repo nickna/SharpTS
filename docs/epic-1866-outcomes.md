@@ -1178,3 +1178,30 @@ source and independent controls. Normal deployment is conservative when eval
 escapes as a value, even if a particular later input is non-string. Explicit
 standalone behavior and non-string identity remain intact. No broader dynamic
 direct-eval lexical-scope, hosted execution or Windows lifetime repair is claimed.
+
+## #1774 — Callable namespace function values
+
+**Outcome: callability repaired; later mutation failures retained for #1777.**
+Script initialization retains a source path for diagnostics but now resolves
+function declarations in shared script scope. Namespace population consequently
+stores callable function wrappers. Ordinary, synchronous-generator and async
+declarations work through direct, aliased, nested and merged access; the original
+shape control prints `function function true` with preserved identity.
+
+All **17 focused cases pass**: six compiled originals, five interpreted
+references and six isolated saved standalone originals. The interpreter's
+independent merged-namespace binding failure is excluded. Every saved original
+retains verified IL and its 30-second deadline. Fresh main and pre-repair current
+reproduce seven callability errors and the shape mismatch. After repair, the two
+mutation originals reach their function bodies but print stale/ignored values;
+they remain outside passing counts and are linked to #1777. Their exact sources
+and full reference expectations are preserved in
+`tests/fixtures/NamespaceFunctionValues`.
+
+The selected suite passes **309 tests** and retains seven established
+unchanged-main namespace-class object/System.Type IL failures, tracked in
+#1781. Full TypeScript compilation and Node confirm all eight original
+expectations. Quality gates and the actual AOT analyzer baseline pass with zero
+analyzer warnings.
+No module namespace, property mutation, class construction or process-lifetime
+repair is claimed.

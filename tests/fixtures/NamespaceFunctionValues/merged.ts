@@ -1,0 +1,1 @@
+namespace Joined {export const first=3;export function left(){return first;}}namespace Joined {export const second=5;export function right(){return first+second;}}const joined:any=Joined;console.log(joined.first,joined.second,joined.left(),joined.right());
