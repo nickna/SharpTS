@@ -732,7 +732,7 @@ public partial class Interpreter
             SharpTSSet set => set.Values().Elements,       // yields values
             SharpTSIterator iter => iter.Elements,
             SharpTSGenerator gen => gen,                   // generators implement IEnumerable<object?>
-            string s => s.Select(c => (object?)c.ToString()),
+            string s => StringBuiltIns.IterateCodePoints(s),
             List<object?> list => list,                    // plain List<object?>
             IEnumerable<object?> enumerable => enumerable, // IEnumerable<object?> (e.g., SharpTSIntlSegments)
             _ => throw new InterpreterException("for...of requires an iterable (array, Map, Set, or iterator).")
@@ -1188,7 +1188,7 @@ public partial class Interpreter
             // instead of throwing "not iterable". (#1282)
             SharpTSTypedArray typed => typed.ToArray(),
             SharpTSBuffer buf => buf.Data.Select(b => (object?)(double)b),
-            string s => s.Select(c => (object?)c.ToString()),
+            string s => StringBuiltIns.IterateCodePoints(s),
             List<object?> list => list,                    // plain List<object?>
             IEnumerable<object?> enumerable => enumerable, // IEnumerable<object?> (e.g., SharpTSIntlSegments)
             null => throw new InterpreterException("Cannot spread null or undefined."),

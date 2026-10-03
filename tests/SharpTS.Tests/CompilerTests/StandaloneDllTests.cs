@@ -19,6 +19,24 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.GeneratorStringDelegationTests.Cases), MemberType = typeof(SharedTests.GeneratorStringDelegationTests))]
+    public void Isolated_Issue1730StringDelegation_PreservesCodePointsAndCompletion(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: "", utf8Console: true));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.DynamicGeneratorIteratorTests.Cases), MemberType = typeof(SharedTests.DynamicGeneratorIteratorTests))]
     public void Isolated_Issue1729DynamicGeneratorIterator_PreservesOriginalOutputsAndLifecycle(string name, string source, string expected)
     {
@@ -14765,7 +14783,8 @@ public class StandaloneDllTests
         string? timeoutStartsAfterOutput = null,
         int readinessTimeoutMs = 15000,
         Action<string>? verifyStandardError = null,
-        string? standardInput = null)
+        string? standardInput = null,
+        bool utf8Console = false)
     {
         var workingDir = Path.GetDirectoryName(dllPath)!;
         var psi = new ProcessStartInfo("dotnet", dllPath)
@@ -14774,8 +14793,23 @@ public class StandaloneDllTests
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            WorkingDirectory = workingDir
+            WorkingDirectory = workingDir,
+            StandardOutputEncoding = utf8Console ? Encoding.UTF8 : null
         };
+
+        // The Windows testhost's console code page cannot encode supplementary
+        // characters. Set up a UTF-8 console in the child launcher, retaining
+        // the exact saved guest program and the same execution deadline.
+        if (utf8Console && OperatingSystem.IsWindows())
+        {
+            var launcher = Path.Combine(workingDir, "utf8-console.ps1");
+            File.WriteAllText(launcher,
+                "param([string]$DllPath)\n[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)\n& dotnet $DllPath\nexit $LASTEXITCODE\n");
+            psi.FileName = "pwsh";
+            psi.Arguments = "";
+            foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-File", launcher, dllPath })
+                psi.ArgumentList.Add(argument);
+        }
 
         using var process = Process.Start(psi)!;
         TaskCompletionSource<bool>? readiness = null;

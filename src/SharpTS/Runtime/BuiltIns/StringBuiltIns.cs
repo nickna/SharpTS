@@ -8,12 +8,23 @@ namespace SharpTS.Runtime.BuiltIns;
 
 public static class StringBuiltIns
 {
+    internal static IEnumerable<object?> IterateCodePoints(string value)
+    {
+        for (int index = 0; index < value.Length;)
+        {
+            int width = char.IsHighSurrogate(value[index]) && index + 1 < value.Length
+                && char.IsLowSurrogate(value[index + 1]) ? 2 : 1;
+            yield return value.Substring(index, width);
+            index += width;
+        }
+    }
+
     private static readonly BuiltInTypeMemberLookup<string> _lookup =
         BuiltInTypeBuilder<string>.ForInstanceType()
             .Property("length", s => (double)s.Length)
             .MethodV2("[Symbol.iterator]", 0, static (_, value, _) =>
                 RuntimeValue.FromObject(new SharpTSIterator(
-                    value.EnumerateRunes().Select(r => (object?)r.ToString()))))
+                    IterateCodePoints(value))))
             .MethodV2("charAt", 0, int.MaxValue, specLength: 1, CharAtV2)
             // Spec lengths (ECMA-262 §22.1.3) are metadata, independent of
             // runtime argument acceptance: JavaScript methods coerce omitted

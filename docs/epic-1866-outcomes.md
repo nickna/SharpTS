@@ -705,3 +705,27 @@ with zero analyzer warnings. `tests/fixtures/DynamicGeneratorIterator`
 retains evidence and scope boundaries; no general receiver-rebinding, intrinsic
 method metadata/identity, async-generator symbol or hosted execution repair is
 claimed.
+
+## #1730 — Unicode string delegation
+
+**Outcome: repaired.** Compiled synchronous string delegation uses the existing
+StringIterator, preserving surrogate pairs and lone surrogates. Interpreter
+string intrinsics, spread and loop paths share equivalent code-point iteration.
+The unchanged original now prints `1,2,a,😀`, and its numeric control prints
+`2 2 55357`; fresh unchanged main reproduces the original failures with verified
+IL, successful exit and empty stderr.
+
+All **1,020 selected tests pass** with compiled IL verification, covering
+generator lifecycle, iterator protocols, strings and retained #1729 saved
+programs. Eight isolated standalone outputs match Node, omit runtime
+references/copies and exit cleanly within 30 seconds. Windows saved tests use
+a UTF-8 child-console launcher because the testhost's default console replaced
+the same DLL's correct emoji output with `??`; the source and expectations
+remain unchanged. Nine references pass Node and TypeScript. Quality gates and
+the actual AOT analyzer baseline pass with zero analyzer warnings.
+
+`tests/fixtures/GeneratorStringDelegation` retains an independent missing-throw-
+method TypeError mismatch, reproduced unchanged on main, outside passing counts.
+Completion, return/finally and operand exception controls pass. No correction of
+that separate throw protocol, compiled async string delegation or hosted guest
+execution is claimed.

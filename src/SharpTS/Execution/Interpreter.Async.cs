@@ -158,7 +158,7 @@ public partial class Interpreter
             SharpTSSet set => set.Values().Elements,       // yields values
             SharpTSIterator iter => iter.Elements,
             SharpTSGenerator gen => gen,                   // generators implement IEnumerable<object?>
-            string s => s.Select(c => (object?)c.ToString()),
+            string s => StringBuiltIns.IterateCodePoints(s),
             _ => throw new InterpreterException("for...of requires an iterable (array, Map, Set, or iterator).")
         };
 
