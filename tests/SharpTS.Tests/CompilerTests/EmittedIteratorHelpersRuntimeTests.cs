@@ -84,6 +84,16 @@ public sealed class EmittedIteratorHelpersRuntimeTests
             Assert.Equal(new object[] { 2d, 3d }, Values(Call("IteratorFilter", values, predicate)!));
             Assert.Equal(new object[] { 1d, 2d }, Values(Call("IteratorTake", values, 2d)!));
             Assert.Equal(new object[] { 3d }, Values(Call("IteratorDrop", values, 2d)!));
+            int reads = 0; int closes = 0;
+            var sourceIterator = new Dictionary<string, object>
+            {
+                ["next"] = new Func<object[], object>(_ => new Dictionary<string, object> { ["value"] = (double)++reads, ["done"] = reads > 3 }),
+                ["return"] = new Func<object[], object>(_ => { closes++; return new Dictionary<string, object> { ["done"] = true }; })
+            };
+            var taken = Call("IteratorTake", sourceIterator, 1d)!;
+            Assert.Equal(0, reads); Assert.Equal(0, closes);
+            Assert.Equal(new object[] { 1d }, Values(taken)); Assert.Equal(1, reads); Assert.Equal(1, closes);
+            Assert.Empty(Values(taken)); Assert.Equal(1, closes);
             foreach (var methodName in new[] { "IteratorTake", "IteratorDrop" })
             {
                 foreach (var invalidLimit in new[] { -1d, double.NaN, double.NegativeInfinity })
@@ -132,10 +142,12 @@ public sealed class EmittedIteratorHelpersRuntimeTests
         il = test.GetILGenerator(); il.Emit(truthy ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ret);
         var emitter = new RuntimeEmitter(TypeProvider.Runtime); var helper = typeof(RuntimeEmitter).GetMethod("EmitCallbackMoveNext", Members)!;
         var inputs = Activator.CreateInstance(helper.GetParameters()[1].ParameterType, invoke, test)!;
-        helper.Invoke(emitter, [type, inputs, source, callbackField, index, current, true, filter]);
+        helper.Invoke(emitter, [type, inputs, source, callbackField, index, current, true, filter, null]);
         typeof(RuntimeEmitter).GetMethod("EmitCurrentProperty", Members)!.Invoke(emitter, [type, current]);
         typeof(RuntimeEmitter).GetMethod("EmitResetThrows", Members)!.Invoke(emitter, [type]);
-        typeof(RuntimeEmitter).GetMethod("EmitDisposeNoOp", Members)!.Invoke(emitter, [type]);
+        var close = type.DefineMethod("Close", MethodAttributes.Public | MethodAttributes.Static, typeof(void), [typeof(object), typeof(bool)]);
+        close.GetILGenerator().Emit(OpCodes.Ret);
+        typeof(RuntimeEmitter).GetMethod("EmitDisposeIteratorSource", Members)!.Invoke(emitter, [type, source, close, null, null]);
         type.CreateType(); var loaded = SaveVerifyLoad(builder); var probe = loaded.GetType("Probe")!;
         var instance = (IEnumerator<object>)Activator.CreateInstance(probe)!;
         probe.GetField("source")!.SetValue(instance, new List<object> { 1d, 2d }.GetEnumerator());
@@ -150,7 +162,7 @@ public sealed class EmittedIteratorHelpersRuntimeTests
     public void ScopedHelpersDoNotRetainTheWholeHolder()
     {
         Assert.Equal(19, Slots.Length);
-        string[] methods = ["EmitIteratorHelperMethods", "EmitNormalizeToEnumerator", "EmitMapIteratorType", "EmitFilterIteratorType", "EmitTakeIteratorType", "EmitDropIteratorType", "EmitFlatMapIteratorType", "EmitCallbackMoveNext", "EmitIteratorMap", "EmitIteratorFilter", "EmitIteratorTake", "EmitIteratorDrop", "EmitIteratorLimitFactory", "EmitIteratorFlatMap", "EmitIteratorReduce", "EmitIteratorToArray", "EmitIteratorForEach", "EmitIteratorSome", "EmitIteratorEvery", "EmitIteratorPredicateMethod", "EmitIteratorFind", "EmitIteratorNext", "EmitIteratorFrom"];
+        string[] methods = ["EmitIteratorHelperMethods", "EmitNormalizeToEnumerator", "EmitMapIteratorType", "EmitFilterIteratorType", "EmitTakeIteratorType", "EmitDropIteratorType", "EmitFlatMapIteratorType", "EmitCallbackMoveNext", "EmitIteratorMap", "EmitIteratorFilter", "EmitIteratorTake", "EmitIteratorDrop", "EmitIteratorLimitFactory", "EmitDisposeIteratorSource", "EmitIteratorFlatMap", "EmitIteratorReduce", "EmitIteratorToArray", "EmitIteratorForEach", "EmitIteratorSome", "EmitIteratorEvery", "EmitIteratorPredicateMethod", "EmitIteratorFind", "EmitIteratorNext", "EmitIteratorFrom"];
         foreach (var slot in Slots) Assert.Null(typeof(EmittedRuntime).GetProperty(slot.Name.EndsWith("Ctor") || slot.Name == "NormalizeToEnumerator" ? slot.Name : "Iterator" + slot.Name));
         foreach (string name in methods)
         {

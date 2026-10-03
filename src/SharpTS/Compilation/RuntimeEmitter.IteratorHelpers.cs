@@ -37,11 +37,11 @@ public partial class RuntimeEmitter
         EmitNormalizeToEnumerator(typeBuilder, iteratorHelpers, inputs.WrapperCtor, inputs.Errors);
 
         // Lazy wrapper types
-        EmitMapIteratorType(moduleBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
-        EmitFilterIteratorType(moduleBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
-        EmitTakeIteratorType(moduleBuilder, iteratorHelpers);
-        EmitDropIteratorType(moduleBuilder, iteratorHelpers);
-        EmitFlatMapIteratorType(moduleBuilder, iteratorHelpers, inputs.InvokeMethod);
+        EmitMapIteratorType(moduleBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy), inputs.CloseIterator);
+        EmitFilterIteratorType(moduleBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy), inputs.CloseIterator);
+        EmitTakeIteratorType(moduleBuilder, iteratorHelpers, inputs.CloseIterator);
+        EmitDropIteratorType(moduleBuilder, iteratorHelpers, inputs.CloseIterator);
+        EmitFlatMapIteratorType(moduleBuilder, iteratorHelpers, inputs.InvokeMethod, inputs.CloseIterator);
 
         // Lazy factory methods (on $Runtime)
         EmitIteratorMap(typeBuilder, iteratorHelpers);
@@ -120,7 +120,7 @@ public partial class RuntimeEmitter
     /// Emits $MapIterator: wraps a source enumerator and applies a callback to each element.
     /// Fields: _source (IEnumerator&lt;object&gt;), _callback (object), _index (int), _current (object)
     /// </summary>
-    private void EmitMapIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorCallbackInputs callback)
+    private void EmitMapIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorCallbackInputs callback, MethodInfo closeIterator)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$MapIterator",
@@ -134,6 +134,7 @@ public partial class RuntimeEmitter
         var callbackField = typeBuilder.DefineField("_callback", _types.Object, FieldAttributes.Private);
         var indexField = typeBuilder.DefineField("_index", _types.Int32, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
+        var completedField = typeBuilder.DefineField("_completed", _types.Boolean, FieldAttributes.Private);
 
         // Constructor(IEnumerator<object> source, object callback)
         var ctor = typeBuilder.DefineConstructor(
@@ -154,11 +155,11 @@ public partial class RuntimeEmitter
 
         // MoveNext: source.MoveNext() ? { _current = callback(source.Current, _index++); return true; } : false
         EmitCallbackMoveNext(typeBuilder, callback, sourceField, callbackField, indexField, currentField,
-            includeIndex: true, filterMode: false);
+            includeIndex: true, filterMode: false, completedField);
 
         EmitCurrentProperty(typeBuilder, currentField);
         EmitResetThrows(typeBuilder);
-        EmitDisposeNoOp(typeBuilder);
+        EmitDisposeIteratorSource(typeBuilder, sourceField, closeIterator, completedField);
         EmitGetEnumeratorReturnsSelf(typeBuilder);
 
         typeBuilder.CreateType();
@@ -167,7 +168,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $FilterIterator: wraps a source enumerator and yields only elements matching a predicate.
     /// </summary>
-    private void EmitFilterIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorCallbackInputs callback)
+    private void EmitFilterIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorCallbackInputs callback, MethodInfo closeIterator)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FilterIterator",
@@ -181,6 +182,7 @@ public partial class RuntimeEmitter
         var callbackField = typeBuilder.DefineField("_callback", _types.Object, FieldAttributes.Private);
         var indexField = typeBuilder.DefineField("_index", _types.Int32, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
+        var completedField = typeBuilder.DefineField("_completed", _types.Boolean, FieldAttributes.Private);
 
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
@@ -200,11 +202,11 @@ public partial class RuntimeEmitter
 
         // MoveNext: loop source.MoveNext(), call predicate, if truthy set current and return true
         EmitCallbackMoveNext(typeBuilder, callback, sourceField, callbackField, indexField, currentField,
-            includeIndex: true, filterMode: true);
+            includeIndex: true, filterMode: true, completedField);
 
         EmitCurrentProperty(typeBuilder, currentField);
         EmitResetThrows(typeBuilder);
-        EmitDisposeNoOp(typeBuilder);
+        EmitDisposeIteratorSource(typeBuilder, sourceField, closeIterator, completedField);
         EmitGetEnumeratorReturnsSelf(typeBuilder);
 
         typeBuilder.CreateType();
@@ -213,7 +215,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $TakeIterator: wraps a source enumerator and yields at most 'limit' elements.
     /// </summary>
-    private void EmitTakeIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
+    private void EmitTakeIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, MethodInfo closeIterator)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TakeIterator",
@@ -227,6 +229,7 @@ public partial class RuntimeEmitter
         var limitField = typeBuilder.DefineField("_limit", _types.Double, FieldAttributes.Private);
         var countField = typeBuilder.DefineField("_count", _types.Double, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
+        var completedField = typeBuilder.DefineField("_completed", _types.Boolean, FieldAttributes.Private);
 
         // Constructor(IEnumerator<object> source, double integerLimit)
         var ctor = typeBuilder.DefineConstructor(
@@ -251,14 +254,24 @@ public partial class RuntimeEmitter
             _types.Boolean, Type.EmptyTypes);
         var il = moveNext.GetILGenerator();
         var returnFalseLabel = il.DefineLabel();
+        var limitReached = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, completedField);
+        il.Emit(OpCodes.Brtrue, returnFalseLabel);
 
         // if (_count >= _limit) return false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, countField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, limitField);
-        il.Emit(OpCodes.Bge, returnFalseLabel);
+        il.Emit(OpCodes.Bge, limitReached);
 
+        // A next/value failure completes this helper without closing its source.
+        // Successful advancement reopens it until the next resume or disposal.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, completedField);
         // if (!source.MoveNext()) return false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sourceField);
@@ -280,16 +293,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stfld, countField);
 
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, completedField);
+
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
+        il.MarkLabel(limitReached);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, completedField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sourceField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, closeIterator);
         il.MarkLabel(returnFalseLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
 
         EmitCurrentProperty(typeBuilder, currentField);
         EmitResetThrows(typeBuilder);
-        EmitDisposeNoOp(typeBuilder);
+        EmitDisposeIteratorSource(typeBuilder, sourceField, closeIterator, completedField);
         EmitGetEnumeratorReturnsSelf(typeBuilder);
 
         typeBuilder.CreateType();
@@ -298,7 +323,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $DropIterator: wraps a source enumerator and skips the first 'count' elements.
     /// </summary>
-    private void EmitDropIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
+    private void EmitDropIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, MethodInfo closeIterator)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DropIterator",
@@ -312,6 +337,7 @@ public partial class RuntimeEmitter
         var toDropField = typeBuilder.DefineField("_toDrop", _types.Double, FieldAttributes.Private);
         var droppedField = typeBuilder.DefineField("_dropped", _types.Double, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
+        var completedField = typeBuilder.DefineField("_completed", _types.Boolean, FieldAttributes.Private);
 
         // Constructor(IEnumerator<object> source, double integerLimit)
         var ctor = typeBuilder.DefineConstructor(
@@ -339,6 +365,9 @@ public partial class RuntimeEmitter
         var skipCheckLabel = il.DefineLabel();
         var yieldLabel = il.DefineLabel();
         var returnFalseLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, completedField);
+        il.Emit(OpCodes.Brtrue, returnFalseLabel);
 
         // Skip loop: while (_dropped < _toDrop)
         il.Emit(OpCodes.Br, skipCheckLabel);
@@ -382,12 +411,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnFalseLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, completedField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
 
         EmitCurrentProperty(typeBuilder, currentField);
         EmitResetThrows(typeBuilder);
-        EmitDisposeNoOp(typeBuilder);
+        EmitDisposeIteratorSource(typeBuilder, sourceField, closeIterator, completedField);
         EmitGetEnumeratorReturnsSelf(typeBuilder);
 
         typeBuilder.CreateType();
@@ -397,7 +429,7 @@ public partial class RuntimeEmitter
     /// Emits $FlatMapIterator: wraps a source enumerator, calls callback for each element,
     /// and flattens the result by iterating inner results.
     /// </summary>
-    private void EmitFlatMapIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, MethodInfo invokeMethod)
+    private void EmitFlatMapIteratorType(ModuleBuilder moduleBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, MethodInfo invokeMethod, MethodInfo closeIterator)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FlatMapIterator",
@@ -411,6 +443,7 @@ public partial class RuntimeEmitter
         var callbackField = typeBuilder.DefineField("_callback", _types.Object, FieldAttributes.Private);
         var indexField = typeBuilder.DefineField("_index", _types.Int32, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
+        var completedField = typeBuilder.DefineField("_completed", _types.Boolean, FieldAttributes.Private);
         var innerField = typeBuilder.DefineField("_inner", _types.IEnumeratorOfObject, FieldAttributes.Private);
 
         var ctor = typeBuilder.DefineConstructor(
@@ -437,6 +470,9 @@ public partial class RuntimeEmitter
         var tryInnerLabel = il.DefineLabel();
         var advanceOuterLabel = il.DefineLabel();
         var returnFalseLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, completedField);
+        il.Emit(OpCodes.Brtrue, returnFalseLabel);
 
         // try inner first
         il.MarkLabel(tryInnerLabel);
@@ -515,12 +551,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, tryInnerLabel);
 
         il.MarkLabel(returnFalseLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, completedField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
 
         EmitCurrentProperty(typeBuilder, currentField);
         EmitResetThrows(typeBuilder);
-        EmitDisposeNoOp(typeBuilder);
+        EmitDisposeIteratorSource(typeBuilder, sourceField, closeIterator, completedField, innerField);
         EmitGetEnumeratorReturnsSelf(typeBuilder);
 
         typeBuilder.CreateType();
@@ -537,7 +576,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCallbackMoveNext(TypeBuilder typeBuilder, IteratorCallbackInputs callback,
         FieldBuilder sourceField, FieldBuilder callbackField, FieldBuilder indexField, FieldBuilder currentField,
-        bool includeIndex, bool filterMode)
+        bool includeIndex, bool filterMode, FieldBuilder? completed = null)
     {
         var moveNext = typeBuilder.DefineMethod(
             "MoveNext", MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
@@ -548,6 +587,13 @@ public partial class RuntimeEmitter
         var returnFalseLabel = il.DefineLabel();
 
         il.MarkLabel(loopStartLabel);
+
+        if (completed != null)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, completed);
+            il.Emit(OpCodes.Brtrue, returnFalseLabel);
+        }
 
         // if (!source.MoveNext()) return false
         il.Emit(OpCodes.Ldarg_0);
@@ -624,6 +670,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnFalseLabel);
+        if (completed != null)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stfld, completed);
+        }
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
     }
@@ -666,12 +718,46 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Throw);
     }
 
-    private void EmitDisposeNoOp(TypeBuilder typeBuilder)
+    private void EmitDisposeIteratorSource(TypeBuilder typeBuilder, FieldBuilder source,
+        MethodInfo closeIterator, FieldBuilder? completed = null, FieldBuilder? inner = null)
     {
+        completed ??= typeBuilder.DefineField("_disposed", _types.Boolean, FieldAttributes.Private);
         var dispose = typeBuilder.DefineMethod(
             "Dispose", MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
             _types.Void, Type.EmptyTypes);
         var il = dispose.GetILGenerator();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, completed);
+        il.Emit(OpCodes.Brtrue, done);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, completed);
+        void Close(FieldBuilder field, bool preserveThrow)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, field);
+            il.Emit(preserveThrow ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, closeIterator);
+        }
+        if (inner is not null)
+        {
+            var closeOuter = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, inner);
+            il.Emit(OpCodes.Brfalse, closeOuter);
+            il.BeginExceptionBlock();
+            Close(inner, false);
+            il.Emit(OpCodes.Leave, closeOuter);
+            il.BeginCatchBlock(_types.Exception);
+            il.Emit(OpCodes.Pop);
+            Close(source, true);
+            il.Emit(OpCodes.Rethrow);
+            il.EndExceptionBlock();
+            il.MarkLabel(closeOuter);
+        }
+        Close(source, false);
+        il.MarkLabel(done);
         il.Emit(OpCodes.Ret);
     }
 

@@ -1,0 +1,1 @@
+const source:any={i:0,closed:0,next(){this.i++;return {value:this.i,done:this.i>3};},return(){this.closed++;return {done:true};}};console.log(Iterator.from(source).take(1).toArray().join(","),source.closed);

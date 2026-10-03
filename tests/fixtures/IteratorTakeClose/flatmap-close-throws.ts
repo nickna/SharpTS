@@ -1,0 +1,1 @@
+const marker={tag:7};function* outer(){try{yield 1;}finally{console.log("outer");throw {tag:9};}}function* inner(){try{yield 3;yield 4;}finally{console.log("inner");throw marker;}}try{Iterator.from(outer()).flatMap(()=>inner()).take(1).toArray();}catch(e:any){console.log(e===marker);}

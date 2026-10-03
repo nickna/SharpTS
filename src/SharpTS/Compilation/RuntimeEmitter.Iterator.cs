@@ -628,7 +628,8 @@ public partial class RuntimeEmitter
     private readonly record struct IteratorWrapperInputs(
         EmittedIteratorRecordRuntime IteratorRecords,
         MethodBuilder GetIteratorDone,
-        MethodBuilder GetIteratorValue
+        MethodBuilder GetIteratorValue,
+        MethodInfo CloseIterator
     );
 
     /// <summary>
@@ -651,6 +652,8 @@ public partial class RuntimeEmitter
         var iteratorField = typeBuilder.DefineField("_iterator", _types.Object, FieldAttributes.Private);
         var nextField = typeBuilder.DefineField("_next", _types.Object, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
+
+        var completedField = typeBuilder.DefineField("_completed", _types.Boolean, FieldAttributes.Private);
 
         // Constructor: $IteratorWrapper(object iterator)
         // NOTE: runtimeType parameter kept for backward compatibility but not used
@@ -723,6 +726,11 @@ public partial class RuntimeEmitter
 
         // Locals for MoveNext
         var resultLocal = moveNextIl.DeclareLocal(_types.Object);
+        var doneLocal = moveNextIl.DeclareLocal(_types.Boolean);
+        var alreadyCompleted = moveNextIl.DefineLabel();
+        moveNextIl.Emit(OpCodes.Ldarg_0);
+        moveNextIl.Emit(OpCodes.Ldfld, completedField);
+        moveNextIl.Emit(OpCodes.Brtrue, alreadyCompleted);
 
         // var result = InvokeCapturedIteratorNext(_iterator, _next);  -- DIRECT CALL
         moveNextIl.Emit(OpCodes.Ldarg_0);
@@ -735,6 +743,10 @@ public partial class RuntimeEmitter
         // var done = GetIteratorDone(result);  -- DIRECT CALL
         moveNextIl.Emit(OpCodes.Ldloc, resultLocal);
         moveNextIl.Emit(OpCodes.Call, inputs.GetIteratorDone);
+        moveNextIl.Emit(OpCodes.Stloc, doneLocal);
+        moveNextIl.Emit(OpCodes.Ldarg_0);
+        moveNextIl.Emit(OpCodes.Ldloc, doneLocal);
+        moveNextIl.Emit(OpCodes.Stfld, completedField);
 
         // Preserve IteratorValue(result) even when done is true.  `yield*` reads
         // Current after MoveNext returns false to obtain the delegated iterator's
@@ -746,7 +758,9 @@ public partial class RuntimeEmitter
 
         // if (done) return false;
         var notDoneLabel = moveNextIl.DefineLabel();
+        moveNextIl.Emit(OpCodes.Ldloc, doneLocal);
         moveNextIl.Emit(OpCodes.Brfalse, notDoneLabel);
+        moveNextIl.MarkLabel(alreadyCompleted);
         moveNextIl.Emit(OpCodes.Ldc_I4_0);
         moveNextIl.Emit(OpCodes.Ret);
 
@@ -769,6 +783,11 @@ public partial class RuntimeEmitter
         var mwsIl = moveNextWithSent.GetILGenerator();
 
         var mwsResultLocal = mwsIl.DeclareLocal(_types.Object);
+        var mwsDoneLocal = mwsIl.DeclareLocal(_types.Boolean);
+        var mwsAlreadyCompleted = mwsIl.DefineLabel();
+        mwsIl.Emit(OpCodes.Ldarg_0);
+        mwsIl.Emit(OpCodes.Ldfld, completedField);
+        mwsIl.Emit(OpCodes.Brtrue, mwsAlreadyCompleted);
 
         // var result = InvokeCapturedIteratorNextWithSent(_iterator, _next, sent);
         mwsIl.Emit(OpCodes.Ldarg_0);
@@ -781,6 +800,10 @@ public partial class RuntimeEmitter
 
         mwsIl.Emit(OpCodes.Ldloc, mwsResultLocal);
         mwsIl.Emit(OpCodes.Call, inputs.GetIteratorDone);
+        mwsIl.Emit(OpCodes.Stloc, mwsDoneLocal);
+        mwsIl.Emit(OpCodes.Ldarg_0);
+        mwsIl.Emit(OpCodes.Ldloc, mwsDoneLocal);
+        mwsIl.Emit(OpCodes.Stfld, completedField);
 
         // As above, retain the completion record's value for `yield*` when
         // this call reports done.
@@ -790,7 +813,9 @@ public partial class RuntimeEmitter
         mwsIl.Emit(OpCodes.Stfld, currentField);
 
         var mwsNotDoneLabel = mwsIl.DefineLabel();
+        mwsIl.Emit(OpCodes.Ldloc, mwsDoneLocal);
         mwsIl.Emit(OpCodes.Brfalse, mwsNotDoneLabel);
+        mwsIl.MarkLabel(mwsAlreadyCompleted);
         mwsIl.Emit(OpCodes.Ldc_I4_0);
         mwsIl.Emit(OpCodes.Ret);
 
@@ -810,15 +835,7 @@ public partial class RuntimeEmitter
         resetIl.Emit(OpCodes.Newobj, typeof(NotSupportedException).GetConstructor([typeof(string)])!);
         resetIl.Emit(OpCodes.Throw);
 
-        // Method: void Dispose() - no-op
-        var dispose = typeBuilder.DefineMethod(
-            "Dispose",
-            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
-            _types.Void,
-            Type.EmptyTypes
-        );
-        var disposeIl = dispose.GetILGenerator();
-        disposeIl.Emit(OpCodes.Ret);
+        EmitDisposeIteratorSource(typeBuilder, iteratorField, inputs.CloseIterator, completedField);
 
         typeBuilder.CreateType();
     }
@@ -910,6 +927,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, validateResult);
 
         il.MarkLabel(lookupReturn);
+        // Internal adapters and lazy helpers forward close through IDisposable.
+        // Generators above retain their guest return-result validation.
+        var lookupGuestReturn = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.IEnumerator);
+        il.Emit(OpCodes.Brfalse, lookupGuestReturn);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.IDisposable);
+        il.Emit(OpCodes.Brfalse, finishTry);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.IDisposable);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IDisposable, "Dispose"));
+        il.Emit(OpCodes.Br, finishTry);
+        il.MarkLabel(lookupGuestReturn);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Call, inputs.ObjectRead.Property);

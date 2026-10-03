@@ -929,3 +929,28 @@ and the actual AOT analyzer baseline pass with zero analyzer warnings.
 closing, and exception precedence. Frozen child #1747 still owns normal
 limit-reached closing. No interpreter, arbitrary invalid-receiver or hosted
 guest execution repair is claimed.
+
+## #1747 — Closing iterator take at its limit
+
+**Outcome: repaired.** Compiled take closes its underlying iterator when
+resumed after reaching the limit, including zero limits. It marks completion
+before advancing or closing, preserves next/return errors and skips closing
+after normal exhaustion. Scoped adapters and lazy helpers forward cleanup;
+flatMap closes its inner source before its outer source, preserving the first
+close error. Closed helpers stay completed. Both unchanged originals match
+Node; fresh unchanged main retains the missing close and passes the direct
+return control.
+
+The selected iterator, for-of and generator run has **2,032 passes and one
+unchanged-main failure (#1956)** with compiled IL verification enabled.
+Thirteen compiled references also run as isolated standalone output with exact
+Node stdout, empty stderr, no SharpTS reference/copy and clean exit within
+30 seconds. Native reused-emitter tests verify forwarding, close counts,
+completion and scoped declaration ownership. Node and TypeScript check every
+source. Quality gates and the actual AOT analyzer baseline pass with zero
+analyzer warnings.
+
+`tests/fixtures/IteratorTakeClose` records lazy resume timing, normal exhaustion,
+custom iterators, generator finally blocks, primitive/error return results and
+pipeline cleanup. No interpreter, all-helper abrupt-completion or hosted guest
+execution repair is claimed.

@@ -1,0 +1,1 @@
+const source:any={closed:0,next(){return {value:7,done:false};},return(){this.closed++;return Symbol("close");}};const helper=Iterator.from(source).take(1);try{helper.toArray();}catch(e:any){console.log(e.name,source.closed);}console.log(helper.next().done,source.closed);
