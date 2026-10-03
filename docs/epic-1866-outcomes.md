@@ -1124,3 +1124,30 @@ initialized/active/exhausted controls and retained iterator helper consumption.
 Quality gates pass. Production code is unchanged, so the verified #1753 actual
 AOT analyzer baseline remains applicable. The unresolved original and repeated
 raw-source failures remain outside passing counts.
+
+## #1740 — Prefixed Readable import dispatch
+
+**Outcome: repaired.** Built-in import pre-scanning now uses the canonical bare
+key for node:-prefixed imports, registering named bindings before function
+bodies are emitted. Shared state-machine dispatch resolves methods on dynamic
+receivers instead of assuming names such as push designate an array operation.
+Readable.push therefore buffers the chunks and receives its null EOF signal.
+All six unchanged executable originals now match Node, including typed/from,
+construction/push, bare alias, catch and stage controls. The original's UTF-8/LF
+source hash matches the frozen issue. Fresh unchanged main and pre-repair current
+retain empty-output/from failures and the staged undefined-function TypeError.
+
+All **3,995 selected tests pass** with compiled IL verification, covering
+retained modules, streams, registry dispatch and array operations. All sixteen
+focused tests pass. Seven references run in both engines and as isolated saved
+standalone outputs with verified IL, exact stdout, empty stderr, no SharpTS
+reference/copy and clean exit within the original 30 seconds. Node checks all
+eight sources. Quality gates and the actual AOT analyzer baseline pass with
+zero analyzer warnings.
+
+`tests/fixtures/PrefixedStreamImports` preserves every original and adds the
+bare construction/push control. The top-level-await original still has its
+recorded pre-emission diagnostic and remains outside passing execution counts.
+No iterator-next, Windows process-lifetime or hosted guest execution repair is
+claimed. Historical matching-body evidence describes the earlier migration;
+this semantic repair changes emitted method bodies.

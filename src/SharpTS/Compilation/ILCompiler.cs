@@ -798,8 +798,13 @@ public partial class ILCompiler
                 // Check if the import path is a built-in module or an stdlib-internal
                 // primitive. Both dispatch through BuiltInModuleEmitterRegistry — the
                 // primitive case's key is the full specifier (e.g. "primitive:os").
-                string? builtInModuleName = Runtime.BuiltIns.Modules.BuiltInModuleRegistry.IsBuiltIn(import.ModulePath)
-                    ? import.ModulePath  // Use the module path directly as the module name
+                // Resolution strips node: before selecting a built-in. This
+                // pre-scan runs before function bodies and must use the same key.
+                string dispatchPath = import.ModulePath.StartsWith("node:", StringComparison.Ordinal)
+                    ? import.ModulePath[5..]
+                    : import.ModulePath;
+                string? builtInModuleName = Runtime.BuiltIns.Modules.BuiltInModuleRegistry.IsBuiltIn(dispatchPath)
+                    ? dispatchPath
                     : Modules.Stdlib.PrimitiveRegistry.IsPrimitive(import.ModulePath)
                         ? import.ModulePath  // "primitive:os" is its own emitter key
                         : Runtime.BuiltIns.Modules.BuiltInModuleRegistry.GetModuleName(import.ModulePath);  // Try sentinel path

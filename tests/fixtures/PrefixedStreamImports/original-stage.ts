@@ -1,0 +1,1 @@
+import {Readable} from "node:stream";async function run(){try{console.log("before-from");const stream:any=Readable.from([1,2,3]);console.log("after-from");let total=0;for await(const n of stream)total+=n;console.log(total);}catch(e:any){console.log("caught",e.name,e.message);}}run();

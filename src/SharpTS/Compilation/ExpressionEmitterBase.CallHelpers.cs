@@ -1692,9 +1692,10 @@ public abstract partial class ExpressionEmitterBase
                 or "push" or "find" or "findIndex" or "some" or "every" or "reduce" or "join"
                 or "reverse" or "fill")
             {
-                var arrayStrategy = Ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Array(new TypeSystem.TypeInfo.Any()));
-                if (arrayStrategy != null && arrayStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, c.Arguments))
-                    return true;
+                // A spelling such as push does not identify an Array when
+                // the receiver is dynamic (Readable.push is a stream method).
+                EmitDynamicMethodCallPreservingThis(methodGet.Object, methodName, c.Arguments);
+                return true;
             }
         }
 

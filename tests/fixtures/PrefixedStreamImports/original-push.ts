@@ -1,0 +1,1 @@
+import {Readable} from "node:stream";async function run(){const stream:any=new Readable({objectMode:true});stream.push(1);stream.push(2);stream.push(3);stream.push(null);let total=0;for await(const n of stream)total+=n;console.log(total);}run();
