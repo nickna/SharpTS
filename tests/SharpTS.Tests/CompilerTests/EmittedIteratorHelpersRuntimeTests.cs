@@ -90,7 +90,12 @@ public sealed class EmittedIteratorHelpersRuntimeTests
             Assert.Equal(6d, Call("IteratorReduce", values, sum, null, false));
             Assert.Equal(16d, Call("IteratorReduce", values, sum, 10d, true));
             Assert.Contains("Reduce of empty iterator", Assert.Throws<TargetInvocationException>(() => Call("IteratorReduce", new List<object>(), sum, null, false)).InnerException!.Message);
-            double total = 0; Call("IteratorForEach", values, new Func<object[], object>(args => total += (double)args[0])); Assert.Equal(6d, total);
+            var undefined = loaded.GetType(runtime.Sentinels.UndefinedType.FullName!)!
+                .GetField(runtime.Sentinels.UndefinedInstance.Name, Members)!.GetValue(null);
+            double total = 0;
+            var visit = new Func<object[], object>(args => total += (double)args[0]);
+            Assert.Same(undefined, Call("IteratorForEach", values, visit)); Assert.Equal(6d, total);
+            Assert.Same(undefined, Call("IteratorForEach", new List<object>(), visit)); Assert.Equal(6d, total);
             Assert.Equal(true, Call("IteratorSome", values, predicate)); Assert.Equal(false, Call("IteratorEvery", values, predicate));
             Assert.Equal(2d, Call("IteratorFind", values, predicate)); Assert.Same(values, Call("IteratorFrom", values));
             var iterator = (IEnumerator<object>)Call("NormalizeToEnumerator", values)!;

@@ -48,7 +48,7 @@ public partial class RuntimeEmitter
         // Eager methods (on $Runtime)
         EmitIteratorReduce(typeBuilder, iteratorHelpers, inputs.InvokeMethod, inputs.Errors);
         EmitIteratorToArray(typeBuilder, iteratorHelpers);
-        EmitIteratorForEach(typeBuilder, iteratorHelpers, inputs.InvokeMethod);
+        EmitIteratorForEach(typeBuilder, iteratorHelpers, inputs.InvokeMethod, inputs.UndefinedInstance);
         EmitIteratorSome(typeBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
         EmitIteratorEvery(typeBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
         EmitIteratorFind(typeBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
@@ -903,7 +903,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorForEach(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, MethodInfo invokeMethod)
+    private void EmitIteratorForEach(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers,
+        MethodInfo invokeMethod, FieldInfo undefinedInstance)
     {
         // static object IteratorForEach(object source, object callback)
         var method = typeBuilder.DefineMethod(
@@ -959,7 +960,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopLabel);
 
         il.MarkLabel(doneLabel);
-        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 

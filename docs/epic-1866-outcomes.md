@@ -882,3 +882,24 @@ analyzer baseline pass with zero analyzer warnings.
 length, throw identity, custom iterators, repeated spreads, sparse arrays and
 numeric controls. No interpreter, hosted guest execution, unrelated array
 method-descriptor or arbitrary iterable-protocol repair is claimed.
+
+## #1745 — Iterator forEach return value
+
+**Outcome: repaired.** Compiled iterator forEach returns the compilation's
+undefined singleton after normal exhaustion. The helper receives that scoped
+field directly and preserves its callback loop and public ABI. Both unchanged
+original result failures now match Node; the values-only control remains correct.
+
+All **87 selected tests pass** with compiled IL verification, including iterator
+helpers and native emission reuse. Six compiled references run as isolated saved
+standalone output, with exact Node stdout, clean exit, empty stderr, no SharpTS
+reference/copy and the original 30-second deadline. Native tests check singleton
+identity for empty/nonempty inputs across minimal, optional, repeated and hosted
+declarations. Node and TypeScript check all sources. Quality gates and the actual
+AOT analyzer baseline pass with zero analyzer warnings.
+
+`tests/fixtures/IteratorForEachReturn` retains two separate contextual-void
+callback checker failures. TypeScript accepts value-returning block callbacks;
+fresh unchanged main and current reject them before emission. They are excluded
+from passing totals. No callback typing, abrupt-close policy or hosted guest
+execution repair is claimed.
