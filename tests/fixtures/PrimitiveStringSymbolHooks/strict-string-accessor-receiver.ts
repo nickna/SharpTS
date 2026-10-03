@@ -1,0 +1,1 @@
+Object.defineProperty(String.prototype,Symbol.match,{get(){"use strict";console.log(typeof this,this==="b");return function(s:any){"use strict";console.log(typeof this,this==="b");return [s];};}});console.log("abc".match("b")![0]);

@@ -1,0 +1,1 @@
+const box:any=new Number(1);(Number.prototype as any)[Symbol.search]=function(s:any){"use strict";console.log(this===box,typeof this);return s.length+4;};console.log("abc".search(box));const value:any={[Symbol.match](s:any){console.log(this===value);return [s];}};console.log("abc".match(value)![0]);

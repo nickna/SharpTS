@@ -447,7 +447,7 @@ public partial class RuntimeEmitter
 
         // IsRegExp(searchValue) requires a global RegExp before @@replace is
         // retrieved. Preserve that observable ordering for native RegExp
-        // values, then use the shared object-only GetMethod dispatch.
+        // values, then use the shared non-nullish GetMethod dispatch.
         var symbolDispatchLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, regExp.Type);
@@ -1252,9 +1252,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, preparedMatcherLabel);
         il.MarkLabel(notPreparedLabel);
 
-        // ES2026 String.prototype.matchAll only performs IsRegExp/GetMethod
-        // when regexp is an Object. In particular, primitive Boolean/Number/
-        // String/BigInt values must not consult their prototypes' symbol keys.
+        // IsRegExp only observes @@match on Objects. The subsequent GetMethod
+        // lookup also observes @@matchAll on non-nullish primitives (ES2025).
         var patternClassificationDone = il.DefineLabel();
         var patternIsObject = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
@@ -1405,8 +1404,11 @@ public partial class RuntimeEmitter
         // RegExpCreate. The intrinsic helper is retained on the rich-result
         // fast path; every user override is invoked with the original receiver
         // value (before ToString(this), as required by the observable order).
-        il.Emit(OpCodes.Ldloc, patternIsObjectLocal);
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, fallbackCreateLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, fallbackCreateLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldsfld, inputs.Symbols.MatchAll);
         il.Emit(OpCodes.Call, inputs.GetIndex);

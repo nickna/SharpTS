@@ -1486,7 +1486,10 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.TypedArrays,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                runtime.Booleans,
+                runtime.Numbers,
+                runtime.BigInt
             )
         );
         // DisposeResource uses the shared Symbol indexed-get path so descriptor

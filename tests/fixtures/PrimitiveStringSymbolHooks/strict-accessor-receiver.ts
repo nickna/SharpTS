@@ -1,0 +1,1 @@
+let order="";Object.defineProperty(Number.prototype,Symbol.search,{get(){"use strict";order+="get:"+typeof this+":"+(this===2)+">";return function(s:any){"use strict";order+="call:"+typeof this+":"+(this===2)+">";return s.length;};}});console.log("abc".search(2 as any),order);

@@ -56,7 +56,10 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         EmittedTypedArrayRuntime TypedArrays,
         FieldInfo UndefinedInstance,
-        Type UndefinedType
+        Type UndefinedType,
+        EmittedBooleanRuntime Booleans,
+        EmittedNumberRuntime Numbers,
+        EmittedBigIntRuntime BigInt
     );
 
     private readonly record struct RegExpSymbolDispatchInputs(
@@ -359,20 +362,6 @@ public partial class RuntimeEmitter
             il.MarkLabel(notRegExpForSymbolLabel);
         }
 
-        // String primitives inherit @@iterator from String.prototype. Re-enter
-        // GetIndex on the prototype dictionary so descriptor unwrapping follows
-        // the same ordinary [[Get]] path as a direct prototype access.
-        var notStringForSymbolLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brfalse, notStringForSymbolLabel);
-        il.Emit(OpCodes.Call, inputs.Strings.PrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, inputs.Strings.PrototypeField);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, method);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notStringForSymbolLabel);
-
         // Array-receiver symbol-key walk: when the per-object symbol dict
         // doesn't carry the key, walk up to Array.prototype's symbol dict.
         // Required for `arr[Symbol.iterator]` to resolve to Array.prototype.
@@ -419,6 +408,28 @@ public partial class RuntimeEmitter
             var symbolProtoDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
             var symbolProtoLoopLabel = il.DefineLabel();
             var symbolProtoDoneLabel = il.DefineLabel();
+            // Primitive [[Get]] starts at the corresponding intrinsic
+            // prototype. Keep arg0 as the receiver so strict getters observe
+            // the primitive rather than the prototype dictionary.
+            void EmitPrimitiveSymbolPrototype(Type primitiveType, FieldBuilder prototype, MethodBuilder populate)
+            {
+                var next = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Isinst, primitiveType);
+                il.Emit(OpCodes.Brfalse, next);
+                il.Emit(OpCodes.Call, populate);
+                il.Emit(OpCodes.Ldsfld, prototype);
+                il.Emit(OpCodes.Stloc, symbolProtoLocal);
+                il.Emit(OpCodes.Br, symbolProtoLoopLabel);
+                il.MarkLabel(next);
+            }
+            EmitPrimitiveSymbolPrototype(_types.Double, inputs.Numbers.PrototypeField, inputs.Numbers.PrototypePopulateMethod);
+            EmitPrimitiveSymbolPrototype(_types.Int32, inputs.Numbers.PrototypeField, inputs.Numbers.PrototypePopulateMethod);
+            EmitPrimitiveSymbolPrototype(_types.Boolean, inputs.Booleans.PrototypeField, inputs.Booleans.PrototypePopulateMethod);
+            EmitPrimitiveSymbolPrototype(_types.String, inputs.Strings.PrototypeField, inputs.Strings.PrototypePopulateMethod);
+            EmitPrimitiveSymbolPrototype(inputs.Symbols.Type, inputs.Symbols.Prototype, inputs.Symbols.PopulatePrototype);
+            if (inputs.BigInt.Implementation is not null)
+                EmitPrimitiveSymbolPrototype(_types.BigInteger, inputs.BigInt.PrototypeField, inputs.BigInt.PrototypePopulateMethod);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPrototype);
             il.Emit(OpCodes.Stloc, symbolProtoLocal);

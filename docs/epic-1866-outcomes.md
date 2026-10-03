@@ -1740,3 +1740,30 @@ unchanged main and current expose an empty string, both with verified IL, clean
 exit and empty stderr. An additional prototype-hook source probe retains its
 Node expectation `(?:)|abc` and current output `|abc`. These are excluded from
 passing coverage; no source representation repair is claimed.
+
+## #1795 — Primitive prototype symbol hooks
+
+**Outcome: repaired.** Shared string protocol dispatch now looks up symbol
+methods on every non-nullish candidate. Symbol indexed reads start at the
+appropriate primitive prototype and preserve the original receiver for getters
+and method calls. MatchAll separates its object-only IsRegExp test from its
+non-nullish method lookup, preserving ES2025 ordering. The misleading primitive
+exclusion comments are corrected. Fresh unchanged-main/pre-repair current
+verify the original but print -1; current prints 7 with empty stderr and clean
+exit within the unchanged 30 seconds.
+
+All **110 focused checks pass**, including twelve compiled references, twelve
+isolated standalone outputs, twelve hosted module compilations, original saved
+protocol controls and native string-dispatch/object-read ownership checks.
+TypeScript/Node confirm all twelve expectations. Coverage includes all five
+primitive families, strict accessor/method receivers, inherited prototype hooks,
+thrown identity, non-callable/nullish methods, removal, nullish candidates,
+boxed/custom controls, borrowed calls and matchAll's primitive ordering.
+All **294 broader symbol/string-method/iteration checks pass**, including #1794
+controls. Saved guests verify IL, exact stdout, empty stderr, no SharpTS
+reference/copy and clean exit within 30 seconds; hosted exports are not executed.
+The shared dispatch's owned declaration, signature and seven metadata inputs
+remain frozen. Indexed lookup uses scoped primitive-family inputs and honors
+supplied BigInt implementation selection; no ownership construction repair is
+claimed. Quality gates and the actual AOT analyzer baseline pass with zero
+analyzer warnings.
