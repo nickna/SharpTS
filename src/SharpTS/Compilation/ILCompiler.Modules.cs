@@ -117,7 +117,7 @@ public partial class ILCompiler
                 {
                     // Named export from declaration
                     string? exportName = GetExportDeclarationName(export.Declaration);
-                    if (exportName != null)
+                    if (exportName != null && !exportFields.ContainsKey(exportName))
                     {
                         var field = moduleType.DefineField(
                             exportName,
@@ -273,6 +273,7 @@ public partial class ILCompiler
         Stmt.Var v => v.Name.Lexeme,
         Stmt.Const ct => ct.Name.Lexeme,
         Stmt.Enum e => e.Name.Lexeme,
+        Stmt.Namespace ns => ns.Name.Lexeme,
         Stmt.Interface or Stmt.TypeAlias => null, // Type-only, no runtime export
         _ => null
     };

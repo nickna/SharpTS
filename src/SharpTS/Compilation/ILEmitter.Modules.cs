@@ -511,6 +511,11 @@ public partial class ILEmitter
                     EmitEnumAsObject(enumMembers);
                     IL.Emit(OpCodes.Stsfld, field);
                 }
+                else if (_ctx.ResolveNamespaceField(name) is { } namespaceField)
+                {
+                    IL.Emit(OpCodes.Ldsfld, namespaceField);
+                    IL.Emit(OpCodes.Stsfld, field);
+                }
             }
         }
         else if (export.NamedExports != null && export.FromModulePath == null)
@@ -551,6 +556,11 @@ public partial class ILEmitter
                     {
                         // Create SharpTSObject with enum members
                         EmitEnumAsObject(enumMembers);
+                        IL.Emit(OpCodes.Stsfld, field);
+                    }
+                    else if (_ctx.ResolveNamespaceField(localName) is { } namespaceField)
+                    {
+                        IL.Emit(OpCodes.Ldsfld, namespaceField);
                         IL.Emit(OpCodes.Stsfld, field);
                     }
                 }
@@ -641,6 +651,7 @@ public partial class ILEmitter
         Stmt.Var v => v.Name.Lexeme,
         Stmt.Const ct => ct.Name.Lexeme,
         Stmt.Enum e => e.Name.Lexeme,
+        Stmt.Namespace ns => ns.Name.Lexeme,
         _ => null
     };
 

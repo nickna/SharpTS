@@ -19,6 +19,25 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.ImportedNamespaceFunctionTests.Cases), MemberType = typeof(SharedTests.ImportedNamespaceFunctionTests))]
+    public void Isolated_Issue1776ImportedNamespaces_PreserveValuesAndMembers(string name, string source, string library, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        directory.CreateFile("lib.ts", library);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.NamespaceInitializerFunctionTests.Cases), MemberType = typeof(SharedTests.NamespaceInitializerFunctionTests))]
     public void Isolated_Issue1775NamespaceInitializers_ResolvePrivateFunctions(string name, string source, string expected)
     {

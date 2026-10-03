@@ -1231,3 +1231,28 @@ passing counts. Fresh original diagnostics finish within 30 seconds; historical
 Windows lifetime observations remain with #1772. No broader private-variable
 publication, cross-declaration private scope, mutation or hosted execution
 repair is claimed.
+
+## #1776 — Imported namespace member values
+
+**Outcome: repaired.** Namespace declarations now participate in module export
+name discovery and publish their populated object into the import/export slot.
+Named namespace exports store the same object. Merged declarations share one
+export field. The unchanged two-file original prints `8 9 true`; the constant
+control retains `8 true`. Fresh unchanged main and pre-repair current reproduce
+the null-receiver error, with verified IL and empty stdout. Fresh diagnostics
+finish within 30 seconds, leaving the historical lifetime observation to #1772.
+
+All **24 focused cases pass**, including nine compiled references, nine isolated
+saved standalone outputs, and six retained namespace declaration/deployment
+checks. Full TypeScript compilation and Node confirm every pair. Saved guest
+outputs have verified IL, exact stdout, empty stderr, clean exit within the
+original deadline and no SharpTS reference/copy. The broader selected suite
+passes **1,948 tests** and retains the seven established namespace class IL
+failures owned by #1781. Quality gates and the actual AOT analyzer baseline pass
+with zero analyzer warnings.
+
+`tests/fixtures/ImportedNamespaceFunctions` preserves original and direct,
+named, nested, generator, async, merged and renamed controls. Existing hosted
+coverage checks declarations/deployment, without claiming guest execution.
+Cross-module same-name namespace identity remains in the #1908 design transfer;
+no mutation, class identity or process-lifetime repair is claimed here.
