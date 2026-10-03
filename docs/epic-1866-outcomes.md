@@ -1181,7 +1181,8 @@ direct-eval lexical-scope, hosted execution or Windows lifetime repair is claime
 
 ## #1774 — Callable namespace function values
 
-**Outcome: callability repaired; later mutation failures retained for #1777.**
+**Outcome: callability repaired here; later original mutation failures repaired
+by #1777.**
 Script initialization retains a source path for diagnostics but now resolves
 function declarations in shared script scope. Namespace population consequently
 stores callable function wrappers. Ordinary, synchronous-generator and async
@@ -1193,8 +1194,9 @@ references and six isolated saved standalone originals. The interpreter's
 independent merged-namespace binding failure is excluded. Every saved original
 retains verified IL and its 30-second deadline. Fresh main and pre-repair current
 reproduce seven callability errors and the shape mismatch. After repair, the two
-mutation originals reach their function bodies but print stale/ignored values;
-they remain outside passing counts and are linked to #1777. Their exact sources
+mutation originals reach their function bodies but initially print stale/ignored
+values. #1777 subsequently repairs them and enables their complete unchanged
+expectations in compiled and isolated regression coverage. Their exact sources
 and full reference expectations are preserved in
 `tests/fixtures/NamespaceFunctionValues`.
 
@@ -1256,3 +1258,34 @@ named, nested, generator, async, merged and renamed controls. Existing hosted
 coverage checks declarations/deployment, without claiming guest execution.
 Cross-module same-name namespace identity remains in the #1908 design transfer;
 no mutation, class identity or process-lifetime repair is claimed here.
+
+## #1777 — Namespace property writes and live exported bindings
+
+**Outcome: repaired.** Emitted dot and computed writes dispatch through the
+scoped namespace storage owner. Exported variables bind to their generated
+public static backing fields, sharing values with member-body reads and writes.
+The unchanged original now prints `8 9`, compared with `null 3` on fresh main
+and pre-repair current. Added properties, existing values, function replacement,
+strict writes, nested namespaces and separate-object controls match Node.
+The two exact #1774 mutation originals now pass their complete expectations;
+all **22 #1774 regression cases pass**, including all eight compiled and saved
+originals and six interpreted references.
+
+All **49 focused cases pass** with IL verification, including eight compiled
+references, eight isolated saved standalone outputs, scoped namespace metadata
+and native object-writing controls. Native namespace helpers preserve Get/Set
+identity and instance isolation, verify Bind metadata/ABI and observe live
+field updates in both directions. Reused native emitters cover minimal,
+optional and minimal-again configurations for standalone and hosted outputs,
+without hard SharpTS references or stale declaration ownership. Full
+TypeScript compilation and Node confirm every source. Saved guest outputs
+verify IL, exact stdout, empty stderr, no SharpTS reference/copy and clean exit
+within the unchanged 30 seconds.
+
+The selected suite passes **1,990 tests** and retains the seven established
+namespace class IL failures owned by #1781. Quality gates and the actual AOT
+analyzer baseline pass with zero analyzer warnings.
+`tests/fixtures/NamespaceMutation` preserves originals and controls. No broader
+private-variable publication, cross-module namespace identity, missing-value,
+deletion or hosted guest execution repair is claimed. Missing values and actual
+deletion remain the separate #1778/#1779 tasks.

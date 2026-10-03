@@ -45,7 +45,7 @@ public sealed class EmittedNamespaceRuntimeTests
     [Fact]
     public void HelperAcceptsOnlyItsModuleAndNamespaceOwner()
     {
-        Assert.Equal(4, Handles.Length);
+        Assert.Equal(5, Handles.Length);
         Assert.NotSame(new EmittedRuntime().Namespaces, new EmittedRuntime().Namespaces);
         Assert.Null(typeof(EmittedRuntime).GetProperty("Namespaces")!.SetMethod);
         foreach (string name in new[] { "TSNamespaceType", "TSNamespaceCtor", "TSNamespaceGet", "TSNamespaceSet" })
@@ -64,6 +64,7 @@ public sealed class EmittedNamespaceRuntimeTests
         Assert.False(owner.IsComplete); Assert.True(owner.Type.IsCreated());
         Assert.Same(owner.Type, owner.Constructor.DeclaringType);
         Assert.Same(owner.Type, owner.Get.DeclaringType); Assert.Same(owner.Type, owner.Set.DeclaringType);
+        Assert.Same(owner.Type, owner.Bind.DeclaringType);
         Complete(owner); VerifyNamespace(SaveVerifyLoad(builder).GetType("$TSNamespace")!);
     }
 
@@ -83,6 +84,7 @@ public sealed class EmittedNamespaceRuntimeTests
             foreach (var property in Handles) Assert.True(handles.Add(property.GetValue(owner)!));
             Assert.Same(builder, owner.Type.Assembly); Assert.Same(owner.Type, owner.Constructor.DeclaringType);
             Assert.Same(owner.Type, owner.Get.DeclaringType); Assert.Same(owner.Type, owner.Set.DeclaringType);
+            Assert.Same(owner.Type, owner.Bind.DeclaringType);
             var loaded = SaveVerifyLoad(builder); VerifyNamespace(loaded.GetType("$TSNamespace")!);
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
             Assert.Equal(hosted, loaded.GetReferencedAssemblies().Any(a => a.Name == "SharpTS.Hosting.Abstractions"));
@@ -93,9 +95,10 @@ public sealed class EmittedNamespaceRuntimeTests
     {
         Assert.True(type.IsPublic && type.IsSealed); Assert.True((type.Attributes & TypeAttributes.BeforeFieldInit) != 0);
         var fields = type.GetFields(Members).OrderBy(f => f.MetadataToken).ToArray();
-        Assert.Equal(new[] { "_members", "_name" }, fields.Select(f => f.Name));
+        Assert.Equal(new[] { "_members", "_name", "_bindings" }, fields.Select(f => f.Name));
         Assert.All(fields, f => Assert.True(f.IsPrivate && !f.IsStatic && !f.IsInitOnly));
         Assert.Equal(typeof(Dictionary<string, object>), fields[0].FieldType); Assert.Equal(typeof(string), fields[1].FieldType);
+        Assert.Equal(typeof(Dictionary<string, FieldInfo>), fields[2].FieldType);
         var constructor = Assert.Single(type.GetConstructors()); Assert.Equal(typeof(string), Assert.Single(constructor.GetParameters()).ParameterType);
         var get = type.GetMethod("Get")!; var set = type.GetMethod("Set")!; var display = type.GetMethod("ToString")!;
         Assert.True(get.IsPublic && !get.IsStatic && get.ReturnType == typeof(object));
@@ -110,6 +113,23 @@ public sealed class EmittedNamespaceRuntimeTests
         set.Invoke(first, ["value", 9.0]); Assert.Equal(9.0, get.Invoke(first, ["value"]));
         set.Invoke(first, ["nil", null]); Assert.Null(get.Invoke(first, ["nil"]));
         Assert.Equal("[namespace First]", first.ToString()); Assert.Equal("[namespace Second]", second.ToString());
+
+        var bind = type.GetMethod("Bind")!;
+        Assert.True(bind.IsPublic && !bind.IsStatic && bind.ReturnType == typeof(void));
+        Assert.Equal(new[] { typeof(string), typeof(FieldInfo) }, bind.GetParameters().Select(p => p.ParameterType));
+        NamespaceBindingCell.Value = 1.0;
+        bind.Invoke(first, ["live", typeof(NamespaceBindingCell).GetField(nameof(NamespaceBindingCell.Value))]);
+        Assert.Equal(1.0, get.Invoke(first, ["live"]));
+        set.Invoke(first, ["live", 7.0]);
+        Assert.Equal(7.0, NamespaceBindingCell.Value);
+        NamespaceBindingCell.Value = 9.0;
+        Assert.Equal(9.0, get.Invoke(first, ["live"]));
+        Assert.Null(get.Invoke(second, ["live"]));
+    }
+
+    public static class NamespaceBindingCell
+    {
+        public static object Value = 0.0;
     }
 
     private static object Handle(Type type)

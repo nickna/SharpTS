@@ -15,6 +15,7 @@ public partial class RuntimeEmitter
         MethodBuilder InvokeMethodUnwrapped,
         MethodBuilder InvokeMethodValue,
         EmittedMathRuntime Math,
+        EmittedNamespaceRuntime Namespaces,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectOwnPropertiesRuntime ObjectOwnProperties,
         EmittedObjectPrototypeRuntime ObjectPrototypes,
@@ -1254,6 +1255,18 @@ public partial class RuntimeEmitter
             il.MarkLabel(inheritedNotProxyLabel);
         }
         il.MarkLabel(noInheritedProxyLabel);
+
+        var notNamespace = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.Namespaces.Type);
+        il.Emit(OpCodes.Brfalse, notNamespace);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, objectWrite.Property);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notNamespace);
 
         // globalThis/global sentinel (#271): `root[stringKey] = v` stores into the
         // shared global-properties dictionary. Symbol keys fall through to the

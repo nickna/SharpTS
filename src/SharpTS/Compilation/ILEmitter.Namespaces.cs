@@ -132,11 +132,11 @@ public partial class ILEmitter
                 break;
 
             case Stmt.Var varStmt:
-                EmitNamespaceMemberVar(nsField, nsPath, memberName!, varStmt.Initializer, varStmt.TypeAnnotation);
+                EmitNamespaceMemberVar(nsField, nsPath, memberName!, varStmt.Initializer, varStmt.TypeAnnotation, isExported);
                 break;
 
             case Stmt.Const constStmt:
-                EmitNamespaceMemberVar(nsField, nsPath, memberName!, constStmt.Initializer, constStmt.TypeAnnotation);
+                EmitNamespaceMemberVar(nsField, nsPath, memberName!, constStmt.Initializer, constStmt.TypeAnnotation, isExported);
                 break;
 
             case Stmt.Class classStmt:
@@ -288,7 +288,7 @@ public partial class ILEmitter
     /// module-top-level var path, so a namespace member whose name collides with a module-level
     /// binding no longer clobbers that binding's slot (#657).
     /// </summary>
-    private void EmitNamespaceMemberVar(FieldBuilder nsField, string nsPath, string memberName, Expr? initializer, string? typeAnnotation)
+    private void EmitNamespaceMemberVar(FieldBuilder nsField, string nsPath, string memberName, Expr? initializer, string? typeAnnotation, bool isExported)
     {
         // Locate the backing field (DefineNamespaceVarField created one for every namespace var).
         FieldBuilder? backingField = null;
@@ -328,5 +328,14 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldstr, memberName);
         IL.Emit(OpCodes.Ldloc, valueLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
+
+        if (isExported && backingField != null)
+        {
+            IL.Emit(OpCodes.Ldsfld, nsField);
+            IL.Emit(OpCodes.Ldstr, memberName);
+            IL.Emit(OpCodes.Ldtoken, backingField);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.FieldInfo, "GetFieldFromHandle", _ctx.Types.Resolve("System.RuntimeFieldHandle")));
+            IL.Emit(OpCodes.Call, _ctx.Runtime.Namespaces.Bind);
+        }
     }
 }

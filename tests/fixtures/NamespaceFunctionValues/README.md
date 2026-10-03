@@ -15,9 +15,11 @@ are callable. Six originals now match their full reference outputs, with
 verified IL, empty stderr, clean exit, no SharpTS assembly reference or copy,
 and the same deadline. The mutation originals expose their next independent
 failure: live-binding prints `1 1` then `1 2 2`; dynamic-write prints `2 2 2`.
-They remain outside passing counts and are retained for #1777. The interpreter
-also independently rejects the original merged namespace's `first` lookup;
-that original is only counted as passing in compiled mode.
+These failures are subsequently repaired by #1777, which enables the complete
+unchanged expectations for all eight compiled and isolated originals. The
+interpreter independently rejects the merged namespace's `first` lookup and
+the dynamic-write path; those originals remain outside interpreted passing
+counts.
 
 No imported namespace, mutation, missing-member, deletion, enum reverse-map or
 class-construction repair is claimed by this task. Those epic children retain

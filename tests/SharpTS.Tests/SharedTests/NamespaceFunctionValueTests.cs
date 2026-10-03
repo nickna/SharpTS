@@ -33,13 +33,10 @@ public sealed class NamespaceFunctionValueTests
             """, "function function true\n" };
     }
 
-    // The unchanged mutation originals are retained as fixtures and diagnostics;
-    // their later storage mismatch belongs to #1777, beyond repaired callability.
-    public static IEnumerable<object[]> CallableCases() => Cases()
-        .Where(row => (string)row[0] is not ("live-binding" or "dynamic-write"));
+    public static IEnumerable<object[]> CallableCases() => Cases();
     public static IEnumerable<object[]> CompiledSources() => CallableCases().Select(row => row[1..]);
     public static IEnumerable<object[]> InterpretedSources() => CallableCases()
-        .Where(row => (string)row[0] != "merged").Select(row => row[1..]);
+        .Where(row => (string)row[0] is not ("merged" or "dynamic-write")).Select(row => row[1..]);
 
     [Theory, MemberData(nameof(CompiledSources))]
     public void CompiledNamespaceFunctionsAreCallableThroughValues(string source, string expected)

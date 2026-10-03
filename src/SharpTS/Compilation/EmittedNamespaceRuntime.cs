@@ -37,6 +37,13 @@ public sealed class EmittedNamespaceRuntime
         internal set => SetHandle(ref _set, value);
     }
 
+    private MethodBuilder? _bind;
+    public MethodBuilder Bind
+    {
+        get => Require(_bind);
+        internal set => SetHandle(ref _bind, value);
+    }
+
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException("Namespace metadata '" + name + "' has not been declared.");
 
@@ -62,6 +69,7 @@ public sealed class EmittedNamespaceRuntime
         _ = Constructor;
         _ = Get;
         _ = Set;
+        _ = Bind;
         IsComplete = true;
     }
 }

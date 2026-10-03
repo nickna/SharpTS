@@ -1,0 +1,1 @@
+namespace Counter {export let value=1;export function increment(){value++;}export function read(){return value;}}const counter:any=Counter;console.log(counter.value,Counter.value);Counter.increment();console.log(counter.value,Counter.value,Counter.read());
