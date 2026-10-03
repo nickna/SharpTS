@@ -1963,3 +1963,24 @@ identity. Saved guests require verified IL, exact stdout, empty stderr, clean
 exit and no SharpTS reference/copy; hosted exports are not executed. The #1790
 quality and actual AOT checks pass; this completion adds regression coverage and
 documentation only and claims no metadata ownership audit closure.
+
+## #1791 — Typed numeric enum reverse lookup
+
+**Outcome: repaired by #1790, separately verified.** Numeric enum indices are
+boxed for ordinary object lookup instead of unboxing an already-native double.
+Fresh unchanged main rejects all nine displayed failing originals/controls at
+their recorded Double/object StackUnexpected offsets. Those saved invalid
+assemblies remain retained and are never executed. The independently passing
+any-typed function and hosted literal controls still verify.
+
+Current saves and verifies all eleven original/control assemblies. All seven
+original executable references produce complete Node output with empty stderr
+and clean exit within the original 30 seconds. Four hosted original/control
+declarations verify without executing exported functions. TypeScript and Node
+establish those references and two supplemental actual-await/async-generator
+suspension controls before SharpTS execution. All **89 selected checks pass**,
+including nine compiled/saved executable references, four hosted declarations,
+prior missing-key/value-binding regressions and native enum ownership checks.
+The #1790 quality and actual AOT checks pass; this completion adds coverage and
+documentation only and preserves native helper ownership/ABI without claiming
+metadata ownership audit closure.
