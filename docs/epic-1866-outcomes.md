@@ -808,3 +808,30 @@ analyzer warnings.
 `tests/fixtures/AsyncMutableCaptures` records scope and evidence. The remaining
 boxed-state-machine failure, absent lexical display-class homes, per-iteration
 mutable async cells and hosted guest execution are not claimed as repaired.
+
+## #1735 — Awaited for-await elements
+
+**Outcome: repaired.** For-await loop binding applies the existing recursive
+Promise unwrapping to element types and their union members. Ordinary for-of
+retains Promise elements, and awaiting a tuple does not recursively transform
+its nested members. Both unchanged originals now match Node; fresh unchanged
+main reproduces the reported numeric diagnostics with no output assemblies,
+while both exact any-typed controls already execute correctly.
+
+All **832 selected tests pass** with compiled IL verification, covering async
+iteration, iterable typing, generators and retained saved regressions. Eight
+runtime references run in both engines and as isolated standalone output;
+five uncalled declared-type controls check inference separately. Seven
+negative bindings fail in both test-harness modes and produce no CLI assembly.
+Saved runtime outputs omit references/copies and require exact Node stdout,
+clean exit and empty stderr within 30 seconds. Node accepts the thirteen
+positive references; TypeScript accepts them and rejects all seven negatives.
+Quality gates and the actual AOT analyzer baseline pass with zero analyzer
+warnings.
+
+`tests/fixtures/ForAwaitElementInference` retains an independent primitive
+member-validation gap: number.then is accepted unchanged on main even without
+iteration, unlike TypeScript. Those two references are excluded from passing
+counts. No general primitive-member validation, arbitrary thenable/generic
+Awaited expansion, non-iterable async-source diagnosis or hosted execution
+repair is claimed.
