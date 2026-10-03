@@ -19,6 +19,44 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.ClassOwnKeyOrderTests.Cases), MemberType = typeof(SharedTests.ClassOwnKeyOrderTests))]
+    public void Isolated_Issue1765ClassOwnKeyOrder_PreservesDeclaredFields(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var library = source.Contains("Object.values") ? " --lib esnext,dom" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify{library}",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ClassOwnKeyOrderTests.HostedCases), MemberType = typeof(SharedTests.ClassOwnKeyOrderTests))]
+    public void Isolated_Issue1765HostedClassOwnKeyOrder_VerifiesDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var library = source.Contains("Object.values") ? " --lib esnext,dom" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify{library}",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.CapturedLexicalAssignmentTests.Cases), MemberType = typeof(SharedTests.CapturedLexicalAssignmentTests))]
     public void Isolated_Issue1761CapturedLexicalAssignments_CheckInitialization(string name, string source, string expected)
     {

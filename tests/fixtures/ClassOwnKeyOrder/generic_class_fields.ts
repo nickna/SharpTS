@@ -1,0 +1,1 @@
+class Box<T>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}const a:any=new Box<number>(3);const b:any=new Box<string>("text");a["value"]=5;b["value"]="next";console.log(a.value,a.get(),b.value,b.get(),"value" in a);

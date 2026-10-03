@@ -1,0 +1,1 @@
+class Box{value:number=2;}const b:any=new Box();const s=Symbol("s");b[s]=8;b.extra=9;Object.defineProperty(b,"value",{enumerable:false});console.log(Object.keys(b).join(","));console.log(Object.getOwnPropertyNames(b).join(","));const keys=Reflect.ownKeys(b);console.log(keys.length,keys[0],keys[1],keys[2]===s);

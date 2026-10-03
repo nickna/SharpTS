@@ -1571,3 +1571,33 @@ A separate forward-var source is preserved under
 it, while fresh unchanged-main/current reject `x` before emission. The declared
 var control passes; no separate forward-var checker repair is claimed. Quality
 gates and the actual AOT analyzer baseline pass with zero analyzer warnings.
+
+## #1765 — Class fields preceding later dynamic properties
+
+**Outcome: repaired.** The compatibility field dictionary merges declared backing
+fields before later dynamic properties, preserving their current values. Inherited
+field names already represented in the derived dynamic store precede its declared
+fields. Fresh unchanged-main/pre-repair saved outputs verify and exit cleanly but
+print `extra,value` for the original; current preserves `value,extra`. All three
+original class-expression/inheritance/generic controls retain their expectations.
+
+All **67 focused checks pass**, including ten compiled references, ten isolated
+standalone outputs, ten hosted module compilation controls and existing native
+object-field/key ownership tests. TypeScript/Node confirm all ten references.
+Coverage includes keys, values, entries, own-property names, Reflect keys, numeric
+index normalization, symbols, nonenumerable fields and later typed writes. Saved
+guests verify IL, exact stdout, empty stderr, no SharpTS reference/copy and clean
+exit within 30 seconds. Only added Object.values/entries controls select newer
+library declarations; original options stay unchanged. Hosted exports are not
+executed. The five object-field and six object-key native contracts remain frozen.
+Quality gates and the actual AOT analyzer baseline pass with zero analyzer warnings.
+
+The wider class/descriptor selection passes **274 tests** with three failures
+excluded from passing counts: the previously retained Promise constructor verifier
+mismatch and two runtime method-order checks. The latter expose a forward-declaration
+order regression from an earlier epic change and are handled in the next corrective
+commit. Separate `ClassOwnKeyOrder/independent` sources demonstrate inherited field
+visibility without dynamic writes and property creation inside field initializers.
+Fresh unchanged-main/current both disagree with Node on those cases, with verified
+IL and clean execution. Tracking actual creation across initialization/inheritance
+is outside this declared-field merge repair; no storage-wide fix is claimed.
