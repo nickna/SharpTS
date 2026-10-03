@@ -828,6 +828,13 @@ generated type, while lastIndex and guest prototype mutations retain their exist
 The shared string symbol dispatcher is an explicit peer. The late AST-identity regex-hoist
 registry remains separate and must be included in the residual lifecycle audit.
 
+The separate #1796 behavior repair changes the existing StringMatchRegExp and
+StringSearchRegExp receiver slots to object and pads omitted patterns with undefined.
+This retains borrowed receiver identity through symbol dispatch; their own nullish
+guards precede hook lookup, and only fallback converts to string. Direct string
+emission likewise preserves boxed identity for these protocols. Owners, declaration
+sites and optional RegExp selection are unchanged by this semantic correction.
+
 Symbols use two required owners. `Symbols` owns 27 primitive, well-known, storage and
 prototype declarations, and `SymbolAccessors` owns the nine class-accessor registry
 declarations. The primitive class is emitted before comparer/iterator consumers; runtime

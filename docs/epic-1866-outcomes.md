@@ -1767,3 +1767,36 @@ remain frozen. Indexed lookup uses scoped primitive-family inputs and honors
 supplied BigInt implementation selection; no ownership construction repair is
 claimed. Quality gates and the actual AOT analyzer baseline pass with zero
 analyzer warnings.
+
+## #1796 — Original receivers in borrowed string protocols
+
+**Outcome: repaired.** Match/search helpers accept object receivers, check
+nullish values before hook lookup and defer ToString until fallback. Their
+object/object signatures and undefined-padding metadata prevent reflective
+invocation from converting the receiver before custom dispatch. Direct string
+emission also preserves boxed receiver identity for match/search/matchAll/split.
+Fresh unchanged-main/pre-repair current verify the original but print string:77;
+current prints number:77 with empty stderr and clean exit within the unchanged
+30 seconds.
+
+All **344 selected checks pass**, including twelve compiled references, twelve
+isolated standalone outputs, twelve hosted module compilations, native RegExp/
+string-dispatch/receiver-guard checks and earlier string-protocol controls.
+TypeScript/Node confirm all twelve final references. Coverage includes object
+and primitive identity, getter/call/fallback conversion order, thrown identity,
+nullish receivers before hook access, call/apply/bind, boxed direct/dynamic calls,
+omitted patterns, ordinary fallback and the existing matchAll/split/replaceAll
+ordering. This does not claim every replace/search pattern fallback is repaired.
+Saved guests verify IL, exact stdout, empty stderr, no SharpTS reference/copy and
+clean exit within 30 seconds; hosted exports are not executed. Native checks
+assert the two deliberately corrected object receiver signatures, synthetic
+receiver names and padding attributes across fresh optional/hosted emissions.
+Existing owners, declaration order and deployment boundaries remain unchanged.
+Quality gates and the actual AOT analyzer baseline pass with zero analyzer warnings.
+
+Two separate typed sources remain under `BorrowedStringProtocolReceivers/independent`.
+TypeScript/Node accept them; unchanged main and current reject indexing the
+returned RegExpMatchArray interface and the CLI boxed String.matchAll surface
+before emission. They are excluded from passing coverage. Runtime controls use
+any result/prototype bindings, without changing the original child source or
+expectation. No checker or library-surface repair is claimed.

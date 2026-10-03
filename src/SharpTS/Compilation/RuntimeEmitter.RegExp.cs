@@ -72,7 +72,11 @@ public partial class RuntimeEmitter
         MethodBuilder StringTryInvokeSymbolMethod,
         EmittedSymbolRuntime Symbols,
         FieldInfo UndefinedInstance,
-        Type UndefinedType
+        Type UndefinedType,
+        EmittedStringCoercionRuntime StringCoercion,
+        MethodBuilder CreateException,
+        ConstructorBuilder TSTypeErrorCtor,
+        ConstructorBuilder PadUndefinedAttrCtor
     );
 
     private readonly record struct StringMatchAllRegExpInputs(
@@ -115,7 +119,12 @@ public partial class RuntimeEmitter
         MethodBuilder InvokeMethodValue,
         MethodBuilder StringTryInvokeSymbolMethod,
         EmittedSymbolRuntime Symbols,
-        FieldInfo UndefinedInstance
+        FieldInfo UndefinedInstance,
+        Type UndefinedType,
+        EmittedStringCoercionRuntime StringCoercion,
+        MethodBuilder CreateException,
+        ConstructorBuilder TSTypeErrorCtor,
+        ConstructorBuilder PadUndefinedAttrCtor
     );
 
     private readonly record struct StringSplitRegExpInputs(EmittedStringCoercionRuntime StringCoercion, Type UndefinedType);
@@ -223,7 +232,11 @@ public partial class RuntimeEmitter
                 inputs.StringTryInvokeSymbolMethod,
                 inputs.Symbols,
                 inputs.UndefinedInstance,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                inputs.StringCoercion,
+                inputs.CreateException,
+                inputs.TSTypeErrorCtor,
+                inputs.PadUndefinedAttrCtor
             )
         );
         EmitStringMatchAllRegExp(
@@ -294,7 +307,12 @@ public partial class RuntimeEmitter
                 inputs.InvokeMethodValue,
                 inputs.StringTryInvokeSymbolMethod,
                 inputs.Symbols,
-                inputs.UndefinedInstance
+                inputs.UndefinedInstance,
+                inputs.UndefinedType,
+                inputs.StringCoercion,
+                inputs.CreateException,
+                inputs.TSTypeErrorCtor,
+                inputs.PadUndefinedAttrCtor
             )
         );
         EmitStringSplitRegExp(
@@ -1119,7 +1137,7 @@ public partial class RuntimeEmitter
 
     private void EmitStringMatchRegExp(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp, StringMatchRegExpInputs inputs)
     {
-        // StringMatch(string str, object? pattern) -> object?
+        // StringMatch(object receiver, object? pattern) -> object?
         // An existing @@match handles native matching. If GetMethod returns
         // undefined, RegExpCreate stringifies the pattern even for a native
         // RegExp with an own nullish override; it does not copy its source slot.
@@ -1127,12 +1145,18 @@ public partial class RuntimeEmitter
             "StringMatchRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.String, _types.Object]
+            [_types.Object, _types.Object]
         );
+        method.SetCustomAttribute(inputs.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         regExp.StringMatch = method;
 
         var il = method.GetILGenerator();
+        EmitStringProtocolReceiverCheck(il, inputs.UndefinedType, inputs.CreateException, inputs.TSTypeErrorCtor, "match");
         EmitStringSymbolDispatchPreamble(il, inputs.StringTryInvokeSymbolMethod, inputs.Symbols.Match, 0);
+        var stringLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Stloc, stringLocal);
 
         // RegExpCreate(pattern, undefined), then Invoke(rx, @@match, « str »).
         // This is observably different from a literal substring search: object
@@ -1153,7 +1177,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Stloc, createdArgsLocal);
         il.Emit(OpCodes.Ldloc, createdMatcherLocal);
@@ -1161,6 +1185,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, createdArgsLocal);
         il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitStringProtocolReceiverCheck(ILGenerator il, Type undefinedType,
+        MethodInfo createException, ConstructorInfo typeErrorCtor, string methodName)
+    {
+        var receiverOk = il.DefineLabel();
+        var receiverThrow = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, receiverThrow);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, undefinedType);
+        il.Emit(OpCodes.Brfalse, receiverOk);
+        il.MarkLabel(receiverThrow);
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor,
+            $"String.prototype.{methodName} called on null or undefined");
+        il.MarkLabel(receiverOk);
     }
 
     private void EmitStringMatchAllRegExp(TypeBuilder typeBuilder, EmittedRegExpRuntime regExps, StringMatchAllRegExpInputs inputs)
@@ -2238,18 +2278,24 @@ public partial class RuntimeEmitter
         StringSearchRegExpInputs inputs
     )
     {
-        // StringSearch(string str, object? pattern) -> object (index or a
+        // StringSearch(object receiver, object? pattern) -> object (index or a
         // custom @@search return value)
         var method = typeBuilder.DefineMethod(
             "StringSearchRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.String, _types.Object]
+            [_types.Object, _types.Object]
         );
+        method.SetCustomAttribute(inputs.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         regExp.StringSearch = method;
 
         var il = method.GetILGenerator();
+        EmitStringProtocolReceiverCheck(il, inputs.UndefinedType, inputs.CreateException, inputs.TSTypeErrorCtor, "search");
         EmitStringSymbolDispatchPreamble(il, inputs.StringTryInvokeSymbolMethod, inputs.Symbols.Search, 0);
+        var stringLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Stloc, stringLocal);
         var regexpLocal = il.DeclareLocal(regExp.Type);
         var isStringPatternLabel = il.DefineLabel();
 
@@ -2264,7 +2310,7 @@ public partial class RuntimeEmitter
 
         // return (double)regexp.Search(str)
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Call, regExp.InstanceSearch);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
@@ -2287,7 +2333,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Stloc, createdArgsLocal);
         il.Emit(OpCodes.Ldloc, createdMatcherLocal);

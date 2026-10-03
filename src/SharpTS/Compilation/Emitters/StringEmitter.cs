@@ -33,14 +33,20 @@ public sealed class StringEmitter : ITypeEmitterStrategy
                 return true;
         }
 
-        // replaceAll performs observable @@replace dispatch before ToString(this).
-        // Preserve a boxed String receiver until the runtime helper has offered
-        // the custom protocol method the original value.
-        if (methodName == "replaceAll")
+        // String protocol hooks receive the original receiver before ToString.
+        // Preserve boxed String identity on the direct typed path too.
+        if (methodName is "replaceAll" or "match" or "matchAll" or "search" or "split")
         {
             emitter.EmitExpression(receiver);
             emitter.EmitBoxIfNeeded(receiver);
-            EmitReplaceAll(emitter, arguments);
+            switch (methodName)
+            {
+                case "replaceAll": EmitReplaceAll(emitter, arguments); break;
+                case "match": EmitMatch(emitter, arguments); break;
+                case "matchAll": EmitMatchAll(emitter, arguments); break;
+                case "search": EmitSearch(emitter, arguments); break;
+                case "split": EmitSplit(emitter, arguments); break;
+            }
             return true;
         }
 

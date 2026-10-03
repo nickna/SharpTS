@@ -1,0 +1,1 @@
+const receiver:any={toString(){throw "unexpected";}};const value:any={[Symbol.match](s:any){console.log(this===value,s===receiver);return "hook";}};console.log(String.prototype.match.call(receiver,value));
