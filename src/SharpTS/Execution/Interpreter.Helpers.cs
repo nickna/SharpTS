@@ -26,7 +26,7 @@ public partial class Interpreter
                 value = proxy.TrapGet(name.Lexeme, this);
                 return true;
             case SharpTSClass klass:
-                value = klass.GetStaticProperty(name.Lexeme);
+                value = EvaluateGetOnClass(klass, name.Lexeme);
                 return true;
             case SharpTSInstance instance:
                 instance.SetInterpreter(this);
@@ -58,7 +58,7 @@ public partial class Interpreter
                 value = proxy.TrapGetRV(name.Lexeme, this);
                 return true;
             case SharpTSClass klass:
-                value = RuntimeValue.FromBoxed(klass.GetStaticProperty(name.Lexeme));
+                value = RuntimeValue.FromBoxed(EvaluateGetOnClass(klass, name.Lexeme));
                 return true;
             case SharpTSInstance instance:
                 instance.SetInterpreter(this);
@@ -92,7 +92,9 @@ public partial class Interpreter
                 proxy.TrapSet(name.Lexeme, value, this);
                 return true;
             case SharpTSClass klass:
-                klass.SetStaticProperty(name.Lexeme, value);
+                if (!TryAssignThroughDescriptor(klass.FindStaticPropertyDescriptor(name.Lexeme),
+                        klass, name.Lexeme, value, _environment.IsStrictMode))
+                    klass.SetStaticProperty(name.Lexeme, value, _environment.IsStrictMode);
                 return true;
             case SharpTSInstance instance:
                 instance.SetInterpreter(this);

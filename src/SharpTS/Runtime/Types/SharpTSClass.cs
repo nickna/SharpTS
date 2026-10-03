@@ -46,6 +46,9 @@ public class SharpTSClass(
     private readonly FrozenDictionary<string, ISharpTSCallable> _methods = methods.ToFrozenDictionary();
     private readonly FrozenDictionary<string, ISharpTSCallable> _staticMethods = staticMethods.ToFrozenDictionary();
     private readonly Dictionary<string, object?> _staticProperties = staticProperties;
+    // Share field storage with the ordinary descriptor implementation. Allocate
+    // descriptor metadata only when a class property is explicitly defined.
+    private SharpTSObject? _staticPropertyObject;
     private readonly FrozenDictionary<string, SharpTSFunction> _getters = getters?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
     private readonly FrozenDictionary<string, SharpTSFunction> _setters = setters?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
     private readonly FrozenDictionary<string, SharpTSFunction> _staticGetters = staticGetters?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
@@ -273,16 +276,38 @@ public class SharpTSClass(
         return Superclass?.HasStaticProperty(name) ?? false;
     }
 
-    public void SetStaticProperty(string name, object? value)
+    public void SetStaticProperty(string name, object? value, bool strictMode = false)
     {
+        if (FindStaticPropertyDescriptor(name) is { HasWritable: true, Writable: false })
+        {
+            if (strictMode)
+                throw StrictModeErrors.TypeError($"Cannot assign to read only property '{name}'");
+            return;
+        }
         if (_staticMethods.ContainsKey(name))
             _deletedStaticMethods.Add(name);
         _staticMethodCache.Remove(name);
-        _staticProperties[name] = value;
+        if (_staticPropertyObject is not null)
+            _staticPropertyObject.SetPropertyStrict(name, value, strictMode);
+        else
+            _staticProperties[name] = value;
     }
+
+    internal SharpTSPropertyDescriptor? GetOwnStaticPropertyDescriptor(string name)
+        => _staticPropertyObject?.GetOwnPropertyDescriptor(name)
+            ?? (_staticProperties.TryGetValue(name, out var value)
+                ? new SharpTSPropertyDescriptor(value, writable: true, enumerable: true, configurable: true)
+                    { HasValue = true }
+                : null);
+
+    internal SharpTSPropertyDescriptor? FindStaticPropertyDescriptor(string name)
+        => HasOwnStaticMember(name)
+            ? _staticPropertyObject?.GetOwnPropertyDescriptor(name)
+            : Superclass?.FindStaticPropertyDescriptor(name);
 
     internal bool HasOwnStaticMember(string name)
         => _staticProperties.ContainsKey(name)
+            || _staticPropertyObject?.GetOwnPropertyDescriptor(name) is not null
             || !_deletedStaticMethods.Contains(name) && _staticMethods.ContainsKey(name)
             || _staticGetters.ContainsKey(name)
             || _staticSetters.ContainsKey(name)
@@ -290,6 +315,8 @@ public class SharpTSClass(
 
     internal bool DeleteStaticProperty(string name)
     {
+        if (_staticPropertyObject is not null && !_staticPropertyObject.DeleteProperty(name))
+            return false;
         _staticProperties.Remove(name);
         if (_staticMethods.ContainsKey(name))
             _deletedStaticMethods.Add(name);
@@ -299,8 +326,12 @@ public class SharpTSClass(
 
     internal bool DefineStaticProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
-        if (descriptor.HasValue)
-            SetStaticProperty(name, descriptor.Value);
+        _staticPropertyObject ??= new SharpTSObject(_staticProperties);
+        if (!_staticPropertyObject.DefineProperty(name, descriptor))
+            return false;
+        if (_staticMethods.ContainsKey(name))
+            _deletedStaticMethods.Add(name);
+        _staticMethodCache.Remove(name);
         return true;
     }
 

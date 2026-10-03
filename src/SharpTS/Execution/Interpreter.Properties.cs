@@ -1564,6 +1564,8 @@ public partial class Interpreter
 
     private object? EvaluateGetOnClass(SharpTSClass klass, string memberName)
     {
+        if (TryReadDescriptor(klass.FindStaticPropertyDescriptor(memberName), klass, out var definedValue))
+            return definedValue;
         // ECMA-262: every class has exactly one `prototype` (an ordinary object whose
         // props are the instance methods + constructor back-ref). Without this,
         // `Error.prototype.toString` and friends throw "Static member 'prototype' does
@@ -2626,6 +2628,9 @@ public partial class Interpreter
                 return value;
 
             case TypeCategory.Class when obj is SharpTSClass klass:
+                if (TryAssignThroughDescriptor(klass.FindStaticPropertyDescriptor(memberName),
+                        klass, memberName, value, strictMode))
+                    return value;
                 if (klass.HasStaticAutoAccessor(memberName))
                 {
                     klass.SetStaticAutoAccessorValue(memberName, value);
@@ -2637,7 +2642,7 @@ public partial class Interpreter
                     staticSetterClass.BindStatic(klass).CallBoxed(this, [value]);
                     return value;
                 }
-                klass.SetStaticProperty(memberName, value);
+                klass.SetStaticProperty(memberName, value, strictMode);
                 return value;
 
             case TypeCategory.Instance when obj is SharpTSInstance instance:
