@@ -1196,10 +1196,14 @@ public class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
-    [Theory]
-    [InlineData("async_declaration", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v));")]
-    [InlineData("async_rejection_detail", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v),e=>console.log(\"rejected\",e.message));")]
-    [InlineData("async_before_await", "async function run(){class C{static value=5;}const value=C.value;await Promise.resolve(0);return value;}run().then(v=>console.log(v));")]
+    public static IEnumerable<object[]> Issue1805Programs =>
+    [
+        ["async_declaration", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v));"],
+        ["async_rejection_detail", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v),e=>console.log(\"rejected\",e.message));"],
+        ["async_before_await", "async function run(){class C{static value=5;}const value=C.value;await Promise.resolve(0);return value;}run().then(v=>console.log(v));"],
+    ];
+
+    [Theory, MemberData(nameof(Issue1805Programs))]
     public void Isolated_Issue1805OriginalPrograms_ResolveLocalClassBindings(string name, string source)
     {
         // Keep the original #1805 acceptance sources alongside the in-process regressions.
@@ -1209,9 +1213,28 @@ public class StandaloneDllTests
         var compile = IntegrationTests.CliTestHelper.RunCli(
             $"--no-tsconfig --compile \"{tempDir.GetPath("main.ts")}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
         Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
         Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
         Assert.Equal("5\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
             verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory, MemberData(nameof(Issue1805Programs))]
+    public void Isolated_Issue1805HostedPrograms_VerifyLocalClassDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport async function hosted(){return await run();}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
     }
 
     [Theory]

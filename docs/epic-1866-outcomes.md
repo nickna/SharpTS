@@ -1614,3 +1614,23 @@ ownership across optional/deferred families, #1714 isolated wrapper references
 and #1765 saved/hosted references. Quality gates and the actual AOT analyzer
 baseline pass with zero analyzer warnings. The Promise constructor diagnostic
 in #1765's wider selection remains separate and excluded from passing counts.
+
+## #1805 — Local class declarations in async functions
+
+**Outcome: demonstrated prior repair.** Main already contains `ca9dec46` (#1849).
+It records the class binding in suspension analysis and preserves its scoped
+storage name in emission. All three original programs verify and print exactly
+`5` on fresh unchanged main and current, with empty stderr and clean exit within
+the original 30 seconds. The original historical rejection/empty-output reports
+remain in #1805; this child does not claim a new compiler repair.
+
+All **150 selected checks pass**, including the three original standalone outputs,
+three added hosted module compilations and existing ordinary/async/generator,
+declaration/expression, shadowing, suspended definition and computed-key controls.
+Native class initialization retains successful/failed caching, original exception
+identity, fresh ownership and its established metadata boundary across standalone
+and hosted feature masks. TypeScript/Node confirm each original expectation.
+Saved guests verify IL, exact stdout, empty stderr, no SharpTS reference/copy and
+clean exit within 30 seconds. Hosted exports are not executed. Quality gates pass;
+the actual AOT analyzer baseline passes with zero warnings on the unchanged
+production source used for this test/documentation task.
