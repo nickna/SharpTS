@@ -86,11 +86,13 @@ internal static class EmitTypeDefinitions
         Type? returnType,
         Type[]? parameterTypes,
         CallingConvention nativeCallConvention,
-        CharSet nativeCharSet)
+        CharSet nativeCharSet,
+        string? entryPoint = null)
     {
         return typeBuilder.DefinePInvokeMethod(
             name,
             dllName,
+            entryPoint ?? name,
             attributes,
             callingConvention,
             returnType,

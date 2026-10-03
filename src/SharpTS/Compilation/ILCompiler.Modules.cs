@@ -828,6 +828,7 @@ public partial class ILCompiler
 
         var il = mainMethod.GetILGenerator();
 
+        EmitConfigureWindowsErrorReporting(il);
         EmitInitializeConsoleOutput(il);
 
         MethodBuilder? hostedInitialize = null;

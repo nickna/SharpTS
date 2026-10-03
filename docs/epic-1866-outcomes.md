@@ -2010,3 +2010,42 @@ A supplemental synchronous void-main compiler-API control exposes an independent
 StackUnderflow at an unconditional result pop. Its source/failure remain retained
 locally and excluded from passing counts. This repair does not claim general
 user-main IL correctness or change the two exact original issue programs.
+
+## #1772 — Windows unhandled-error shutdown
+
+**Outcome: investigated and repaired.** Fresh unchanged main and pre-repair
+current reproduce both original 30-second timeouts under the restricted Windows
+launcher, in normal and CreateNoWindow contexts. Each prints its original error
+and remains alive. Forced kills remain failures; pipes close promptly after
+termination. The same verified assembly exits in about 100 ms outside that
+restricted context. A minimal .NET console also reproduces the context-dependent
+timeout; disabling Windows fatal-error reporting makes it finish in 56–60 ms.
+These controlled comparisons isolate the Windows reporting path rather than
+compiler semantics or redirected-pipe capture. The precise internal Windows
+wait was not inspected; no visible-dialog observation is claimed.
+
+Generated executable entry points now preserve inherited error-mode flags and
+add SEM_NOGPFAULTERRORBOX when running on Windows, stderr is redirected, and the
+generated assembly owns the entry point. Interactive processes and embedding
+hosts retain their policy. This flag disables Windows Error Reporting, as
+specified by Microsoft's [SetErrorMode documentation](https://learn.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-seterrormode).
+Primitive Windows imports use the existing persisted-metadata seam with explicit
+native entry points; the native compiler host does not marshal them.
+
+Repaired saved originals exit naturally in 65–130 ms under the original
+restricted launcher and close both pipes, preserving original error text,
+stack traces and nonzero CLR status. Function source support remains unchanged.
+Forced standalone eval still reports the missing bridge; normal deployment,
+repaired by #1771, preserves the original `3` with clean exit/empty stderr.
+The full Node expectations and source programs remain unchanged and distinct
+from supported-boundary diagnostic expectations.
+
+All **261 selected checks pass**, including independent exit/pipe-closure
+regressions for both originals, ordinary unhandled throws and deployed eval in
+both contexts; embedding host policy, Function boundaries, eval deployment,
+Unicode output, entry-point contexts and native process/filesystem metadata.
+The regression supplies EOF, captures both streams concurrently, requires
+natural process completion within 30 seconds and closes pipes within five more
+seconds. It never counts forced kills as successful completion. Quality gates
+and the actual AOT analyzer baseline pass with zero analyzer warnings. No
+metadata ownership audit closure is claimed.

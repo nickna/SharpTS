@@ -19,6 +19,99 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.WindowsProcessShutdownTests.OriginalCases), MemberType = typeof(SharedTests.WindowsProcessShutdownTests))]
+    public void Isolated_Issue1772UnhandledOriginals_ExitAndClosePipes(string name, string source, string nodeExpected)
+    {
+        Assert.NotEmpty(nodeExpected); // Full reference retained separately from the supported-boundary diagnostic.
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        foreach (bool hidden in new[] { false, true })
+        {
+            var result = CaptureBoundedProcess(output, hidden);
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Equal(name == "global_receiver" ? "true true\n" : "", result.Stdout);
+            Assert.Contains("Unhandled exception.", result.Stderr);
+            Assert.Contains(name == "global_receiver" ? "Dynamic Function() construction with source text is not supported" : "SharpTS runtime not present", result.Stderr);
+        }
+    }
+
+    [Fact]
+    public void Isolated_Issue1772DeployedIndirectEval_CompletesWithOriginalOutput()
+    {
+        var original = SharedTests.WindowsProcessShutdownTests.OriginalCases().Single(row => (string)row[0] == "indirect_dynamic");
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", (string)original[1]);
+        var output = directory.GetPath("deployed.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.True(File.Exists(directory.GetPath("SharpTS.dll")));
+        foreach (bool hidden in new[] { false, true })
+        {
+            var result = CaptureBoundedProcess(output, hidden);
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal((string)original[2], result.Stdout);
+            Assert.Empty(result.Stderr);
+        }
+    }
+
+    [Fact]
+    public void Isolated_Issue1772OrdinaryUnhandledThrow_ExitsAndClosesPipes()
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", "console.log(\"before\");throw new Error(\"process-guard\");");
+        var output = directory.GetPath("throw.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        foreach (bool hidden in new[] { false, true })
+        {
+            var result = CaptureBoundedProcess(output, hidden);
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Equal("before\n", result.Stdout);
+            Assert.Contains("process-guard", result.Stderr);
+        }
+    }
+
+    private static (int ExitCode, string Stdout, string Stderr) CaptureBoundedProcess(string output, bool hidden)
+    {
+        var start = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false, CreateNoWindow = hidden,
+            RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
+            WorkingDirectory = Path.GetDirectoryName(output)!
+        };
+        start.ArgumentList.Add(output);
+        using var process = Process.Start(start)!;
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        process.StandardInput.Close();
+        bool completed = process.WaitForExit(30000);
+        if (!completed)
+        {
+            TryTerminateProcessTree(process);
+            process.WaitForExit(5000);
+        }
+        bool drained = Task.WaitAll([stdout, stderr], 5000);
+        Assert.True(completed, "Unhandled compiled error exceeded the original 30-second process-exit deadline; forced kill is a failure.");
+        Assert.True(drained, "Process exited but redirected pipes did not close.");
+        return (process.ExitCode, stdout.Result.Replace("\r\n", "\n"), stderr.Result.Replace("\r\n", "\n"));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.WindowsUnicodeOutputTests.Cases), MemberType = typeof(SharedTests.WindowsUnicodeOutputTests))]
     public void Isolated_Issue1743UnicodeOutput_PreservesUtf8InBothWindowsProcessContexts(string name, string source, string expected)
     {
