@@ -988,7 +988,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.Interface,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.Sentinels.UndefinedInstance
+                runtime.Sentinels.UndefinedInstance,
+                runtime.NumericCoercion
             )
         );
         EmitInvokeMethodValue(

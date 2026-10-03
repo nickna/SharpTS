@@ -63,10 +63,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, mapFnOkLabel);
-        // Provided value: must be callable. $TSFunction passes; everything else throws.
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
-        il.Emit(OpCodes.Brtrue, mapFnOkLabel);
+        // Validate the callable carriers supported by InvokeMethodValue before
+        // consuming even an empty source. Bound wrappers and built-in values
+        // have distinct CLR representations from an ordinary $TSFunction.
+        List<Type> callableTypes =
+        [
+            runtime.FunctionValues.Type,
+            runtime.FunctionBindings.BoundType,
+            runtime.FunctionBindings.AnyType,
+            runtime.FunctionBindings.BindType,
+            runtime.FunctionBindings.CallType,
+            runtime.FunctionBindings.ApplyType,
+            runtime.ArrayOperations.BoundMethodType,
+            runtime.ReflectedMethods.CallableType,
+            _types.FuncObjectArrayToObject,
+            _types.MethodBase,
+            _types.Type
+        ];
+        if (runtime.Map is { } map) callableTypes.Add(map.BoundMethodType);
+        if (runtime.Set is { } set) callableTypes.Add(set.BoundMethodType);
+        if (runtime.TypedArrays.Implementation is { } typedArrays) callableTypes.Add(typedArrays.BoundMethodType);
+        if (runtime.TextEncoding is { } encoding) callableTypes.Add(encoding.DecodeMethodType);
+        foreach (var callableType in callableTypes)
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, callableType);
+            il.Emit(OpCodes.Brtrue, mapFnOkLabel);
+        }
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.from: mapfn argument must be callable");
         il.MarkLabel(mapFnOkLabel);
 

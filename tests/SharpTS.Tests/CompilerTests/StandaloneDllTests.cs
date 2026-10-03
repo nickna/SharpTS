@@ -19,6 +19,47 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Isolated_Issue1713CallableArrayFromMappers_Execute(bool controls)
+    {
+        var source = controls ? """
+            function add(bias: number, value: number, index: number) { return this.base + bias + value + index; }
+            const bound: any = add.bind({base: 10}, 100);
+            console.log(Array.from([1, 2], bound, {base: 90}).join(','));
+            const from: any = Array.from;
+            console.log(from([1, 2], undefined).join(','));
+            for (const mapper of [null, {}, 0, 'x', Symbol('x')]) {
+                try { from([], mapper); } catch (error) { console.log(error instanceof TypeError); }
+            }
+            const numeric: any = Number;
+            console.log(numeric(), numeric(3n), Number.isNaN(numeric(undefined)));
+            try { numeric(Symbol('x')); } catch (error) { console.log(error instanceof TypeError); }
+            class ConstructorOnly {}
+            console.log(from([], ConstructorOnly).length);
+            try { from([1], ConstructorOnly); } catch (error) { console.log(error instanceof TypeError); }
+            """ : """
+            function twice(x: number) { return x * 2; }
+            const bound: any = twice.bind(null);
+            console.log(Array.from([1, 2], twice).join(","));
+            console.log(Array.from([1, 2], bound).join(","));
+            console.log(Array.from(["1", "2"], Number).join(","));
+            """;
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath("array_from.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify --standalone",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        var expected = controls ? "111,113\n1,2\ntrue\ntrue\ntrue\ntrue\ntrue\n0 3 true\ntrue\n0\ntrue\n" : "2,4\n2,4\n1,2\n";
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.PromiseModuleIdentityTests.ImportOrders), MemberType = typeof(SharedTests.PromiseModuleIdentityTests))]
     public void Isolated_Issue1910PromiseModules_HaveUniqueTypeDeclarationsAndExports(string imports)
     {

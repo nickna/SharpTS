@@ -331,3 +331,29 @@ Release builds, quality gates and the actual AOT analyzer baseline passed with
 zero analyzer warnings. No hosted execution is claimed. The fixture README
 preserves the source/deadline gap and separates metadata correctness from runtime
 success.
+
+## #1713 — Callable Array.from mappers
+
+**Outcome: original compiled defect repaired.** The issue's unchanged source
+passes Node and TypeScript and interprets correctly at unchanged `0ad37b57` and
+pre-repair `d41c975e`; both compiled baselines pass IL verification but throw on
+the bound mapper. Validation now recognizes the emitted callable carriers and
+retains receiver-aware invocation. The indirect Number value now uses explicit
+numeric coercion through the existing numeric runtime owner instead of returning
+null. Original output remains `2,4`, `2,4`, `1,2`.
+
+All 211 affected mapper/function-wrapper/invocation/numeric tests passed with
+compiled IL verification, including two isolated CLI outputs with no SharpTS
+assembly reference. Controls cover bound arguments and receiver precedence,
+bound array methods, extracted call wrappers, omitted/undefined mappers, invalid
+explicit mappers on empty inputs, BigInt and Symbol coercion. Release builds,
+quality gates and actual AOT/trim/single-file analyzer checks passed with zero
+analyzer warnings; the existing NU1902 package warning remains.
+
+A separately labelled class-mapper control exposes an unchanged interpreter
+call-versus-construction defect: Node/compiled print `0` then `true`, while both
+interpreter baselines print `0` then `accepted`. Its source is retained in
+`tests/fixtures/ArrayFromCallableMappers`, with compiled-only coverage and an
+explicit limitation. Automatic approval review rejected publishing this adjacent
+issue as outside the frozen epic authorization; it remains a local finding.
+No proxy-mapper or hosted execution coverage is claimed.

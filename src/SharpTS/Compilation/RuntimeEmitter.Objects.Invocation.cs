@@ -43,7 +43,8 @@ public partial class RuntimeEmitter
         Type IHasFieldsInterface,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
-        FieldInfo UndefinedInstance
+        FieldInfo UndefinedInstance,
+        EmittedNumericCoercionRuntime NumericCoercion
     );
 
     private readonly record struct InvokeMethodValueInputs(
@@ -430,6 +431,31 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notObjectTypeLabel);
+
+        // Number's value form must perform the same explicit numeric coercion
+        // as direct Number(x), including BigInt and the no-argument zero default.
+        var notNumberTypeLabel = il.DefineLabel();
+        var numberNoArgLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.Type);
+        il.Emit(OpCodes.Ldtoken, _types.Double);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", _types.Type, _types.Type));
+        il.Emit(OpCodes.Brfalse, notNumberTypeLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brfalse, numberNoArgLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ConvertToNumber);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(numberNoArgLabel);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notNumberTypeLabel);
 
         // String call form (`Array.prototype.map.call(values, String)`). Bare
         // String is represented by the System.String Type token, so dynamic
