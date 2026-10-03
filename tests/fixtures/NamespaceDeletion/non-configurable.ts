@@ -1,0 +1,1 @@
+namespace Values {export const value=3;}const values:any=Values;Object.defineProperty(values,"value",{value:3,configurable:false});function run(){"use strict";try{delete values.value;}catch(e){console.log(e.name);}try{delete values["value"];}catch(e){console.log(e.name);}console.log(values.value);}run();

@@ -45,7 +45,7 @@ public sealed class EmittedNamespaceRuntimeTests
     [Fact]
     public void HelperAcceptsOnlyItsModuleNamespaceOwnerAndUndefinedField()
     {
-        Assert.Equal(5, Handles.Length);
+        Assert.Equal(7, Handles.Length);
         Assert.NotSame(new EmittedRuntime().Namespaces, new EmittedRuntime().Namespaces);
         Assert.Null(typeof(EmittedRuntime).GetProperty("Namespaces")!.SetMethod);
         foreach (string name in new[] { "TSNamespaceType", "TSNamespaceCtor", "TSNamespaceGet", "TSNamespaceSet" })
@@ -66,6 +66,7 @@ public sealed class EmittedNamespaceRuntimeTests
         Assert.Same(owner.Type, owner.Constructor.DeclaringType);
         Assert.Same(owner.Type, owner.Get.DeclaringType); Assert.Same(owner.Type, owner.Set.DeclaringType);
         Assert.Same(owner.Type, owner.Bind.DeclaringType);
+        Assert.Same(owner.Type, owner.Has.DeclaringType); Assert.Same(owner.Type, owner.Delete.DeclaringType);
         Complete(owner);
         var loaded = SaveVerifyLoad(builder);
         VerifyNamespace(loaded.GetType("$TSNamespace")!, ReadField(loaded, undefined));
@@ -88,6 +89,7 @@ public sealed class EmittedNamespaceRuntimeTests
             Assert.Same(builder, owner.Type.Assembly); Assert.Same(owner.Type, owner.Constructor.DeclaringType);
             Assert.Same(owner.Type, owner.Get.DeclaringType); Assert.Same(owner.Type, owner.Set.DeclaringType);
             Assert.Same(owner.Type, owner.Bind.DeclaringType);
+            Assert.Same(owner.Type, owner.Has.DeclaringType); Assert.Same(owner.Type, owner.Delete.DeclaringType);
             var loaded = SaveVerifyLoad(builder);
             VerifyNamespace(loaded.GetType("$TSNamespace")!, ReadField(loaded, runtime.Sentinels.UndefinedInstance));
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
@@ -129,6 +131,34 @@ public sealed class EmittedNamespaceRuntimeTests
         NamespaceBindingCell.Value = 9.0;
         Assert.Equal(9.0, get.Invoke(first, ["live"]));
         Assert.Same(undefined, get.Invoke(second, ["live"]));
+
+        var has = type.GetMethod("Has")!; var delete = type.GetMethod("Delete")!;
+        Assert.True(set.MetadataToken < bind.MetadataToken && bind.MetadataToken < has.MetadataToken
+            && has.MetadataToken < delete.MetadataToken && delete.MetadataToken < display.MetadataToken);
+        foreach (var method in new[] { has, delete })
+        {
+            Assert.True(method.IsPublic && !method.IsStatic && method.ReturnType == typeof(bool));
+            Assert.Equal(new[] { typeof(string) }, method.GetParameters().Select(p => p.ParameterType));
+        }
+        var storage = (Dictionary<string, object?>)fields[0].GetValue(first)!;
+        Assert.Equal(true, has.Invoke(first, ["nil"]));
+        set.Invoke(first, ["empty", undefined]);
+        Assert.Equal(true, has.Invoke(first, ["empty"]));
+        Assert.Equal(true, delete.Invoke(first, ["empty"]));
+        Assert.False(storage.ContainsKey("empty"));
+        Assert.True(storage.ContainsKey("live"));
+        Assert.Equal(true, delete.Invoke(first, ["live"]));
+        Assert.False(storage.ContainsKey("live"));
+        Assert.Equal(false, has.Invoke(first, ["live"]));
+        Assert.Same(undefined, NamespaceBindingCell.Value);
+        Assert.Same(undefined, get.Invoke(first, ["live"]));
+        Assert.Equal(true, delete.Invoke(first, ["live"]));
+        Assert.Equal(true, delete.Invoke(first, ["missing"]));
+        Assert.Null(get.Invoke(first, ["nil"]));
+        set.Invoke(first, ["live", 11.0]);
+        Assert.True(storage.ContainsKey("live"));
+        Assert.Equal(11.0, NamespaceBindingCell.Value);
+        Assert.Equal(11.0, get.Invoke(first, ["live"]));
     }
 
     private static FieldBuilder DefineUndefined(ModuleBuilder module)

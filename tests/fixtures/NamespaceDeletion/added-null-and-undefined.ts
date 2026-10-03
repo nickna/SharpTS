@@ -1,0 +1,1 @@
+namespace Values {export const value=3;}const values:any=Values;values.nil=null;values.empty=undefined;values.extra=9;console.log(delete values.nil,delete values["empty"],delete values.extra,values.nil===undefined,values.value);

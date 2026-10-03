@@ -1,0 +1,1 @@
+namespace Values {export const value=3;export const other=7;}const first:any=Values;const second:any=Values;console.log(delete first.value,delete first.value,second["value"]===undefined,second.other,first===second);

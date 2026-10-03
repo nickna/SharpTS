@@ -1,0 +1,1 @@
+"use strict";namespace Values {export const value=3;}const values:any=Values;Object.freeze(values);try{delete values.value;}catch(e){console.log(e.name);}try{delete values["value"];}catch(e){console.log(e.name);}console.log(delete values.missing,values.value);

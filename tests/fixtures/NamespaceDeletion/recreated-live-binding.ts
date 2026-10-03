@@ -1,0 +1,1 @@
+namespace Values {export let value:any=3;export function read(){return value;}}const values:any=Values;delete values.value;console.log(values.read()===undefined,Values.value===undefined);values["value"]=9;console.log(values.value,Values.value,values.read());

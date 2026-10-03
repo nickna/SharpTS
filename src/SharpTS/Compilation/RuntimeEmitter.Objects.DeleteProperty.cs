@@ -19,6 +19,7 @@ public partial class RuntimeEmitter
         MethodInfo IHasFieldsFieldsGetter,
         Type IHasFieldsInterface,
         MethodBuilder InvokeMethodUnwrapped,
+        EmittedNamespaceRuntime Namespaces,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectStateRuntime ObjectState,
         EmittedObjectStorageRuntime ObjectStorage,
@@ -38,6 +39,7 @@ public partial class RuntimeEmitter
         MethodInfo IHasFieldsFieldsGetter,
         Type IHasFieldsInterface,
         MethodBuilder InvokeMethodUnwrapped,
+        EmittedNamespaceRuntime Namespaces,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectStateRuntime ObjectState,
         EmittedObjectStorageRuntime ObjectStorage,
@@ -57,6 +59,7 @@ public partial class RuntimeEmitter
         MethodInfo IHasFieldsFieldsGetter,
         Type IHasFieldsInterface,
         MethodBuilder InvokeMethodUnwrapped,
+        EmittedNamespaceRuntime Namespaces,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectStateRuntime ObjectState,
         EmittedObjectStorageRuntime ObjectStorage,
@@ -91,6 +94,7 @@ public partial class RuntimeEmitter
                 inputs.IHasFieldsFieldsGetter,
                 inputs.IHasFieldsInterface,
                 inputs.InvokeMethodUnwrapped,
+                inputs.Namespaces,
                 inputs.ObjectDescriptors,
                 inputs.ObjectState,
                 inputs.ObjectStorage,
@@ -340,6 +344,32 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, ordinaryDeleteDescriptorAllowedLabel);
         EmitDeleteFail("' of object");
         il.MarkLabel(ordinaryDeleteDescriptorAllowedLabel);
+
+        var notNamespace = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.Namespaces.Type);
+        il.Emit(OpCodes.Brfalse, notNamespace);
+        var namespaceDeleteAllowed = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.Namespaces.Type);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, inputs.Namespaces.Has);
+        il.Emit(OpCodes.Brfalse, namespaceDeleteAllowed);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsSealed);
+        il.Emit(OpCodes.Brfalse, namespaceDeleteAllowed);
+        EmitDeleteFail("' of a sealed namespace");
+        il.MarkLabel(namespaceDeleteAllowed);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.Namespaces.Type);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, inputs.Namespaces.Delete);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notNamespace);
 
         // Check if $TSObject
         var sharpTSObjectLabel = il.DefineLabel();
@@ -1017,6 +1047,7 @@ public partial class RuntimeEmitter
                 inputs.IHasFieldsFieldsGetter,
                 inputs.IHasFieldsInterface,
                 inputs.InvokeMethodUnwrapped,
+                inputs.Namespaces,
                 inputs.ObjectDescriptors,
                 inputs.ObjectState,
                 inputs.ObjectStorage,

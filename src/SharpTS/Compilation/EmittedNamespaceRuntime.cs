@@ -44,6 +44,20 @@ public sealed class EmittedNamespaceRuntime
         internal set => SetHandle(ref _bind, value);
     }
 
+    private MethodBuilder? _has;
+    public MethodBuilder Has
+    {
+        get => Require(_has);
+        internal set => SetHandle(ref _has, value);
+    }
+
+    private MethodBuilder? _delete;
+    public MethodBuilder Delete
+    {
+        get => Require(_delete);
+        internal set => SetHandle(ref _delete, value);
+    }
+
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException("Namespace metadata '" + name + "' has not been declared.");
 
@@ -70,6 +84,8 @@ public sealed class EmittedNamespaceRuntime
         _ = Get;
         _ = Set;
         _ = Bind;
+        _ = Has;
+        _ = Delete;
         IsComplete = true;
     }
 }

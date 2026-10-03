@@ -62,7 +62,14 @@ public partial class RuntimeEmitter
 
         var getIL = getBuilder.GetILGenerator();
         var valueLocal = getIL.DeclareLocal(_types.Object);
-        var foundLabel = getIL.DefineLabel();
+        var missingLabel = getIL.DefineLabel();
+
+        getIL.Emit(OpCodes.Ldarg_0);
+        getIL.Emit(OpCodes.Ldfld, membersField);
+        getIL.Emit(OpCodes.Ldarg_1);
+        getIL.Emit(OpCodes.Ldloca, valueLocal);
+        getIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
+        getIL.Emit(OpCodes.Brfalse, missingLabel);
 
         // Namespace bodies and object aliases share the exported backing field.
         var bindingLocal = getIL.DeclareLocal(_types.FieldInfo);
@@ -79,16 +86,10 @@ public partial class RuntimeEmitter
         getIL.Emit(OpCodes.Ret);
         getIL.MarkLabel(unboundGet);
 
-        getIL.Emit(OpCodes.Ldarg_0);
-        getIL.Emit(OpCodes.Ldfld, membersField);
-        getIL.Emit(OpCodes.Ldarg_1);
-        getIL.Emit(OpCodes.Ldloca, valueLocal);
-        getIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
-        getIL.Emit(OpCodes.Brtrue, foundLabel);
-        getIL.Emit(OpCodes.Ldsfld, undefinedInstance);
-        getIL.Emit(OpCodes.Ret);
-        getIL.MarkLabel(foundLabel);
         getIL.Emit(OpCodes.Ldloc, valueLocal);
+        getIL.Emit(OpCodes.Ret);
+        getIL.MarkLabel(missingLabel);
+        getIL.Emit(OpCodes.Ldsfld, undefinedInstance);
         getIL.Emit(OpCodes.Ret);
 
         // Set method: public void Set(string name, object? value) => _members[name] = value;
@@ -131,7 +132,49 @@ public partial class RuntimeEmitter
         bindIL.Emit(OpCodes.Ldarg_1);
         bindIL.Emit(OpCodes.Ldarg_2);
         bindIL.Emit(OpCodes.Callvirt, _types.GetMethod(bindingMapType, "set_Item", _types.String, _types.FieldInfo));
+        bindIL.Emit(OpCodes.Ldarg_0);
+        bindIL.Emit(OpCodes.Ldfld, membersField);
+        bindIL.Emit(OpCodes.Ldarg_1);
+        bindIL.Emit(OpCodes.Ldarg_2);
+        bindIL.Emit(OpCodes.Ldnull);
+        bindIL.Emit(OpCodes.Callvirt, _types.FieldInfoGetValue);
+        bindIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         bindIL.Emit(OpCodes.Ret);
+
+        var hasBuilder = typeBuilder.DefineMethod("Has", MethodAttributes.Public,
+            _types.Boolean, [_types.String]);
+        namespaces.Has = hasBuilder;
+        var hasIL = hasBuilder.GetILGenerator();
+        hasIL.Emit(OpCodes.Ldarg_0);
+        hasIL.Emit(OpCodes.Ldfld, membersField);
+        hasIL.Emit(OpCodes.Ldarg_1);
+        hasIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
+        hasIL.Emit(OpCodes.Ret);
+
+        var deleteBuilder = typeBuilder.DefineMethod("Delete", MethodAttributes.Public,
+            _types.Boolean, [_types.String]);
+        namespaces.Delete = deleteBuilder;
+        var deleteIL = deleteBuilder.GetILGenerator();
+        var deletedBinding = deleteIL.DeclareLocal(_types.FieldInfo);
+        var deleteDone = deleteIL.DefineLabel();
+        deleteIL.Emit(OpCodes.Ldarg_0);
+        deleteIL.Emit(OpCodes.Ldfld, membersField);
+        deleteIL.Emit(OpCodes.Ldarg_1);
+        deleteIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
+        deleteIL.Emit(OpCodes.Brfalse, deleteDone);
+        deleteIL.Emit(OpCodes.Ldarg_0);
+        deleteIL.Emit(OpCodes.Ldfld, bindingsField);
+        deleteIL.Emit(OpCodes.Ldarg_1);
+        deleteIL.Emit(OpCodes.Ldloca, deletedBinding);
+        deleteIL.Emit(OpCodes.Callvirt, _types.GetMethod(bindingMapType, "TryGetValue", _types.String, _types.FieldInfo.MakeByRefType()));
+        deleteIL.Emit(OpCodes.Brfalse, deleteDone);
+        deleteIL.Emit(OpCodes.Ldloc, deletedBinding);
+        deleteIL.Emit(OpCodes.Ldnull);
+        deleteIL.Emit(OpCodes.Ldsfld, undefinedInstance);
+        deleteIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.FieldInfo, "SetValue", _types.Object, _types.Object));
+        deleteIL.MarkLabel(deleteDone);
+        deleteIL.Emit(OpCodes.Ldc_I4_1);
+        deleteIL.Emit(OpCodes.Ret);
 
         // ToString method: public override string ToString() => $"[namespace {Name}]"
         var toStringBuilder = typeBuilder.DefineMethod(

@@ -1316,3 +1316,32 @@ analyzer baseline pass with zero analyzer warnings.
 `tests/fixtures/NamespaceMissingMembers` preserves originals and controls.
 Hosted checks cover metadata/deployment, without claiming guest execution.
 Actual deletion remains the separate #1779 task.
+
+## #1779 — Observable namespace property deletion
+
+**Outcome: repaired.** Named and computed deletion now remove namespace storage
+entries. Bound exported fields become undefined on deletion and remain connected
+when a property is recreated. Fresh unchanged main and pre-repair current,
+including #1778, print `true false` for the unchanged original; current prints
+the reference `true true`. Aliases observe missing values, repeated/missing
+deletion succeeds, and unrelated properties remain intact.
+
+All **53 focused cases pass**, including eleven compiled references, eleven
+isolated saved standalone outputs and scoped native namespace/deletion helpers.
+Native checks inspect `_members` independently of Get, distinguish present
+undefined/null, validate Has/Delete ABI and ordering, preserve live recreation,
+and exercise all four strict/sloppy named/computed deletion paths. Frozen/sealed
+and non-configurable properties remain present; strict functions throw TypeError
+while missing deletion succeeds. Reused minimal/optional standalone and hosted
+emitters preserve output ownership and deployment. Full TypeScript compilation
+and Node confirm every guest expectation. Saved outputs verify IL, exact stdout,
+empty stderr, no SharpTS reference/copy and clean exit within 30 seconds.
+
+The selected namespace/module/deletion/integrity/Reflect suite passes **3,149
+tests**, retaining seven established namespace class IL failures owned by #1781.
+Quality gates and the actual AOT analyzer baseline pass with zero warnings.
+`tests/fixtures/NamespaceDeletion` preserves originals, controls and three
+independent diagnostics: namespace descriptor-value reads, Reflect's sealed
+deletion fallback and saved script initialization's top-level strict deletion.
+Each reproduces unchanged on fresh main/current and is excluded from passing
+counts. Hosted coverage verifies metadata/deployment rather than guest execution.
