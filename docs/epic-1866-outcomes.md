@@ -756,3 +756,29 @@ is included in passing counts for that engine. No general request queue,
 delegated throw-method protocol or hosted execution repair is claimed. Active
 delegation retains its existing throw path so a request cannot linger until
 an unrelated ordinary yield.
+
+## #1733 — Async delegation completion
+
+**Outcome: repaired.** Compiled async `yield*` preserves the delegate's final
+result value; synchronous generators use their existing public next(v)
+protocol for sent values and completion. The interpreter shares sync/async
+generator driving and preserves explicit null completion. Original async/sync
+aggregates and direct completion records now match Node. Fresh unchanged main
+reproduces both `NaN` aggregates and both missing completions with verified IL,
+clean exit and empty stderr; the original values-only control remains correct.
+
+All **852 selected tests pass** with compiled IL verification, including native
+runtime ownership, generator lifecycles, retained #1732 injection and iterator
+regressions. Fourteen references run in both engines and as isolated standalone
+saved output, covering completion identity, empty and nested pending delegates,
+sent values, natural/error cleanup and cleanup before a later ordinary throw.
+Saved outputs omit runtime references/copies and require exact Node stdout,
+clean exit and empty stderr within 30 seconds. All sixteen references pass
+Node and TypeScript. Quality gates and the actual AOT analyzer baseline pass
+with zero analyzer warnings.
+
+`tests/fixtures/AsyncGeneratorDelegationCompletion` retains separate unawaited
+async-generator return-promise failures, reproduced on unchanged main even
+without delegation and excluded from passing counts. No general promise-return
+adoption, external delegated return/throw protocol, custom async adapter,
+compiled async string iteration or hosted execution repair is claimed.

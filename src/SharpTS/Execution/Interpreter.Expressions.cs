@@ -236,11 +236,8 @@ public partial class Interpreter
 
         object? result = await activeGenerator.OnYieldAsync(value, yieldExpr.IsDelegating);
 
-        // For a plain `yield`, the resume value is delivered verbatim (so `next(null)` yields null and a
-        // bare next() yields undefined). For `yield*`, a non-generator delegate's completion value is
-        // undefined; coalesce null → undefined to preserve that.
-        if (yieldExpr.IsDelegating)
-            return RuntimeValue.FromBoxed(result ?? SharpTSUndefined.Instance);
+        // Both a sent value and a delegate completion preserve explicit null.
+        // Iterables without a completion value already return the undefined sentinel.
         return RuntimeValue.FromBoxed(result);
     }
 

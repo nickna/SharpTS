@@ -1,0 +1,1 @@
+async function* inner(){yield 2;yield 3;return 4;}async function* outer(){return yield* inner();}async function run(){const g=outer();const a=await g.next();const b=await g.next();const c=await g.next();console.log(a.value,a.done,b.value,b.done,c.value,c.done);}run();

@@ -30,6 +30,34 @@ public partial class AsyncGeneratorMoveNextEmitter
     // be routed). Saved/restored around each region so nesting is handled correctly.
     private bool _inHandlerBody;
 
+    // A protocol call or awaiter result cannot span a suspension. Capture
+    // failures in a short protected segment and use the active guest handler.
+    private void EmitCaptureTryOperation(Action emit)
+    {
+        if (_currentTryExceptionLocal is null)
+        {
+            emit();
+            return;
+        }
+        _il.BeginExceptionBlock();
+        emit();
+        _il.BeginCatchBlock(typeof(Exception));
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.WrapException);
+        _il.Emit(OpCodes.Stloc, _currentTryExceptionLocal);
+        // A failed delegated step ends yield*. A handler can suspend at an
+        // ordinary yield next, which must not still look like delegation.
+        if (_builder.DelegatedAsyncEnumeratorField is { } delegation)
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Stfld, delegation);
+        }
+        _il.Emit(OpCodes.Ldc_I4_1);
+        _il.Emit(OpCodes.Stloc, _currentTryExceptionPresentLocal!);
+        _il.Emit(OpCodes.Leave, _currentTryCleanupLabel);
+        _il.EndExceptionBlock();
+    }
+
     private void EmitInjectedYieldThrow()
     {
         var normalResumeLabel = _il.DefineLabel();

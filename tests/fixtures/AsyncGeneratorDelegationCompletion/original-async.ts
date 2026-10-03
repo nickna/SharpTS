@@ -1,0 +1,1 @@
+async function* inner(){yield 2;yield await Promise.resolve(3);return 4;}async function* outer(){const result=yield* inner();yield result+1;}async function run(){let total=0;for await(const n of outer())total+=n;console.log(total);}run();
