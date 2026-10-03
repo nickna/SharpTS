@@ -125,6 +125,11 @@ public partial class GeneratorMoveNextEmitter
         if (chain.Count == 0)
         {
             // No intervening finally: store straight into the enclosing try and branch to its catch.
+            // A handler exception replaces a pending return/break/continue; otherwise
+            // that old exit wins at the enclosing finally's dispatch and hides it.
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Stfld, GetPendingExitField());
             loadValue();
             _il.Emit(OpCodes.Stloc, encl.CaughtException);
             _il.Emit(OpCodes.Ldc_I4_1);
@@ -141,6 +146,9 @@ public partial class GeneratorMoveNextEmitter
         int code = _nextExitCode++;
         _exitTerminals[code] = () =>
         {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Stfld, GetPendingExitField());
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, GetPendingExceptionField());
             _il.Emit(OpCodes.Stloc, encl.CaughtException);
@@ -330,6 +338,12 @@ public partial class GeneratorMoveNextEmitter
     /// </summary>
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
+        t = t with
+        {
+            TryBlock = LowerUsingScopes(t.TryBlock),
+            CatchBlock = t.CatchBlock is null ? null : LowerUsingScopes(t.CatchBlock),
+            FinallyBlock = t.FinallyBlock is null ? null : LowerUsingScopes(t.FinallyBlock)
+        };
         bool hasYields = AnyStmtContainsSuspension(t.TryBlock)
             || (t.CatchBlock != null && AnyStmtContainsSuspension(t.CatchBlock))
             || (t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock));

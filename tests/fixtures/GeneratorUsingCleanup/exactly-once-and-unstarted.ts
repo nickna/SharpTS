@@ -1,0 +1,1 @@
+let calls=0;function* values(){using r={[Symbol.dispose](){calls++;}};yield 1;}const a:any=values();console.log(a.return(9).value,calls);const b:any=values();console.log(b.next().value,calls);console.log(b.return(8).value,calls);console.log(b.next().done,b.return(7).value,calls);

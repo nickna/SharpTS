@@ -231,6 +231,19 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
 
     #region Declarations
 
+    protected override void VisitUsing(Stmt.Using stmt)
+    {
+        foreach (var binding in stmt.Bindings)
+        {
+            Visit(binding.Initializer);
+            if (binding.Name is null) continue;
+            if (_arrowDepth > 0)
+                CurrentScope.TryAdd(binding.Name.Lexeme, binding.Name.Lexeme);
+            else
+                DeclareBlockScoped(binding, binding.Name.Lexeme);
+        }
+    }
+
     protected override void VisitConst(Stmt.Const stmt)
     {
         base.VisitConst(stmt);   // initializer is evaluated before the binding enters scope

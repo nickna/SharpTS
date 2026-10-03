@@ -3384,10 +3384,6 @@ public partial class ILEmitter
         IL.EndExceptionBlock();
     }
 
-    /// <summary>
-    /// Emits disposal code for using declaration resources.
-    /// Disposes in reverse order (LIFO).
-    /// </summary>
     private readonly record struct UsingResourceLocals(LocalBuilder Resource, LocalBuilder Method, LocalBuilder Registered);
 
     private UsingResourceLocals EmitUsingRegistration(Stmt.UsingBinding binding)
@@ -3398,9 +3394,6 @@ public partial class ILEmitter
             : IL.DeclareLocal(_ctx.Types.Object);
         var method = IL.DeclareLocal(_ctx.Types.Object);
         var registered = IL.DeclareLocal(_ctx.Types.Boolean);
-        var acquired = IL.DefineLabel();
-        var missingMethod = IL.DefineLabel();
-        var invalidMethod = IL.DefineLabel();
 
         // A loop may revisit these locals. Failed initialization/acquisition must
         // never dispose a value left over from an earlier iteration.
@@ -3411,45 +3404,16 @@ public partial class ILEmitter
         EmitExpression(binding.Initializer);
         EnsureBoxed();
         IL.Emit(OpCodes.Stloc, resource);
-        IL.Emit(OpCodes.Ldloc, resource);
-        IL.Emit(OpCodes.Brfalse, acquired);
-        IL.Emit(OpCodes.Ldloc, resource);
-        IL.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
-        IL.Emit(OpCodes.Brtrue, acquired);
-
-        // Read the method once, before the next declaration or body statement.
-        IL.Emit(OpCodes.Ldloc, resource);
-        IL.Emit(OpCodes.Ldsfld, runtime.Symbols.Dispose);
-        IL.Emit(OpCodes.Call, runtime.ObjectRead.Index);
-        IL.Emit(OpCodes.Stloc, method);
-        IL.Emit(OpCodes.Ldloc, method);
-        IL.Emit(OpCodes.Brfalse, missingMethod);
-        IL.Emit(OpCodes.Ldloc, method);
-        IL.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
-        IL.Emit(OpCodes.Brtrue, missingMethod);
-        IL.Emit(OpCodes.Ldloc, method);
-        IL.Emit(OpCodes.Call, runtime.Operators.TypeOf);
-        IL.Emit(OpCodes.Ldstr, "function");
-        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.String, "op_Equality", _ctx.Types.String, _ctx.Types.String));
-        IL.Emit(OpCodes.Brfalse, invalidMethod);
-        IL.Emit(OpCodes.Br, acquired);
-
-        // Preserve the CLR IDisposable boundary without another symbol lookup.
-        IL.MarkLabel(missingMethod);
-        IL.Emit(OpCodes.Ldnull);
-        IL.Emit(OpCodes.Stloc, method);
-        IL.Emit(OpCodes.Ldloc, resource);
-        IL.Emit(OpCodes.Isinst, typeof(IDisposable));
-        IL.Emit(OpCodes.Brtrue, acquired);
-        IL.MarkLabel(invalidMethod);
-        GuestErrorEmitter.ThrowTypeError(IL, runtime, "Resource Symbol.dispose must be callable");
-
-        IL.MarkLabel(acquired);
+        UsingResourceEmitter.Acquire(IL, _ctx.Types, runtime,
+            () => IL.Emit(OpCodes.Ldloc, resource),
+            () => IL.Emit(OpCodes.Ldloc, method),
+            () => IL.Emit(OpCodes.Stloc, method));
         IL.Emit(OpCodes.Ldc_I4_1);
         IL.Emit(OpCodes.Stloc, registered);
         return new(resource, method, registered);
     }
 
+    /// <summary>Invokes registered disposers in reverse order without another lookup.</summary>
     private void EmitUsingDisposal(List<UsingResourceLocals> resources)
     {
         // Dispose in reverse order
@@ -3457,25 +3421,11 @@ public partial class ILEmitter
         {
             var resource = resources[i];
             var done = IL.DefineLabel();
-            var managed = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, resource.Registered);
             IL.Emit(OpCodes.Brfalse, done);
-            IL.Emit(OpCodes.Ldloc, resource.Method);
-            IL.Emit(OpCodes.Brfalse, managed);
-            IL.Emit(OpCodes.Ldloc, resource.Resource);
-            IL.Emit(OpCodes.Ldloc, resource.Method);
-            IL.Emit(OpCodes.Ldc_I4_0);
-            IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.Invocation.Method);
-            IL.Emit(OpCodes.Pop);
-            IL.Emit(OpCodes.Br, done);
-            IL.MarkLabel(managed);
-            IL.Emit(OpCodes.Ldloc, resource.Resource);
-            IL.Emit(OpCodes.Isinst, typeof(IDisposable));
-            IL.Emit(OpCodes.Brfalse, done);
-            IL.Emit(OpCodes.Ldloc, resource.Resource);
-            IL.Emit(OpCodes.Castclass, typeof(IDisposable));
-            IL.Emit(OpCodes.Callvirt, _ctx.Types.DisposableDispose);
+            UsingResourceEmitter.Dispose(IL, _ctx.Types, _ctx.Runtime!,
+                () => IL.Emit(OpCodes.Ldloc, resource.Resource),
+                () => IL.Emit(OpCodes.Ldloc, resource.Method));
             IL.MarkLabel(done);
         }
     }

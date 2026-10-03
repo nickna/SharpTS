@@ -1,0 +1,1 @@
+const original=new Error("injected");function* values(){try{yield 1;}catch(e){using r={[Symbol.dispose](){console.log("catch dispose");}};console.log(e===original);yield 2;}finally{console.log("finally");}}const g:any=values();console.log(g.next().value);console.log(g.throw(original).value);console.log(g.return(9).value);

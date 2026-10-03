@@ -1,0 +1,1 @@
+function* values(){using a={[Symbol.dispose](){console.log("outer");}};{using b={[Symbol.dispose](){console.log("inner");}};yield 1;}yield 2;}const g:any=values();console.log(g.next().value);console.log(g.next().value);console.log(g.next().done);

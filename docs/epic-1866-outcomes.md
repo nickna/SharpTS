@@ -1823,3 +1823,34 @@ unchanged 30 seconds; hosted exports are not executed. The native helper's owned
 declaration, signature, inputs and declaration order remain unchanged. This
 behavior repair closes no ownership audit work. Quality gates and the actual
 AOT analyzer baseline pass with zero analyzer warnings.
+
+## #1785 — Generator using cleanup
+
+**Outcome: repaired.** Synchronous generators persist using resources and
+captured disposal methods in state-machine fields. Implied finally scopes run
+cleanup on normal completion, early return and injected throw, using existing
+suspension/non-local-exit routing. Using bindings participate in block-scope
+renaming, preserving shadowed resource fields. Ordinary and generator acquisition
+share one compiler helper; existing emitted disposal ownership remains unchanged.
+Fresh unchanged-main/pre-repair current verify both original using programs but
+omit disposal. Current matches both original Node outputs; the original explicit
+finally control remains passing, within the unchanged 30-second execution limits.
+
+All **952 selected checks pass**, including eighteen compiled references,
+eighteen isolated standalone outputs, eighteen hosted module compilations,
+ordinary using/acquisition/native ownership checks and broader generator/finally,
+error identity, closure, spill, undefined-value and method regressions.
+TypeScript/Node confirm all eighteen references. Coverage includes exactly-once
+cleanup, unstarted generators, LIFO order, original receiver/captured method,
+nested/shadowed scopes, injected throw, nullish resources, getter/partial-registration
+failures, catch scopes, no-yield generators, class methods and for-of closing.
+
+Disposal-exception coverage found a pre-existing nested finally routing defect:
+fresh unchanged main also loses the exception from a finally during a pending
+return. Handler propagation now clears that superseded exit, ensuring outer
+cleanup runs and the original exception propagates. The exact explicit-finally
+control is retained alongside the using case. Saved guests require verified IL,
+exact stdout, empty stderr, no SharpTS reference/copy and clean exit; hosted
+exports are not executed. This does not claim async disposal or ownership audit
+closure. Quality gates and the actual AOT analyzer baseline pass with zero
+analyzer warnings.

@@ -1,0 +1,1 @@
+const r:any={value:5};let calls=0;Object.defineProperty(r,Symbol.dispose,{get(){calls++;console.log("get");return function(){console.log(this.value,calls);};}});function* values(){using x=r;console.log("body");yield 1;}const g:any=values();console.log(g.next().value);console.log(g.return(9).value);

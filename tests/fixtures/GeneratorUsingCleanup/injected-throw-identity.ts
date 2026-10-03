@@ -1,0 +1,1 @@
+const original=new Error("original");function* values(){using a={[Symbol.dispose](){console.log("a");}};{using b={[Symbol.dispose](){console.log("b");}};yield 1;}}const g:any=values();console.log(g.next().value);try{g.throw(original);}catch(e){console.log(e===original);}console.log(g.next().done);

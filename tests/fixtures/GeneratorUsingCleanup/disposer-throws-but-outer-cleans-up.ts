@@ -1,0 +1,1 @@
+const original=new Error("dispose");function* values(){using a={[Symbol.dispose](){console.log("outer");}},b={[Symbol.dispose](){console.log("inner");throw original;}};yield 1;}const g:any=values();console.log(g.next().value);try{g.return(9);}catch(e){console.log(e===original);}console.log(g.next().done);

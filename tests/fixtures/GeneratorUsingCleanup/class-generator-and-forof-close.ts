@@ -1,0 +1,1 @@
+class C{value=7;*values(){using r={value:this.value,[Symbol.dispose](){console.log(this.value);}};yield r.value;yield 8;}}for(const value of new C().values()){console.log(value);break;}console.log("after");
