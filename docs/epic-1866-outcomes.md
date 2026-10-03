@@ -225,3 +225,30 @@ that complete failure is retained in `identity.ts` and separately tracked as
 No runtime pass is credited to that artifact. No production code changed;
 reference commands and `git diff --check` passed. The new probes were not
 executed through a hosted factory or separately via in-process compilation.
+
+## #1907 — Runtime-valued dynamic superclass
+
+**Outcome: investigation/design completed, implementation transferred to
+[#1967](https://github.com/nickna/SharpTS/issues/1967); compiled inheritance remains wrong.**
+The original progress note and retained reconciliation expose no exact source
+or deadline. Three new, explicitly labelled fixtures pin the ordinary user-class
+case on unchanged `0ad37b57` and `dced3a75`. TypeScript 7.0.2 accepts all final
+sources, and Node v25.5.0 and CLI interpretation agree. Both compiled positive
+controls pass IL verification but omit the selected parent constructor, inherited
+method/static member, constructor prototype and `instanceof` relationships.
+The first catches `undefined is not a function`; its zero exit status is not a
+pass. The abrupt awaited parent instead fails compilation with a null `key`
+exception, while the reference preserves the rejection before static initialization.
+
+The finite decision in `docs/plans/runtime-valued-superclass.md` retains the
+evaluated parent in #1964's guest class definition and uses receiver-preserving
+construction/member adapters for runtime heritage. It specifies ordinary
+user-class fields, constructors, methods, statics, prototypes and `instanceof`,
+plus awaited/abrupt controls, without expanding into arbitrary host constructors
+or a general mixin system. The successor depends on #1964; no repair is claimed.
+
+All 13 retained known-parent/awaited-heritage/owner-identity tests passed with
+compiled IL verification. These have statically identifiable parents and do not
+prove runtime selection. Final fixture reference commands and `git diff --check`
+passed. No production code changed. The new probes were not exercised through a
+hosted factory or separately through in-process compilation.
