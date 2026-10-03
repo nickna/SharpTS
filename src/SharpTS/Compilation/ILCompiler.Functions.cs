@@ -1298,6 +1298,7 @@ public partial class ILCompiler
         _entryPoint = mainMethod;
 
         var il = mainMethod.GetILGenerator();
+        EmitInitializeConsoleOutput(il);
         EmitInstallEventLoopSyncContext(il);
         var returnLabel = il.DefineLabel();
         il.BeginExceptionBlock();
@@ -1485,6 +1486,7 @@ public partial class ILCompiler
         _entryPoint = mainMethod;
 
         var il = mainMethod.GetILGenerator();
+        EmitInitializeConsoleOutput(il);
         EmitInstallEventLoopSyncContext(il);
         var returnLabel = il.DefineLabel();
         il.BeginExceptionBlock();

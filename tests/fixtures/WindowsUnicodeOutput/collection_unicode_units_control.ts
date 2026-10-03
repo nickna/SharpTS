@@ -1,0 +1,1 @@
+const a=[..."A😀B"];console.log(a.length,a[1].length,a[1].charCodeAt(0),a[1].charCodeAt(1));function collect(...xs:any[]){console.log(xs.length,xs[1].length,xs[1].charCodeAt(0),xs[1].charCodeAt(1));}collect(0,..."😀B",9);

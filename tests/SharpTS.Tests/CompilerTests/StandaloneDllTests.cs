@@ -19,6 +19,73 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.WindowsUnicodeOutputTests.Cases), MemberType = typeof(SharedTests.WindowsUnicodeOutputTests))]
+    public void Isolated_Issue1743UnicodeOutput_PreservesUtf8InBothWindowsProcessContexts(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        foreach (bool hidden in new[] { false, true })
+            AssertUtf8ProcessOutput(output, hidden, expected);
+    }
+
+    [Fact]
+    public void Isolated_Issue1743UnicodeUserMain_PreservesUtf8InBothWindowsProcessContexts()
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var statements = new Parser(new Lexer("async function main(args:string[]):Promise<void>{console.log(\"é Ω 漢字 😀\");}").ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var compiler = new ILCompiler("unicode_main", false, true, null, null, null, OutputTarget.Exe);
+        compiler.Compile(statements, typeMap, new DeadCodeAnalyzer(typeMap).Analyze(statements));
+        var output = directory.GetPath("main.dll");
+        compiler.Save(output);
+        using var verifier = new ILVerifier();
+        using var assemblyStream = File.OpenRead(output);
+        Assert.Empty(verifier.Verify(assemblyStream));
+        directory.CreateFile("main.runtimeconfig.json", """
+            {"runtimeOptions":{"tfm":"net10.0","framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}
+            """);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        foreach (bool hidden in new[] { false, true })
+            AssertUtf8ProcessOutput(output, hidden, "é Ω 漢字 😀\n");
+    }
+
+    private static void AssertUtf8ProcessOutput(string output, bool hidden, string expected)
+    {
+        var start = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false, CreateNoWindow = hidden,
+            RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true,
+            WorkingDirectory = Path.GetDirectoryName(output)!
+        };
+        start.ArgumentList.Add(output);
+        using var process = Process.Start(start)!;
+        process.StandardInput.Close();
+        using var stdout = new MemoryStream();
+        using var stderr = new MemoryStream();
+        var drain = Task.WhenAll(process.StandardOutput.BaseStream.CopyToAsync(stdout),
+            process.StandardError.BaseStream.CopyToAsync(stderr));
+        if (!process.WaitForExit(30000))
+        {
+            TryTerminateProcessTree(process);
+            process.WaitForExit(5000);
+            Assert.Fail($"Unicode output did not complete within 30 seconds (CreateNoWindow={hidden}).");
+        }
+        Assert.True(drain.Wait(5000), "Output pipes did not close.");
+        Assert.Equal(0, process.ExitCode);
+        Assert.Empty(stderr.ToArray());
+        var text = new UTF8Encoding(false, true).GetString(stdout.ToArray()).Replace("\r\n", "\n");
+        Assert.Equal(expected, text);
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.TypedEnumReverseLookupTests.Cases), MemberType = typeof(SharedTests.TypedEnumReverseLookupTests))]
     public void Isolated_Issue1791TypedEnumReverseLookups_PreserveForwardAndReverseMappings(string name, string source, string expected)
     {

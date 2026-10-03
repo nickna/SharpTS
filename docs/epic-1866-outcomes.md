@@ -1984,3 +1984,29 @@ prior missing-key/value-binding regressions and native enum ownership checks.
 The #1790 quality and actual AOT checks pass; this completion adds coverage and
 documentation only and preserves native helper ownership/ABI without claiming
 metadata ownership audit closure.
+
+## #1743 — Windows redirected Unicode output
+
+**Outcome: repaired.** Executable entry points initialize redirected stdout to
+UTF-8 before guest writes. An entry-assembly guard preserves embedding hosts'
+Console writers and encoding; hosted initialization retains host console policy.
+Fresh unchanged main and pre-repair current reproduce the original Unicode
+failure under CreateNoWindow and preserve emoji during normal execution of the
+same verified assembly. The original numeric code-unit control passes in both.
+A minimal .NET 10 control identifies output code page 65001 normally versus 437
+when hidden; explicit UTF-8 fixes its raw bytes in both contexts.
+
+Current saved originals emit identical UTF-8 bytes in both contexts, complete
+Node stdout, empty stderr and clean exit within the original 30 seconds. All
+**23 selected checks pass**, including raw byte checks for the original pair,
+multilingual text, module output and async user-main in both contexts, existing
+Unicode generator regressions and entry-point synchronization-context controls.
+The new checks use no launcher encoding override. TypeScript/Node establish
+references before their SharpTS runs. Saved guests require verified IL and no
+SharpTS reference/copy. Quality gates and the actual AOT analyzer baseline pass
+with zero analyzer warnings; no iterator ownership audit closure is claimed.
+
+A supplemental synchronous void-main compiler-API control exposes an independent
+StackUnderflow at an unconditional result pop. Its source/failure remain retained
+locally and excluded from passing counts. This repair does not claim general
+user-main IL correctness or change the two exact original issue programs.
