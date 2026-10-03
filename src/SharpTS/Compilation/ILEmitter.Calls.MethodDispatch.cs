@@ -938,6 +938,12 @@ public partial class ILEmitter
     /// </summary>
     protected override bool TryEmitSuperMethodCall(string methodName, List<Expr> arguments)
     {
+        // An arrow body lives on a display class rather than the lexical class.
+        // Use the same legal parent-call bridge as a state machine, with EmitThis
+        // loading the captured receiver instead of the display class's arg0.
+        if (_ctx.CurrentClassBuilder is { } lexicalOwner && !ReferenceEquals(_ctx.EmittingTypeBuilder, lexicalOwner))
+            return base.TryEmitSuperMethodCall(methodName, arguments);
+
         // Resolve the superclass name - try multiple sources:
         // 1. CurrentSuperclassName (set in constructor context)
         // 2. ClassRegistry superclass lookup (works in method body context)

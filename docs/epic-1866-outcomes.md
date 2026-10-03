@@ -1469,3 +1469,34 @@ in-process offset is 207. The diagnostic source is preserved under
 verified guest. The four direct async super tests retained by #1756 now pass.
 Quality gates and the actual AOT analyzer baseline pass with zero analyzer
 warnings. This super-call repair does not claim those separate lowering fixes.
+
+## #1758 — Super access in synchronous arrows
+
+**Outcome: repaired.** Super method values load the captured receiver through
+the ordinary `this` resolver. Arrow bodies retain their enclosing class builder
+and use the #1757 bridge for direct parent calls. All five original programs now
+verify and preserve `5`/`child:5`. Fresh unchanged main rejects three originals
+with `UnrecognizedArgumentNumber`; its two explicit-capture controls verify but
+throw TypeError. After #1757, pre-repair current has one direct-call receiver
+verifier failure and four IL-valid TypeErrors. Invalid outputs are not executed.
+Fresh IL-valid diagnostic runs exit with nonzero status within 30 seconds; the
+historical timeout remains recorded without a claimed process-lifetime cause.
+
+All **36 focused checks pass**: twelve compiled references, twelve isolated
+standalone outputs and twelve hosted module compilation controls. References
+cover deeper arrow nesting, receiver-dependent direct calls, lexical parent
+selection despite later overrides/call-site receivers, generic owners, string
+argument order, defaults and callbacks. Full TypeScript compilation and Node
+confirm all expectations. Saved guests verify IL, exact stdout, empty stderr,
+no SharpTS reference/copy and clean exit within the original 30 seconds. Hosted
+exports are not executed. The discarded unbound this-dependent extraction in
+the original issue remains excluded from passing coverage.
+
+The selected arrow/closure/private/super suite passes **1,441 tests**, retaining
+four unchanged-main verifier failures: #1956 closure boxing, nested async arrow
+mutation, the typed callback mismatch preserved with #1757, and the Promise
+constructor mismatch preserved with #1756. They are excluded from passing
+counts. Existing native parent-method ownership and saved super controls remain
+covered, with no native lookup boundary or constructor input changes. Quality
+gates and the actual AOT analyzer baseline pass with zero analyzer warnings.
+`tests/fixtures/SynchronousArrowSuper` preserves the original and added controls.

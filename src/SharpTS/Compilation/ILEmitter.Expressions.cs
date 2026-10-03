@@ -846,9 +846,9 @@ public partial class ILEmitter
 
     protected override void EmitSuper(Expr.Super s)
     {
-        // Load this and prepare for base method call
+        // Super method values use the lexical receiver, including arrow captures.
         // Note: super() constructor calls are handled in EmitCall, not here
-        IL.Emit(OpCodes.Ldarg_0);
+        EmitThis();
         IL.Emit(OpCodes.Ldstr, s.Method?.Lexeme ?? "constructor");
         EmitCallUnknown(_ctx.Runtime!.ReflectedMethods.SuperMethod);
     }
