@@ -111,6 +111,12 @@ public partial class Interpreter
         object? klass = (await ctx.EvaluateExprAsync(newExpr.Callee)).ToObject();
         List<object?> evaluatedArguments = await EvaluateNewArgumentsCore(ctx, newExpr.Arguments);
 
+        while (klass is BoundFunction boundConstructor)
+        {
+            evaluatedArguments = boundConstructor.PrependArguments(evaluatedArguments);
+            klass = boundConstructor.Target;
+        }
+
         // Handle Proxy construct trap
         if (klass is SharpTSProxy proxy)
         {
@@ -187,7 +193,7 @@ public partial class Interpreter
 
         // Handle callable constructors (like SharpTSEventEmitterConstructor)
         // These implement ISharpTSCallable and are used for module-imported types.
-        if (klass is ISharpTSCallable callable && klass is not SharpTSClass && klass is not BoundFunction)
+        if (klass is ISharpTSCallable callable && klass is not SharpTSClass)
         {
             try
             {
@@ -197,12 +203,6 @@ public partial class Interpreter
             {
                 throw new ThrowException(new SharpTSError(ex.Message));
             }
-        }
-
-        // Bound functions cannot be used as constructors (JS spec compliance)
-        if (klass is BoundFunction)
-        {
-            throw new InterpreterException("Bound functions cannot be used as constructors.");
         }
 
         if (klass is not SharpTSClass sharpClass)
@@ -245,6 +245,11 @@ public partial class Interpreter
     /// </summary>
     internal object? Construct(object? callable, IList<object?> args)
     {
+        while (callable is BoundFunction boundConstructor)
+        {
+            args = boundConstructor.PrependArguments(args);
+            callable = boundConstructor.Target;
+        }
         if (callable is ISharpTSNonConstructorCallable)
         {
             throw new ThrowException(new SharpTSTypeError("X is not a constructor"));
@@ -341,6 +346,12 @@ public partial class Interpreter
         object? klass = Evaluate(newExpr.Callee);
         List<object?> evaluatedArguments = EvaluateNewArguments(newExpr.Arguments);
 
+        while (klass is BoundFunction boundConstructor)
+        {
+            evaluatedArguments = boundConstructor.PrependArguments(evaluatedArguments);
+            klass = boundConstructor.Target;
+        }
+
         // Handle Proxy construct trap
         if (klass is SharpTSProxy proxy)
         {
@@ -402,7 +413,7 @@ public partial class Interpreter
 
         // Handle callable constructors. Many built-in constructors are
         // registered as BuiltInMethod, so we accept any ISharpTSCallable here.
-        if (klass is ISharpTSCallable callable && klass is not SharpTSClass && klass is not BoundFunction)
+        if (klass is ISharpTSCallable callable && klass is not SharpTSClass)
         {
             try
             {
@@ -412,12 +423,6 @@ public partial class Interpreter
             {
                 throw new ThrowException(new SharpTSError(ex.Message));
             }
-        }
-
-        // Bound functions cannot be used as constructors (JS spec compliance)
-        if (klass is BoundFunction)
-        {
-            throw new InterpreterException("Bound functions cannot be used as constructors.");
         }
 
         if (klass is not SharpTSClass sharpClass)

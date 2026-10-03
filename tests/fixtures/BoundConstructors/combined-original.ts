@@ -1,0 +1,1 @@
+function Inner(this:any){this.y=2;}function Outer(this:any){this.x=1;const C:any=Inner;const child:any=new C();this.x+=child.y;}const C:any=Outer;console.log(new C().x);const bound:any=Inner.bind({y:90});const b:any=new bound();console.log(b.y);

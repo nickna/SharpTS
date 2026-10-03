@@ -352,6 +352,8 @@ public class BoundFunction : ISharpTSCallable
 
     internal ISharpTSCallable Target => _target;
 
+    internal List<object?> PrependArguments(IEnumerable<object?> arguments) => [.. _boundArgs, .. arguments];
+
     public bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
         => (_ownProperties ??= new SharpTSObject([])).DefineProperty(name, descriptor);
 

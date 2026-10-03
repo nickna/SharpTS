@@ -507,3 +507,24 @@ remain retained; the decoder-specific passing control precomputes views.
 `tests/fixtures/ExtractedTextDecoderMethods` records these boundaries. No
 historical delay root cause, general encoding-label/streaming repair or hosted
 guest execution is claimed.
+
+## #1724 — Bound dynamic construction receiver
+
+**Outcome: repaired in both engines.** The exact independent source compiles
+and IL-verifies on unchanged `0ad37b57`, then prints `undefined 2 false` with
+normal exit and empty stderr. Compiled bound construction now prepends bound
+arguments and recursively delegates to the target construction protocol, which
+creates the receiver and uses the target prototype. Interpreter construction
+unwraps bound targets in its synchronous, asynchronous and internal Construct
+paths, preserving the captured receiver for ordinary calls.
+
+Both unchanged issue sources match Node: `2 90 false`, and `3` then `2`.
+All **107 selected affected tests pass** with compiled IL verification, including
+repeated binding, argument order, prototype linkage, explicit object returns,
+thrown-object identity, restoration after failure and construction after async
+suspension. Five isolated saved outputs verify IL, omit a SharpTS reference and
+exit zero with empty stderr. Separate TypeScript/Node references accept all five
+fixtures. Required quality gates and actual AOT analyzer baseline pass with
+zero analyzer warnings. `tests/fixtures/BoundConstructors` retains originals
+and command boundaries. No #1725 non-constructor policy repair, #1799 Proxy
+construction/deployment repair or hosted guest execution is claimed.
