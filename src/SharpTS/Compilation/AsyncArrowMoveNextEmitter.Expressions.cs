@@ -60,27 +60,9 @@ public partial class AsyncArrowMoveNextEmitter
 
     protected override void EmitSuper(Expr.Super s)
     {
-        // Load hoisted 'this' from outer state machine if captured
-        if (_builder.Captures.Contains("this"))
-        {
-            if (_ctx?.AsyncArrowOuterBuilders?.TryGetValue(_builder.Arrow, out var outerBuilder) == true &&
-                outerBuilder.ThisField != null)
-            {
-                _il.Emit(OpCodes.Ldarg_0);
-                _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
-                _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
-                _il.Emit(OpCodes.Ldfld, outerBuilder.ThisField);
-            }
-            else
-            {
-                _il.Emit(OpCodes.Ldnull);
-            }
-        }
-        else
-        {
-            _il.Emit(OpCodes.Ldnull);
-        }
-
+        // Use the same lexical receiver loader as this/direct super calls,
+        // including standalone capture fields and outer async state machines.
+        EmitThis();
         _il.Emit(OpCodes.Ldstr, s.Method?.Lexeme ?? "constructor");
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.ReflectedMethods.SuperMethod);
         SetStackUnknown();

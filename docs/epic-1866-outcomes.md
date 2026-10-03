@@ -1500,3 +1500,33 @@ counts. Existing native parent-method ownership and saved super controls remain
 covered, with no native lookup boundary or constructor input changes. Quality
 gates and the actual AOT analyzer baseline pass with zero analyzer warnings.
 `tests/fixtures/SynchronousArrowSuper` preserves the original and added controls.
+
+## #1759 — Super method values in async arrows
+
+**Outcome: repaired.** Async arrow method-value emission uses its existing
+lexical `this` loader for standalone captures and outer async state machines.
+Fresh unchanged-main/pre-repair current saved outputs verify IL and exit normally
+with empty stderr, but two originals omit stdout and the rejection control prints
+`rejected TypeError object is not a function`. Current preserves all three
+unchanged expectations: `7`, `child:7`, and `7`. This task makes no timeout claim.
+Ordinary async-method controls preserve their passing unchanged-main behavior.
+
+All **24 focused checks pass**: eight compiled references, eight isolated
+standalone outputs and eight hosted module compilation controls. They cover
+reads before/after await, an arrow inside an async method, a generic enclosing
+class and ordinary-method controls. Full TypeScript compilation and Node
+confirm every expectation. Saved guests verify IL, exact stdout, empty stderr,
+no SharpTS reference/copy and clean exit within 30 seconds. Hosted exports are
+not executed. Native parent lookup boundaries and wrapper constructors remain
+unchanged and retain their ownership/isolation controls.
+
+The wider async-arrow/async-method/super selection passes **509 tests**, retaining
+three independent verifier failures: nested async arrow mutation, the Promise
+constructor mismatch retained with #1756, and async string constructor arguments
+in a lock test. Fresh unchanged-main/current saved compilation with
+`--noLib --decorators` matches the latter test's ambient library/Stage3 setting
+and rejects the same object/string arguments at offsets 30 and 52. Its source
+is preserved under `tests/fixtures/AsyncArrowSuperValues/independent`; invalid
+outputs are not executed and these diagnostics are excluded from passing counts.
+Quality gates and the actual AOT analyzer baseline pass with zero analyzer
+warnings. This receiver fix does not claim those separate lowering repairs.

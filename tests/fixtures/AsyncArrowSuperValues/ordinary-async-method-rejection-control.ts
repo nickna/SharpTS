@@ -1,0 +1,1 @@
+class A {value(x:number){return x+2;}}class B extends A {async read(){await Promise.resolve(0);const method=super.value;return method(5);}}new B().read().then(v=>console.log(v)).catch(e=>console.log("rejected",e.name,e.message));
