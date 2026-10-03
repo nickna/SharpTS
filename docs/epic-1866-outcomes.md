@@ -663,3 +663,23 @@ compiled namespace initializer output omission, and saved exported-namespace
 function invocation throwing object-is-not-a-function. Their Node expectations
 remain intact and they are excluded from passing saved conformance counts.
 No typeof-query, namespace execution or hosted guest execution repair is claimed.
+
+## #1802 — Array static descriptor identity
+
+**Outcome: repaired.** Both unchanged originals reproduce `false true` on
+fresh unchanged main, with verified standalone IL, normal exit and empty
+stderr. Compiled Array descriptors supplied undefined for `isArray`; they now
+use the existing cached static lookup. Interpreter Array methods use the
+established built-in static table so descriptor and member reads agree without
+a descriptor-specific cache or function-branding change.
+
+All **413 selected tests pass** with compiled IL verification, including Array
+calls/mappers, Object descriptors/assign, constructor branding and the retained
+native static lookup identity checks. Four isolated standalone outputs match
+Node with clean exits within the original 30-second deadline and omit SharpTS
+references/copies. Node and TypeScript accept all four fixtures. Quality gates
+and the actual AOT analyzer baseline pass with zero analyzer warnings. The
+native checks also compare descriptor values across emitter reuse,
+optional families and hosted declarations. `tests/fixtures/ArrayStaticDescriptorValues`
+retains originals and boundaries; no compiled Array.from/fromAsync/of descriptor
+or hosted guest execution repair is claimed.

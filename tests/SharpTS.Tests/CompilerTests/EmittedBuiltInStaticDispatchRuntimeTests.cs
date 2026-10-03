@@ -89,6 +89,16 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
                 Assert.Same(wrapper, getOrCreate.Invoke(null, [method, name, length]));
                 Assert.Equal(name, wrapper.GetType().GetProperty("Name")!.GetValue(wrapper));
                 Assert.Equal(length, wrapper.GetType().GetProperty("Length")!.GetValue(wrapper));
+                if (target == typeof(IList<object>) && name == "isArray")
+                {
+                    var descriptorMethod = type.GetMethod(runtime.ObjectDescriptors.GetOwnPropertyDescriptor.Name)!;
+                    var descriptor = Assert.IsType<Dictionary<string, object>>(
+                        descriptorMethod.Invoke(null, [Resolve(target), name]));
+                    Assert.Same(wrapper, descriptor["value"]);
+                    Assert.Equal(true, descriptor["writable"]);
+                    Assert.Equal(false, descriptor["enumerable"]);
+                    Assert.Equal(true, descriptor["configurable"]);
+                }
             }
             Check(typeof(IList<object>), "isArray", runtime.ArrayOperations.IsArray, 1);
             Check(typeof(double), "isNaN", runtime.Numbers.IsNaN, 1);

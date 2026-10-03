@@ -67,6 +67,9 @@ public partial class RuntimeEmitter
 
     private readonly record struct GetOwnDescriptorNumberConstructorInputs(MethodBuilder GetProperty, MethodBuilder TSFunctionGetOrCreate);
 
+    private readonly record struct GetOwnDescriptorArrayConstructorInputs(
+        FieldInfo UndefinedInstance, MethodBuilder LookupBuiltInStaticMember);
+
     private readonly record struct GetOwnDescriptorConstructorFallbackInputs(
         MethodBuilder GetProperty,
         TypeBuilder TSFunctionType,
@@ -515,7 +518,12 @@ public partial class RuntimeEmitter
             endLabel
         );
 
-        EmitGetOwnDescriptorArrayConstructor(il, inputs.UndefinedInstance, propNameLocal, resultDictLocal, endLabel);
+        EmitGetOwnDescriptorArrayConstructor(
+            il,
+            new GetOwnDescriptorArrayConstructorInputs(inputs.UndefinedInstance, inputs.LookupBuiltInStaticMember),
+            propNameLocal,
+            resultDictLocal,
+            endLabel);
 
         EmitGetOwnDescriptorNumberConstructor(
             il,
@@ -811,7 +819,7 @@ public partial class RuntimeEmitter
     // to the caller-owned endLabel with one result object.
     private void EmitGetOwnDescriptorArrayConstructor(
         ILGenerator il,
-        FieldInfo undefinedInstance,
+        GetOwnDescriptorArrayConstructorInputs inputs,
         LocalBuilder propNameLocal,
         LocalBuilder resultDictLocal,
         Label endLabel
@@ -835,7 +843,19 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, resultDictLocal);
             il.Emit(OpCodes.Ldloc, resultDictLocal);
             il.Emit(OpCodes.Ldstr, "value");
-            il.Emit(OpCodes.Ldsfld, undefinedInstance);
+            if (n == "isArray")
+            {
+                // Resolve through the existing static-member cache, just as
+                // direct, computed and aliased Array.isArray reads do.
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Castclass, _types.Type);
+                il.Emit(OpCodes.Ldloc, propNameLocal);
+                il.Emit(OpCodes.Call, inputs.LookupBuiltInStaticMember);
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+            }
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
             EmitDescriptorBoolField(il, resultDictLocal, "writable", true);
             EmitDescriptorBoolField(il, resultDictLocal, "enumerable", false);

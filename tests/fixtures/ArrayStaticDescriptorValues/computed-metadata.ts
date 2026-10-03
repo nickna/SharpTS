@@ -1,0 +1,14 @@
+const A:any=Array;
+const key="isArray";
+const first=Object.getOwnPropertyDescriptor(A,key)!;
+const second=Object.getOwnPropertyDescriptor(Array,key)!;
+const predicate=first.value;
+console.log(predicate===second.value,predicate===A[key],predicate===Array.isArray);
+console.log(typeof predicate,predicate.name,predicate.length);
+console.log(first.writable,first.enumerable,first.configurable);
+const nameDescriptor=Object.getOwnPropertyDescriptor(predicate,"name")!;
+const lengthDescriptor=Object.getOwnPropertyDescriptor(predicate,"length")!;
+console.log(nameDescriptor.value,nameDescriptor.writable,nameDescriptor.enumerable,nameDescriptor.configurable);
+console.log(lengthDescriptor.value,lengthDescriptor.writable,lengthDescriptor.enumerable,lengthDescriptor.configurable);
+console.log(predicate([]),predicate({}),predicate(null),predicate.call(null,[1]));
+console.log(Object.getOwnPropertyDescriptor(predicate,"prototype")===undefined);
