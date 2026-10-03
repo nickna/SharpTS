@@ -27,6 +27,27 @@ metadata publishes the canonical object without repeating initializers. Two
 TypeScript 7.0.2 / Node 25.5.0 references precede the SharpTS checks; all 139
 selected hosted runtime, enum and architecture tests pass with verification.
 
+The final standalone integration run also detects a superseded #1864 metadata
+assertion for indirect `Number` in CommonJS. TypeScript/Node and fresh verified
+current output print `2 2 true`; fresh verified starting-main output retains
+`2 null true`. #1713's behavior repair supersedes the live assertion. The archived
+#1919 reconciliation and its original failure evidence remain intact.
+The companion metadata assertion also retains a pre-repair false result for
+`isNaN('x')` through an alias. #1770 now supplies Node's true result. Fresh saved
+baseline/current probes verify and exit cleanly with their recorded outputs;
+the independent `isFinite` alias coercion limitation is unchanged and remains
+explicitly outside the repaired result.
+
+Consolidated local verification finishes with 24,087 hermetic Core passes,
+zero failures and three existing skips. All three standalone shards execute
+2,165 cases: 2,163 pass, and the two obsolete numeric compatibility expectations
+above are corrected and their complete 39-case groups pass on rerun. The final
+code-quality gate reports 28 reviewed duplicate groups and zero errors; the
+actual analyzer-aware restore/rebuild reports zero AOT/trim/single-file analyzer
+warnings without changing either baseline. Each of the 74 child sections has
+one distinct completion commit. The consolidated PR is
+[#1969](https://github.com/nickna/SharpTS/pull/1969).
+
 ## #1900 — Interpreter non-writable static descriptors
 
 **Outcome: repaired.** The original progress note links #1861 but contains no

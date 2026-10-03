@@ -4539,13 +4539,14 @@ public class StandaloneDllTests
             },
             "true false false false\nfalse false false false\nfalse true true true\nfalse true false false\nfalse false false false\nfalse false false false\ntrue false\n", "main.ts", true
         },
+        // Keep the existing isFinite alias limitation; #1770 repairs isNaN coercion.
         new object[]
         {
             new Dictionary<string, string>
             {
                 ["main.ts"] = "const finite:any=isFinite;const nan:any=isNaN;console.log(finite('42'),finite('x'),finite(false),nan('42'),nan('x'),nan(false));"
             },
-            "false false false false false false\n", "main.ts", true
+            "false false false false true false\n", "main.ts", true
         },
         new object[]
         {
@@ -5244,11 +5245,11 @@ public class StandaloneDllTests
             "generator", "function* values():Generator<any,void,any>{yield '2';yield '-3';}for(const value of values())console.log(+value,value|0);",
             "2 2\n-3 -3\n", "main.ts"
         },
-        // Preserve the existing compatibility limitation while changing metadata ownership.
+        // #1713 repairs the formerly retained indirect Number compatibility limitation.
         new object[]
         {
             "cjs", "const N=Number;console.log(Number('2'),N('2'),N===Number);",
-            "2 null true\n", "main.cjs"
+            "2 2 true\n", "main.cjs"
         },
         new object[]
         {
