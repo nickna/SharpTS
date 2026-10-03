@@ -19,6 +19,33 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [InlineData("<number>", false)]
+    [InlineData("<number>", true)]
+    [InlineData("", false)]
+    [InlineData("", true)]
+    public void Isolated_Issue1909ArrayHeritage_PreservesCliAndStandaloneBehavior(string typeArguments, bool noLib)
+    {
+        var source = $$"""
+            class Values extends Array{{typeArguments}} {}
+            const values: any = new Values(3);
+            values[1] = 7;
+            console.log(values.length, 0 in values, values[1]);
+            console.log(values instanceof Values, values instanceof Array, Array.isArray(values));
+            """;
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath("array_heritage.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig{(noLib ? " --noLib" : "")} --compile \"{path}\" -o \"{output}\" --verify --standalone",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.Equal("3 false 7\ntrue true true\n", ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
     [InlineData("async_declaration", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v));")]
     [InlineData("async_rejection_detail", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v),e=>console.log(\"rejected\",e.message));")]
     [InlineData("async_before_await", "async function run(){class C{static value=5;}const value=C.value;await Promise.resolve(0);return value;}run().then(v=>console.log(v));")]

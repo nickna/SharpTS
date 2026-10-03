@@ -279,3 +279,29 @@ object/System.Type verifier failures on both baselines (130 total). All six
 failures remain explicitly recorded. No production code changed; reference
 commands and `git diff --check` passed. New controls were not exercised through
 a hosted factory or separately via in-process compilation.
+
+## #1909 — CLI Array inheritance versus compiler API
+
+**Outcome: default-library CLI declaration gap repaired.**
+Recovered the typed storage program retained in #1817's
+`PackedSparseSubclassAndRestStorageVerifyAndRunStandalone` test. Its original
+60-second compilation and 30-second execution limits remain. The separate
+historical non-generic source was not recovered; a labelled new control
+reproduces its recorded diagnostic on unchanged `0ad37b57`.
+
+The default-library CLI rejects the typed source at `0ad37b57` and `313373c5`,
+while `--noLib` and the single-file API accept it. Loaded declarations represent
+Array's value through a constructible interface, so class heritage previously
+rejected it. The checker now identifies the actual default-library Array binding
+before user declarations, then uses the existing runtime Array subclass bridge.
+Local shadowed bindings keep their own checking, and excess type arguments remain
+rejected. Declaration libraries are retained, not disabled.
+
+Verification: 183 affected Array storage/subclass/iteration/CLI tests passed with
+compiled IL verification, including four isolated standalone cases covering
+generic/non-generic declarations with default libraries and `--noLib`. The retained
+typed source and new non-generic control match separate TypeScript 7.0.2/Node
+v25.5.0 references in CLI interpretation and IL-verified standalone execution,
+with zero exit status. Release project builds, code-quality gates and the actual
+AOT/trim/single-file analyzer baseline passed (zero analyzer warnings). The
+existing NU1902 package warning remains. Hosted execution was not exercised.
