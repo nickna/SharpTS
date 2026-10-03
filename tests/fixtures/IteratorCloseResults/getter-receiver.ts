@@ -1,0 +1,1 @@
+let gets=0;let calls=0;const it:any={[Symbol.iterator](){return this;},next(){return {value:1,done:false};},get return(){gets++;return function(){calls++;console.log(this===it);return Symbol("close");};}};try{for(const n of it)break;}catch(e:any){console.log(e.name,gets,calls);}

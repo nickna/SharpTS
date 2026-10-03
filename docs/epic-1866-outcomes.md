@@ -835,3 +835,27 @@ iteration, unlike TypeScript. Those two references are excluded from passing
 counts. No general primitive-member validation, arbitrary thenable/generic
 Awaited expansion, non-iterable async-source diagnosis or hosted execution
 repair is claimed.
+
+## #1739 — IteratorClose primitive results
+
+**Outcome: repaired.** The emitted close helper rejects BigInt and Symbol as
+well as the existing primitive categories. Its symbol dependency comes from
+the compilation's scoped owner. The unchanged three original programs now
+match Node; fresh unchanged main accepts BigInt/Symbol and rejects the numeric
+control. An incoming throw keeps its identity when closing returns a primitive,
+throws, or encounters a throwing getter.
+
+The selected iterable-consumer run has **1,065 passes and one unchanged-main
+failure (#1956)**, with compiled IL verification enabled. Eleven compiled
+references also run as isolated standalone output with exact Node stdout,
+empty stderr, no SharpTS reference/copy and clean exit within 30 seconds.
+Native tests validate every primitive category, valid-object behavior,
+standalone/hosted declaration ownership and emitter reuse. Node and TypeScript
+check all references. Quality gates and the actual AOT baseline pass with zero
+analyzer warnings.
+
+`tests/fixtures/IteratorCloseResults` retains the infinite-destructuring probe
+outside passing counts: fresh unchanged main and the corrected compiler both
+time out before closing, with empty streams. Frozen child #1750 owns that
+consumer correction. The interpreter's broader normal-close validation and
+hosted guest execution are not claimed as repaired.

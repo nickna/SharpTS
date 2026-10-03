@@ -62,6 +62,7 @@ public partial class RuntimeEmitter
         EmittedGeneratorRuntime Generators,
         EmittedInvocationRuntime Invocation,
         EmittedObjectReadRuntime ObjectRead,
+        EmittedSymbolRuntime Symbols,
         FieldInfo UndefinedInstance,
         Type UndefinedType
     );
@@ -861,7 +862,7 @@ public partial class RuntimeEmitter
         EmitIteratorClose(
             typeBuilder,
             runtime.IteratorProtocol,
-            new IteratorCloseInputs(runtime.Errors, runtime.Generators, runtime.Invocation, runtime.ObjectRead, runtime.Sentinels.UndefinedInstance, runtime.Sentinels.UndefinedType)
+            new IteratorCloseInputs(runtime.Errors, runtime.Generators, runtime.Invocation, runtime.ObjectRead, runtime.Symbols, runtime.Sentinels.UndefinedInstance, runtime.Sentinels.UndefinedType)
         );
     }
 
@@ -887,7 +888,7 @@ public partial class RuntimeEmitter
         var validateResult = il.DefineLabel();
         var finishTry = il.DefineLabel();
         var done = il.DefineLabel();
-        var resultIsObject = il.DefineLabel();
+        var invalidResult = il.DefineLabel();
 
         // A throw completion wins over every abrupt completion produced by
         // IteratorClose. A small catch around the normal algorithm preserves it.
@@ -929,20 +930,19 @@ public partial class RuntimeEmitter
         // IteratorClose requires the return method's result to be an Object.
         il.MarkLabel(validateResult);
         il.Emit(OpCodes.Ldloc, closeResult);
-        il.Emit(OpCodes.Brfalse, resultIsObject);
-        il.Emit(OpCodes.Ldloc, closeResult);
-        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
-        il.Emit(OpCodes.Brtrue, resultIsObject);
-        il.Emit(OpCodes.Ldloc, closeResult);
-        il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brtrue, resultIsObject);
-        il.Emit(OpCodes.Ldloc, closeResult);
-        il.Emit(OpCodes.Isinst, _types.Boolean);
-        il.Emit(OpCodes.Brtrue, resultIsObject);
-        il.Emit(OpCodes.Ldloc, closeResult);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brfalse, finishTry);
-        il.MarkLabel(resultIsObject);
+        il.Emit(OpCodes.Brfalse, invalidResult);
+        foreach (var primitiveType in new Type[]
+        {
+            inputs.UndefinedType, _types.Double, _types.Boolean, _types.String,
+            _types.BigInteger, inputs.Symbols.Type
+        })
+        {
+            il.Emit(OpCodes.Ldloc, closeResult);
+            il.Emit(OpCodes.Isinst, primitiveType);
+            il.Emit(OpCodes.Brtrue, invalidResult);
+        }
+        il.Emit(OpCodes.Br, finishTry);
+        il.MarkLabel(invalidResult);
         GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Iterator .return() must return an object");
 
         il.MarkLabel(finishTry);
