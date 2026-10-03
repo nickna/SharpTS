@@ -135,10 +135,8 @@ public partial class AsyncMoveNextEmitter
         className = _ctx!.ResolvePrivateFieldOwner(className, fieldName);
 
         // Static private field: ClassName.#field
-        if (((gp.Object is Expr.Variable classVar &&
-              classVar.Name.Lexeme == _ctx!.CurrentClassShortName)
-             || (gp.Object is Expr.This && !_ctx!.IsInstanceMethod)) &&
-            _ctx!.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
+        if (IsStaticPrivateReceiver(gp.Object) &&
+            _ctx!.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var staticField))
         {
             _il.Emit(OpCodes.Ldsfld, staticField!);
             SetStackUnknown();
@@ -175,7 +173,7 @@ public partial class AsyncMoveNextEmitter
         }
 
         // Fallback static private field lookup
-        if (_ctx!.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var fallbackStaticField))
+        if (_ctx!.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var fallbackStaticField))
         {
             _il.Emit(OpCodes.Ldsfld, fallbackStaticField!);
             SetStackUnknown();
@@ -206,10 +204,8 @@ public partial class AsyncMoveNextEmitter
         className = _ctx!.ResolvePrivateFieldOwner(className, fieldName);
 
         // Static private field assignment: ClassName.#field = value
-        if (((sp.Object is Expr.Variable classVar &&
-              classVar.Name.Lexeme == _ctx!.CurrentClassShortName)
-             || (sp.Object is Expr.This && !_ctx!.IsInstanceMethod)) &&
-            _ctx!.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
+        if (IsStaticPrivateReceiver(sp.Object) &&
+            _ctx!.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var staticField))
         {
             EmitExpression(sp.Value);
             EnsureBoxed();
@@ -256,7 +252,7 @@ public partial class AsyncMoveNextEmitter
         }
 
         // Fallback static private field assignment
-        if (_ctx!.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var fallbackStaticField))
+        if (_ctx!.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var fallbackStaticField))
         {
             EmitExpression(sp.Value);
             EnsureBoxed();
@@ -290,10 +286,8 @@ public partial class AsyncMoveNextEmitter
         className = _ctx!.ResolvePrivateMethodOwner(className, methodName);
 
         // Static private method: ClassName.#method(...)
-        if (((cp.Object is Expr.Variable classVar &&
-              classVar.Name.Lexeme == _ctx!.CurrentClassShortName)
-             || (cp.Object is Expr.This && !_ctx!.IsInstanceMethod)) &&
-            _ctx!.ClassRegistry!.TryGetStaticPrivateMethod(className, methodName, out var staticMethod))
+        if (IsStaticPrivateReceiver(cp.Object) &&
+            _ctx!.ClassRegistry!.TryGetCallableStaticPrivateMethod(className, methodName, out var staticMethod))
         {
             // Spill args so an await inside one doesn't suspend with earlier args on the stack.
             var argLocals = cp.Arguments.Select(SpillBoxed).ToList();

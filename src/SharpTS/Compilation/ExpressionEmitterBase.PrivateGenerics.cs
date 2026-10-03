@@ -5,6 +5,12 @@ namespace SharpTS.Compilation;
 
 public abstract partial class ExpressionEmitterBase
 {
+    protected bool IsStaticPrivateReceiver(Expr receiver) =>
+        receiver is Expr.Variable variable &&
+        (variable.Name.Lexeme == Ctx.CurrentClassShortName ||
+         Ctx.TypeMap?.Get(receiver) is SharpTS.TypeSystem.TypeInfo.GenericClass) ||
+        receiver is Expr.This && !Ctx.IsInstanceMethod;
+
     protected bool TryEmitGenericPrivateGet(Expr.GetPrivate get)
     {
         string name = get.Name.Lexeme.TrimStart('#');

@@ -131,3 +131,43 @@ brand storage and field installation timing. The successor is separate from
 private-method values and repeated class-evaluation identity. Fixtures and
 reference commands were exercised; `git diff --check` passed. No production code
 changed, so the previously completed core/quality/AOT checks remain applicable.
+
+## #1904 — Generic static-private lookup
+
+**Outcome: demonstrated lookup gap repaired; historical source remains missing.**
+The #1853/#1854 notes do not provide the original generic static-private source
+or deadline. #1861's retained tests cover TypeScript `private static` visibility
+and public static storage, not the reported ECMAScript `static #name` case. New
+controls on unchanged `0ad37b57` and `ebc68d10` rejected generic static-private
+field reads/writes and method calls before execution. Node and TypeScript accept
+them. They are explicitly new controls, not recovered historical reproducers.
+
+The checker recognizes the generic constructor while retaining its lexical
+declaration identity, field type and method argument checks. Static private
+metadata now resolves to the same closed, type-erased declaring owner used by
+public static members. Ordinary, async, generator and async-generator emission
+use those field/method tokens. A typed generic constructor alias takes static
+dispatch even when the class also has instance-private storage.
+
+Verification:
+
+- 218 affected tests passed with compiled IL verification, including generic
+  and non-generic controls, distinct type arguments, module-local same-named
+  owners, aliases with instance-private storage, closure/suspension and negative
+  type/arity/access checks. Release builds completed with the existing NU1902
+  warning and no errors.
+- Four single-file controls match Node in CLI interpretation and verified
+  standalone execution with zero exit status. The mixed-storage alias control
+  additionally matches Node's `7` after compilation and IL verification.
+- Five pinned Test262 static-private controls were compared with unchanged
+  baseline: all compiled outcomes remain identical (three Pass, two RuntimeError).
+  Interpretation has four Pass and one Fail; the inner-arrow improvement from
+  baseline's three Pass/two Fail belongs to the earlier #1902 lexical-owner repair.
+  Remaining static receiver errors are preserved, not counted as repaired here.
+- Final code-quality gates and the actual AOT/trim/single-file analyzer baseline
+  passed with zero errors and zero analyzer warnings.
+
+No hosted execution is claimed. The full core run recorded under #1902 predates
+this checker/emitter change; this child uses the affected suite above. Broader
+static-private receiver semantics and the separately transferred private-method
+value/brand-query features remain outside this focused lookup repair.

@@ -33,11 +33,10 @@ public partial class ILEmitter
         className = _ctx.ResolvePrivateFieldOwner(className, fieldName);
 
         // Check if it's a static private field access (ClassName.#field)
-        if ((gp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassShortName)
-            || (gp.Object is Expr.This && !_ctx.IsInstanceMethod))
+        if (IsStaticPrivateReceiver(gp.Object))
         {
             // Try static private field
-            if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
+            if (_ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var staticField))
             {
                 if (gp.Object is Expr.This)
                     EmitStaticPrivateReceiverBrandCheck(className, fieldName);
@@ -95,7 +94,7 @@ public partial class ILEmitter
         }
 
         // Fallback: check for static private field (covers ClassName.#staticField case)
-        if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var fallbackStaticField))
+        if (_ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var fallbackStaticField))
         {
             IL.Emit(OpCodes.Ldsfld, fallbackStaticField!);
             SetStackUnknown();
@@ -130,10 +129,9 @@ public partial class ILEmitter
         className = _ctx.ResolvePrivateFieldOwner(className, fieldName);
 
         // Check if it's a static private field
-        if ((sp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassShortName)
-            || (sp.Object is Expr.This && !_ctx.IsInstanceMethod))
+        if (IsStaticPrivateReceiver(sp.Object))
         {
-            if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
+            if (_ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var staticField))
             {
                 if (sp.Object is Expr.This)
                     EmitStaticPrivateReceiverBrandCheck(className, fieldName);
@@ -207,7 +205,7 @@ public partial class ILEmitter
         }
 
         // Fallback for static private field
-        if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var setFallbackStaticField))
+        if (_ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var setFallbackStaticField))
         {
             EmitExpression(sp.Value);
             EmitBoxIfNeeded(sp.Value);
@@ -245,10 +243,9 @@ public partial class ILEmitter
         className = _ctx.ResolvePrivateMethodOwner(className, methodName);
 
         // Check for static private method (ClassName.#method())
-        if ((cp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassShortName)
-            || (cp.Object is Expr.This && !_ctx.IsInstanceMethod))
+        if (IsStaticPrivateReceiver(cp.Object))
         {
-            if (_ctx.ClassRegistry!.TryGetStaticPrivateMethod(className, methodName, out var staticMethod))
+            if (_ctx.ClassRegistry!.TryGetCallableStaticPrivateMethod(className, methodName, out var staticMethod))
             {
                 if (cp.Object is Expr.This)
                     EmitStaticPrivateReceiverBrandCheck(className, methodName);
@@ -358,7 +355,7 @@ public partial class ILEmitter
         }
 
         // Fallback: check for static private method
-        if (_ctx.ClassRegistry!.TryGetStaticPrivateMethod(className, methodName, out var fallbackStaticMethod))
+        if (_ctx.ClassRegistry!.TryGetCallableStaticPrivateMethod(className, methodName, out var fallbackStaticMethod))
         {
             foreach (var arg in cp.Arguments)
             {

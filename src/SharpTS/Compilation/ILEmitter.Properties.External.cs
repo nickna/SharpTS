@@ -209,7 +209,7 @@ public partial class ILEmitter
 
         // Try static private fields - strip leading # if present
         string privateName = propertyName.StartsWith('#') ? propertyName[1..] : propertyName;
-        if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, privateName, out var staticPrivateField))
+        if (_ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, privateName, out var staticPrivateField))
         {
             IL.Emit(OpCodes.Ldsfld, staticPrivateField!);
             SetStackUnknown();
@@ -274,7 +274,7 @@ public partial class ILEmitter
 
         // Try static private fields
         string privateFieldName = propertyName.StartsWith('#') ? propertyName[1..] : propertyName;
-        if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, privateFieldName, out var staticPrivateField))
+        if (_ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, privateFieldName, out var staticPrivateField))
         {
             EmitExpression(value);
             EmitBoxIfNeeded(value);

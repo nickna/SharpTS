@@ -1293,7 +1293,7 @@ public partial class TypeChecker
         }
 
         // Check static private fields if accessing on the class itself
-        if (objType is TypeInfo.Class && _currentClass.StaticPrivateFieldTypes.TryGetValue(fieldName, out var staticFieldType))
+        if (IsStaticPrivateConstructor(objType) && _currentClass.StaticPrivateFieldTypes.TryGetValue(fieldName, out var staticFieldType))
         {
             return staticFieldType;
         }
@@ -1322,7 +1322,7 @@ public partial class TypeChecker
         {
             fieldType = pf;
         }
-        else if (objType is TypeInfo.Class && _currentClass.StaticPrivateFieldTypes.TryGetValue(fieldName, out var spf))
+        else if (IsStaticPrivateConstructor(objType) && _currentClass.StaticPrivateFieldTypes.TryGetValue(fieldName, out var spf))
         {
             fieldType = spf;
         }
@@ -1360,7 +1360,7 @@ public partial class TypeChecker
         {
             methodType = pm;
         }
-        else if (objType is TypeInfo.Class && _currentClass.StaticPrivateMethodTypes.TryGetValue(methodName, out var spm))
+        else if (IsStaticPrivateConstructor(objType) && _currentClass.StaticPrivateMethodTypes.TryGetValue(methodName, out var spm))
         {
             methodType = spm;
         }
@@ -1410,4 +1410,12 @@ public partial class TypeChecker
 
         return funcType.ReturnType;
     }
+
+    // Generic constructor aliases retain their declaration identity. Accepting
+    // every generic class here would expose another declaration's same-spelled
+    // private member through the current class's metadata.
+    private bool IsStaticPrivateConstructor(TypeInfo type) =>
+        type is TypeInfo.Class ||
+        type is TypeInfo.GenericClass generic && _currentClass != null &&
+        SourceDerivesFromDeclaration(generic, _currentClass.Core.DeclarationId);
 }

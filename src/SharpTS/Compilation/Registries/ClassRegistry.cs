@@ -467,6 +467,34 @@ public sealed class ClassRegistry
         return false;
     }
 
+    /// <summary>Resolves a private static field on its type-erased declaring owner.</summary>
+    public bool TryGetCallableStaticPrivateField(string qualifiedClassName, string fieldName, out System.Reflection.FieldInfo? field)
+    {
+        if (!TryGetStaticPrivateField(qualifiedClassName, fieldName, out var builder))
+        {
+            field = null;
+            return false;
+        }
+
+        var closedType = GetClosedGenericDeclaringType(qualifiedClassName, qualifiedClassName, _builders[qualifiedClassName]);
+        field = closedType != null ? EmitterTypeHelpers.ResolveField(closedType, builder!) : builder;
+        return true;
+    }
+
+    /// <summary>Resolves a private static method on its type-erased declaring owner.</summary>
+    public bool TryGetCallableStaticPrivateMethod(string qualifiedClassName, string methodName, out System.Reflection.MethodInfo? method)
+    {
+        if (!TryGetStaticPrivateMethod(qualifiedClassName, methodName, out var builder))
+        {
+            method = null;
+            return false;
+        }
+
+        var closedType = GetClosedGenericDeclaringType(qualifiedClassName, qualifiedClassName, _builders[qualifiedClassName]);
+        method = closedType != null ? EmitterTypeHelpers.ResolveMethod(closedType, builder!) : builder;
+        return true;
+    }
+
     /// <summary>
     /// Gets a static method that can be called, handling generic types by creating a closed generic type.
     /// For non-generic classes, returns the MethodBuilder directly.

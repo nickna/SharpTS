@@ -1012,10 +1012,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
         className = Ctx.ResolvePrivateFieldOwner(className, fieldName);
 
-        if (((gp.Object is Expr.Variable classVar &&
-              classVar.Name.Lexeme == Ctx.CurrentClassShortName)
-             || (gp.Object is Expr.This && !Ctx.IsInstanceMethod)) &&
-            Ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
+        if (IsStaticPrivateReceiver(gp.Object) &&
+            Ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var staticField))
         {
             IL.Emit(OpCodes.Ldsfld, staticField!);
             SetStackUnknown();
@@ -1049,7 +1047,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return;
         }
 
-        if (Ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var fallbackStaticField))
+        if (Ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var fallbackStaticField))
         {
             IL.Emit(OpCodes.Ldsfld, fallbackStaticField!);
             SetStackUnknown();
@@ -1082,10 +1080,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
         className = Ctx.ResolvePrivateFieldOwner(className, fieldName);
 
-        if (((sp.Object is Expr.Variable classVar &&
-              classVar.Name.Lexeme == Ctx.CurrentClassShortName)
-             || (sp.Object is Expr.This && !Ctx.IsInstanceMethod)) &&
-            Ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
+        if (IsStaticPrivateReceiver(sp.Object) &&
+            Ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var staticField))
         {
             EmitExpression(sp.Value);
             EnsureBoxed();
@@ -1128,7 +1124,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return;
         }
 
-        if (Ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var fallbackStaticField))
+        if (Ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var fallbackStaticField))
         {
             EmitExpression(sp.Value);
             EnsureBoxed();
@@ -1164,10 +1160,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
         className = Ctx.ResolvePrivateMethodOwner(className, methodName);
 
-        if (((cp.Object is Expr.Variable classVar &&
-              classVar.Name.Lexeme == Ctx.CurrentClassShortName)
-             || (cp.Object is Expr.This && !Ctx.IsInstanceMethod)) &&
-            Ctx.ClassRegistry!.TryGetStaticPrivateMethod(className, methodName, out var staticMethod))
+        if (IsStaticPrivateReceiver(cp.Object) &&
+            Ctx.ClassRegistry!.TryGetCallableStaticPrivateMethod(className, methodName, out var staticMethod))
         {
             foreach (var arg in cp.Arguments)
             {
