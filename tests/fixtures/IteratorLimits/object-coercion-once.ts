@@ -1,0 +1,1 @@
+let calls=0;const limit:any={valueOf(){calls++;return 1.9;}};const a=Iterator.from([1,2,3]).take(limit);console.log(calls,a.toArray().join(","),calls);const b=Iterator.from([1,2,3]).drop(limit);console.log(calls,b.toArray().join(","),calls);

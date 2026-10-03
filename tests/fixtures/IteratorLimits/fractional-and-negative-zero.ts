@@ -1,0 +1,1 @@
+console.log(Iterator.from([1,2,3]).take(1.9).toArray().join(","),Iterator.from([1,2,3]).drop(1.9).toArray().join(","));console.log(Iterator.from([1,2,3]).take(-0.5).toArray().length,Iterator.from([1,2,3]).drop(-0.5).toArray().join(","));console.log(Iterator.from([1]).take(-0).toArray().length,Iterator.from([1]).drop(-0).toArray().join(","));

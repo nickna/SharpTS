@@ -1,0 +1,1 @@
+const marker={tag:7};const limit:any={valueOf(){throw marker;}};const source:any={closed:0,next(){return {done:true};},return(){this.closed++;throw {tag:9};}};try{Iterator.from(source).take(limit);}catch(e:any){console.log(e===marker,source.closed);}try{Iterator.from(source).drop(limit);}catch(e:any){console.log(e===marker,source.closed);}

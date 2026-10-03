@@ -16,10 +16,15 @@ public partial class RuntimeEmitter
         MethodInfo InvokeMethod,
         MethodInfo IsTruthy,
         EmittedGeneratorRuntime Generators,
+        MethodInfo ToNumber,
+        MethodInfo CloseIterator,
         FieldInfo UndefinedInstance
     );
 
     private readonly record struct IteratorCallbackInputs(MethodInfo InvokeMethod, MethodInfo IsTruthy);
+
+    private readonly record struct IteratorLimitInputs(EmittedErrorRuntime Errors,
+        MethodInfo ToNumber, MethodInfo CloseIterator);
 
 
     /// <summary>
@@ -41,8 +46,9 @@ public partial class RuntimeEmitter
         // Lazy factory methods (on $Runtime)
         EmitIteratorMap(typeBuilder, iteratorHelpers);
         EmitIteratorFilter(typeBuilder, iteratorHelpers);
-        EmitIteratorTake(typeBuilder, iteratorHelpers);
-        EmitIteratorDrop(typeBuilder, iteratorHelpers);
+        var limits = new IteratorLimitInputs(inputs.Errors, inputs.ToNumber, inputs.CloseIterator);
+        EmitIteratorTake(typeBuilder, iteratorHelpers, limits);
+        EmitIteratorDrop(typeBuilder, iteratorHelpers, limits);
         EmitIteratorFlatMap(typeBuilder, iteratorHelpers);
 
         // Eager methods (on $Runtime)
@@ -218,14 +224,14 @@ public partial class RuntimeEmitter
         );
 
         var sourceField = typeBuilder.DefineField("_source", _types.IEnumeratorOfObject, FieldAttributes.Private);
-        var limitField = typeBuilder.DefineField("_limit", _types.Int32, FieldAttributes.Private);
-        var countField = typeBuilder.DefineField("_count", _types.Int32, FieldAttributes.Private);
+        var limitField = typeBuilder.DefineField("_limit", _types.Double, FieldAttributes.Private);
+        var countField = typeBuilder.DefineField("_count", _types.Double, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
 
-        // Constructor(IEnumerator<object> source, int limit)
+        // Constructor(IEnumerator<object> source, double integerLimit)
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
-            [_types.IEnumeratorOfObject, _types.Int32]);
+            [_types.IEnumeratorOfObject, _types.Double]);
         iteratorHelpers.TakeIteratorCtor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
@@ -270,7 +276,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, countField);
-        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldc_R8, 1d);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stfld, countField);
 
@@ -303,14 +309,14 @@ public partial class RuntimeEmitter
         );
 
         var sourceField = typeBuilder.DefineField("_source", _types.IEnumeratorOfObject, FieldAttributes.Private);
-        var toDropField = typeBuilder.DefineField("_toDrop", _types.Int32, FieldAttributes.Private);
-        var droppedField = typeBuilder.DefineField("_dropped", _types.Int32, FieldAttributes.Private);
+        var toDropField = typeBuilder.DefineField("_toDrop", _types.Double, FieldAttributes.Private);
+        var droppedField = typeBuilder.DefineField("_dropped", _types.Double, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
 
-        // Constructor(IEnumerator<object> source, int toDrop)
+        // Constructor(IEnumerator<object> source, double integerLimit)
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public, CallingConventions.Standard,
-            [_types.IEnumeratorOfObject, _types.Int32]);
+            [_types.IEnumeratorOfObject, _types.Double]);
         iteratorHelpers.DropIteratorCtor = ctor;
 
         var ctorIl = ctor.GetILGenerator();
@@ -347,7 +353,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, droppedField);
-        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldc_R8, 1d);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stfld, droppedField);
 
@@ -729,35 +735,61 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorTake(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
+    private void EmitIteratorTake(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorLimitInputs inputs)
     {
-        // static object IteratorTake(object source, int limit)
-        var method = typeBuilder.DefineMethod(
-            "IteratorTake", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object, [_types.Object, _types.Int32]);
-        iteratorHelpers.Take = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, iteratorHelpers.TakeIteratorCtor);
-        il.Emit(OpCodes.Ret);
+        iteratorHelpers.Take = EmitIteratorLimitFactory(typeBuilder, iteratorHelpers.NormalizeToEnumerator,
+            iteratorHelpers.TakeIteratorCtor, inputs, "IteratorTake");
     }
 
-    private void EmitIteratorDrop(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
+    private void EmitIteratorDrop(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorLimitInputs inputs)
+    {
+        iteratorHelpers.Drop = EmitIteratorLimitFactory(typeBuilder, iteratorHelpers.NormalizeToEnumerator,
+            iteratorHelpers.DropIteratorCtor, inputs, "IteratorDrop");
+    }
+
+    private MethodBuilder EmitIteratorLimitFactory(TypeBuilder typeBuilder, MethodInfo normalize,
+        ConstructorInfo constructor, IteratorLimitInputs inputs, string name)
     {
         var method = typeBuilder.DefineMethod(
-            "IteratorDrop", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object, [_types.Object, _types.Int32]);
-        iteratorHelpers.Drop = method;
-
+            name, MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.Object]);
         var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
+        var limit = il.DeclareLocal(_types.Double);
+        var invalid = il.DefineLabel();
+        var valid = il.DefineLabel();
+        // Coercion/validation precedes source normalization. A resulting throw
+        // closes the receiver, retaining that throw even if close itself fails.
+        il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, iteratorHelpers.DropIteratorCtor);
+        il.Emit(OpCodes.Call, inputs.ToNumber);
+        il.Emit(OpCodes.Stloc, limit);
+        il.Emit(OpCodes.Ldloc, limit);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double]));
+        il.Emit(OpCodes.Brtrue, invalid);
+        il.Emit(OpCodes.Ldloc, limit);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", [_types.Double]));
+        il.Emit(OpCodes.Stloc, limit);
+        il.Emit(OpCodes.Ldloc, limit);
+        il.Emit(OpCodes.Ldc_R8, 0d);
+        il.Emit(OpCodes.Blt, invalid);
+        il.Emit(OpCodes.Leave, valid);
+        il.MarkLabel(invalid);
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.RangeErrorConstructor,
+            "Iterator limit must be a non-negative number");
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, inputs.CloseIterator);
+        il.Emit(OpCodes.Rethrow);
+        il.EndExceptionBlock();
+        il.MarkLabel(valid);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, normalize);
+        il.Emit(OpCodes.Ldloc, limit);
+        il.Emit(OpCodes.Newobj, constructor);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 
     private void EmitIteratorFlatMap(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)

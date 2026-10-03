@@ -903,3 +903,29 @@ callback checker failures. TypeScript accepts value-returning block callbacks;
 fresh unchanged main and current reject them before emission. They are excluded
 from passing totals. No callback typing, abrupt-close policy or hosted guest
 execution repair is claimed.
+
+## #1746 — Iterator take/drop limit validation
+
+**Outcome: repaired.** Both compiled factories receive the boxed limit and
+perform abstract numeric coercion once, reject NaN, truncate fractions and
+reject negative integer limits. Validation/coercion failure closes the receiver
+while preserving the incoming error. Lazy wrappers retain double integer
+limits/counters, preserving infinity and large finite limits without Int32
+narrowing. Both unchanged originals now match Node. This follows the published
+[ES2025 take/drop contract](https://tc39.es/ecma262/2025/multipage/control-abstraction-objects.html#sec-iterator.prototype.take);
+the newer draft's finite safe-integer ceiling is not applied to original-version
+expectations.
+
+All **111 selected tests pass** with compiled IL verification, including helper
+behavior, native scoped emission and retained #1745 coverage. Twelve compiled
+references also run as isolated standalone output, with exact Node stdout,
+empty stderr, no SharpTS reference/copy and clean exit within 30 seconds. Native
+reused-emitter tests check the revised boxed factory/double constructor ABI,
+negative/NaN rejection, infinity and output isolation across minimal, optional
+and hosted declarations. Node and TypeScript check every source. Quality gates
+and the actual AOT analyzer baseline pass with zero analyzer warnings.
+
+`tests/fixtures/IteratorLimits` records numeric and coercion boundaries, invalid
+closing, and exception precedence. Frozen child #1747 still owns normal
+limit-reached closing. No interpreter, arbitrary invalid-receiver or hosted
+guest execution repair is claimed.

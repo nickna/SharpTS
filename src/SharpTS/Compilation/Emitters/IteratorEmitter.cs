@@ -34,14 +34,14 @@ public sealed class IteratorEmitter : ITypeEmitterStrategy
             case "take":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                EmitIntArg(emitter, arguments);
+                EmitLimitArg(emitter, arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.Take);
                 return true;
 
             case "drop":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                EmitIntArg(emitter, arguments);
+                EmitLimitArg(emitter, arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.IteratorHelpers.Drop);
                 return true;
 
@@ -139,7 +139,7 @@ public sealed class IteratorEmitter : ITypeEmitterStrategy
         return false;
     }
 
-    private static void EmitIntArg(IEmitterContext emitter, List<Expr> arguments)
+    private static void EmitLimitArg(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -148,13 +148,10 @@ public sealed class IteratorEmitter : ITypeEmitterStrategy
         {
             emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
-            // Convert object (boxed double) to int
-            il.Emit(OpCodes.Unbox_Any, ctx.Types.Double);
-            il.Emit(OpCodes.Conv_I4);
         }
         else
         {
-            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
         }
     }
 }
