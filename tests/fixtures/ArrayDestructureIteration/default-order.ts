@@ -1,0 +1,1 @@
+const events:string[]=[];const source:any={i:0,[Symbol.iterator](){return this;},next(){events.push("next");this.i++;return {value:undefined,done:this.i>2};},return(){events.push("close");return {done:true};}};function fallback(){events.push("default");return 7;}const [a=fallback()]=source;console.log(a,events.join(","));

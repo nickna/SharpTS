@@ -1,0 +1,1 @@
+const source:any={reads:0,closed:0,[Symbol.iterator](){return this;},next(){this.reads++;return {done:true};},return(){this.closed++;return {done:true};}};const [a=7,b=9]=source;console.log(a,b,source.reads,source.closed);

@@ -980,3 +980,31 @@ It also retains a separate any-typed toArray dispatch failure, excluded from
 passing counts: unchanged main and current throw the same TypeError with empty
 stdout. No full primitive/override compatibility, dynamic helper dispatch,
 interpreter or hosted guest execution repair is claimed.
+
+## #1750 — Incremental array binding and cleanup
+
+**Outcome: finite design transfer, not repaired.** The concrete contract is
+linked in [incremental-array-binding.md](plans/incremental-array-binding.md)
+and will be included in the consolidated PR. No separate successor issue was
+published. Exact partial/empty programs still consume four next calls without
+closing, in both interpreted and compiled execution. Fresh unchanged main and
+current preserve the same wrong results; the original rest and weak generator
+controls remain correct. Saved original outputs verify their IL, have empty
+stderr and exit cleanly within 30 seconds.
+
+Additional default-order, nested-order and abrupt-default probes establish why
+limited materialization or a final close call cannot satisfy binding semantics.
+The recovered infinite close-result probe still times out at the unchanged
+30-second deadline with empty streams. Every failing execution is retained
+outside passing counts. The linked plan specifies cursor/completion state,
+binding scope, interleaved defaults, nested close order, error precedence,
+existing consumer transforms and finite acceptance/stopping conditions.
+
+All **313 selected tests pass** with compiled IL verification. Four independent
+passing controls run in both engines and as isolated saved standalone outputs
+with exact stdout, empty stderr, clean exit, no SharpTS reference/copy and the
+original 30-second deadline. Node and TypeScript check all ten fixture sources.
+Quality gates pass; production code is unchanged, so the verified #1748 actual
+AOT baseline remains applicable. No iterator-close or hosted execution repair
+is claimed. Automatic approval review rejected publishing a separate issue;
+the design remains a reviewable part of the requested consolidated PR.
