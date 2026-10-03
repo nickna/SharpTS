@@ -1,0 +1,1 @@
+function f(this:any,a:number,b:number){return this.x+a+b;}const p:any=new Proxy(f,{apply(target:any,receiver:any,args:any[]){return target.apply(receiver,args)*2;}});console.log(p.call({x:1},2,3),p.apply({x:4},[5,6]),p.bind({x:7},8)(9));

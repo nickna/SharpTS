@@ -1393,6 +1393,25 @@ public partial class RuntimeEmitter
             AcceptCallable(inputs.Set!.BoundMethodType);
         AcceptCallable(_types.Type);
         AcceptCallable(_types.FuncObjectArrayToObject);
+        var proxyTargetLabel = il.DefineLabel();
+        var nonProxyTargetLabel = il.DefineLabel();
+        void LoadBindTarget()
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, targetField);
+        }
+        EmitProxyTypeCheck(il, LoadBindTarget, proxyTargetLabel, nonProxyTargetLabel);
+        il.MarkLabel(proxyTargetLabel);
+        // Proxy objects are callable only when their target has [[Call]].
+        // Ask the soft-runtime contract without adding a hard assembly reference.
+        EmitProxyMethodCall(il, LoadBindTarget, "get_IsCallable", () =>
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Object);
+        });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Brtrue, callableTargetLabel);
+        il.MarkLabel(nonProxyTargetLabel);
         GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Function.prototype.bind called on incompatible receiver");
         il.MarkLabel(callableTargetLabel);
 

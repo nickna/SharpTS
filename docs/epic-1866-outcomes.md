@@ -380,3 +380,31 @@ or async-closure repair is claimed. Quality gates and actual AOT/trim/single-fil
 analyzer checks pass with zero analyzer warnings. Existing NU1902 remains.
 Fixtures and scope are retained in `tests/fixtures/ExtractedFunctionWrappers`;
 Proxy and hosted execution are not claimed by this task.
+
+## #1715 — Callable Proxy call/apply/bind programs
+
+**Outcome: current original-source behavior repaired; historical timeout not
+reproduced.** Both exact issue programs compile and pass IL verification at
+unchanged `0ad37b57` and pre-repair `a9baf9a0`, then terminate with bind-validation
+TypeError rather than timing out. A labelled operation-isolation control proves
+call and apply already succeed and bind is the earliest failing operation.
+The interpreter independently loses the bound receiver (NaN or a null-receiver
+property error on the original programs).
+
+Compiled bind now validates a Proxy through its soft-runtime IsCallable contract.
+Both interpreter bound-call paths retain the Proxy's receiver and arguments.
+The original outputs remain `12 30 48` and `3 9 15`; both modes and isolated
+saved outputs match Node. Three isolated tests preserve runtime-bearing
+deployment, byte-check the copied compiler runtime, verify IL and require zero
+exit, empty stderr and completion within the original 30-second execution
+limit. Controls include a direct callable, nested Proxies, bound arguments,
+receiver preservation, thrown-object identity and non-callable Proxy rejection.
+
+The broader suite has **128 passes and one existing union getter IL failure
+(129 total)**, reproduced unchanged on main. A final 36-case focused run also
+passes, including boxed/RuntimeValue bound-call entry points. Separate
+TypeScript/Node references accept the sources, Release builds and quality gates
+pass, and the actual AOT analyzer baseline has zero analyzer warnings.
+`tests/fixtures/CallableProxyWrappers` preserves the historical-versus-current
+failure distinction. No historical timeout root cause, runtime-independent
+standalone Proxy deployment or hosted execution is claimed.

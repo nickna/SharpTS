@@ -1,4 +1,5 @@
 using SharpTS.Execution;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -100,6 +101,9 @@ public static class FunctionBuiltIns
     {
         var callable = receiver.ToObject() as ISharpTSCallable
             ?? throw new Exception("Runtime Error: bind called on non-function.");
+        if (callable is SharpTSProxy { IsCallable: false })
+            throw new ThrowException(new SharpTSTypeError(
+                "Function.prototype.bind called on incompatible receiver"));
 
         var thisArg = args.Length > 0 ? args[0].ToObject() : null;
         var boundArgs = new List<object?>(Math.Max(0, args.Length - 1));
@@ -426,6 +430,10 @@ public class BoundFunction : ISharpTSCallable
             combined[i] = RuntimeValue.FromBoxed(_boundArgs[i]);
         arguments.CopyTo(combined.AsSpan(_boundArgs.Count));
 
+        if (!_ignoreThisArg && _target is SharpTSProxy proxy)
+            return RuntimeValue.FromBoxed(proxy.TrapApply(
+                _thisArg, CallableInterop.ToBoxedList(combined), interpreter));
+
         // Delegate to target's V2 path if available
         if (!_ignoreThisArg && _thisArg != null)
         {
@@ -473,6 +481,9 @@ public class BoundFunction : ISharpTSCallable
         // Combine bound args with call args
         var combinedArgs = new List<object?>(_boundArgs);
         combinedArgs.AddRange(arguments);
+
+        if (!_ignoreThisArg && _target is SharpTSProxy proxy)
+            return proxy.TrapApply(_thisArg, combinedArgs, interpreter);
 
         // Handle binding 'this' for the target function
         if (!_ignoreThisArg && _thisArg != null)

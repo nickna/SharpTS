@@ -19,6 +19,26 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.CallableProxyWrapperTests.Cases), MemberType = typeof(SharedTests.CallableProxyWrapperTests))]
+    public void Isolated_Issue1715CallableProxyWrappers_FinishWithinOriginalDeadline(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        // Preserve the issue's runtime-bearing Proxy deployment and its unchanged
+        // thirty-second execution deadline. The CLI copies the matching runtime.
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.True(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(File.ReadAllBytes(typeof(ILCompiler).Assembly.Location), File.ReadAllBytes(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.ExtractedFunctionWrapperTests.Cases), MemberType = typeof(SharedTests.ExtractedFunctionWrapperTests))]
     public void Isolated_Issue1714ExtractedWrappers_PreserveInvocation(string name, string source, string expected)
     {
