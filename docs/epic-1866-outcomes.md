@@ -604,3 +604,36 @@ zero analyzer warnings. `tests/fixtures/TypedReflectApply` retains the original
 sources, negative typing controls and the earlier TS2365 preparation diagnostic
 without inventing its missing exact source. No standalone Proxy independence,
 hosted guest execution or #1799 construction repair is claimed.
+
+## #1799 — Saved Proxy constructor programs
+
+**Outcome: repaired with both unchanged originals.** Unchanged `0ad37b57`
+IL-verifies the class-Proxy and aliased-Proxy-factory sources, deploys matching
+runtime bytes, produces no stdout and reports the original not-a-constructor
+errors. Fresh processes exit abnormally before 30 seconds; the issue's original
+deadline/kill observations remain separate, with no shutdown cause inferred.
+Both original ordinary/dynamic class controls still print `8` on main.
+
+Compiled Proxy and bound forwarding now uses general dynamic construction,
+which recognizes class Type tokens. The constructor predicate recognizes the
+exact Proxy factory, class Proxy targets retain callable branding, and both
+engines validate target constructibility before a construct trap. Interpreter
+function forwarding uses its fresh-receiver construction protocol.
+
+All nine new saved outputs verify IL and match Node, exiting zero with empty
+stderr within the original 30-second deadline. Proxy outputs compare deployed
+runtime bytes; ordinary class controls omit it. Tests cover nested/bound
+construction, arguments, default prototypes/instanceof, ordinary/revocable
+proxies, invalid/revoked targets, primitive trap results, thrown-object identity
+and recovery. Construct traps receive the exact target, arguments and newTarget.
+Two forced-standalone declaration checks preserve IL, omission and the CLI
+runtime note without being counted as standalone executable Proxy conformance.
+
+The selected run passes **206 of 207 tests** with compiled IL verification;
+the sole union-getter failure in `Proxy_HasTrap_TruthyCoercion(Compiled)` is
+identical on unchanged main. #1715 saved callable controls and native ownership,
+emitter reuse and hosted declaration/deployment checks pass. Node/TypeScript
+accept all nine positive fixtures. Quality gates and the actual AOT analyzer
+baseline pass with zero analyzer warnings. `tests/fixtures/ProxyConstructors`
+retains original observations and boundaries. No general Reflect.construct
+alternate-prototype or hosted guest execution repair is claimed.

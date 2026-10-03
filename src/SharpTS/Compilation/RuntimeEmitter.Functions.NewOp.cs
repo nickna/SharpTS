@@ -52,10 +52,19 @@ public partial class RuntimeEmitter
 
         // [[Construct]] on a bound function prepends arguments and delegates to
         // the target's construction protocol. Its bound call receiver is ignored.
-        EmitBoundConstruction(il, method, inputs.FunctionBindings.BoundType,
+        EmitBoundConstruction(il, dynamicConstruction.Value, inputs.FunctionBindings.BoundType,
             inputs.FunctionBindings.BoundTargetField, inputs.FunctionBindings.BoundArgumentsField);
-        EmitBoundConstruction(il, method, inputs.FunctionBindings.AnyType,
+        EmitBoundConstruction(il, dynamicConstruction.Value, inputs.FunctionBindings.AnyType,
             inputs.FunctionBindings.AnyTargetField, inputs.FunctionBindings.AnyArgumentsField);
+
+        // Proxy [[Construct]] exists only when the target is a constructor,
+        // including when a handler supplies its own construct trap.
+        var isConstructorOkLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.FunctionIntrospection.IsConstructor);
+        il.Emit(OpCodes.Brtrue, isConstructorOkLabel);
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "not a constructor");
+        il.MarkLabel(isConstructorOkLabel);
 
         var proxyLabel = il.DefineLabel();
         var notProxyLabel = il.DefineLabel();
@@ -79,7 +88,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_2);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, dynamicConstruction.Function);
+                il.Emit(OpCodes.Ldftn, dynamicConstruction.Value);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, object?[], object?>),
                     _types.Object, _types.IntPtr)!);
@@ -95,24 +104,6 @@ public partial class RuntimeEmitter
             });
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyLabel);
-
-        // Construct rejects non-constructor function values through the shared
-        // predicate, including marked arrows/async methods, generator kickoff
-        // methods and built-in helpers. Ordinary function declarations retain
-        // their construction protocol below.
-        var isConstructorOkLabel = il.DefineLabel();
-        var skipConstructorCheckLabel = il.DefineLabel();
-        // Only run the check for $TSFunction inputs — Type and other callees
-        // were already constructable in the legacy code path.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
-        il.Emit(OpCodes.Brfalse, skipConstructorCheckLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.FunctionIntrospection.IsConstructor);
-        il.Emit(OpCodes.Brtrue, isConstructorOkLabel);
-        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "not a constructor");
-        il.MarkLabel(skipConstructorCheckLabel);
-        il.MarkLabel(isConstructorOkLabel);
 
         // `new <plain object>` — plain objects have no [[Construct]] (#224):
         // throw TypeError instead of the legacy silent null. Namespace

@@ -2179,7 +2179,7 @@ public partial class RuntimeEmitter
                     runtime.Errors.CreateErrorFromTypeOrNull,
                     runtime.NumericCoercion.ToNumber,
                     runtime.FunctionIntrospection.IsConstructor,
-                    runtime.DynamicConstruction.Function,
+                    runtime.DynamicConstruction.Value,
                     runtime.Sentinels.UndefinedType,
                     runtime.ObjectRead.Property,
                     runtime.DataView,

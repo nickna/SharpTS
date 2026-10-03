@@ -48,7 +48,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct ReflectConstructInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, MethodInfo InvokeMethodUnwrapped, MethodInfo CreateErrorFromTypeOrNull,
-        MethodInfo ToNumber, MethodInfo IsConstructorMethod, MethodInfo NewOnFunction, Type UndefinedType,
+        MethodInfo ToNumber, MethodInfo IsConstructorMethod, MethodInfo ConstructDynamicValue, Type UndefinedType,
         MethodInfo GetProperty, EmittedDataViewRuntime? DataView, EmittedPromiseRuntime? Promise);
 
     private readonly record struct ReflectValueFormMethodsInputs(MethodInfo Get, MethodInfo Set,
@@ -1154,6 +1154,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, stringEqMethod);
         var notTlsConstructor = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notTlsConstructor);
+        // %Proxy%'s value wrapper is the exact CreateProxy factory. Its
+        // revocable helper and other runtime methods remain non-constructors.
+        il.Emit(OpCodes.Ldloc, miLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(System.Reflection.MemberInfo), "Name").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "CreateProxy");
+        il.Emit(OpCodes.Call, stringEqMethod);
+        il.Emit(OpCodes.Brtrue, notRuntimeLabel);
         il.Emit(OpCodes.Ldloc, miLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(System.Reflection.MemberInfo), "Name").GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "TlsCreateSocket");
@@ -1315,7 +1322,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_2);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, inputs.NewOnFunction);
+                il.Emit(OpCodes.Ldftn, inputs.ConstructDynamicValue);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, object?[], object?>),
                     _types.Object, _types.IntPtr)!);
@@ -1343,7 +1350,7 @@ public partial class RuntimeEmitter
         // Not a Type - use the ordinary function-construction protocol.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, inputs.NewOnFunction);
+        il.Emit(OpCodes.Call, inputs.ConstructDynamicValue);
         il.Emit(OpCodes.Ret);
 
         // Is a Type - use Activator.CreateInstance(type, args)

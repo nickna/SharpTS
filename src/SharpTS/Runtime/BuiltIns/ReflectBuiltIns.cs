@@ -455,8 +455,10 @@ public static class ReflectBuiltIns
     /// <c>Reflect.construct(function(){}, [], f)</c> and treats a throw as
     /// "not a constructor".
     /// </summary>
-    private static bool IsNotConstructor(object? value)
+    internal static bool IsNotConstructor(object? value)
     {
+        if (value is SharpTSProxy proxy)
+            return !proxy.HasConstructableTarget(target => !IsNotConstructor(target));
         // Direct rejections — methods/wrappers that are clearly callable but
         // aren't constructors per spec.
         if (Interpreter.IsNonConstructorWrapper(value))

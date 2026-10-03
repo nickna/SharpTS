@@ -682,6 +682,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.ObjectArray]);
+        runtime.DynamicConstruction.Value = runtime.RuntimeClass.Type.DefineMethod(
+            "ConstructDynamicValue",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.ObjectArray]);
 
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime, netConstruction);

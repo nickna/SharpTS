@@ -19,6 +19,47 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.ProxyConstructorTests.Cases), MemberType = typeof(SharedTests.ProxyConstructorTests))]
+    public void Isolated_Issue1799ProxyConstructors_FinishWithinOriginalDeadline(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        var runtime = directory.GetPath("SharpTS.dll");
+        bool requiresRuntime = name is not ("class-control" or "dynamic-class-control");
+        Assert.Equal(requiresRuntime, File.Exists(runtime));
+        if (requiresRuntime)
+            Assert.Equal(File.ReadAllBytes(typeof(TypeChecker).Assembly.Location), File.ReadAllBytes(runtime));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [InlineData("constructor-target")]
+    [InlineData("aliased-constructor")]
+    public void Issue1799ForcedStandaloneRetainsRuntimeOmissionAndWarning(string name)
+    {
+        var row = SharedTests.ProxyConstructorTests.Cases().Single(row => (string)row[0] == name);
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", (string)row[1]);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.Contains("Note: output uses features needing the SharpTS runtime (Proxy)", compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.TypedReflectApplyTests.Cases), MemberType = typeof(SharedTests.TypedReflectApplyTests))]
     public void Isolated_Issue1798ReflectApply_PreservesTypedAndDynamicResults(string name, string source, string expected)
     {
