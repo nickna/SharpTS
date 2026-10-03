@@ -1120,6 +1120,7 @@ public partial class RuntimeEmitter
             new IsConstructorInputs(
                 runtime.FunctionBindings,
                 runtime.FunctionValues,
+                runtime.FunctionAttributes,
                 runtime.Sentinels.UndefinedType,
                 runtime.ReflectedMethods.InvokeUnwrapped
             )

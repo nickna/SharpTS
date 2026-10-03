@@ -96,13 +96,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyLabel);
 
-        // ECMA-262 §7.3.14 Construct: throw TypeError if callee is a $TSFunction
-        // wrapping a built-in helper (declaring type == $Runtime). Catches
-        // Test262 patterns like `new Array.prototype.sort()` where the user
-        // expects TypeError on a non-constructor. Routed through IsConstructor
-        // so the policy stays in one place. We only throw for the explicit
-        // "$TSFunction wrapping $Runtime" subset — class refs (Type) and user
-        // function decls fall through to the existing construct path.
+        // Construct rejects non-constructor function values through the shared
+        // predicate, including marked arrows/async methods, generator kickoff
+        // methods and built-in helpers. Ordinary function declarations retain
+        // their construction protocol below.
         var isConstructorOkLabel = il.DefineLabel();
         var skipConstructorCheckLabel = il.DefineLabel();
         // Only run the check for $TSFunction inputs — Type and other callees

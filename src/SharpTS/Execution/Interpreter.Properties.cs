@@ -250,7 +250,7 @@ public partial class Interpreter
             args = boundConstructor.PrependArguments(args);
             callable = boundConstructor.Target;
         }
-        if (callable is ISharpTSNonConstructorCallable)
+        if (IsNonConstructorWrapper(callable))
         {
             throw new ThrowException(new SharpTSTypeError("X is not a constructor"));
         }
@@ -1550,8 +1550,15 @@ public partial class Interpreter
     /// per-method <see cref="BuiltInMethod.IsConstructor"/> flag, preserving
     /// constructor registrations while rejecting ordinary built-in methods.
     /// </summary>
-    private static bool IsNonConstructorWrapper(object? callable) => callable
+    internal static bool IsNonConstructorWrapper(object? callable) => callable
         is ISharpTSNonConstructorCallable
+        or SharpTSArrowFunction { HasOwnThis: false }
+        or SharpTSAsyncFunction
+        or SharpTSAsyncArrowFunction
+        or SharpTSGeneratorFunction
+        or SharpTSArrowGeneratorFunction
+        or SharpTSAsyncGeneratorFunction
+        or SharpTSAsyncArrowGeneratorFunction
         or ArrayPrototypeMethodWrapper
         or StringPrototypeMethodWrapper
         or NumberPrototypeMethodWrapper

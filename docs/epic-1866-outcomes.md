@@ -528,3 +528,28 @@ fixtures. Required quality gates and actual AOT analyzer baseline pass with
 zero analyzer warnings. `tests/fixtures/BoundConstructors` retains originals
 and command boundaries. No #1725 non-constructor policy repair, #1799 Proxy
 construction/deployment repair or hosted guest execution is claimed.
+
+## #1725 — Dynamic construction of non-constructor functions
+
+**Outcome: repaired in both engines.** Unchanged `0ad37b57` IL-verifies the
+exact branch-control source, exits zero with empty stderr and incorrectly prints
+three `constructed` lines. The shared compiled constructor predicate now reads
+existing non-constructible and state-machine attributes, and follows both bound
+wrapper targets. It rejects arrows, async functions and sync/async generators
+without removing compiled generator prototype properties. Interpreter new and
+Reflect construction share the same function-kind rejection policy.
+
+Both unchanged originals now produce their exact Node expectations. All
+**659 selected affected tests pass** with compiled IL verification, including
+generator execution, bound positive construction, repeated bound negative
+controls, Reflect target/newTarget checks, argument evaluation and catchable
+guest TypeError identity. Six isolated outputs verify IL, omit SharpTS references
+and exit zero with empty stderr. The separate compiled prototype control matches
+unchanged main. TypeScript/Node accept all reference sources; quality gates and
+the actual AOT analyzer baseline pass with zero analyzer warnings.
+
+The earlier new combined prototype control retains an independent interpreter
+failure: generator prototype properties are already absent there. Its source
+and unchanged Node expectation remain outside passing conformance counts.
+`tests/fixtures/NonConstructibleFunctions` records that boundary. No interpreter
+generator-prototype repair or hosted guest execution is claimed.

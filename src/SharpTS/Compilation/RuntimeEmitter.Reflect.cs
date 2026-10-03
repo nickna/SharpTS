@@ -8,6 +8,7 @@ public partial class RuntimeEmitter
     private readonly record struct IsConstructorInputs(
         EmittedFunctionBindingRuntime FunctionBindings,
         EmittedFunctionValueRuntime FunctionValues,
+        EmittedFunctionAttributesRuntime FunctionAttributes,
         Type UndefinedType,
         MethodBuilder InvokeMethodUnwrapped
     );
@@ -1071,6 +1072,28 @@ public partial class RuntimeEmitter
         var miNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, miLocal);
         il.Emit(OpCodes.Brfalse, miNullLabel);
+        // Callability does not imply [[Construct]]. Generator kickoff methods
+        // keep their prototype but carry their existing state-machine marker.
+        Type[] nonConstructorMarkers =
+        [
+            inputs.FunctionAttributes.NonConstructibleType,
+            typeof(System.Runtime.CompilerServices.AsyncStateMachineAttribute),
+            typeof(System.Runtime.CompilerServices.IteratorStateMachineAttribute),
+            typeof(System.Runtime.CompilerServices.AsyncIteratorStateMachineAttribute),
+        ];
+        foreach (var marker in nonConstructorMarkers)
+        {
+            var notMarked = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, miLocal);
+            il.Emit(OpCodes.Ldtoken, marker);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
+            il.Emit(OpCodes.Brfalse, notMarked);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notMarked);
+        }
         // dt = mi.DeclaringType
         var dtLocal = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldloc, miLocal);
@@ -1167,6 +1190,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, functionIntrospection.IsConstructor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoundLabel);
+
+        var notAnyBoundLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Brfalse, notAnyBoundLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.AnyTargetField);
+        il.Emit(OpCodes.Call, functionIntrospection.IsConstructor);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notAnyBoundLabel);
 
         // Default: not constructable
         il.Emit(OpCodes.Ldc_I4_0);
