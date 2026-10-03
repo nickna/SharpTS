@@ -1943,3 +1943,23 @@ hosted exports are not executed. Existing emitted enum helper declarations,
 signatures and scoped ownership remain unchanged. Quality gates and the actual
 AOT analyzer baseline pass with zero analyzer warnings. This does not claim
 general local enum freshness or metadata ownership audit closure.
+
+## #1789 — Missing enum reverse properties
+
+**Outcome: repaired by #1790, separately verified.** Ordinary enum object reads
+return the guest undefined value for missing properties. No native helper
+signature or direct-helper exception contract changes are required. Fresh
+unchanged main verifies the displayed original and exits cleanly with `threw`;
+current verifies and prints the complete Node output `undefined undefined`, with
+empty stderr and clean exit within the original 30 seconds.
+
+All **67 selected checks pass**, including six compiled script references, two
+compiled module references, eight isolated standalone executions and eight
+hosted declaration/deployment checks, plus enum value binding and native owner
+controls. TypeScript/Node establish all eight references before SharpTS execution.
+Coverage includes literal/dynamic/aliased/namespace and module-qualified access,
+valid/missing keys, numeric strings, nonfinite misses, typeof and undefined
+identity. Saved guests require verified IL, exact stdout, empty stderr, clean
+exit and no SharpTS reference/copy; hosted exports are not executed. The #1790
+quality and actual AOT checks pass; this completion adds regression coverage and
+documentation only and claims no metadata ownership audit closure.

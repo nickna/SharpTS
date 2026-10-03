@@ -19,6 +19,67 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.EnumMissingPropertyTests.ModuleCases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
+    public void Isolated_Issue1789ModuleEnumMissingProperties_VerifyMappingsAndIdentity(string name, string main, string library, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", main);
+        directory.CreateFile("lib.ts", library);
+        foreach (bool hosted in new[] { false, true })
+        {
+            var output = directory.GetPath(name + (hosted ? "-hosted" : "") + ".dll");
+            var compile = IntegrationTests.CliTestHelper.RunCli(
+                $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify" + (hosted ? " --target dll --hosted" : ""),
+                directory.Path, TimeSpan.FromSeconds(60));
+            Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+            Assert.Contains("IL verification passed.", compile.StandardOutput);
+            var references = GetAssemblyReferences(output);
+            Assert.DoesNotContain("SharpTS", references);
+            Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+            Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+            if (!hosted)
+                Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+                    verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.EnumMissingPropertyTests.Cases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
+    public void Isolated_Issue1789EnumMissingProperties_PreserveForwardAndReverseMappings(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.EnumMissingPropertyTests.HostedCases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
+    public void Isolated_Issue1789HostedEnumMissingProperties_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.EnumValueBindingTests.ModuleCases), MemberType = typeof(SharedTests.EnumValueBindingTests))]
     public void Isolated_Issue1790ModuleEnumBindings_VerifyMappingsAndIdentity(string name, string main, string library, string expected)
     {

@@ -70,6 +70,7 @@ public sealed class EnumValueBindingTests
     [Theory, MemberData(nameof(ModuleCases))]
     public void CompiledModulesShareEnumValues(string name, string main, string library, string expected)
     {
-        Assert.Equal(expected, TestHarness.RunModules(new() { ["main.ts"] = main, ["lib.ts"] = library }, "main.ts", ExecutionMode.Compiled));
+        var actual = TestHarness.RunModules(new() { ["main.ts"] = main, ["lib.ts"] = library }, "main.ts", ExecutionMode.Compiled);
+        Assert.True(expected == actual, $"{name}: Expected [{expected}], received [{actual}]");
     }
 }
