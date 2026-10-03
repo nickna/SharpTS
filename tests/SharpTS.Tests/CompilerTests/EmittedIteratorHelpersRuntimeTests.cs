@@ -113,7 +113,12 @@ public sealed class EmittedIteratorHelpersRuntimeTests
             Assert.Same(undefined, Call("IteratorForEach", values, visit)); Assert.Equal(6d, total);
             Assert.Same(undefined, Call("IteratorForEach", new List<object>(), visit)); Assert.Equal(6d, total);
             Assert.Equal(true, Call("IteratorSome", values, predicate)); Assert.Equal(false, Call("IteratorEvery", values, predicate));
-            Assert.Equal(2d, Call("IteratorFind", values, predicate)); Assert.Same(values, Call("IteratorFrom", values));
+            Assert.Equal(2d, Call("IteratorFind", values, predicate));
+            var fromArray = Call("IteratorFrom", values)!;
+            Assert.NotSame(values, fromArray);
+            Assert.Same(fromArray, Call("IteratorFrom", fromArray));
+            Assert.Equal(new object[] { 1d, 2d, 3d }, Values(fromArray));
+            Assert.Empty(Values(fromArray));
             var iterator = (IEnumerator<object>)Call("NormalizeToEnumerator", values)!;
             Assert.Same(iterator, Call("NormalizeToEnumerator", iterator));
             var next = (Dictionary<string, object>)Call("IteratorNext", iterator, null)!; Assert.Equal(1d, next["value"]); Assert.Equal(false, next["done"]);

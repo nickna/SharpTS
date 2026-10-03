@@ -1,0 +1,1 @@
+function* values(){yield 3;yield 4;}const source:any=values();const wrapped=Iterator.from(source);console.log(wrapped===source,Iterator.from(wrapped)===wrapped,wrapped.next().value,wrapped.toArray().join(","));

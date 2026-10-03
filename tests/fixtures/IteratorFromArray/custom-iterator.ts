@@ -1,0 +1,1 @@
+const a:any=[1,2];let calls=0;a[Symbol.iterator]=function(){console.log(this===a);calls++;let n=0;return {next(){n++;return {value:n*7,done:n>2};}};};const wrapped=Iterator.from(a);console.log(calls,wrapped===a,Iterator.from(wrapped)===wrapped);console.log(wrapped.toArray().join(","),calls);

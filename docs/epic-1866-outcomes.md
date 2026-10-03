@@ -954,3 +954,29 @@ analyzer warnings.
 custom iterators, generator finally blocks, primitive/error return results and
 pipeline cleanup. No interpreter, all-helper abrupt-completion or hosted guest
 execution repair is claimed.
+
+## #1748 — Iterator.from array adapters
+
+**Outcome: repaired.** The compiled factory selects custom Symbol.iterator once,
+adapts default arrays using the live indexed array iterator, and preserves
+compatible iterator identity. Custom iterator objects capture their next method
+once. Array completion clears the last yielded value. All three unchanged
+originals now match Node and finish normally within 30 seconds. The original
+fresh-main timeout, identity mismatch and catch-control TypeError remain
+recorded independently.
+
+The selected iterator run has **723 passes and one unchanged-main failure
+(#1956)** with compiled IL verification. Thirteen compiled references also run
+as isolated standalone outputs with exact Node stdout, empty stderr, no SharpTS
+reference/copy and clean exit within the original 30-second deadline. Native
+reused-emitter tests check adapter/iterator identity, exhaustion, scoped
+ownership and the unchanged public ABI. Node and TypeScript check all sources.
+Quality gates and the actual AOT analyzer baseline pass with zero analyzer
+warnings.
+
+`tests/fixtures/IteratorFromArray` records live mutations, indexed getters,
+custom iterator selection, generator/helper identity and captured next.
+It also retains a separate any-typed toArray dispatch failure, excluded from
+passing counts: unchanged main and current throw the same TypeError with empty
+stdout. No full primitive/override compatibility, dynamic helper dispatch,
+interpreter or hosted guest execution repair is claimed.

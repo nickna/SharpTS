@@ -18,7 +18,8 @@ public partial class RuntimeEmitter
         EmittedGeneratorRuntime Generators,
         MethodInfo ToNumber,
         MethodInfo CloseIterator,
-        FieldInfo UndefinedInstance
+        FieldInfo UndefinedInstance,
+        IteratorFromInputs From
     );
 
     private readonly record struct IteratorCallbackInputs(MethodInfo InvokeMethod, MethodInfo IsTruthy);
@@ -26,6 +27,9 @@ public partial class RuntimeEmitter
     private readonly record struct IteratorLimitInputs(EmittedErrorRuntime Errors,
         MethodInfo ToNumber, MethodInfo CloseIterator);
 
+    private readonly record struct IteratorFromInputs(FieldInfo IteratorSymbol,
+        MethodInfo GetIteratorFunction, MethodInfo InvokeMethod, ConstructorInfo ArrayIteratorCtor,
+        ConstructorInfo WrapperCtor, Type UndefinedType);
 
     /// <summary>
     /// Emits all iterator helper methods and types.
@@ -59,7 +63,7 @@ public partial class RuntimeEmitter
         EmitIteratorEvery(typeBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
         EmitIteratorFind(typeBuilder, iteratorHelpers, new IteratorCallbackInputs(inputs.InvokeMethod, inputs.IsTruthy));
         EmitIteratorNext(typeBuilder, iteratorHelpers, inputs.Generators, inputs.UndefinedInstance);
-        EmitIteratorFrom(typeBuilder, iteratorHelpers);
+        EmitIteratorFrom(typeBuilder, iteratorHelpers, inputs.From);
     }
 
     /// <summary>
@@ -1355,20 +1359,62 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitIteratorFrom(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers)
+    private void EmitIteratorFrom(TypeBuilder typeBuilder, EmittedIteratorHelpersRuntime iteratorHelpers, IteratorFromInputs inputs)
     {
-        // static object IteratorFrom(object source)
-        // Wraps any iterable source into something that can use iterator helpers.
-        // In compiled mode, this just returns the source as-is since our iterator helper
-        // methods work with any IEnumerable/IEnumerator via NormalizeToEnumerator.
         var method = typeBuilder.DefineMethod(
             "IteratorFrom", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object]);
         iteratorHelpers.From = method;
 
         var il = method.GetILGenerator();
-        // Just return the source - our helper methods will normalize it
+        var iteratorMethod = il.DeclareLocal(_types.Object);
+        var iterator = il.DeclareLocal(_types.Object);
+        var defaultIterator = il.DefineLabel();
+        var compatibleIterator = il.DefineLabel();
+        var normalize = il.DefineLabel();
+
+        // Select a custom @@iterator once, before default native adaptation.
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, inputs.IteratorSymbol);
+        il.Emit(OpCodes.Call, inputs.GetIteratorFunction);
+        il.Emit(OpCodes.Stloc, iteratorMethod);
+        il.Emit(OpCodes.Ldloc, iteratorMethod);
+        il.Emit(OpCodes.Brfalse, defaultIterator);
+        il.Emit(OpCodes.Ldloc, iteratorMethod);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, defaultIterator);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, iteratorMethod);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, inputs.InvokeMethod);
+        il.Emit(OpCodes.Stloc, iterator);
+        il.Emit(OpCodes.Ldloc, iterator);
+        il.Emit(OpCodes.Isinst, _types.IEnumeratorOfObject);
+        il.Emit(OpCodes.Brtrue, compatibleIterator);
+        il.Emit(OpCodes.Ldloc, iterator);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Newobj, inputs.WrapperCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(compatibleIterator);
+        il.Emit(OpCodes.Ldloc, iterator);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(defaultIterator);
+        // Array values use live indexed reads, including descriptor getters.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, normalize);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newobj, inputs.ArrayIteratorCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(normalize);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, iteratorHelpers.NormalizeToEnumerator);
         il.Emit(OpCodes.Ret);
     }
 

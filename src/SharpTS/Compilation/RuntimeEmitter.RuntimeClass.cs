@@ -1608,7 +1608,10 @@ public partial class RuntimeEmitter
             new IteratorHelperInputs(runtime.Errors, runtime.IteratorWrappers.Ctor,
                 runtime.Invocation.Method, runtime.Booleans.IsTruthy,
                 runtime.Generators, runtime.NumericCoercion.ToNumber, runtime.IteratorProtocol.Close,
-                runtime.Sentinels.UndefinedInstance));
+                runtime.Sentinels.UndefinedInstance,
+                new IteratorFromInputs(runtime.Symbols.Iterator, runtime.IteratorProtocol.Function,
+                    runtime.Invocation.Method, runtime.ArrayOperations.IteratorCtor,
+                    runtime.IteratorWrappers.Ctor, runtime.Sentinels.UndefinedType)));
         runtime.IteratorHelpers.CompleteEmission();
         // Arrays - must come AFTER iterator methods since ConcatArrays/ExpandCallArgs use IterateToList.
         // SetArrayElement* helpers (including Object variant) are emitted earlier, BEFORE SetIndex,
