@@ -459,7 +459,7 @@ public partial class ILEmitter
                     else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(name), out var enumMembers) == true)
                     {
                         // Create SharpTSObject with enum members
-                        EmitEnumAsObject(enumMembers);
+                        EmitEnumAsObject(enumMembers, _ctx.GetQualifiedEnumName(name));
                         IL.Emit(OpCodes.Stsfld, defaultField);
                     }
                 }
@@ -508,7 +508,7 @@ public partial class ILEmitter
                 else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(name), out var enumMembers) == true)
                 {
                     // Create SharpTSObject with enum members
-                    EmitEnumAsObject(enumMembers);
+                    EmitEnumAsObject(enumMembers, _ctx.GetQualifiedEnumName(name));
                     IL.Emit(OpCodes.Stsfld, field);
                 }
                 else if (_ctx.ResolveNamespaceField(name) is { } namespaceField)
@@ -555,7 +555,7 @@ public partial class ILEmitter
                     else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(localName), out var enumMembers) == true)
                     {
                         // Create SharpTSObject with enum members
-                        EmitEnumAsObject(enumMembers);
+                        EmitEnumAsObject(enumMembers, _ctx.GetQualifiedEnumName(localName));
                         IL.Emit(OpCodes.Stsfld, field);
                     }
                     else if (_ctx.ResolveNamespaceField(localName) is { } namespaceField)
@@ -698,8 +698,14 @@ public partial class ILEmitter
     /// <summary>
     /// Emits an enum as a SharpTSObject with its member values.
     /// </summary>
-    private void EmitEnumAsObject(Dictionary<string, object> members)
+    private void EmitEnumAsObject(Dictionary<string, object> members, string qualifiedEnumName)
     {
+        if (_ctx.EnumValueFields?.TryGetValue(qualifiedEnumName, out var valueField) == true)
+        {
+            IL.Emit(OpCodes.Ldsfld, valueField);
+            return;
+        }
+
         // Create new Dictionary<string, object?>()
         var dictType = _ctx.Types.DictionaryStringObject;
         var dictCtor = _ctx.Types.GetDefaultConstructor(dictType);

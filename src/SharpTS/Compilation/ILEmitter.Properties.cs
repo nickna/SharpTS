@@ -180,6 +180,17 @@ public partial class ILEmitter
         }
 
         // Enum forward mapping: Direction.Up -> 0 or Status.Success -> "SUCCESS"
+        if (g.Object is Expr.Variable enumValueVar &&
+            _ctx.EnumValueFields?.ContainsKey(_ctx.ResolveEnumName(enumValueVar.Name.Lexeme)) == true)
+        {
+            EmitExpression(g.Object);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
+            SetStackUnknown();
+            return;
+        }
+
         if (g.Object is Expr.Variable enumVar &&
             _ctx.EnumMembers?.TryGetValue(_ctx.ResolveEnumName(enumVar.Name.Lexeme), out var members) == true &&
             members.TryGetValue(g.Name.Lexeme, out var value))
@@ -1242,6 +1253,18 @@ public partial class ILEmitter
         }
 
         // Enum reverse mapping: Direction[0] -> "Up"
+        if (gi.Object is Expr.Variable enumValueVar &&
+            _ctx.EnumValueFields?.ContainsKey(_ctx.ResolveEnumName(enumValueVar.Name.Lexeme)) == true)
+        {
+            EmitExpression(gi.Object);
+            EnsureBoxed();
+            EmitExpression(gi.Index);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
+            SetStackUnknown();
+            return;
+        }
+
         if (gi.Object is Expr.Variable enumVar &&
             _ctx.EnumReverse?.TryGetValue(_ctx.ResolveEnumName(enumVar.Name.Lexeme), out var reverse) == true)
         {

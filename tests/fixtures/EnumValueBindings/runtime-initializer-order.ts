@@ -1,0 +1,1 @@
+let calls=0;function next():number{calls++;console.log("next",calls);return calls+2;}enum E{A=next(),B=next(),C=A|B}const alias:any=E;console.log(E.A,E.B,E.C,calls,alias===E);console.log(alias[3],alias[4],alias[7]);

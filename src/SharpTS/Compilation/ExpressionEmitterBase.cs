@@ -2101,6 +2101,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return true;
         }
 
+        if (TryEmitEnumVariable(name)) return true;
+
         // User class identifiers used as values: emit the class's Type token
         // (the same representation ILEmitter's sync path produces) so
         // `x instanceof MyClass` works inside state-machine bodies. Before

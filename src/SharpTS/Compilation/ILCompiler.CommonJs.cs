@@ -216,7 +216,7 @@ public partial class ILCompiler
         foreach (var stmt in module.Statements)
         {
             // Class definitions execute here; other declarations are compiled separately.
-            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
+            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias)
             {
                 continue;
             }

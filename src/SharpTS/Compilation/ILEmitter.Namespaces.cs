@@ -214,6 +214,16 @@ public partial class ILEmitter
     {
         // Get the qualified enum name and its members
         string qualifiedEnumName = _ctx.ResolveEnumName(enumStmt.Name.Lexeme);
+        if (_ctx.EnumValueFields?.TryGetValue(qualifiedEnumName, out var valueField) == true)
+        {
+            EmitEnumDeclaration(enumStmt);
+            IL.Emit(OpCodes.Ldsfld, nsField);
+            IL.Emit(OpCodes.Ldstr, enumStmt.Name.Lexeme);
+            IL.Emit(OpCodes.Ldsfld, valueField);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
+            return;
+        }
+
         if (_ctx.EnumMembers == null ||
             !_ctx.EnumMembers.TryGetValue(qualifiedEnumName, out var members) ||
             members == null)

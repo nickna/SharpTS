@@ -1914,3 +1914,32 @@ exports are not executed. Existing owned declarations, helper signature,
 scoped inputs and declaration order remain unchanged; no metadata ownership
 audit closure is claimed. Quality gates and the actual AOT analyzer baseline
 pass with zero analyzer warnings.
+
+## #1790 — Runtime enum value bindings
+
+**Outcome: repaired.** Ordinary enum declarations initialize a canonical runtime
+object at their source position, evaluating computed members once and in order.
+Earlier members resolve within later initializers. Forward and numeric reverse
+entries share that object, including duplicate-value replacement. Aliases,
+namespace/module exports and suspended functions resolve the same value binding.
+Const-enum inlining remains covered by existing controls.
+
+Fresh unchanged-main/pre-repair current probes preserve all eight displayed
+originals and their 30-second deadlines. Computed members, aliases and generator
+access reproduce value-binding failures; the overlapping negative-value control
+already passes after #1788. Fresh unhandled errors complete within the deadline,
+so the historical timeout is neither claimed as reproduced nor assigned a cause.
+Current produces every complete original Node expectation.
+
+All **143 selected checks pass**, including twelve compiled script references,
+two compiled module references, fourteen isolated standalone executions, fourteen
+hosted declaration/deployment checks, signed-value/namespace enum regressions,
+native enum ownership and existing enum/enum-key checking controls. TypeScript
+and Node establish all fourteen references before SharpTS execution. Controls
+include initializer order, aliases across yields, namespace/module identity,
+string enums and duplicate values. Saved guests require verified IL, exact
+stdout, empty stderr, clean exit and no SharpTS reference/copy within 30 seconds;
+hosted exports are not executed. Existing emitted enum helper declarations,
+signatures and scoped ownership remain unchanged. Quality gates and the actual
+AOT analyzer baseline pass with zero analyzer warnings. This does not claim
+general local enum freshness or metadata ownership audit closure.

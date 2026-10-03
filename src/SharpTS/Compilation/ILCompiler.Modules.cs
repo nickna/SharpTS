@@ -709,7 +709,7 @@ public partial class ILCompiler
         {
             // Class definitions still execute at their source position. Other
             // declarations are compiled separately in earlier phases.
-            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
+            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias)
             {
                 continue;
             }
@@ -788,7 +788,7 @@ public partial class ILCompiler
         {
             // Class definitions still execute at their source position. Other
             // declarations are compiled separately in earlier phases.
-            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
+            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias)
             {
                 continue;
             }

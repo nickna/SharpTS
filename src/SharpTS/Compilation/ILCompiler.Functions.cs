@@ -1381,7 +1381,7 @@ public partial class ILCompiler
                 }
                 continue;
             }
-            if (stmt is Stmt.Function or Stmt.Interface or Stmt.Enum)
+            if (stmt is Stmt.Function or Stmt.Interface)
             {
                 continue;
             }
@@ -1528,7 +1528,7 @@ public partial class ILCompiler
             }
 
             // Skip the remaining declarations (handled in earlier phases), including main().
-            if (stmt is Stmt.Function or Stmt.Interface or Stmt.Enum)
+            if (stmt is Stmt.Function or Stmt.Interface)
             {
                 continue;
             }

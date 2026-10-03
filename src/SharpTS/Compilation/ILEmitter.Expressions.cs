@@ -55,6 +55,9 @@ public partial class ILEmitter
     {
         var name = v.Name.Lexeme;
 
+        if (TryEmitEnumInitializerMember(name))
+            return;
+
         if (TryEmitDefaultParameterTdz(name))
             return;
 
@@ -347,6 +350,9 @@ public partial class ILEmitter
             SetStackUnknown();
             return;
         }
+
+        if (TryEmitEnumVariable(name))
+            return;
 
         // Check if it's a built-in Error constructor — push the emitted Type object
         if (TryEmitErrorTypeToken(name))

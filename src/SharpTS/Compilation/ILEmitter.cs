@@ -292,8 +292,11 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 break;
             case Stmt.Interface:
             case Stmt.TypeAlias:
-            case Stmt.Enum:
                 // Handled at top level / compile-time only
+                break;
+
+            case Stmt.Enum enumStmt:
+                EmitEnumDeclaration(enumStmt);
                 break;
 
             case Stmt.Namespace ns:
