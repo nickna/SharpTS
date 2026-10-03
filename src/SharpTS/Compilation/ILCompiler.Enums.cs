@@ -30,7 +30,13 @@ public partial class ILCompiler
 
         foreach (var member in enumStmt.Members)
         {
-            if (member.Value is Expr.Literal lit)
+            // Signed numeric literals are unary/grouping nodes in the parser,
+            // rather than Literal nodes. Preserve them in ordinary enum tables
+            // before assigning the following implicit value and reverse key.
+            Expr? initializer = member.Value;
+            if (initializer is not Expr.Literal && ConstEnumExpressionEvaluator.TryEvaluateSignedLiteral(initializer, out double signedValue))
+                initializer = new Expr.Literal(signedValue);
+            if (initializer is Expr.Literal lit)
             {
                 if (lit.Value is double d)
                 {

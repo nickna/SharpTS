@@ -1884,3 +1884,33 @@ and clean exit; hosted exports are not executed. Existing owned disposal
 declarations, signatures and scoped dependencies remain unchanged. Quality gates
 and the actual AOT analyzer baseline pass with zero analyzer warnings; no
 ownership audit closure is claimed.
+
+## #1788 — Signed enum values
+
+**Outcome: repaired.** Compilation and checking recognize numeric literals
+through unary signs and grouping. Ordinary enum tables retain signed forward
+values, reverse keys and the correct next implicit numeric value. Duplicate
+numeric values preserve last-member reverse mappings. The checker also retains
+known numeric values instead of disabling auto-increment as for arbitrary
+computed initializers. Arbitrary computed initialization remains under #1790;
+missing reverse properties remain under #1789.
+
+Fresh unchanged-main/pre-repair current verify both originals but fail the
+negative lookup. The caught source prints negative-miss and Half, then fails
+forward access to Values.Negative. These fresh runs exit with errors within
+the original 30 seconds, so the historical timeout is not claimed as reproduced
+or explained. Current prints both complete original Node expectations with
+empty stderr and clean exit within the unchanged deadline.
+
+All **97 selected checks pass**, including eight compiled references, eight
+isolated standalone outputs, eight hosted module compilations, original enum
+reverse controls, native enum ownership checks, namespace mapping and existing
+enum/enum-key type-checker regressions. TypeScript/Node confirm all eight
+references. Coverage includes negative, zero, positive and fractional values,
+forward/reverse access, duplicates, auto-increment, nested signs/parentheses,
+namespace values and const-enum controls. Saved guests require verified IL,
+exact stdout, empty stderr, no SharpTS reference/copy and clean exit; hosted
+exports are not executed. Existing owned declarations, helper signature,
+scoped inputs and declaration order remain unchanged; no metadata ownership
+audit closure is claimed. Quality gates and the actual AOT analyzer baseline
+pass with zero analyzer warnings.

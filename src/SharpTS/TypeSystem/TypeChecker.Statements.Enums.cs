@@ -25,7 +25,10 @@ public partial class TypeChecker
             {
                 // For literals, do normal type checking
                 // For const enum computed expressions, skip CheckExpr (enum not yet defined)
-                if (member.Value is Expr.Literal lit)
+                Expr initializer = member.Value;
+                if (initializer is not Expr.Literal && ConstEnumExpressionEvaluator.TryEvaluateSignedLiteral(initializer, out double signedValue))
+                    initializer = new Expr.Literal(signedValue);
+                if (initializer is Expr.Literal lit)
                 {
                     if (lit.Value is double d)
                     {
