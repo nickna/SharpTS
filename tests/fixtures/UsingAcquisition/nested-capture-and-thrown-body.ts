@@ -1,0 +1,1 @@
+const original=new Error("body");function make(value:number):any{return {value,[Symbol.dispose](){console.log(this.value);}};}try{{using a=make(1);{using b=make(2);b[Symbol.dispose]=function(){console.log("replacement");};throw original;}}}catch(e){console.log(e===original);}

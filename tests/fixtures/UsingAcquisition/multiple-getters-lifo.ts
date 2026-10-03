@@ -1,0 +1,1 @@
+function make(value:number):any{const r:any={value};Object.defineProperty(r,Symbol.dispose,{get(){console.log("get",value);return function(){console.log("dispose",this.value);};}});return r;}{using a=make(1),b=make(2);console.log("body");a.value=3;b.value=4;}

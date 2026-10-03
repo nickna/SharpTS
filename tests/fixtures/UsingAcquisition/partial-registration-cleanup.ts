@@ -1,0 +1,1 @@
+const original=new Error("original");const a:any={value:1,[Symbol.dispose](){console.log("dispose",this.value);}};const b:any={};Object.defineProperty(b,Symbol.dispose,{get(){console.log("get-b");throw original;}});try{{using x=a,y=b;console.log("unreachable");}}catch(e){console.log(e===original);}

@@ -1800,3 +1800,26 @@ returned RegExpMatchArray interface and the CLI boxed String.matchAll surface
 before emission. They are excluded from passing coverage. Runtime controls use
 any result/prototype bindings, without changing the original child source or
 expectation. No checker or library-surface repair is claimed.
+
+## #1784 — Disposal acquisition timing
+
+**Outcome: repaired.** Both ordinary compiler using paths capture the disposal
+method at registration, before subsequent declarations or body statements. Cleanup
+invokes that captured method with the original resource receiver. Nullish resources
+are skipped; getter failures and invalid methods cannot register a resource for
+cleanup. The existing CLR IDisposable fallback is selected at registration too.
+Fresh unchanged-main/pre-repair current verify both originals but retain the
+reported wrong ordering/method. Current matches the original Node expectations.
+
+All **77 selected checks pass**, including twelve compiled references, twelve
+isolated standalone outputs, twelve hosted module compilations, existing using
+and explicit-finally controls, native disposal ownership checks and a verified
+compiled-function managed boundary check. TypeScript/Node confirm all twelve
+references. Coverage includes getter exceptions, partial registration, multiple
+declarations, LIFO cleanup, receiver identity, mutation/deletion, inherited getters,
+bound disposers, nested scopes and function returns. Saved guests verify IL,
+exact stdout, empty stderr, no SharpTS reference/copy and clean exit within the
+unchanged 30 seconds; hosted exports are not executed. The native helper's owned
+declaration, signature, inputs and declaration order remain unchanged. This
+behavior repair closes no ownership audit work. Quality gates and the actual
+AOT analyzer baseline pass with zero analyzer warnings.

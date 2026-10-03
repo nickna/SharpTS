@@ -3187,7 +3187,7 @@ public partial class ILEmitter
         PredeclareBlockScopedClassLocals(b.Statements);
 
         // Check if block contains using declarations
-        var usingResources = new List<LocalBuilder>();
+        var usingResources = new List<UsingResourceLocals>();
         bool hasUsing = b.Statements.Any(s => s is Stmt.Using);
 
         if (hasUsing)
@@ -3348,7 +3348,7 @@ public partial class ILEmitter
     /// <summary>
     /// Emits a block that contains using declarations with proper try/finally disposal.
     /// </summary>
-    private void EmitBlockWithUsing(List<Stmt> statements, List<LocalBuilder> usingResources)
+    private void EmitBlockWithUsing(List<Stmt> statements, List<UsingResourceLocals> usingResources)
     {
         // Find the first using declaration index
         int firstUsingIndex = statements.FindIndex(s => s is Stmt.Using);
@@ -3367,26 +3367,9 @@ public partial class ILEmitter
             var stmt = statements[i];
             if (stmt is Stmt.Using usingStmt)
             {
-                // Process using declaration - store resources for disposal
                 foreach (var binding in usingStmt.Bindings)
                 {
-                    // Evaluate the initializer
-                    EmitExpression(binding.Initializer);
-                    EnsureBoxed();
-
-                    // Store in a local variable for later disposal
-                    LocalBuilder resourceLocal;
-                    if (binding.Name != null)
-                    {
-                        resourceLocal = _ctx.Locals.DeclareLocal(binding.Name.Lexeme, _ctx.Types.Object);
-                    }
-                    else
-                    {
-                        // Anonymous using - still need to track for disposal
-                        resourceLocal = IL.DeclareLocal(_ctx.Types.Object);
-                    }
-                    IL.Emit(OpCodes.Stloc, resourceLocal);
-                    usingResources.Add(resourceLocal);
+                    usingResources.Add(EmitUsingRegistration(binding));
                 }
             }
             else
@@ -3405,21 +3388,95 @@ public partial class ILEmitter
     /// Emits disposal code for using declaration resources.
     /// Disposes in reverse order (LIFO).
     /// </summary>
-    private void EmitUsingDisposal(List<LocalBuilder> resources)
+    private readonly record struct UsingResourceLocals(LocalBuilder Resource, LocalBuilder Method, LocalBuilder Registered);
+
+    private UsingResourceLocals EmitUsingRegistration(Stmt.UsingBinding binding)
+    {
+        var runtime = _ctx.Runtime!;
+        var resource = binding.Name is not null
+            ? _ctx.Locals.DeclareLocal(binding.Name.Lexeme, _ctx.Types.Object)
+            : IL.DeclareLocal(_ctx.Types.Object);
+        var method = IL.DeclareLocal(_ctx.Types.Object);
+        var registered = IL.DeclareLocal(_ctx.Types.Boolean);
+        var acquired = IL.DefineLabel();
+        var missingMethod = IL.DefineLabel();
+        var invalidMethod = IL.DefineLabel();
+
+        // A loop may revisit these locals. Failed initialization/acquisition must
+        // never dispose a value left over from an earlier iteration.
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, registered);
+        IL.Emit(OpCodes.Ldnull);
+        IL.Emit(OpCodes.Stloc, method);
+        EmitExpression(binding.Initializer);
+        EnsureBoxed();
+        IL.Emit(OpCodes.Stloc, resource);
+        IL.Emit(OpCodes.Ldloc, resource);
+        IL.Emit(OpCodes.Brfalse, acquired);
+        IL.Emit(OpCodes.Ldloc, resource);
+        IL.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        IL.Emit(OpCodes.Brtrue, acquired);
+
+        // Read the method once, before the next declaration or body statement.
+        IL.Emit(OpCodes.Ldloc, resource);
+        IL.Emit(OpCodes.Ldsfld, runtime.Symbols.Dispose);
+        IL.Emit(OpCodes.Call, runtime.ObjectRead.Index);
+        IL.Emit(OpCodes.Stloc, method);
+        IL.Emit(OpCodes.Ldloc, method);
+        IL.Emit(OpCodes.Brfalse, missingMethod);
+        IL.Emit(OpCodes.Ldloc, method);
+        IL.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        IL.Emit(OpCodes.Brtrue, missingMethod);
+        IL.Emit(OpCodes.Ldloc, method);
+        IL.Emit(OpCodes.Call, runtime.Operators.TypeOf);
+        IL.Emit(OpCodes.Ldstr, "function");
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.String, "op_Equality", _ctx.Types.String, _ctx.Types.String));
+        IL.Emit(OpCodes.Brfalse, invalidMethod);
+        IL.Emit(OpCodes.Br, acquired);
+
+        // Preserve the CLR IDisposable boundary without another symbol lookup.
+        IL.MarkLabel(missingMethod);
+        IL.Emit(OpCodes.Ldnull);
+        IL.Emit(OpCodes.Stloc, method);
+        IL.Emit(OpCodes.Ldloc, resource);
+        IL.Emit(OpCodes.Isinst, typeof(IDisposable));
+        IL.Emit(OpCodes.Brtrue, acquired);
+        IL.MarkLabel(invalidMethod);
+        GuestErrorEmitter.ThrowTypeError(IL, runtime, "Resource Symbol.dispose must be callable");
+
+        IL.MarkLabel(acquired);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, registered);
+        return new(resource, method, registered);
+    }
+
+    private void EmitUsingDisposal(List<UsingResourceLocals> resources)
     {
         // Dispose in reverse order
         for (int i = resources.Count - 1; i >= 0; i--)
         {
-            var resourceLocal = resources[i];
-
-            // Load the resource
-            IL.Emit(OpCodes.Ldloc, resourceLocal);
-
-            // Load Symbol.dispose
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Symbols.Dispose);
-
-            // Call $Runtime.DisposeResource(resource, Symbol.dispose)
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ResourceDisposal.Dispose);
+            var resource = resources[i];
+            var done = IL.DefineLabel();
+            var managed = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, resource.Registered);
+            IL.Emit(OpCodes.Brfalse, done);
+            IL.Emit(OpCodes.Ldloc, resource.Method);
+            IL.Emit(OpCodes.Brfalse, managed);
+            IL.Emit(OpCodes.Ldloc, resource.Resource);
+            IL.Emit(OpCodes.Ldloc, resource.Method);
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Invocation.Method);
+            IL.Emit(OpCodes.Pop);
+            IL.Emit(OpCodes.Br, done);
+            IL.MarkLabel(managed);
+            IL.Emit(OpCodes.Ldloc, resource.Resource);
+            IL.Emit(OpCodes.Isinst, typeof(IDisposable));
+            IL.Emit(OpCodes.Brfalse, done);
+            IL.Emit(OpCodes.Ldloc, resource.Resource);
+            IL.Emit(OpCodes.Castclass, typeof(IDisposable));
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.DisposableDispose);
+            IL.MarkLabel(done);
         }
     }
 
@@ -4036,7 +4093,7 @@ public partial class ILEmitter
 
         if (hasUsing)
         {
-            var usingResources = new List<LocalBuilder>();
+            var usingResources = new List<UsingResourceLocals>();
 
             // Find the first using declaration index
             int firstUsingIndex = statements.FindIndex(s => s is Stmt.Using);
@@ -4058,26 +4115,9 @@ public partial class ILEmitter
                 var stmt = statements[i];
                 if (stmt is Stmt.Using usingStmt)
                 {
-                    // Process using declaration - store resources for disposal
                     foreach (var binding in usingStmt.Bindings)
                     {
-                        // Evaluate the initializer
-                        EmitExpression(binding.Initializer);
-                        EnsureBoxed();
-
-                        // Store in a local variable for later disposal
-                        LocalBuilder resourceLocal;
-                        if (binding.Name != null)
-                        {
-                            resourceLocal = _ctx.Locals.DeclareLocal(binding.Name.Lexeme, _ctx.Types.Object);
-                        }
-                        else
-                        {
-                            // Anonymous using - still need to track for disposal
-                            resourceLocal = IL.DeclareLocal(_ctx.Types.Object);
-                        }
-                        IL.Emit(OpCodes.Stloc, resourceLocal);
-                        usingResources.Add(resourceLocal);
+                        usingResources.Add(EmitUsingRegistration(binding));
                     }
                 }
                 else

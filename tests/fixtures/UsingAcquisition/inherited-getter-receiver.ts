@@ -1,0 +1,1 @@
+const p:any={};let calls=0;Object.defineProperty(p,Symbol.dispose,{get(){calls++;console.log(this.value);return function(){console.log(this===r,this.value,calls);};}});const r:any=Object.create(p);r.value=3;{using x=r;r.value=4;console.log("body");}
