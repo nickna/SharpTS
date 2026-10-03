@@ -1940,6 +1940,13 @@ public partial class RuntimeEmitter
         // implement that via EmitDispatchToTarget.
         var callableWrapperLabel = il.DefineLabel();
 
+        if (inputs.TypedArrays.Implementation is { } typedArrayMethods)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, typedArrayMethods.BoundMethodType);
+            il.Emit(OpCodes.Brtrue, callableWrapperLabel);
+        }
+
         if (inputs.Promise is not null)
         {
             // Promise resolving functions are ECMAScript anonymous built-ins.

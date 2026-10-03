@@ -455,3 +455,29 @@ and Node references accept the sources. Release builds, final quality gates and
 actual AOT analyzer baseline pass with zero analyzer warnings; existing NU1902
 remains. `tests/fixtures/TypedReflectConstruct` retains the source and baseline
 boundaries. No namespace repair or hosted execution is claimed.
+
+## #1721 — Extracted TypedArray fill through call
+
+**Outcome: isolated reported behavior repaired.** Both exact issue sources
+are retained. On unchanged `0ad37b57` and pre-repair `f09e98f6`, the isolated
+source compiles and verifies, then throws the reported undefined-function
+TypeError. Fresh processes exit within the original 30-second deadline; no
+historical delayed-exit root cause is claimed.
+
+TypedArray method values now expose function-method lookup. Explicit call/apply
+wrappers validate and use the selected TypedArray receiver; interpreter fill
+also uses that receiver. New controls preserve argument order, start/end bounds,
+return identity, another numeric array kind and invalid-receiver TypeErrors.
+All 326 affected tests pass with compiled IL verification, including all numeric
+and BigInt direct extracted-method controls and two isolated standalone CLI
+outputs with zero exit, empty stderr and no SharpTS reference. Separate
+TypeScript/Node references accept the sources. Release builds, final quality
+gates and actual AOT analyzer baseline pass with zero analyzer warnings.
+
+The original combined source remains a **failed compiled comparison** under
+this task: fill reaches `3 3`, but the decoder prints an empty line instead of
+`A`; Promise still prints `9`. The saved output exits zero with empty stderr,
+which does not make its stdout correct. This separate decoder gap is #1722.
+`tests/fixtures/ExtractedTypedArrayMethods` preserves both originals, all expected
+outputs and this boundary. No hosted execution or broad unbound-method behavior
+change is claimed.

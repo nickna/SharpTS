@@ -584,7 +584,9 @@ public partial class RuntimeEmitter
                 runtime.ArrayOperations,
                 runtime.Map,
                 runtime.Set,
-                runtime.Invocation
+                runtime.Invocation,
+                runtime.TypedArrays,
+                runtime.Errors
             )
         );
         EmitFunctionApplyWrapperClass(
@@ -596,7 +598,9 @@ public partial class RuntimeEmitter
                 runtime.Map,
                 runtime.Set,
                 runtime.ArrayStorage,
-                runtime.Invocation
+                runtime.Invocation,
+                runtime.TypedArrays,
+                runtime.Errors
             )
         );
         EmitFunctionBindWrapperClass(

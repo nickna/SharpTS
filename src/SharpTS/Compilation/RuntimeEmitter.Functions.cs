@@ -46,7 +46,9 @@ public partial class RuntimeEmitter
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedMapRuntime? Map,
         EmittedSetRuntime? Set,
-        EmittedInvocationRuntime Invocation
+        EmittedInvocationRuntime Invocation,
+        EmittedTypedArrayRuntime TypedArrays,
+        EmittedErrorRuntime Errors
     );
 
     private readonly record struct FunctionApplyWrapperClassInputs(
@@ -55,7 +57,9 @@ public partial class RuntimeEmitter
         EmittedMapRuntime? Map,
         EmittedSetRuntime? Set,
         EmittedArrayStorageRuntime ArrayStorage,
-        EmittedInvocationRuntime Invocation
+        EmittedInvocationRuntime Invocation,
+        EmittedTypedArrayRuntime TypedArrays,
+        EmittedErrorRuntime Errors
     );
 
     private readonly record struct DispatchToTargetInputs(
@@ -534,6 +538,40 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitTypedArrayWrapperCall(
+        ILGenerator il,
+        EmittedTypedArrayRuntime typedArrays,
+        EmittedErrorRuntime errors,
+        FieldBuilder targetField,
+        LocalBuilder receiver,
+        LocalBuilder args)
+    {
+        if (typedArrays.Implementation is not { } arrays) return;
+        var otherTarget = il.DefineLabel();
+        var validReceiver = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Isinst, arrays.BoundMethodType);
+        il.Emit(OpCodes.Brfalse, otherTarget);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Isinst, arrays.BaseType);
+        il.Emit(OpCodes.Brtrue, validReceiver);
+        GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor,
+            "TypedArray method called on incompatible receiver");
+        il.MarkLabel(validReceiver);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Castclass, arrays.BoundMethodType);
+        il.Emit(OpCodes.Ldfld, arrays.BoundMethodNameField);
+        il.Emit(OpCodes.Newobj, arrays.BoundMethodCtor);
+        il.Emit(OpCodes.Ldloc, args);
+        il.Emit(OpCodes.Callvirt, arrays.BoundMethodInvoke);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(otherTarget);
     }
 
     private void EmitProxyInvokeWithThisFallback(
@@ -1675,6 +1713,7 @@ public partial class RuntimeEmitter
 
         // Remaining non-TSFunction callables, including proxies, retain the
         // explicit thisArg through the shared dispatch fallback.
+        EmitTypedArrayWrapperCall(il, inputs.TypedArrays, inputs.Errors, targetField, thisArgLocal, callArgsLocal);
         EmitDispatchToTarget(
             il,
             functionBindings,
@@ -1938,6 +1977,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, isBoundTSFunctionLabel);
 
         // Non-TSFunction callables, including proxies, retain thisArg.
+        EmitTypedArrayWrapperCall(il, inputs.TypedArrays, inputs.Errors, targetField, thisArgLocal, callArgsLocal);
         EmitDispatchToTarget(
             il,
             functionBindings,

@@ -19,6 +19,24 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.ExtractedTypedArrayMethodTests.Cases), MemberType = typeof(SharedTests.ExtractedTypedArrayMethodTests))]
+    public void Isolated_Issue1721ExtractedTypedArrayFill_PreservesInvocation(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        // Keep the original thirty-second saved-output execution deadline.
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.TypedReflectConstructTests.Cases), MemberType = typeof(SharedTests.TypedReflectConstructTests))]
     public void Isolated_Issue1718TypedReflectConstruct_PreservesInstanceIdentity(string name, string source, string expected)
     {

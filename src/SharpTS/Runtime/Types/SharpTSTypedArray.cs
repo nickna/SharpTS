@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
@@ -461,13 +462,16 @@ public abstract class SharpTSTypedArray : ITypeCategorized
                 return RuntimeValue.FromObject(Subarray(begin, end));
             }),
 
-            "fill" => BuiltInMethod.CreateV2("fill", 1, 3, (_, _, args) =>
+            "fill" => BuiltInMethod.CreateV2("fill", 1, 3, (_, receiver, args) =>
             {
+                if (receiver.ToObject() is not SharpTSTypedArray target)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "TypedArray.fill called on incompatible receiver"));
                 if (args.Length == 0)
                     throw new Exception("TypedArray.fill requires a value argument");
                 int start = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
                 int? end = args.Length > 2 && args[2].IsNumber ? (int)args[2].AsNumberUnsafe() : null;
-                return RuntimeValue.FromObject(Fill(args[0].ToObject(), start, end));
+                return RuntimeValue.FromObject(target.Fill(args[0].ToObject(), start, end));
             }),
 
             "copyWithin" => BuiltInMethod.CreateV2("copyWithin", 2, 3, (_, _, args) =>
