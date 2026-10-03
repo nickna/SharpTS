@@ -1067,3 +1067,32 @@ checker before declaration refinement, although CLI/TypeScript reject it; a
 preceding named generator supplies the concrete negative element control.
 No general forward-inference, dynamic-source normalization (#1753) or hosted
 guest execution repair is claimed.
+
+## #1753 — Iterator overrides on dynamic array sources
+
+**Outcome: repaired.** Dynamic array destructuring now honors own iterator
+overrides through the existing materializer whenever analysis cannot prove
+the array iterator unchanged. Descriptor API use also disables the iterator
+fast path. The normalizer retains its public ABI and receives a scoped mutation
+flag. Native reused-emitter controls retain identity when the iterator is
+unchanged and verify collection, scoped ownership and standalone/hosted output
+isolation when mutation is possible. Both unchanged originals now match Node;
+fresh unchanged main retains `1 2` for the dynamic source and `8 9` for its
+typed alias control.
+
+All **1,008 selected tests pass** with compiled IL verification. All 31 final
+focused checks pass, including thirteen saved standalone programs with exact
+Node stdout, empty stderr, clean exit within the original 30 seconds and no
+SharpTS reference/copy. Twelve references also execute in the interpreter.
+Node and TypeScript check every fixture source. Quality gates and the actual
+AOT analyzer baseline pass with zero analyzer warnings.
+
+`tests/fixtures/DynamicArrayDestructureOverride` preserves getter/factory and
+next selection counts, receiver identity, aliases, empty/fresh iterators,
+factory throws, invalid methods and unchanged arrays. The compiled iterator
+getter passes; unchanged main and current interpreters both reject it, outside
+interpreted passing counts. A separate prototype lookup reproduction also
+remains outside passing counts: saved any-alias outputs on unchanged main and
+current verify their IL and cleanly print `1 2` instead of Node's `8 9`.
+No general prototype lookup, incremental closing (#1750), fresh CLR enumerable
+acquisition (#1754) or hosted guest execution repair is claimed.

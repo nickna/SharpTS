@@ -1,0 +1,1 @@
+const source:any=[1,2];let getters=0;let factories=0;Object.defineProperty(source,Symbol.iterator,{get(){getters++;return function*(){factories++;yield this===source?8:0;yield 9;};}});const [a,...rest]=source;console.log(a,rest.join(","),getters,factories);

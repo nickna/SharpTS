@@ -2530,7 +2530,8 @@ public partial class RuntimeEmitter
                 runtime.Invocation.Method, runtime.IteratorWrappers.Ctor,
                 runtime.ObjectFields.Interface, runtime.Sentinels.UndefinedType,
                 runtime.TypedArrays.Implementation?.BaseType,
-                _features.UsesBuffer ? runtime.RequireBuffer().Type : null));
+                _features.UsesBuffer ? runtime.RequireBuffer().Type : null,
+                _features.UsesArrayPrototypeMutation));
         // JSON methods — gated on UsesJSON (also implied by UsesHttp).
         if (runtime.Json.Implementation is not null)
         {

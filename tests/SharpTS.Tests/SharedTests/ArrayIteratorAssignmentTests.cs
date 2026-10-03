@@ -69,6 +69,7 @@ public sealed class ArrayIteratorAssignmentTests
     public static IEnumerable<object[]> SourceCases() => Cases().Select(row => row[1..]);
     public static IEnumerable<object[]> InvalidSourceCases() => InvalidCases().Select(row => new[] { row[1] });
     public static IEnumerable<object[]> InvalidCliCases() => InvalidCases().Select(row => row[..2]);
+    public static IEnumerable<object[]> TypingOnlyCliCases() => TypingOnlyCases().Select(row => row[..2]);
 
     [Theory, MemberData(nameof(SourceCases))]
     public void TypedArrayIteratorAssignmentRetainsElementContract(string source, string expected)

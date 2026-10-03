@@ -955,6 +955,7 @@ public sealed class RuntimeFeatureDetector
                         // `const define = Object.defineProperty; define(a, ...)`
                         // has the same ability to invalidate array fast paths.
                         _set.UsesDynamicPropertyDescriptors = true;
+                        _set.UsesArrayPrototypeMutation = true;
                     }
                 }
                 // String methods that StringEmitter routes through RegExp
@@ -1064,6 +1065,7 @@ public sealed class RuntimeFeatureDetector
                 {
                     // Computed access may resolve to defineProperty at runtime.
                     _set.UsesDynamicPropertyDescriptors = true;
+                    _set.UsesArrayPrototypeMutation = true;
                     // It may also resolve to getPrototypeOf, yielding an alias
                     // to the RegExp prototype that a later write can mutate.
                     _set.UsesRegExpPrototypeMutation = true;

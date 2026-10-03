@@ -47,13 +47,15 @@ public partial class RuntimeEmitter
     private readonly record struct ArrayDestructureInputs(Type SymbolType,
         MethodInfo IterateToList, ConstructorInfo ArrayCtor, EmittedErrorRuntime Errors,
         MethodInfo GetIteratorFunction, MethodInfo InvokeMethod, ConstructorInfo WrapperCtor,
-        Type HasFieldsInterface, Type UndefinedType, Type? TypedArrayType, Type? BufferType);
+        Type HasFieldsInterface, Type UndefinedType, Type? TypedArrayType, Type? BufferType,
+        bool UsesArrayPrototypeMutation);
 
     /// <summary>
     /// Emits ArrayDestructureSource: normalizes an array binding-pattern source through the
     /// iterator protocol (#685). Index-addressable sources — any
     /// <see cref="System.Collections.IList"/> (arrays, <c>$Array</c>, typed lists) — pass through
-    /// unchanged so the desugared positional index access reads them directly and stays consistent
+    /// unchanged when analysis proves the array iterator has not been replaced,
+    /// so the desugared positional index access reads them directly and stays consistent
     /// with the matching pass-through type the type checker assigned. Any other iterable (Set, Map,
     /// generators, strings, <c>[Symbol.iterator]</c> objects, <c>IEnumerable&lt;object&gt;</c>) is
     /// materialized via <c>IterateToList</c> into a <c>List&lt;object&gt;</c> so positional access
@@ -89,14 +91,14 @@ public partial class RuntimeEmitter
 
         // IList (List<object>, $Array, typed lists) → pass through: already index-addressable, and
         // routing a typed list (List<double>/List<bool>) through IterateToList would re-box it.
+        // Possible iterator mutation requires the same protocol selection as typed source paths.
         // Note: a .NET string is NOT an IList, so it falls through to the IterateToList path below and
         // is materialized into a character array (#753) — required so a rest element binds an array.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, ilistType);
-        il.Emit(OpCodes.Brtrue, passThroughLabel);
-
-        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, source);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, ilistType);
+        il.Emit(OpCodes.Brtrue, inputs.UsesArrayPrototypeMutation ? collect : passThroughLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, collect);
