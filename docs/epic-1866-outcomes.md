@@ -108,3 +108,26 @@ The source notes did not expose the original standalone artifact, so that artifa
 is not credited with fresh execution. The retained regression source is explicit;
 hosted execution was not exercised. Static-private receiver semantics and the
 transferred private-method-value implementation remain separate work.
+
+## #1903 — Private-in brand checks
+
+**Outcome: finite implementation transfer to
+[#1962](https://github.com/nickna/SharpTS/issues/1962); behavior remains unsupported.**
+The original #1599/#1853 note has no recoverable source, output or deadline.
+New investigation fixtures explicitly distinguish instance/static private fields
+and methods, generic constructor aliases, derived/foreign objects, proxies,
+primitive errors, operand evaluation and invalid lexical names.
+
+On unchanged `0ad37b57` and `b2d4a987`, CLI interpretation and compilation reject
+all five at parsing (`Expect expression`, exit 1). Node v25.5.0 matches the
+documented positive outputs; TypeScript 7.0.2 accepts those three sources and
+rejects the outside/undeclared controls with TS18016/TS2339. Parser rejection of
+the negative files is not credited as semantic validation. No SharpTS runtime,
+IL-verification or hosted pass is claimed.
+
+The finite design in `docs/plans/private-in-brand-checks.md` names each affected
+AST/checker/interpreter/emitter boundary and acceptance control, including generic
+brand storage and field installation timing. The successor is separate from
+private-method values and repeated class-evaluation identity. Fixtures and
+reference commands were exercised; `git diff --check` passed. No production code
+changed, so the previously completed core/quality/AOT checks remain applicable.
