@@ -408,3 +408,22 @@ pass, and the actual AOT analyzer baseline has zero analyzer warnings.
 `tests/fixtures/CallableProxyWrappers` preserves the historical-versus-current
 failure distinction. No historical timeout root cause, runtime-independent
 standalone Proxy deployment or hosted execution is claimed.
+
+## #1717 — Repeated bound-function names
+
+**Outcome: repaired in both engines.** The unchanged original source exposes
+an empty second compiled name on unchanged `0ad37b57` and pre-repair `f020187`;
+the interpreter instead drops a bound prefix. The generic emitted wrapper now
+resolves the immediate target name and adds its own prefix, while interpreter
+rebinding retains the full immediate BoundFunction.Name. Original expected
+output remains `bound sample 2 bound bound sample 1` then `7 true true 6`.
+
+All 101 affected naming/function-owner/wrapper tests pass with compiled IL
+verification, including two isolated CLI outputs without a SharpTS reference.
+A new four-level binding control verifies every prefix, length's zero floor,
+argument prepending, independent expandos and unchanged invocation. Both API
+modes and default-library CLI sources match separate TypeScript/Node references.
+Release build, quality gates and actual AOT/trim/single-file analyzer baseline
+pass with zero analyzer warnings. The existing NU1902 warning remains. Source
+and command boundaries are preserved in `tests/fixtures/NestedBoundFunctionNames`;
+no hosted execution or unrelated target-name mutation repair is claimed.

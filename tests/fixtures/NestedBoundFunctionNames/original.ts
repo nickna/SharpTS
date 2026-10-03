@@ -1,0 +1,1 @@
+function sample(a:number,b:number,c:number){return a+b+c;}const a:any=sample.bind(null,1);const b:any=a.bind(null,2);console.log(a.name,a.length,b.name,b.length);a.tag=7;console.log(a.tag,b.tag===undefined,a.missing===undefined,b(3));

@@ -1131,6 +1131,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(nameLabel);
         var nameIsTSFunctionLabel = il.DefineLabel();
         var nameIsBoundLabel = il.DefineLabel();
+        var nameIsBoundAnyLabel = il.DefineLabel();
         var nameEndLabel = il.DefineLabel();
 
         // Check for $TSFunction
@@ -1142,6 +1143,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brtrue, nameIsBoundLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Brtrue, nameIsBoundAnyLabel);
 
         // Unknown - return ""
         il.Emit(OpCodes.Ldstr, "");
@@ -1172,6 +1177,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.BoundTargetField);
         il.Emit(OpCodes.Call, inputs.FunctionValues.NameGetter);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Br, nameEndLabel);
+
+        // Repeated binding uses the generic wrapper; retain every bound prefix
+        // by resolving the immediate target rather than skipping to its function.
+        il.MarkLabel(nameIsBoundAnyLabel);
+        il.Emit(OpCodes.Ldstr, "bound ");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.AnyTargetField);
+        il.Emit(OpCodes.Ldstr, "name");
+        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
 
         il.MarkLabel(nameEndLabel);

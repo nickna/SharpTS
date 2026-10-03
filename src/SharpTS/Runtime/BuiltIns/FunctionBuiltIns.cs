@@ -409,9 +409,7 @@ public class BoundFunction : ISharpTSCallable
             SharpTSArrowFunction arrow => arrow.ToString().Contains("<fn ")
                 ? arrow.ToString().Replace("<fn ", "").TrimEnd('>')
                 : "",
-            BoundFunction bound => bound.Name.StartsWith("bound ")
-                ? bound.Name.Substring(6)
-                : bound.Name,
+            BoundFunction bound => bound.Name,
             _ => ""
         };
     }
