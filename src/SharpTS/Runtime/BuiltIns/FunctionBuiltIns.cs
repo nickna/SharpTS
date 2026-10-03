@@ -10,9 +10,9 @@ namespace SharpTS.Runtime.BuiltIns;
 public static class FunctionBuiltIns
 {
     // Spec lengths per ECMA-262 §20.2.3: bind=1, call=1, apply=2.
-    private static readonly BuiltInMethod _bind = BuiltInMethod.CreateV2("bind", 0, int.MaxValue, Bind).WithSpecLength(1);
-    private static readonly BuiltInMethod _call = BuiltInMethod.CreateV2("call", 0, int.MaxValue, Call).WithSpecLength(1);
-    private static readonly BuiltInMethod _apply = BuiltInMethod.CreateV2("apply", 0, 2, Apply).WithSpecLength(2);
+    private static readonly BuiltInMethod _bind = BuiltInMethod.CreateV2("bind", 0, int.MaxValue, Bind).WithSpecLength(1).AsNonConstructor();
+    private static readonly BuiltInMethod _call = BuiltInMethod.CreateV2("call", 0, int.MaxValue, Call).WithSpecLength(1).AsNonConstructor();
+    private static readonly BuiltInMethod _apply = BuiltInMethod.CreateV2("apply", 0, 2, Apply).WithSpecLength(2).AsNonConstructor();
 
     /// <summary>
     /// Returns the unbound singleton callable for a Function.prototype method

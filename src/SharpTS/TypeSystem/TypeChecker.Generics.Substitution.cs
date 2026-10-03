@@ -70,6 +70,7 @@ public partial class TypeChecker
                 new TypeInfo.Array(Sub(arr.ElementType)),
             TypeInfo.Promise promise =>
                 new TypeInfo.Promise(Sub(promise.ValueType)),
+            TypeInfo.FunctionSupertype => type,
             TypeInfo.Function func =>
                 new TypeInfo.Function(
                     func.ParamTypes.Select(Sub).ToList(),

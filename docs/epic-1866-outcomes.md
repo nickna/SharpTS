@@ -427,3 +427,31 @@ Release build, quality gates and actual AOT/trim/single-file analyzer baseline
 pass with zero analyzer warnings. The existing NU1902 warning remains. Source
 and command boundaries are preserved in `tests/fixtures/NestedBoundFunctionNames`;
 no hosted execution or unrelated target-name mutation repair is claimed.
+
+## #1718 — Typed Reflect.construct class target
+
+**Outcome: repaired with unchanged original expectations.** The default-library
+CLI rejects the exact typed source before output generation on unchanged
+`0ad37b57` and pre-repair `d4b1c62b`. Its separately labelled Point-as-any control
+already compiles, verifies and executes correctly on unchanged main.
+TypeScript's broad Function object type is now distinct from an ordinary call
+signature; constructor values satisfy it, and the distinction survives generic
+substitution and compatibility caching. Plain objects, primitives, class
+instances and ordinary callable-signature assignments remain rejected.
+
+The exact original also exposes a baseline interpreter false result for the
+Function.prototype.call invalid-constructor control. Existing non-constructor
+flags now mark call/apply/bind intrinsics, retaining callable use and rejecting
+Reflect construction. All original expected TypeError lines remain true.
+
+The affected run has **333 passes and one unchanged namespace-construction IL
+failure (334 total)**, reproduced on unchanged main. All four positive sources
+pass both API modes, default-library CLI interpretation and isolated standalone
+execution, including class instance identity, a generic Function constraint,
+a Function-typed target, a construct-signature target and all three intrinsic
+negative runtime controls. Isolated artifacts verify IL, execute with zero exit
+and empty stderr, and have no SharpTS assembly reference. Separate TypeScript
+and Node references accept the sources. Release builds, final quality gates and
+actual AOT analyzer baseline pass with zero analyzer warnings; existing NU1902
+remains. `tests/fixtures/TypedReflectConstruct` retains the source and baseline
+boundaries. No namespace repair or hosted execution is claimed.
