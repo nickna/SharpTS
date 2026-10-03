@@ -9,7 +9,8 @@ Design results and prior repairs are distinguished from new behavior repairs.
 Verification counts describe each child's run. Later repairs supersede earlier
 retained diagnostics: #1781 resolves the seven namespace-class verifier failures,
 #1757 resolves four direct async super-call failures, and #1761 resolves #1956's
-promoted numeric closure verifier failure.
+promoted numeric closure verifier failure. A later declaration-order correction
+restores the runtime ownership checks described after #1765.
 
 ## #1900 — Interpreter non-writable static descriptors
 
@@ -1601,3 +1602,15 @@ visibility without dynamic writes and property creation inside field initializer
 Fresh unchanged-main/current both disagree with Node on those cases, with verified
 IL and clean execution. Tracking actual creation across initialization/inheritance
 is outside this declared-field merge repair; no storage-wide fix is claimed.
+
+### Runtime declaration-order correction
+
+The #1714 forward token for `InvokeMethodValue` is reserved after the established
+leading `Stringify`, `FormatNumber` and `CreateException` helpers. This restores
+their frozen metadata order while retaining early availability for function
+wrappers. Both original ownership checks pass on fresh unchanged main and fail
+before this correction. All **29 selected current checks pass**, including native
+ownership across optional/deferred families, #1714 isolated wrapper references
+and #1765 saved/hosted references. Quality gates and the actual AOT analyzer
+baseline pass with zero analyzer warnings. The Promise constructor diagnostic
+in #1765's wider selection remains separate and excluded from passing counts.

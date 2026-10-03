@@ -26,14 +26,6 @@ public partial class RuntimeEmitter
         );
         runtime.RuntimeClass.Type = typeBuilder;
 
-        // Function wrappers are emitted before the runtime helper body and
-        // call this declaration when composing call, apply and bind values.
-        runtime.Invocation.Method = typeBuilder.DefineMethod(
-            "InvokeMethodValue",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object, _types.ObjectArray]);
-
         // Reserve Stringify(object) → string. EmitStringify fills the body
         // later; it must skip its own DefineMethod call when this signature
         // is already present.
@@ -58,6 +50,14 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Exception,
             [_types.Object]);
+
+        // Function wrappers need this forward declaration, after the stable leading
+        // Stringify/FormatNumber/CreateException declarations.
+        runtime.Invocation.Method = typeBuilder.DefineMethod(
+            "InvokeMethodValue",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object, _types.ObjectArray]);
 
         // Preserve the leading runtime declarations while reserving the event-loop guard.
         DefineCancellationCheck(typeBuilder, runtime.Cancellation);
