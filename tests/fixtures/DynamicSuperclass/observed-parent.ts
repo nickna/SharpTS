@@ -23,4 +23,3 @@ async function main() {
     console.log(value instanceof Right, value instanceof Left);
 }
 main().then(() => {}, error => console.log("rejected", error.message));
-
