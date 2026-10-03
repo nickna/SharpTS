@@ -171,3 +171,28 @@ No hosted execution is claimed. The full core run recorded under #1902 predates
 this checker/emitter change; this child uses the affected suite above. Broader
 static-private receiver semantics and the separately transferred private-method
 value/brand-query features remain outside this focused lookup repair.
+
+## #1905 — Distinct generic constructor compatibility
+
+**Outcome: finite implementation transfer to
+[#1963](https://github.com/nickna/SharpTS/issues/1963); valid distinct pairs remain rejected.**
+#1857 repaired identical constructors and #1858 preserved declaration identity.
+Their bodies and retained regressions explicitly leave structural assignment
+between distinct constructors open. The historical note has no exact pair or
+deadline. The retained asserted runtime-reassignment source is identified in
+`docs/plans/generic-constructor-compatibility.md`; the new unasserted fixture is
+labelled as a modified control, not an unchanged historical reproducer.
+
+Seven fixtures pin the boundary using TypeScript 7.0.2. Three public/equal-constraint
+pairs are accepted and execute in Node v25.5.0 with documented outputs. Four
+private-origin/static-type/narrower-constraint/instance-result mismatches are
+rejected with TS2322. SharpTS baseline `0ad37b57` and `6b7cc25e` reject all seven
+in both CLI modes before runtime, exit 1. Positive runtime or IL passes are not
+claimed; the invalid pairs' rejection is preserved.
+
+All 24 retained generic identity/module-constructor tests pass with compiled IL
+verification. The finite successor design requires one consistent generic
+construct-signature/result/static-side relation, declaration-sensitive caching,
+private origin preservation and runtime binding checks. No production code
+changed; reference fixture commands and `git diff --check` passed. Hosted
+execution was not exercised.
