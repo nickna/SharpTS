@@ -35,7 +35,7 @@ public partial class ILCompiler
     /// </summary>
     private void DefineCommonJsModuleType(ParsedModule module)
     {
-        string moduleTypeName = $"$Module_{CompilationContext.SanitizeModuleName(module.ModuleName)}";
+        string moduleTypeName = GetUniqueModuleTypeName(module);
         var moduleType = _moduleBuilder.DefineType(
             moduleTypeName,
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed | TypeAttributes.Abstract

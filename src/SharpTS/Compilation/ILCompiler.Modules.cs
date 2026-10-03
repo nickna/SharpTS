@@ -16,6 +16,18 @@ public partial class ILCompiler
     // Track $GetNamespace methods for module registration
     private readonly Dictionary<string, MethodBuilder> _moduleGetNamespaceMethods = [];
 
+    private string GetUniqueModuleTypeName(ParsedModule module)
+    {
+        string baseName = $"$Module_{CompilationContext.SanitizeModuleName(module.ModuleName)}";
+        string name = baseName;
+        int suffix = 0;
+        // Module lookup remains keyed by canonical path. CLR names need a separate
+        // unique slot when distinct paths share a filename or sanitized spelling.
+        while (_modules.Types.Values.Any(type => type.Name == name))
+            name = $"{baseName}${++suffix}";
+        return name;
+    }
+
     /// <summary>
     /// Defines a module type with export fields.
     /// Script files (no import/export) are skipped - they share global scope.
@@ -38,7 +50,7 @@ public partial class ILCompiler
         }
 
         // Create module class: $Module_<name>
-        string moduleTypeName = $"$Module_{CompilationContext.SanitizeModuleName(module.ModuleName)}";
+        string moduleTypeName = GetUniqueModuleTypeName(module);
         var moduleType = _moduleBuilder.DefineType(
             moduleTypeName,
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed | TypeAttributes.Abstract

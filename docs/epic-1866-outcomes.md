@@ -305,3 +305,29 @@ v25.5.0 references in CLI interpretation and IL-verified standalone execution,
 with zero exit status. Release project builds, code-quality gates and the actual
 AOT/trim/single-file analyzer baseline passed (zero analyzer warnings). The
 existing NU1902 package warning remains. Hosted execution was not exercised.
+
+## #1910 — Duplicate `$Module_promises` declarations
+
+**Outcome: demonstrated declaration defect repaired; historical imports remain missing.**
+The #1821/#1822 evidence retains the duplicate metadata name but no exact
+colliding imports or deadline. Labelled new fs/DNS/timers Promise-module controls
+compile, pass IL verification and execute successfully at unchanged `0ad37b57`
+and `acae1bdd`, while their saved assemblies contain six `$Module_promises`
+TypeDef rows. This is a reproduced declaration defect; no runtime failure is
+invented for these controls.
+
+ESM and CommonJS module declaration paths now allocate unique CLR type names
+while lookup/export fields stay keyed by canonical module path. The current
+saved metadata has one base name and five distinct suffixed names. The change
+does not rewrite general class/function/enum name resolution.
+
+All 328 affected module/CommonJS/Promise/registry tests passed with compiled IL
+verification. Isolated tests assert unique saved TypeDef names, execute both
+built-in import orders and cover local same-filename/suffix-looking names in
+both orders and both module formats. Local programs remain runtime-independent
+under `--standalone`; built-in programs use default CLI deployment for DNS's
+existing optional runtime requirement. Node matches their documented outputs.
+Release builds, quality gates and the actual AOT analyzer baseline passed with
+zero analyzer warnings. No hosted execution is claimed. The fixture README
+preserves the source/deadline gap and separates metadata correctness from runtime
+success.

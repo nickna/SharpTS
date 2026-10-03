@@ -19,6 +19,65 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.PromiseModuleIdentityTests.ImportOrders), MemberType = typeof(SharedTests.PromiseModuleIdentityTests))]
+    public void Isolated_Issue1910PromiseModules_HaveUniqueTypeDeclarationsAndExports(string imports)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var source = imports + "\nconsole.log(typeof filesystem.readFile, typeof dns.lookup, typeof timers.setTimeout); timers.setTimeout(1, 'ready').then(value => console.log(value));";
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath("promise_modules.dll");
+        // DNS has an optional runtime deployment. Keep the default CLI deployment
+        // here instead of claiming --standalone removes that existing requirement.
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify", directory.Path,
+            TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        using var stream = File.OpenRead(output);
+        using var pe = new PEReader(stream);
+        var metadata = pe.GetMetadataReader();
+        var names = metadata.TypeDefinitions.Select(handle => metadata.GetString(metadata.GetTypeDefinition(handle).Name))
+            .Where(name => name.StartsWith("$Module_", StringComparison.Ordinal)).ToList();
+        Assert.Equal(names.Count, names.Distinct(StringComparer.Ordinal).Count());
+        Assert.True(names.Count(name => name.StartsWith("$Module_promises", StringComparison.Ordinal)) >= 3);
+        Assert.Equal("function function function\nready\n", ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Isolated_Issue1910LocalModuleNames_PreserveDistinctExports(bool commonJs, bool reverse)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var extension = commonJs ? "cts" : "ts";
+        directory.CreateFile($"left/promises.{extension}", commonJs ? "exports.value = 'left';" : "export const value = 'left';");
+        directory.CreateFile($"right/promises.{extension}", commonJs ? "exports.value = 'right';" : "export const value = 'right';");
+        directory.CreateFile($"third/promises$1.{extension}", commonJs ? "exports.value = 'third';" : "export const value = 'third';");
+        var left = $"import * as left from './left/promises.{extension}';";
+        var right = $"import * as right from './right/promises.{extension}';";
+        var source = (reverse ? right + left : left + right) + $"import * as third from './third/promises$1.{extension}'; console.log(left.value, right.value, third.value);";
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath("local_modules.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify --standalone", directory.Path,
+            TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        using var stream = File.OpenRead(output);
+        using var pe = new PEReader(stream);
+        var metadata = pe.GetMetadataReader();
+        var names = metadata.TypeDefinitions.Select(handle => metadata.GetString(metadata.GetTypeDefinition(handle).Name))
+            .Where(name => name.StartsWith("$Module_", StringComparison.Ordinal)).ToList();
+        Assert.Equal(names.Count, names.Distinct(StringComparer.Ordinal).Count());
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.Equal("left right third\n", ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
     [InlineData("<number>", false)]
     [InlineData("<number>", true)]
     [InlineData("", false)]
