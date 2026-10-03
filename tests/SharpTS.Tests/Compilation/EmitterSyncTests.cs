@@ -164,6 +164,9 @@ public class EmitterSyncTests
             // (break/continue/loop-nav/EmitBranchToLabel are inherited from StateMachineExitRoutingEmitter.)
             "EmitReturn",           // Generator return: set state -2, return false
             "EmitTryCatch",         // Generator exception handling
+            "EmitBlock",            // #1785: lower using scopes into resumable finally regions
+            "EmitStatementCore",    // #1785: dispatch the synthetic disposal markers after resumption
+            "EmitUsingDeclaration", // #1785: retain resource and captured disposal method in state-machine fields
             "EmitForOf",            // Hoisted enumerator for yield across loop boundaries
             "EmitForIn",            // #547: hoisted key-list/index for yield across for-in iterations
             "EmitYield",            // Core: yield value + suspend

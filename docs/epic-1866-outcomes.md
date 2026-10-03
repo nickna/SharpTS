@@ -12,6 +12,13 @@ retained diagnostics: #1781 resolves the seven namespace-class verifier failures
 promoted numeric closure verifier failure. A later declaration-order correction
 restores the runtime ownership checks described after #1765.
 
+Final integration checks register the three #1785 generator cleanup overrides
+with their architectural justification. The #1772 native Windows imports live
+in a dedicated internal helper type, preserving `$Program`'s guest-method IL
+inspection contract. All 90 focused architecture, sort, compact-object and
+Windows output/shutdown checks pass; the actual AOT/trim/single-file analyzer
+inventory remains at zero warnings.
+
 ## #1900 — Interpreter non-writable static descriptors
 
 **Outcome: repaired.** The original progress note links #1861 but contains no
