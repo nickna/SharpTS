@@ -61,7 +61,8 @@ public partial class RuntimeEmitter
             new GlobalPropertyWriteInputs(runtime.DescriptorStorage.DescriptorType,
                 runtime.DescriptorStorage.GetPropertyDescriptor,
                 runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!,
-                runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!));
+                runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!,
+                runtime.DescriptorStorage.TryGetSetter, runtime.Invocation.Method));
         runtime.GlobalObject.CompleteEmission();
     }
 
@@ -80,7 +81,8 @@ public partial class RuntimeEmitter
         GlobalPropertyOptionalInputs Optional);
 
     private readonly record struct GlobalPropertyWriteInputs(
-        Type DescriptorType, MethodBuilder GetPropertyDescriptor, MethodInfo GetWritable, MethodInfo SetValue);
+        Type DescriptorType, MethodBuilder GetPropertyDescriptor, MethodInfo GetWritable, MethodInfo SetValue,
+        MethodBuilder TryGetSetter, MethodBuilder InvokeMethod);
 
     private readonly record struct UriComponentInputs(ConstructorBuilder? PadUndefinedCtor, MethodBuilder ToJsString);
 
@@ -638,6 +640,28 @@ public partial class RuntimeEmitter
         var method = (MethodBuilder)globalObject.SetProperty;
 
         var il = method.GetILGenerator();
+
+        // Accessor setters have no [[Writable]] flag. Invoke one before the
+        // data-property check, preserving the actual global receiver and value.
+        var setter = il.DeclareLocal(_types.Object);
+        var noSetter = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, setter);
+        il.Emit(OpCodes.Call, inputs.TryGetSetter);
+        il.Emit(OpCodes.Brfalse, noSetter);
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
+        il.Emit(OpCodes.Ldloc, setter);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, inputs.InvokeMethod);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noSetter);
 
         // Respect Object.defineProperty metadata installed on the global
         // sentinel. A non-writable data property silently rejects sloppy-mode

@@ -1,0 +1,1 @@
+const root:any=globalThis;const alias:any=root.global;const key="__ga";let stored=2;let calls=0;Object.defineProperty(root,key,{get(){return stored;},set(v:number){calls++;stored=v;},configurable:true});alias[key]=4;globalThis[key]=8;console.log(alias[key],calls,alias===root);

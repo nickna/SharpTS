@@ -19,6 +19,42 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
+    [MemberData(nameof(SharedTests.GlobalAccessorWriteTests.Cases), MemberType = typeof(SharedTests.GlobalAccessorWriteTests))]
+    public void Isolated_Issue1769GlobalAccessors_InvokeSetters(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.GlobalAccessorWriteTests.HostedCases), MemberType = typeof(SharedTests.GlobalAccessorWriteTests))]
+    public void Isolated_Issue1769HostedGlobalAccessors_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
     [MemberData(nameof(SharedTests.UriComponentSemanticsTests.Cases), MemberType = typeof(SharedTests.UriComponentSemanticsTests))]
     public void Isolated_Issue1767UriComponents_PreserveValidation(string name, string source, string expected)
     {

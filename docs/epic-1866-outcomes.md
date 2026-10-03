@@ -1660,3 +1660,30 @@ probes are not claimed as runtime repairs or passing executions; its function-va
 coercion controls remain covered. All **150 broader global-object/string-coercion
 checks pass**. Quality gates and the actual AOT analyzer baseline pass with zero
 analyzer warnings.
+
+## #1769 — Installed setters on the global object
+
+**Outcome: repaired.** The global writer invokes an installed setter before
+checking data-property writability. It supplies the global singleton as receiver
+and the assigned value as its sole argument, then returns without creating a
+shadowing data entry. The original verifies and prints `2 2`/`true` on fresh
+unchanged-main/pre-repair current; repaired current preserves `8 8`/`true` with
+empty stderr and clean exit within the original 30 seconds.
+
+All **89 selected checks pass**, including nine compiled references, nine isolated
+standalone outputs, nine hosted module compilations, native global ownership and
+existing saved/globalThis controls. TypeScript/Node confirm all nine references.
+Coverage includes direct/aliased/computed writes, the Node global alias, receiver
+identity, setter-only descriptors, exception identity, re-entry, dot read-modify-
+write, strict setter invocation, and preserved readonly/getter-only values and
+deletion. The latter control does not claim strict rejection behavior. Saved
+guests verify IL, exact stdout, empty stderr, no SharpTS reference/copy and clean
+exit within 30 seconds. Hosted exports are not executed. The global object's four
+forward declarations, late eval declaration, identity, optional selections and
+deployment boundaries remain frozen; setter invocation uses precise scoped inputs.
+Quality gates and the actual AOT analyzer baseline pass with zero analyzer warnings.
+
+A separate compound string-index source is retained under
+`GlobalAccessorWrites/independent`. TypeScript/Node accept it with `6 2`; fresh
+unchanged-main/current reject it before emission with `Array index must be a
+number`. It is excluded from passing coverage and no checker repair is claimed.

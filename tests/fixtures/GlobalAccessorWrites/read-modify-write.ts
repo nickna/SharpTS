@@ -1,0 +1,1 @@
+const root:any=globalThis;let stored=2;let calls=0;Object.defineProperty(root,"__ga",{get(){return stored;},set(v:number){stored=v;calls++;},configurable:true});root.__ga++;root.__ga+=3;console.log(root.__ga,calls);

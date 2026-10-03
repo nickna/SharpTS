@@ -1,0 +1,1 @@
+const root:any=globalThis;const box:any={value:2};Object.defineProperty(root,"__sharptsGlobalAccessor",{get(){return box.value;},set(value:number){box.value=value;},configurable:true});root["__sharptsGlobalAccessor"]=8;console.log(globalThis.__sharptsGlobalAccessor,box.value);delete root.__sharptsGlobalAccessor;console.log(root.__sharptsGlobalAccessor===undefined);

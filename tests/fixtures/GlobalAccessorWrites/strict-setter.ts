@@ -1,0 +1,1 @@
+const root:any=globalThis;let stored=2;Object.defineProperty(root,"__ga",{get(){return stored;},set(v:number){stored=v;},configurable:true});function assign(){"use strict";root.__ga=8;}assign();console.log(root.__ga);
