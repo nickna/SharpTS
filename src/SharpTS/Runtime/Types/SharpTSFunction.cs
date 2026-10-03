@@ -59,6 +59,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     private readonly Stmt.Function _declaration;
     private readonly RuntimeEnvironment _closure;
     private readonly int _arity;
+    internal SharpTSClass? PrivateOwner { get; set; }
     // `this` value stored on the function itself (from BindThis) rather than in an
     // extra closure scope — otherwise the resolver's scope-distance count wouldn't
     // match the runtime chain and outer-variable captures would be off-by-one.
@@ -232,6 +233,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         RuntimeEnvironment environment = functionStrict
             ? new RuntimeEnvironment(_closure, strictMode: true)
             : new RuntimeEnvironment(_closure);
+        environment.PrivateClass = PrivateOwner;
 
         // JS calling convention: if `this` isn't bound by a receiver
         // (bare call `foo()`), it defaults to the global object in
@@ -327,6 +329,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         _symbolProperties ??= [];
         _symbolAccessors ??= [];
         bound._properties = _properties;
+        bound.PrivateOwner = PrivateOwner;
         bound._symbolProperties = _symbolProperties;
         bound._symbolAccessors = _symbolAccessors;
         return bound;
@@ -346,6 +349,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         RuntimeEnvironment environment = functionStrict
             ? new RuntimeEnvironment(_closure, strictMode: true)
             : new RuntimeEnvironment(_closure);
+        environment.PrivateClass = PrivateOwner;
 
         // See Call() for rationale on bound-this and default-this.
         if (_hasBoundThis)

@@ -66,3 +66,45 @@ positive/negative acceptance matrix. No production behavior is claimed fixed,
 and no in-process compiled, standalone runtime or hosted passing result is
 credited to these rejected programs. The original deadline/source are unknown;
 new CLI diagnostics completed promptly, without altering historical evidence.
+
+## #1902 — Inherited private-method interpreter dispatch
+
+**Outcome: repaired.** The unchanged `PrivateBrandsSpanTypeArgumentsAndRemainLexical`
+source retained by #1854 is copied into shared coverage. Its compiled execution
+already printed `ok`, `42`, `7`, `brand`, `rhs`; the interpreter printed `wrong`
+in place of `7` on `b4400b61`. New same-spelled base/derived private member and
+closure/suspension controls independently reproduced the receiver-based dispatch.
+
+Method wrappers now retain their lexical declaring class through binding and
+invocation. Invocation environments carry that private owner without adding a
+variable scope, so closures and suspended generators keep their declaration.
+Private method calls check the declaring owner's brand before dispatch; private
+field reads/writes in that method use its same owner. Derived instances receive
+each ancestor's separate private storage on the original receiver. Implicit
+constructor handling avoids allocating and initializing a redundant base instance.
+
+Verification on the same Windows/.NET environment as #1900:
+
+- 101 affected private member tests passed with compiled IL verification,
+  including the retained source, generic type arguments, module-local owners,
+  illegal receiver rejection, initialization count and suspension.
+- Four single-file controls matched Node in CLI interpretation and verified
+  standalone execution (zero exit status); the retained source kept its exact
+  stdout and the 30-second test-harness budget.
+- Test262 `private-method-brand-check.js` and
+  `private-method-brand-check-super-class.js` changed from Fail to Pass in the
+  interpreter. Two static-private controls retained existing interpreted Fail
+  results. All four compiled outcomes matched the unchanged baseline (two Pass,
+  two RuntimeError). The retained compiled superclass probe in shared coverage
+  passes independently; the failing Test262 program is not counted as repaired.
+- Code-quality gates passed with zero errors; the actual AOT/trim/single-file
+  analyzer inventory is zero and matches the enforced repository baseline.
+- The full hermetic core run completed: 23,438 passed, three skipped and one
+  failed. The sole failure is the documented Windows ARM64 compiled escaped
+  numeric-closure crash, [#1956](https://github.com/nickna/SharpTS/issues/1956),
+  already reproduced on unchanged main and outside this epic's frozen scope.
+
+The source notes did not expose the original standalone artifact, so that artifact
+is not credited with fresh execution. The retained regression source is explicit;
+hosted execution was not exercised. Static-private receiver semantics and the
+transferred private-method-value implementation remain separate work.

@@ -3090,9 +3090,7 @@ public partial class Interpreter
         // Instance private field access
         if (obj is SharpTSInstance instance)
         {
-            // For instance private fields, use the instance's class as the declaring class
-            // The type checker already verified brand checking
-            var declaringClass = instance.RuntimeClass;
+            var declaringClass = _environment.PrivateClass ?? instance.RuntimeClass;
             return declaringClass.GetPrivateFieldRV(instance, fieldName);
         }
 
@@ -3136,9 +3134,7 @@ public partial class Interpreter
         // Instance private field assignment
         if (obj is SharpTSInstance instance)
         {
-            // For instance private fields, use the instance's class as the declaring class
-            // The type checker already verified brand checking
-            var declaringClass = instance.RuntimeClass;
+            var declaringClass = _environment.PrivateClass ?? instance.RuntimeClass;
             declaringClass.SetPrivateField(instance, fieldName, value.ToObject());
             return value;
         }
@@ -3197,9 +3193,10 @@ public partial class Interpreter
         // Instance private method call
         if (obj is SharpTSInstance instance)
         {
-            // For instance private methods, use the instance's class as the declaring class
-            // The type checker already verified brand checking
-            var declaringClass = instance.RuntimeClass;
+            var declaringClass = _environment.PrivateClass ?? instance.RuntimeClass;
+            if (!declaringClass.HasPrivateBrand(instance))
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot access private member {methodName} from an object whose class did not declare it"));
             var method = declaringClass.GetPrivateMethod(methodName);
             if (method == null)
             {
@@ -3210,7 +3207,8 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(SharpTSClass.BindMethod(method, instance).CallBoxed(this, arguments));
         }
 
-        throw new InterpreterException($"Cannot call private method '{methodName}' on non-class value.");
+        throw new ThrowException(new SharpTSTypeError(
+            $"Cannot access private member {methodName} from an object whose class did not declare it"));
     }
 
     #endregion

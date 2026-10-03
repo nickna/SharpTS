@@ -112,15 +112,12 @@ public class SharpTSClass(
         // Initialize auto-accessor backing storage (before constructor runs)
         InitializeAutoAccessors(interpreter, instance);
 
+        // FindMethod includes ancestor constructors, which must initialize this
+        // receiver rather than a separately allocated superclass instance.
         ISharpTSCallable? constructor = FindMethod("constructor");
         if (constructor != null)
         {
             BindMethod(constructor, instance).Call(interpreter, arguments);
-        }
-        else if (Superclass != null)
-        {
-            // If no constructor, call super constructor
-            Superclass.Call(interpreter, arguments);
         }
 
         return instance;
@@ -376,6 +373,7 @@ public class SharpTSClass(
 
     public void AddSymbolAccessor(SharpTSSymbol symbol, SharpTSFunction func, bool isStatic, bool isGetter)
     {
+        BindPrivateMemberOwner(func);
         switch (isStatic, isGetter)
         {
             case (true, true): (_staticSymbolGetters ??= [])[symbol] = func; break;
@@ -408,6 +406,7 @@ public class SharpTSClass(
 
     public void AddSymbolMethod(SharpTSSymbol symbol, ISharpTSCallable func, bool isStatic)
     {
+        BindPrivateMemberOwner(func);
         if (isStatic) (_staticSymbolMethods ??= [])[symbol] = func;
         else (_symbolMethods ??= [])[symbol] = func;
     }
@@ -480,14 +479,37 @@ public class SharpTSClass(
 
     #region ES2022 Private Class Elements
 
+    internal void BindPrivateMemberOwners()
+    {
+        foreach (var method in _methods.Values.Concat(_staticMethods.Values)
+            .Concat(_privateMethods.Values).Concat(_staticPrivateMethods.Values)
+            .Concat(_getters.Values).Concat(_setters.Values)
+            .Concat(_staticGetters.Values).Concat(_staticSetters.Values))
+            BindPrivateMemberOwner(method);
+    }
+
+    private void BindPrivateMemberOwner(ISharpTSCallable method)
+    {
+        switch (method)
+        {
+            case SharpTSFunction function: function.PrivateOwner = this; break;
+            case SharpTSAsyncFunction function: function.PrivateOwner = this; break;
+            case SharpTSGeneratorFunction function: function.PrivateOwner = this; break;
+            case SharpTSAsyncGeneratorFunction function: function.PrivateOwner = this; break;
+        }
+    }
+
+    internal bool HasPrivateBrand(object receiver) => _privateFieldStorage.TryGetValue(receiver, out _);
+
     /// <summary>
     /// Initializes private fields for an instance. Each class in the hierarchy
     /// has its own private field storage - private fields are NOT inherited.
     /// </summary>
     protected void InitializePrivateFields(Interpreter interpreter, SharpTSInstance instance)
     {
-        // Note: Private fields are NOT inherited, so we don't call superclass here
-        // Each class's private fields are completely independent
+        // A derived instance carries each ancestor's independent private brand.
+        // Initialize every owner's storage on this same receiver.
+        Superclass?.InitializePrivateFields(interpreter, instance);
 
         var fields = new Dictionary<string, object?>();
         foreach (var field in _instancePrivateFields)

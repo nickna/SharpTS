@@ -2327,6 +2327,8 @@ public partial class Interpreter
                 staticGetters.Count > 0 ? staticGetters : null,
                 staticSetters.Count > 0 ? staticSetters : null);
 
+        klass.BindPrivateMemberOwners();
+
         if (symbolAccessors != null)
         {
             foreach (var (symbol, func, isStatic, isGetter) in symbolAccessors)
