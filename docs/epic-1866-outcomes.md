@@ -252,3 +252,30 @@ compiled IL verification. These have statically identifiable parents and do not
 prove runtime selection. Final fixture reference commands and `git diff --check`
 passed. No production code changed. The new probes were not exercised through a
 hosted factory or separately through in-process compilation.
+
+## #1908 — Namespace duplicate property-dispatch declarations
+
+**Outcome: demonstrated current diagnostic family; finite implementation transfer
+to [#1968](https://github.com/nickna/SharpTS/issues/1968), not a repair.**
+The historical note, #1853/#1854 review evidence and #1859 do not expose the
+original namespace source/deadline. #1859's retained expression cases are not
+treated as proof that namespace declarations were repaired.
+
+Four labelled entry-point controls are recorded in
+`docs/plans/namespace-class-identity.md`. Generic and non-generic sibling
+namespaces plus a top-level same-named class interpret correctly but fail
+compilation with the duplicate property-dispatch diagnostic on unchanged
+`0ad37b57` and `a90e3dc7`. Both module import orders pass IL verification but
+throw on a null exported namespace class; interpretation rejects exported
+namespace declaration naming. TypeScript accepts all four; Node prints `1 2 9`
+for sibling controls and `1 2` for module controls. No compiled runtime pass is
+claimed. The module failure is related to #1776, not a proven exact duplicate.
+
+The finite successor covers declaration-owned namespace class identity and
+lookup/export paths, coordinates with #1776 and preserves #1781's separate
+construction control. Existing metadata ownership work is not reopened.
+The retained namespace/expression/runtime suite has 124 passes and the same six
+object/System.Type verifier failures on both baselines (130 total). All six
+failures remain explicitly recorded. No production code changed; reference
+commands and `git diff --check` passed. New controls were not exercised through
+a hosted factory or separately via in-process compilation.
