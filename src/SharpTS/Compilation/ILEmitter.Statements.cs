@@ -3360,7 +3360,9 @@ public partial class ILEmitter
         }
 
         // Now emit using declarations and remaining statements in a try/finally
-        IL.BeginExceptionBlock();
+        var builder = _ctx.ILBuilder;
+        _ctx.ExceptionBlockDepth++;
+        builder.BeginExceptionBlock();
 
         for (int i = firstUsingIndex; i < statements.Count; i++)
         {
@@ -3379,9 +3381,10 @@ public partial class ILEmitter
         }
 
         // Finally block - dispose resources in reverse order
-        IL.BeginFinallyBlock();
+        builder.BeginFinallyBlock();
         EmitUsingDisposal(usingResources);
-        IL.EndExceptionBlock();
+        builder.EndExceptionBlock();
+        _ctx.ExceptionBlockDepth--;
     }
 
     private readonly record struct UsingResourceLocals(LocalBuilder Resource, LocalBuilder Method, LocalBuilder Registered);
@@ -3416,12 +3419,26 @@ public partial class ILEmitter
     /// <summary>Invokes registered disposers in reverse order without another lookup.</summary>
     private void EmitUsingDisposal(List<UsingResourceLocals> resources)
     {
+        // Retiring the whole scope before invoking user code prevents unreached
+        // declarations on a later loop iteration from disposing stale resources.
+        // Keep this cleanup's registration flags in separate locals so a throwing
+        // disposer cannot leave another resource armed for the next iteration.
+        var registrations = new List<LocalBuilder>();
+        foreach (var resource in resources)
+        {
+            var registered = IL.DeclareLocal(_ctx.Types.Boolean);
+            IL.Emit(OpCodes.Ldloc, resource.Registered);
+            IL.Emit(OpCodes.Stloc, registered);
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Stloc, resource.Registered);
+            registrations.Add(registered);
+        }
         // Dispose in reverse order
         for (int i = resources.Count - 1; i >= 0; i--)
         {
             var resource = resources[i];
             var done = IL.DefineLabel();
-            IL.Emit(OpCodes.Ldloc, resource.Registered);
+            IL.Emit(OpCodes.Ldloc, registrations[i]);
             IL.Emit(OpCodes.Brfalse, done);
             UsingResourceEmitter.Dispose(IL, _ctx.Types, _ctx.Runtime!,
                 () => IL.Emit(OpCodes.Ldloc, resource.Resource),
@@ -4043,44 +4060,7 @@ public partial class ILEmitter
 
         if (hasUsing)
         {
-            var usingResources = new List<UsingResourceLocals>();
-
-            // Find the first using declaration index
-            int firstUsingIndex = statements.FindIndex(s => s is Stmt.Using);
-
-            // Emit statements before the first using
-            for (int i = 0; i < firstUsingIndex; i++)
-            {
-                EmitStatement(statements[i]);
-            }
-
-            // Now emit using declarations and remaining statements in a try/finally
-            // Use the builder for exception block tracking and validation
-            var builder = _ctx.ILBuilder;
-            _ctx.ExceptionBlockDepth++;
-            builder.BeginExceptionBlock();
-
-            for (int i = firstUsingIndex; i < statements.Count; i++)
-            {
-                var stmt = statements[i];
-                if (stmt is Stmt.Using usingStmt)
-                {
-                    foreach (var binding in usingStmt.Bindings)
-                    {
-                        usingResources.Add(EmitUsingRegistration(binding));
-                    }
-                }
-                else
-                {
-                    EmitStatement(stmt);
-                }
-            }
-
-            // Finally block - dispose resources in reverse order
-            builder.BeginFinallyBlock();
-            EmitUsingDisposal(usingResources);
-            builder.EndExceptionBlock();
-            _ctx.ExceptionBlockDepth--;
+            EmitBlockWithUsing(statements, []);
         }
         else
         {

@@ -1854,3 +1854,33 @@ exact stdout, empty stderr, no SharpTS reference/copy and clean exit; hosted
 exports are not executed. This does not claim async disposal or ownership audit
 closure. Quality gates and the actual AOT analyzer baseline pass with zero
 analyzer warnings.
+
+## #1786 — Ordinary using loop transfers
+
+**Outcome: repaired.** Ordinary using blocks track protected regions through
+the existing IL builder and compilation context. Break/continue and nested block
+returns use legal transfers and run cleanup. Function statement lists share the
+same lowering. Cleanup retires registration flags before user callbacks, so
+unreached declarations cannot dispose a stale resource on a later iteration.
+
+Fresh unchanged main rejects the original with the two recorded BranchOutOfTry
+offsets 136/164; pre-repair current retains two errors at 243/271 after intervening
+acquisition changes. Neither invalid assembly is executed. Current verifies and
+prints the complete original Node output `0`, `1`, `after`, within the original
+30 seconds. The exact explicit-finally control remains passing. A supplemental
+acquisition-failure control exposes stale prior-iteration cleanup on both fresh
+unchanged main and pre-repair current; repaired current matches Node.
+
+All **167 focused checks pass**, including twelve compiled references, twelve
+isolated standalone outputs, twelve hosted module compilations, both earlier
+using repairs, original disposal controls and native ownership/managed-boundary
+checks. TypeScript/Node confirm all twelve loop references. Coverage includes
+multiple declarations, LIFO order, nested/labeled loops, inner-loop local
+transfers, while/do/for-of, captured methods, unreached declarations, acquisition
+failures and disposal errors that cancel a pending transfer. All **458 broader
+control-flow/label/loop-closure/generator-finally/exception checks pass**. Saved
+guests require verified IL, exact stdout, empty stderr, no SharpTS reference/copy
+and clean exit; hosted exports are not executed. Existing owned disposal
+declarations, signatures and scoped dependencies remain unchanged. Quality gates
+and the actual AOT analyzer baseline pass with zero analyzer warnings; no
+ownership audit closure is claimed.

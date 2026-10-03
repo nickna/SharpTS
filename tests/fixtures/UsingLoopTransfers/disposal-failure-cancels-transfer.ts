@@ -1,0 +1,1 @@
+const original=new Error("dispose");for(let i=0;i<2;i++){try{{using r={[Symbol.dispose](){console.log("dispose",i);throw original;}};if(i===0)continue;break;}}catch(e){console.log(e===original);}}console.log("after");
