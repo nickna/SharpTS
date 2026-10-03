@@ -1096,3 +1096,31 @@ remains outside passing counts: saved any-alias outputs on unchanged main and
 current verify their IL and cleanly print `1 2` instead of Node's `8 9`.
 No general prototype lookup, incremental closing (#1750), fresh CLR enumerable
 acquisition (#1754) or hosted guest execution repair is claimed.
+
+## #1754 — Native CLR enumerable acquisition
+
+**Outcome: finite design transfer, not repaired.** The concrete acquisition
+contract is linked in [clr-enumerable-acquisition.md](plans/clr-enumerable-acquisition.md)
+for inclusion in the consolidated PR. No separate successor issue was published.
+The exact raw LINQ input still produces an empty array instead of `0, 1, 2` in
+fresh unchanged main and current, across all six native configurations per
+compiler. Every generated output is saved, IL-verified and checked for scoped
+ownership and standalone/hosted deployment-reference isolation. Compiler and
+output hashes are recorded. These are native emitted-helper reproductions;
+no guest-program failure or hosted guest execution is claimed.
+
+Initialized, active and exhausted enumerator controls pass, as does Queue.
+Repeated raw enumerable use remains empty. Public-interface role adapters
+demonstrate repeated sequence acquisition and cursor consumption with explicit
+intent; they do not replace or repair the unchanged original. The retained
+probe reports `OriginalMatchesExpected: false` separately from successful
+evidence collection and passing controls. A blanket IEnumerable-first dispatch
+would restart active/exhausted cursors. The linked plan specifies the native
+interop boundary, explicit acquisition role, legacy-policy decision, scoped
+emission and finite acceptance/stopping conditions.
+
+All **109 selected tests pass** with compiled IL verification, including native
+initialized/active/exhausted controls and retained iterator helper consumption.
+Quality gates pass. Production code is unchanged, so the verified #1753 actual
+AOT analyzer baseline remains applicable. The unresolved original and repeated
+raw-source failures remain outside passing counts.

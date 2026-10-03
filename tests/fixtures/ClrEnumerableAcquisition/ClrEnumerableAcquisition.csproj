@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <SharpTsCompilerPath Condition="'$(SharpTsCompilerPath)' == ''">$(MSBuildThisFileDirectory)..\..\..\src\SharpTS\bin\Release\net10.0\SharpTS.dll</SharpTsCompilerPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="SharpTS" HintPath="$(SharpTsCompilerPath)" />
+    <Reference Include="SharpTS.Hosting.Abstractions" HintPath="$([System.IO.Path]::GetDirectoryName('$(SharpTsCompilerPath)'))\SharpTS.Hosting.Abstractions.dll" />
+    <PackageReference Include="Microsoft.ILVerification" />
+  </ItemGroup>
+</Project>

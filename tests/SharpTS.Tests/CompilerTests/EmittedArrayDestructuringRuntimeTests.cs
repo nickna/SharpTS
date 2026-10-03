@@ -50,6 +50,12 @@ public sealed class EmittedArrayDestructuringRuntimeTests
             }
             Assert.Equal(new object[] { "A", "\U0001f600", "B" }, ((IList)Normalize("A\U0001f600B")).Cast<object>());
             Assert.Equal(new object[] { 0d, 1d, 2d }, ((IList)Normalize(new Queue<object>([0d, 1d, 2d]))).Cast<object>());
+            Assert.Equal(new object[] { 0d, 1d, 2d }, ((IList)Normalize(
+                Enumerable.Range(0, 3).Select(n => (object)(double)n).GetEnumerator())).Cast<object>());
+            var active = Enumerable.Range(0, 3).Select(n => (object)(double)n).GetEnumerator();
+            Assert.True(active.MoveNext());
+            Assert.Equal(new object[] { 1d, 2d }, ((IList)Normalize(active)).Cast<object>());
+            Assert.Empty(((IList)Normalize(active)).Cast<object>());
             var undefined = loaded.GetType(runtime.Sentinels.UndefinedType.FullName!)!
                 .GetField(runtime.Sentinels.UndefinedInstance.Name, Members)!.GetValue(null);
             foreach (var invalid in new object?[] { null, undefined, 4d, false,
