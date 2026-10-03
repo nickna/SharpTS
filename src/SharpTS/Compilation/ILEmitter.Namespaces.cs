@@ -87,6 +87,7 @@ public partial class ILEmitter
     /// </summary>
     private void EmitNamespaceMember(Stmt member, FieldBuilder nsField, string nsPath)
     {
+        bool isExported = member is Stmt.Export;
         // Unwrap export
         if (member is Stmt.Export export && export.Declaration != null)
         {
@@ -110,6 +111,9 @@ public partial class ILEmitter
         switch (member)
         {
             case Stmt.Function funcStmt:
+                // Private functions remain available through lexical namespace
+                // resolution; only exported declarations become object properties.
+                if (!isExported) break;
                 // Functions are defined at compile-time, not via EmitStatement
                 // Wrap as TSFunction and store in namespace
                 if (_ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(funcStmt.Name.Lexeme), out var methodBuilder))

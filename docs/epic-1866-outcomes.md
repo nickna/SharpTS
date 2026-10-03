@@ -1205,3 +1205,29 @@ expectations. Quality gates and the actual AOT analyzer baseline pass with zero
 analyzer warnings.
 No module namespace, property mutation, class construction or process-lifetime
 repair is claimed.
+
+## #1775 — Private functions in namespace initializers
+
+**Outcome: repaired by #1774's script-scope resolution, with export visibility
+completed here.** Fresh unchanged main reproduces all three exact original
+undefined-function errors. Current prints the expected ordinary, generator
+and async results. Private function declarations remain available to lexical
+namespace lookup and are no longer published as object properties; exported
+functions retain callability and identity.
+
+Seven compiled references and seven isolated saved standalone outputs verify
+the originals, nesting/shadowing, merging, function visibility and declaration
+identity. Together with retained #1774 coverage, all **31 focused cases pass**.
+All saved outputs verify IL, preserve exact stdout and empty stderr, omit hard
+SharpTS references and copies, and exit cleanly within 30 seconds. Full
+TypeScript compilation and Node confirm all seven expectations. The broader
+selected suite passes **1,928 tests**, retaining the seven established namespace
+class IL failures owned by #1781. Quality gates and the actual AOT analyzer
+baseline pass with zero analyzer warnings.
+
+`tests/fixtures/NamespaceInitializerFunctions` retains the unchanged originals
+and the separate missing-member typeof reproduction for #1778, excluded from
+passing counts. Fresh original diagnostics finish within 30 seconds; historical
+Windows lifetime observations remain with #1772. No broader private-variable
+publication, cross-declaration private scope, mutation or hosted execution
+repair is claimed.
