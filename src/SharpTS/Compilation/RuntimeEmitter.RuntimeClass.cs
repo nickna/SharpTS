@@ -950,11 +950,6 @@ public partial class RuntimeEmitter
         // their normalization path consumes arbitrary iterables. Reserve the
         // method token now and fill its body in EmitIteratorMethodsAdvanced.
         DeclareIterateToList(typeBuilder, runtime.IteratorCollection, runtime.Symbols.Type);
-        runtime.Invocation.Method = typeBuilder.DefineMethod(
-            "InvokeMethodValue",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object, _types.ObjectArray]);
         runtime.Reflect.Get = typeBuilder.DefineMethod(
             "ReflectGet",
             MethodAttributes.Public | MethodAttributes.Static,

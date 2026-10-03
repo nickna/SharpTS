@@ -357,3 +357,26 @@ interpreter baselines print `0` then `accepted`. Its source is retained in
 explicit limitation. Automatic approval review rejected publishing this adjacent
 issue as outside the frozen epic authorization; it remains a local finding.
 No proxy-mapper or hosted execution coverage is claimed.
+
+## #1714 — Extracted call/apply wrapper composition
+
+**Outcome: repaired.** The unchanged issue source prints `6 15` in Node;
+unchanged `0ad37b57` and pre-repair `ee154e04` saved outputs instead print
+`null null` after successful compilation and IL verification. The wrapper
+fallback now invokes the canonical receiver-aware helper, reserved before
+wrapper emission. Function.prototype wrappers select their actual Reference
+receiver, and generic bound callables retain the explicit receiver and prepended
+arguments. Bind validates call/apply wrapper types after their declaration.
+
+The exact original plus new target/bind/error/strict-this controls pass both
+API engines and three isolated CLI outputs, with IL verification, zero exits,
+empty stderr and no SharpTS assembly reference. Separate TypeScript and Node
+references accept all sources and preserve the expected numeric outputs and
+exception identity. The wider affected suite records **406 passes and one
+failure (407 total)**: `AsyncArrow_NestedWithMutation(Compiled)` fails IL
+verification with a readonly state-machine address at offset 90. The same
+signature is reproduced on unchanged `0ad37b57`; no passing full affected suite
+or async-closure repair is claimed. Quality gates and actual AOT/trim/single-file
+analyzer checks pass with zero analyzer warnings. Existing NU1902 remains.
+Fixtures and scope are retained in `tests/fixtures/ExtractedFunctionWrappers`;
+Proxy and hosted execution are not claimed by this task.

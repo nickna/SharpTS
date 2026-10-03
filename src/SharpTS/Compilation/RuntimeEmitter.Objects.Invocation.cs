@@ -773,8 +773,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BindType);
         il.Emit(OpCodes.Brfalse, notBindWrapperLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BindType);
+        // Function.prototype methods select their target from the actual
+        // Reference receiver, including an extracted method invoked via call.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.BindCtor);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.BindInvoke);
         il.Emit(OpCodes.Ret);
@@ -783,8 +785,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, inputs.FunctionBindings.CallType);
         il.Emit(OpCodes.Brfalse, notCallWrapperLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.CallType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.CallCtor);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.CallInvoke);
         il.Emit(OpCodes.Ret);
@@ -794,8 +796,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, inputs.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Brfalse, notApplyWrapperLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.ApplyType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.ApplyCtor);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.ApplyInvoke);
         il.Emit(OpCodes.Ret);

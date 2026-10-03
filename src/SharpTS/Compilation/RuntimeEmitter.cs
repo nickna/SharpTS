@@ -574,7 +574,30 @@ public partial class RuntimeEmitter
         EmitBoundAnyFunctionClass(
             moduleBuilder,
             runtime.FunctionBindings,
-            new BoundAnyFunctionClassInputs(runtime.FunctionValues, runtime.ArrayOperations, runtime.Map, runtime.Set)
+            new BoundAnyFunctionClassInputs(runtime.FunctionValues, runtime.ArrayOperations, runtime.Map, runtime.Set, runtime.Invocation)
+        );
+        EmitFunctionCallWrapperClass(
+            moduleBuilder,
+            runtime.FunctionBindings,
+            new FunctionCallWrapperClassInputs(
+                runtime.FunctionValues,
+                runtime.ArrayOperations,
+                runtime.Map,
+                runtime.Set,
+                runtime.Invocation
+            )
+        );
+        EmitFunctionApplyWrapperClass(
+            moduleBuilder,
+            runtime.FunctionBindings,
+            new FunctionApplyWrapperClassInputs(
+                runtime.FunctionValues,
+                runtime.ArrayOperations,
+                runtime.Map,
+                runtime.Set,
+                runtime.ArrayStorage,
+                runtime.Invocation
+            )
         );
         EmitFunctionBindWrapperClass(
             moduleBuilder,
@@ -586,27 +609,6 @@ public partial class RuntimeEmitter
                 runtime.Set,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Errors
-            )
-        );
-        EmitFunctionCallWrapperClass(
-            moduleBuilder,
-            runtime.FunctionBindings,
-            new FunctionCallWrapperClassInputs(
-                runtime.FunctionValues,
-                runtime.ArrayOperations,
-                runtime.Map,
-                runtime.Set
-            )
-        );
-        EmitFunctionApplyWrapperClass(
-            moduleBuilder,
-            runtime.FunctionBindings,
-            new FunctionApplyWrapperClassInputs(
-                runtime.FunctionValues,
-                runtime.ArrayOperations,
-                runtime.Map,
-                runtime.Set,
-                runtime.ArrayStorage
             )
         );
         runtime.FunctionBindings.CompleteEmission();
