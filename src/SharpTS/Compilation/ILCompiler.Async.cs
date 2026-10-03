@@ -1742,7 +1742,8 @@ public partial class ILCompiler
             arrowBuilder.DefineStateMachineStandalone(
                 arrowAnalysis.AwaitCount,
                 arrow.Parameters,
-                arrowAnalysis.HoistedLocals);
+                arrowAnalysis.HoistedLocals,
+                GetStandaloneLiveCaptureFields(arrow, captures));
 
             // Define the stub method
             arrowBuilder.DefineStubMethod(_programType, _runtime);

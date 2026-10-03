@@ -133,12 +133,12 @@ public partial class AsyncArrowMoveNextEmitter
 
             if (captureOrder.Count > 0)
             {
-                // A standalone arrow captures BY VALUE (the values are copied into its own state
-                // machine). A write to a capture therefore cannot propagate back to the enclosing
-                // binding, so reject it instead of silently dropping the write (#684/#682). The
-                // verifiable shared-cell fix is the same class as #625/#673 and tracked there.
+                // A capture without an enclosing display-class home still uses
+                // a value snapshot. Reject writes to that remaining subset
+                // instead of silently dropping them (#684/#682).
                 var written = CapturedWriteAnalysis.CollectImmediateWrites(af);
                 written.IntersectWith(captureOrder);
+                written.ExceptWith(nestedBuilder.StandaloneLiveCaptureFields.Keys);
                 if (written.Count > 0)
                 {
                     throw new CompileException(
@@ -157,8 +157,14 @@ public partial class AsyncArrowMoveNextEmitter
                 {
                     _il.Emit(OpCodes.Dup);
                     _il.Emit(OpCodes.Ldc_I4, i);
-                    LoadVariableForCapture(captureOrder[i]);
-                    EnsureBoxed();
+                    var name = captureOrder[i];
+                    if (nestedBuilder.StandaloneLiveCaptureFields.TryGetValue(name, out var liveField))
+                        StandaloneAsyncCaptureEmitter.EmitReference(_il, _ctx!, liveField, name, _builder);
+                    else
+                    {
+                        LoadVariableForCapture(name);
+                        EnsureBoxed();
+                    }
                     _il.Emit(OpCodes.Stelem_Ref);
                 }
             }

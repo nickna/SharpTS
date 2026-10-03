@@ -782,3 +782,29 @@ async-generator return-promise failures, reproduced on unchanged main even
 without delegation and excluded from passing counts. No general promise-return
 adoption, external delegated return/throw protocol, custom async adapter,
 compiled async string iteration or hosted execution repair is claimed.
+
+## #1734 — Shared async mutable captures
+
+**Outcome: repaired.** Standalone async captures retain existing lexical
+display-class references, so repeated methods and sibling closures share the
+same mutable binding. Homes resolve by AST identity and references by type;
+numeric fields keep the boxed async-arrow storage contract. The unchanged
+original loop now prints `6` within its original 30-second deadline, and the
+bounded original prints `1 false 2 false 3 false 4 true`. Fresh unchanged main
+reproduces the loop timeout with empty streams and the bounded reset-to-one
+output, with verified IL; no shutdown root cause is inferred.
+
+All **22 focused tests pass**, covering eleven references in both engines and
+as isolated standalone saved outputs, including independent factories, sibling
+sync/async reads/writes, parameters, multiple lexical homes and pending awaits.
+Saved tests omit runtime references/copies and require exact Node stdout,
+clean exit and empty stderr within 30 seconds. Node and TypeScript accept all
+eleven references. The broader run has **446 passes and one unchanged-main
+IL failure**: `AsyncArrow_NestedWithMutation(Compiled)` retains the readonly
+outer-state-machine address diagnostic at offset 90 already verified for
+#1714. Quality gates and the actual AOT analyzer baseline pass with zero
+analyzer warnings.
+
+`tests/fixtures/AsyncMutableCaptures` records scope and evidence. The remaining
+boxed-state-machine failure, absent lexical display-class homes, per-iteration
+mutable async cells and hosted guest execution are not claimed as repaired.

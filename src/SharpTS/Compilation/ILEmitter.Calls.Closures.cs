@@ -124,7 +124,11 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Ldc_I4, i);
                 var captureName = captureOrder[i];
-                if (captureName == "this")
+                if (arrowBuilder.StandaloneLiveCaptureFields.TryGetValue(captureName, out var liveField))
+                {
+                    StandaloneAsyncCaptureEmitter.EmitReference(IL, _ctx, liveField, captureName);
+                }
+                else if (captureName == "this")
                 {
                     IL.Emit(OpCodes.Ldarg_0);
                 }
