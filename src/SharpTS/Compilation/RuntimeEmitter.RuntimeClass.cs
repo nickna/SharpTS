@@ -1595,7 +1595,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.IteratorCollection,
             new IteratorCollectionInputs(
-                runtime.ArrayStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
+                runtime.ArrayStorage, runtime.DescriptorStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
                 runtime.IteratorProtocol, runtime.IteratorRecords, runtime.ObjectRead,
                 runtime.Sentinels.UndefinedType, runtime.Sentinels.UndefinedInstance, runtime.TypedArrays.Implementation,
                 _features.UsesBuffer ? runtime.RequireBuffer() : null,

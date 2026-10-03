@@ -76,6 +76,25 @@ public sealed class EmittedIteratorCollectionRuntimeTests
             var original = new List<object> { 1d, 2d }; Assert.Equal(original, (List<object>)toList.Invoke(null, [original, symbol, type])!);
             var destination = new List<object> { 0d }; Assert.Same(destination, intoList.Invoke(null, [original, symbol, type, destination]));
             Assert.Equal(new object[] { 0d, 1d, 2d }, destination); Assert.Equal(new object[] { 1d, 2d }, original);
+            foreach (var array in new[]
+            {
+                new List<object> { 1d, 2d },
+                (List<object>)Activator.CreateInstance(loaded.GetType(runtime.ArrayStorage.Type.FullName!)!, new List<object> { 1d, 2d })!
+            })
+            {
+                int reads = 0;
+                var descriptorType = loaded.GetType(runtime.DescriptorStorage.DescriptorType.FullName!)!;
+                var descriptor = Activator.CreateInstance(descriptorType)!;
+                descriptorType.GetProperty(runtime.DescriptorStorage.DescriptorGetter.Name)!
+                    .SetValue(descriptor, new Func<object[], object>(_ => { reads++; return 9d; }));
+                var store = loaded.GetType(runtime.DescriptorStorage.DefineProperty.DeclaringType!.FullName!)!;
+                store.GetMethod(runtime.DescriptorStorage.DefineProperty.Name)!.Invoke(null, [array, "1", descriptor]);
+                Assert.Equal(new object[] { 1d, 9d }, (List<object>)toList.Invoke(null, [array, symbol, type])!);
+                var appended = new List<object> { 0d };
+                Assert.Same(appended, intoList.Invoke(null, [array, symbol, type, appended]));
+                Assert.Equal(new object[] { 0d, 1d, 9d }, appended);
+                Assert.Equal(2, reads);
+            }
             Assert.Equal(new object[] { "A", "\U0001f600", "B" }, (List<object>)toList.Invoke(null, ["A\U0001f600B", symbol, type])!);
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
             Assert.Equal(hosted, loaded.GetReferencedAssemblies().Any(a => a.Name == "SharpTS.Hosting.Abstractions"));
@@ -96,7 +115,7 @@ public sealed class EmittedIteratorCollectionRuntimeTests
         typeof(RuntimeEmitter).GetMethod("DeclareIterateToList", Members)!.Invoke(emitter, [type, owner, runtime.Symbols.Type]);
         var helper = typeof(RuntimeEmitter).GetMethod("EmitIteratorMethodsAdvanced", Members)!;
         var inputs = Activator.CreateInstance(helper.GetParameters()[2].ParameterType,
-            runtime.ArrayStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
+            runtime.ArrayStorage, runtime.DescriptorStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
             runtime.IteratorProtocol, runtime.IteratorRecords, runtime.ObjectRead,
             runtime.Sentinels.UndefinedType, runtime.Sentinels.UndefinedInstance, runtime.TypedArrays.Implementation,
             bufferSelected ? runtime.RequireBuffer() : null, runtime.Map is not null, mutation)!;
@@ -123,7 +142,7 @@ public sealed class EmittedIteratorCollectionRuntimeTests
     {
         Assert.Equal(2, Slots.Length);
         foreach (string old in new[] { "IterateToList", "IterateIntoList" }) Assert.Null(typeof(EmittedRuntime).GetProperty(old));
-        foreach (string name in new[] { "DeclareIterateToList", "EmitIteratorMethodsAdvanced", "EmitIterateToList", "EmitIterateToListBody", "EmitAppendDenseIteratorSource", "EmitArrayIteratorType" })
+        foreach (string name in new[] { "DeclareIterateToList", "EmitIteratorMethodsAdvanced", "EmitIterateToList", "EmitIterateToListBody", "EmitAppendDenseIteratorSource", "EmitCollectIndexedArray", "EmitArrayIteratorType" })
         {
             var method = typeof(RuntimeEmitter).GetMethod(name, Members)!;
             Assert.DoesNotContain(method.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime) || p.ParameterType == typeof(RuntimeFeatureSet));

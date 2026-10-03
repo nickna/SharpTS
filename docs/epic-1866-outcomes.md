@@ -859,3 +859,26 @@ outside passing counts: fresh unchanged main and the corrected compiler both
 time out before closing, with empty streams. Frozen child #1750 owns that
 consumer correction. The interpreter's broader normal-close validation and
 hosted guest execution are not claimed as repaired.
+
+## #1742 — Indexed getters in array and argument spread
+
+**Outcome: repaired.** Array collection checks the scoped descriptor store
+before using backing storage. Descriptor-bearing arrays use ordinary indexed
+reads with live length, so own getters run in order and can grow or shrink the
+source. Iterator override selection precedes this path. Descriptor-free numeric
+argument spreading retains the bulk path; dense collection materializes holes
+as actual undefined entries. Both original failures now match Node, while the
+unchanged direct-read and Array.values controls remain correct.
+
+All **487 selected tests pass** with compiled IL verification. Eleven compiled
+references also run as isolated standalone outputs with exact Node stdout,
+empty stderr, clean exit within 30 seconds and no SharpTS reference/copy. Native
+reused-emitter tests cover both List and emitted-array descriptor overlays,
+minimal/optional/mutation/hosted declaration ownership and scoped dependencies.
+Node and TypeScript check every source. Quality gates and the actual AOT
+analyzer baseline pass with zero analyzer warnings.
+
+`tests/fixtures/ArraySpreadDescriptors` records getter side effects, live
+length, throw identity, custom iterators, repeated spreads, sparse arrays and
+numeric controls. No interpreter, hosted guest execution, unrelated array
+method-descriptor or arbitrary iterable-protocol repair is claimed.

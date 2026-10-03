@@ -1,0 +1,1 @@
+const a:any[]=[1,2,3];let order="";Object.defineProperty(a,"0",{get(){order+="a";return 4;}});Object.defineProperty(a,"1",{get(){order+="b";return 5;}});console.log([...a].join(","),order);order="";function collect(...xs:any[]){console.log(xs.join(","),order);}collect(...a);

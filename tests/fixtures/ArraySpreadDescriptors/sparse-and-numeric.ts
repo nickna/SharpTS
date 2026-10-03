@@ -1,0 +1,1 @@
+const a:any[]=[1,,3];const b=[...a];console.log(b.length,1 in b,b[1]===undefined);function collect(...xs:any[]){console.log(xs.length,1 in xs,xs[1]===undefined);}collect(...a);const dense=[1,2,3];console.log([...dense].join(","));function sum(...xs:number[]){let total=0;for(const n of xs)total+=n;console.log(total);}sum(0,...dense,4);

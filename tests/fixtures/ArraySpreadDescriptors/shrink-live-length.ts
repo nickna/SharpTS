@@ -1,0 +1,1 @@
+const a:any[]=[1,2,3];Object.defineProperty(a,"0",{get(){a.length=1;return 7;}});console.log([...a].join(","));const b:any[]=[1,2,3];Object.defineProperty(b,"0",{get(){b.length=1;return 8;}});function collect(...xs:any[]){console.log(xs.join(","));}collect(...b);

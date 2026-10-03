@@ -10,6 +10,7 @@ public partial class RuntimeEmitter
 {
     private readonly record struct IteratorCollectionInputs(
         EmittedArrayStorageRuntime ArrayStorage,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedCollectionKeysRuntime CollectionKeys,
         EmittedErrorRuntime Errors,
         EmittedInvocationRuntime Invocation,
@@ -1303,6 +1304,42 @@ public partial class RuntimeEmitter
         il.MarkLabel(done);
     }
 
+    private void EmitCollectIndexedArray(ILGenerator il, IteratorCollectionInputs inputs,
+        LocalBuilder result, bool appendToExisting, bool longLength)
+    {
+        var index = il.DeclareLocal(_types.Int64);
+        var check = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(check);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, longLength ? inputs.ArrayStorage.Type : _types.ListOfObject);
+        il.Emit(OpCodes.Callvirt, longLength ? inputs.ArrayStorage.LongLengthGetter
+            : _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+        if (!longLength) il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Bge, done);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Index);
+        il.Emit(OpCodes.Call, appendToExisting ? inputs.ArrayStorage.AppendRestValue
+            : _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, check);
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitIterateToListBody(EmittedIteratorCollectionRuntime iteratorCollection, IteratorCollectionInputs inputs, bool appendToExisting)
     {
         var method = appendToExisting ? iteratorCollection.IntoList : iteratorCollection.ToList;
@@ -1354,17 +1391,18 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, customArrayIteratorLabel);
         }
 
-        // 1a. Stage E.2: fast path for $Array — return its backing list directly.
-        // Since `$Array` inherits List<object?> (M2 decision), Elements is just
-        // `this`. The sparse tail past base Count is lost in this fast path,
-        // which is acceptable because IterateToList is called by spread /
-        // Array.from / concat — all of which either produce fresh dense arrays
-        // or receive dense prefixes. Callers needing sparse-aware iteration
-        // use the long-indexed GetLong / HasIndex accessors directly.
+        // Descriptor-free dense arrays retain their storage fast paths. Own
+        // indexed getters and sparse tails require live ordinary indexed reads.
         var notTSArrayLabel = il.DefineLabel();
+        var indexedArray = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArrayLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Brtrue, indexedArray);
+        if (inputs.UsesArrayPrototypeMutation)
+            il.Emit(OpCodes.Br, indexedArray);
         if (appendToExisting && !inputs.UsesArrayPrototypeMutation)
         {
             var boxedSource = il.DefineLabel();
@@ -1382,59 +1420,24 @@ public partial class RuntimeEmitter
         }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.LongLengthGetter);
+        il.Emit(OpCodes.Bne_Un, indexedArray);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.ElementsGetter);
-        if (appendToExisting)
-        {
-            var elements = il.DeclareLocal(_types.ListOfObject);
-            il.Emit(OpCodes.Stloc, elements);
-            var indexed = il.DefineLabel();
-            if (inputs.UsesArrayPrototypeMutation)
-                il.Emit(OpCodes.Br, indexed);
-            else
-            {
-                // Dense boxed storage can be copied directly after the iterator
-                // proof above. Holes/sparse tails require ordinary indexed reads.
-                il.Emit(OpCodes.Ldloc, elements);
-                il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
-                il.Emit(OpCodes.Conv_I8);
-                il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
-                il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.LongLengthGetter);
-                il.Emit(OpCodes.Bne_Un, indexed);
-                EmitAppendDenseIteratorSource(il, inputs.ArrayStorage, inputs.UndefinedInstance, resultLocal, elements);
-                il.Emit(OpCodes.Ldloc, resultLocal);
-                il.Emit(OpCodes.Ret);
-            }
-            il.MarkLabel(indexed);
-            var index = il.DeclareLocal(_types.Int64);
-            var check = il.DefineLabel();
-            var done = il.DefineLabel();
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Conv_I8);
-            il.Emit(OpCodes.Stloc, index);
-            il.MarkLabel(check);
-            il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
-            il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.LongLengthGetter);
-            il.Emit(OpCodes.Bge, done);
-            il.Emit(OpCodes.Ldloc, resultLocal);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, inputs.ObjectRead.Index);
-            AppendValue();
-            il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Conv_I8);
-            il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Stloc, index);
-            il.Emit(OpCodes.Br, check);
-            il.MarkLabel(done);
-            il.Emit(OpCodes.Ldloc, resultLocal);
-        }
+        var elements = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Stloc, elements);
+        // Both collection entry points materialize holes as real undefined
+        // entries. The argument-spread numeric bulk path above remains intact.
+        EmitAppendDenseIteratorSource(il, inputs.ArrayStorage, inputs.UndefinedInstance, resultLocal, elements);
+        il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
+        il.MarkLabel(indexedArray);
+        EmitCollectIndexedArray(il, inputs, resultLocal, appendToExisting, longLength: true);
         il.MarkLabel(notTSArrayLabel);
 
         // 1b. Fast path for emitted $TypedArray — only present when program uses typed arrays.
@@ -1577,6 +1580,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, tryStringLabel);
+        var indexedList = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Brtrue, indexedList);
+        if (inputs.UsesArrayPrototypeMutation)
+            il.Emit(OpCodes.Br, indexedList);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         if (appendToExisting)
@@ -1587,6 +1596,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, resultLocal);
         }
         il.Emit(OpCodes.Ret);
+        il.MarkLabel(indexedList);
+        EmitCollectIndexedArray(il, inputs, resultLocal, appendToExisting, longLength: false);
 
         // 2. If obj is string, iterate characters
         il.MarkLabel(tryStringLabel);

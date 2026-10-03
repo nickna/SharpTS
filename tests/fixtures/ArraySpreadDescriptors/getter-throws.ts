@@ -1,0 +1,1 @@
+const marker={tag:7};let reads=0;let calls=0;const a:any[]=[1,2];Object.defineProperty(a,"0",{get(){reads++;throw marker;}});try{const b=[...a];console.log("accepted");}catch(e:any){console.log(e===marker,reads);}function collect(...xs:any[]){calls++;}try{collect(...a);}catch(e:any){console.log(e===marker,reads,calls);}
