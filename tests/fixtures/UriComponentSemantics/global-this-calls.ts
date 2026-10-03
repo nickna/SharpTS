@@ -1,0 +1,1 @@
+console.log(globalThis.encodeURIComponent("!'()*"));const root:any=globalThis;try{root.decodeURIComponent("%E0%A4");}catch(e){console.log(e.name,e instanceof URIError);}const decode:any=root["decodeURIComponent"];try{decode("%GG");}catch(e){console.log(e.name);}console.log(decode("%41"));

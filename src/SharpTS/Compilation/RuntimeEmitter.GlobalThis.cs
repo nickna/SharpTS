@@ -86,7 +86,7 @@ public partial class RuntimeEmitter
 
     private void EmitUriComponentFunctions(TypeBuilder typeBuilder, EmittedUriComponentRuntime uriComponents, UriComponentInputs inputs)
     {
-        MethodBuilder Emit(string clrName, MethodInfo uriMethod)
+        MethodBuilder Emit(string clrName, bool encode)
         {
             var method = typeBuilder.DefineMethod(
                 clrName,
@@ -101,17 +101,47 @@ public partial class RuntimeEmitter
                     inputs.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
 
             var il = method.GetILGenerator();
+            var source = il.DeclareLocal(_types.String);
+            var result = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.ToJsString);
-            il.Emit(OpCodes.Call, uriMethod);
+            il.Emit(OpCodes.Stloc, source);
+
+            // Coercion is outside the validation catch so its original abrupt
+            // completion wins. Strict UTF-8 rejects unpaired UTF-16 on encode
+            // and invalid/overlong/surrogate percent-encoded octets on decode.
+            var done = il.BeginExceptionBlock();
+            if (encode)
+                EmitUriEncodeValidation(il, source);
+            else
+                EmitUriDecodeValidation(il, source);
+            il.Emit(OpCodes.Ldloc, source);
+            il.Emit(OpCodes.Call, encode ? _types.UriEscapeDataString : _types.UriUnescapeDataString);
+            if (encode)
+            {
+                foreach (var (escaped, literal) in new[] {
+                    ("%21", "!"), ("%27", "'"), ("%28", "("), ("%29", ")"), ("%2A", "*") })
+                {
+                    il.Emit(OpCodes.Ldstr, escaped);
+                    il.Emit(OpCodes.Ldstr, literal);
+                    il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", [_types.String, _types.String])!);
+                }
+            }
+            il.Emit(OpCodes.Stloc, result);
+            il.Emit(OpCodes.Leave, done);
+            il.BeginCatchBlock(encode ? typeof(System.Text.EncoderFallbackException) : typeof(System.Text.DecoderFallbackException));
+            il.Emit(OpCodes.Pop);
+            EmitMalformedUriError(il);
+            il.EndExceptionBlock();
+            il.Emit(OpCodes.Ldloc, result);
             il.Emit(OpCodes.Ret);
             return method;
         }
 
         uriComponents.Encode = Emit(
-            "GlobalEncodeURIComponent", _types.UriEscapeDataString);
+            "GlobalEncodeURIComponent", true);
         uriComponents.Decode = Emit(
-            "GlobalDecodeURIComponent", _types.UriUnescapeDataString);
+            "GlobalDecodeURIComponent", false);
     }
 
     /// <summary>

@@ -1,0 +1,1 @@
+let count=0;for(const s of ["\uD800","\uDC00","\uD800A","A\uDC00"]){try{encodeURIComponent(s);}catch(e){if(e instanceof URIError)count++;}}console.log(count);console.log(encodeURIComponent("\uD83D\uDE00"));

@@ -1,0 +1,1 @@
+let count=0;for(const s of ["%80","%C0%AF","%E0%A4","%E0%80%80","%ED%A0%80","%F4%90%80%80","%F5%80%80%80","%F0%9F%98","%C2x%A2","%E2%28%A1"]){try{decodeURIComponent(s);}catch(e){if(e instanceof URIError)count++;}}console.log(count);

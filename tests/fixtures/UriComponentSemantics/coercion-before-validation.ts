@@ -1,0 +1,1 @@
+const original=new Error("coerce");const value:any={toString(){throw original;}};for(const fn of [encodeURIComponent,decodeURIComponent]){try{fn(value);}catch(e){console.log(e===original,e.name);}}let calls=0;const s:any={toString(){calls++;return "%GG";}};try{decodeURIComponent(s);}catch(e){console.log(e.name,calls);}

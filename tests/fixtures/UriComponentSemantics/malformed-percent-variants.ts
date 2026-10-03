@@ -1,0 +1,1 @@
+let count=0;for(const s of ["%","%0","%GG","%A-","text%2","%1g","%g1"]){try{decodeURIComponent(s);}catch(e){if(e instanceof URIError&&e.name==="URIError")count++;}}console.log(count);console.log(decodeURIComponent("a%2520b+%2B"));

@@ -1634,3 +1634,29 @@ Saved guests verify IL, exact stdout, empty stderr, no SharpTS reference/copy an
 clean exit within 30 seconds. Hosted exports are not executed. Quality gates pass;
 the actual AOT analyzer baseline passes with zero warnings on the unchanged
 production source used for this test/documentation task.
+
+## #1767 — URI component escaping and input validation
+
+**Outcome: repaired.** Encoding validates UTF-16 with strict UTF-8 before BCL
+escaping and preserves `!'()*`. Decoding validates every percent triplet and
+each contiguous octet run with strict UTF-8 before unescaping. Invalid input
+becomes a guest URIError through the existing exception bridge. ToString coercion
+precedes validation and retains its original abrupt completion. All four original
+programs verify and reproduce the historical mismatch on fresh unchanged-main/
+pre-repair current; repaired current preserves every original Node expectation.
+
+All **66 focused checks pass**: twelve compiled references, twelve isolated
+standalone outputs, twelve hosted module controls, seven original passing saved
+programs, fourteen existing shared URI checks and nine native ownership checks.
+TypeScript/Node confirm all twelve references. Coverage includes malformed hex,
+incomplete/overlong/out-of-range UTF-8, encoded/lone surrogates, valid Unicode
+boundaries, raw surrogate preservation, borrowed/value/globalThis calls and
+coercion ordering. Saved guests verify IL, exact stdout, empty stderr, no SharpTS
+reference/copy and clean exit within the unchanged 30 seconds. Hosted exports are
+not executed. Native URI helper signatures, two owned declarations, conversion
+inputs, padding metadata and encode/decode order remain frozen across standalone/
+hosted optional masks. The original report's separate direct-call typing-limited
+probes are not claimed as runtime repairs or passing executions; its function-value
+coercion controls remain covered. All **150 broader global-object/string-coercion
+checks pass**. Quality gates and the actual AOT analyzer baseline pass with zero
+analyzer warnings.

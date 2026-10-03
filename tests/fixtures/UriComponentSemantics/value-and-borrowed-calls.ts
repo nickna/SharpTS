@@ -1,0 +1,1 @@
+const encode:any=encodeURIComponent;const decode:any=decodeURIComponent;console.log(encode.call(null,"!'()*"),decode.apply({},["%21%27%28%29%2A"]));for(const fn of [encode.bind(null,"\uD800"),decode.bind(null,"%C0%80")]){try{fn();}catch(e){console.log(e.name,e instanceof URIError);}}
