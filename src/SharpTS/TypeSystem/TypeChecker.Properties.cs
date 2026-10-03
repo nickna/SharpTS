@@ -62,9 +62,18 @@ public partial class TypeChecker
             return new TypeInfo.Function([], TypeInfo.Void.Shared);
         }
 
-        if (superMethods != null && superMethods.TryGetValue(expr.Method.Lexeme, out var methodType))
+        TypeInfo? current = _currentClass.Superclass;
+        Dictionary<string, TypeInfo> substitutions = [];
+        while (current != null)
         {
-            return SubstituteSuperclassTypeArgs(methodType);
+            substitutions = ComposeInheritedClassSubs(current, substitutions);
+            if (GetMethods(current)?.TryGetValue(expr.Method.Lexeme, out var methodType) == true)
+            {
+                if (GetMethodAccess(current)?.GetValueOrDefault(expr.Method.Lexeme) == AccessModifier.Private)
+                    throw new TypeCheckException($" Property '{expr.Method.Lexeme}' is private and only accessible within class '{GetClassName(current)}'.", tsCode: "TS2341");
+                return substitutions.Count == 0 ? methodType : Substitute(methodType, substitutions);
+            }
+            current = GetSuperclass(current);
         }
 
         throw new TypeCheckException($" Property '{expr.Method.Lexeme}' does not exist on superclass '{superName}'.", tsCode: "TS2339");

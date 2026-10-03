@@ -1406,3 +1406,34 @@ classes still collide, and module controls now run with verified IL but print
 import-order-dependent `2 2`/`1 1` instead of `1 2`. They remain diagnostic
 failures in the finite declaration/namespace identity transfer to #1968.
 This construction boundary fix does not claim that separate identity repair.
+
+## #1756 — Super methods inherited through an intermediate class
+
+**Outcome: repaired.** The checker resolves super method signatures through the
+superclass chain, selecting the nearest declaration and composing generic type
+arguments. Inaccessible private methods remain rejected. Fresh unchanged main
+and pre-repair current reject the original on superclass B; current accepts it,
+verifies IL and prints the unchanged `grandparent` expectation. The declared
+parent control retains its passing behavior.
+
+All **40 distinct focused cases pass** across runtime, saved, hosted, signature
+and retained native/super-method controls. Seven compiled references and seven
+isolated saved standalone outputs cover deeper inheritance, overrides, receiver
+identity, protected methods and generic grandparents. Five invalid signature/
+access sources match TypeScript rejection codes; a generic superclass chain
+preserves its parameter and return type in checker coverage. Full TypeScript
+compilation and Node confirm the seven executable expectations. Saved outputs
+verify IL, exact stdout, empty stderr, no SharpTS reference/copy and clean exit
+within 30 seconds. Seven hosted controls verify module compilation/deployment,
+without claiming export execution.
+
+The selected superclass/inheritance/access/generic/constructor suite passes
+**765 tests**, retaining six verifier failures confirmed on fresh unchanged main.
+Four direct async super-call failures remain with #1757. Separate async parameter
+object/string and Promise constructor object/Delegate mismatches are retained
+in `tests/fixtures/InheritedSuperMethods/independent`, excluded from passing
+counts. The Promise comparison uses `--noLib` to match the harness checker;
+the default CLI library rejects that source before emission. Invalid assemblies
+are not executed. Quality gates and the actual AOT analyzer baseline pass with
+zero analyzer warnings. This checker repair does not claim those independent
+state-machine/constructor lowering fixes.
