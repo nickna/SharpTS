@@ -1008,3 +1008,33 @@ Quality gates pass; production code is unchanged, so the verified #1748 actual
 AOT baseline remains applicable. No iterator-close or hosted execution repair
 is claimed. Automatic approval review rejected publishing a separate issue;
 the design remains a reviewable part of the requested consolidated PR.
+
+## #1751 — Guest errors for non-iterable destructuring sources
+
+**Outcome: repaired.** Ordinary guest object/class storage now requires a guest
+iterator method instead of inheriting iterable behavior from CLR storage.
+Missing/non-callable methods and invalid iterator results throw guest TypeError.
+Custom selection runs once with the original receiver and a captured next
+method. Valid strings, collections, typed arrays, Buffer and native CLR
+iterable/iterator controls retain their paths. The public normalizer ABI is
+unchanged and receives scoped protocol, error and optional collection inputs.
+All three unchanged originals now match Node; fresh unchanged main retains the
+original Error names and accepted empty object.
+
+All **591 selected tests pass** with compiled IL verification, including
+retained destructuring, iterable, spread, adapter and native emission coverage.
+Fourteen compiled references also run as isolated standalone output, with exact
+Node stdout, empty stderr, no SharpTS reference/copy and clean exit within the
+original 30-second deadline. Native reused-emitter tests validate guest-source
+rejection, Queue/string controls, output isolation, selected optional types and
+standalone/hosted declaration ownership. Node and TypeScript check every source.
+Quality gates and the actual AOT analyzer baseline pass with zero analyzer
+warnings.
+
+`tests/fixtures/ArrayDestructureSourceValidation` records the original programs,
+primitive/object shapes, empty patterns, valid collections, getter/factory
+counts, receiver/throw identity and malformed iterator results. The chosen null
+message matches Node, but general engine message wording is not a contract.
+Incremental closing remains the #1750 design, dynamic array overrides #1753,
+and fresh LINQ acquisition #1754. No interpreter or hosted guest execution
+repair is claimed.

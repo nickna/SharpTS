@@ -44,6 +44,11 @@ public partial class RuntimeEmitter
         Type UndefinedType
     );
 
+    private readonly record struct ArrayDestructureInputs(Type SymbolType,
+        MethodInfo IterateToList, ConstructorInfo ArrayCtor, EmittedErrorRuntime Errors,
+        MethodInfo GetIteratorFunction, MethodInfo InvokeMethod, ConstructorInfo WrapperCtor,
+        Type HasFieldsInterface, Type UndefinedType, Type? TypedArrayType, Type? BufferType);
+
     /// <summary>
     /// Emits ArrayDestructureSource: normalizes an array binding-pattern source through the
     /// iterator protocol (#685). Index-addressable sources — any
@@ -55,22 +60,20 @@ public partial class RuntimeEmitter
     /// yields the iterated elements. A <b>string</b> is deliberately not on the pass-through path: it
     /// materializes iterator code-point strings so a rest element binds an array rather than the
     /// trailing substring (<c>const [a, ...rest] = "hi"</c>), matching ECMA-262 (#753).
-    /// Non-iterable sources throw through <c>IterateToList</c>.
+    /// Guest objects require a callable iterator method; CLR storage enumeration is not sufficient.
     /// Signature: object ArrayDestructureSource(object value, $TSSymbol iteratorSymbol, Type runtimeType)
     /// </summary>
     private void EmitArrayDestructureSource(
         TypeBuilder typeBuilder,
         EmittedArrayOperationsRuntime arrays,
-        Type symbolType,
-        MethodInfo iterateToList,
-        ConstructorInfo arrayCtor
+        ArrayDestructureInputs inputs
     )
     {
         var method = typeBuilder.DefineMethod(
             "ArrayDestructureSource",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, symbolType, _types.Type]
+            [_types.Object, inputs.SymbolType, _types.Type]
         );
         arrays.DestructureSource = method;
 
@@ -78,6 +81,11 @@ public partial class RuntimeEmitter
         var ilistType = typeof(System.Collections.IList);
 
         var passThroughLabel = il.DefineLabel();
+        var collect = il.DefineLabel();
+        var guestSource = il.DefineLabel();
+        var notIterable = il.DefineLabel();
+        var source = il.DeclareLocal(_types.Object);
+        var iteratorMethod = il.DeclareLocal(_types.Object);
 
         // IList (List<object>, $Array, typed lists) → pass through: already index-addressable, and
         // routing a typed list (List<double>/List<bool>) through IterateToList would re-box it.
@@ -87,18 +95,76 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, ilistType);
         il.Emit(OpCodes.Brtrue, passThroughLabel);
 
-        // Everything else → materialize through the iterator protocol via IterateToList (Set, Map,
-        // generators, [Symbol.iterator] objects, .NET enumerables). This is the same routine spread
-        // uses, so destructuring and spread agree on what is iterable; it throws for genuinely
-        // non-iterable values (and null), matching JS's "x is not iterable". The List<object> is
-        // wrapped in a $Array so the subsequent positional index access has JS array semantics —
-        // notably an out-of-range index (a pattern longer than the iterable) yields undefined (so a
-        // binding default applies) instead of throwing IndexOutOfRange off the bare list.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, source);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, collect);
+        foreach (var nativeCollection in new[] { inputs.TypedArrayType, inputs.BufferType })
+        {
+            if (nativeCollection is null)
+                continue;
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, nativeCollection);
+            il.Emit(OpCodes.Brtrue, collect);
+        }
+
+        // Guest objects require @@iterator even if their storage implements
+        // CLR IEnumerable. Keep native enumerable/iterator interop separate.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, guestSource);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.HasFieldsInterface);
+        il.Emit(OpCodes.Brtrue, guestSource);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.IEnumerable);
+        il.Emit(OpCodes.Brtrue, collect);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.IEnumerator);
+        il.Emit(OpCodes.Brtrue, collect);
+
+        il.MarkLabel(guestSource);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.GetIteratorFunction);
+        il.Emit(OpCodes.Stloc, iteratorMethod);
+        il.Emit(OpCodes.Ldloc, iteratorMethod);
+        il.Emit(OpCodes.Brfalse, notIterable);
+        il.Emit(OpCodes.Ldloc, iteratorMethod);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, notIterable);
+        // Select once: descriptor getters and iterator factories must not run
+        // again when the resulting iterator is collected.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, iteratorMethod);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, inputs.InvokeMethod);
+        il.Emit(OpCodes.Stloc, source);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Isinst, _types.IEnumeratorOfObject);
+        il.Emit(OpCodes.Brtrue, collect);
+        // An iterable factory must return an iterator, not merely another
+        // IEnumerable such as an array. Capture its guest next method directly.
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Newobj, inputs.WrapperCtor);
+        il.Emit(OpCodes.Stloc, source);
+        il.Emit(OpCodes.Br, collect);
+
+        il.MarkLabel(notIterable);
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException,
+            inputs.Errors.TypeErrorConstructor, "source is not iterable");
+
+        // Materialize accepted iterators/collections and wrap the list in $Array
+        // so out-of-range binding reads yield undefined and can apply defaults.
+        il.MarkLabel(collect);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, iterateToList);
-        il.Emit(OpCodes.Newobj, arrayCtor);
+        il.Emit(OpCodes.Call, inputs.IterateToList);
+        il.Emit(OpCodes.Newobj, inputs.ArrayCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(passThroughLabel);

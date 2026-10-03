@@ -34,12 +34,18 @@ public sealed class EmittedArrayDestructuringRuntimeTests
             var method = type.GetMethod("ArrayDestructureSource")!;
             Assert.True(method.IsPublic && method.IsStatic); Assert.Equal(typeof(object), method.ReturnType);
             Assert.Equal(new[] { typeof(object), symbol.GetType(), typeof(Type) }, method.GetParameters().Select(p => p.ParameterType));
-            object Normalize(object value) => method.Invoke(null, [value, symbol, type])!;
+            object Normalize(object? value) => method.Invoke(null, [value, symbol, type])!;
             var list = new List<object> { 1d, 2d };
             var typed = new List<double> { 3d, 4d };
             Assert.Same(list, Normalize(list)); Assert.Same(typed, Normalize(typed));
             Assert.Equal(new object[] { "A", "\U0001f600", "B" }, ((IList)Normalize("A\U0001f600B")).Cast<object>());
             Assert.Equal(new object[] { 0d, 1d, 2d }, ((IList)Normalize(new Queue<object>([0d, 1d, 2d]))).Cast<object>());
+            var undefined = loaded.GetType(runtime.Sentinels.UndefinedType.FullName!)!
+                .GetField(runtime.Sentinels.UndefinedInstance.Name, Members)!.GetValue(null);
+            foreach (var invalid in new object?[] { null, undefined, 4d, false,
+                new Dictionary<string, object>(),
+                new Dictionary<string, object> { ["next"] = new Func<object[], object>(_ => new Dictionary<string, object> { ["done"] = true }) } })
+                Assert.Contains("TypeError:", Assert.Throws<TargetInvocationException>(() => Normalize(invalid)).InnerException!.Message);
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
             Assert.Equal(hosted, loaded.GetReferencedAssemblies().Any(a => a.Name == "SharpTS.Hosting.Abstractions"));
         }
@@ -67,9 +73,19 @@ public sealed class EmittedArrayDestructuringRuntimeTests
             il.Emit(OpCodes.Stelem_Ref);
         }
         il.Emit(OpCodes.Stsfld, captured); il.Emit(OpCodes.Ldsfld, result); il.Emit(OpCodes.Ret);
+        var getIterator = type.DefineMethod("GetIterator", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object), [typeof(object), typeof(Guid)]);
+        il = getIterator.GetILGenerator(); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ret);
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime);
+        var dependencies = emitter.EmitAll(module);
+        var inputType = typeof(RuntimeEmitter).GetNestedType("ArrayDestructureInputs", Members)!;
+        var inputs = Activator.CreateInstance(inputType, [typeof(Guid), collect, ctor,
+            dependencies.Errors, getIterator, dependencies.Invocation.Method,
+            dependencies.IteratorWrappers.Ctor, dependencies.ObjectFields.Interface,
+            dependencies.Sentinels.UndefinedType, null, null]);
         var arrays = new EmittedRuntime().ArrayOperations;
         typeof(RuntimeEmitter).GetMethod("EmitArrayDestructureSource", Members)!
-            .Invoke(new RuntimeEmitter(TypeProvider.Runtime), [type, arrays, typeof(Guid), collect, ctor]);
+            .Invoke(emitter, [type, arrays, inputs]);
         Assert.False(arrays.IsComplete); Assert.Same(type, arrays.DestructureSource.DeclaringType);
         storage.CreateType(); type.CreateType(); var loaded = SaveVerifyLoad(builder); var probe = loaded.GetType("Probe")!;
         var method = probe.GetMethod("ArrayDestructureSource")!; var symbol = Guid.NewGuid();
@@ -87,8 +103,12 @@ public sealed class EmittedArrayDestructuringRuntimeTests
     {
         Assert.Null(typeof(EmittedRuntime).GetProperty("ArrayDestructureSource"));
         var helper = typeof(RuntimeEmitter).GetMethod("EmitArrayDestructureSource", Members)!;
-        Assert.Equal(new[] { typeof(TypeBuilder), typeof(EmittedArrayOperationsRuntime), typeof(Type), typeof(MethodInfo), typeof(ConstructorInfo) },
+        var inputs = typeof(RuntimeEmitter).GetNestedType("ArrayDestructureInputs", Members)!;
+        Assert.Equal(new[] { typeof(TypeBuilder), typeof(EmittedArrayOperationsRuntime), inputs },
             helper.GetParameters().Select(p => p.ParameterType));
+        Assert.DoesNotContain(inputs.GetFields(Members), f => f.FieldType == typeof(EmittedRuntime) || f.FieldType == typeof(RuntimeFeatureSet));
+        Assert.Equal(new[] { "ArrayCtor", "BufferType", "Errors", "GetIteratorFunction", "HasFieldsInterface", "InvokeMethod", "IterateToList", "SymbolType", "TypedArrayType", "UndefinedType", "WrapperCtor" },
+            inputs.GetProperties().Select(p => p.Name).Order());
     }
 
     private static PersistedAssemblyBuilder NewAssembly() => new(new AssemblyName($"array_destructuring_{Guid.NewGuid():N}"), typeof(object).Assembly);

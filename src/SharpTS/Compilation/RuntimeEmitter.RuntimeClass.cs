@@ -2525,7 +2525,12 @@ public partial class RuntimeEmitter
         // #685: array binding-pattern source normalizer uses the declared iterator
         // collection helper and array storage constructor.
         EmitArrayDestructureSource(typeBuilder, runtime.ArrayOperations,
-            runtime.Symbols.Type, runtime.IteratorCollection.ToList, runtime.ArrayStorage.Ctor);
+            new ArrayDestructureInputs(runtime.Symbols.Type, runtime.IteratorCollection.ToList,
+                runtime.ArrayStorage.Ctor, runtime.Errors, runtime.IteratorProtocol.Function,
+                runtime.Invocation.Method, runtime.IteratorWrappers.Ctor,
+                runtime.ObjectFields.Interface, runtime.Sentinels.UndefinedType,
+                runtime.TypedArrays.Implementation?.BaseType,
+                _features.UsesBuffer ? runtime.RequireBuffer().Type : null));
         // JSON methods — gated on UsesJSON (also implied by UsesHttp).
         if (runtime.Json.Implementation is not null)
         {
