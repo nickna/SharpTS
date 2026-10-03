@@ -1711,3 +1711,32 @@ clean exit within 30 seconds. Hosted exports are not executed. Native number
 declaration signatures, ownership and formatter boundaries remain frozen; the
 coercion helper and padding constructor are precise scoped inputs. Quality gates
 and the actual AOT analyzer baseline pass with zero analyzer warnings.
+
+## #1794 — Native RegExp own nullish match overrides
+
+**Outcome: repaired.** After GetMethod returns undefined, String.match now
+creates a fresh RegExp from the stringified pattern rather than copying or
+reusing a native matcher. Both own null and undefined overrides follow this
+fallback. Existing callable hooks retain ordinary native dispatch and its
+intrinsic fast path. Fresh unchanged-main/pre-repair current verify the original
+but print false; repaired current prints true with empty stderr and clean exit
+within the original 30 seconds.
+
+All **297 selected checks pass**, including twelve compiled references, twelve
+isolated standalone outputs, twelve hosted module compilations, existing saved
+protocol controls, native RegExp/string-dispatch ownership checks and related
+string-method tests. TypeScript/Node confirm all twelve references. Coverage
+includes callable/non-callable/nullish overrides, deletion, prototype replacement,
+fresh fallback matcher identity, getter order, receiver binding, thrown identity,
+borrowed calls and ordinary native matching. Saved guests verify IL, exact stdout,
+empty stderr, no SharpTS reference/copy and clean exit within 30 seconds. Hosted
+exports are not executed. Native owned declarations, scoped inputs, optional
+selection and deployment boundaries remain frozen. Quality gates and the actual
+AOT analyzer baseline pass with zero analyzer warnings.
+
+A separate empty-RegExp source diagnostic is retained under
+`RegExpOwnMatchOverrides/independent`: Node expects source `(?:)`, while fresh
+unchanged main and current expose an empty string, both with verified IL, clean
+exit and empty stderr. An additional prototype-hook source probe retains its
+Node expectation `(?:)|abc` and current output `|abc`. These are excluded from
+passing coverage; no source representation repair is claimed.
