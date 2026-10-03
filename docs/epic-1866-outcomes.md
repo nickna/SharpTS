@@ -1437,3 +1437,35 @@ the default CLI library rejects that source before emission. Invalid assemblies
 are not executed. Quality gates and the actual AOT analyzer baseline pass with
 zero analyzer warnings. This checker repair does not claim those independent
 state-machine/constructor lowering fixes.
+
+## #1757 — Direct super calls in async and generator state machines
+
+**Outcome: repaired.** State machines call a cached bridge on the lexical class,
+where a nonvirtual parent call with that class's own receiver is legal. Generic
+owners implement a nongeneric emitted contract to preserve their actual closed
+type. Async arrows capture the implicit super receiver. Argument conversion,
+defaults, evaluation order and temporaries across await/yield remain verified.
+Fresh unchanged main rejects all five original sources at IL verification;
+invalid assemblies are not executed. Current verifies the four runtime originals
+and preserves `11`, `7`, `3 4 5`, and `3`/`4`. The hosted original verifies
+declarations and deployment. Extracted-method controls preserve their prior
+verified behavior and clean execution within the original deadline.
+
+All **84 focused checks pass**, including fourteen compiled references, fourteen
+isolated standalone outputs, fourteen hosted module controls, the two original
+hosted sources, inherited-member checks and retained native parent-method
+ownership controls. Full TypeScript compilation and Node confirm all fourteen
+executable expectations. Saved guests verify IL, exact stdout, empty stderr,
+no SharpTS reference/copy and clean exit within 30 seconds. Hosted exports are
+not executed. No native runtime ownership boundary or constructor input changes.
+
+The broader async/generator/arrow/closure selection passes **1,588 tests**,
+retaining three independent verifier failures excluded from passing counts:
+#1956 numeric closure boxing, nested async arrow mutation, and a typed callback
+`$TSFunction`/`System.Delegate` mismatch. Fresh unchanged-main/current saved
+compilation confirms the callback mismatch at the same offset 167; its forced
+in-process offset is 207. The diagnostic source is preserved under
+`tests/fixtures/StateMachineSuperCalls/independent` and is not executed as a
+verified guest. The four direct async super tests retained by #1756 now pass.
+Quality gates and the actual AOT analyzer baseline pass with zero analyzer
+warnings. This super-call repair does not claim those separate lowering fixes.

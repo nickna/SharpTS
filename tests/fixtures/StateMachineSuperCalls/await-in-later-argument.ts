@@ -1,0 +1,1 @@
+let log="";function arg(n:number){log+=n;return n;}class A {sum(a:number,b:number){return a+b;}}class B extends A {async read(){return super.sum(arg(1),await Promise.resolve(arg(2)));}}new B().read().then(v=>console.log(v,log));

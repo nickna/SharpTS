@@ -1,0 +1,1 @@
+class A {label="parent";value(){return this.label;}}class B extends A {label="child";value(){return "override";}async read(){await Promise.resolve(0);return super.value();}}class C extends B {label="grandchild";value(){return "later override";}}new C().read().then(v=>console.log(v));

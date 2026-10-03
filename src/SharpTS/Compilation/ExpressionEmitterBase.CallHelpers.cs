@@ -2273,14 +2273,11 @@ public abstract partial class ExpressionEmitterBase
     }
 
     /// <summary>
-    /// Emits a non-virtual call to a base class method for super.method().
-    /// Returns false by default (arrow functions don't support super).
-    /// Override in emitters that have access to a hoisted 'this' field.
+    /// Calls a lexical-class bridge for super.method() from a state machine.
+    /// The bridge performs the nonvirtual parent call with its own this receiver.
     /// </summary>
     protected virtual bool TryEmitSuperMethodCall(string methodName, List<Expr> arguments)
     {
-        var thisField = GetThisField();
-
         string? superclassName = Ctx.CurrentSuperclassName;
 
         if (superclassName == null && Ctx.CurrentClassName != null)
@@ -2303,46 +2300,24 @@ public abstract partial class ExpressionEmitterBase
         if (methodBuilder == null)
             return false;
 
-        // Generic superclasses need the member referenced through the instantiated base
-        // (e.g. Base<float64>::count) — an open MethodDef token is not executable (#178)
-        if (!EmitterTypeHelpers.TryResolveSuperCall(
-                Ctx.CurrentClassBuilder, methodBuilder, Ctx.EmittingTypeBuilder, out var superTarget))
+        if (Ctx.CurrentClassBuilder is not { } owner || Ctx.ClassRegistry is not { } registry)
             return false;
+
+        var (receiverType, callTarget) = registry.GetOrCreateSuperCallBridge(owner, methodBuilder);
 
         var methodParams = methodBuilder.GetParameters();
 
-        List<LocalBuilder> argTemps = [];
-        foreach (var arg in arguments)
-        {
-            EmitExpression(arg);
-            EnsureBoxed();
-            var temp = IL.DeclareLocal(typeof(object));
-            IL.Emit(OpCodes.Stloc, temp);
-            argTemps.Add(temp);
-        }
+        var argTemps = arguments.Select(SpillBoxed).ToArray();
 
-        // Load hoisted 'this' from state machine
-        if (thisField != null)
-        {
-            IL.Emit(OpCodes.Ldarg_0);
-            IL.Emit(OpCodes.Ldfld, thisField);
-        }
-        else
-        {
-            IL.Emit(OpCodes.Ldnull);
-        }
+        // EmitThis also supports async arrows whose lexical receiver lives in an
+        // outer state machine or a standalone capture field.
+        EmitThis();
+        IL.Emit(OpCodes.Castclass, receiverType);
 
-        for (int i = 0; i < argTemps.Count; i++)
+        for (int i = 0; i < Math.Min(argTemps.Length, methodParams.Length); i++)
         {
             IL.Emit(OpCodes.Ldloc, argTemps[i]);
-            if (i < methodParams.Length)
-            {
-                var targetType = methodParams[i].ParameterType;
-                if (targetType.IsValueType && targetType != typeof(object))
-                {
-                    IL.Emit(OpCodes.Unbox_Any, targetType);
-                }
-            }
+            EmitCoerceBoxedToType(methodParams[i].ParameterType);
         }
 
         for (int i = arguments.Count; i < methodParams.Length; i++)
@@ -2350,7 +2325,7 @@ public abstract partial class ExpressionEmitterBase
             EmitOmittedArgument(methodParams[i].ParameterType);
         }
 
-        IL.Emit(OpCodes.Call, superTarget);
+        IL.Emit(OpCodes.Callvirt, callTarget);
         SetStackUnknown();
         return true;
     }

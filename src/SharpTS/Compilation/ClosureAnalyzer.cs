@@ -913,6 +913,16 @@ public class ClosureAnalyzer : AstVisitorBase
 
     protected override void VisitThis(Expr.This expr)
     {
+        CaptureLexicalThis();
+    }
+
+    protected override void VisitSuper(Expr.Super expr)
+    {
+        CaptureLexicalThis();
+    }
+
+    private void CaptureLexicalThis()
+    {
         // Arrow functions capture 'this' from their lexical scope. Also propagate the
         // capture up the arrow chain — every enclosing arrow (up to the first non-arrow
         // or `function(){}`-expression boundary) needs `this` in its display class so
