@@ -80,7 +80,7 @@ public static class BigIntBuiltIns
         return new SharpTSBigInt(truncated);
     }
 
-    private static BigInteger ParseBigIntString(string text)
+    internal static BigInteger ParseBigIntString(string text)
     {
         string value = text.Trim();
         if (value.Length == 0) return BigInteger.Zero;

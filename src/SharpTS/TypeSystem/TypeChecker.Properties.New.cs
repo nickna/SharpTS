@@ -451,6 +451,7 @@ public partial class TypeChecker
             var bufferType = CheckExpr(newExpr.Arguments[0]);
             if (bufferType is not TypeInfo.ArrayBuffer
                 && bufferType is not TypeInfo.SharedArrayBuffer
+                && bufferType is not TypeInfo.Interface { Name: "ArrayBuffer" or "SharedArrayBuffer" }
                 && bufferType is not TypeInfo.Any)
             {
                 throw new TypeCheckException($"DataView buffer must be an ArrayBuffer or SharedArrayBuffer, got '{bufferType}'.", tsCode: "TS2345");
