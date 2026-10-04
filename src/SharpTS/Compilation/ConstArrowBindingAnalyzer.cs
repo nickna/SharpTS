@@ -41,6 +41,7 @@ internal sealed class ConstArrowBindingAnalyzer : AstVisitorBase
         foreach (var parameter in parameters)
         {
             Count(parameter.Name);
+            VisitDecorators(parameter.Decorators);
             if (parameter.DestructuredProperties != null)
                 foreach (var property in parameter.DestructuredProperties)
                 {
@@ -51,12 +52,20 @@ internal sealed class ConstArrowBindingAnalyzer : AstVisitorBase
         }
     }
 
+    private void VisitDecorators(IEnumerable<Decorator>? decorators)
+    {
+        if (decorators != null)
+            foreach (var decorator in decorators)
+                Visit(decorator.Expression);
+    }
+
     protected override void VisitVar(Stmt.Var stmt) { Count(stmt.Name); base.VisitVar(stmt); }
     protected override void VisitConst(Stmt.Const stmt) { Count(stmt.Name); base.VisitConst(stmt); }
     protected override void VisitFunction(Stmt.Function stmt)
     {
         Count(stmt.Name);
         CountParameters(stmt.Parameters);
+        VisitDecorators(stmt.Decorators);
         if (stmt.ComputedKey != null)
             Visit(stmt.ComputedKey);
         base.VisitFunction(stmt);
@@ -69,9 +78,31 @@ internal sealed class ConstArrowBindingAnalyzer : AstVisitorBase
     }
     protected override void VisitAccessor(Stmt.Accessor stmt)
     {
+        VisitDecorators(stmt.Decorators);
         if (stmt.SetterParam != null)
             CountParameters([stmt.SetterParam]);
         base.VisitAccessor(stmt);
+    }
+    protected override void VisitField(Stmt.Field stmt)
+    {
+        VisitDecorators(stmt.Decorators);
+        base.VisitField(stmt);
+    }
+    protected override void VisitAutoAccessor(Stmt.AutoAccessor stmt)
+    {
+        VisitDecorators(stmt.Decorators);
+        base.VisitAutoAccessor(stmt);
+    }
+    protected override void VisitNew(Expr.New expr)
+    {
+        Visit(expr.Callee);
+        base.VisitNew(expr);
+    }
+    protected override void VisitExport(Stmt.Export stmt)
+    {
+        if (stmt.ExportAssignment != null)
+            Visit(stmt.ExportAssignment);
+        base.VisitExport(stmt);
     }
     protected override void VisitForOf(Stmt.ForOf stmt) { Count(stmt.Variable); base.VisitForOf(stmt); }
     protected override void VisitForIn(Stmt.ForIn stmt) { Count(stmt.Variable); base.VisitForIn(stmt); }
@@ -79,6 +110,7 @@ internal sealed class ConstArrowBindingAnalyzer : AstVisitorBase
     protected override void VisitClass(Stmt.Class stmt)
     {
         Count(stmt.Name);
+        VisitDecorators(stmt.Decorators);
         base.VisitClass(stmt);
         VisitClassExtras(stmt.SuperclassExpr, stmt.Fields, stmt.AutoAccessors, stmt.StaticInitializers);
     }
@@ -95,8 +127,11 @@ internal sealed class ConstArrowBindingAnalyzer : AstVisitorBase
         if (superclass != null)
             Visit(superclass);
         foreach (var field in fields)
+        {
+            VisitDecorators(field.Decorators);
             if (field.ComputedKey != null)
                 Visit(field.ComputedKey);
+        }
         if (accessors != null)
             foreach (var accessor in accessors)
                 Visit(accessor);

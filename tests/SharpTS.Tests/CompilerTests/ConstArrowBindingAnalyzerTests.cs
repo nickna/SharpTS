@@ -8,6 +8,20 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class ConstArrowBindingAnalyzerTests
 {
+    [Theory]
+    [InlineData("new (class { run(callback: (x: number) => number): void { [1].map(callback); } })();")]
+    [InlineData("export = class { run(callback: (x: number) => number): void { [1].map(callback); } };")]
+    [InlineData("@decorate((callback: (x: number) => number) => [1].map(callback)) class Holder {}")]
+    [InlineData("class Holder { @decorate((callback: (x: number) => number) => [1].map(callback)) value: number = 1; }")]
+    [InlineData("class Holder { @decorate((callback: (x: number) => number) => [1].map(callback)) accessor value: number = 1; }")]
+    public void ConstructorAndExportAssignmentSubtreesCannotHideBindingOwners(string consumer)
+    {
+        var statements = new Parser(new Lexer(
+            "const callback = (x: number): number => x + 1; " + consumer).ScanTokens(),
+            DecoratorMode.Stage3).ParseOrThrow();
+        Assert.Empty(ConstArrowBindingAnalyzer.Collect(statements));
+    }
+
     [Fact]
     public void SelectionProtectsIdentityAndRejectsConsumerMutation()
     {

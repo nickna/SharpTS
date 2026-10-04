@@ -14,7 +14,8 @@ public sealed class ArrowCallbackOwnershipTests
         { "try { throw (x: number): number => x + 100; } catch (callback) { console.log([1, 2].map(callback).join(',')); }", "101,102\n" },
         { "function apply({ callback }: { callback: (x: number) => number }): void { console.log([1, 2].map(callback).join(',')); } apply({ callback: (x: number): number => x + 100 });", "101,102\n" },
         { "class Holder { static { const callback = (x: number): number => x + 100; console.log([1, 2].map(callback).join(',')); } }", "101,102\n" },
-        { "const Holder = class { static { const callback = (x: number): number => x + 100; console.log([1, 2].map(callback).join(',')); } };", "101,102\n" }
+        { "const Holder = class { static { const callback = (x: number): number => x + 100; console.log([1, 2].map(callback).join(',')); } };", "101,102\n" },
+        { "new (class { run(callback: (x: number) => number): void { console.log([1, 2].map(callback).join(',')); } })().run((x: number): number => x + 100);", "101,102\n" }
     };
 
     [Theory, MemberData(nameof(Shadows))]
