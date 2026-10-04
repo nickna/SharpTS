@@ -85,6 +85,13 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         if (TryEmitBuiltInClassType(il, ctx, propertyName))
             return true;
 
+        if (propertyName == "Math")
+        {
+            il.Emit(OpCodes.Ldstr, propertyName);
+            il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
+            return true;
+        }
+
         // Check if this is a known built-in that has its own static emitter
         var staticEmitter = _registry.GetStaticStrategy(propertyName);
         if (staticEmitter != null)

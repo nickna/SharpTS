@@ -20,7 +20,12 @@ public sealed class HistoricalRuntimeDeploymentTests
     {
         using var directory = CliTestHelper.CreateTempDirectory();
         var path = directory.CreateFile(file, source);
-        foreach (bool noLib in new[] { false, true })
+        // These exact historical sources reference Math.sumPrecise, whose ambient
+        // declaration is explicitly outside #1935/#1936. Their --noLib deployment
+        // probes preserve the originals; cast-based controls also check default libs.
+        var libModes = file is "issue1935-original.ts" or "issue1936-original.ts"
+            ? new[] { true } : new[] { false, true };
+        foreach (bool noLib in libModes)
         foreach (bool hosted in new[] { false, true })
         {
             string output = directory.GetPath($"guest-{noLib}-{hosted}.dll");
