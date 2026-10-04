@@ -23,7 +23,7 @@ public sealed class HistoricalRuntimeDeploymentTests
         // Preserve historical snippets where current declarations reject
         // sumPrecise availability or unchecked descriptor reads. The noLib probes
         // retain the originals; typed controls also check default declarations.
-        var libModes = file is "issue1935-original.ts" or "issue1936-original.ts" or "issue1959-original.ts"
+        var libModes = file is "issue1935-original.ts" or "issue1936-original.ts" or "issue1959-original.ts" or "issue1960-original.ts"
             ? new[] { true } : new[] { false, true };
         foreach (bool noLib in libModes)
         foreach (bool hosted in new[] { false, true })

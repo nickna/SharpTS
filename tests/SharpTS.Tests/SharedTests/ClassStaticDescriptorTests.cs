@@ -54,8 +54,7 @@ public sealed class ClassStaticDescriptorTests
         Assert.Equal("true\n4\n", TestHarness.Run(source, mode));
     }
 
-    // The compiled read-modify-write path separately omits strict rejection (#1960).
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void ReadModifyWriteOperationsRespectNonWritableStatic(ExecutionMode mode)
     {
         const string source = """

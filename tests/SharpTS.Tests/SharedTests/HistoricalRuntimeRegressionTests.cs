@@ -7,6 +7,11 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1960-index-controls.ts", "\"use strict\";const a:any=[4];Object.defineProperty(a,'0',{writable:false});try{++a[0];}catch(e){console.log(e instanceof TypeError);}try{a[0]--;}catch(e){console.log(e instanceof TypeError);}try{a[0]+=2;}catch(e){console.log(e instanceof TypeError);}try{a[0]&&=9;}catch(e){console.log(e instanceof TypeError);}let hits=0;console.log(a[0]||=++hits,a[0]??=++hits,hits,a[0]);", "true\ntrue\ntrue\ntrue\n4 4 0 4\n"];
+        yield return ["issue1960-original.ts", "\"use strict\";class Box<T>{static count=4;}const box:any=Box;Object.defineProperty(Box,'count',{value:4,writable:false});try{box.count++;}catch(e){console.log(e instanceof TypeError);}try{box.count+=2;}catch(e){console.log(e instanceof TypeError);}try{box.count*=2;}catch(e){console.log(e instanceof TypeError);}try{box.count&&=3;}catch(e){console.log(e instanceof TypeError);}console.log(box.count,Object.getOwnPropertyDescriptor(Box,'count').value);", "true\ntrue\ntrue\ntrue\n4 4\n"];
+        yield return ["issue1960-strict-controls.ts", "\"use strict\";class Box{static count=4;static zero=0;static nil:any=undefined;}const b:any=Box;for(const key of ['count','zero','nil']){Object.defineProperty(Box,key,{writable:false});}function attempt(action:any){try{action();}catch(e){console.log(e instanceof TypeError);}}attempt(()=>{'use strict';++b.count;});attempt(()=>{'use strict';b.count--;});attempt(()=>{'use strict';b.count+=2;});attempt(()=>{'use strict';b.count&&=9;});attempt(()=>{'use strict';b.zero||=1;});attempt(()=>{'use strict';b.nil??=1;});let hits=0;console.log(b.count||=++hits,b.count??=++hits,b.zero&&=++hits,hits);console.log(b.count,b.zero,b.nil);", "true\ntrue\ntrue\ntrue\ntrue\ntrue\n4 4 0 0\n4 0 undefined\n"];
+        yield return ["issue1960-sloppy-controls.ts", "class Box{static count=4;}const b:any=Box;Object.defineProperty(Box,'count',{writable:false});console.log(b.count++,++b.count,b.count+=2,b.count*=2,b.count&&=3,b['count']);", "4 5 6 8 3 4\n"];
+        yield return ["issue1960-state-controls.ts", "\"use strict\";class Box{static count=4;}const b:any=Box;Object.defineProperty(Box,'count',{writable:false});function* values(){'use strict';try{b.count++;}catch(e){console.log(e instanceof TypeError);}try{b.count+=2;}catch(e){console.log(e instanceof TypeError);}yield b.count;}for(const value of values()){console.log(value);}async function run(){'use strict';await Promise.resolve(1);try{++b.count;}catch(e){console.log(e instanceof TypeError);}try{b.count&&=9;}catch(e){console.log(e instanceof TypeError);}console.log(b.count);}run();", "true\ntrue\n4\ntrue\ntrue\n4\n"];
         yield return ["issue1956-original.ts", """
             function create(n: number): any {
                 let current: number = 0;
@@ -127,7 +132,10 @@ public sealed class HistoricalRuntimeRegressionTests
                 // Its Number(value) control remains dual-mode; preserve the complete
                 // original source and reference for compiled API/deployment execution.
                 // #1934 similarly separates the interpreter's radix-36 discrepancy.
-                if (item[0] is "issue1933-original.ts" or "issue1934-original.ts" && mode == ExecutionMode.Interpreted)
+                // The extra #1960 indexed-array probe exercises compiled PutValue;
+                // interpreter array-index descriptor enforcement is a separate gap.
+                // The original static-field source and sloppy controls remain dual-mode.
+                if (item[0] is "issue1933-original.ts" or "issue1934-original.ts" or "issue1960-index-controls.ts" && mode == ExecutionMode.Interpreted)
                     continue;
                 yield return [..item, mode];
             }
