@@ -48,13 +48,24 @@ public sealed class HistoricalRuntimeDeploymentTests
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         process.StandardInput.Close();
-        bool completed = process.WaitForExit(30000);
-        if (!completed) process.Kill(entireProcessTree: true);
-        Assert.True(completed, "Standalone execution exceeded the preserved 30-second deadline.");
-        Assert.True(Task.WaitAll([stdout, stderr], 5000), "Redirected output did not drain.");
-        Assert.Equal(0, process.ExitCode);
-        Assert.Empty(stderr.Result);
-        return stdout.Result.Replace("\r\n", "\n");
+        try
+        {
+            Assert.True(process.WaitForExit(30000),
+                "Standalone execution exceeded the preserved 30-second deadline.");
+            Assert.True(Task.WaitAll([stdout, stderr], 5000), "Redirected output did not drain.");
+            Assert.Equal(0, process.ExitCode);
+            Assert.Empty(stderr.Result);
+            return stdout.Result.Replace("\r\n", "\n");
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                try { process.Kill(entireProcessTree: true); }
+                catch (InvalidOperationException) { }
+                process.WaitForExit(5000);
+            }
+        }
     }
 
     private static string RunHosted(string dll)
