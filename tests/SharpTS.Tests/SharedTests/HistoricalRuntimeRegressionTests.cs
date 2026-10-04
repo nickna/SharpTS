@@ -7,6 +7,8 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1954-original.ts", "const value:any='ab';console.log(Object.prototype.propertyIsEnumerable.call(value,'length'),Object.keys(value).join(','));", "false 0,1\n"];
+        yield return ["issue1954-controls.ts", "const pie:any=Object.prototype.propertyIsEnumerable;for(const value of ['', 'ab', new String('ab')]){console.log(pie.call(value,'length'),pie.call(value,'missing'),Object.keys(value).join(','));}console.log(pie.call(new String('ab'),'0'));", "false false \nfalse false 0,1\nfalse false 0,1\ntrue\n"];
         yield return ["issue1939-original.ts", "async function run(){const n=await Promise.resolve(7n);console.log(BigInt.asIntN(3,n),n+2n);}run().catch((e:any)=>console.log(e.name,e.message));", "-1n 9n\n"];
         yield return ["issue1939-call-control.ts", "async function run(){const n=await Promise.resolve(7);console.log(BigInt(n));}run().catch((e:any)=>console.log(e.name,e.message));", "7n\n"];
         yield return ["issue1939-controls.ts", "async function run(){console.log(BigInt('8'));await Promise.resolve(1);const B:any=BigInt;console.log(B===BigInt,B('9'),B.asIntN(3,7n),B.asUintN(3,-1n));}run().catch((e:any)=>console.log(e.name,e.message));", "8n\ntrue 9n -1n 7n\n"];
@@ -126,11 +128,6 @@ public sealed class HistoricalRuntimeRegressionTests
 
     internal static void AssertReferenceOutput(string file, string expected, string actual)
     {
-        // #1953 scopes acceptance to the first descriptor line. Preserve the
-        // complete source and Node reference; its second-line predicate is #1954.
-        if (file == "issue1953-original.ts")
-            Assert.Equal(expected.Split('\n')[0], actual.Split('\n')[0]);
-        else
-            Assert.Equal(expected, actual);
+        Assert.Equal(expected, actual);
     }
 }
