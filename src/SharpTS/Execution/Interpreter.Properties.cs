@@ -2894,8 +2894,8 @@ public partial class Interpreter
             // non-writable data and getter-only accessors block own shadowing.
             if (!simpleObj.HasProperty(memberName)
                 && !simpleObj.HasSetter(memberName)
-                && TrySetBoxedPrimitiveInheritedProperty(
-                    simpleObj, memberName, value, strictMode))
+                && (TrySetOrdinaryInheritedProperty(simpleObj, memberName, value, strictMode)
+                    || TrySetBoxedPrimitiveInheritedProperty(simpleObj, memberName, value, strictMode)))
                 return value;
 
             if (strictMode)
@@ -2936,6 +2936,20 @@ public partial class Interpreter
         }
 
         throw new InterpreterException($"Only instances and objects have fields. Cannot set '{memberName}' on {obj?.GetType().Name ?? "null"}.");
+    }
+
+    private bool TrySetOrdinaryInheritedProperty(
+        SharpTSObject receiver, string name, object? value, bool strictMode)
+    {
+        if (receiver.GetOwnPropertyDescriptor(name) is not null) return false;
+        object? current = receiver.Prototype;
+        while (current is SharpTSObject prototype)
+        {
+            if (prototype.GetOwnPropertyDescriptor(name) is { } descriptor)
+                return TryAssignThroughDescriptor(descriptor, receiver, name, value, strictMode);
+            current = prototype.Prototype;
+        }
+        return false;
     }
 
     private SharpTSPropertyDescriptor? GetBoxedPrimitivePrototypeDescriptor(

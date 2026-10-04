@@ -7,6 +7,12 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1947-original.ts", "const proto:any={set value(v:number){(this as any).own=v;}};const value:any=Object.create(proto);value.value=9;console.log(value.own,Object.hasOwn(value,'own'),Object.hasOwn(proto,'own'));", "9 true false\n"];
+        yield return ["issue1947-controls.ts", """
+            const proto:any={get value(){return (this as any).own;},set value(v:number){(this as any).own=v;}};const middle:any=Object.create(proto);const value:any=Object.create(middle);value['value']=6;console.log(value.value,Object.hasOwn(value,'value'),Object.hasOwn(proto,'own'));
+            Object.defineProperty(value,'value',{value:20,writable:true});value.value=21;console.log(value.value,value.own);
+            const defined:any={};Object.defineProperty(defined,'value',{set(v:number){(this as any).own=v;}});const child:any=Object.create(defined);child['value']=8;console.log(child.own,Object.hasOwn(defined,'own'));
+            """, "6 false false\n21 6\n8 false\n"];
         yield return ["issue1946-original.ts", "const proto:any={base:3,get value(){return (this as any).own+this.base;}};const value:any=Object.create(proto);value.own=4;console.log(value.value,'base' in value,Object.hasOwn(value,'base'),Object.getPrototypeOf(value)===proto);", "7 true false true\n"];
         yield return ["issue1946-controls.ts", """
             let calls=0;const proto:any={base:3,get value(){calls++;return (this as any).own+this.base;}};const middle:any=Object.create(proto);const value:any=Object.create(middle);value.own=4;console.log(value['value'],calls,Object.hasOwn(proto,'own'));

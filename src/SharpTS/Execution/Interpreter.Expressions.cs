@@ -1819,8 +1819,8 @@ public partial class Interpreter
                         throw new ThrowException(new SharpTSTypeError(
                             $"Proxy set trap rejected property '{t.Key}'"));
                 }
-                else if (TrySetBoxedPrimitiveInheritedProperty(
-                    t.Target, t.Key, value, strictMode))
+                else if (TrySetOrdinaryInheritedProperty(t.Target, t.Key, value, strictMode)
+                    || TrySetBoxedPrimitiveInheritedProperty(t.Target, t.Key, value, strictMode))
                 {
                     // The inherited setter handled the write, or an inherited
                     // non-writable/getter-only descriptor blocked it.

@@ -855,6 +855,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, inheritedSetPrototypeLocal);
+        var inheritedSetPrototypeLoop = il.DefineLabel();
+        var inheritedSetNextPrototype = il.DefineLabel();
+        il.MarkLabel(inheritedSetPrototypeLoop);
         il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal);
         il.Emit(OpCodes.Brfalse, inheritedSetContinueLabel);
         // An inherited Proxy supplies [[Set]] itself; dispatch before probing
@@ -878,33 +881,46 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(inheritedNotProxyLabel);
         }
-        var inheritedSetDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        // Normalize descriptors so object-literal accessor tables and PDS
+        // descriptors participate in the same inherited [[Set]] operation.
+        var inheritedSetDescriptorLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, inheritedSetDescriptorLocal);
         il.Emit(OpCodes.Ldloc, inheritedSetDescriptorLocal);
-        il.Emit(OpCodes.Brfalse, inheritedSetContinueLabel);
+        il.Emit(OpCodes.Brfalse, inheritedSetNextPrototype);
+        il.Emit(OpCodes.Ldloc, inheritedSetDescriptorLocal);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, inheritedSetNextPrototype);
+        var inheritedSetDataLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, inheritedSetDescriptorLocal);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Call, inputs.ObjectOwnProperties.HasOwnProperty);
+        il.Emit(OpCodes.Brfalse, inheritedSetDataLabel);
         var inheritedSetterLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, inheritedSetDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, inheritedSetterLocal);
-        var inheritedSetNoSetterLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, inheritedSetterLocal);
-        il.Emit(OpCodes.Brfalse, inheritedSetNoSetterLabel);
+        il.Emit(OpCodes.Brfalse, nullLabel);
         il.Emit(OpCodes.Ldloc, inheritedSetterLocal);
         il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, nullLabel);
         EmitInvokePdsSetterWithValueAndReturn(il, inputs.InvokeMethodValue, inheritedSetterLocal);
-        il.MarkLabel(inheritedSetNoSetterLabel);
-        // Getter-only accessors reject assignment; writable inherited data
-        // properties allow creation of a new own property.
+        il.MarkLabel(inheritedSetDataLabel);
         il.Emit(OpCodes.Ldloc, inheritedSetDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, nullLabel);
-        il.Emit(OpCodes.Ldloc, inheritedSetDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "writable");
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Brfalse, nullLabel);
+        il.Emit(OpCodes.Br, inheritedSetContinueLabel);
+        il.MarkLabel(inheritedSetNextPrototype);
+        il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, inheritedSetPrototypeLocal);
+        il.Emit(OpCodes.Br, inheritedSetPrototypeLoop);
         il.MarkLabel(inheritedSetContinueLabel);
 
         EmitNamespaceSetBranch(il, inputs.Namespaces);
