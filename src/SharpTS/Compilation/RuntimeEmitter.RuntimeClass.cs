@@ -869,6 +869,7 @@ public partial class RuntimeEmitter
                 runtime.ArrayStorage,
                 runtime.DescriptorStorage,
                 runtime.Errors,
+                runtime.Promise,
                 runtime.RegExps,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
