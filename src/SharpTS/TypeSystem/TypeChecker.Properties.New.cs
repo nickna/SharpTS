@@ -452,10 +452,8 @@ public partial class TypeChecker
             bool MatchesGlobalBuffer(string name)
             {
                 // Namespace and local interfaces can reuse the intrinsic name;
-                // the outermost binding supplies the global declaration surface.
-                TypeInfo? declaredBuffer = null;
-                for (TypeEnvironment? scope = _environment; scope != null; scope = scope.Enclosing)
-                    declaredBuffer = scope.GetLocalTypeBinding(name) ?? declaredBuffer;
+                // only the program's global declaration surface is relevant.
+                var declaredBuffer = _globalDeclarationEnvironment?.GetTypeBinding(name);
                 return declaredBuffer is TypeInfo.Interface && IsCompatible(declaredBuffer, bufferType);
             }
             if (bufferType is not TypeInfo.ArrayBuffer

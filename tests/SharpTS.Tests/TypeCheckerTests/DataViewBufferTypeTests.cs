@@ -8,16 +8,19 @@ namespace SharpTS.Tests.TypeCheckerTests;
 public sealed class DataViewBufferTypeTests
 {
     [Theory]
-    [InlineData("ArrayBuffer", false)]
-    [InlineData("ArrayBuffer", true)]
-    [InlineData("SharedArrayBuffer", false)]
-    [InlineData("SharedArrayBuffer", true)]
-    public void RejectsUnrelatedNamespacedBufferInterfaces(string name, bool insideNamespace)
+    [InlineData("ArrayBuffer", false, true)]
+    [InlineData("ArrayBuffer", true, true)]
+    [InlineData("SharedArrayBuffer", false, true)]
+    [InlineData("SharedArrayBuffer", true, true)]
+    [InlineData("ArrayBuffer", false, false)]
+    [InlineData("ArrayBuffer", true, false)]
+    [InlineData("SharedArrayBuffer", false, false)]
+    [InlineData("SharedArrayBuffer", true, false)]
+    public void RejectsUnrelatedNamespacedBufferInterfaces(string name, bool insideNamespace, bool declareGlobal)
     {
         string body = $"function use(buffer: {(insideNamespace ? name : "NS." + name)}){{new DataView(buffer);}}";
         string source = $$"""
-            interface ArrayBuffer { readonly byteLength: number; }
-            interface SharedArrayBuffer { readonly byteLength: number; }
+            {{(declareGlobal ? "interface ArrayBuffer { readonly byteLength: number; } interface SharedArrayBuffer { readonly byteLength: number; }" : "")}}
             namespace NS {
                 export interface {{name}} { marker: number; }
                 {{(insideNamespace ? body : "")}}

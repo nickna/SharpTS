@@ -52,6 +52,7 @@ namespace SharpTS.TypeSystem;
 public partial class TypeChecker
 {
     private TypeEnvironment _environment = new();
+    private TypeEnvironment? _globalDeclarationEnvironment;
     private TypeMap _typeMap = new();
     private SourceDocument? _standaloneSourceDocument;
 
@@ -1325,6 +1326,7 @@ public partial class TypeChecker
     /// </summary>
     public TypeMap Check(List<Stmt> statements, SourceDocument? sourceDocument)
     {
+        _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
         _checkedVarRedeclarationSymbols.Clear();
         _explicitAnyVarSymbols.Clear();
@@ -1404,6 +1406,7 @@ public partial class TypeChecker
         List<Stmt> statements,
         SourceDocument? sourceDocument)
     {
+        _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
         _checkedVarRedeclarationSymbols.Clear();
         _explicitAnyVarSymbols.Clear();
@@ -1755,6 +1758,7 @@ public partial class TypeChecker
 
         // Create a shared script environment for script files (they share global scope)
         var scriptEnv = new TypeEnvironment(_environment);
+        _globalDeclarationEnvironment = scriptEnv;
 
         // First pass: collect all exports from each module. Declaration files are trusted
         // compiler inputs: this pass consumes every surface SharpTS understands, then marks
