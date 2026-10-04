@@ -489,8 +489,8 @@ public partial class TypeChecker
         }
 
         // Substitute type parameters in the function signature
-        var substitutedParams = generic.ParamTypes.Select(p => Substitute(p, substitutions)).ToList();
-        var substitutedReturn = Substitute(generic.ReturnType, substitutions);
+        var substitutedParams = generic.ParamTypes.Select(p => SubstitutePreservingSignatures(p, substitutions)).ToList();
+        var substitutedReturn = SubstitutePreservingSignatures(generic.ReturnType, substitutions);
 
         return new TypeInfo.Function(substitutedParams, substitutedReturn, generic.RequiredParams, generic.HasRestParam);
     }

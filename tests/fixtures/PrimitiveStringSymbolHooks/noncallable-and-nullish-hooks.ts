@@ -1,0 +1,1 @@
+const p:any=Number.prototype;for(const value of [false,0,"x",{}]){p[Symbol.search]=value;try{"abc".search(1 as any);}catch(e){console.log(e.name,e instanceof TypeError);}}p[Symbol.search]=null;console.log("a1b".search(1 as any));p[Symbol.search]=undefined;console.log("a1b".search(1 as any));delete p[Symbol.search];console.log("a1b".search(1 as any));

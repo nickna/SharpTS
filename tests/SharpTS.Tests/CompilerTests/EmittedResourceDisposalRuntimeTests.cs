@@ -2,12 +2,54 @@ using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Compilation;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
 
 public sealed class EmittedResourceDisposalRuntimeTests
 {
+    [Fact]
+    public void CompiledUsingCapturesManagedFallbackAndPrefersGuestMethod()
+    {
+        const string source = "function work(resource:any,body:any):number{using value=resource;body();return 7;}";
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var compiler = new ILCompiler("using_managed_" + Guid.NewGuid().ToString("N"));
+        compiler.Compile(statements, new TypeChecker().Check(statements));
+        var bytes = compiler.SaveToBytes();
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        using var stream = new MemoryStream(bytes);
+        var errors = verifier.Verify(stream);
+        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+        var loaded = Assembly.Load(bytes);
+        var work = Assert.Single(loaded.GetTypes().SelectMany(t => t.GetMethods()),
+            m => m.IsStatic && m.Name == "work");
+        var runtime = loaded.GetType("$Runtime")!;
+        var symbol = loaded.GetType("$TSSymbol")!.GetField("dispose")!.GetValue(null);
+        var set = runtime.GetMethod("SetIndex")!;
+        var resource = new ManagedDisposable();
+        var callback = new ManagedCallback();
+        var disposer = Activator.CreateInstance(loaded.GetType("$TSFunction")!, [callback, typeof(ManagedCallback).GetMethod("Invoke")!])!;
+
+        // Installing a guest method after registration does not replace the
+        // already selected managed fallback.
+        object Body(Action action) => Activator.CreateInstance(loaded.GetType("$TSFunction")!,
+            [new ManagedBody(action), typeof(ManagedBody).GetMethod("Invoke")!])!;
+        var install = Body(() => set.Invoke(null, [resource, symbol, disposer]));
+        Assert.Equal(7d, work.Invoke(null, [resource, install]));
+        Assert.Equal(1, resource.Count);
+        Assert.Equal(0, callback.Calls);
+
+        // Removing a guest method after registration still calls that method
+        // with the original receiver, without also disposing the CLR object.
+        var remove = Body(() => set.Invoke(null, [resource, symbol, null]));
+        Assert.Equal(7d, work.Invoke(null, [resource, remove]));
+        Assert.Equal(1, resource.Count);
+        Assert.Equal(1, callback.Calls);
+        Assert.Same(resource, callback.Receiver);
+        Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
+    }
+
     private const BindingFlags Members = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
     private static readonly PropertyInfo Handle = typeof(EmittedResourceDisposalRuntime).GetProperty("Dispose")!;
 
@@ -135,6 +177,10 @@ public sealed class EmittedResourceDisposalRuntimeTests
         public int Calls { get; private set; }
         public object? Receiver { get; private set; }
         public object? Invoke(object __this) { Calls++; Receiver = __this; return null; }
+    }
+    public sealed class ManagedBody(Action action)
+    {
+        public object? Invoke() { action(); return null; }
     }
     private static void Expect<T>(Action action) where T : Exception =>
         Assert.IsType<T>(Assert.Throws<TargetInvocationException>(action).InnerException);

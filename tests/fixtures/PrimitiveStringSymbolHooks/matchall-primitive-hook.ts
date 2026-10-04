@@ -1,0 +1,1 @@
+Object.defineProperty(Number.prototype,Symbol.match,{get(){throw "IsRegExp must ignore primitives";}});(Number.prototype as any)[Symbol.matchAll]=function(s:any){"use strict";console.log(typeof this,this===1,typeof s);return "hook:"+s;};console.log("abc".matchAll(1 as any));

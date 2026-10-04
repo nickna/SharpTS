@@ -1148,6 +1148,8 @@ public partial class ILCompiler
             // Create context for MoveNext emission
             var il = smBuilder.MoveNextMethod.GetILGenerator();
             var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
+            if (_hostedModuleRunnerKeys.Values.Contains(funcName))
+                ctx.ModuleExportFields = _modules.ExportFields;
             ctx.AsyncArrowBuilders = _async.ArrowBuilders;
             ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
             ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
@@ -1742,7 +1744,8 @@ public partial class ILCompiler
             arrowBuilder.DefineStateMachineStandalone(
                 arrowAnalysis.AwaitCount,
                 arrow.Parameters,
-                arrowAnalysis.HoistedLocals);
+                arrowAnalysis.HoistedLocals,
+                GetStandaloneLiveCaptureFields(arrow, captures));
 
             // Define the stub method
             arrowBuilder.DefineStubMethod(_programType, _runtime);

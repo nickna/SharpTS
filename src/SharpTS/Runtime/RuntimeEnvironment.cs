@@ -21,6 +21,15 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     private string? _directBindingName;
     private RuntimeValue _directBindingValue;
     private bool _hasDirectBinding;
+    private SharpTSClass? _privateClass;
+
+    // Private names follow the method's lexical declaration across receiver
+    // rebinding, closures and suspension. This does not add a variable scope.
+    internal SharpTSClass? PrivateClass
+    {
+        get => _privateClass ?? Enclosing?.PrivateClass;
+        set => _privateClass = value;
+    }
 
     public RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? strictMode = null)
         : base(enclosing, strictMode)

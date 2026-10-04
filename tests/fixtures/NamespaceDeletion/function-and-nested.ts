@@ -1,0 +1,1 @@
+namespace Values {export function read(){return 5;}export namespace Inner {export const n=7;}export const keep=2;}const values:any=Values;const read=values.read;const inner=values.Inner;console.log(delete values.read,delete values["Inner"],typeof values.read,values.Inner===undefined,read(),inner.n,values.keep);

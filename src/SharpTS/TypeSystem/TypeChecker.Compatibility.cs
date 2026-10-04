@@ -1340,6 +1340,13 @@ public partial class TypeChecker
         // Function type compatibility
         // A callable interface or object type (`{ (x): T }`) is assignable to a function-typed
         // target (plain or generic) when one of its call signatures satisfies that function type.
+        // The broad Function type includes constructors; an ordinary call
+        // signature still requires a callable source with a matching signature.
+        if (expected is TypeInfo.FunctionSupertype &&
+            (actual is TypeInfo.Class or TypeInfo.MutableClass or TypeInfo.GenericClass ||
+             GetConstructorSignatures(actual) is not null))
+            return true;
+
         if (NormalizeSignature(expected) is { } expectedFnSig && GetCallSignatures(actual) is { } sourceCallSigs)
         {
             return CallableAssignableToFunction(sourceCallSigs, expectedFnSig);

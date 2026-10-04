@@ -455,23 +455,13 @@ public static class ReflectBuiltIns
     /// <c>Reflect.construct(function(){}, [], f)</c> and treats a throw as
     /// "not a constructor".
     /// </summary>
-    private static bool IsNotConstructor(object? value)
+    internal static bool IsNotConstructor(object? value)
     {
+        if (value is SharpTSProxy proxy)
+            return !proxy.HasConstructableTarget(target => !IsNotConstructor(target));
         // Direct rejections — methods/wrappers that are clearly callable but
         // aren't constructors per spec.
-        if (value is ISharpTSNonConstructorCallable
-            or SharpTS.Runtime.Types.ArrayPrototypeMethodWrapper
-            or SharpTS.Runtime.Types.StringPrototypeMethodWrapper
-            or SharpTS.Runtime.Types.NumberPrototypeMethodWrapper
-            or SharpTS.Runtime.Types.BooleanPrototypeMethodWrapper
-            or SharpTS.Runtime.Types.SymbolPrototypeMethodWrapper
-            or SharpTS.Runtime.Types.BigIntPrototypeMethodWrapper
-            or SharpTS.Runtime.Types.SharpTSGlobalFunction
-            or SharpTS.Runtime.Types.SharpTSObjectUnboundMethod
-            or SharpTS.Runtime.Types.SharpTSArrayUnboundMethod
-            or SharpTS.Runtime.Types.ErrorToStringCallable
-            or BuiltInAsyncMethod
-            or BuiltInMethod { IsConstructor: false })
+        if (Interpreter.IsNonConstructorWrapper(value))
             return true;
         if (value is BoundFunction bound)
             return IsNotConstructor(bound.Target);

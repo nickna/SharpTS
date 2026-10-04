@@ -1,0 +1,1 @@
+namespace Values {function read(){return 5;}function* sequence(){yield 6;}async function later(){return 7;}export const result=read();export function publicRead(){return read();}}const values:any=Values;console.log(Values.result,values.publicRead(),values.read==null,values.sequence==null,values.later==null,values.publicRead===Values.publicRead);

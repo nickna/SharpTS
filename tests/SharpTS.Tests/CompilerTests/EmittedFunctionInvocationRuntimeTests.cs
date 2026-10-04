@@ -172,7 +172,11 @@ public sealed class EmittedFunctionInvocationRuntimeTests
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         typeof(RuntimeEmitter).GetField("_features", Members)!.SetValue(emitter, new RuntimeFeatureSet { UsesMap = !mapPresent, UsesSet = !setPresent });
         var inputs = typeof(RuntimeEmitter).GetNestedType("DispatchToTargetInputs", BindingFlags.NonPublic)!;
-        var peers = Activator.CreateInstance(inputs, Members, null, [values, arrays, maps, sets], null)!;
+        var fallbackType = module.DefineType("Fallback", TypeAttributes.Public);
+        var fallback = fallbackType.DefineMethod("InvokeMethodValue", MethodAttributes.Public | MethodAttributes.Static, typeof(object), [typeof(object), typeof(object), typeof(object[])]);
+        fallback.GetILGenerator().Emit(OpCodes.Ldnull); fallback.GetILGenerator().Emit(OpCodes.Ret); fallbackType.CreateType();
+        var invocation = new EmittedInvocationRuntime { Method = fallback };
+        var peers = Activator.CreateInstance(inputs, Members, null, [values, arrays, maps, sets, invocation], null)!;
         var dispatcher = module.DefineType("Dispatch", TypeAttributes.Public);
         var targetField = dispatcher.DefineField("Target", typeof(object), FieldAttributes.Public);
         var method = dispatcher.DefineMethod("Invoke", MethodAttributes.Public, typeof(object), [typeof(object[])]);

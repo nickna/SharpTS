@@ -1,0 +1,1 @@
+const source:any={reads:0,closed:0,next(){this.reads++;return {value:this.reads,done:false};},return(){this.closed++;return {done:true};}};const helper=Iterator.from(source).drop(1).map((n:any)=>n*2).filter((n:any)=>n>2).take(1);console.log(helper.toArray().join(","),source.reads,source.closed);

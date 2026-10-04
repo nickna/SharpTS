@@ -35,7 +35,7 @@ public partial class ILCompiler
     /// </summary>
     private void DefineCommonJsModuleType(ParsedModule module)
     {
-        string moduleTypeName = $"$Module_{CompilationContext.SanitizeModuleName(module.ModuleName)}";
+        string moduleTypeName = GetUniqueModuleTypeName(module);
         var moduleType = _moduleBuilder.DefineType(
             moduleTypeName,
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed | TypeAttributes.Abstract
@@ -216,7 +216,7 @@ public partial class ILCompiler
         foreach (var stmt in module.Statements)
         {
             // Class definitions execute here; other declarations are compiled separately.
-            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
+            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias)
             {
                 continue;
             }

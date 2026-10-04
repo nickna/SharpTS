@@ -1,0 +1,1 @@
+let log="";function arg(s:string){log+=s;return s;}class A {join(a:string,b:string){return a+b;}}class B extends A {read(){return (()=>super.join(arg("a"),arg("b")))();}}console.log(new B().read(),log);

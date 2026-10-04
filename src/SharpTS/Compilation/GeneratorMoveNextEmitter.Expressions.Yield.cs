@@ -231,6 +231,23 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.Sentinels.UndefinedType);
         _il.Emit(OpCodes.Brfalse, hasIteratorLabel);
 
+        // A CLR string enumerates UTF-16 code units. Reuse the ordinary
+        // string iterator so delegation keeps surrogate pairs together and
+        // retains lone surrogates as individual strings.
+        var notStringDelegateLabel = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldloc, iterableLocal);
+        _il.Emit(OpCodes.Isinst, Types.String);
+        _il.Emit(OpCodes.Brfalse, notStringDelegateLabel);
+        EmitTryBodyOperation(() =>
+        {
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.Strings.Iterator);
+            _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerator));
+            _il.Emit(OpCodes.Stloc, enumTemp);
+        });
+        _il.Emit(OpCodes.Br, gotEnumeratorLabel);
+        _il.MarkLabel(notStringDelegateLabel);
+
         // No Symbol.iterator - fall back to IEnumerable cast
         _il.Emit(OpCodes.Ldloc, iterableLocal);
         _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));

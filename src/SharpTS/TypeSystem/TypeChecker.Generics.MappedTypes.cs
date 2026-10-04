@@ -245,6 +245,24 @@ public partial class TypeChecker
         if (constraint is TypeInfo.KeyOf keyOf)
         {
             TypeInfo sourceType = Substitute(keyOf.SourceType, outerSubstitutions);
+            // A homomorphic identity projection over a tuple/array preserves its container.
+            // Readonly<A> in Reflect.apply must remain a readonly argument tuple, rather than
+            // becoming an object made from array member names and a numeric index signature.
+            if (mapped.AsClause is null &&
+                !mapped.Modifiers.HasFlag(MappedTypeModifiers.AddOptional) &&
+                !mapped.Modifiers.HasFlag(MappedTypeModifiers.RemoveOptional) &&
+                mapped.ValueType is TypeInfo.IndexedAccess { IndexType: TypeInfo.TypeParameter index } projection &&
+                index.Name == mapped.ParameterName &&
+                TypeInfoEqualityComparer.Instance.Equals(
+                    Substitute(projection.ObjectType, outerSubstitutions), sourceType))
+            {
+                bool Readonly(bool original) => mapped.Modifiers.HasFlag(MappedTypeModifiers.AddReadonly) ||
+                    (original && !mapped.Modifiers.HasFlag(MappedTypeModifiers.RemoveReadonly));
+                if (sourceType is TypeInfo.Tuple tuple)
+                    return tuple with { IsReadonly = Readonly(tuple.IsReadonly) };
+                if (sourceType is TypeInfo.Array array)
+                    return array with { IsReadonly = Readonly(array.IsReadonly) };
+            }
             homomorphicOptional = ExtractOptionalProperties(sourceType).ToHashSet(StringComparer.Ordinal);
             constraint = EvaluateKeyOf(sourceType);
         }

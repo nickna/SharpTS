@@ -950,11 +950,6 @@ public partial class RuntimeEmitter
         // their normalization path consumes arbitrary iterables. Reserve the
         // method token now and fill its body in EmitIteratorMethodsAdvanced.
         DeclareIterateToList(typeBuilder, runtime.IteratorCollection, runtime.Symbols.Type);
-        runtime.Invocation.Method = typeBuilder.DefineMethod(
-            "InvokeMethodValue",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object, _types.ObjectArray]);
         runtime.Reflect.Get = typeBuilder.DefineMethod(
             "ReflectGet",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -988,7 +983,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.Interface,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.Sentinels.UndefinedInstance
+                runtime.Sentinels.UndefinedInstance,
+                runtime.NumericCoercion
             )
         );
         EmitInvokeMethodValue(
@@ -1124,6 +1120,7 @@ public partial class RuntimeEmitter
             new IsConstructorInputs(
                 runtime.FunctionBindings,
                 runtime.FunctionValues,
+                runtime.FunctionAttributes,
                 runtime.Sentinels.UndefinedType,
                 runtime.ReflectedMethods.InvokeUnwrapped
             )
@@ -1331,6 +1328,7 @@ public partial class RuntimeEmitter
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.Invocation.Method,
                 runtime.BuiltInStatics.Lookup,
+                runtime.Namespaces,
                 runtime.NumericCoercion,
                 runtime.ObjectDescriptors,
                 runtime.ObjectOwnProperties,
@@ -1363,6 +1361,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.Interface,
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.Invocation.Method,
+                runtime.Namespaces,
                 runtime.ObjectDescriptors,
                 runtime.ObjectRead,
                 runtime.ObjectState,
@@ -1386,6 +1385,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.FieldsGetter,
                 runtime.ObjectFields.Interface,
                 runtime.ReflectedMethods.InvokeUnwrapped,
+                runtime.Namespaces,
                 runtime.ObjectDescriptors,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
@@ -1408,6 +1408,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.FieldsGetter,
                 runtime.ObjectFields.Interface,
                 runtime.ReflectedMethods.InvokeUnwrapped,
+                runtime.Namespaces,
                 runtime.ObjectDescriptors,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
@@ -1469,6 +1470,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.FunctionPrototypes.Prototype,
                 runtime.FunctionPrototypes.Populate,
+                runtime.Generators,
                 runtime.GlobalObject.GetProperty,
                 runtime.GlobalObject.SingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,
@@ -1484,7 +1486,10 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.TypedArrays,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                runtime.Booleans,
+                runtime.Numbers,
+                runtime.BigInt
             )
         );
         // DisposeResource uses the shared Symbol indexed-get path so descriptor
@@ -1505,6 +1510,7 @@ public partial class RuntimeEmitter
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.Invocation.Method,
                 runtime.Math,
+                runtime.Namespaces,
                 runtime.ObjectDescriptors,
                 runtime.ObjectOwnProperties,
                 runtime.ObjectPrototypes,
@@ -1577,7 +1583,7 @@ public partial class RuntimeEmitter
         EmitIteratorWrapperType(
             moduleBuilder,
             runtime.IteratorWrappers,
-            new IteratorWrapperInputs(runtime.IteratorRecords, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value)
+            new IteratorWrapperInputs(runtime.IteratorRecords, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value, runtime.IteratorProtocol.Close)
         );
         runtime.IteratorWrappers.CompleteEmission();
         EmitArrayIteratorType(moduleBuilder, runtime.ArrayOperations, new ArrayIteratorInputs(runtime.Arguments, runtime.ObjectRead.Index));
@@ -1597,7 +1603,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.IteratorCollection,
             new IteratorCollectionInputs(
-                runtime.ArrayStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
+                runtime.ArrayStorage, runtime.DescriptorStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
                 runtime.IteratorProtocol, runtime.IteratorRecords, runtime.ObjectRead,
                 runtime.Sentinels.UndefinedType, runtime.Sentinels.UndefinedInstance, runtime.TypedArrays.Implementation,
                 _features.UsesBuffer ? runtime.RequireBuffer() : null,
@@ -1609,7 +1615,11 @@ public partial class RuntimeEmitter
             typeBuilder, moduleBuilder, runtime.IteratorHelpers,
             new IteratorHelperInputs(runtime.Errors, runtime.IteratorWrappers.Ctor,
                 runtime.Invocation.Method, runtime.Booleans.IsTruthy,
-                runtime.Generators, runtime.Sentinels.UndefinedInstance));
+                runtime.Generators, runtime.NumericCoercion.ToNumber, runtime.IteratorProtocol.Close,
+                runtime.Sentinels.UndefinedInstance,
+                new IteratorFromInputs(runtime.Symbols.Iterator, runtime.IteratorProtocol.Function,
+                    runtime.Invocation.Method, runtime.ArrayOperations.IteratorCtor,
+                    runtime.IteratorWrappers.Ctor, runtime.Sentinels.UndefinedType)));
         runtime.IteratorHelpers.CompleteEmission();
         // Arrays - must come AFTER iterator methods since ConcatArrays/ExpandCallArgs use IterateToList.
         // SetArrayElement* helpers (including Object variant) are emitted earlier, BEFORE SetIndex,
@@ -2182,7 +2192,7 @@ public partial class RuntimeEmitter
                     runtime.Errors.CreateErrorFromTypeOrNull,
                     runtime.NumericCoercion.ToNumber,
                     runtime.FunctionIntrospection.IsConstructor,
-                    runtime.DynamicConstruction.Function,
+                    runtime.DynamicConstruction.Value,
                     runtime.Sentinels.UndefinedType,
                     runtime.ObjectRead.Property,
                     runtime.DataView,
@@ -2523,7 +2533,13 @@ public partial class RuntimeEmitter
         // #685: array binding-pattern source normalizer uses the declared iterator
         // collection helper and array storage constructor.
         EmitArrayDestructureSource(typeBuilder, runtime.ArrayOperations,
-            runtime.Symbols.Type, runtime.IteratorCollection.ToList, runtime.ArrayStorage.Ctor);
+            new ArrayDestructureInputs(runtime.Symbols.Type, runtime.IteratorCollection.ToList,
+                runtime.ArrayStorage.Ctor, runtime.Errors, runtime.IteratorProtocol.Function,
+                runtime.Invocation.Method, runtime.IteratorWrappers.Ctor,
+                runtime.ObjectFields.Interface, runtime.Sentinels.UndefinedType,
+                runtime.TypedArrays.Implementation?.BaseType,
+                _features.UsesBuffer ? runtime.RequireBuffer().Type : null,
+                _features.UsesArrayPrototypeMutation));
         // JSON methods — gated on UsesJSON (also implied by UsesHttp).
         if (runtime.Json.Implementation is not null)
         {
@@ -2691,7 +2707,9 @@ public partial class RuntimeEmitter
                 runtime.Symbols.Type,
                 runtime.Errors.CreateException,
                 runtime.Errors.TypeErrorConstructor,
-                runtime.Errors.RangeErrorConstructor));
+                runtime.Errors.RangeErrorConstructor,
+                runtime.NumericCoercion.ToNumber,
+                runtime.FunctionAttributes.PadUndefinedCtor));
         // Number.prototype populate body — must come AFTER EmitNumberMethods so
         // NumberToFixed/etc. MethodBuilders are non-null.
         EmitNumberPrototypePopulate(typeBuilder, runtime.Numbers,

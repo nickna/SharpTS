@@ -10,6 +10,7 @@ public partial class RuntimeEmitter
 {
     private readonly record struct IteratorCollectionInputs(
         EmittedArrayStorageRuntime ArrayStorage,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedCollectionKeysRuntime CollectionKeys,
         EmittedErrorRuntime Errors,
         EmittedInvocationRuntime Invocation,
@@ -62,6 +63,7 @@ public partial class RuntimeEmitter
         EmittedGeneratorRuntime Generators,
         EmittedInvocationRuntime Invocation,
         EmittedObjectReadRuntime ObjectRead,
+        EmittedSymbolRuntime Symbols,
         FieldInfo UndefinedInstance,
         Type UndefinedType
     );
@@ -195,6 +197,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, completedField);
+        // Array iterators have no completion value; do not expose the last yield.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stfld, currentField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
 
@@ -626,7 +632,8 @@ public partial class RuntimeEmitter
     private readonly record struct IteratorWrapperInputs(
         EmittedIteratorRecordRuntime IteratorRecords,
         MethodBuilder GetIteratorDone,
-        MethodBuilder GetIteratorValue
+        MethodBuilder GetIteratorValue,
+        MethodInfo CloseIterator
     );
 
     /// <summary>
@@ -649,6 +656,8 @@ public partial class RuntimeEmitter
         var iteratorField = typeBuilder.DefineField("_iterator", _types.Object, FieldAttributes.Private);
         var nextField = typeBuilder.DefineField("_next", _types.Object, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
+
+        var completedField = typeBuilder.DefineField("_completed", _types.Boolean, FieldAttributes.Private);
 
         // Constructor: $IteratorWrapper(object iterator)
         // NOTE: runtimeType parameter kept for backward compatibility but not used
@@ -721,6 +730,11 @@ public partial class RuntimeEmitter
 
         // Locals for MoveNext
         var resultLocal = moveNextIl.DeclareLocal(_types.Object);
+        var doneLocal = moveNextIl.DeclareLocal(_types.Boolean);
+        var alreadyCompleted = moveNextIl.DefineLabel();
+        moveNextIl.Emit(OpCodes.Ldarg_0);
+        moveNextIl.Emit(OpCodes.Ldfld, completedField);
+        moveNextIl.Emit(OpCodes.Brtrue, alreadyCompleted);
 
         // var result = InvokeCapturedIteratorNext(_iterator, _next);  -- DIRECT CALL
         moveNextIl.Emit(OpCodes.Ldarg_0);
@@ -733,6 +747,10 @@ public partial class RuntimeEmitter
         // var done = GetIteratorDone(result);  -- DIRECT CALL
         moveNextIl.Emit(OpCodes.Ldloc, resultLocal);
         moveNextIl.Emit(OpCodes.Call, inputs.GetIteratorDone);
+        moveNextIl.Emit(OpCodes.Stloc, doneLocal);
+        moveNextIl.Emit(OpCodes.Ldarg_0);
+        moveNextIl.Emit(OpCodes.Ldloc, doneLocal);
+        moveNextIl.Emit(OpCodes.Stfld, completedField);
 
         // Preserve IteratorValue(result) even when done is true.  `yield*` reads
         // Current after MoveNext returns false to obtain the delegated iterator's
@@ -744,7 +762,9 @@ public partial class RuntimeEmitter
 
         // if (done) return false;
         var notDoneLabel = moveNextIl.DefineLabel();
+        moveNextIl.Emit(OpCodes.Ldloc, doneLocal);
         moveNextIl.Emit(OpCodes.Brfalse, notDoneLabel);
+        moveNextIl.MarkLabel(alreadyCompleted);
         moveNextIl.Emit(OpCodes.Ldc_I4_0);
         moveNextIl.Emit(OpCodes.Ret);
 
@@ -767,6 +787,11 @@ public partial class RuntimeEmitter
         var mwsIl = moveNextWithSent.GetILGenerator();
 
         var mwsResultLocal = mwsIl.DeclareLocal(_types.Object);
+        var mwsDoneLocal = mwsIl.DeclareLocal(_types.Boolean);
+        var mwsAlreadyCompleted = mwsIl.DefineLabel();
+        mwsIl.Emit(OpCodes.Ldarg_0);
+        mwsIl.Emit(OpCodes.Ldfld, completedField);
+        mwsIl.Emit(OpCodes.Brtrue, mwsAlreadyCompleted);
 
         // var result = InvokeCapturedIteratorNextWithSent(_iterator, _next, sent);
         mwsIl.Emit(OpCodes.Ldarg_0);
@@ -779,6 +804,10 @@ public partial class RuntimeEmitter
 
         mwsIl.Emit(OpCodes.Ldloc, mwsResultLocal);
         mwsIl.Emit(OpCodes.Call, inputs.GetIteratorDone);
+        mwsIl.Emit(OpCodes.Stloc, mwsDoneLocal);
+        mwsIl.Emit(OpCodes.Ldarg_0);
+        mwsIl.Emit(OpCodes.Ldloc, mwsDoneLocal);
+        mwsIl.Emit(OpCodes.Stfld, completedField);
 
         // As above, retain the completion record's value for `yield*` when
         // this call reports done.
@@ -788,7 +817,9 @@ public partial class RuntimeEmitter
         mwsIl.Emit(OpCodes.Stfld, currentField);
 
         var mwsNotDoneLabel = mwsIl.DefineLabel();
+        mwsIl.Emit(OpCodes.Ldloc, mwsDoneLocal);
         mwsIl.Emit(OpCodes.Brfalse, mwsNotDoneLabel);
+        mwsIl.MarkLabel(mwsAlreadyCompleted);
         mwsIl.Emit(OpCodes.Ldc_I4_0);
         mwsIl.Emit(OpCodes.Ret);
 
@@ -808,15 +839,7 @@ public partial class RuntimeEmitter
         resetIl.Emit(OpCodes.Newobj, typeof(NotSupportedException).GetConstructor([typeof(string)])!);
         resetIl.Emit(OpCodes.Throw);
 
-        // Method: void Dispose() - no-op
-        var dispose = typeBuilder.DefineMethod(
-            "Dispose",
-            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
-            _types.Void,
-            Type.EmptyTypes
-        );
-        var disposeIl = dispose.GetILGenerator();
-        disposeIl.Emit(OpCodes.Ret);
+        EmitDisposeIteratorSource(typeBuilder, iteratorField, inputs.CloseIterator, completedField);
 
         typeBuilder.CreateType();
     }
@@ -861,7 +884,7 @@ public partial class RuntimeEmitter
         EmitIteratorClose(
             typeBuilder,
             runtime.IteratorProtocol,
-            new IteratorCloseInputs(runtime.Errors, runtime.Generators, runtime.Invocation, runtime.ObjectRead, runtime.Sentinels.UndefinedInstance, runtime.Sentinels.UndefinedType)
+            new IteratorCloseInputs(runtime.Errors, runtime.Generators, runtime.Invocation, runtime.ObjectRead, runtime.Symbols, runtime.Sentinels.UndefinedInstance, runtime.Sentinels.UndefinedType)
         );
     }
 
@@ -887,7 +910,7 @@ public partial class RuntimeEmitter
         var validateResult = il.DefineLabel();
         var finishTry = il.DefineLabel();
         var done = il.DefineLabel();
-        var resultIsObject = il.DefineLabel();
+        var invalidResult = il.DefineLabel();
 
         // A throw completion wins over every abrupt completion produced by
         // IteratorClose. A small catch around the normal algorithm preserves it.
@@ -908,6 +931,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, validateResult);
 
         il.MarkLabel(lookupReturn);
+        // Internal adapters and lazy helpers forward close through IDisposable.
+        // Generators above retain their guest return-result validation.
+        var lookupGuestReturn = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.IEnumerator);
+        il.Emit(OpCodes.Brfalse, lookupGuestReturn);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.IDisposable);
+        il.Emit(OpCodes.Brfalse, finishTry);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.IDisposable);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IDisposable, "Dispose"));
+        il.Emit(OpCodes.Br, finishTry);
+        il.MarkLabel(lookupGuestReturn);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
@@ -929,20 +966,19 @@ public partial class RuntimeEmitter
         // IteratorClose requires the return method's result to be an Object.
         il.MarkLabel(validateResult);
         il.Emit(OpCodes.Ldloc, closeResult);
-        il.Emit(OpCodes.Brfalse, resultIsObject);
-        il.Emit(OpCodes.Ldloc, closeResult);
-        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
-        il.Emit(OpCodes.Brtrue, resultIsObject);
-        il.Emit(OpCodes.Ldloc, closeResult);
-        il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brtrue, resultIsObject);
-        il.Emit(OpCodes.Ldloc, closeResult);
-        il.Emit(OpCodes.Isinst, _types.Boolean);
-        il.Emit(OpCodes.Brtrue, resultIsObject);
-        il.Emit(OpCodes.Ldloc, closeResult);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brfalse, finishTry);
-        il.MarkLabel(resultIsObject);
+        il.Emit(OpCodes.Brfalse, invalidResult);
+        foreach (var primitiveType in new Type[]
+        {
+            inputs.UndefinedType, _types.Double, _types.Boolean, _types.String,
+            _types.BigInteger, inputs.Symbols.Type
+        })
+        {
+            il.Emit(OpCodes.Ldloc, closeResult);
+            il.Emit(OpCodes.Isinst, primitiveType);
+            il.Emit(OpCodes.Brtrue, invalidResult);
+        }
+        il.Emit(OpCodes.Br, finishTry);
+        il.MarkLabel(invalidResult);
         GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Iterator .return() must return an object");
 
         il.MarkLabel(finishTry);
@@ -1303,6 +1339,42 @@ public partial class RuntimeEmitter
         il.MarkLabel(done);
     }
 
+    private void EmitCollectIndexedArray(ILGenerator il, IteratorCollectionInputs inputs,
+        LocalBuilder result, bool appendToExisting, bool longLength)
+    {
+        var index = il.DeclareLocal(_types.Int64);
+        var check = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(check);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, longLength ? inputs.ArrayStorage.Type : _types.ListOfObject);
+        il.Emit(OpCodes.Callvirt, longLength ? inputs.ArrayStorage.LongLengthGetter
+            : _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+        if (!longLength) il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Bge, done);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Index);
+        il.Emit(OpCodes.Call, appendToExisting ? inputs.ArrayStorage.AppendRestValue
+            : _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, check);
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitIterateToListBody(EmittedIteratorCollectionRuntime iteratorCollection, IteratorCollectionInputs inputs, bool appendToExisting)
     {
         var method = appendToExisting ? iteratorCollection.IntoList : iteratorCollection.ToList;
@@ -1354,17 +1426,18 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, customArrayIteratorLabel);
         }
 
-        // 1a. Stage E.2: fast path for $Array — return its backing list directly.
-        // Since `$Array` inherits List<object?> (M2 decision), Elements is just
-        // `this`. The sparse tail past base Count is lost in this fast path,
-        // which is acceptable because IterateToList is called by spread /
-        // Array.from / concat — all of which either produce fresh dense arrays
-        // or receive dense prefixes. Callers needing sparse-aware iteration
-        // use the long-indexed GetLong / HasIndex accessors directly.
+        // Descriptor-free dense arrays retain their storage fast paths. Own
+        // indexed getters and sparse tails require live ordinary indexed reads.
         var notTSArrayLabel = il.DefineLabel();
+        var indexedArray = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSArrayLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Brtrue, indexedArray);
+        if (inputs.UsesArrayPrototypeMutation)
+            il.Emit(OpCodes.Br, indexedArray);
         if (appendToExisting && !inputs.UsesArrayPrototypeMutation)
         {
             var boxedSource = il.DefineLabel();
@@ -1382,59 +1455,24 @@ public partial class RuntimeEmitter
         }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.LongLengthGetter);
+        il.Emit(OpCodes.Bne_Un, indexedArray);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.ElementsGetter);
-        if (appendToExisting)
-        {
-            var elements = il.DeclareLocal(_types.ListOfObject);
-            il.Emit(OpCodes.Stloc, elements);
-            var indexed = il.DefineLabel();
-            if (inputs.UsesArrayPrototypeMutation)
-                il.Emit(OpCodes.Br, indexed);
-            else
-            {
-                // Dense boxed storage can be copied directly after the iterator
-                // proof above. Holes/sparse tails require ordinary indexed reads.
-                il.Emit(OpCodes.Ldloc, elements);
-                il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
-                il.Emit(OpCodes.Conv_I8);
-                il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
-                il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.LongLengthGetter);
-                il.Emit(OpCodes.Bne_Un, indexed);
-                EmitAppendDenseIteratorSource(il, inputs.ArrayStorage, inputs.UndefinedInstance, resultLocal, elements);
-                il.Emit(OpCodes.Ldloc, resultLocal);
-                il.Emit(OpCodes.Ret);
-            }
-            il.MarkLabel(indexed);
-            var index = il.DeclareLocal(_types.Int64);
-            var check = il.DefineLabel();
-            var done = il.DefineLabel();
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Conv_I8);
-            il.Emit(OpCodes.Stloc, index);
-            il.MarkLabel(check);
-            il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
-            il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.LongLengthGetter);
-            il.Emit(OpCodes.Bge, done);
-            il.Emit(OpCodes.Ldloc, resultLocal);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, inputs.ObjectRead.Index);
-            AppendValue();
-            il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Conv_I8);
-            il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Stloc, index);
-            il.Emit(OpCodes.Br, check);
-            il.MarkLabel(done);
-            il.Emit(OpCodes.Ldloc, resultLocal);
-        }
+        var elements = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Stloc, elements);
+        // Both collection entry points materialize holes as real undefined
+        // entries. The argument-spread numeric bulk path above remains intact.
+        EmitAppendDenseIteratorSource(il, inputs.ArrayStorage, inputs.UndefinedInstance, resultLocal, elements);
+        il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
+        il.MarkLabel(indexedArray);
+        EmitCollectIndexedArray(il, inputs, resultLocal, appendToExisting, longLength: true);
         il.MarkLabel(notTSArrayLabel);
 
         // 1b. Fast path for emitted $TypedArray — only present when program uses typed arrays.
@@ -1577,6 +1615,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, tryStringLabel);
+        var indexedList = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
+        il.Emit(OpCodes.Brtrue, indexedList);
+        if (inputs.UsesArrayPrototypeMutation)
+            il.Emit(OpCodes.Br, indexedList);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         if (appendToExisting)
@@ -1587,6 +1631,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, resultLocal);
         }
         il.Emit(OpCodes.Ret);
+        il.MarkLabel(indexedList);
+        EmitCollectIndexedArray(il, inputs, resultLocal, appendToExisting, longLength: false);
 
         // 2. If obj is string, iterate characters
         il.MarkLabel(tryStringLabel);

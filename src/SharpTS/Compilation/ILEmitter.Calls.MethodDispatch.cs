@@ -681,6 +681,18 @@ public partial class ILEmitter
         }
         else
         {
+            // Argument evaluation can re-enter any same-arity method call via a
+            // nested call, getter or callback. Retain values in locals until all
+            // guest evaluation is complete, then fill the pooled array once.
+            var argumentLocals = new LocalBuilder[arguments.Count];
+            for (int i = 0; i < arguments.Count; i++)
+            {
+                argumentLocals[i] = IL.DeclareLocal(_ctx.Types.Object);
+                EmitExpression(arguments[i]);
+                EmitBoxIfNeeded(arguments[i]);
+                IL.Emit(OpCodes.Stloc, argumentLocals[i]);
+            }
+
             // For arity > 0, route through the per-thread $CallArgsPool to skip per-call
             // newarr — the dispatch chain (InvokeMethodValue → $TSFunction.Invoke →
             // MethodInvoker.Invoke) reads values out of the array without retaining a
@@ -700,8 +712,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Ldc_I4, i);
-                EmitExpression(arguments[i]);
-                EmitBoxIfNeeded(arguments[i]);
+                IL.Emit(OpCodes.Ldloc, argumentLocals[i]);
                 IL.Emit(OpCodes.Stelem_Ref);
             }
         }
@@ -927,6 +938,12 @@ public partial class ILEmitter
     /// </summary>
     protected override bool TryEmitSuperMethodCall(string methodName, List<Expr> arguments)
     {
+        // An arrow body lives on a display class rather than the lexical class.
+        // Use the same legal parent-call bridge as a state machine, with EmitThis
+        // loading the captured receiver instead of the display class's arg0.
+        if (_ctx.CurrentClassBuilder is { } lexicalOwner && !ReferenceEquals(_ctx.EmittingTypeBuilder, lexicalOwner))
+            return base.TryEmitSuperMethodCall(methodName, arguments);
+
         // Resolve the superclass name - try multiple sources:
         // 1. CurrentSuperclassName (set in constructor context)
         // 2. ClassRegistry superclass lookup (works in method body context)

@@ -49,7 +49,11 @@ internal sealed class AsyncArrowStorageAccess
     {
         EmitReceiver(il);
         if (_field != null)
+        {
             il.Emit(OpCodes.Ldfld, _field);
+            if (_field.FieldType.IsValueType)
+                il.Emit(OpCodes.Box, _field.FieldType);
+        }
     }
 
     // Consumes exactly one boxed value, preserving any assignment-result copy below it.
@@ -61,6 +65,8 @@ internal sealed class AsyncArrowStorageAccess
             return;
         }
 
+        if (_field.FieldType.IsValueType)
+            il.Emit(OpCodes.Unbox_Any, _field.FieldType);
         var value = il.DeclareLocal(_field.FieldType);
         il.Emit(OpCodes.Stloc, value);
         EmitReceiver(il);

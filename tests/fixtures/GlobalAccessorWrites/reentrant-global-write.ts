@@ -1,0 +1,1 @@
+const root:any=globalThis;let calls=0;Object.defineProperty(root,"__ga",{get(){return root.__side;},set(v:number){calls++;this.__side=v+1;},configurable:true});root.__ga=8;console.log(root.__ga,root.__side,calls);

@@ -372,6 +372,8 @@ public partial class TypeChecker
     /// </summary>
     private bool RelateFunctionShapes(TypeInfo.Function f1, TypeInfo.Function f2)
     {
+        f1 = ExpandTupleRestSignature(f1);
+        f2 = ExpandTupleRestSignature(f2);
         // Source (f2) must not require more parameters than the target (f1) can supply.
         // A rest parameter on the target lets it supply unboundedly many, so the count check
         // only applies when the target has no rest parameter.
@@ -450,5 +452,30 @@ public partial class TypeChecker
             _methodBivarianceDepth = savedMethodDepth;
             _inCallbackComparison = inCallback;
         }
+    }
+
+    private static TypeInfo.Function ExpandTupleRestSignature(TypeInfo.Function function)
+    {
+        if (!function.HasRestParam || function.ParamTypes.Count == 0 ||
+            function.ParamTypes[^1] is not TypeInfo.Tuple { HasSpread: false } tuple)
+            return function;
+        int restIndex = function.ParamTypes.Count - 1;
+        var parameters = function.ParamTypes.Take(restIndex).Concat(tuple.ElementTypes).ToList();
+        if (tuple.RestElementType is { } restElement)
+            parameters.Add(new TypeInfo.Array(restElement));
+        var marks = function.InstantiatedTypeParamPositions?.Where(position => position < restIndex).ToHashSet();
+        if (function.IsInstantiatedTypeParamPosition(restIndex))
+        {
+            marks ??= [];
+            for (int i = restIndex; i < parameters.Count; i++) marks.Add(i);
+        }
+        return function with
+        {
+            ParamTypes = parameters,
+            RequiredParams = tuple.RequiredCount > 0 ? restIndex + tuple.RequiredCount : Math.Min(function.MinArity, restIndex),
+            HasRestParam = tuple.RestElementType is not null,
+            ParamNames = null,
+            InstantiatedTypeParamPositions = marks?.ToFrozenSet(),
+        };
     }
 }

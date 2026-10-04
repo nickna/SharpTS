@@ -1,0 +1,1 @@
+const a:any=[1,2];let reads=0;Object.defineProperty(a,"0",{get(){reads++;return 9;}});a[Symbol.iterator]=function*(){yield 7;yield 8;};console.log([...a].join(","),reads);function collect(...xs:any[]){console.log(xs.join(","),reads);}collect(0,...a,3);

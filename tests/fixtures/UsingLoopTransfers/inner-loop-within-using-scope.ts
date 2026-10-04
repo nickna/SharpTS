@@ -1,0 +1,1 @@
+for(let i=0;i<2;i++){using r={value:i,[Symbol.dispose](){console.log("dispose",this.value);}};for(let j=0;j<3;j++){if(j===0)continue;if(j===2)break;console.log(i,j);}console.log("body",i);}console.log("after");

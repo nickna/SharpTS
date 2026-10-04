@@ -1,0 +1,1 @@
+const root:any=globalThis;const g:any=isNaN;console.log(g===root.isNaN,g===root["isNaN"],g!==Number.isNaN);console.log(g.name,g.length,g.prototype===undefined);console.log(Number.isNaN(NaN),Number.isNaN("x" as any));

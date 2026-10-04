@@ -1,0 +1,1 @@
+const value:any=/b/;value[Symbol.match]=null;RegExp.prototype[Symbol.match]=function(s:any):any{console.log(this!==value,this.source.includes("/"),this.flags==="",s);return ["hook"];};console.log("abc".match(value)![0]);delete value[Symbol.match];console.log("abc".match(value)![0]);

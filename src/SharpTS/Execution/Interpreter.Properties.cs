@@ -111,6 +111,12 @@ public partial class Interpreter
         object? klass = (await ctx.EvaluateExprAsync(newExpr.Callee)).ToObject();
         List<object?> evaluatedArguments = await EvaluateNewArgumentsCore(ctx, newExpr.Arguments);
 
+        while (klass is BoundFunction boundConstructor)
+        {
+            evaluatedArguments = boundConstructor.PrependArguments(evaluatedArguments);
+            klass = boundConstructor.Target;
+        }
+
         // Handle Proxy construct trap
         if (klass is SharpTSProxy proxy)
         {
@@ -187,7 +193,7 @@ public partial class Interpreter
 
         // Handle callable constructors (like SharpTSEventEmitterConstructor)
         // These implement ISharpTSCallable and are used for module-imported types.
-        if (klass is ISharpTSCallable callable && klass is not SharpTSClass && klass is not BoundFunction)
+        if (klass is ISharpTSCallable callable && klass is not SharpTSClass)
         {
             try
             {
@@ -197,12 +203,6 @@ public partial class Interpreter
             {
                 throw new ThrowException(new SharpTSError(ex.Message));
             }
-        }
-
-        // Bound functions cannot be used as constructors (JS spec compliance)
-        if (klass is BoundFunction)
-        {
-            throw new InterpreterException("Bound functions cannot be used as constructors.");
         }
 
         if (klass is not SharpTSClass sharpClass)
@@ -245,7 +245,12 @@ public partial class Interpreter
     /// </summary>
     internal object? Construct(object? callable, IList<object?> args)
     {
-        if (callable is ISharpTSNonConstructorCallable)
+        while (callable is BoundFunction boundConstructor)
+        {
+            args = boundConstructor.PrependArguments(args);
+            callable = boundConstructor.Target;
+        }
+        if (IsNonConstructorWrapper(callable))
         {
             throw new ThrowException(new SharpTSTypeError("X is not a constructor"));
         }
@@ -341,6 +346,12 @@ public partial class Interpreter
         object? klass = Evaluate(newExpr.Callee);
         List<object?> evaluatedArguments = EvaluateNewArguments(newExpr.Arguments);
 
+        while (klass is BoundFunction boundConstructor)
+        {
+            evaluatedArguments = boundConstructor.PrependArguments(evaluatedArguments);
+            klass = boundConstructor.Target;
+        }
+
         // Handle Proxy construct trap
         if (klass is SharpTSProxy proxy)
         {
@@ -402,7 +413,7 @@ public partial class Interpreter
 
         // Handle callable constructors. Many built-in constructors are
         // registered as BuiltInMethod, so we accept any ISharpTSCallable here.
-        if (klass is ISharpTSCallable callable && klass is not SharpTSClass && klass is not BoundFunction)
+        if (klass is ISharpTSCallable callable && klass is not SharpTSClass)
         {
             try
             {
@@ -412,12 +423,6 @@ public partial class Interpreter
             {
                 throw new ThrowException(new SharpTSError(ex.Message));
             }
-        }
-
-        // Bound functions cannot be used as constructors (JS spec compliance)
-        if (klass is BoundFunction)
-        {
-            throw new InterpreterException("Bound functions cannot be used as constructors.");
         }
 
         if (klass is not SharpTSClass sharpClass)
@@ -1545,8 +1550,15 @@ public partial class Interpreter
     /// per-method <see cref="BuiltInMethod.IsConstructor"/> flag, preserving
     /// constructor registrations while rejecting ordinary built-in methods.
     /// </summary>
-    private static bool IsNonConstructorWrapper(object? callable) => callable
+    internal static bool IsNonConstructorWrapper(object? callable) => callable
         is ISharpTSNonConstructorCallable
+        or SharpTSArrowFunction { HasOwnThis: false }
+        or SharpTSAsyncFunction
+        or SharpTSAsyncArrowFunction
+        or SharpTSGeneratorFunction
+        or SharpTSArrowGeneratorFunction
+        or SharpTSAsyncGeneratorFunction
+        or SharpTSAsyncArrowGeneratorFunction
         or ArrayPrototypeMethodWrapper
         or StringPrototypeMethodWrapper
         or NumberPrototypeMethodWrapper
@@ -1564,6 +1576,8 @@ public partial class Interpreter
 
     private object? EvaluateGetOnClass(SharpTSClass klass, string memberName)
     {
+        if (TryReadDescriptor(klass.FindStaticPropertyDescriptor(memberName), klass, out var definedValue))
+            return definedValue;
         // ECMA-262: every class has exactly one `prototype` (an ordinary object whose
         // props are the instance methods + constructor back-ref). Without this,
         // `Error.prototype.toString` and friends throw "Static member 'prototype' does
@@ -2626,6 +2640,9 @@ public partial class Interpreter
                 return value;
 
             case TypeCategory.Class when obj is SharpTSClass klass:
+                if (TryAssignThroughDescriptor(klass.FindStaticPropertyDescriptor(memberName),
+                        klass, memberName, value, strictMode))
+                    return value;
                 if (klass.HasStaticAutoAccessor(memberName))
                 {
                     klass.SetStaticAutoAccessorValue(memberName, value);
@@ -2637,7 +2654,7 @@ public partial class Interpreter
                     staticSetterClass.BindStatic(klass).CallBoxed(this, [value]);
                     return value;
                 }
-                klass.SetStaticProperty(memberName, value);
+                klass.SetStaticProperty(memberName, value, strictMode);
                 return value;
 
             case TypeCategory.Instance when obj is SharpTSInstance instance:
@@ -3085,9 +3102,7 @@ public partial class Interpreter
         // Instance private field access
         if (obj is SharpTSInstance instance)
         {
-            // For instance private fields, use the instance's class as the declaring class
-            // The type checker already verified brand checking
-            var declaringClass = instance.RuntimeClass;
+            var declaringClass = _environment.PrivateClass ?? instance.RuntimeClass;
             return declaringClass.GetPrivateFieldRV(instance, fieldName);
         }
 
@@ -3131,9 +3146,7 @@ public partial class Interpreter
         // Instance private field assignment
         if (obj is SharpTSInstance instance)
         {
-            // For instance private fields, use the instance's class as the declaring class
-            // The type checker already verified brand checking
-            var declaringClass = instance.RuntimeClass;
+            var declaringClass = _environment.PrivateClass ?? instance.RuntimeClass;
             declaringClass.SetPrivateField(instance, fieldName, value.ToObject());
             return value;
         }
@@ -3192,9 +3205,10 @@ public partial class Interpreter
         // Instance private method call
         if (obj is SharpTSInstance instance)
         {
-            // For instance private methods, use the instance's class as the declaring class
-            // The type checker already verified brand checking
-            var declaringClass = instance.RuntimeClass;
+            var declaringClass = _environment.PrivateClass ?? instance.RuntimeClass;
+            if (!declaringClass.HasPrivateBrand(instance))
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot access private member {methodName} from an object whose class did not declare it"));
             var method = declaringClass.GetPrivateMethod(methodName);
             if (method == null)
             {
@@ -3205,7 +3219,8 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(SharpTSClass.BindMethod(method, instance).CallBoxed(this, arguments));
         }
 
-        throw new InterpreterException($"Cannot call private method '{methodName}' on non-class value.");
+        throw new ThrowException(new SharpTSTypeError(
+            $"Cannot access private member {methodName} from an object whose class did not declare it"));
     }
 
     #endregion

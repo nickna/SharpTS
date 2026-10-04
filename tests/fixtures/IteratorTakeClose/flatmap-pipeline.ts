@@ -1,0 +1,1 @@
+function* outer(){try{yield 1;yield 2;}finally{console.log("outer");}}function* inner(n:number){try{yield n*3;yield n*4;}finally{console.log("inner");}}console.log(Iterator.from(outer()).flatMap((n:number)=>inner(n)).take(1).toArray().join(","));

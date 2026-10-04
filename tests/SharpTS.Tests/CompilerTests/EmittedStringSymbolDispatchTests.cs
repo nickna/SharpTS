@@ -76,7 +76,8 @@ public sealed class EmittedStringSymbolDispatchTests
         }
         Assert.Null(Get("Classified")); Assert.Null(Get("IndexReceiver"));
         Set("Classification", "number"); var primitive = Dispatch(42);
-        Assert.Equal(42, Get("Classified")); Assert.Null(primitive.Value); Assert.False(primitive.Invoked); Assert.False(primitive.Own); Assert.Null(Get("IndexReceiver"));
+        Assert.Null(Get("Classified")); Assert.Same(output, primitive.Value); Assert.True(primitive.Invoked); Assert.False(primitive.Own);
+        Assert.Equal(42, Get("IndexReceiver")); Assert.Equal(42, Get("Receiver")); Assert.Same(values, Get("Arguments"));
         Set("Classification", "object"); object candidate = "selected native type";
         var called = Dispatch(candidate); Assert.Same(output, called.Value); Assert.True(called.Invoked); Assert.Equal(nativeType, called.Own);
         Assert.Same(candidate, Get("IndexReceiver")); Assert.Same(symbol, Get("IndexSymbol"));

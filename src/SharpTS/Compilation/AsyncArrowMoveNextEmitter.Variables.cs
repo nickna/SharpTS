@@ -102,6 +102,9 @@ public partial class AsyncArrowMoveNextEmitter
         if (TryEmitWorkerGlobal(name))
             return;
 
+        if (TryEmitIndirectEvalValue(name))
+            return;
+
         // Not found - push null
         _il.Emit(OpCodes.Ldnull);
         SetStackType(StackType.Null);
@@ -177,7 +180,8 @@ public partial class AsyncArrowMoveNextEmitter
         // Capture population has its own order: parameters, hoisted locals, outer captures,
         // IL locals, then standalone captures before globals. The capturing-arrow caller
         // separately shares cell/display-class references when live storage is required.
-        var storage = _resolver!.TryResolveHoistedOrCaptured(name) ?? _resolver.TryResolveLocal(name);
+        var storage = TryResolveDisplayClassStorage(name)
+            ?? _resolver!.TryResolveHoistedOrCaptured(name) ?? _resolver.TryResolveLocal(name);
         if (storage == null && _builder.StandaloneCaptureFields.TryGetValue(name, out var standaloneField))
             storage = AsyncArrowStorageAccess.StateMachineField(standaloneField);
 
@@ -219,6 +223,10 @@ public partial class AsyncArrowMoveNextEmitter
 
     private AsyncArrowStorageAccess? TryResolveDisplayClassStorage(string name)
     {
+        if (_builder.StandaloneLiveCaptureFields.TryGetValue(name, out var liveField))
+            return AsyncArrowStorageAccess.OwnDisplayClassField(
+                _builder.StandaloneCaptureFields[name], liveField);
+
         // A captured write promoted by the enclosing function uses outer.functionDC.field.
         // The outer plumbing is absent on standalone arrows, which must fall through.
         if (_ctx?.OuterFunctionDCField != null &&

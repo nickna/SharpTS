@@ -8,11 +8,9 @@ namespace SharpTS.Runtime.BuiltIns;
 /// </summary>
 public static class ArrayStaticBuiltIns
 {
-    public static object? GetStaticMethod(string name)
-    {
-        return name switch
-        {
-            "isArray" => BuiltInMethod.CreateV2("isArray", 1, int.MaxValue, static (_, _, args) =>
+    private static readonly BuiltInStaticMemberLookup _staticLookup =
+        BuiltInStaticBuilder.Create()
+            .MethodV2("isArray", 1, int.MaxValue, static (_, _, args) =>
             {
                 object? candidate = args[0].ToObject();
                 bool isArray = candidate switch
@@ -23,8 +21,8 @@ public static class ArrayStaticBuiltIns
                     _ => false,
                 };
                 return RuntimeValue.FromBoolean(isArray);
-            }).AsNonConstructor(),
-            "from" => BuiltInMethod.CreateV2("from", 1, 3, static (interpreter, _, args) =>
+            })
+            .MethodV2("from", 1, 3, static (interpreter, _, args) =>
             {
                 // ECMA-262 23.1.2.1: Array.from(null) and Array.from(undefined) throw TypeError
                 // (via the GetMethod(@@iterator) → Get → ToObject(items) chain).
@@ -86,16 +84,17 @@ public static class ArrayStaticBuiltIns
                     ? interpreter.GetIterableElements(iterable).ToList()
                     : interpreter.ReadArrayLikeElements(iterable);
                 return RuntimeValue.FromObject(new SharpTSArray(elements));
-            }).AsNonConstructor(),
-            "of" => BuiltInMethod.CreateV2("of", 0, int.MaxValue, static (_, _, args) =>
+            })
+            .MethodV2("of", 0, int.MaxValue, static (_, _, args) =>
             {
                 // Array.of() creates an array from all arguments
                 var items = new List<object?>(args.Length);
                 foreach (var arg in args)
                     items.Add(arg.ToObject());
                 return RuntimeValue.FromObject(new SharpTSArray(items));
-            }).AsNonConstructor(),
-            _ => null
-        };
-    }
+            })
+            .Build();
+
+    public static object? GetStaticMethod(string name)
+        => _staticLookup.GetMember(name);
 }

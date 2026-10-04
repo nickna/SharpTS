@@ -232,6 +232,9 @@ public partial class CompilationContext
     /// </summary>
     public Dictionary<string, Dictionary<double, string>>? EnumReverse { get; set; }
 
+    /// <summary>Canonical runtime objects for ordinary enum declarations.</summary>
+    public Dictionary<string, FieldBuilder>? EnumValueFields { get; set; }
+
     /// <summary>
     /// Enum kinds mapping enum name to kind.
     /// </summary>

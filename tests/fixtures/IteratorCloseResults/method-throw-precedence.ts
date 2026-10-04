@@ -1,0 +1,1 @@
+const marker={tag:7};const closingError={tag:9};const it:any={[Symbol.iterator](){return this;},next(){return {value:1,done:false};},return(){throw closingError;}};try{for(const n of it)throw marker;}catch(e:any){console.log(e===marker);}try{for(const n of it)break;}catch(e:any){console.log(e===closingError);}

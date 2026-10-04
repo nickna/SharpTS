@@ -1,0 +1,1 @@
+async function* values(){const items:any=[Promise.resolve(2),Promise.resolve(3)];for await(const n of items)yield n+1;}async function run(){let total=0;for await(const n of values())total+=n;console.log(total);}run();

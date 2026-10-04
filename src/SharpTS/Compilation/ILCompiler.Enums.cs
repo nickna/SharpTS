@@ -15,9 +15,15 @@ public partial class ILCompiler
 
         // Get qualified enum name (module-prefixed in multi-module compilation)
         string qualifiedEnumName = ctx.GetQualifiedEnumName(enumStmt.Name.Lexeme);
+        if (!enumStmt.IsConst && !_enums.ValueFields.ContainsKey(qualifiedEnumName))
+        {
+            _enums.ValueFields[qualifiedEnumName] = _programType!.DefineField(
+                "$enumValue" + _enums.ValueFields.Count,
+                _types.Object, System.Reflection.FieldAttributes.Assembly | System.Reflection.FieldAttributes.Static);
+        }
 
         // Track simple name -> module mapping for later lookups
-        if (_modules.CurrentPath != null)
+        if (_modules.CurrentPath != null && _currentNamespacePath == null)
         {
             _modules.EnumToModule[enumStmt.Name.Lexeme] = _modules.CurrentPath;
         }
@@ -30,7 +36,13 @@ public partial class ILCompiler
 
         foreach (var member in enumStmt.Members)
         {
-            if (member.Value is Expr.Literal lit)
+            // Signed numeric literals are unary/grouping nodes in the parser,
+            // rather than Literal nodes. Preserve them in ordinary enum tables
+            // before assigning the following implicit value and reverse key.
+            Expr? initializer = member.Value;
+            if (initializer is not Expr.Literal && ConstEnumExpressionEvaluator.TryEvaluateSignedLiteral(initializer, out double signedValue))
+                initializer = new Expr.Literal(signedValue);
+            if (initializer is Expr.Literal lit)
             {
                 if (lit.Value is double d)
                 {

@@ -18,6 +18,7 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSCallable, IReceiverBindable
     private readonly Stmt.Function _declaration;
     private readonly RuntimeEnvironment _closure;
     private readonly int _arity;
+    internal SharpTSClass? PrivateOwner { get; set; }
     /// <summary>A dynamic receiver was bound, so <see cref="Call"/> binds <c>this</c> to
     /// <see cref="_boundThis"/> rather than defaulting it to undefined.</summary>
     private readonly bool _thisBound;
@@ -47,7 +48,7 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSCallable, IReceiverBindable
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
         // Create a new environment for this generator invocation
-        RuntimeEnvironment environment = new(_closure);
+        RuntimeEnvironment environment = new(_closure) { PrivateClass = PrivateOwner };
 
         // #775: an async generator expression / object method binds its own dynamic `this`. The bound
         // receiver (or globalThis for a plain call) is defined in the generator's OWN body environment,
@@ -77,14 +78,14 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSCallable, IReceiverBindable
     /// Creates a bound version with 'this' set for method calls.
     /// </summary>
     public SharpTSAsyncGeneratorFunction Bind(SharpTSInstance instance)
-        => new(_declaration, _closure, thisBound: true, boundThis: instance);
+        => new(_declaration, _closure, thisBound: true, boundThis: instance) { PrivateOwner = PrivateOwner };
 
     /// <summary>Binds an arbitrary receiver (object async generator method / <c>.call</c> / <c>.apply</c>) (#775).</summary>
     public ISharpTSCallable BindToReceiver(object receiver)
-        => new SharpTSAsyncGeneratorFunction(_declaration, _closure, thisBound: true, boundThis: receiver);
+        => new SharpTSAsyncGeneratorFunction(_declaration, _closure, thisBound: true, boundThis: receiver) { PrivateOwner = PrivateOwner };
 
     public SharpTSAsyncGeneratorFunction BindStatic(SharpTSClass klass)
-        => new(_declaration, _closure, thisBound: true, boundThis: klass, boundSuper: klass.Superclass);
+        => new(_declaration, _closure, thisBound: true, boundThis: klass, boundSuper: klass.Superclass) { PrivateOwner = PrivateOwner };
 
     public override string ToString() => $"[async function* {_declaration.Name?.Lexeme ?? "anonymous"}]";
 }

@@ -1,0 +1,1 @@
+import {PublicLibrary as Library} from "./lib.ts";const library:any=Library;console.log(library.base,library.read(),library===Library);

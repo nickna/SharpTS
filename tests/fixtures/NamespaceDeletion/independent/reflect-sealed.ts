@@ -1,0 +1,1 @@
+namespace Values {export const value=3;}const values:any=Values;Object.seal(values);console.log(Reflect.deleteProperty(values,"value"),Reflect.deleteProperty(values,"value"),Reflect.deleteProperty(values,"missing"),values.value);

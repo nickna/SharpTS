@@ -112,14 +112,10 @@ public partial class RuntimeEmitter
         Wire("normalize",      strings.Normalize,      0);
         Wire("localeCompare",  strings.LocaleCompare,  1);
 
-        // match/matchAll/search wired to the regex-aware helpers used by the
-        // inline StringEmitter path. RequireObjectCoercible(this) is enforced
-        // by $TSFunction.CoercePrimitiveArgs for any helper whose first param
-        // is named "__this" with type string — Wire renames param 1 to
-        // "__this" above, so borrowed-method calls of the form
-        // `String.prototype.search.call(null, ...)` still throw TypeError.
-        // Wrapper receivers (`new String("x").search(...)`) are unwrapped
-        // through the same path via ToJsString reading __primitiveValue.
+        // Protocol helpers retain the original object receiver through custom
+        // symbol dispatch. They enforce RequireObjectCoercible themselves and
+        // defer ToString until the ordinary fallback needs it; TSFunction must
+        // not pre-coerce a borrowed receiver to a CLR string.
         // Pre-fix these slots were wired to _StringPrototypeStrictStub which
         // ignored arguments and returned the receiver string, regressing 45
         // Test262 tests once `new String(...)` started producing wrappers.

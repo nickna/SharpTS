@@ -1,4 +1,5 @@
 using SharpTS.Execution;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -9,9 +10,9 @@ namespace SharpTS.Runtime.BuiltIns;
 public static class FunctionBuiltIns
 {
     // Spec lengths per ECMA-262 §20.2.3: bind=1, call=1, apply=2.
-    private static readonly BuiltInMethod _bind = BuiltInMethod.CreateV2("bind", 0, int.MaxValue, Bind).WithSpecLength(1);
-    private static readonly BuiltInMethod _call = BuiltInMethod.CreateV2("call", 0, int.MaxValue, Call).WithSpecLength(1);
-    private static readonly BuiltInMethod _apply = BuiltInMethod.CreateV2("apply", 0, 2, Apply).WithSpecLength(2);
+    private static readonly BuiltInMethod _bind = BuiltInMethod.CreateV2("bind", 0, int.MaxValue, Bind).WithSpecLength(1).AsNonConstructor();
+    private static readonly BuiltInMethod _call = BuiltInMethod.CreateV2("call", 0, int.MaxValue, Call).WithSpecLength(1).AsNonConstructor();
+    private static readonly BuiltInMethod _apply = BuiltInMethod.CreateV2("apply", 0, 2, Apply).WithSpecLength(2).AsNonConstructor();
 
     /// <summary>
     /// Returns the unbound singleton callable for a Function.prototype method
@@ -100,6 +101,9 @@ public static class FunctionBuiltIns
     {
         var callable = receiver.ToObject() as ISharpTSCallable
             ?? throw new Exception("Runtime Error: bind called on non-function.");
+        if (callable is SharpTSProxy { IsCallable: false })
+            throw new ThrowException(new SharpTSTypeError(
+                "Function.prototype.bind called on incompatible receiver"));
 
         var thisArg = args.Length > 0 ? args[0].ToObject() : null;
         var boundArgs = new List<object?>(Math.Max(0, args.Length - 1));
@@ -184,6 +188,9 @@ public static class FunctionBuiltIns
     {
         if (callable is SharpTSProxy proxy)
             return proxy.TrapApply(thisArg, args, interp);
+
+        if (callable is SharpTSTextDecoder.TextDecoderDecodeMethod decode)
+            return decode.CallWithReceiver(thisArg, args);
 
         // Arrow functions ignore thisArg
         if (callable is SharpTSArrowFunction arrow && !arrow.HasOwnThis)
@@ -345,6 +352,8 @@ public class BoundFunction : ISharpTSCallable
 
     internal ISharpTSCallable Target => _target;
 
+    internal List<object?> PrependArguments(IEnumerable<object?> arguments) => [.. _boundArgs, .. arguments];
+
     public bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
         => (_ownProperties ??= new SharpTSObject([])).DefineProperty(name, descriptor);
 
@@ -405,9 +414,7 @@ public class BoundFunction : ISharpTSCallable
             SharpTSArrowFunction arrow => arrow.ToString().Contains("<fn ")
                 ? arrow.ToString().Replace("<fn ", "").TrimEnd('>')
                 : "",
-            BoundFunction bound => bound.Name.StartsWith("bound ")
-                ? bound.Name.Substring(6)
-                : bound.Name,
+            BoundFunction bound => bound.Name,
             _ => ""
         };
     }
@@ -425,6 +432,10 @@ public class BoundFunction : ISharpTSCallable
         for (int i = 0; i < _boundArgs.Count; i++)
             combined[i] = RuntimeValue.FromBoxed(_boundArgs[i]);
         arguments.CopyTo(combined.AsSpan(_boundArgs.Count));
+
+        if (!_ignoreThisArg && _target is SharpTSProxy proxy)
+            return RuntimeValue.FromBoxed(proxy.TrapApply(
+                _thisArg, CallableInterop.ToBoxedList(combined), interpreter));
 
         // Delegate to target's V2 path if available
         if (!_ignoreThisArg && _thisArg != null)
@@ -473,6 +484,9 @@ public class BoundFunction : ISharpTSCallable
         // Combine bound args with call args
         var combinedArgs = new List<object?>(_boundArgs);
         combinedArgs.AddRange(arguments);
+
+        if (!_ignoreThisArg && _target is SharpTSProxy proxy)
+            return proxy.TrapApply(_thisArg, combinedArgs, interpreter);
 
         // Handle binding 'this' for the target function
         if (!_ignoreThisArg && _thisArg != null)

@@ -1,0 +1,1 @@
+enum Values {Negative=-2,Half=0.5}let key:number=-2;try{console.log(Values[key]);}catch(e){console.log("negative-miss");}key=0.5;try{console.log(Values[key]);}catch(e){console.log("fraction-miss");}console.log(Values.Negative,Values.Half);

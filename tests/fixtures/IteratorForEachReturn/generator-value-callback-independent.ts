@@ -1,0 +1,1 @@
+function* values(){try{yield 2;yield 5;}finally{console.log("exhausted");}}const seen:any[]=[];const r:any=Iterator.from(values()).forEach((n:any,i:any)=>{seen.push(n+i);return null;});console.log(seen.join(","),r===undefined);

@@ -8,6 +8,21 @@ namespace SharpTS.Compilation;
 // Split out of RuntimeEmitter.Objects.Properties.cs (#1141): the property/index assignment emitters (sloppy + strict).
 public partial class RuntimeEmitter
 {
+    private void EmitNamespaceSetBranch(ILGenerator il, EmittedNamespaceRuntime namespaces)
+    {
+        var notNamespace = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, namespaces.Type);
+        il.Emit(OpCodes.Brfalse, notNamespace);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, namespaces.Type);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, namespaces.Set);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notNamespace);
+    }
+
     private readonly record struct SetFieldsPropertyInputs(
         EmittedDateRuntime Dates,
         EmittedDescriptorStorageRuntime DescriptorStorage,
@@ -54,6 +69,7 @@ public partial class RuntimeEmitter
         MethodBuilder InvokeMethodUnwrapped,
         MethodBuilder InvokeMethodValue,
         MethodBuilder LookupBuiltInStaticMember,
+        EmittedNamespaceRuntime Namespaces,
         EmittedNumericCoercionRuntime NumericCoercion,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectOwnPropertiesRuntime ObjectOwnProperties,
@@ -83,6 +99,7 @@ public partial class RuntimeEmitter
         Type IHasFieldsInterface,
         MethodBuilder InvokeMethodUnwrapped,
         MethodBuilder InvokeMethodValue,
+        EmittedNamespaceRuntime Namespaces,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectReadRuntime ObjectRead,
         EmittedObjectStateRuntime ObjectState,
@@ -889,6 +906,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, nullLabel);
         il.MarkLabel(inheritedSetContinueLabel);
+
+        EmitNamespaceSetBranch(il, inputs.Namespaces);
 
         // $Object (with setter support) - call obj.SetProperty(name, value)
         il.Emit(OpCodes.Ldarg_0);
@@ -1929,6 +1948,7 @@ public partial class RuntimeEmitter
         }
 
         // Check if $Object
+        EmitNamespaceSetBranch(il, inputs.Namespaces);
         var sharpTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);

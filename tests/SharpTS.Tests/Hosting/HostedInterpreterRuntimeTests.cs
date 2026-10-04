@@ -15,6 +15,66 @@ namespace SharpTS.Tests.Hosting;
 [Collection("ProcessLifecycleTests")]
 public sealed class HostedInterpreterRuntimeTests
 {
+    [Fact]
+    public void CompiledHostedTopLevelAwait_InitializesEnumObjectsInDeclarationOrder()
+    {
+        const string source = """
+            enum Before { A=2, B=A<<1, All=A|B }
+            console.log(Before.All, Before[6]);
+            await Promise.resolve(0);
+            enum After { A=3, B=A+1 }
+            const alias:any=After;
+            console.log(alias===After, alias[4], After.B);
+            export {};
+            """;
+        AssertCompiledHostedEnumOutput(
+            new Dictionary<string, string> { ["main.ts"] = source }, "6 All\ntrue B 4\n");
+    }
+
+    [Fact]
+    public void CompiledHostedTopLevelAwait_ExportsEnumIdentityWithoutRepeatingInitializers()
+    {
+        AssertCompiledHostedEnumOutput(new Dictionary<string, string>
+        {
+            ["lib.ts"] = """
+                let calls=0;
+                function next():number { calls++; return 3; }
+                export enum Values { A=next(), B=A+1 }
+                console.log(Values.B);
+                await Promise.resolve(0);
+                console.log(calls);
+                export const alias=Values;
+                """,
+            ["main.ts"] = """
+                import {Values,alias} from './lib.ts';
+                console.log(Values===alias, Values[4]);
+                """,
+        }, "4\n1\ntrue B\n");
+    }
+
+    private static void AssertCompiledHostedEnumOutput(
+        IReadOnlyDictionary<string, string> sources, string expected)
+    {
+        SharpTSProgram program = CreateProgram(sources, "main.ts");
+        var compiler = new ILCompiler($"hosted_enum_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(program.RuntimeModules.ToList(), program.Resolver, program.TypeMap);
+        byte[] bytes = compiler.SaveToBytes();
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        using var assemblyStream = new MemoryStream(bytes);
+        Assert.Empty(verifier.Verify(assemblyStream));
+        var dispatcher = new DeterministicHostDispatcher();
+        var errors = new RecordingErrorSink();
+        using var output = Infrastructure.AsyncLocalConsoleRedirector.Capture();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(bytes), dispatcher, new RecordingLifetime(), errors);
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+        initialization.GetAwaiter().GetResult();
+        Assert.Equal(expected, output.GetOutput().Replace("\r\n", "\n"));
+        Assert.Empty(errors.Errors);
+    }
+
     [Theory]
     [InlineData("await Promise.resolve(0);class C{static value=5;}return C.value;")]
     [InlineData("class C{static value=5;}await new Promise(r=>setTimeout(r,1));return C.value;")]

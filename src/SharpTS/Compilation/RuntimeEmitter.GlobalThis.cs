@@ -61,7 +61,8 @@ public partial class RuntimeEmitter
             new GlobalPropertyWriteInputs(runtime.DescriptorStorage.DescriptorType,
                 runtime.DescriptorStorage.GetPropertyDescriptor,
                 runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!,
-                runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!));
+                runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!,
+                runtime.DescriptorStorage.TryGetSetter, runtime.Invocation.Method));
         runtime.GlobalObject.CompleteEmission();
     }
 
@@ -80,13 +81,14 @@ public partial class RuntimeEmitter
         GlobalPropertyOptionalInputs Optional);
 
     private readonly record struct GlobalPropertyWriteInputs(
-        Type DescriptorType, MethodBuilder GetPropertyDescriptor, MethodInfo GetWritable, MethodInfo SetValue);
+        Type DescriptorType, MethodBuilder GetPropertyDescriptor, MethodInfo GetWritable, MethodInfo SetValue,
+        MethodBuilder TryGetSetter, MethodBuilder InvokeMethod);
 
     private readonly record struct UriComponentInputs(ConstructorBuilder? PadUndefinedCtor, MethodBuilder ToJsString);
 
     private void EmitUriComponentFunctions(TypeBuilder typeBuilder, EmittedUriComponentRuntime uriComponents, UriComponentInputs inputs)
     {
-        MethodBuilder Emit(string clrName, MethodInfo uriMethod)
+        MethodBuilder Emit(string clrName, bool encode)
         {
             var method = typeBuilder.DefineMethod(
                 clrName,
@@ -101,17 +103,47 @@ public partial class RuntimeEmitter
                     inputs.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
 
             var il = method.GetILGenerator();
+            var source = il.DeclareLocal(_types.String);
+            var result = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.ToJsString);
-            il.Emit(OpCodes.Call, uriMethod);
+            il.Emit(OpCodes.Stloc, source);
+
+            // Coercion is outside the validation catch so its original abrupt
+            // completion wins. Strict UTF-8 rejects unpaired UTF-16 on encode
+            // and invalid/overlong/surrogate percent-encoded octets on decode.
+            var done = il.BeginExceptionBlock();
+            if (encode)
+                EmitUriEncodeValidation(il, source);
+            else
+                EmitUriDecodeValidation(il, source);
+            il.Emit(OpCodes.Ldloc, source);
+            il.Emit(OpCodes.Call, encode ? _types.UriEscapeDataString : _types.UriUnescapeDataString);
+            if (encode)
+            {
+                foreach (var (escaped, literal) in new[] {
+                    ("%21", "!"), ("%27", "'"), ("%28", "("), ("%29", ")"), ("%2A", "*") })
+                {
+                    il.Emit(OpCodes.Ldstr, escaped);
+                    il.Emit(OpCodes.Ldstr, literal);
+                    il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", [_types.String, _types.String])!);
+                }
+            }
+            il.Emit(OpCodes.Stloc, result);
+            il.Emit(OpCodes.Leave, done);
+            il.BeginCatchBlock(encode ? typeof(System.Text.EncoderFallbackException) : typeof(System.Text.DecoderFallbackException));
+            il.Emit(OpCodes.Pop);
+            EmitMalformedUriError(il);
+            il.EndExceptionBlock();
+            il.Emit(OpCodes.Ldloc, result);
             il.Emit(OpCodes.Ret);
             return method;
         }
 
         uriComponents.Encode = Emit(
-            "GlobalEncodeURIComponent", _types.UriEscapeDataString);
+            "GlobalEncodeURIComponent", true);
         uriComponents.Decode = Emit(
-            "GlobalDecodeURIComponent", _types.UriUnescapeDataString);
+            "GlobalDecodeURIComponent", false);
     }
 
     /// <summary>
@@ -494,7 +526,7 @@ public partial class RuntimeEmitter
 
         // isNaN
         il.MarkLabel(isNaNLabel);
-        EmitGetOrCreateTSFn(inputs.Numbers.IsNaN, "isNaN", 1);
+        EmitGetOrCreateTSFn(inputs.Numbers.GlobalIsNaN, "isNaN", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
         // isFinite
@@ -608,6 +640,28 @@ public partial class RuntimeEmitter
         var method = (MethodBuilder)globalObject.SetProperty;
 
         var il = method.GetILGenerator();
+
+        // Accessor setters have no [[Writable]] flag. Invoke one before the
+        // data-property check, preserving the actual global receiver and value.
+        var setter = il.DeclareLocal(_types.Object);
+        var noSetter = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, setter);
+        il.Emit(OpCodes.Call, inputs.TryGetSetter);
+        il.Emit(OpCodes.Brfalse, noSetter);
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
+        il.Emit(OpCodes.Ldloc, setter);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, inputs.InvokeMethod);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noSetter);
 
         // Respect Object.defineProperty metadata installed on the global
         // sentinel. A non-writable data property silently rejects sloppy-mode

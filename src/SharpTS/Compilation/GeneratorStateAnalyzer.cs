@@ -44,6 +44,7 @@ public class GeneratorStateAnalyzer : AstVisitorBase
     // State during analysis
     private readonly List<YieldPoint> _yieldPoints = [];
     private readonly HashSet<string> _declaredVariables = [];
+    private readonly HashSet<string> _usingResources = [];
     private readonly HashSet<string> _variablesUsedAfterYield = [];
     private readonly HashSet<string> _variablesDeclaredBeforeYield = [];
     private readonly List<Stmt.ForOf> _forOfLoopsWithYield = [];  // for...of loops containing yields (enumerator hoisting)
@@ -105,6 +106,7 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         // case we hoist a local unnecessarily.
         var hoistedLocals = new HashSet<string>(_declaredVariables);
         hoistedLocals.IntersectWith(_variablesUsedAfterYield);
+        hoistedLocals.UnionWith(_usingResources);
         hoistedLocals.ExceptWith(parameters); // Parameters are tracked separately
 
         return new GeneratorFunctionAnalysis(
@@ -132,6 +134,7 @@ public class GeneratorStateAnalyzer : AstVisitorBase
     {
         _yieldPoints.Clear();
         _declaredVariables.Clear();
+        _usingResources.Clear();
         _variablesUsedAfterYield.Clear();
         _variablesDeclaredBeforeYield.Clear();
         _forOfLoopsWithYield.Clear();
@@ -172,6 +175,22 @@ public class GeneratorStateAnalyzer : AstVisitorBase
     }
 
     #region Statement Visitor Overrides
+
+    protected override void VisitUsing(Stmt.Using stmt)
+    {
+        foreach (var binding in stmt.Bindings)
+        {
+            Visit(binding.Initializer);
+            if (binding.Name is not null)
+            {
+                var name = StorageName(binding, binding.Name.Lexeme);
+                _declaredVariables.Add(name);
+                // Implied cleanup observes the resource even when the source
+                // never reads its binding after the suspension.
+                _usingResources.Add(name);
+            }
+        }
+    }
 
     protected override void VisitVar(Stmt.Var stmt)
     {

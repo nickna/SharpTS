@@ -1,0 +1,1 @@
+const source:any={reads:0,next(){this.reads++;return {value:this.reads,done:this.reads>2};}};let gets=0;let calls=0;Object.defineProperty(source,Symbol.iterator,{get(){gets++;return function(){calls++;console.log(this===source);return source;};}});const [a,...rest]=source;console.log(a,rest.join(","),gets,calls,source.reads);

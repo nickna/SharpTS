@@ -1,0 +1,1 @@
+let calls=0;const original=new Error("original");const receiver:any={toString(){calls++;return "abc";}};const value:any={};Object.defineProperty(value,Symbol.match,{get(){throw original;}});try{String.prototype.match.call(receiver,value);}catch(e){console.log(e===original,calls);}

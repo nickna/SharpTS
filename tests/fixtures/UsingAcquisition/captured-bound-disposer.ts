@@ -1,0 +1,1 @@
+const target:any={value:8};function dispose(this:any){console.log(this===target,this.value);}const r:any={[Symbol.dispose]:dispose.bind(target)};{using x=r;r[Symbol.dispose]=function(){console.log("replacement");};console.log("body");}

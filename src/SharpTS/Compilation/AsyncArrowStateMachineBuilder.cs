@@ -67,6 +67,10 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
     // (similar to display class fields for non-async closures)
     public Dictionary<string, FieldBuilder> StandaloneCaptureFields { get; } = [];
 
+    // Captures whose slot holds the enclosing display-class reference rather
+    // than a value snapshot. The mapped field is the actual binding's storage.
+    public Dictionary<string, FieldBuilder> StandaloneLiveCaptureFields { get; } = [];
+
     // For nested arrows: captures that require accessing through outer's outer reference
     // These are variables from a grandparent that the parent arrow also captured
     public HashSet<string> TransitiveCaptures { get; } = [];
@@ -239,7 +243,8 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
     public void DefineStateMachineStandalone(
         int awaitCount,
         List<Stmt.Parameter> arrowParameters,
-        HashSet<string> hoistedLocals)
+        HashSet<string> hoistedLocals,
+        IReadOnlyDictionary<string, FieldBuilder>? liveCaptures = null)
     {
         IsStandalone = true;
         OuterStateMachineType = null;
@@ -305,17 +310,23 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
             );
         }
 
-        // Define capture fields for variables from the enclosing (non-async) function
-        // These will be passed to the stub method and stored in the state machine
+        // Capture slots carry a live display-class reference where one exists;
+        // remaining values keep the existing snapshot path.
         foreach (var captureName in Captures)
         {
             // Skip parameters and hoisted locals (already have fields)
             if (ParameterFields.ContainsKey(captureName) || LocalFields.ContainsKey(captureName))
                 continue;
 
+            Type captureType = _types.Object;
+            if (liveCaptures?.TryGetValue(captureName, out var liveField) == true)
+            {
+                StandaloneLiveCaptureFields[captureName] = liveField;
+                captureType = liveField.DeclaringType!;
+            }
             var field = _stateMachineType.DefineField(
                 $"<>captured_{captureName}",
-                _types.Object,
+                captureType,
                 FieldAttributes.Public
             );
             StandaloneCaptureFields[captureName] = field;
@@ -427,6 +438,8 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
                 il.Emit(OpCodes.Castclass, _types.ObjectArray);
                 il.Emit(OpCodes.Ldc_I4, i);
                 il.Emit(OpCodes.Ldelem_Ref);
+                if (captureField.FieldType != _types.Object)
+                    il.Emit(OpCodes.Castclass, captureField.FieldType);
                 il.Emit(OpCodes.Stfld, captureField);
             }
             paramOffset = 1; // Skip the single capture-array arg when copying params

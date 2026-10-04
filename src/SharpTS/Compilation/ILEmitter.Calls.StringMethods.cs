@@ -156,6 +156,8 @@ public partial class ILEmitter
                 break;
 
             case "split":
+                IL.Emit(OpCodes.Pop);
+                IL.Emit(OpCodes.Ldloc, objLocal);
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);
@@ -181,6 +183,8 @@ public partial class ILEmitter
                 break;
 
             case "match":
+                IL.Emit(OpCodes.Pop);
+                IL.Emit(OpCodes.Ldloc, objLocal);
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);
@@ -194,6 +198,8 @@ public partial class ILEmitter
                 break;
 
             case "search":
+                IL.Emit(OpCodes.Pop);
+                IL.Emit(OpCodes.Ldloc, objLocal);
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);

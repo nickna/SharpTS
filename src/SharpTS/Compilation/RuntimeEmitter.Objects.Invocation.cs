@@ -43,7 +43,8 @@ public partial class RuntimeEmitter
         Type IHasFieldsInterface,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
-        FieldInfo UndefinedInstance
+        FieldInfo UndefinedInstance,
+        EmittedNumericCoercionRuntime NumericCoercion
     );
 
     private readonly record struct InvokeMethodValueInputs(
@@ -431,6 +432,31 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notObjectTypeLabel);
 
+        // Number's value form must perform the same explicit numeric coercion
+        // as direct Number(x), including BigInt and the no-argument zero default.
+        var notNumberTypeLabel = il.DefineLabel();
+        var numberNoArgLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.Type);
+        il.Emit(OpCodes.Ldtoken, _types.Double);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", _types.Type, _types.Type));
+        il.Emit(OpCodes.Brfalse, notNumberTypeLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brfalse, numberNoArgLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ConvertToNumber);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(numberNoArgLabel);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notNumberTypeLabel);
+
         // String call form (`Array.prototype.map.call(values, String)`). Bare
         // String is represented by the System.String Type token, so dynamic
         // invocation must perform §22.1.1.1 String(value), including the empty
@@ -747,8 +773,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BindType);
         il.Emit(OpCodes.Brfalse, notBindWrapperLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BindType);
+        // Function.prototype methods select their target from the actual
+        // Reference receiver, including an extracted method invoked via call.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.BindCtor);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.BindInvoke);
         il.Emit(OpCodes.Ret);
@@ -757,8 +785,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, inputs.FunctionBindings.CallType);
         il.Emit(OpCodes.Brfalse, notCallWrapperLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.CallType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.CallCtor);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.CallInvoke);
         il.Emit(OpCodes.Ret);
@@ -768,8 +796,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, inputs.FunctionBindings.ApplyType);
         il.Emit(OpCodes.Brfalse, notApplyWrapperLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.ApplyType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.ApplyCtor);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.ApplyInvoke);
         il.Emit(OpCodes.Ret);
@@ -915,17 +943,35 @@ public partial class RuntimeEmitter
         il.MarkLabel(notBoundAnyFunctionLabel);
 
         // $BoundTypedArrayMethod (#940) — wraps a typed-array bulk method bound to its receiver.
-        // The receiver is already captured in the wrapper, so arg0 is ignored (like $MethodCallable).
+        // A method value carries its original receiver as an implementation
+        // detail. call/apply must use the explicitly selected TypedArray.
         if (inputs.HasAnyTypedArray)
         {
+            var arrays = inputs.TypedArrays.RequireImplementation();
             var notBoundTypedArrayMethodLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, inputs.TypedArrays.RequireImplementation().BoundMethodType);
+            il.Emit(OpCodes.Isinst, arrays.BoundMethodType);
             il.Emit(OpCodes.Brfalse, notBoundTypedArrayMethodLabel);
+            var validTypedArrayReceiverLabel = il.DefineLabel();
+            var invokeTypedArrayMethodLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, arrays.BaseType);
+            il.Emit(OpCodes.Brtrue, validTypedArrayReceiverLabel);
+            // Direct extracted calls retain their established captured receiver.
+            // Explicit call/apply receiver validation occurs in those wrappers.
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, inputs.TypedArrays.RequireImplementation().BoundMethodType);
+            il.Emit(OpCodes.Castclass, arrays.BoundMethodType);
+            il.Emit(OpCodes.Br, invokeTypedArrayMethodLabel);
+            il.MarkLabel(validTypedArrayReceiverLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, arrays.BaseType);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, arrays.BoundMethodType);
+            il.Emit(OpCodes.Ldfld, arrays.BoundMethodNameField);
+            il.Emit(OpCodes.Newobj, arrays.BoundMethodCtor);
+            il.MarkLabel(invokeTypedArrayMethodLabel);
             il.Emit(OpCodes.Ldarg_2);  // args
-            il.Emit(OpCodes.Callvirt, inputs.TypedArrays.RequireImplementation().BoundMethodInvoke);
+            il.Emit(OpCodes.Callvirt, arrays.BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notBoundTypedArrayMethodLabel);
         }

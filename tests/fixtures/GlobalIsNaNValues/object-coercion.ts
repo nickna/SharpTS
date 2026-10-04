@@ -1,0 +1,1 @@
+let log="";const bad:any={valueOf(){log+="v";return "bad";},toString(){log+="s";return "4";}};const g:any=isNaN;console.log(g(bad),log);log="";console.log(isNaN(bad),log);const good:any={valueOf(){return {};},toString(){return "4";}};console.log(g(good),Number.isNaN(good));

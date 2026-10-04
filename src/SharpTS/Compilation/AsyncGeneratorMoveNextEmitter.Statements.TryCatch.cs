@@ -30,6 +30,77 @@ public partial class AsyncGeneratorMoveNextEmitter
     // be routed). Saved/restored around each region so nesting is handled correctly.
     private bool _inHandlerBody;
 
+    // A protocol call or awaiter result cannot span a suspension. Capture
+    // failures in a short protected segment and use the active guest handler.
+    private void EmitCaptureTryOperation(Action emit)
+    {
+        if (_currentTryExceptionLocal is null)
+        {
+            emit();
+            return;
+        }
+        _il.BeginExceptionBlock();
+        emit();
+        _il.BeginCatchBlock(typeof(Exception));
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.WrapException);
+        _il.Emit(OpCodes.Stloc, _currentTryExceptionLocal);
+        // A failed delegated step ends yield*. A handler can suspend at an
+        // ordinary yield next, which must not still look like delegation.
+        if (_builder.DelegatedAsyncEnumeratorField is { } delegation)
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Stfld, delegation);
+        }
+        _il.Emit(OpCodes.Ldc_I4_1);
+        _il.Emit(OpCodes.Stloc, _currentTryExceptionPresentLocal!);
+        _il.Emit(OpCodes.Leave, _currentTryCleanupLabel);
+        _il.EndExceptionBlock();
+    }
+
+    private void EmitInjectedYieldThrow()
+    {
+        var normalResumeLabel = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, _builder.ThrowRequestedField);
+        _il.Emit(OpCodes.Brfalse, normalResumeLabel);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Stfld, _builder.ThrowRequestedField);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4_M1);
+        _il.Emit(OpCodes.Stfld, _builder.StateField);
+
+        void LoadThrownValue()
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, _builder.ThrowValueField);
+        }
+
+        if (_currentTryExceptionLocal is not null)
+        {
+            EmitThrowIntoEnclosingTry(LoadThrownValue);
+        }
+        else if (ActiveFinallyFrames() is { Count: > 0 } chain)
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            LoadThrownValue();
+            _il.Emit(OpCodes.Stfld, GetPendingExceptionField());
+            RegisterThrowTerminal();
+            RouteThroughFinallys(chain, ExitCodeThrow, OpCodes.Br);
+        }
+        else
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldc_I4, -2);
+            _il.Emit(OpCodes.Stfld, _builder.StateField);
+            LoadThrownValue();
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.CreateException);
+            _il.Emit(OpCodes.Throw);
+        }
+        _il.MarkLabel(normalResumeLabel);
+    }
+
     // `<>pendingException` (object): the value of a `throw` being routed through finally(s), held
     // across any suspension in those finallys until the terminal dispatch rethrows it.
     private FieldBuilder? _pendingExceptionField;

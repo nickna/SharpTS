@@ -1,0 +1,1 @@
+class Box{value:number;constructor(value:number){this.value=value;}read(){return this.value;}}const b:any=new Box(2);b["value"]=7;b["extra"]=9;console.log(b.value,b.read(),b.extra,"value" in b,"missing" in b);console.log(Object.keys(b).join(","));

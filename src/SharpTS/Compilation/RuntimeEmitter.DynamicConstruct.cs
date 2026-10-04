@@ -38,13 +38,7 @@ public partial class RuntimeEmitter
         ConstructDynamicValueInputs inputs
     )
     {
-        var method = typeBuilder.DefineMethod(
-            "ConstructDynamicValue",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.ObjectArray]
-        );
-        dynamicConstruction.Value = method;
+        var method = dynamicConstruction.Value;
 
         var il = method.GetILGenerator();
         var throwLabel = il.DefineLabel();

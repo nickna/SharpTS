@@ -8,6 +8,10 @@ namespace SharpTS.Runtime.BuiltIns;
 /// </summary>
 public static class GeneratorBuiltIns
 {
+    internal static readonly BuiltInMethod IteratorMethod =
+        BuiltInMethod.CreateV2("[Symbol.iterator]", 0, static (_, receiver, _) => receiver)
+            .AsNonConstructor();
+
     /// <summary>
     /// Gets a built-in member for a generator.
     /// </summary>

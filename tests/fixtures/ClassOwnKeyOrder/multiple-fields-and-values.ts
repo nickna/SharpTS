@@ -1,0 +1,1 @@
+class Box{z:number=1;a:number=2;}const b:any=new Box();b.extra=3;b.later=4;b.z=5;console.log(Object.keys(b).join(","));console.log(Object.values(b).join(","));console.log(Object.entries(b).map(p=>p.join(":")).join(","));console.log(Object.getOwnPropertyNames(b).join(","));console.log(Reflect.ownKeys(b).join(","));

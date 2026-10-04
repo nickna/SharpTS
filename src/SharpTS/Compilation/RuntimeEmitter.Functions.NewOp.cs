@@ -26,12 +26,9 @@ public partial class RuntimeEmitter
     /// params resolve `this` to the new object), and returns the explicit object
     /// return value if the body yielded one — otherwise the constructed <c>this</c>.
     /// </summary>
-    /// <remarks>
-    /// Non-callable values return null, mirroring the pre-existing <c>Ldnull</c>
-    /// behavior rather than throwing — legacy code paths for <c>new &lt;not-a-function&gt;</c>
-    /// shouldn't regress. Must be emitted after <c>$Object</c>, <c>$TSFunction</c>,
-    /// and <c>$BoundTSFunction</c> are defined.
-    /// </remarks>
+    /// <remarks>Bound callables delegate to their target with prepended arguments.
+    /// Non-constructors throw a guest TypeError. Must be emitted after the object
+    /// and function wrapper types are declared.</remarks>
     internal void EmitNewOnFunction(
         TypeBuilder typeBuilder,
         EmittedDynamicConstructionRuntime dynamicConstruction,
@@ -52,6 +49,22 @@ public partial class RuntimeEmitter
         var resultLocal = il.DeclareLocal(_types.Object);
         var prevThisLocal = il.DeclareLocal(_types.Object);
         var notCallableLocal = il.DeclareLocal(_types.Boolean);
+
+        // [[Construct]] on a bound function prepends arguments and delegates to
+        // the target's construction protocol. Its bound call receiver is ignored.
+        EmitBoundConstruction(il, dynamicConstruction.Value, inputs.FunctionBindings.BoundType,
+            inputs.FunctionBindings.BoundTargetField, inputs.FunctionBindings.BoundArgumentsField);
+        EmitBoundConstruction(il, dynamicConstruction.Value, inputs.FunctionBindings.AnyType,
+            inputs.FunctionBindings.AnyTargetField, inputs.FunctionBindings.AnyArgumentsField);
+
+        // Proxy [[Construct]] exists only when the target is a constructor,
+        // including when a handler supplies its own construct trap.
+        var isConstructorOkLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.FunctionIntrospection.IsConstructor);
+        il.Emit(OpCodes.Brtrue, isConstructorOkLabel);
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "not a constructor");
+        il.MarkLabel(isConstructorOkLabel);
 
         var proxyLabel = il.DefineLabel();
         var notProxyLabel = il.DefineLabel();
@@ -75,7 +88,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_2);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldftn, dynamicConstruction.Function);
+                il.Emit(OpCodes.Ldftn, dynamicConstruction.Value);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, object?[], object?>),
                     _types.Object, _types.IntPtr)!);
@@ -91,27 +104,6 @@ public partial class RuntimeEmitter
             });
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyLabel);
-
-        // ECMA-262 §7.3.14 Construct: throw TypeError if callee is a $TSFunction
-        // wrapping a built-in helper (declaring type == $Runtime). Catches
-        // Test262 patterns like `new Array.prototype.sort()` where the user
-        // expects TypeError on a non-constructor. Routed through IsConstructor
-        // so the policy stays in one place. We only throw for the explicit
-        // "$TSFunction wrapping $Runtime" subset — class refs (Type) and user
-        // function decls fall through to the existing construct path.
-        var isConstructorOkLabel = il.DefineLabel();
-        var skipConstructorCheckLabel = il.DefineLabel();
-        // Only run the check for $TSFunction inputs — Type and other callees
-        // were already constructable in the legacy code path.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
-        il.Emit(OpCodes.Brfalse, skipConstructorCheckLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.FunctionIntrospection.IsConstructor);
-        il.Emit(OpCodes.Brtrue, isConstructorOkLabel);
-        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "not a constructor");
-        il.MarkLabel(skipConstructorCheckLabel);
-        il.MarkLabel(isConstructorOkLabel);
 
         // `new <plain object>` — plain objects have no [[Construct]] (#224):
         // throw TypeError instead of the legacy silent null. Namespace
@@ -137,8 +129,8 @@ public partial class RuntimeEmitter
         // Without this, yallist/semver's `if (!(this instanceof F)) return new F(args)`
         // recurses infinitely. Stage 0b makes F.prototype real (lazy-creates an
         // empty $Object on first read); this stage links newObj to it. Only
-        // applies to $TSFunction callees ($BoundTSFunction / non-callable callees
-        // skip the prototype link).
+        // applies to $TSFunction callees; bound construction already delegated
+        // to its target above.
         var skipProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
@@ -173,34 +165,19 @@ public partial class RuntimeEmitter
 
         il.BeginExceptionBlock();
 
-        var tryBound = il.DefineLabel();
         var notCallable = il.DefineLabel();
         var afterTry = il.DefineLabel();
 
         // if (fn is $TSFunction) result = fn.InvokeWithThis(newObj, args);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.FunctionValues.Type);
-        il.Emit(OpCodes.Brfalse, tryBound);
+        il.Emit(OpCodes.Brfalse, notCallable);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, newObjLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, inputs.FunctionValues.InvokeWithThis);
-        il.Emit(OpCodes.Stloc, resultLocal);
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // else if (fn is $BoundTSFunction) result = fn.InvokeWithThis(newObj, args);
-        il.MarkLabel(tryBound);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
-        il.Emit(OpCodes.Brfalse, notCallable);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
-        il.Emit(OpCodes.Ldloc, newObjLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.BoundInvokeWithThis);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, afterTry);
 
@@ -262,5 +239,72 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, newObjLocal);
         il.Emit(OpCodes.Ret);
         dynamicConstruction.MarkFunctionBodyEmitted();
+    }
+
+    private void EmitBoundConstruction(ILGenerator il, MethodBuilder construct, TypeBuilder boundType,
+        FieldBuilder targetField, FieldBuilder argumentsField)
+    {
+        var otherConstructor = il.DefineLabel();
+        var bound = il.DeclareLocal(boundType);
+        var prefix = il.DeclareLocal(_types.ObjectArray);
+        var combined = il.DeclareLocal(_types.ObjectArray);
+        var prefixLength = il.DeclareLocal(_types.Int32);
+        var argumentLength = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, boundType);
+        il.Emit(OpCodes.Stloc, bound);
+        il.Emit(OpCodes.Ldloc, bound);
+        il.Emit(OpCodes.Brfalse, otherConstructor);
+        il.Emit(OpCodes.Ldloc, bound);
+        il.Emit(OpCodes.Ldfld, argumentsField);
+        il.Emit(OpCodes.Stloc, prefix);
+        var noPrefix = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, prefix);
+        il.Emit(OpCodes.Brfalse, noPrefix);
+        il.Emit(OpCodes.Ldloc, prefix);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, prefixLength);
+        il.MarkLabel(noPrefix);
+        var noArguments = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, noArguments);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, argumentLength);
+        il.MarkLabel(noArguments);
+        il.Emit(OpCodes.Ldloc, prefixLength);
+        il.Emit(OpCodes.Ldloc, argumentLength);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, combined);
+        var copy = _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!;
+        var skipPrefixCopy = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, prefixLength);
+        il.Emit(OpCodes.Brfalse, skipPrefixCopy);
+        il.Emit(OpCodes.Ldloc, prefix);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, combined);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, prefixLength);
+        il.Emit(OpCodes.Call, copy);
+        il.MarkLabel(skipPrefixCopy);
+        var skipArgumentCopy = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argumentLength);
+        il.Emit(OpCodes.Brfalse, skipArgumentCopy);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, combined);
+        il.Emit(OpCodes.Ldloc, prefixLength);
+        il.Emit(OpCodes.Ldloc, argumentLength);
+        il.Emit(OpCodes.Call, copy);
+        il.MarkLabel(skipArgumentCopy);
+        il.Emit(OpCodes.Ldloc, bound);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Ldloc, combined);
+        il.Emit(OpCodes.Call, construct);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(otherConstructor);
     }
 }

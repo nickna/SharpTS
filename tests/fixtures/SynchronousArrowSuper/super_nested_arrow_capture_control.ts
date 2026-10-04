@@ -1,0 +1,1 @@
+class A {label="parent";value(x:number){return x+2;}}class B extends A {label="child";read(){const outer=()=>()=>{const marker=this.label;const method=super.value;return marker+":"+method(3);};return outer()();}}console.log(new B().read());

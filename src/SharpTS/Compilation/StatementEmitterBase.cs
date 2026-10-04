@@ -293,6 +293,10 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 EmitStateMachineClassDeclaration(classStmt);
                 break;
 
+            case Stmt.Enum enumStmt:
+                EmitEnumDeclaration(enumStmt);
+                break;
+
             case Stmt.If i:
                 EmitIf(i);
                 break;

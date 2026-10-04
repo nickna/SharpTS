@@ -1,0 +1,1 @@
+const A:any=Array;const O:any=Object;console.log(O.getOwnPropertyDescriptor(A,"isArray").value===A.isArray,A.isArray===Array.isArray);console.log(O.getOwnPropertyDescriptor(O,"assign").value===O.assign,O.assign.length);

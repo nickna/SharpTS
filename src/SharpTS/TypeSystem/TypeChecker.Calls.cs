@@ -1417,12 +1417,21 @@ public partial class TypeChecker
 
         foreach (TypeInfo candidate in overloadSet.Signatures)
         {
-            TypeInfo.Function? signature = candidate switch
+            TypeInfo.Function? signature;
+            try
             {
-                TypeInfo.Function function => function,
-                TypeInfo.GenericFunction generic => InstantiateMixedOverload(generic, call, argTypes),
-                _ => null,
-            };
+                signature = candidate switch
+                {
+                    TypeInfo.Function function when call.TypeArgs is not { Count: > 0 } => function,
+                    TypeInfo.GenericFunction generic => InstantiateMixedOverload(generic, call, argTypes),
+                    _ => null,
+                };
+            }
+            catch (TypeCheckException)
+            {
+                // A failed generic candidate does not invalidate later overloads.
+                continue;
+            }
 
             if (signature is not null &&
                 (TryMatchSignature(signature, argTypes) ||

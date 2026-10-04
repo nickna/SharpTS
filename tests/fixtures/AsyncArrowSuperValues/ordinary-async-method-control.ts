@@ -1,0 +1,1 @@
+class A {value(x:number){return x+2;}}class B extends A {async read(){const first=super.value;await Promise.resolve(0);const second=super.value;return first(3)+second(4);}}new B().read().then(v=>console.log(v));

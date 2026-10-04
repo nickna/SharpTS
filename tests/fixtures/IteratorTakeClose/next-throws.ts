@@ -1,0 +1,1 @@
+const marker={tag:7};const source:any={reads:0,closed:0,next(){this.reads++;throw marker;},return(){this.closed++;return {done:true};}};const helper=Iterator.from(source).take(1);try{helper.next();}catch(e:any){console.log(e===marker,source.reads,source.closed);}console.log(helper.next().done,source.reads,source.closed);

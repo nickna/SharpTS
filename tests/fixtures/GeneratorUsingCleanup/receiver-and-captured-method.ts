@@ -1,0 +1,1 @@
+const r:any={value:3,[Symbol.dispose](){console.log(this===r,this.value);}};function* values(){using x=r;yield x.value;}const g:any=values();console.log(g.next().value);r[Symbol.dispose]=function(){console.log("replacement");};r.value=4;console.log(g.return(9).value);

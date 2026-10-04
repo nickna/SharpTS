@@ -1,0 +1,1 @@
+let n=0;const values:any={[Symbol.asyncIterator](){return {async next(){return {value:++n,done:n>3};}};}};async function run(){let total=0;for await(const v of values)total+=v;console.log(total);}run();

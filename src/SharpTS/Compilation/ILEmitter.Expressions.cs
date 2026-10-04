@@ -55,6 +55,9 @@ public partial class ILEmitter
     {
         var name = v.Name.Lexeme;
 
+        if (TryEmitEnumInitializerMember(name))
+            return;
+
         if (TryEmitDefaultParameterTdz(name))
             return;
 
@@ -221,7 +224,8 @@ public partial class ILEmitter
         // Other global functions routable through globalThis (they have fast-path call handlers
         // but must ALSO be addressable as values — lodash caches them: `var freeParseFloat = parseFloat`
         // then calls the alias later). Matches how `fetch` resolves the bare reference above.
-        if (name is "eval" or "parseFloat" or "parseInt" or "isNaN" or "isFinite"
+        if (TryEmitIndirectEvalValue(name)) return;
+        if (name is "parseFloat" or "parseInt" or "isNaN" or "isFinite"
             or "encodeURIComponent" or "decodeURIComponent"
             or "setTimeout" or "clearTimeout" or "setInterval" or "clearInterval"
             or "queueMicrotask" or "structuredClone")
@@ -328,6 +332,15 @@ public partial class ILEmitter
             return;
         }
 
+        if (_ctx.ResolveNamespaceEnumField(name) is { } enumNamespace)
+        {
+            IL.Emit(OpCodes.Ldsfld, enumNamespace);
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Get);
+            SetStackUnknown();
+            return;
+        }
+
         // Check if it's a namespace - load the static field. ResolveNamespaceField walks enclosing
         // namespace prefixes so a nested namespace's member body can name a sibling/enclosing
         // namespace by its simple name (#665), not just a top-level namespace by full path.
@@ -337,6 +350,9 @@ public partial class ILEmitter
             SetStackUnknown();
             return;
         }
+
+        if (TryEmitEnumVariable(name))
+            return;
 
         // Check if it's a built-in Error constructor — push the emitted Type object
         if (TryEmitErrorTypeToken(name))
@@ -782,10 +798,21 @@ public partial class ILEmitter
 
         var storageName = _ctx.ResolveFunctionDCFieldName(name);
         if (_ctx.CapturedFunctionLocals?.Contains(storageName) == true
-            && _ctx.FunctionDisplayClassFields?.TryGetValue(storageName, out var functionField) == true
-            && _ctx.FunctionDisplayClassLocal != null)
+            && _ctx.FunctionDisplayClassFields?.TryGetValue(storageName, out var functionField) == true)
         {
-            IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+            // Promoted value slots are proven initialized before their closure
+            // is created and cannot contain the object-valued TDZ sentinel.
+            if (functionField.FieldType.IsValueType)
+                return;
+            if (_ctx.FunctionDisplayClassLocal != null)
+                IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+            else if (_ctx.CurrentArrowFunctionDCField != null)
+            {
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
+            }
+            else
+                return;
             IL.Emit(OpCodes.Ldfld, functionField);
         }
         else if (_ctx.CapturedArrowLocals?.Contains(name) == true
@@ -836,9 +863,9 @@ public partial class ILEmitter
 
     protected override void EmitSuper(Expr.Super s)
     {
-        // Load this and prepare for base method call
+        // Super method values use the lexical receiver, including arrow captures.
         // Note: super() constructor calls are handled in EmitCall, not here
-        IL.Emit(OpCodes.Ldarg_0);
+        EmitThis();
         IL.Emit(OpCodes.Ldstr, s.Method?.Lexeme ?? "constructor");
         EmitCallUnknown(_ctx.Runtime!.ReflectedMethods.SuperMethod);
     }

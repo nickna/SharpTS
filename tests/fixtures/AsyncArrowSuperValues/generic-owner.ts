@@ -1,0 +1,1 @@
+class A<T> {value(x:T):T{return x;}}class B<T> extends A<T> {read(x:T){const f=async()=>{await Promise.resolve(0);const method=super.value;return method(x);};return f();}}new B<string>().read("ok").then(v=>console.log(v));

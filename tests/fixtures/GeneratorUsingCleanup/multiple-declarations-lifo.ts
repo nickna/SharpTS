@@ -1,0 +1,1 @@
+function make(value:number):any{return {value,[Symbol.dispose](){console.log(this.value);}};}function* values(){using a=make(1),b=make(2);yield 3;using c=make(4);yield 5;}const g:any=values();console.log(g.next().value);console.log(g.next().value);console.log(g.return(9).value);

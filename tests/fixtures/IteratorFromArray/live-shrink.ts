@@ -1,0 +1,1 @@
+const a:any=[1,2,3];const wrapped=Iterator.from(a);console.log(wrapped.next().value);a.length=1;console.log(wrapped.next().done);a.push(4);console.log(wrapped.next().done,Iterator.from(a).toArray().join(","));

@@ -203,6 +203,17 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// TypeScript's broad Function object type includes constructor values.
+    /// Keep it distinct from a declared variadic call signature in relations
+    /// and compatibility caches, while retaining its permissive call surface.
+    /// </summary>
+    public sealed record FunctionSupertype() : Function(
+        [new Array(Any.Shared)], Any.Shared, RequiredParams: 0, HasRestParam: true)
+    {
+        public override string ToString() => "Function";
+    }
+
+    /// <summary>
     /// Renders a parameter list with optionality (<c>?</c>) and rest (<c>...</c>) markers. The
     /// markers must appear in ToString output: signatures differing only in optionality or restness
     /// differ in assignability, and <see cref="TypeInfoEqualityComparer"/> (the compatibility-cache

@@ -1,0 +1,1 @@
+for(const limit of [-1,-1.9,-Infinity]){try{Iterator.from([1]).take(limit);console.log("accepted");}catch(e:any){console.log(e.name);}try{Iterator.from([1]).drop(limit);console.log("accepted");}catch(e:any){console.log(e.name);}}

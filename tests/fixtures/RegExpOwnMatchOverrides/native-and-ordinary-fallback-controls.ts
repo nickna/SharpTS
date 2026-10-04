@@ -1,0 +1,1 @@
+console.log("aba".match(/a/g)!.join(","));const native:any="abc".match(/b/);console.log(native[0],native.index,native.input);const empty:any="abc".match(undefined);console.log(empty[0]==="",empty.index,empty.input);console.log("null".match(null)![0]);

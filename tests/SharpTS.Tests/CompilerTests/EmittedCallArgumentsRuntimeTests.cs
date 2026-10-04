@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Compilation;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
@@ -85,6 +86,30 @@ public sealed class EmittedCallArgumentsRuntimeTests
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
             Assert.Equal(hosted, loaded.GetReferencedAssemblies().Any(a => a.Name == "SharpTS.Hosting.Abstractions"));
         }
+    }
+
+    [Fact]
+    public void NonNestedDynamicMethodCallsReuseTheirPerArityArray()
+    {
+        var statements = new Parser(new Lexer("function invoke(o:any,a:any,b:any){return o.f(a,b);}").ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var compiler = new ILCompiler($"method_pool_{Guid.NewGuid():N}");
+        compiler.Compile(statements, typeMap, new DeadCodeAnalyzer(typeMap).Analyze(statements));
+        var bytes = compiler.SaveToBytes();
+        using var stream = new MemoryStream(bytes);
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        Assert.Empty(verifier.Verify(stream));
+        var assembly = Assembly.Load(bytes);
+        var invoke = assembly.GetType("$Program")!.GetMethods(Members).Single(method => method.Name.EndsWith("invoke", StringComparison.Ordinal));
+        var observed = new List<object[]>();
+        var callback = new Func<object[], object>(args => { observed.Add(args); return args[0]; });
+        var receiver = new Dictionary<string, object> { ["f"] = callback };
+        Assert.Equal(1d, invoke.Invoke(null, [receiver, 1d, 2d]));
+        Assert.Equal(3d, invoke.Invoke(null, [receiver, 3d, 4d]));
+        Assert.Equal(2, observed.Count);
+        Assert.Same(observed[0], observed[1]);
+        var pooled = assembly.GetType("$CallArgsPool")!.GetMethod("Get")!.Invoke(null, [2]);
+        Assert.Same(pooled, observed[0]);
     }
 
     [Fact]

@@ -1,0 +1,1 @@
+const original=new Error("get");const r:any={};Object.defineProperty(r,Symbol.dispose,{get(){console.log("get");throw original;}});function* values(){using a={[Symbol.dispose](){console.log("a");}},b=r;yield 1;}const g:any=values();try{g.next();}catch(e){console.log(e===original);}console.log(g.next().done);

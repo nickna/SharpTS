@@ -1,0 +1,1 @@
+let order="";const receiver:any={toString(){order+="receiver>";return "abc";}};const value:any={toString(){order+="pattern>";return "b";}};Object.defineProperty(value,Symbol.match,{get(){order+="get>";return null;}});const result:any=String.prototype.match.call(receiver,value);console.log(result[0],order);

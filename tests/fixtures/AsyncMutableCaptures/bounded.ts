@@ -1,0 +1,1 @@
+const values:any={[Symbol.asyncIterator](){let n=0;return {async next(){return {value:++n,done:n>3};}};}};async function run(){const it=values[Symbol.asyncIterator]();const a=await it.next();const b=await it.next();const c=await it.next();const d=await it.next();console.log(a.value,a.done,b.value,b.done,c.value,c.done,d.value,d.done);}run();

@@ -16,6 +16,18 @@ public partial class ILCompiler
     // Track $GetNamespace methods for module registration
     private readonly Dictionary<string, MethodBuilder> _moduleGetNamespaceMethods = [];
 
+    private string GetUniqueModuleTypeName(ParsedModule module)
+    {
+        string baseName = $"$Module_{CompilationContext.SanitizeModuleName(module.ModuleName)}";
+        string name = baseName;
+        int suffix = 0;
+        // Module lookup remains keyed by canonical path. CLR names need a separate
+        // unique slot when distinct paths share a filename or sanitized spelling.
+        while (_modules.Types.Values.Any(type => type.Name == name))
+            name = $"{baseName}${++suffix}";
+        return name;
+    }
+
     /// <summary>
     /// Defines a module type with export fields.
     /// Script files (no import/export) are skipped - they share global scope.
@@ -38,7 +50,7 @@ public partial class ILCompiler
         }
 
         // Create module class: $Module_<name>
-        string moduleTypeName = $"$Module_{CompilationContext.SanitizeModuleName(module.ModuleName)}";
+        string moduleTypeName = GetUniqueModuleTypeName(module);
         var moduleType = _moduleBuilder.DefineType(
             moduleTypeName,
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed | TypeAttributes.Abstract
@@ -105,7 +117,7 @@ public partial class ILCompiler
                 {
                     // Named export from declaration
                     string? exportName = GetExportDeclarationName(export.Declaration);
-                    if (exportName != null)
+                    if (exportName != null && !exportFields.ContainsKey(exportName))
                     {
                         var field = moduleType.DefineField(
                             exportName,
@@ -261,6 +273,7 @@ public partial class ILCompiler
         Stmt.Var v => v.Name.Lexeme,
         Stmt.Const ct => ct.Name.Lexeme,
         Stmt.Enum e => e.Name.Lexeme,
+        Stmt.Namespace ns => ns.Name.Lexeme,
         Stmt.Interface or Stmt.TypeAlias => null, // Type-only, no runtime export
         _ => null
     };
@@ -696,7 +709,7 @@ public partial class ILCompiler
         {
             // Class definitions still execute at their source position. Other
             // declarations are compiled separately in earlier phases.
-            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
+            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias)
             {
                 continue;
             }
@@ -775,7 +788,7 @@ public partial class ILCompiler
         {
             // Class definitions still execute at their source position. Other
             // declarations are compiled separately in earlier phases.
-            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
+            if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias)
             {
                 continue;
             }
@@ -814,6 +827,9 @@ public partial class ILCompiler
         _entryPoint = mainMethod;
 
         var il = mainMethod.GetILGenerator();
+
+        EmitConfigureWindowsErrorReporting(il);
+        EmitInitializeConsoleOutput(il);
 
         MethodBuilder? hostedInitialize = null;
         if (_hosted)
@@ -1195,9 +1211,9 @@ public partial class ILCompiler
         string? defaultBinding,
         string? exportAssignmentBinding) => statement switch
     {
-        // Class declarations retain their executable definition work.
+        // Class and ordinary enum declarations retain their executable definition work.
         // Other declarations are defined in the normal declaration phases.
-        Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum or
+        Stmt.Function or Stmt.Interface or Stmt.TypeAlias or
             Stmt.Namespace or Stmt.DeclareModule => null,
 
         // Module imports are emitted in a synchronous prelude using the normal
@@ -1221,6 +1237,7 @@ public partial class ILCompiler
                 IsVarRedeclaration: declaration.IsVar,
                 IsLexicalInitialization: !declaration.IsVar)),
         Stmt.Var => null,
+        Stmt.Export { Declaration: Stmt.Enum { IsConst: false } declaration } => declaration,
         Stmt.Sequence sequence => new Stmt.Sequence(
             sequence.Statements
                 .Select(item => LowerHostedTopLevelStatement(
@@ -1284,6 +1301,8 @@ public partial class ILCompiler
         if (statement is not Stmt.Export export || export.IsTypeOnly)
             return false;
         if (export.Declaration is Stmt.Const or Stmt.Var or Stmt.Sequence)
+            return false;
+        if (export.Declaration is Stmt.Enum { IsConst: false })
             return false;
         if (export.DefaultExpr is not null || export.ExportAssignment is not null)
             return false;

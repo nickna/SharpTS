@@ -1,0 +1,1 @@
+const [a,...arrayRest]=[1,2,3];const [s,...stringRest]="AB";const [v,...setRest]=new Set([4,5]);const [entry,...mapRest]=new Map([["a",6],["b",7]]);console.log(a,arrayRest.join(","),s,stringRest.join(","),v,setRest.join(","),entry.join(","),mapRest.length);

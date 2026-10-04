@@ -1530,6 +1530,8 @@ public partial class ILCompiler
         ctx.CurrentClassName = _async.ArrowEnclosingClassNames.TryGetValue(arrow, out var enclosingClassName)
             ? enclosingClassName
             : null;
+        if (ctx.CurrentClassName != null)
+            ctx.CurrentClassBuilder = _classes.Builders.GetValueOrDefault(ctx.CurrentClassName);
         ctx.CurrentSuperclassIsAnonymousEmptyClass = _arrowsInAnonymousEmptyDerivedClass.Contains(arrow);
         // Entry-point display class for accessing captured top-level variables
         ApplyCapturedTopLevelVariableAccess(ctx);

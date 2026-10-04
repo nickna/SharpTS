@@ -1,0 +1,1 @@
+const source:any={reads:0,closed:0,next(){this.reads++;return {value:1,done:false};},return(){this.closed++;return {done:true};}};const helper=Iterator.from(source).take(0);console.log(source.reads,source.closed);console.log(helper.next().done,source.reads,source.closed);console.log(helper.next().done,source.reads,source.closed);

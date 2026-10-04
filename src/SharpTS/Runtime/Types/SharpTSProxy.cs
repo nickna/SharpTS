@@ -1635,16 +1635,17 @@ public class SharpTSProxy : ISharpTSCallable
     public object? TrapConstruct(
         List<object?> args, Interpreter? interp, object? newTarget = null)
     {
+        EnsureNotRevoked();
+        if (ReflectBuiltIns.IsNotConstructor(_target))
+            throw new ThrowException(new SharpTSTypeError("Proxy target is not a constructor"));
         var trap = GetTrapCallable("construct", interp);
         if (trap == null)
         {
             if (_target is SharpTSProxy targetProxy)
                 return targetProxy.TrapConstruct(
                     args, interp, newTarget ?? this);
-            if (_target is SharpTSClass klass)
-                return klass.Call(interp!, args);
-            if (_target is ISharpTSCallable callable)
-                return callable.Call(interp!, args);
+            if (interp is not null)
+                return interp.Construct(_target, args);
             throw new Exception("Runtime Error: Proxy target is not constructable.");
         }
 
@@ -1876,11 +1877,11 @@ public class SharpTSProxy : ISharpTSCallable
 
     /// <summary>
     /// Returns whether the proxy target is callable (function-like).
-    /// Checks ISharpTSCallable (interpreter mode), Delegate, and emitted compiled function types.
+    /// Checks interpreter callables, compiled class Type tokens, delegates and emitted functions.
     /// </summary>
     public bool IsCallable => _target is SharpTSProxy proxy
         ? proxy.IsCallable
-        : _target is ISharpTSCallable or Delegate
+        : _target is ISharpTSCallable or Delegate or Type
         || _target?.GetType().Name is "$TSFunction" or "$BoundTSFunction"
             or "$PromisifiedFunction" or "$DeprecatedFunction";
 

@@ -326,35 +326,20 @@ public class SharpTSAsyncGenerator : ITypeCategorized
     /// </summary>
     private async Task<object?> DelegateYieldStarAsync(object? iterable)
     {
-        if (iterable is SharpTSAsyncGenerator inner)
-        {
-            var received = new GeneratorResume(GeneratorResumeKind.Next, SharpTSUndefined.Instance);
-            while (true)
+        if (iterable is SharpTSGenerator synchronous)
+            return await DelegateGeneratorAsync(received => Task.FromResult<object?>(received.Kind switch
             {
-                // Drive the delegate with the completion the outer was resumed with, preserving the
-                // outer's environment across the inner's own suspensions.
-                Task<object?> step = received.Kind switch
-                {
-                    GeneratorResumeKind.Return => inner.Return(received.Value),
-                    GeneratorResumeKind.Throw => inner.Throw(received.Value),
-                    _ => inner.Next(received.Value),
-                };
-                object? innerResult = await _interpreter.AwaitPreservingEnvironment(step);
-                (bool done, object? innerValue) = ReadIteratorResult(innerResult);
-
-                if (done)
-                {
-                    // return → the outer generator itself returns the delegate's value (step c.viii);
-                    // next/throw(handled) → yield* evaluates to it and the outer continues (steps a.v/b.5).
-                    if (received.Kind == GeneratorResumeKind.Return)
-                        throw new GeneratorReturnException(innerValue);
-                    return innerValue;
-                }
-
-                received = await SuspendAtYieldAsync(innerValue);
-            }
-        }
-
+                GeneratorResumeKind.Return => synchronous.Return(received.Value),
+                GeneratorResumeKind.Throw => synchronous.Throw(received.Value),
+                _ => synchronous.Next(received.Value),
+            }));
+        if (iterable is SharpTSAsyncGenerator inner)
+            return await DelegateGeneratorAsync(received => received.Kind switch
+            {
+                GeneratorResumeKind.Return => inner.Return(received.Value),
+                GeneratorResumeKind.Throw => inner.Throw(received.Value),
+                _ => inner.Next(received.Value),
+            });
         // Custom iterator objects (those with [Symbol.iterator] and a next(v) that
         // consumes its argument) are driven manually so the outer's resume value is
         // forwarded as the argument to next(v) (ECMA-262 §14.4.14, #503).
@@ -387,6 +372,24 @@ public class SharpTSAsyncGenerator : ITypeCategorized
             resume.Realize();
         }
         return SharpTSUndefined.Instance;
+    }
+
+    private async Task<object?> DelegateGeneratorAsync(Func<GeneratorResume, Task<object?>> drive)
+    {
+        var received = new GeneratorResume(GeneratorResumeKind.Next, SharpTSUndefined.Instance);
+        while (true)
+        {
+            // Preserve the outer environment while a delegate drives its own body.
+            object? result = await _interpreter.AwaitPreservingEnvironment(drive(received));
+            (bool done, object? value) = ReadIteratorResult(result);
+            if (done)
+            {
+                if (received.Kind == GeneratorResumeKind.Return)
+                    throw new GeneratorReturnException(value);
+                return value;
+            }
+            received = await SuspendAtYieldAsync(value);
+        }
     }
 
     /// <summary>

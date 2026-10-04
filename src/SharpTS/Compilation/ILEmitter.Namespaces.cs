@@ -87,6 +87,7 @@ public partial class ILEmitter
     /// </summary>
     private void EmitNamespaceMember(Stmt member, FieldBuilder nsField, string nsPath)
     {
+        bool isExported = member is Stmt.Export;
         // Unwrap export
         if (member is Stmt.Export export && export.Declaration != null)
         {
@@ -110,6 +111,9 @@ public partial class ILEmitter
         switch (member)
         {
             case Stmt.Function funcStmt:
+                // Private functions remain available through lexical namespace
+                // resolution; only exported declarations become object properties.
+                if (!isExported) break;
                 // Functions are defined at compile-time, not via EmitStatement
                 // Wrap as TSFunction and store in namespace
                 if (_ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(funcStmt.Name.Lexeme), out var methodBuilder))
@@ -128,11 +132,11 @@ public partial class ILEmitter
                 break;
 
             case Stmt.Var varStmt:
-                EmitNamespaceMemberVar(nsField, nsPath, memberName!, varStmt.Initializer, varStmt.TypeAnnotation);
+                EmitNamespaceMemberVar(nsField, nsPath, memberName!, varStmt.Initializer, varStmt.TypeAnnotation, isExported);
                 break;
 
             case Stmt.Const constStmt:
-                EmitNamespaceMemberVar(nsField, nsPath, memberName!, constStmt.Initializer, constStmt.TypeAnnotation);
+                EmitNamespaceMemberVar(nsField, nsPath, memberName!, constStmt.Initializer, constStmt.TypeAnnotation, isExported);
                 break;
 
             case Stmt.Class classStmt:
@@ -210,6 +214,16 @@ public partial class ILEmitter
     {
         // Get the qualified enum name and its members
         string qualifiedEnumName = _ctx.ResolveEnumName(enumStmt.Name.Lexeme);
+        if (_ctx.EnumValueFields?.TryGetValue(qualifiedEnumName, out var valueField) == true)
+        {
+            EmitEnumDeclaration(enumStmt);
+            IL.Emit(OpCodes.Ldsfld, nsField);
+            IL.Emit(OpCodes.Ldstr, enumStmt.Name.Lexeme);
+            IL.Emit(OpCodes.Ldsfld, valueField);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
+            return;
+        }
+
         if (_ctx.EnumMembers == null ||
             !_ctx.EnumMembers.TryGetValue(qualifiedEnumName, out var members) ||
             members == null)
@@ -241,6 +255,15 @@ public partial class ILEmitter
             }
 
             IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item"));
+            if (value is double numericValue)
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldc_R8, numericValue);
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.ToJsString);
+                IL.Emit(OpCodes.Ldstr, memberName);
+                IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item"));
+            }
         }
 
         // Store the dictionary in the namespace: nsField.Set(enumName, dict)
@@ -284,7 +307,7 @@ public partial class ILEmitter
     /// module-top-level var path, so a namespace member whose name collides with a module-level
     /// binding no longer clobbers that binding's slot (#657).
     /// </summary>
-    private void EmitNamespaceMemberVar(FieldBuilder nsField, string nsPath, string memberName, Expr? initializer, string? typeAnnotation)
+    private void EmitNamespaceMemberVar(FieldBuilder nsField, string nsPath, string memberName, Expr? initializer, string? typeAnnotation, bool isExported)
     {
         // Locate the backing field (DefineNamespaceVarField created one for every namespace var).
         FieldBuilder? backingField = null;
@@ -324,5 +347,14 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldstr, memberName);
         IL.Emit(OpCodes.Ldloc, valueLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
+
+        if (isExported && backingField != null)
+        {
+            IL.Emit(OpCodes.Ldsfld, nsField);
+            IL.Emit(OpCodes.Ldstr, memberName);
+            IL.Emit(OpCodes.Ldtoken, backingField);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.FieldInfo, "GetFieldFromHandle", _ctx.Types.Resolve("System.RuntimeFieldHandle")));
+            IL.Emit(OpCodes.Call, _ctx.Runtime.Namespaces.Bind);
+        }
     }
 }

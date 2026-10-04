@@ -375,6 +375,7 @@ public partial class ILCompiler
     {
         public Dictionary<string, Dictionary<string, object>> Members { get; } = [];
         public Dictionary<string, Dictionary<double, string>> Reverse { get; } = [];
+        public Dictionary<string, FieldBuilder> ValueFields { get; } = [];
         public Dictionary<string, EnumKind> Kinds { get; } = [];
         public HashSet<string> ConstEnums { get; } = [];
     }

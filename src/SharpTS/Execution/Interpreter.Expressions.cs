@@ -236,11 +236,8 @@ public partial class Interpreter
 
         object? result = await activeGenerator.OnYieldAsync(value, yieldExpr.IsDelegating);
 
-        // For a plain `yield`, the resume value is delivered verbatim (so `next(null)` yields null and a
-        // bare next() yields undefined). For `yield*`, a non-generator delegate's completion value is
-        // undefined; coalesce null → undefined to preserve that.
-        if (yieldExpr.IsDelegating)
-            return RuntimeValue.FromBoxed(result ?? SharpTSUndefined.Instance);
+        // Both a sent value and a delegate completion preserve explicit null.
+        // Iterables without a completion value already return the undefined sentinel.
         return RuntimeValue.FromBoxed(result);
     }
 
@@ -1152,6 +1149,9 @@ public partial class Interpreter
                 return RuntimeValue.FromBoxed(symbolBag.GetBySymbol(bagSymbol));
         }
 
+        if (obj is SharpTSGenerator && ReferenceEquals(index, SharpTSSymbol.Iterator))
+            return RuntimeValue.FromObject(GeneratorBuiltIns.IteratorMethod);
+
         // JS functions are objects — bracket access reads user properties.
         if (obj is SharpTSFunction fn)
         {
@@ -1885,7 +1885,9 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.ClassString t:
-                t.Target.SetStaticProperty(t.Key, value);
+                if (!TryAssignThroughDescriptor(t.Target.FindStaticPropertyDescriptor(t.Key),
+                        t.Target, t.Key, value, strictMode))
+                    t.Target.SetStaticProperty(t.Key, value, strictMode);
                 break;
 
             case IndexTarget.ClassSymbol t:
@@ -2274,6 +2276,8 @@ public partial class Interpreter
                     instanceFields,
                     staticGetters: staticGetters.Count > 0 ? staticGetters : null,
                     staticSetters: staticSetters.Count > 0 ? staticSetters : null);
+
+            klass.BindPrivateMemberOwners();
 
             if (symbolAccessors != null)
             {

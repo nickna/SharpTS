@@ -35,6 +35,26 @@ internal readonly record struct ConstEnumError(ConstEnumErrorKind Kind, string M
 /// </remarks>
 internal static class ConstEnumExpressionEvaluator
 {
+    /// <summary>Recognizes numeric literals through grouping and unary signs, without evaluating arbitrary expressions.</summary>
+    public static bool TryEvaluateSignedLiteral(Expr? expression, out double value)
+    {
+        switch (expression)
+        {
+            case Expr.Literal { Value: double number }:
+                value = number;
+                return true;
+            case Expr.Grouping grouping:
+                return TryEvaluateSignedLiteral(grouping.Expression, out value);
+            case Expr.Unary { Operator.Type: TokenType.MINUS or TokenType.PLUS } unary
+                when TryEvaluateSignedLiteral(unary.Right, out double operand):
+                value = unary.Operator.Type == TokenType.MINUS ? -operand : operand;
+                return true;
+            default:
+                value = 0;
+                return false;
+        }
+    }
+
     public static object Evaluate(
         Expr expression,
         IReadOnlyDictionary<string, object> resolvedMembers,

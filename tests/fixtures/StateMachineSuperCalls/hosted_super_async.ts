@@ -1,0 +1,1 @@
+class A {value(){return 3;}} class B extends A {async read(){await Promise.resolve(0);return super.value();}}export async function run(){return await new B().read();}

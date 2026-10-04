@@ -19,9 +19,1869 @@ namespace SharpTS.Tests.CompilerTests;
 public class StandaloneDllTests
 {
     [Theory]
-    [InlineData("async_declaration", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v));")]
-    [InlineData("async_rejection_detail", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v),e=>console.log(\"rejected\",e.message));")]
-    [InlineData("async_before_await", "async function run(){class C{static value=5;}const value=C.value;await Promise.resolve(0);return value;}run().then(v=>console.log(v));")]
+    [MemberData(nameof(SharedTests.WindowsProcessShutdownTests.OriginalCases), MemberType = typeof(SharedTests.WindowsProcessShutdownTests))]
+    public void Isolated_Issue1772UnhandledOriginals_ExitAndClosePipes(string name, string source, string nodeExpected)
+    {
+        Assert.NotEmpty(nodeExpected); // Full reference retained separately from the supported-boundary diagnostic.
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        foreach (bool hidden in new[] { false, true })
+        {
+            var result = CaptureBoundedProcess(output, hidden);
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Equal(name == "global_receiver" ? "true true\n" : "", result.Stdout);
+            Assert.Contains("Unhandled exception.", result.Stderr);
+            Assert.Contains(name == "global_receiver" ? "Dynamic Function() construction with source text is not supported" : "SharpTS runtime not present", result.Stderr);
+        }
+    }
+
+    [Fact]
+    public void Isolated_Issue1772DeployedIndirectEval_CompletesWithOriginalOutput()
+    {
+        var original = SharedTests.WindowsProcessShutdownTests.OriginalCases().Single(row => (string)row[0] == "indirect_dynamic");
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", (string)original[1]);
+        var output = directory.GetPath("deployed.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.True(File.Exists(directory.GetPath("SharpTS.dll")));
+        foreach (bool hidden in new[] { false, true })
+        {
+            var result = CaptureBoundedProcess(output, hidden);
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal((string)original[2], result.Stdout);
+            Assert.Empty(result.Stderr);
+        }
+    }
+
+    [Fact]
+    public void Isolated_Issue1772OrdinaryUnhandledThrow_ExitsAndClosesPipes()
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", "console.log(\"before\");throw new Error(\"process-guard\");");
+        var output = directory.GetPath("throw.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        foreach (bool hidden in new[] { false, true })
+        {
+            var result = CaptureBoundedProcess(output, hidden);
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Equal("before\n", result.Stdout);
+            Assert.Contains("process-guard", result.Stderr);
+        }
+    }
+
+    private static (int ExitCode, string Stdout, string Stderr) CaptureBoundedProcess(string output, bool hidden)
+    {
+        var start = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false, CreateNoWindow = hidden,
+            RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
+            WorkingDirectory = Path.GetDirectoryName(output)!
+        };
+        start.ArgumentList.Add(output);
+        using var process = Process.Start(start)!;
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        process.StandardInput.Close();
+        bool completed = process.WaitForExit(30000);
+        if (!completed)
+        {
+            TryTerminateProcessTree(process);
+            process.WaitForExit(5000);
+        }
+        bool drained = Task.WaitAll([stdout, stderr], 5000);
+        Assert.True(completed, "Unhandled compiled error exceeded the original 30-second process-exit deadline; forced kill is a failure.");
+        Assert.True(drained, "Process exited but redirected pipes did not close.");
+        return (process.ExitCode, stdout.Result.Replace("\r\n", "\n"), stderr.Result.Replace("\r\n", "\n"));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.WindowsUnicodeOutputTests.Cases), MemberType = typeof(SharedTests.WindowsUnicodeOutputTests))]
+    public void Isolated_Issue1743UnicodeOutput_PreservesUtf8InBothWindowsProcessContexts(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        foreach (bool hidden in new[] { false, true })
+            AssertUtf8ProcessOutput(output, hidden, expected);
+    }
+
+    [Fact]
+    public void Isolated_Issue1743UnicodeUserMain_PreservesUtf8InBothWindowsProcessContexts()
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var statements = new Parser(new Lexer("async function main(args:string[]):Promise<void>{console.log(\"é Ω 漢字 😀\");}").ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var compiler = new ILCompiler("unicode_main", false, true, null, null, null, OutputTarget.Exe);
+        compiler.Compile(statements, typeMap, new DeadCodeAnalyzer(typeMap).Analyze(statements));
+        var output = directory.GetPath("main.dll");
+        compiler.Save(output);
+        using var verifier = new ILVerifier();
+        using var assemblyStream = File.OpenRead(output);
+        Assert.Empty(verifier.Verify(assemblyStream));
+        directory.CreateFile("main.runtimeconfig.json", """
+            {"runtimeOptions":{"tfm":"net10.0","framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}
+            """);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        foreach (bool hidden in new[] { false, true })
+            AssertUtf8ProcessOutput(output, hidden, "é Ω 漢字 😀\n");
+    }
+
+    private static void AssertUtf8ProcessOutput(string output, bool hidden, string expected)
+    {
+        var start = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false, CreateNoWindow = hidden,
+            RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true,
+            WorkingDirectory = Path.GetDirectoryName(output)!
+        };
+        start.ArgumentList.Add(output);
+        using var process = Process.Start(start)!;
+        process.StandardInput.Close();
+        using var stdout = new MemoryStream();
+        using var stderr = new MemoryStream();
+        var drain = Task.WhenAll(process.StandardOutput.BaseStream.CopyToAsync(stdout),
+            process.StandardError.BaseStream.CopyToAsync(stderr));
+        if (!process.WaitForExit(30000))
+        {
+            TryTerminateProcessTree(process);
+            process.WaitForExit(5000);
+            Assert.Fail($"Unicode output did not complete within 30 seconds (CreateNoWindow={hidden}).");
+        }
+        Assert.True(drain.Wait(5000), "Output pipes did not close.");
+        Assert.Equal(0, process.ExitCode);
+        Assert.Empty(stderr.ToArray());
+        var text = new UTF8Encoding(false, true).GetString(stdout.ToArray()).Replace("\r\n", "\n");
+        Assert.Equal(expected, text);
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.TypedEnumReverseLookupTests.Cases), MemberType = typeof(SharedTests.TypedEnumReverseLookupTests))]
+    public void Isolated_Issue1791TypedEnumReverseLookups_PreserveForwardAndReverseMappings(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.TypedEnumReverseLookupTests.HostedCases), MemberType = typeof(SharedTests.TypedEnumReverseLookupTests))]
+    public void Isolated_Issue1791HostedTypedEnumReverseLookups_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.EnumMissingPropertyTests.ModuleCases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
+    public void Isolated_Issue1789ModuleEnumMissingProperties_VerifyMappingsAndIdentity(string name, string main, string library, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", main);
+        directory.CreateFile("lib.ts", library);
+        foreach (bool hosted in new[] { false, true })
+        {
+            var output = directory.GetPath(name + (hosted ? "-hosted" : "") + ".dll");
+            var compile = IntegrationTests.CliTestHelper.RunCli(
+                $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify" + (hosted ? " --target dll --hosted" : ""),
+                directory.Path, TimeSpan.FromSeconds(60));
+            Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+            Assert.Contains("IL verification passed.", compile.StandardOutput);
+            var references = GetAssemblyReferences(output);
+            Assert.DoesNotContain("SharpTS", references);
+            Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+            Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+            if (!hosted)
+                Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+                    verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.EnumMissingPropertyTests.Cases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
+    public void Isolated_Issue1789EnumMissingProperties_PreserveForwardAndReverseMappings(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.EnumMissingPropertyTests.HostedCases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
+    public void Isolated_Issue1789HostedEnumMissingProperties_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.EnumValueBindingTests.ModuleCases), MemberType = typeof(SharedTests.EnumValueBindingTests))]
+    public void Isolated_Issue1790ModuleEnumBindings_VerifyMappingsAndIdentity(string name, string main, string library, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", main);
+        directory.CreateFile("lib.ts", library);
+        foreach (bool hosted in new[] { false, true })
+        {
+            var output = directory.GetPath(name + (hosted ? "-hosted" : "") + ".dll");
+            var compile = IntegrationTests.CliTestHelper.RunCli(
+                $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify" + (hosted ? " --target dll --hosted" : ""),
+                directory.Path, TimeSpan.FromSeconds(60));
+            Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+            Assert.Contains("IL verification passed.", compile.StandardOutput);
+            var references = GetAssemblyReferences(output);
+            Assert.DoesNotContain("SharpTS", references);
+            Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
+            Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+            if (!hosted)
+                Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+                    verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.EnumValueBindingTests.Cases), MemberType = typeof(SharedTests.EnumValueBindingTests))]
+    public void Isolated_Issue1790EnumValueBindings_PreserveForwardAndReverseMappings(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.EnumValueBindingTests.HostedCases), MemberType = typeof(SharedTests.EnumValueBindingTests))]
+    public void Isolated_Issue1790HostedEnumValueBindings_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.SignedEnumValueTests.Cases), MemberType = typeof(SharedTests.SignedEnumValueTests))]
+    public void Isolated_Issue1788SignedEnumValues_PreserveForwardAndReverseMappings(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.SignedEnumValueTests.HostedCases), MemberType = typeof(SharedTests.SignedEnumValueTests))]
+    public void Isolated_Issue1788HostedSignedEnumValues_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.UsingLoopTransferTests.Cases), MemberType = typeof(SharedTests.UsingLoopTransferTests))]
+    public void Isolated_Issue1786UsingLoopTransfers_VerifyAndCleanUp(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.UsingLoopTransferTests.HostedCases), MemberType = typeof(SharedTests.UsingLoopTransferTests))]
+    public void Isolated_Issue1786HostedUsingLoopTransfers_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.GeneratorUsingCleanupTests.Cases), MemberType = typeof(SharedTests.GeneratorUsingCleanupTests))]
+    public void Isolated_Issue1785GeneratorUsing_CleansUpAcrossSuspension(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.GeneratorUsingCleanupTests.HostedCases), MemberType = typeof(SharedTests.GeneratorUsingCleanupTests))]
+    public void Isolated_Issue1785HostedGeneratorUsing_VerifiesDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.UsingAcquisitionTests.Cases), MemberType = typeof(SharedTests.UsingAcquisitionTests))]
+    public void Isolated_Issue1784UsingAcquisition_CapturesOriginalMethod(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.UsingAcquisitionTests.HostedCases), MemberType = typeof(SharedTests.UsingAcquisitionTests))]
+    public void Isolated_Issue1784HostedUsingAcquisition_VerifiesDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.BorrowedStringProtocolReceiverTests.Cases), MemberType = typeof(SharedTests.BorrowedStringProtocolReceiverTests))]
+    public void Isolated_Issue1796BorrowedStringReceivers_PreserveOrdering(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.BorrowedStringProtocolReceiverTests.HostedCases), MemberType = typeof(SharedTests.BorrowedStringProtocolReceiverTests))]
+    public void Isolated_Issue1796HostedBorrowedStringReceivers_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.PrimitiveStringSymbolHookTests.Cases), MemberType = typeof(SharedTests.PrimitiveStringSymbolHookTests))]
+    public void Isolated_Issue1795PrimitiveSymbolHooks_PreserveLookup(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.PrimitiveStringSymbolHookTests.HostedCases), MemberType = typeof(SharedTests.PrimitiveStringSymbolHookTests))]
+    public void Isolated_Issue1795HostedPrimitiveSymbolHooks_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.RegExpOwnMatchOverrideTests.Cases), MemberType = typeof(SharedTests.RegExpOwnMatchOverrideTests))]
+    public void Isolated_Issue1794RegExpOwnMatchOverrides_PreserveFallback(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.RegExpOwnMatchOverrideTests.HostedCases), MemberType = typeof(SharedTests.RegExpOwnMatchOverrideTests))]
+    public void Isolated_Issue1794HostedRegExpOwnMatchOverrides_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.GlobalIsNaNValueTests.Cases), MemberType = typeof(SharedTests.GlobalIsNaNValueTests))]
+    public void Isolated_Issue1770GlobalIsNaNValues_PreserveCoercion(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.GlobalIsNaNValueTests.HostedCases), MemberType = typeof(SharedTests.GlobalIsNaNValueTests))]
+    public void Isolated_Issue1770HostedGlobalIsNaNValues_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.GlobalAccessorWriteTests.Cases), MemberType = typeof(SharedTests.GlobalAccessorWriteTests))]
+    public void Isolated_Issue1769GlobalAccessors_InvokeSetters(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.GlobalAccessorWriteTests.HostedCases), MemberType = typeof(SharedTests.GlobalAccessorWriteTests))]
+    public void Isolated_Issue1769HostedGlobalAccessors_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.UriComponentSemanticsTests.Cases), MemberType = typeof(SharedTests.UriComponentSemanticsTests))]
+    public void Isolated_Issue1767UriComponents_PreserveValidation(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.UriComponentSemanticsTests.HostedCases), MemberType = typeof(SharedTests.UriComponentSemanticsTests))]
+    public void Isolated_Issue1767HostedUriComponents_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ClassOwnKeyOrderTests.Cases), MemberType = typeof(SharedTests.ClassOwnKeyOrderTests))]
+    public void Isolated_Issue1765ClassOwnKeyOrder_PreservesDeclaredFields(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var library = source.Contains("Object.values") ? " --lib esnext,dom" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify{library}",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ClassOwnKeyOrderTests.HostedCases), MemberType = typeof(SharedTests.ClassOwnKeyOrderTests))]
+    public void Isolated_Issue1765HostedClassOwnKeyOrder_VerifiesDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var library = source.Contains("Object.values") ? " --lib esnext,dom" : "";
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify{library}",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.CapturedLexicalAssignmentTests.Cases), MemberType = typeof(SharedTests.CapturedLexicalAssignmentTests))]
+    public void Isolated_Issue1761CapturedLexicalAssignments_CheckInitialization(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.CapturedLexicalAssignmentTests.HostedCases), MemberType = typeof(SharedTests.CapturedLexicalAssignmentTests))]
+    public void Isolated_Issue1761HostedCapturedLexicalAssignments_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.AsyncArrowSuperValueTests.Cases), MemberType = typeof(SharedTests.AsyncArrowSuperValueTests))]
+    public void Isolated_Issue1759AsyncArrowSuperValues_PreserveParentResults(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.AsyncArrowSuperValueTests.HostedCases), MemberType = typeof(SharedTests.AsyncArrowSuperValueTests))]
+    public void Isolated_Issue1759HostedAsyncArrowSuperValues_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport async function run(){return await Promise.resolve(1);}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.SynchronousArrowSuperTests.Cases), MemberType = typeof(SharedTests.SynchronousArrowSuperTests))]
+    public void Isolated_Issue1758SynchronousArrowSuper_UsesCapturedReceivers(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.SynchronousArrowSuperTests.HostedCases), MemberType = typeof(SharedTests.SynchronousArrowSuperTests))]
+    public void Isolated_Issue1758HostedSynchronousArrowSuper_VerifiesDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.StateMachineSuperCallTests.Cases), MemberType = typeof(SharedTests.StateMachineSuperCallTests))]
+    public void Isolated_Issue1757StateMachineSuperCalls_VerifyAndPreserveReceivers(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.StateMachineSuperCallTests.HostedCases), MemberType = typeof(SharedTests.StateMachineSuperCallTests))]
+    public void Isolated_Issue1757HostedStateMachineSuperCalls_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport async function run(){return await Promise.resolve(1);}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Isolated_Issue1757OriginalHostedSuperCall_VerifiesDeclarations(bool extracted)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var source = extracted
+            ? "class A {value(){return 3;}}class B extends A {async read(){await Promise.resolve(0);const method=super.value;return method();}}export async function run(){return await new B().read();}"
+            : "class A {value(){return 3;}} class B extends A {async read(){await Promise.resolve(0);return super.value();}}export async function run(){return await new B().read();}";
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath("hosted_super_async.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.InheritedSuperMethodTests.HostedCases), MemberType = typeof(SharedTests.InheritedSuperMethodTests))]
+    public void Isolated_Issue1756HostedInheritedSuperMethods_VerifyDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.InheritedSuperMethodTests.Cases), MemberType = typeof(SharedTests.InheritedSuperMethodTests))]
+    public void Isolated_Issue1756InheritedSuperMethods_PreserveParentLookup(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NamespaceClassConstructionTests.Cases), MemberType = typeof(SharedTests.NamespaceClassConstructionTests))]
+    public void Isolated_Issue1781NamespaceClasses_VerifyConstructionAndIdentity(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NamespaceEnumReverseMappingTests.Cases), MemberType = typeof(SharedTests.NamespaceEnumReverseMappingTests))]
+    public void Isolated_Issue1780NamespaceEnums_PreserveNumericReverseMappings(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NamespaceEnumReverseMappingTests.HostedCases), MemberType = typeof(SharedTests.NamespaceEnumReverseMappingTests))]
+    public void Isolated_Issue1780HostedNamespaceEnums_VerifyDeclarationsAndDeployment(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport function run(){return 1;}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NamespaceDeletionTests.Cases), MemberType = typeof(SharedTests.NamespaceDeletionTests))]
+    public void Isolated_Issue1779NamespaceDeletion_RemovesMembersAndPreservesAliases(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NamespaceMissingMemberTests.Cases), MemberType = typeof(SharedTests.NamespaceMissingMemberTests))]
+    public void Isolated_Issue1778NamespaceMissingMembers_DistinguishUndefinedAndNull(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NamespaceMutationTests.Cases), MemberType = typeof(SharedTests.NamespaceMutationTests))]
+    public void Isolated_Issue1777NamespaceWrites_PreserveMembersAndLiveBindings(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ImportedNamespaceFunctionTests.Cases), MemberType = typeof(SharedTests.ImportedNamespaceFunctionTests))]
+    public void Isolated_Issue1776ImportedNamespaces_PreserveValuesAndMembers(string name, string source, string library, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        directory.CreateFile("lib.ts", library);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NamespaceInitializerFunctionTests.Cases), MemberType = typeof(SharedTests.NamespaceInitializerFunctionTests))]
+    public void Isolated_Issue1775NamespaceInitializers_ResolvePrivateFunctions(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NamespaceFunctionValueTests.CallableCases), MemberType = typeof(SharedTests.NamespaceFunctionValueTests))]
+    public void Isolated_Issue1774NamespaceFunctions_PreserveCallabilityAndIdentity(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.IndirectEvalDeploymentTests.Cases), MemberType = typeof(SharedTests.IndirectEvalDeploymentTests))]
+    public void Isolated_Issue1771IndirectEval_DeploysMatchingOptionalRuntime(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        var runtime = directory.GetPath("SharpTS.dll");
+        Assert.True(File.Exists(runtime));
+        Assert.Equal(File.ReadAllBytes(typeof(TypeChecker).Assembly.Location), File.ReadAllBytes(runtime));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.IndirectEvalDeploymentTests.StandaloneCases), MemberType = typeof(SharedTests.IndirectEvalDeploymentTests))]
+    public void Isolated_Issue1771StandaloneEval_PreservesIdentityLexicalLoweringAndOmission(string name, string source, string expected, bool usesBridge)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.Equal(usesBridge, (compile.StandardOutput + compile.StandardError).Contains("indirect eval"));
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.BuiltInModules.PrefixedStreamImportTests.Cases), MemberType = typeof(SharedTests.BuiltInModules.PrefixedStreamImportTests))]
+    public void Isolated_Issue1740StreamImports_ResolveStaticCallsAndConstructors(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.DynamicArrayDestructureOverrideTests.AllCases), MemberType = typeof(SharedTests.DynamicArrayDestructureOverrideTests))]
+    public void Isolated_Issue1753DynamicArrays_HonorIteratorOverrides(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(IteratorTakeCloseTests.Cases), MemberType = typeof(IteratorTakeCloseTests))]
+    public void Isolated_Issue1747IteratorTake_ClosesSourceExactlyOnce(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(IteratorFromArrayTests.Cases), MemberType = typeof(IteratorFromArrayTests))]
+    public void Isolated_Issue1748IteratorFrom_AdaptsArrayAndRetainsIteratorIdentity(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ArrayDestructureIterationControlTests.Cases), MemberType = typeof(SharedTests.ArrayDestructureIterationControlTests))]
+    public void Isolated_Issue1750Controls_FullRestAndExhaustion(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(ArrayDestructureSourceValidationTests.Cases), MemberType = typeof(ArrayDestructureSourceValidationTests))]
+    public void Isolated_Issue1751Destructuring_RejectsNonIterableGuestSources(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ArrayIteratorAssignmentTests.Cases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
+    public void Isolated_Issue1752ArrayIteratorAssignment_PreservesTypedFactories(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ArrayIteratorAssignmentTests.TypingOnlyCliCases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
+    public void Isolated_Issue1752ArrayValuesFactory_AcceptsTypingAndVerifiesEmission(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        // Execution of this extra control remains an independently recorded runtime gap.
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ArrayIteratorAssignmentTests.InvalidCliCases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
+    public void Isolated_Issue1752InvalidArrayIteratorFactory_RejectsBeforeEmission(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.NotEqual(0, compile.ExitCode);
+        Assert.Contains("Type Error", compile.StandardOutput + compile.StandardError);
+        Assert.False(File.Exists(output));
+    }
+
+    [Theory]
+    [MemberData(nameof(IteratorLimitTests.Cases), MemberType = typeof(IteratorLimitTests))]
+    public void Isolated_Issue1746IteratorLimits_ValidateAndCoerceBeforeIteration(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(IteratorForEachReturnTests.Cases), MemberType = typeof(IteratorForEachReturnTests))]
+    public void Isolated_Issue1745IteratorForEach_ReturnsUndefined(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(ArraySpreadDescriptorTests.Cases), MemberType = typeof(ArraySpreadDescriptorTests))]
+    public void Isolated_Issue1742ArraySpread_HonorsOwnGettersAndLiveIteration(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(IteratorCloseResultTests.Cases), MemberType = typeof(IteratorCloseResultTests))]
+    public void Isolated_Issue1739IteratorClose_RejectsPrimitivesAndPreservesThrow(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ForAwaitElementInferenceTests.Cases), MemberType = typeof(SharedTests.ForAwaitElementInferenceTests))]
+    public void Isolated_Issue1735ForAwaitElements_InferAndExecuteAwaitedValues(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ForAwaitElementInferenceTests.InvalidCliCases), MemberType = typeof(SharedTests.ForAwaitElementInferenceTests))]
+    public void Isolated_Issue1735InvalidLoopBindings_ProduceNoAssembly(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.NotEqual(0, compile.ExitCode);
+        Assert.Contains("Type Error", compile.StandardOutput + compile.StandardError);
+        Assert.False(File.Exists(output));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.AsyncMutableCaptureTests.Cases), MemberType = typeof(SharedTests.AsyncMutableCaptureTests))]
+    public void Isolated_Issue1734AsyncCaptures_PreserveSharedCounterAndCompleteOriginalLoop(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.AsyncGeneratorDelegationCompletionTests.Cases), MemberType = typeof(SharedTests.AsyncGeneratorDelegationCompletionTests))]
+    public void Isolated_Issue1733AsyncDelegation_PreservesCompletionSentValuesAndCleanup(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.AsyncGeneratorInjectedThrowTests.CompiledCases), MemberType = typeof(SharedTests.AsyncGeneratorInjectedThrowTests))]
+    public void Isolated_Issue1732AsyncGeneratorThrow_ResumesBodyAndSettlesPromise(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.GeneratorStringDelegationTests.Cases), MemberType = typeof(SharedTests.GeneratorStringDelegationTests))]
+    public void Isolated_Issue1730StringDelegation_PreservesCodePointsAndCompletion(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: "", utf8Console: true));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.DynamicGeneratorIteratorTests.Cases), MemberType = typeof(SharedTests.DynamicGeneratorIteratorTests))]
+    public void Isolated_Issue1729DynamicGeneratorIterator_PreservesOriginalOutputsAndLifecycle(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ArrayStaticDescriptorValueTests.Cases), MemberType = typeof(SharedTests.ArrayStaticDescriptorValueTests))]
+    public void Isolated_Issue1802ArrayDescriptorValues_ShareCachedStaticFunction(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NumberPredicateValueTests.Cases), MemberType = typeof(SharedTests.NumberPredicateValueTests))]
+    public void Isolated_Issue1801NumberPredicateValues_RetainOriginalOutputs(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ProxyConstructorTests.Cases), MemberType = typeof(SharedTests.ProxyConstructorTests))]
+    public void Isolated_Issue1799ProxyConstructors_FinishWithinOriginalDeadline(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        var runtime = directory.GetPath("SharpTS.dll");
+        bool requiresRuntime = name is not ("class-control" or "dynamic-class-control");
+        Assert.Equal(requiresRuntime, File.Exists(runtime));
+        if (requiresRuntime)
+            Assert.Equal(File.ReadAllBytes(typeof(TypeChecker).Assembly.Location), File.ReadAllBytes(runtime));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [InlineData("constructor-target")]
+    [InlineData("aliased-constructor")]
+    public void Issue1799ForcedStandaloneRetainsRuntimeOmissionAndWarning(string name)
+    {
+        var row = SharedTests.ProxyConstructorTests.Cases().Single(row => (string)row[0] == name);
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", (string)row[1]);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.Contains("Note: output uses features needing the SharpTS runtime (Proxy)", compile.StandardOutput + compile.StandardError);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.TypedReflectApplyTests.Cases), MemberType = typeof(SharedTests.TypedReflectApplyTests))]
+    public void Isolated_Issue1798ReflectApply_PreservesTypedAndDynamicResults(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var runtime = typeof(TypeChecker).Assembly.Location;
+        var deployed = directory.GetPath("SharpTS.dll");
+        if (name is "original" or "direct-control")
+            Assert.True(File.Exists(deployed), "Proxy output must deploy its matching runtime.");
+        if (!File.Exists(deployed)) File.Copy(runtime, deployed);
+        Assert.Equal(File.ReadAllBytes(runtime), File.ReadAllBytes(deployed));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NestedMethodArgumentTests.CompiledCases), MemberType = typeof(SharedTests.NestedMethodArgumentTests))]
+    public void Isolated_Issue1727NestedMethodArguments_PreserveValuesAndOrder(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NonConstructibleFunctionTests.CompiledCases), MemberType = typeof(SharedTests.NonConstructibleFunctionTests))]
+    public void Isolated_Issue1725NonConstructibleFunctions_ThrowGuestTypeError(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.BoundConstructorTests.Cases), MemberType = typeof(SharedTests.BoundConstructorTests))]
+    public void Isolated_Issue1724BoundConstructors_UseFreshReceiver(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ExtractedTextDecoderMethodTests.Cases), MemberType = typeof(SharedTests.ExtractedTextDecoderMethodTests))]
+    public void Isolated_Issue1722ExtractedTextDecoderDecode_PreservesInvocation(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ExtractedTypedArrayMethodTests.Cases), MemberType = typeof(SharedTests.ExtractedTypedArrayMethodTests))]
+    public void Isolated_Issue1721ExtractedTypedArrayFill_PreservesInvocation(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        // Keep the original thirty-second saved-output execution deadline.
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.TypedReflectConstructTests.Cases), MemberType = typeof(SharedTests.TypedReflectConstructTests))]
+    public void Isolated_Issue1718TypedReflectConstruct_PreservesInstanceIdentity(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.NestedBoundFunctionNameTests.Cases), MemberType = typeof(SharedTests.NestedBoundFunctionNameTests))]
+    public void Isolated_Issue1717NestedBinding_PreservesNamesAndProperties(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.CallableProxyWrapperTests.Cases), MemberType = typeof(SharedTests.CallableProxyWrapperTests))]
+    public void Isolated_Issue1715CallableProxyWrappers_FinishWithinOriginalDeadline(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        // Preserve the issue's runtime-bearing Proxy deployment and its unchanged
+        // thirty-second execution deadline. The CLI copies the matching runtime.
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.True(File.Exists(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(File.ReadAllBytes(typeof(ILCompiler).Assembly.Location), File.ReadAllBytes(directory.GetPath("SharpTS.dll")));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.ExtractedFunctionWrapperTests.Cases), MemberType = typeof(SharedTests.ExtractedFunctionWrapperTests))]
+    public void Isolated_Issue1714ExtractedWrappers_PreserveInvocation(string name, string source, string expected)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify --standalone",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Isolated_Issue1713CallableArrayFromMappers_Execute(bool controls)
+    {
+        var source = controls ? """
+            function add(bias: number, value: number, index: number) { return this.base + bias + value + index; }
+            const bound: any = add.bind({base: 10}, 100);
+            console.log(Array.from([1, 2], bound, {base: 90}).join(','));
+            const from: any = Array.from;
+            console.log(from([1, 2], undefined).join(','));
+            for (const mapper of [null, {}, 0, 'x', Symbol('x')]) {
+                try { from([], mapper); } catch (error) { console.log(error instanceof TypeError); }
+            }
+            const numeric: any = Number;
+            console.log(numeric(), numeric(3n), Number.isNaN(numeric(undefined)));
+            try { numeric(Symbol('x')); } catch (error) { console.log(error instanceof TypeError); }
+            class ConstructorOnly {}
+            console.log(from([], ConstructorOnly).length);
+            try { from([1], ConstructorOnly); } catch (error) { console.log(error instanceof TypeError); }
+            """ : """
+            function twice(x: number) { return x * 2; }
+            const bound: any = twice.bind(null);
+            console.log(Array.from([1, 2], twice).join(","));
+            console.log(Array.from([1, 2], bound).join(","));
+            console.log(Array.from(["1", "2"], Number).join(","));
+            """;
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath("array_from.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify --standalone",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        var expected = controls ? "111,113\n1,2\ntrue\ntrue\ntrue\ntrue\ntrue\n0 3 true\ntrue\n0\ntrue\n" : "2,4\n2,4\n1,2\n";
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedTests.PromiseModuleIdentityTests.ImportOrders), MemberType = typeof(SharedTests.PromiseModuleIdentityTests))]
+    public void Isolated_Issue1910PromiseModules_HaveUniqueTypeDeclarationsAndExports(string imports)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var source = imports + "\nconsole.log(typeof filesystem.readFile, typeof dns.lookup, typeof timers.setTimeout); timers.setTimeout(1, 'ready').then(value => console.log(value));";
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath("promise_modules.dll");
+        // DNS has an optional runtime deployment. Keep the default CLI deployment
+        // here instead of claiming --standalone removes that existing requirement.
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify", directory.Path,
+            TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        using var stream = File.OpenRead(output);
+        using var pe = new PEReader(stream);
+        var metadata = pe.GetMetadataReader();
+        var names = metadata.TypeDefinitions.Select(handle => metadata.GetString(metadata.GetTypeDefinition(handle).Name))
+            .Where(name => name.StartsWith("$Module_", StringComparison.Ordinal)).ToList();
+        Assert.Equal(names.Count, names.Distinct(StringComparer.Ordinal).Count());
+        Assert.True(names.Count(name => name.StartsWith("$Module_promises", StringComparison.Ordinal)) >= 3);
+        Assert.Equal("function function function\nready\n", ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Isolated_Issue1910LocalModuleNames_PreserveDistinctExports(bool commonJs, bool reverse)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var extension = commonJs ? "cts" : "ts";
+        directory.CreateFile($"left/promises.{extension}", commonJs ? "exports.value = 'left';" : "export const value = 'left';");
+        directory.CreateFile($"right/promises.{extension}", commonJs ? "exports.value = 'right';" : "export const value = 'right';");
+        directory.CreateFile($"third/promises$1.{extension}", commonJs ? "exports.value = 'third';" : "export const value = 'third';");
+        var left = $"import * as left from './left/promises.{extension}';";
+        var right = $"import * as right from './right/promises.{extension}';";
+        var source = (reverse ? right + left : left + right) + $"import * as third from './third/promises$1.{extension}'; console.log(left.value, right.value, third.value);";
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath("local_modules.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --verify --standalone", directory.Path,
+            TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        using var stream = File.OpenRead(output);
+        using var pe = new PEReader(stream);
+        var metadata = pe.GetMetadataReader();
+        var names = metadata.TypeDefinitions.Select(handle => metadata.GetString(metadata.GetTypeDefinition(handle).Name))
+            .Where(name => name.StartsWith("$Module_", StringComparison.Ordinal)).ToList();
+        Assert.Equal(names.Count, names.Distinct(StringComparer.Ordinal).Count());
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.Equal("left right third\n", ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory]
+    [InlineData("<number>", false)]
+    [InlineData("<number>", true)]
+    [InlineData("", false)]
+    [InlineData("", true)]
+    public void Isolated_Issue1909ArrayHeritage_PreservesCliAndStandaloneBehavior(string typeArguments, bool noLib)
+    {
+        var source = $$"""
+            class Values extends Array{{typeArguments}} {}
+            const values: any = new Values(3);
+            values[1] = 7;
+            console.log(values.length, 0 in values, values[1]);
+            console.log(values instanceof Values, values instanceof Array, Array.isArray(values));
+            """;
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath("array_heritage.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig{(noLib ? " --noLib" : "")} --compile \"{path}\" -o \"{output}\" --verify --standalone",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("SharpTS", GetAssemblyReferences(output));
+        Assert.Equal("3 false 7\ntrue true true\n", ExecuteCompiledDllIsolated(output, timeoutMs: 30000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    public static IEnumerable<object[]> Issue1805Programs =>
+    [
+        ["async_declaration", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v));"],
+        ["async_rejection_detail", "async function run(){await Promise.resolve(0);class C{static value=5;}return C.value;}run().then(v=>console.log(v),e=>console.log(\"rejected\",e.message));"],
+        ["async_before_await", "async function run(){class C{static value=5;}const value=C.value;await Promise.resolve(0);return value;}run().then(v=>console.log(v));"],
+    ];
+
+    [Theory, MemberData(nameof(Issue1805Programs))]
     public void Isolated_Issue1805OriginalPrograms_ResolveLocalClassBindings(string name, string source)
     {
         // Keep the original #1805 acceptance sources alongside the in-process regressions.
@@ -31,9 +1891,28 @@ public class StandaloneDllTests
         var compile = IntegrationTests.CliTestHelper.RunCli(
             $"--no-tsconfig --compile \"{tempDir.GetPath("main.ts")}\" -o \"{dllPath}\" --verify --standalone", tempDir.Path);
         Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
         Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
         Assert.Equal("5\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 30000,
             verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+    }
+
+    [Theory, MemberData(nameof(Issue1805Programs))]
+    public void Isolated_Issue1805HostedPrograms_VerifyLocalClassDeclarations(string name, string source)
+    {
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source + "\nexport async function hosted(){return await run();}\n");
+        var output = directory.GetPath(name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --compile \"{path}\" -o \"{output}\" --target dll --hosted --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.DoesNotContain("SharpTS", references);
+        Assert.Contains("SharpTS.Hosting.Abstractions", references);
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
     }
 
     [Theory]
@@ -2660,13 +4539,14 @@ public class StandaloneDllTests
             },
             "true false false false\nfalse false false false\nfalse true true true\nfalse true false false\nfalse false false false\nfalse false false false\ntrue false\n", "main.ts", true
         },
+        // Keep the existing isFinite alias limitation; #1770 repairs isNaN coercion.
         new object[]
         {
             new Dictionary<string, string>
             {
                 ["main.ts"] = "const finite:any=isFinite;const nan:any=isNaN;console.log(finite('42'),finite('x'),finite(false),nan('42'),nan('x'),nan(false));"
             },
-            "false false false false false false\n", "main.ts", true
+            "false false false false true false\n", "main.ts", true
         },
         new object[]
         {
@@ -3365,11 +5245,11 @@ public class StandaloneDllTests
             "generator", "function* values():Generator<any,void,any>{yield '2';yield '-3';}for(const value of values())console.log(+value,value|0);",
             "2 2\n-3 -3\n", "main.ts"
         },
-        // Preserve the existing compatibility limitation while changing metadata ownership.
+        // #1713 repairs the formerly retained indirect Number compatibility limitation.
         new object[]
         {
             "cjs", "const N=Number;console.log(Number('2'),N('2'),N===Number);",
-            "2 null true\n", "main.cjs"
+            "2 2 true\n", "main.cjs"
         },
         new object[]
         {
@@ -14364,7 +16244,8 @@ public class StandaloneDllTests
         string? timeoutStartsAfterOutput = null,
         int readinessTimeoutMs = 15000,
         Action<string>? verifyStandardError = null,
-        string? standardInput = null)
+        string? standardInput = null,
+        bool utf8Console = false)
     {
         var workingDir = Path.GetDirectoryName(dllPath)!;
         var psi = new ProcessStartInfo("dotnet", dllPath)
@@ -14373,8 +16254,23 @@ public class StandaloneDllTests
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            WorkingDirectory = workingDir
+            WorkingDirectory = workingDir,
+            StandardOutputEncoding = utf8Console ? Encoding.UTF8 : null
         };
+
+        // The Windows testhost's console code page cannot encode supplementary
+        // characters. Set up a UTF-8 console in the child launcher, retaining
+        // the exact saved guest program and the same execution deadline.
+        if (utf8Console && OperatingSystem.IsWindows())
+        {
+            var launcher = Path.Combine(workingDir, "utf8-console.ps1");
+            File.WriteAllText(launcher,
+                "param([string]$DllPath)\n[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)\n& dotnet $DllPath\nexit $LASTEXITCODE\n");
+            psi.FileName = "pwsh";
+            psi.Arguments = "";
+            foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-File", launcher, dllPath })
+                psi.ArgumentList.Add(argument);
+        }
 
         using var process = Process.Start(psi)!;
         TaskCompletionSource<bool>? readiness = null;

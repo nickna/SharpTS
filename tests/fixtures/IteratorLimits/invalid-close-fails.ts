@@ -1,0 +1,1 @@
+const source:any={closed:0,next(){return {done:true};},return(){this.closed++;return 1n;}};try{Iterator.from(source).take(-1);}catch(e:any){console.log(e.name,source.closed);}try{Iterator.from(source).drop(NaN);}catch(e:any){console.log(e.name,source.closed);}

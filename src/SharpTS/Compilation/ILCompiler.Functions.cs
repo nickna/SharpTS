@@ -1298,6 +1298,8 @@ public partial class ILCompiler
         _entryPoint = mainMethod;
 
         var il = mainMethod.GetILGenerator();
+        EmitConfigureWindowsErrorReporting(il);
+        EmitInitializeConsoleOutput(il);
         EmitInstallEventLoopSyncContext(il);
         var returnLabel = il.DefineLabel();
         il.BeginExceptionBlock();
@@ -1381,7 +1383,7 @@ public partial class ILCompiler
                 }
                 continue;
             }
-            if (stmt is Stmt.Function or Stmt.Interface or Stmt.Enum)
+            if (stmt is Stmt.Function or Stmt.Interface)
             {
                 continue;
             }
@@ -1485,6 +1487,8 @@ public partial class ILCompiler
         _entryPoint = mainMethod;
 
         var il = mainMethod.GetILGenerator();
+        EmitConfigureWindowsErrorReporting(il);
+        EmitInitializeConsoleOutput(il);
         EmitInstallEventLoopSyncContext(il);
         var returnLabel = il.DefineLabel();
         il.BeginExceptionBlock();
@@ -1528,7 +1532,7 @@ public partial class ILCompiler
             }
 
             // Skip the remaining declarations (handled in earlier phases), including main().
-            if (stmt is Stmt.Function or Stmt.Interface or Stmt.Enum)
+            if (stmt is Stmt.Function or Stmt.Interface)
             {
                 continue;
             }

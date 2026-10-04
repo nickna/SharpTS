@@ -72,7 +72,11 @@ public partial class RuntimeEmitter
         MethodBuilder StringTryInvokeSymbolMethod,
         EmittedSymbolRuntime Symbols,
         FieldInfo UndefinedInstance,
-        Type UndefinedType
+        Type UndefinedType,
+        EmittedStringCoercionRuntime StringCoercion,
+        MethodBuilder CreateException,
+        ConstructorBuilder TSTypeErrorCtor,
+        ConstructorBuilder PadUndefinedAttrCtor
     );
 
     private readonly record struct StringMatchAllRegExpInputs(
@@ -115,7 +119,12 @@ public partial class RuntimeEmitter
         MethodBuilder InvokeMethodValue,
         MethodBuilder StringTryInvokeSymbolMethod,
         EmittedSymbolRuntime Symbols,
-        FieldInfo UndefinedInstance
+        FieldInfo UndefinedInstance,
+        Type UndefinedType,
+        EmittedStringCoercionRuntime StringCoercion,
+        MethodBuilder CreateException,
+        ConstructorBuilder TSTypeErrorCtor,
+        ConstructorBuilder PadUndefinedAttrCtor
     );
 
     private readonly record struct StringSplitRegExpInputs(EmittedStringCoercionRuntime StringCoercion, Type UndefinedType);
@@ -223,7 +232,11 @@ public partial class RuntimeEmitter
                 inputs.StringTryInvokeSymbolMethod,
                 inputs.Symbols,
                 inputs.UndefinedInstance,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                inputs.StringCoercion,
+                inputs.CreateException,
+                inputs.TSTypeErrorCtor,
+                inputs.PadUndefinedAttrCtor
             )
         );
         EmitStringMatchAllRegExp(
@@ -294,7 +307,12 @@ public partial class RuntimeEmitter
                 inputs.InvokeMethodValue,
                 inputs.StringTryInvokeSymbolMethod,
                 inputs.Symbols,
-                inputs.UndefinedInstance
+                inputs.UndefinedInstance,
+                inputs.UndefinedType,
+                inputs.StringCoercion,
+                inputs.CreateException,
+                inputs.TSTypeErrorCtor,
+                inputs.PadUndefinedAttrCtor
             )
         );
         EmitStringSplitRegExp(
@@ -447,7 +465,7 @@ public partial class RuntimeEmitter
 
         // IsRegExp(searchValue) requires a global RegExp before @@replace is
         // retrieved. Preserve that observable ordering for native RegExp
-        // values, then use the shared object-only GetMethod dispatch.
+        // values, then use the shared non-nullish GetMethod dispatch.
         var symbolDispatchLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, regExp.Type);
@@ -1119,101 +1137,37 @@ public partial class RuntimeEmitter
 
     private void EmitStringMatchRegExp(TypeBuilder typeBuilder, EmittedRegExpImplementation regExp, StringMatchRegExpInputs inputs)
     {
-        // StringMatch(string str, object? pattern) -> object?
-        // If pattern is $RegExp with global flag, return all matches as array
-        // If pattern is $RegExp without global flag, return exec result
-        // If pattern is string, return simple string match
+        // StringMatch(object receiver, object? pattern) -> object?
+        // An existing @@match handles native matching. If GetMethod returns
+        // undefined, RegExpCreate stringifies the pattern even for a native
+        // RegExp with an own nullish override; it does not copy its source slot.
         var method = typeBuilder.DefineMethod(
             "StringMatchRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.String, _types.Object]
+            [_types.Object, _types.Object]
         );
+        method.SetCustomAttribute(inputs.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         regExp.StringMatch = method;
 
         var il = method.GetILGenerator();
+        EmitStringProtocolReceiverCheck(il, inputs.UndefinedType, inputs.CreateException, inputs.TSTypeErrorCtor, "match");
         EmitStringSymbolDispatchPreamble(il, inputs.StringTryInvokeSymbolMethod, inputs.Symbols.Match, 0);
-        var regexpLocal = il.DeclareLocal(regExp.Type);
-        var isStringPatternLabel = il.DefineLabel();
-        var globalMatchLabel = il.DefineLabel();
-        var globalMatchLabelEntryFromCoerced = il.DefineLabel();
-        var matchesLocal = il.DeclareLocal(_types.ListOfObject);
-
-        // ECMA-262 22.1.3.13 String.prototype.match: when pattern is undefined,
-        // RegExpCreate coerces to /(?:)/ and the exec path returns the
-        // spec-compliant result object with index/input/length. Pre-fix, undefined
-        // fell through to the string-fallback which returned a bare [match]
-        // array missing index/input/length. Null is NOT special-cased — per spec
-        // ToString(null) = "null", so match(null) searches for the literal "null"
-        // substring (the string-pattern fallback below handles that correctly).
-        var notUndefPatternLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
-        il.Emit(OpCodes.Brfalse, notUndefPatternLabel);
-        il.Emit(OpCodes.Ldstr, "");
-        il.Emit(OpCodes.Newobj, regExp.PatternConstructor);
-        il.Emit(OpCodes.Castclass, regExp.Type);
-        il.Emit(OpCodes.Stloc, regexpLocal);
-        il.Emit(OpCodes.Br, globalMatchLabelEntryFromCoerced);
-        il.MarkLabel(notUndefPatternLabel);
-
-        // var regexp = pattern as $RegExp
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, regExp.Type);
-        il.Emit(OpCodes.Stloc, regexpLocal);
-
-        // if (regexp != null)
-        il.MarkLabel(globalMatchLabelEntryFromCoerced);
-        il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Brfalse, isStringPatternLabel);
-
-        // if (regexp.Global)
-        il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, regExp.GlobalGetter);
-        il.Emit(OpCodes.Brtrue, globalMatchLabel);
-
-        // Non-global: return regexp.Exec(str)
-        il.Emit(OpCodes.Ldloc, regexpLocal);
+        var stringLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, regExp.InstanceExec);
-        il.Emit(OpCodes.Ret);
-
-        // Global match: get all matches and return as array
-        il.MarkLabel(globalMatchLabel);
-
-        // var matches = regexp.MatchAll(str)  // List<object?> of full-match substrings
-        il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, regExp.InstanceMatchAll);
-        il.Emit(OpCodes.Stloc, matchesLocal);
-
-        // if (matches.Count == 0) return null
-        var hasMatchesLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, matchesLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, hasMatchesLabel);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(hasMatchesLabel);
-
-        // MatchAll already returns List<object?>, so hand it straight to the
-        // $Array ctor with no intermediate copy. return new $Array(matches)
-        il.Emit(OpCodes.Ldloc, matchesLocal);
-        il.Emit(OpCodes.Newobj, inputs.ArrayStorage.Ctor);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Stloc, stringLocal);
 
         // RegExpCreate(pattern, undefined), then Invoke(rx, @@match, « str »).
         // This is observably different from a literal substring search: object
         // patterns are ToString-coerced into regex source, and replacements of
         // RegExp.prototype[@@match] receive the newly-created RegExp.
-        il.MarkLabel(isStringPatternLabel);
         var createdMatcherLocal = il.DeclareLocal(_types.Object);
         var createdMethodLocal = il.DeclareLocal(_types.Object);
         var createdArgsLocal = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
-        il.Emit(OpCodes.Call, regExp.FromArguments);
+        il.Emit(OpCodes.Call, regExp.CoerceArgument);
+        il.Emit(OpCodes.Newobj, regExp.PatternConstructor);
         il.Emit(OpCodes.Stloc, createdMatcherLocal);
         il.Emit(OpCodes.Ldloc, createdMatcherLocal);
         il.Emit(OpCodes.Ldsfld, inputs.Symbols.Match);
@@ -1223,7 +1177,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Stloc, createdArgsLocal);
         il.Emit(OpCodes.Ldloc, createdMatcherLocal);
@@ -1231,6 +1185,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, createdArgsLocal);
         il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitStringProtocolReceiverCheck(ILGenerator il, Type undefinedType,
+        MethodInfo createException, ConstructorInfo typeErrorCtor, string methodName)
+    {
+        var receiverOk = il.DefineLabel();
+        var receiverThrow = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, receiverThrow);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, undefinedType);
+        il.Emit(OpCodes.Brfalse, receiverOk);
+        il.MarkLabel(receiverThrow);
+        GuestErrorEmitter.ThrowError(il, createException, typeErrorCtor,
+            $"String.prototype.{methodName} called on null or undefined");
+        il.MarkLabel(receiverOk);
     }
 
     private void EmitStringMatchAllRegExp(TypeBuilder typeBuilder, EmittedRegExpRuntime regExps, StringMatchAllRegExpInputs inputs)
@@ -1322,9 +1292,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, preparedMatcherLabel);
         il.MarkLabel(notPreparedLabel);
 
-        // ES2026 String.prototype.matchAll only performs IsRegExp/GetMethod
-        // when regexp is an Object. In particular, primitive Boolean/Number/
-        // String/BigInt values must not consult their prototypes' symbol keys.
+        // IsRegExp only observes @@match on Objects. The subsequent GetMethod
+        // lookup also observes @@matchAll on non-nullish primitives (ES2025).
         var patternClassificationDone = il.DefineLabel();
         var patternIsObject = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
@@ -1475,8 +1444,11 @@ public partial class RuntimeEmitter
         // RegExpCreate. The intrinsic helper is retained on the rich-result
         // fast path; every user override is invoked with the original receiver
         // value (before ToString(this), as required by the observable order).
-        il.Emit(OpCodes.Ldloc, patternIsObjectLocal);
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, fallbackCreateLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, fallbackCreateLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldsfld, inputs.Symbols.MatchAll);
         il.Emit(OpCodes.Call, inputs.GetIndex);
@@ -2306,18 +2278,24 @@ public partial class RuntimeEmitter
         StringSearchRegExpInputs inputs
     )
     {
-        // StringSearch(string str, object? pattern) -> object (index or a
+        // StringSearch(object receiver, object? pattern) -> object (index or a
         // custom @@search return value)
         var method = typeBuilder.DefineMethod(
             "StringSearchRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.String, _types.Object]
+            [_types.Object, _types.Object]
         );
+        method.SetCustomAttribute(inputs.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         regExp.StringSearch = method;
 
         var il = method.GetILGenerator();
+        EmitStringProtocolReceiverCheck(il, inputs.UndefinedType, inputs.CreateException, inputs.TSTypeErrorCtor, "search");
         EmitStringSymbolDispatchPreamble(il, inputs.StringTryInvokeSymbolMethod, inputs.Symbols.Search, 0);
+        var stringLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Stloc, stringLocal);
         var regexpLocal = il.DeclareLocal(regExp.Type);
         var isStringPatternLabel = il.DefineLabel();
 
@@ -2332,7 +2310,7 @@ public partial class RuntimeEmitter
 
         // return (double)regexp.Search(str)
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Call, regExp.InstanceSearch);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
@@ -2355,7 +2333,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Stloc, createdArgsLocal);
         il.Emit(OpCodes.Ldloc, createdMatcherLocal);

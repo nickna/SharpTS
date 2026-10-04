@@ -28,7 +28,8 @@ public partial class RuntimeEmitter
         EmittedFunctionValueRuntime FunctionValues,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedMapRuntime? Map,
-        EmittedSetRuntime? Set
+        EmittedSetRuntime? Set,
+        EmittedInvocationRuntime Invocation
     );
 
     private readonly record struct FunctionBindWrapperClassInputs(
@@ -44,7 +45,11 @@ public partial class RuntimeEmitter
         EmittedFunctionValueRuntime FunctionValues,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedMapRuntime? Map,
-        EmittedSetRuntime? Set
+        EmittedSetRuntime? Set,
+        EmittedInvocationRuntime Invocation,
+        EmittedTypedArrayRuntime TypedArrays,
+        EmittedTextEncodingRuntime? TextEncoding,
+        EmittedErrorRuntime Errors
     );
 
     private readonly record struct FunctionApplyWrapperClassInputs(
@@ -52,14 +57,19 @@ public partial class RuntimeEmitter
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedMapRuntime? Map,
         EmittedSetRuntime? Set,
-        EmittedArrayStorageRuntime ArrayStorage
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedInvocationRuntime Invocation,
+        EmittedTypedArrayRuntime TypedArrays,
+        EmittedTextEncodingRuntime? TextEncoding,
+        EmittedErrorRuntime Errors
     );
 
     private readonly record struct DispatchToTargetInputs(
         EmittedFunctionValueRuntime FunctionValues,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedMapRuntime? Map,
-        EmittedSetRuntime? Set
+        EmittedSetRuntime? Set,
+        EmittedInvocationRuntime Invocation
     );
 
     /// <summary>
@@ -238,16 +248,16 @@ public partial class RuntimeEmitter
     /// <c>Function.prototype.bind</c> when the bind receiver is NOT a <c>$TSFunction</c>
     /// (e.g. a <c>$BoundArrayMethod</c> / <c>$BoundMapMethod</c> / <c>$BoundSetMethod</c>,
     /// a <c>$BoundTSFunction</c>, or any other callable that <c>InvokeValue</c> knows
-    /// how to dispatch). Stores (target, boundArgs) and, on invocation, prepends
+    /// how to dispatch). Stores (target, thisArg, boundArgs) and, on invocation, prepends
     /// boundArgs to the call args and dispatches to the target. <c>thisArg</c> is
-    /// ignored because bound methods already capture their receiver.
+    /// retained for nested wrappers; already bound functions keep their receiver.
     /// </summary>
     /// <remarks>
     /// Must be emitted AFTER <c>$TSFunction</c>, <c>$BoundTSFunction</c>, and all three
     /// <c>$Bound*Method</c> TypeBuilders have been defined (Phase 1), because the
     /// emitted body of <c>Invoke</c> <c>Callvirt</c>s each of their <c>Invoke</c>
-    /// MethodBuilders directly — there is no <c>InvokeValue</c> yet at this point in
-    /// the emission pipeline.
+    /// MethodBuilders directly. The shared invocation signature is reserved
+    /// before these wrappers; its body is filled later in the emission pipeline.
     /// </remarks>
     private void EmitBoundAnyFunctionClass(
         ModuleBuilder moduleBuilder,
@@ -266,12 +276,13 @@ public partial class RuntimeEmitter
         functionBindings.AnyTargetField = targetField;
         var boundArgsField = typeBuilder.DefineField("_boundArgs", _types.ObjectArray, FieldAttributes.Assembly);
         functionBindings.AnyArgumentsField = boundArgsField;
+        var boundThisField = typeBuilder.DefineField("_thisArg", _types.Object, FieldAttributes.Private);
 
-        // ctor(object target, object[] boundArgs)
+        // ctor(object target, object thisArg, object[] boundArgs)
         var ctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_types.Object, _types.ObjectArray]
+            [_types.Object, _types.Object, _types.ObjectArray]
         );
         functionBindings.AnyCtor = ctorBuilder;
 
@@ -283,6 +294,9 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Stfld, targetField);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_2);
+        ctorIL.Emit(OpCodes.Stfld, boundThisField);
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldarg_3);
         ctorIL.Emit(OpCodes.Stfld, boundArgsField);
         ctorIL.Emit(OpCodes.Ret);
 
@@ -299,6 +313,10 @@ public partial class RuntimeEmitter
         var combinedLocal = il.DeclareLocal(_types.ObjectArray);
         var boundLenLocal = il.DeclareLocal(_types.Int32);
         var argsLenLocal = il.DeclareLocal(_types.Int32);
+        var boundThisLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, boundThisField);
+        il.Emit(OpCodes.Stloc, boundThisLocal);
 
         // boundLen = _boundArgs?.Length ?? 0
         var noBoundLabel = il.DefineLabel();
@@ -370,14 +388,11 @@ public partial class RuntimeEmitter
         EmitDispatchToTarget(
             il,
             functionBindings,
-            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set),
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation),
             targetField,
-            combinedLocal
+            combinedLocal,
+            boundThisLocal
         );
-
-        // Fall-through: unknown target type → return null
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ret);
 
         // InvokeWithThis(object thisArg, object[] args): bound target ignores thisArg
         var invokeWithThisBuilder = typeBuilder.DefineMethod(
@@ -407,8 +422,7 @@ public partial class RuntimeEmitter
     /// <c>$BoundArrayMethod</c>, <c>$BoundMapMethod</c>, <c>$BoundSetMethod</c>,
     /// <c>$BoundAnyFunction</c> (recursive bind). The caller must emit the args array
     /// and load it into <paramref name="argsLocal"/> before calling this helper.
-    /// After dispatch, each branch emits <c>Ret</c>, so the caller is responsible for
-    /// a fall-through path (e.g. <c>ldnull; ret</c>).
+    /// Each branch and the shared invocation fallback emit <c>Ret</c>.
     /// </summary>
     private void EmitDispatchToTarget(
         ILGenerator il,
@@ -513,6 +527,108 @@ public partial class RuntimeEmitter
         if (thisArgLocal != null)
             EmitProxyInvokeWithThisFallback(
                 il, targetField, thisArgLocal, argsLocal);
+
+        // Nested call/apply/bind wrappers and built-in values are dispatched by
+        // the canonical helper, whose signature is declared before these types.
+        // This preserves the selected function receiver instead of returning null.
+        if (thisArgLocal != null)
+            il.Emit(OpCodes.Ldloc, thisArgLocal);
+        else
+            il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Call, inputs.Invocation.Method);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitTextDecoderWrapperCall(
+        ILGenerator il,
+        EmittedFunctionValueRuntime functions,
+        EmittedTextEncodingRuntime? textEncoding,
+        EmittedErrorRuntime errors,
+        FieldBuilder targetField,
+        LocalBuilder receiver,
+        LocalBuilder args)
+    {
+        if (textEncoding is null) return;
+        var otherMethod = il.DefineLabel();
+        var validReceiver = il.DefineLabel();
+        var method = il.DeclareLocal(_types.MethodInfo);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Castclass, functions.Type);
+        il.Emit(OpCodes.Callvirt, functions.GetMethodInfo);
+        il.Emit(OpCodes.Stloc, method);
+        il.Emit(OpCodes.Ldloc, method);
+        il.Emit(OpCodes.Callvirt, typeof(MemberInfo).GetProperty("DeclaringType")!.GetMethod!);
+        il.Emit(OpCodes.Ldtoken, textEncoding.DecoderType);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, otherMethod);
+        il.Emit(OpCodes.Ldloc, method);
+        il.Emit(OpCodes.Callvirt, typeof(MemberInfo).GetProperty("Name")!.GetMethod!);
+        il.Emit(OpCodes.Ldstr, "Decode");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, otherMethod);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Isinst, textEncoding.DecoderType);
+        il.Emit(OpCodes.Brtrue, validReceiver);
+        GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor,
+            "TextDecoder.decode called on incompatible receiver");
+        il.MarkLabel(validReceiver);
+        var input = il.DeclareLocal(_types.Object);
+        var noInput = il.DefineLabel();
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, input);
+        il.Emit(OpCodes.Ldloc, args);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brfalse, noInput);
+        il.Emit(OpCodes.Ldloc, args);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, input);
+        il.MarkLabel(noInput);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Castclass, textEncoding.DecoderType);
+        il.Emit(OpCodes.Ldloc, input);
+        il.Emit(OpCodes.Callvirt, textEncoding.DecoderDecode);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(otherMethod);
+    }
+
+    private void EmitTypedArrayWrapperCall(
+        ILGenerator il,
+        EmittedTypedArrayRuntime typedArrays,
+        EmittedErrorRuntime errors,
+        FieldBuilder targetField,
+        LocalBuilder receiver,
+        LocalBuilder args)
+    {
+        if (typedArrays.Implementation is not { } arrays) return;
+        var otherTarget = il.DefineLabel();
+        var validReceiver = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Isinst, arrays.BoundMethodType);
+        il.Emit(OpCodes.Brfalse, otherTarget);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Isinst, arrays.BaseType);
+        il.Emit(OpCodes.Brtrue, validReceiver);
+        GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor,
+            "TypedArray method called on incompatible receiver");
+        il.MarkLabel(validReceiver);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Castclass, arrays.BaseType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Castclass, arrays.BoundMethodType);
+        il.Emit(OpCodes.Ldfld, arrays.BoundMethodNameField);
+        il.Emit(OpCodes.Newobj, arrays.BoundMethodCtor);
+        il.Emit(OpCodes.Ldloc, args);
+        il.Emit(OpCodes.Callvirt, arrays.BoundMethodInvoke);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(otherTarget);
     }
 
     private void EmitProxyInvokeWithThisFallback(
@@ -1110,6 +1226,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(nameLabel);
         var nameIsTSFunctionLabel = il.DefineLabel();
         var nameIsBoundLabel = il.DefineLabel();
+        var nameIsBoundAnyLabel = il.DefineLabel();
         var nameEndLabel = il.DefineLabel();
 
         // Check for $TSFunction
@@ -1121,6 +1238,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Brtrue, nameIsBoundLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Brtrue, nameIsBoundAnyLabel);
 
         // Unknown - return ""
         il.Emit(OpCodes.Ldstr, "");
@@ -1151,6 +1272,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
         il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.BoundTargetField);
         il.Emit(OpCodes.Call, inputs.FunctionValues.NameGetter);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Br, nameEndLabel);
+
+        // Repeated binding uses the generic wrapper; retain every bound prefix
+        // by resolving the immediate target rather than skipping to its function.
+        il.MarkLabel(nameIsBoundAnyLabel);
+        il.Emit(OpCodes.Ldstr, "bound ");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.AnyTargetField);
+        il.Emit(OpCodes.Ldstr, "name");
+        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
 
         il.MarkLabel(nameEndLabel);
@@ -1362,6 +1496,9 @@ public partial class RuntimeEmitter
         AcceptCallable(inputs.FunctionValues.Type);
         AcceptCallable(functionBindings.BoundType);
         AcceptCallable(functionBindings.AnyType);
+        AcceptCallable(functionBindings.BindType);
+        AcceptCallable(functionBindings.CallType);
+        AcceptCallable(functionBindings.ApplyType);
         AcceptCallable(inputs.ArrayOperations.BoundMethodType);
         if (inputs.Map is not null)
             AcceptCallable(inputs.Map!.BoundMethodType);
@@ -1369,6 +1506,25 @@ public partial class RuntimeEmitter
             AcceptCallable(inputs.Set!.BoundMethodType);
         AcceptCallable(_types.Type);
         AcceptCallable(_types.FuncObjectArrayToObject);
+        var proxyTargetLabel = il.DefineLabel();
+        var nonProxyTargetLabel = il.DefineLabel();
+        void LoadBindTarget()
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, targetField);
+        }
+        EmitProxyTypeCheck(il, LoadBindTarget, proxyTargetLabel, nonProxyTargetLabel);
+        il.MarkLabel(proxyTargetLabel);
+        // Proxy objects are callable only when their target has [[Call]].
+        // Ask the soft-runtime contract without adding a hard assembly reference.
+        EmitProxyMethodCall(il, LoadBindTarget, "get_IsCallable", () =>
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Object);
+        });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Brtrue, callableTargetLabel);
+        il.MarkLabel(nonProxyTargetLabel);
         GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Function.prototype.bind called on incompatible receiver");
         il.MarkLabel(callableTargetLabel);
 
@@ -1396,10 +1552,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, isBoundArrayMethodLabel);
 
-        // Non-TSFunction target: new $BoundAnyFunction(target, boundArgs)
+        // Non-TSFunction target: retain the explicit receiver and bound arguments.
         il.MarkLabel(otherCallableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
         il.Emit(OpCodes.Newobj, functionBindings.AnyCtor);
         il.Emit(OpCodes.Ret);
@@ -1414,6 +1571,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Ldfld, inputs.ArrayOperations.BoundMethodNameField);
         il.Emit(OpCodes.Newobj, inputs.ArrayOperations.BoundMethodCtor);
+        il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
         il.Emit(OpCodes.Newobj, functionBindings.AnyCtor);
         il.Emit(OpCodes.Ret);
@@ -1612,21 +1770,19 @@ public partial class RuntimeEmitter
 
         // Remaining non-TSFunction callables, including proxies, retain the
         // explicit thisArg through the shared dispatch fallback.
+        EmitTypedArrayWrapperCall(il, inputs.TypedArrays, inputs.Errors, targetField, thisArgLocal, callArgsLocal);
         EmitDispatchToTarget(
             il,
             functionBindings,
-            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set),
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation),
             targetField,
             callArgsLocal,
             thisArgLocal
         );
 
-        // Fall-through: unknown target type → return null
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ret);
-
         // return (($TSFunction)_target).InvokeWithThis(thisArg, callArgs)
         il.MarkLabel(isTSFunctionLabel);
+        EmitTextDecoderWrapperCall(il, inputs.FunctionValues, inputs.TextEncoding, inputs.Errors, targetField, thisArgLocal, callArgsLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
         il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
@@ -1879,20 +2035,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, isBoundTSFunctionLabel);
 
         // Non-TSFunction callables, including proxies, retain thisArg.
+        EmitTypedArrayWrapperCall(il, inputs.TypedArrays, inputs.Errors, targetField, thisArgLocal, callArgsLocal);
         EmitDispatchToTarget(
             il,
             functionBindings,
-            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set),
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation),
             targetField,
             callArgsLocal,
             thisArgLocal
         );
 
-        // Fall-through: unknown target type → return null
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ret);
-
         il.MarkLabel(isTSFunctionLabel);
+        EmitTextDecoderWrapperCall(il, inputs.FunctionValues, inputs.TextEncoding, inputs.Errors, targetField, thisArgLocal, callArgsLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
         il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);

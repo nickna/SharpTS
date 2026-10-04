@@ -1,0 +1,1 @@
+function make(value:string):any{return {value,[Symbol.dispose](){console.log(this.value);}};}outer:for(let i=0;i<3;i++){using a=make("a"+i);for(let j=0;j<2;j++){using b=make("b"+i+j);if(i===0)continue outer;break outer;}}console.log("after");

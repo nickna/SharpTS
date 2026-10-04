@@ -1,0 +1,1 @@
+const a:any=[1,2];let gets=0;let calls=0;Object.defineProperty(a,Symbol.iterator,{get(){gets++;return function(){calls++;return [8,9].values();};}});const wrapped=Iterator.from(a);console.log(gets,calls);console.log(wrapped.toArray().join(","),gets,calls);

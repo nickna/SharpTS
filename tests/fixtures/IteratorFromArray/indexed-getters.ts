@@ -1,0 +1,1 @@
+const a:any=[1,2];let reads=0;Object.defineProperty(a,"0",{get(){reads++;a.push(3);return 7;},configurable:true});const wrapped=Iterator.from(a);console.log(reads);console.log(wrapped.toArray().join(","),reads);

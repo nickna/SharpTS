@@ -1,0 +1,1 @@
+const a:any[]=[1,2];let reads=0;Object.defineProperty(a,"1",{get(){return ++reads;}});console.log([...a].join(","),[...a].join(","),reads);function collect(...xs:any[]){console.log(xs.join(","),reads);}collect(...a,...a);

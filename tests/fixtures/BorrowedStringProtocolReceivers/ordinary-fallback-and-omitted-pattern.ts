@@ -1,0 +1,1 @@
+const match:any=String.prototype.match;const search:any=String.prototype.search;console.log(match.call(77,"7")[0],search.call(77,"7"));const empty:any=match.call("abc");console.log(empty[0]==="",empty.index,search.call("abc"));for(const method of [match,search]){try{method.call(Symbol("s"),undefined);}catch(e){console.log(e.name,e instanceof TypeError);}}

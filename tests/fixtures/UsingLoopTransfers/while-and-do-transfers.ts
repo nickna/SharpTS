@@ -1,0 +1,1 @@
+let i=0;while(i<3){using r={value:i,[Symbol.dispose](){console.log(this.value);}};i++;if(i===1)continue;break;}let j=0;do{using r={value:j+10,[Symbol.dispose](){console.log(this.value);}};j++;if(j===1)continue;break;}while(j<3);console.log("after");

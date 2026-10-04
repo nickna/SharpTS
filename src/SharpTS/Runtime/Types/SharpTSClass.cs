@@ -46,6 +46,9 @@ public class SharpTSClass(
     private readonly FrozenDictionary<string, ISharpTSCallable> _methods = methods.ToFrozenDictionary();
     private readonly FrozenDictionary<string, ISharpTSCallable> _staticMethods = staticMethods.ToFrozenDictionary();
     private readonly Dictionary<string, object?> _staticProperties = staticProperties;
+    // Share field storage with the ordinary descriptor implementation. Allocate
+    // descriptor metadata only when a class property is explicitly defined.
+    private SharpTSObject? _staticPropertyObject;
     private readonly FrozenDictionary<string, SharpTSFunction> _getters = getters?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
     private readonly FrozenDictionary<string, SharpTSFunction> _setters = setters?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
     private readonly FrozenDictionary<string, SharpTSFunction> _staticGetters = staticGetters?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
@@ -109,15 +112,12 @@ public class SharpTSClass(
         // Initialize auto-accessor backing storage (before constructor runs)
         InitializeAutoAccessors(interpreter, instance);
 
+        // FindMethod includes ancestor constructors, which must initialize this
+        // receiver rather than a separately allocated superclass instance.
         ISharpTSCallable? constructor = FindMethod("constructor");
         if (constructor != null)
         {
             BindMethod(constructor, instance).Call(interpreter, arguments);
-        }
-        else if (Superclass != null)
-        {
-            // If no constructor, call super constructor
-            Superclass.Call(interpreter, arguments);
         }
 
         return instance;
@@ -273,16 +273,38 @@ public class SharpTSClass(
         return Superclass?.HasStaticProperty(name) ?? false;
     }
 
-    public void SetStaticProperty(string name, object? value)
+    public void SetStaticProperty(string name, object? value, bool strictMode = false)
     {
+        if (FindStaticPropertyDescriptor(name) is { HasWritable: true, Writable: false })
+        {
+            if (strictMode)
+                throw StrictModeErrors.TypeError($"Cannot assign to read only property '{name}'");
+            return;
+        }
         if (_staticMethods.ContainsKey(name))
             _deletedStaticMethods.Add(name);
         _staticMethodCache.Remove(name);
-        _staticProperties[name] = value;
+        if (_staticPropertyObject is not null)
+            _staticPropertyObject.SetPropertyStrict(name, value, strictMode);
+        else
+            _staticProperties[name] = value;
     }
+
+    internal SharpTSPropertyDescriptor? GetOwnStaticPropertyDescriptor(string name)
+        => _staticPropertyObject?.GetOwnPropertyDescriptor(name)
+            ?? (_staticProperties.TryGetValue(name, out var value)
+                ? new SharpTSPropertyDescriptor(value, writable: true, enumerable: true, configurable: true)
+                    { HasValue = true }
+                : null);
+
+    internal SharpTSPropertyDescriptor? FindStaticPropertyDescriptor(string name)
+        => HasOwnStaticMember(name)
+            ? _staticPropertyObject?.GetOwnPropertyDescriptor(name)
+            : Superclass?.FindStaticPropertyDescriptor(name);
 
     internal bool HasOwnStaticMember(string name)
         => _staticProperties.ContainsKey(name)
+            || _staticPropertyObject?.GetOwnPropertyDescriptor(name) is not null
             || !_deletedStaticMethods.Contains(name) && _staticMethods.ContainsKey(name)
             || _staticGetters.ContainsKey(name)
             || _staticSetters.ContainsKey(name)
@@ -290,6 +312,8 @@ public class SharpTSClass(
 
     internal bool DeleteStaticProperty(string name)
     {
+        if (_staticPropertyObject is not null && !_staticPropertyObject.DeleteProperty(name))
+            return false;
         _staticProperties.Remove(name);
         if (_staticMethods.ContainsKey(name))
             _deletedStaticMethods.Add(name);
@@ -299,8 +323,12 @@ public class SharpTSClass(
 
     internal bool DefineStaticProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
-        if (descriptor.HasValue)
-            SetStaticProperty(name, descriptor.Value);
+        _staticPropertyObject ??= new SharpTSObject(_staticProperties);
+        if (!_staticPropertyObject.DefineProperty(name, descriptor))
+            return false;
+        if (_staticMethods.ContainsKey(name))
+            _deletedStaticMethods.Add(name);
+        _staticMethodCache.Remove(name);
         return true;
     }
 
@@ -345,6 +373,7 @@ public class SharpTSClass(
 
     public void AddSymbolAccessor(SharpTSSymbol symbol, SharpTSFunction func, bool isStatic, bool isGetter)
     {
+        BindPrivateMemberOwner(func);
         switch (isStatic, isGetter)
         {
             case (true, true): (_staticSymbolGetters ??= [])[symbol] = func; break;
@@ -377,6 +406,7 @@ public class SharpTSClass(
 
     public void AddSymbolMethod(SharpTSSymbol symbol, ISharpTSCallable func, bool isStatic)
     {
+        BindPrivateMemberOwner(func);
         if (isStatic) (_staticSymbolMethods ??= [])[symbol] = func;
         else (_symbolMethods ??= [])[symbol] = func;
     }
@@ -449,14 +479,37 @@ public class SharpTSClass(
 
     #region ES2022 Private Class Elements
 
+    internal void BindPrivateMemberOwners()
+    {
+        foreach (var method in _methods.Values.Concat(_staticMethods.Values)
+            .Concat(_privateMethods.Values).Concat(_staticPrivateMethods.Values)
+            .Concat(_getters.Values).Concat(_setters.Values)
+            .Concat(_staticGetters.Values).Concat(_staticSetters.Values))
+            BindPrivateMemberOwner(method);
+    }
+
+    private void BindPrivateMemberOwner(ISharpTSCallable method)
+    {
+        switch (method)
+        {
+            case SharpTSFunction function: function.PrivateOwner = this; break;
+            case SharpTSAsyncFunction function: function.PrivateOwner = this; break;
+            case SharpTSGeneratorFunction function: function.PrivateOwner = this; break;
+            case SharpTSAsyncGeneratorFunction function: function.PrivateOwner = this; break;
+        }
+    }
+
+    internal bool HasPrivateBrand(object receiver) => _privateFieldStorage.TryGetValue(receiver, out _);
+
     /// <summary>
     /// Initializes private fields for an instance. Each class in the hierarchy
     /// has its own private field storage - private fields are NOT inherited.
     /// </summary>
     protected void InitializePrivateFields(Interpreter interpreter, SharpTSInstance instance)
     {
-        // Note: Private fields are NOT inherited, so we don't call superclass here
-        // Each class's private fields are completely independent
+        // A derived instance carries each ancestor's independent private brand.
+        // Initialize every owner's storage on this same receiver.
+        Superclass?.InitializePrivateFields(interpreter, instance);
 
         var fields = new Dictionary<string, object?>();
         foreach (var field in _instancePrivateFields)

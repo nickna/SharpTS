@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 
 namespace SharpTS.Compilation.Registries;
@@ -20,6 +21,7 @@ public sealed class ClassRegistry
 
     // Instance members
     private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _instanceMethods;
+    private readonly Dictionary<(TypeBuilder Owner, MethodBuilder Parent), (Type Receiver, MethodInfo Target)> _superCallBridges = [];
     private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _instanceGetters;
     private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _instanceSetters;
 
@@ -199,6 +201,58 @@ public sealed class ClassRegistry
     #endregion
 
     #region Instance Method Resolution (with inheritance walking)
+
+    /// <summary>
+    /// State-machine methods cannot make a nonvirtual call to a virtual parent method:
+    /// the CLR requires that call's receiver to be the enclosing class's own this.
+    /// Keep that call in a compiler-only method on the lexical class.
+    /// The bridge is absent from the published JavaScript method registry.
+    /// </summary>
+    internal (Type Receiver, MethodInfo Target) GetOrCreateSuperCallBridge(TypeBuilder owner, MethodBuilder parent)
+    {
+        var key = (owner, parent);
+        if (_superCallBridges.TryGetValue(key, out var cached))
+            return cached;
+
+        if (!EmitterTypeHelpers.TryResolveSuperCall(owner, parent, owner, out var target))
+            throw new InvalidOperationException($"Cannot resolve super method {parent.Name} on {owner.Name}.");
+
+        var parameters = parent.GetParameters();
+        var attributes = MethodAttributes.Assembly | MethodAttributes.HideBySig;
+        Type receiver = owner;
+        MethodBuilder? contractMethod = null;
+        var parameterTypes = parameters.Select(parameter => parameter.ParameterType).ToArray();
+        if (owner.IsGenericTypeDefinition)
+        {
+            // The state machine has no enclosing class type parameters in scope.
+            // A nongeneric contract reaches the bridge on every closed owner type,
+            // retaining that owner's actual base instantiation and receiver.
+            var contract = ((ModuleBuilder)owner.Module).DefineType(
+                $"<>SuperCall${_superCallBridges.Count}",
+                TypeAttributes.Interface | TypeAttributes.Abstract | TypeAttributes.NotPublic);
+            contractMethod = contract.DefineMethod("Invoke",
+                MethodAttributes.Public | MethodAttributes.Abstract | MethodAttributes.Virtual,
+                parent.ReturnType, parameterTypes);
+            contract.CreateType();
+            EmitTypeDefinitions.AddInterfaceImplementation(owner, contract);
+            receiver = contract;
+            attributes |= MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.NewSlot;
+        }
+
+        var bridge = owner.DefineMethod($"<>super${_superCallBridges.Count}", attributes,
+            parent.ReturnType, parameterTypes);
+        if (contractMethod != null)
+            owner.DefineMethodOverride(bridge, contractMethod);
+        var il = bridge.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        for (int i = 0; i < parameters.Length; i++)
+            il.Emit(OpCodes.Ldarg, i + 1);
+        il.Emit(OpCodes.Call, target);
+        il.Emit(OpCodes.Ret);
+        var result = (receiver, (MethodInfo?)contractMethod ?? bridge);
+        _superCallBridges.Add(key, result);
+        return result;
+    }
 
     /// <summary>
     /// Resolves an instance method by walking up the inheritance chain.
@@ -465,6 +519,34 @@ public sealed class ClassRegistry
 
         method = null;
         return false;
+    }
+
+    /// <summary>Resolves a private static field on its type-erased declaring owner.</summary>
+    public bool TryGetCallableStaticPrivateField(string qualifiedClassName, string fieldName, out System.Reflection.FieldInfo? field)
+    {
+        if (!TryGetStaticPrivateField(qualifiedClassName, fieldName, out var builder))
+        {
+            field = null;
+            return false;
+        }
+
+        var closedType = GetClosedGenericDeclaringType(qualifiedClassName, qualifiedClassName, _builders[qualifiedClassName]);
+        field = closedType != null ? EmitterTypeHelpers.ResolveField(closedType, builder!) : builder;
+        return true;
+    }
+
+    /// <summary>Resolves a private static method on its type-erased declaring owner.</summary>
+    public bool TryGetCallableStaticPrivateMethod(string qualifiedClassName, string methodName, out System.Reflection.MethodInfo? method)
+    {
+        if (!TryGetStaticPrivateMethod(qualifiedClassName, methodName, out var builder))
+        {
+            method = null;
+            return false;
+        }
+
+        var closedType = GetClosedGenericDeclaringType(qualifiedClassName, qualifiedClassName, _builders[qualifiedClassName]);
+        method = closedType != null ? EmitterTypeHelpers.ResolveMethod(closedType, builder!) : builder;
+        return true;
     }
 
     /// <summary>

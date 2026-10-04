@@ -74,12 +74,13 @@ public class EmittedTextEncodingRuntimeTests
         Assert.Same(textEncoding.EncoderType, textEncoding.EncoderCtor.DeclaringType);
         Assert.Throws<InvalidOperationException>(() => textEncoding.DecoderType);
         Assert.False(textEncoding.IsComplete);
-        emitter.EmitTSTextDecoderClass(module, textEncoding, buffer);
+        var typedArrays = new EmittedTypedArrayRuntime();
+        emitter.EmitTSTextDecoderClass(module, textEncoding, buffer, typedArrays);
         Assert.True(textEncoding.DecoderType.IsCreated());
         Assert.Same(textEncoding.DecoderType, textEncoding.DecoderDecode.DeclaringType);
         Assert.Throws<InvalidOperationException>(() => textEncoding.DecodeMethodInvoke);
         Assert.False(textEncoding.IsComplete);
-        emitter.EmitTSTextDecoderDecodeMethodClass(module, textEncoding, buffer);
+        emitter.EmitTSTextDecoderDecodeMethodClass(module, textEncoding, buffer, typedArrays);
         Assert.True(textEncoding.DecodeMethodType.IsCreated());
         textEncoding.CompleteEmission();
         AssertFrozen(textEncoding);
@@ -177,6 +178,28 @@ public class EmittedTextEncodingRuntimeTests
         Assert.Equal("[Function: decode]", wrapper.ToString());
         var error = Assert.Throws<TargetInvocationException>(() => invoke.Invoke(wrapper, [new object[] { 123d }]));
         Assert.IsType<InvalidCastException>(error.InnerException);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SavedDecodeWrapperAcceptsEmittedTypedArrayBytes(bool hosted)
+    {
+        using var bytes = Save(EmitRuntime("new TextDecoder(); new Uint8Array(3);", hosted));
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        Assert.Empty(verifier.Verify(bytes));
+        var assembly = Assembly.Load(bytes.ToArray());
+        var arrayType = assembly.GetType("$Uint8Array")!;
+        var view = Activator.CreateInstance(arrayType, [3])!;
+        var storage = Assert.IsType<byte[]>(arrayType.GetMethod("GetBuffer")!.Invoke(view, null));
+        storage[0] = 65;
+        storage[1] = 66;
+        storage[2] = 67;
+        var decoderType = assembly.GetType("$TextDecoder")!;
+        var decoder = Activator.CreateInstance(decoderType, [null, false, false])!;
+        var wrapperType = assembly.GetType("$TextDecoderDecodeMethod")!;
+        var wrapper = Activator.CreateInstance(wrapperType, [decoder])!;
+        Assert.Equal("ABC", wrapperType.GetMethod("Invoke")!.Invoke(wrapper, [new object[] { view }]));
     }
 
     [Fact]

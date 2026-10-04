@@ -1,0 +1,1 @@
+function attempt(fn:any){try{new fn();console.log("constructed");}catch(e:any){console.log("threw",e.name,e instanceof TypeError);}}attempt((x:number)=>x);attempt(async function(){});attempt(function*(){});

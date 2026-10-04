@@ -131,7 +131,9 @@ public partial class CompilationContext
         => $"$nsfn_{namespacePath.Replace('.', '_')}_{baseName}";
 
     private string ModuleQualify(string simpleFunctionName)
-        => CurrentModulePath == null
+        // A script initializer retains its source path for diagnostics/imports,
+        // while its function declarations belong to the shared script scope.
+        => CurrentModulePath == null || IsScriptTopLevel
             ? simpleFunctionName
             : $"$M_{SanitizeModuleName(Path.GetFileNameWithoutExtension(CurrentModulePath))}_{simpleFunctionName}";
 

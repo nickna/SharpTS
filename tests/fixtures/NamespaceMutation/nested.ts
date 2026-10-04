@@ -1,0 +1,1 @@
+namespace Outer {export namespace Inner {export let value=2;export function read(){return value;}}}const inner:any=Outer.Inner;inner.value=7;console.log(inner.value,Outer.Inner.value,Outer.Inner.read());

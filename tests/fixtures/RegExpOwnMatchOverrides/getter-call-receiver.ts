@@ -1,0 +1,1 @@
+let order="";const value:any=/b/;Object.defineProperty(value,Symbol.match,{get(){order+="get>";return function(s:any){order+="call>";console.log(this===value);return s+"!";};}});value.toString=function(){throw "unexpected";};console.log("abc".match(value),order);

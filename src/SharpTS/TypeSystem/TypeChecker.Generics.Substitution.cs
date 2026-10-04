@@ -67,9 +67,10 @@ public partial class TypeChecker
             TypeInfo.TypeParameter tp =>
                 substitutions.TryGetValue(tp.Name, out var sub) ? sub : type,
             TypeInfo.Array arr =>
-                new TypeInfo.Array(Sub(arr.ElementType)),
+                new TypeInfo.Array(Sub(arr.ElementType), arr.IsReadonly),
             TypeInfo.Promise promise =>
                 new TypeInfo.Promise(Sub(promise.ValueType)),
+            TypeInfo.FunctionSupertype => type,
             TypeInfo.Function func =>
                 new TypeInfo.Function(
                     func.ParamTypes.Select(Sub).ToList(),
@@ -219,7 +220,7 @@ public partial class TypeChecker
     /// Like <see cref="Substitute"/>, but preserves (and substitutes into) a Record's call/construct
     /// signatures and index types instead of dropping them. Used by relationships where callable
     /// structure is semantically significant: generic signature contextual instantiation/erasure,
-    /// interface extends (TS2430), and class-extends index signatures (TS2415). General
+    /// generic calls, interface extends (TS2430), and class-extends index signatures (TS2415). General
     /// <see cref="Substitute"/> intentionally keeps its historical fields-only Record behavior;
     /// these focused paths preserve the full shape.
     /// Records recurse so a nested Record field keeps its signatures too; every non-Record type

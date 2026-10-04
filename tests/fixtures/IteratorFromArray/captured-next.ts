@@ -1,0 +1,1 @@
+const source:any={n:0,next(){this.n++;return {value:this.n,done:this.n>2};}};const wrapped=Iterator.from(source);source.next=()=>({value:99,done:false});console.log(wrapped===source,Iterator.from(wrapped)===wrapped,wrapped.next().value,wrapped.toArray().join(","));

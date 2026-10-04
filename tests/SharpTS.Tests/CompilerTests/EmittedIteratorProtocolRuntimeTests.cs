@@ -92,9 +92,15 @@ public sealed class EmittedIteratorProtocolRuntimeTests
             };
             Assert.Equal(10d, Call("InvokeIteratorNext", iterator)); Assert.Equal(9d, Call("InvokeIteratorNextWithSent", iterator, 9d));
             Call("IteratorClose", iterator, false);
-            iterator["return"] = new Func<object[], object>(_ => 3d);
-            Assert.Contains("Iterator .return() must return an object", Assert.Throws<TargetInvocationException>(() => Call("IteratorClose", iterator, false)).InnerException!.Message);
-            Call("IteratorClose", iterator, true);
+            var undefined = loaded.GetType(runtime.Sentinels.UndefinedType.FullName!)!
+                .GetField(runtime.Sentinels.UndefinedInstance.Name, Members)!.GetValue(null);
+            var symbol = Activator.CreateInstance(symbolType, "result");
+            foreach (var primitive in new object?[] { null, undefined, 3d, false, "", System.Numerics.BigInteger.One, symbol })
+            {
+                iterator["return"] = new Func<object[], object?>(_ => primitive);
+                Assert.Contains("Iterator .return() must return an object", Assert.Throws<TargetInvocationException>(() => Call("IteratorClose", iterator, false)).InnerException!.Message);
+                Call("IteratorClose", iterator, true);
+            }
             var enumerator = ((IEnumerable<object>)new object[] { 4d, 5d }).GetEnumerator();
             var next = Assert.IsType<Dictionary<string, object>>(Call("IteratorProtocolCall", enumerator, "next", Array.Empty<object>()));
             Assert.Equal(4d, next["value"]); Assert.Equal(false, next["done"]);

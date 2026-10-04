@@ -83,6 +83,37 @@ public sealed class EmittedObjectDeletionRuntimeTests
                 Assert.True(caught,"Strict frozen deletion did not throw TypeError");
             }
             input["late"]=9d;Assert.True(Equals(Call("DeleteIndex",input,"late"),true)&&!input.ContainsKey("late"),"Guest state was frozen with metadata");
+            VerifyNamespaceDeletion(loaded, (method, args) => Call(method, args));
+        }
+    }
+
+    private static void VerifyNamespaceDeletion(Assembly assembly, Func<string, object?[], object?> call)
+    {
+        var type = assembly.GetType("$TSNamespace")!;
+        var set = type.GetMethod("Set")!; var get = type.GetMethod("Get")!;
+        var undefined = assembly.GetType("$Undefined")!.GetField("Instance")!.GetValue(null);
+        foreach (string method in new[] { "DeleteProperty", "DeletePropertyStrict", "DeleteIndex", "DeleteIndexStrict" })
+        {
+            var value = Activator.CreateInstance(type, new object[] { "Native" })!;
+            var storage = (Dictionary<string, object?>)type.GetField("_members", Members)!.GetValue(value)!;
+            set.Invoke(value, ["x", 3d]); set.Invoke(value, ["other", 7d]);
+            object?[] Arguments(string key) => method.EndsWith("Strict", StringComparison.Ordinal)
+                ? [value, key, true] : [value, key];
+            Assert.Equal(true, call(method, Arguments("x")));
+            Assert.False(storage.ContainsKey("x"));
+            Assert.Same(undefined, get.Invoke(value, ["x"]));
+            Assert.Equal(true, call(method, Arguments("x")));
+            Assert.Equal(7d, get.Invoke(value, ["other"]));
+            call("ObjectFreeze", [value]);
+            if (method.EndsWith("Strict", StringComparison.Ordinal))
+            {
+                var error = Assert.Throws<TargetInvocationException>(() => call(method, Arguments("other")));
+                Assert.Contains("TypeError", error.InnerException!.ToString());
+            }
+            else
+                Assert.Equal(false, call(method, Arguments("other")));
+            Assert.True(storage.ContainsKey("other"));
+            Assert.Equal(true, call(method, Arguments("missing")));
         }
     }
 

@@ -237,7 +237,7 @@ public partial class RuntimeEmitter
 
         // Emit TSNamespace class for namespace support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSNamespace
-        EmitTSNamespaceClass(moduleBuilder, runtime.Namespaces);
+        EmitTSNamespaceClass(moduleBuilder, runtime.Namespaces, runtime.Sentinels.UndefinedInstance);
         runtime.Namespaces.CompleteEmission();
 
         // Emit TSSymbol class for symbol support
@@ -528,8 +528,8 @@ public partial class RuntimeEmitter
         if (features.UsesTextEncoding)
         {
             EmitTSTextEncoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer());
-            EmitTSTextDecoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer());
-            EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer());
+            EmitTSTextDecoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer(), runtime.TypedArrays);
+            EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer(), runtime.TypedArrays);
         }
 
         // $StringDecoder class removed — StringDecoder migrated to
@@ -574,7 +574,36 @@ public partial class RuntimeEmitter
         EmitBoundAnyFunctionClass(
             moduleBuilder,
             runtime.FunctionBindings,
-            new BoundAnyFunctionClassInputs(runtime.FunctionValues, runtime.ArrayOperations, runtime.Map, runtime.Set)
+            new BoundAnyFunctionClassInputs(runtime.FunctionValues, runtime.ArrayOperations, runtime.Map, runtime.Set, runtime.Invocation)
+        );
+        EmitFunctionCallWrapperClass(
+            moduleBuilder,
+            runtime.FunctionBindings,
+            new FunctionCallWrapperClassInputs(
+                runtime.FunctionValues,
+                runtime.ArrayOperations,
+                runtime.Map,
+                runtime.Set,
+                runtime.Invocation,
+                runtime.TypedArrays,
+                runtime.TextEncoding,
+                runtime.Errors
+            )
+        );
+        EmitFunctionApplyWrapperClass(
+            moduleBuilder,
+            runtime.FunctionBindings,
+            new FunctionApplyWrapperClassInputs(
+                runtime.FunctionValues,
+                runtime.ArrayOperations,
+                runtime.Map,
+                runtime.Set,
+                runtime.ArrayStorage,
+                runtime.Invocation,
+                runtime.TypedArrays,
+                runtime.TextEncoding,
+                runtime.Errors
+            )
         );
         EmitFunctionBindWrapperClass(
             moduleBuilder,
@@ -586,27 +615,6 @@ public partial class RuntimeEmitter
                 runtime.Set,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Errors
-            )
-        );
-        EmitFunctionCallWrapperClass(
-            moduleBuilder,
-            runtime.FunctionBindings,
-            new FunctionCallWrapperClassInputs(
-                runtime.FunctionValues,
-                runtime.ArrayOperations,
-                runtime.Map,
-                runtime.Set
-            )
-        );
-        EmitFunctionApplyWrapperClass(
-            moduleBuilder,
-            runtime.FunctionBindings,
-            new FunctionApplyWrapperClassInputs(
-                runtime.FunctionValues,
-                runtime.ArrayOperations,
-                runtime.Map,
-                runtime.Set,
-                runtime.ArrayStorage
             )
         );
         runtime.FunctionBindings.CompleteEmission();
@@ -671,6 +679,11 @@ public partial class RuntimeEmitter
         // main $Runtime body is emitted. Its body is filled after $Runtime.
         runtime.DynamicConstruction.Function = runtime.RuntimeClass.Type.DefineMethod(
             "NewOnFunction",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.ObjectArray]);
+        runtime.DynamicConstruction.Value = runtime.RuntimeClass.Type.DefineMethod(
+            "ConstructDynamicValue",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.ObjectArray]);

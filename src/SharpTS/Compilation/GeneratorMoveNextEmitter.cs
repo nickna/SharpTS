@@ -105,7 +105,7 @@ public partial class GeneratorMoveNextEmitter : IteratorMoveNextEmitter
         _il.Emit(OpCodes.Stfld, _builder.StateField);
 
         // Emit the function body (will emit yield points inline)
-        foreach (var stmt in body)
+        foreach (var stmt in LowerUsingScopes(body))
         {
             EmitStatement(stmt);
         }

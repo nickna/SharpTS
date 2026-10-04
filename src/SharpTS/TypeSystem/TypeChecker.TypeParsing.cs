@@ -196,8 +196,7 @@ public partial class TypeChecker
         // declaration environment: lib.es5's `interface Function` describes its members but has
         // no call signature of its own, so using that surface here makes Extract<T, Function>
         // incorrectly erase actual function types.
-        if (typeName == "Function") return new TypeInfo.Function(
-            [new TypeInfo.Array(TypeInfo.Any.Shared)], TypeInfo.Any.Shared, RequiredParams: 0, HasRestParam: true);
+        if (typeName == "Function") return new TypeInfo.FunctionSupertype();
 
         // A program-loaded declaration wins over SharpTS's compatibility fallbacks.
         // This is what lets lib.*.d.ts describe globals such as Function, Object,

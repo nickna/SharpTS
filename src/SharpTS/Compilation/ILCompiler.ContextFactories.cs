@@ -71,6 +71,7 @@ public partial class ILCompiler
             // Enum tables
             EnumMembers = _enums.Members,
             EnumReverse = _enums.Reverse,
+            EnumValueFields = _enums.ValueFields,
             EnumKinds = _enums.Kinds,
             // Compilation-wide services
             Runtime = _runtime,
@@ -242,6 +243,7 @@ public partial class ILCompiler
             DisplayClassConstructors = parentCtx.DisplayClassConstructors,
             EnumMembers = parentCtx.EnumMembers,
             EnumReverse = parentCtx.EnumReverse,
+            EnumValueFields = parentCtx.EnumValueFields,
             EnumKinds = parentCtx.EnumKinds,
             TopLevelStaticVars = parentCtx.TopLevelStaticVars,
             TopLevelNumericConstantValues = parentCtx.TopLevelNumericConstantValues,

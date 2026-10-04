@@ -1,0 +1,1 @@
+(Number.prototype as any)[Symbol.search]=function(s:any){"use strict";console.log(typeof this,this===1);return s.length+4;};const search:any=String.prototype.search;console.log(search.call("abc",1),search.apply("abc",[1]),search.bind("abc",1)());

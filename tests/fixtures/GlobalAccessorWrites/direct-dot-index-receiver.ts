@@ -1,0 +1,1 @@
+const root:any=globalThis;let stored=2;let calls=0;let receiver:any;Object.defineProperty(root,"__ga",{get(){return stored;},set(v:number){calls++;stored=v;receiver=this;},configurable:true});globalThis.__ga=4;root.__ga=6;root["__ga"]=7;console.log(root.__ga,calls,receiver===root);

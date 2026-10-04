@@ -1,0 +1,1 @@
+const original=new Error("original");const value:any=/b/;Object.defineProperty(value,Symbol.match,{get(){throw original;},configurable:true});try{"abc".match(value);}catch(e){console.log(e===original);}delete value[Symbol.match];value[Symbol.match]=null;value.toString=function(){throw original;};try{"abc".match(value);}catch(e){console.log(e===original);}

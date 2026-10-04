@@ -1,0 +1,1 @@
+class A {label="parent";value(){return this.label;}}class B extends A {label="child";async read(){const f=async()=>{await Promise.resolve(0);return super.value();};await Promise.resolve(0);return await f();}}new B().read().then(v=>console.log(v));

@@ -197,13 +197,38 @@ public partial class TypeChecker
         }
         else if (paramType is TypeInfo.Function paramFunc && argType is TypeInfo.Function argFunc)
         {
+            argFunc = ExpandTupleRestSignature(argFunc);
             // Recurse into function types without merging candidates. Callback parameter and
             // return positions have different inference priorities/variance from sibling JSX
             // properties; treating them as co-equal candidates can incorrectly turn
             // `{ x: string }` and `string` into a union and hide a bad callback return.
-            for (int i = 0; i < paramFunc.ParamTypes.Count && i < argFunc.ParamTypes.Count; i++)
+            int fixedCount = paramFunc.HasRestParam ? paramFunc.ParamTypes.Count - 1 : paramFunc.ParamTypes.Count;
+            for (int i = 0; i < fixedCount && i < argFunc.ParamTypes.Count; i++)
             {
                 InferFromType(paramFunc.ParamTypes[i], argFunc.ParamTypes[i], inferred);
+            }
+            if (paramFunc.HasRestParam && paramFunc.ParamTypes.Count > 0)
+            {
+                var rest = paramFunc.ParamTypes[^1];
+                if (rest is TypeInfo.TypeParameter)
+                {
+                    int actualFixedCount = argFunc.HasRestParam ? argFunc.ParamTypes.Count - 1 : argFunc.ParamTypes.Count;
+                    var restTypes = argFunc.ParamTypes.Skip(fixedCount).Take(Math.Max(0, actualFixedCount - fixedCount)).ToList();
+                    var restElement = argFunc.HasRestParam && argFunc.ParamTypes[^1] is TypeInfo.Array restArray
+                        ? restArray.ElementType : null;
+                    InferFromType(rest, TypeInfo.Tuple.FromTypes(restTypes,
+                        Math.Clamp(argFunc.MinArity - fixedCount, 0, restTypes.Count), restElement), inferred);
+                }
+                else if (rest is TypeInfo.Array restArray)
+                {
+                    for (int i = fixedCount; i < argFunc.ParamTypes.Count; i++)
+                    {
+                        var actual = argFunc.ParamTypes[i];
+                        bool isRest = argFunc.HasRestParam && i == argFunc.ParamTypes.Count - 1;
+                        InferFromType(restArray.ElementType,
+                            isRest && actual is TypeInfo.Array actualArray ? actualArray.ElementType : actual, inferred);
+                    }
+                }
             }
             InferFromType(paramFunc.ReturnType, argFunc.ReturnType, inferred);
         }

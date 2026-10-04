@@ -1,0 +1,1 @@
+const marker={tag:7};const source:any={i:0,closed:0,[Symbol.iterator](){return this;},next(){this.i++;return {value:undefined,done:this.i>2};},return(){this.closed++;throw {tag:9};}};function fallback():any{throw marker;}try{const [a=fallback()]=source;console.log(a);}catch(e:any){console.log(e===marker,source.i,source.closed);}

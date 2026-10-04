@@ -180,6 +180,17 @@ public partial class ILEmitter
         }
 
         // Enum forward mapping: Direction.Up -> 0 or Status.Success -> "SUCCESS"
+        if (g.Object is Expr.Variable enumValueVar &&
+            _ctx.EnumValueFields?.ContainsKey(_ctx.ResolveEnumName(enumValueVar.Name.Lexeme)) == true)
+        {
+            EmitExpression(g.Object);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
+            SetStackUnknown();
+            return;
+        }
+
         if (g.Object is Expr.Variable enumVar &&
             _ctx.EnumMembers?.TryGetValue(_ctx.ResolveEnumName(enumVar.Name.Lexeme), out var members) == true &&
             members.TryGetValue(g.Name.Lexeme, out var value))
@@ -1231,6 +1242,8 @@ public partial class ILEmitter
         // globalThis[key] → GlobalThisGetProperty(key)
         if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis")
         {
+            if (gi.Index is not Expr.Literal { Value: string key } || key == "eval")
+                _ctx.Runtime!.Deployment.Require("indirect eval");
             EmitExpression(gi.Index);
             EmitBoxIfNeeded(gi.Index);
             IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.Object, "ToString")!);
@@ -1240,6 +1253,18 @@ public partial class ILEmitter
         }
 
         // Enum reverse mapping: Direction[0] -> "Up"
+        if (gi.Object is Expr.Variable enumValueVar &&
+            _ctx.EnumValueFields?.ContainsKey(_ctx.ResolveEnumName(enumValueVar.Name.Lexeme)) == true)
+        {
+            EmitExpression(gi.Object);
+            EnsureBoxed();
+            EmitExpression(gi.Index);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
+            SetStackUnknown();
+            return;
+        }
+
         if (gi.Object is Expr.Variable enumVar &&
             _ctx.EnumReverse?.TryGetValue(_ctx.ResolveEnumName(enumVar.Name.Lexeme), out var reverse) == true)
         {
@@ -1696,6 +1721,8 @@ public partial class ILEmitter
     /// </summary>
     private bool TryEmitDiscardedNumberArraySetIndex(Expr.SetIndex si, bool discardResult = true)
     {
+        if (_ctx.TypeMap?.Get(si.Index) is not (TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral))
+            return false;
         if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
             return false;
 
@@ -1801,6 +1828,12 @@ public partial class ILEmitter
 
     protected override void EmitSetIndex(Expr.SetIndex si)
     {
+        if (_ctx.TypeMap?.Get(si.Object) is TypeInfo.Array or TypeInfo.Tuple &&
+            _ctx.TypeMap?.Get(si.Index) is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
+        {
+            base.EmitSetIndex(si);
+            return;
+        }
         if (TryResolveExternalReceiverType(si.Object, out var externalIndexerType) &&
             TryEmitExternalIndexerSet(si.Object, externalIndexerType, si.Index, si.Value))
         {

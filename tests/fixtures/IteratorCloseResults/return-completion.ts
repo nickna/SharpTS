@@ -1,0 +1,1 @@
+const it:any={[Symbol.iterator](){return this;},next(){return {value:1,done:false};},return(){return 1n;}};function run(){for(const n of it)return 9;}try{console.log(run());}catch(e:any){console.log(e.name);}

@@ -1,0 +1,1 @@
+const g:any=isNaN;const original=new Error("coerce");const bad:any={valueOf(){throw original;}};try{g(bad);}catch(e){console.log(e===original);}for(const value of [Symbol("s"),1n]){try{g(value);}catch(e){console.log(e.name,e instanceof TypeError);}console.log(Number.isNaN(value));}

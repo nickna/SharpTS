@@ -873,6 +873,8 @@ public static partial class ObjectBuiltIns
                 writable: false,
                 enumerable: false,
                 configurable: false),
+            SharpTSClass klass when propertyKey is not ("name" or "length")
+                => klass.GetOwnStaticPropertyDescriptor(propertyKey),
             SharpTSBuiltInConstructor { Name: BuiltInNames.RegExp }
                 when propertyKey == "prototype" => DataDescriptor(
                     interpreter.GetRegExpPrototype(),

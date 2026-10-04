@@ -15,6 +15,7 @@ public partial class RuntimeEmitter
         MethodBuilder InvokeMethodUnwrapped,
         MethodBuilder InvokeMethodValue,
         EmittedMathRuntime Math,
+        EmittedNamespaceRuntime Namespaces,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectOwnPropertiesRuntime ObjectOwnProperties,
         EmittedObjectPrototypeRuntime ObjectPrototypes,
@@ -39,6 +40,7 @@ public partial class RuntimeEmitter
         EmittedDescriptorStorageRuntime DescriptorStorage,
         FieldBuilder FunctionPrototypeField,
         MethodBuilder FunctionPrototypePopulateMethod,
+        EmittedGeneratorRuntime Generators,
         MethodBuilder GlobalThisGetProperty,
         FieldBuilder GlobalThisSingletonField,
         MethodBuilder InvokeMethodUnwrapped,
@@ -54,7 +56,10 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         EmittedTypedArrayRuntime TypedArrays,
         FieldInfo UndefinedInstance,
-        Type UndefinedType
+        Type UndefinedType,
+        EmittedBooleanRuntime Booleans,
+        EmittedNumberRuntime Numbers,
+        EmittedBigIntRuntime BigInt
     );
 
     private readonly record struct RegExpSymbolDispatchInputs(
@@ -357,20 +362,6 @@ public partial class RuntimeEmitter
             il.MarkLabel(notRegExpForSymbolLabel);
         }
 
-        // String primitives inherit @@iterator from String.prototype. Re-enter
-        // GetIndex on the prototype dictionary so descriptor unwrapping follows
-        // the same ordinary [[Get]] path as a direct prototype access.
-        var notStringForSymbolLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brfalse, notStringForSymbolLabel);
-        il.Emit(OpCodes.Call, inputs.Strings.PrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, inputs.Strings.PrototypeField);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, method);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notStringForSymbolLabel);
-
         // Array-receiver symbol-key walk: when the per-object symbol dict
         // doesn't carry the key, walk up to Array.prototype's symbol dict.
         // Required for `arr[Symbol.iterator]` to resolve to Array.prototype.
@@ -417,6 +408,28 @@ public partial class RuntimeEmitter
             var symbolProtoDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
             var symbolProtoLoopLabel = il.DefineLabel();
             var symbolProtoDoneLabel = il.DefineLabel();
+            // Primitive [[Get]] starts at the corresponding intrinsic
+            // prototype. Keep arg0 as the receiver so strict getters observe
+            // the primitive rather than the prototype dictionary.
+            void EmitPrimitiveSymbolPrototype(Type primitiveType, FieldBuilder prototype, MethodBuilder populate)
+            {
+                var next = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Isinst, primitiveType);
+                il.Emit(OpCodes.Brfalse, next);
+                il.Emit(OpCodes.Call, populate);
+                il.Emit(OpCodes.Ldsfld, prototype);
+                il.Emit(OpCodes.Stloc, symbolProtoLocal);
+                il.Emit(OpCodes.Br, symbolProtoLoopLabel);
+                il.MarkLabel(next);
+            }
+            EmitPrimitiveSymbolPrototype(_types.Double, inputs.Numbers.PrototypeField, inputs.Numbers.PrototypePopulateMethod);
+            EmitPrimitiveSymbolPrototype(_types.Int32, inputs.Numbers.PrototypeField, inputs.Numbers.PrototypePopulateMethod);
+            EmitPrimitiveSymbolPrototype(_types.Boolean, inputs.Booleans.PrototypeField, inputs.Booleans.PrototypePopulateMethod);
+            EmitPrimitiveSymbolPrototype(_types.String, inputs.Strings.PrototypeField, inputs.Strings.PrototypePopulateMethod);
+            EmitPrimitiveSymbolPrototype(inputs.Symbols.Type, inputs.Symbols.Prototype, inputs.Symbols.PopulatePrototype);
+            if (inputs.BigInt.Implementation is not null)
+                EmitPrimitiveSymbolPrototype(_types.BigInteger, inputs.BigInt.PrototypeField, inputs.BigInt.PrototypePopulateMethod);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPrototype);
             il.Emit(OpCodes.Stloc, symbolProtoLocal);
@@ -476,6 +489,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, symbolFoundLabel);
             il.MarkLabel(notTypeForSymbolLabel);
         }
+
+        // Generators inherit an intrinsic @@iterator from their protocol.
+        // Use the same interface method used by ordinary iteration, wrapped
+        // as a callable so a captured read also exposes call/apply/bind.
+        var notGeneratorIteratorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
+        il.Emit(OpCodes.Bne_Un, notGeneratorIteratorLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.Generators.Type);
+        il.Emit(OpCodes.Brfalse, notGeneratorIteratorLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        EmitInstanceMethodInfoLiteral(il, inputs.Generators.Iterator, inputs.Generators.Type);
+        il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notGeneratorIteratorLabel);
 
         // Return undefined for missing symbol properties (JavaScript semantics)
         il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
@@ -1237,6 +1266,18 @@ public partial class RuntimeEmitter
             il.MarkLabel(inheritedNotProxyLabel);
         }
         il.MarkLabel(noInheritedProxyLabel);
+
+        var notNamespace = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.Namespaces.Type);
+        il.Emit(OpCodes.Brfalse, notNamespace);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, objectWrite.Property);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notNamespace);
 
         // globalThis/global sentinel (#271): `root[stringKey] = v` stores into the
         // shared global-properties dictionary. Symbol keys fall through to the

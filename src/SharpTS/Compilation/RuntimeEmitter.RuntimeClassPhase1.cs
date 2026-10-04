@@ -51,6 +51,14 @@ public partial class RuntimeEmitter
             _types.Exception,
             [_types.Object]);
 
+        // Function wrappers need this forward declaration, after the stable leading
+        // Stringify/FormatNumber/CreateException declarations.
+        runtime.Invocation.Method = typeBuilder.DefineMethod(
+            "InvokeMethodValue",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object, _types.ObjectArray]);
+
         // Preserve the leading runtime declarations while reserving the event-loop guard.
         DefineCancellationCheck(typeBuilder, runtime.Cancellation);
 

@@ -640,6 +640,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // globalThis[key] → GlobalThisGetProperty(key)
         if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis")
         {
+            if (gi.Index is not Expr.Literal { Value: string key } || key == "eval")
+                Ctx.Runtime!.Deployment.Require("indirect eval");
             EmitExpression(gi.Index);
             EnsureBoxed();
             IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
@@ -803,6 +805,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected virtual void EmitVariable(Expr.Variable v)
     {
         string name = v.Name.Lexeme;
+
+        if (TryEmitEnumInitializerMember(name))
+            return;
 
         if (TryEmitDefaultParameterTdz(name))
             return;
@@ -1012,10 +1017,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
         className = Ctx.ResolvePrivateFieldOwner(className, fieldName);
 
-        if (((gp.Object is Expr.Variable classVar &&
-              classVar.Name.Lexeme == Ctx.CurrentClassShortName)
-             || (gp.Object is Expr.This && !Ctx.IsInstanceMethod)) &&
-            Ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
+        if (IsStaticPrivateReceiver(gp.Object) &&
+            Ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var staticField))
         {
             IL.Emit(OpCodes.Ldsfld, staticField!);
             SetStackUnknown();
@@ -1049,7 +1052,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return;
         }
 
-        if (Ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var fallbackStaticField))
+        if (Ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var fallbackStaticField))
         {
             IL.Emit(OpCodes.Ldsfld, fallbackStaticField!);
             SetStackUnknown();
@@ -1082,10 +1085,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
         className = Ctx.ResolvePrivateFieldOwner(className, fieldName);
 
-        if (((sp.Object is Expr.Variable classVar &&
-              classVar.Name.Lexeme == Ctx.CurrentClassShortName)
-             || (sp.Object is Expr.This && !Ctx.IsInstanceMethod)) &&
-            Ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
+        if (IsStaticPrivateReceiver(sp.Object) &&
+            Ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var staticField))
         {
             EmitExpression(sp.Value);
             EnsureBoxed();
@@ -1128,7 +1129,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return;
         }
 
-        if (Ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var fallbackStaticField))
+        if (Ctx.ClassRegistry!.TryGetCallableStaticPrivateField(className, fieldName, out var fallbackStaticField))
         {
             EmitExpression(sp.Value);
             EnsureBoxed();
@@ -1164,10 +1165,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
         className = Ctx.ResolvePrivateMethodOwner(className, methodName);
 
-        if (((cp.Object is Expr.Variable classVar &&
-              classVar.Name.Lexeme == Ctx.CurrentClassShortName)
-             || (cp.Object is Expr.This && !Ctx.IsInstanceMethod)) &&
-            Ctx.ClassRegistry!.TryGetStaticPrivateMethod(className, methodName, out var staticMethod))
+        if (IsStaticPrivateReceiver(cp.Object) &&
+            Ctx.ClassRegistry!.TryGetCallableStaticPrivateMethod(className, methodName, out var staticMethod))
         {
             foreach (var arg in cp.Arguments)
             {
@@ -2105,6 +2104,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return true;
         }
 
+        if (TryEmitEnumVariable(name)) return true;
+
         // User class identifiers used as values: emit the class's Type token
         // (the same representation ILEmitter's sync path produces) so
         // `x instanceof MyClass` works inside state-machine bodies. Before
@@ -2131,7 +2132,22 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (TryEmitBuiltInClassType(name)) return true;
         if (TryEmitNamespaceSingleton(name)) return true;
 
+        // A value-form eval can escape through a holder, callback or alias before
+        // receiving dynamic source. Record its soft bridge dependency at acquisition,
+        // including state-machine bodies; direct static eval keeps its own lowering.
+        if (TryEmitIndirectEvalValue(name)) return true;
+
         return false;
+    }
+
+    protected bool TryEmitIndirectEvalValue(string name)
+    {
+        if (name != "eval") return false;
+        Ctx.Runtime!.Deployment.Require("indirect eval");
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.GlobalObject.GetProperty);
+        SetStackUnknown();
+        return true;
     }
 
     /// <summary>

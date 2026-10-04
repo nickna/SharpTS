@@ -1,0 +1,1 @@
+class A {value(x:number){return x+2;}} class B extends A {*read(){yield super.value(1);yield super.value(2);return super.value(3);}} const g=new B().read();console.log(g.next().value,g.next().value,g.next().value);

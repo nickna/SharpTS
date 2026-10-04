@@ -1,0 +1,1 @@
+const r:any={value:7};Object.defineProperty(r,Symbol.dispose,{configurable:true,get(){console.log("get");return function(){console.log(this===r,this.value);};}});function work():number{using x=r;delete r[Symbol.dispose];console.log("body");return 9;}console.log(work());

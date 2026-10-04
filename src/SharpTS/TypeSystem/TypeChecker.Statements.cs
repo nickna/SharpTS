@@ -1392,6 +1392,12 @@ public partial class TypeChecker
             _ => TypeInfo.Any.Shared
         };
 
+        // The async iteration binding receives awaited values. Resolve each
+        // union member through the same recursive Promise unwrapping as await;
+        // ordinary for...of retains the iterable's Promise element type.
+        if (stmt.IsAsync)
+            elementType = ResolveAwaitedType(elementType);
+
         TypeEnvironment forOfEnv = new(_environment);
         DeclareValue(forOfEnv, stmt.Variable, elementType);
 

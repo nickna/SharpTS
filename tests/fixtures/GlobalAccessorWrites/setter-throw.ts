@@ -1,0 +1,1 @@
+const root:any=globalThis;const original=new Error("setter");let calls=0;Object.defineProperty(root,"__ga",{set(v:number){calls++;throw original;},configurable:true});try{root["__ga"]=8;}catch(e){console.log(e===original,e.message);}console.log(calls,root.__ga===undefined);

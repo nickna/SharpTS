@@ -258,6 +258,7 @@ public partial class TypeChecker
     // that mode, absence from the selected libraries must not be hidden by the
     // execution-oriented built-in fallbacks used by standalone checking.
     private bool _hasDefaultLibraries;
+    private BindingSymbol? _defaultLibraryArrayBinding;
     private bool _hasEs2023IntlLibrary;
     private readonly HashSet<string> _globalObjectLexicalNames = new(StringComparer.Ordinal);
     private readonly HashSet<string> _globalObjectVarNames = new(StringComparer.Ordinal);
@@ -1275,6 +1276,10 @@ public partial class TypeChecker
     // Track type parameters for generic overloaded functions
     private readonly Dictionary<(TypeEnvironment Environment, string Name), List<TypeInfo.TypeParameter>> _pendingOverloadTypeParams = [];
 
+    // Ambient overloads may mix generic/non-generic signatures, each with its
+    // own type-parameter bindings (for example Reflect.apply's broad fallback).
+    private readonly Dictionary<(TypeEnvironment Environment, string Name), List<TypeInfo>> _ambientOverloadSignatures = [];
+
     // Decorator mode configuration
     private DecoratorMode _decoratorMode = DecoratorMode.None;
 
@@ -1706,6 +1711,7 @@ public partial class TypeChecker
 
         _moduleResolver = resolver;
         _hasDefaultLibraries = modules.Any(module => module.IsDefaultLibrary);
+        _defaultLibraryArrayBinding = null;
         _hasEs2023IntlLibrary = modules.Any(module =>
             module.IsDefaultLibrary &&
             module.Path.Contains("lib.es2023.intl.d.ts", StringComparison.OrdinalIgnoreCase));
@@ -1795,6 +1801,7 @@ public partial class TypeChecker
             // incidental graph order (notably the classic React declaration shape).
             foreach (var module in modules.Where(module => module.IsDefaultLibrary))
                 PrepareModule(module);
+            _defaultLibraryArrayBinding = scriptEnv.GetValueBinding("Array");
             foreach (var module in modules.Where(module => !module.IsDefaultLibrary && module.IsScript))
                 PrepareModule(module);
             foreach (var module in modules.Where(module => !module.IsDefaultLibrary && !module.IsScript))

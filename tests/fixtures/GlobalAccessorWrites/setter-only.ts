@@ -1,0 +1,1 @@
+const root:any=globalThis;let stored=0;let calls=0;let receiver:any;Object.defineProperty(root,"__ga",{set(v:number){stored=v;calls++;receiver=this;},configurable:true});root.__ga=8;console.log(root.__ga===undefined,stored,calls,receiver===root);delete root.__ga;console.log(root.__ga===undefined);

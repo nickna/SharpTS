@@ -1,0 +1,1 @@
+class A {label="parent";value(){return this.label;}}class B extends A {label="child";value(){return "override";}read(){return ()=>super.value();}}class C extends B {label="grandchild";value(){return "later override";}}const f=new C().read();console.log(f.call({label:"fake"}));

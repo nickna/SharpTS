@@ -1,0 +1,1 @@
+for(let i=0;i<2;i++){const r:any={value:i,[Symbol.dispose](){console.log(this.value);}};using x=r;r[Symbol.dispose]=function(){console.log("replacement");};if(i===0)continue;break;}console.log("after");

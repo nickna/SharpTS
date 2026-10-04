@@ -955,6 +955,7 @@ public sealed class RuntimeFeatureDetector
                         // `const define = Object.defineProperty; define(a, ...)`
                         // has the same ability to invalidate array fast paths.
                         _set.UsesDynamicPropertyDescriptors = true;
+                        _set.UsesArrayPrototypeMutation = true;
                     }
                 }
                 // String methods that StringEmitter routes through RegExp
@@ -1064,6 +1065,7 @@ public sealed class RuntimeFeatureDetector
                 {
                     // Computed access may resolve to defineProperty at runtime.
                     _set.UsesDynamicPropertyDescriptors = true;
+                    _set.UsesArrayPrototypeMutation = true;
                     // It may also resolve to getPrototypeOf, yielding an alias
                     // to the RegExp prototype that a later write can mutate.
                     _set.UsesRegExpPrototypeMutation = true;
@@ -2108,19 +2110,24 @@ public sealed class RuntimeFeatureDetector
         _ => false
     };
 
-    private static bool IsSymbolIterator(Expr expr) => expr switch
+    private bool IsSymbolIterator(Expr expr)
     {
-        Expr.Get
+        if (_typeMap?.Get(expr) is TypeInfo.UniqueSymbol { DeclarationId: "Symbol.iterator" })
+            return true;
+        return expr switch
         {
-            Object: Expr.Variable { Name.Lexeme: "Symbol" },
-            Name.Lexeme: "iterator"
-        } => true,
-        Expr.Grouping grouping => IsSymbolIterator(grouping.Expression),
-        Expr.TypeAssertion assertion => IsSymbolIterator(assertion.Expression),
-        Expr.Satisfies satisfies => IsSymbolIterator(satisfies.Expression),
-        Expr.NonNullAssertion nonNull => IsSymbolIterator(nonNull.Expression),
-        _ => false
-    };
+            Expr.Get
+            {
+                Object: Expr.Variable { Name.Lexeme: "Symbol" },
+                Name.Lexeme: "iterator"
+            } => true,
+            Expr.Grouping grouping => IsSymbolIterator(grouping.Expression),
+            Expr.TypeAssertion assertion => IsSymbolIterator(assertion.Expression),
+            Expr.Satisfies satisfies => IsSymbolIterator(satisfies.Expression),
+            Expr.NonNullAssertion nonNull => IsSymbolIterator(nonNull.Expression),
+            _ => false
+        };
+    }
 
     private static bool IsArrayMutatorName(string name) =>
         name is "push" or "shift" or "unshift";
@@ -2156,7 +2163,7 @@ public sealed class RuntimeFeatureDetector
 
         static bool CouldBeArray(TypeInfo? type) => type switch
         {
-            null or TypeInfo.Array or TypeInfo.Any or TypeInfo.Unknown => true,
+            null or TypeInfo.Array or TypeInfo.Tuple or TypeInfo.Any or TypeInfo.Unknown => true,
             TypeInfo.Union union => union.Types.Any(CouldBeArray),
             _ => false
         };

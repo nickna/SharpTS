@@ -1094,6 +1094,13 @@ public partial class TypeChecker
         }
 
         TypeInfo superType = CheckExpr(classStmt.SuperclassExpr);
+        if (IsDefaultLibraryArrayHeritage(classStmt.SuperclassExpr, superType))
+        {
+            // The runtime's Array subclass bridge is also used by the single-file API.
+            // Loaded libraries represent its value as ArrayConstructor, not a class.
+            ValidateArrayHeritageTypeArgumentCount(classStmt.SuperclassTypeArgs);
+            superType = TypeInfo.Any.Shared;
+        }
         TypeInfo? superclass = null;
         List<TypeInfo>? unresolvedGenericSuperArguments = null;
 
@@ -1189,6 +1196,19 @@ public partial class TypeChecker
                 throw new TypeCheckException("Superclass must be a class", tsCode: "TS2507");
         }
         return superclass;
+    }
+
+    private bool IsDefaultLibraryArrayHeritage(Expr expression, TypeInfo type) =>
+        _hasDefaultLibraries && _defaultLibraryArrayBinding is not null &&
+        expression is Expr.Variable { Name.Lexeme: "Array" } &&
+        type is TypeInfo.Interface { IsConstructable: true } &&
+        ReferenceEquals(_environment.GetValueBinding("Array"), _defaultLibraryArrayBinding);
+
+    private static void ValidateArrayHeritageTypeArgumentCount(List<string>? arguments)
+    {
+        if (arguments is { Count: > 1 })
+            throw new TypeCheckException(
+                "No base constructor has the specified number of type arguments.", tsCode: "TS2508");
     }
 
     /// <summary>

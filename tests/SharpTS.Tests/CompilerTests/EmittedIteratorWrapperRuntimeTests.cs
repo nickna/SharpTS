@@ -85,6 +85,16 @@ public sealed class EmittedIteratorWrapperRuntimeTests
             Assert.False((bool)sent.Invoke(instance, [9d])!); Assert.Equal(9d, instance.Current); Assert.Equal(instance.Current, ((IEnumerator)instance).Current);
             Assert.Equal(2, calls.Count); Assert.Empty(calls[0]); Assert.Equal(9d, Assert.Single(calls[1]));
             instance.Dispose(); Assert.Equal(2, calls.Count); Assert.Equal(9d, instance.Current);
+            int closes = 0; int advances = 0;
+            var closingIterator = new Dictionary<string, object>
+            {
+                ["next"] = new Func<object[], object>(_ => { advances++; return new Dictionary<string, object> { ["value"] = 7d, ["done"] = false }; }),
+                ["return"] = new Func<object[], object>(_ => { closes++; return new Dictionary<string, object> { ["done"] = true }; })
+            };
+            var closingWrapper = (IEnumerator<object>)ctor.Invoke([closingIterator, null]);
+            Assert.True(closingWrapper.MoveNext());
+            closingWrapper.Dispose(); closingWrapper.Dispose();
+            Assert.Equal(1, closes); Assert.False(closingWrapper.MoveNext()); Assert.Equal(1, advances);
             Assert.Equal("Reset is not supported for iterator wrappers", Assert.Throws<NotSupportedException>(instance.Reset).Message);
             var invalid = (IEnumerator<object>)ctor.Invoke([iterator, null]);
             Assert.Contains("Iterator protocol requires an object", Assert.ThrowsAny<Exception>(() => invalid.MoveNext()).Message);
@@ -102,7 +112,7 @@ public sealed class EmittedIteratorWrapperRuntimeTests
         Assert.Contains(helper.GetParameters(), p => p.ParameterType == typeof(EmittedIteratorWrapperRuntime));
         Assert.DoesNotContain(helper.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime) || p.ParameterType == typeof(RuntimeFeatureSet));
         var peers = helper.GetParameters().Single(p => p.Name == "inputs").ParameterType;
-        Assert.Equal(new[] { "GetIteratorDone", "GetIteratorValue", "IteratorRecords" }, peers.GetProperties().Select(p => p.Name).Order());
+        Assert.Equal(new[] { "CloseIterator", "GetIteratorDone", "GetIteratorValue", "IteratorRecords" }, peers.GetProperties().Select(p => p.Name).Order());
         Assert.DoesNotContain(peers.GetFields(Members), f => f.FieldType == typeof(EmittedRuntime) || f.FieldType == typeof(RuntimeFeatureSet));
     }
 

@@ -176,13 +176,25 @@ public partial class ILCompiler
         MethodInfo ensureFields)
     {
         _typedInterop.PropertyBackingFields.TryGetValue(className, out var backingFields);
-        EmitGetFieldsBodyCore(method, backingFields, ensureFields);
+        EmitGetFieldsBodyCore(method, backingFields, ensureFields, GetInheritedBackingFieldNames(className));
+    }
+
+    private IEnumerable<string> GetInheritedBackingFieldNames(string className)
+    {
+        if (!_classes.Superclass.TryGetValue(className, out var parent) || parent == null)
+            yield break;
+        foreach (var name in GetInheritedBackingFieldNames(parent))
+            yield return name;
+        if (_typedInterop.PropertyBackingFields.TryGetValue(parent, out var fields))
+            foreach (var name in fields.Keys)
+                yield return NamingConventions.ToCamelCase(name);
     }
 
     private void EmitGetFieldsBodyCore(
         MethodBuilder method,
         Dictionary<string, FieldBuilder>? backingFields,
-        MethodInfo ensureFields)
+        MethodInfo ensureFields,
+        IEnumerable<string>? inheritedFieldNames = null)
     {
         var il = method.GetILGenerator();
 
@@ -196,21 +208,39 @@ public partial class ILCompiler
             return;
         }
 
-        // Create a new dictionary from _fields (copy constructor), then add backing fields
-        var iDictType = _types.MakeGenericType(typeof(IDictionary<,>), typeof(string), typeof(object));
-        var copyCtor = _types.GetConstructor(_types.DictionaryStringObject, [iDictType])!;
+        // Declared fields precede properties added later. Inherited fields represented
+        // in this store precede this class's fields; retain their current dynamic values.
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item");
-
-        // var result = new Dictionary<string, object?>(this.EnsureFields());
+        var fields = il.DeclareLocal(_types.DictionaryStringObject);
+        var result = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
-        il.Emit(OpCodes.Newobj, copyCtor);
+        il.Emit(OpCodes.Stloc, fields);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, result);
+
+        var inheritedValue = il.DeclareLocal(_types.Object);
+        foreach (var name in inheritedFieldNames ?? [])
+        {
+            var absent = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, fields);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldloca, inheritedValue);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject,
+                "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Brfalse, absent);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldloc, inheritedValue);
+            il.Emit(OpCodes.Callvirt, setItem);
+            il.MarkLabel(absent);
+        }
 
         // result["propName"] = this._BackingField; for each typed property
         foreach (var (propName, backingField) in backingFields)
         {
             var camelName = NamingConventions.ToCamelCase(propName);
-            il.Emit(OpCodes.Dup); // keep dict on stack
+            il.Emit(OpCodes.Ldloc, result);
             il.Emit(OpCodes.Ldstr, camelName);
             il.Emit(OpCodes.Ldarg_0); // this
             il.Emit(OpCodes.Ldfld, backingField);
@@ -219,7 +249,33 @@ public partial class ILCompiler
             il.Emit(OpCodes.Callvirt, setItem);
         }
 
-        // return result;
+        // Append expandos without replacing the authoritative typed backing values.
+        var enumeratorType = _types.DictionaryStringObjectEnumerator;
+        var enumerator = il.DeclareLocal(enumeratorType);
+        var entry = il.DeclareLocal(_types.KeyValuePairStringObject);
+        var loop = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, fields);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.DictionaryStringObject, "GetEnumerator"));
+        il.Emit(OpCodes.Stloc, enumerator);
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloca, enumerator);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(enumeratorType, "MoveNext"));
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldloca, enumerator);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, entry);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldloca, entry);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloca, entry);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Value").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject,
+            "TryAdd", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, loop);
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ret);
     }
 

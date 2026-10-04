@@ -1,0 +1,1 @@
+function make(value:string):any{return {value,[Symbol.dispose](){console.log(this.value);}};}function second(i:number):any{if(i===1)throw new Error("get");return make("b"+i);}for(let i=0;i<3;i++){try{{using a=make("a"+i),b=second(i),c=make("c"+i);console.log("body",i);}}catch(e){console.log(e.message);}}console.log("after");

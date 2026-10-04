@@ -38,6 +38,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
     private readonly Stmt.Function _declaration;
     private readonly RuntimeEnvironment _closure;
     private readonly int _arity;
+    internal SharpTSClass? PrivateOwner { get; set; }
     // JS: functions (including async) are objects and support property assignment.
     private Dictionary<string, object?>? _properties;
 
@@ -116,7 +117,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
     /// </summary>
     public async Task<object?> CallAsync(Interpreter interpreter, List<object?> arguments)
     {
-        RuntimeEnvironment environment = new(_closure);
+        RuntimeEnvironment environment = new(_closure) { PrivateClass = PrivateOwner };
         await ParameterBinder.BindAsync(_declaration.Parameters, arguments, environment, interpreter);
 
         if (_declaration.Body == null)
@@ -163,7 +164,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
             // 'super' not in scope - ignore
         }
 
-        return new SharpTSAsyncFunction(_declaration, environment);
+        return new SharpTSAsyncFunction(_declaration, environment) { PrivateOwner = PrivateOwner };
     }
 
     /// <summary>
@@ -175,7 +176,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
     {
         RuntimeEnvironment environment = new(_closure);
         environment.Define("this", thisObject);
-        return new SharpTSAsyncFunction(_declaration, environment);
+        return new SharpTSAsyncFunction(_declaration, environment) { PrivateOwner = PrivateOwner };
     }
 
     public SharpTSAsyncFunction BindStatic(SharpTSClass klass)
@@ -184,7 +185,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
         environment.Define("this", klass);
         if (klass.Superclass != null)
             environment.Define("super", klass.Superclass);
-        return new SharpTSAsyncFunction(_declaration, environment);
+        return new SharpTSAsyncFunction(_declaration, environment) { PrivateOwner = PrivateOwner };
     }
 
     public override string ToString() => $"<async fn {_declaration.Name.Lexeme}>";
