@@ -294,13 +294,7 @@ public partial class RuntimeEmitter
         BigIntConversionInputs peers)
     {
         // CreateBigInt: object -> BigInteger (boxed)
-        var method = typeBuilder.DefineMethod(
-            "CreateBigInt",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object]
-        );
-        bigInt.Create = method;
+        var method = bigInt.Create;
 
         // Both BigInt(value) and ToBigInt(value) use ToPrimitive(value,
         // number). Keep it separate because their Number handling differs:

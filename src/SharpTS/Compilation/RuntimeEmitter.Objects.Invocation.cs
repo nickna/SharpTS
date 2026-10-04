@@ -44,7 +44,8 @@ public partial class RuntimeEmitter
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
         FieldInfo UndefinedInstance,
-        EmittedNumericCoercionRuntime NumericCoercion
+        EmittedNumericCoercionRuntime NumericCoercion,
+        EmittedBigIntImplementation? BigInt
     );
 
     private readonly record struct InvokeMethodValueInputs(
@@ -431,6 +432,32 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notObjectTypeLabel);
+
+        if (inputs.BigInt is { } bigInt)
+        {
+            var notBigIntType = il.DefineLabel();
+            var bigIntNoArg = il.DefineLabel();
+            var bigIntConvert = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.Type);
+            il.Emit(OpCodes.Ldtoken, _types.BigInteger);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", _types.Type, _types.Type));
+            il.Emit(OpCodes.Brfalse, notBigIntType);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Brfalse, bigIntNoArg);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Br, bigIntConvert);
+            il.MarkLabel(bigIntNoArg);
+            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+            il.MarkLabel(bigIntConvert);
+            il.Emit(OpCodes.Call, bigInt.Create);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notBigIntType);
+        }
 
         // Number's value form must perform the same explicit numeric coercion
         // as direct Number(x), including BigInt and the no-argument zero default.

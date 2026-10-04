@@ -7,6 +7,8 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1942-original.cjs", "const B=BigInt;console.log(BigInt('123'),B('123'),B.asUintN(8,-1n),(255n).toString(16));", "123n 123n 255n ff\n"];
+        yield return ["issue1942-controls.cjs", "const B=BigInt;console.log(B===BigInt,B(42),B(true),B('0xff'));try{B(1.5);}catch(e){console.log(e.name);}console.log(B.asIntN(8,255n));", "true 42n 1n 255n\nRangeError\n-1n\n"];
         yield return ["issue1941-original.ts", """
             const buffer=new ArrayBuffer(16);const view=new DataView(buffer);view.setBigInt64(0,-1n,true);view.setBigInt64(8,123n,true);const a=new BigInt64Array(buffer);const b=new BigUint64Array(buffer);console.log(a[0],a[1],a.length,b[0],b[1]);const value:any=a;try{value[0]=1n;}catch(e:any){console.log('assignment failed');}
             """, "-1n 123n 2 18446744073709551615n 123n\n"];

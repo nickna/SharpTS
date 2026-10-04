@@ -172,6 +172,9 @@ public partial class RuntimeEmitter
         // object-to-primitive helpers are available.
         if (_features.UsesBigInt)
         {
+            runtime.BigInt.RequireImplementation().Create = typeBuilder.DefineMethod(
+                "CreateBigInt", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.Object]);
             runtime.BigInt.RequireImplementation().ToBigInt = typeBuilder.DefineMethod(
                 "ToBigInt",
                 MethodAttributes.Public | MethodAttributes.Static,
