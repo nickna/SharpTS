@@ -1896,6 +1896,13 @@ alias are removed. Other compiler registries and shared infrastructure still req
 
 ### External CLR type declarations
 
+`TypeMapper` binds runtime, generated class and union owners once; repeating the same
+reference is idempotent, while null, replacement and foreign owners fail before publication.
+Generated class dictionaries stay live for declaration ordering, with module checks on
+consumed builders. Delegate adapters remain bound to that mapper's original runtime/module.
+Existing union and shape completion contracts remain in force. See the
+[mapper ownership audit](docs/compiler-ownership/I01.md).
+
 `TypeMapper.ExternalTypeDeclarations` owns one `ExternalTypeRegistry` per compilation.
 Class decorators and `dotnet:` imports register their aliases with this owner; class
 body selection, type mapping, interop call emission and dependency discovery read
