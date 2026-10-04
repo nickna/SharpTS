@@ -1251,6 +1251,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(newTypeDescriptorLabel);
+            EmitRejectInheritedStaticDataWrite(il, inputs.DescriptorStorage, inputs.IHasFieldsInterface, inputs.Errors, strict: false);
             var noComputedSetter = il.DefineLabel();
             var computedSetter = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
@@ -1911,6 +1912,58 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(doneLabel);
     }
+    // A writable inherited data property may create an own shadow. A read-only
+    // descriptor must reject that write before either the CLR field bridge or PDS
+    // assignment creates the shadow. Existing own properties take precedence.
+    private void EmitRejectInheritedStaticDataWrite(
+        ILGenerator il, EmittedDescriptorStorageRuntime descriptors, Type fieldsInterface,
+        EmittedErrorRuntime errors, bool strict)
+    {
+        var done = il.DefineLabel();
+        var owner = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Stloc, owner);
+        il.Emit(OpCodes.Ldloc, owner);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, descriptors.GetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, done);
+        var fieldOwner = EmitStaticMemberLookupOwner(il, owner, fieldsInterface);
+        il.Emit(OpCodes.Ldloc, fieldOwner);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        il.Emit(OpCodes.Brtrue, done);
+        var descriptor = il.DeclareLocal(descriptors.DescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, descriptors.GetStaticShadow);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt, descriptors.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, done);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt, descriptors.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, done);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt, descriptors.DescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, done);
+        if (strict)
+        {
+            var silent = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, silent);
+            EmitThrowTypeErrorWithName(il, errors, "Cannot assign to read only property '", "' of class");
+            il.MarkLabel(silent);
+        }
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(done);
+    }
+
     /// <summary>
     /// Emits SetPropertyStrict(object obj, string name, object value, bool strictMode) -> void
     /// In strict mode, throws TypeError for modifications to frozen objects or new properties on sealed objects.
@@ -2030,6 +2083,7 @@ public partial class RuntimeEmitter
         // same storage/shadow path as value-position writes outside the class.
         // Restrict this bridge to emitted generic classes with a reflected data
         // field; other receiver kinds retain their dedicated assignment paths.
+        EmitRejectInheritedStaticDataWrite(il, inputs.DescriptorStorage, inputs.IHasFieldsInterface, inputs.Errors, strict: true);
         var notGenericStaticField = il.DefineLabel();
         var genericOwner = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldarg_0);

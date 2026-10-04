@@ -20,9 +20,7 @@ public sealed class ClassStaticDescriptorTests
         Assert.Equal("12\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    // #1900 owns the interpreter repair; the compiled inherited-descriptor
-    // failure is recorded separately from the frozen epic in #1958.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void StrictWritesRejectOwnAndInheritedNonWritableStatics(ExecutionMode mode)
     {
         const string source = """

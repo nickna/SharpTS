@@ -1273,7 +1273,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnNullLabel);
 
         // desc = GetPropertyDescriptor(walkType, propertyKey);
+        // Generic class constructor values use the definition token, whereas
+        // BaseType may be a constructed Base<T>. Probe the same PDS identity.
+        var descriptorOwner = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldloc, walkTypeLocal);
+        il.Emit(OpCodes.Stloc, descriptorOwner);
+        var probeDescriptor = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descriptorOwner);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsGenericType").GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, probeDescriptor);
+        il.Emit(OpCodes.Ldloc, descriptorOwner);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+        il.Emit(OpCodes.Stloc, descriptorOwner);
+        il.MarkLabel(probeDescriptor);
+        il.Emit(OpCodes.Ldloc, descriptorOwner);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, storage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);

@@ -7,6 +7,8 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1958-original.ts", "\"use strict\";class Base<T>{static count=4;}class Derived<T> extends Base<T>{}const derived:any=Derived;Object.defineProperty(Base,'count',{value:4,writable:false});try{derived['count']=10;}catch(e){console.log(e instanceof TypeError);}console.log((Base as any).count,derived.count,Object.hasOwn(Derived,'count'));", "true\n4 4 false\n"];
+        yield return ["issue1958-controls.ts", "class Base{static count=4;static writable=5;}class Derived extends Base{}const b:any=Base;const d:any=Derived;Object.defineProperty(Base,'count',{value:4,writable:false});d.count=10;d['count']=11;d.writable=12;console.log(b.count,d.count,Object.hasOwn(Derived,'count'),b.writable,d.writable);function strictWrite(){'use strict';try{d.count=9;}catch(e){console.log(e instanceof TypeError);}}strictWrite();console.log(b.count,d.count);", "4 4 false 5 12\ntrue\n4 4\n"];
         yield return ["issue1954-original.ts", "const value:any='ab';console.log(Object.prototype.propertyIsEnumerable.call(value,'length'),Object.keys(value).join(','));", "false 0,1\n"];
         yield return ["issue1954-controls.ts", "const pie:any=Object.prototype.propertyIsEnumerable;for(const value of ['', 'ab', new String('ab')]){console.log(pie.call(value,'length'),pie.call(value,'missing'),Object.keys(value).join(','));}console.log(pie.call(new String('ab'),'0'));", "false false \nfalse false 0,1\nfalse false 0,1\ntrue\n"];
         yield return ["issue1939-original.ts", "async function run(){const n=await Promise.resolve(7n);console.log(BigInt.asIntN(3,n),n+2n);}run().catch((e:any)=>console.log(e.name,e.message));", "-1n 9n\n"];
