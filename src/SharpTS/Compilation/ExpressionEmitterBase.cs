@@ -369,8 +369,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     /// <summary>
     /// Emits a literal value. Default uses helper methods (EmitNullConstant, EmitDoubleConstant, etc.).
-    /// ILEmitter overrides for BigInteger/SharpTSUndefined support.
-    /// AsyncArrowMoveNextEmitter overrides for eager boxing.
+    /// BigInteger literals are boxed consistently in synchronous and state-machine bodies.
     /// </summary>
     protected virtual void EmitLiteral(Expr.Literal lit)
     {
@@ -380,6 +379,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             case double d: EmitDoubleConstant(d); break;
             case bool b: EmitBoolConstant(b); break;
             case string s: EmitStringConstant(s); break;
+            case System.Numerics.BigInteger integer: EmitBigIntConstant(integer); break;
             // The `undefined` keyword parses to a Literal holding the $Undefined sentinel
             // (Parser.Expressions.cs), as do array holes. State-machine emitters use this base
             // method, so without an explicit arm `undefined` would fall to `default` and emit
@@ -389,6 +389,22 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             case Runtime.Types.SharpTSUndefined: EmitUndefinedConstant(); break;
             default: IL.Emit(OpCodes.Ldnull); SetStackUnknown(); break;
         }
+    }
+
+    protected void EmitBigIntConstant(System.Numerics.BigInteger value)
+    {
+        if (value >= long.MinValue && value <= long.MaxValue)
+        {
+            IL.Emit(OpCodes.Ldc_I8, (long)value);
+            IL.Emit(OpCodes.Newobj, Types.GetConstructor(Types.BigInteger, Types.Int64));
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldstr, value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            IL.Emit(OpCodes.Call, Types.GetMethod(Types.BigInteger, "Parse", Types.String));
+        }
+        IL.Emit(OpCodes.Box, Types.BigInteger);
+        SetStackUnknown();
     }
 
     /// <summary>
@@ -2623,6 +2639,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitUnary(Expr.Unary u)
     {
+        if (u.Operator.Type == TokenType.MINUS && u.Right is Expr.Literal { Value: System.Numerics.BigInteger value })
+        {
+            EmitBigIntConstant(-value);
+            return;
+        }
+
         switch (u.Operator.Type)
         {
             case TokenType.MINUS:
