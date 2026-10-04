@@ -7,6 +7,28 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1950-original.ts", """
+            let first = Symbol("first");
+            let second = Symbol("second");
+            let obj: any = {};
+            obj[first] = 1;
+            obj[second] = 2;
+            Object.defineProperty(obj, first, { get: () => 3 });
+            let objectKeys = Object.getOwnPropertySymbols(obj);
+            console.log(objectKeys[0] === first, objectKeys[1] === second);
+            delete obj[first];
+            obj[first] = 4;
+            objectKeys = Object.getOwnPropertySymbols(obj);
+            console.log(objectKeys[0] === second, objectKeys[1] === first);
+            let array: any = [];
+            array[first] = 1;
+            array[second] = 2;
+            Object.defineProperty(array, first, { writable: false });
+            let arrayKeys = Object.getOwnPropertySymbols(array);
+            console.log(arrayKeys[0] === first, arrayKeys[1] === second);
+            console.log(Object.getOwnPropertyDescriptor(array, first)!.writable);
+            """, "true true\ntrue true\ntrue true\nfalse\n"];
+        yield return ["issue1950-controls.ts", "const a=Symbol('a'),b=Symbol('b'),c=Symbol('c'),d=Symbol('d');const value:any={};value[a]=1;value[b]=2;value[c]=3;delete value[b];value[d]=4;value[b]=5;let keys=Object.getOwnPropertySymbols(value);console.log(keys[0]===a,keys[1]===c,keys[2]===d,keys[3]===b);delete value[a];value[a]=6;keys=Object.getOwnPropertySymbols(value);console.log(keys[0]===c,keys[1]===d,keys[2]===b,keys[3]===a,value[c],value[d],value[b],value[a]);", "true true true true\ntrue true true true 3 4 5 6\n"];
         yield return ["issue1949-original.ts", "const value:any={[Symbol.toStringTag]:'Widget'};console.log(Object.prototype.toString.call(value));console.log(value[Symbol.toStringTag]);", "[object Widget]\nWidget\n"];
         yield return ["issue1949-controls.ts", "const value:any={};console.log(Object.prototype.toString.call(value));value[Symbol.toStringTag]=42;console.log(Object.prototype.toString.call(value));value[Symbol.toStringTag]='';console.log(Object.prototype.toString.call(value));delete value[Symbol.toStringTag];console.log(Object.prototype.toString.call(value),Object.prototype.toString.call(null),Object.prototype.toString.call(undefined));", "[object Object]\n[object Object]\n[object ]\n[object Object] [object Null] [object Undefined]\n"];
         yield return ["issue1948-original.ts", "'use strict';const value:any={};Object.defineProperty(value,'a',{value:1,writable:false});try{value.a=2;}catch(e:any){console.log(e.name);}console.log(value.a);", "TypeError\n1\n"];
