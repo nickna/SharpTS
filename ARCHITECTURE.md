@@ -1964,6 +1964,8 @@ Method and indexer arrays are caller-owned copies of private cached arrays; the 
 member handles retain identity. Mutating a returned array cannot affect another lookup.
 TypeProvider also snapshots signature keys and excludes collectible types from strong
 name/member caches, including non-dynamic assemblies loaded into collectible contexts.
+Both name resolvers bypass their default-context caches during explicit contextual
+reflection, preserving distinct CLR identities for the same assembly-qualified name.
 Managed/native feature checks and member filtering
 remain at the lookup boundary. This shared cache owns no emitted declarations or
 per-compilation CLR alias bindings.

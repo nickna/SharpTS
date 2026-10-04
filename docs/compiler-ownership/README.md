@@ -25,7 +25,7 @@ inventory counts.
 | M01 / #1894 | [Allocate path-owned module prefixes; retain module namespace](M01.md) | `8117060b` | 73 + 354 |
 | M02 / #1895 | [Retain enum snapshots and runtime value authority](M02.md) | `4d6e5eb2` | 124 |
 | I01 / #1896 | [Reject mapper configuration from another owner](I01.md) | `e7da1a36` | 18 + 205 |
-| I02 / #1897 | [Protect signature/result arrays and collectible lifetimes](I02.md) | `a502a88f` | 26 + 166 |
+| I02 / #1897 | [Protect signature/result arrays, collectible lifetimes and context identities](I02.md) | `a502a88f`, context follow-up | 26 + 166 + 33 |
 | I03 / #1898 | [Retain fixed catalogs and checked strategy registration](I03.md) | `8363e3b3` | 384 |
 | I04 / #1899 | [Retain fixed runtime targets and deployment contracts](I04.md) | `45a790d7` | 106 + 17 + 22 |
 

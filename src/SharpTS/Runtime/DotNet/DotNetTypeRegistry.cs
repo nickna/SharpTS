@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using SharpTS.Declaration;
 
 namespace SharpTS.Runtime.DotNet;
@@ -41,7 +42,8 @@ public static class DotNetTypeRegistry
     public static Type? Resolve(string clrTypeName)
     {
         var generation = Volatile.Read(ref _current);
-        if (generation.Names.TryGetValue(clrTypeName, out var cached)) return cached;
+        bool contextual = AssemblyLoadContext.CurrentContextualReflectionContext != null;
+        if (!contextual && generation.Names.TryGetValue(clrTypeName, out var cached)) return cached;
 
         var type = ManagedDotNetInterop.ResolveType(clrTypeName);
         if (type == null && System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
@@ -64,7 +66,7 @@ public static class DotNetTypeRegistry
 
         // A string key has no CLR lifetime relationship. Never root collectible types
         // through name resolution; their member results are cached under weak type keys.
-        if (type != null && !type.IsCollectible)
+        if (type != null && !type.IsCollectible && !contextual)
         {
             generation.Names[clrTypeName] = type;
         }

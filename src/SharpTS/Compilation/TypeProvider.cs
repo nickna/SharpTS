@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using SharpTS.Diagnostics.Exceptions;
 
 namespace SharpTS.Compilation;
@@ -559,6 +560,10 @@ public class TypeProvider
     /// </summary>
     public Type Resolve(string fullName)
     {
+        // The same assembly-qualified name can resolve to different type identities
+        // in a contextual load scope. Do not consult or publish the default cache.
+        if (AssemblyLoadContext.CurrentContextualReflectionContext != null)
+            return ResolveCore(fullName);
         if (_typeCache.TryGetValue(fullName, out var cached))
             return cached;
         var type = ResolveCore(fullName);

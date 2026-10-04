@@ -78,6 +78,35 @@ public sealed class TypeProviderCacheOwnershipTests
         Assert.False(context.IsAlive);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResolutionKeepsContextIdentityAfterAnOrdinaryLookup(bool generic)
+    {
+        var ordinaryType = generic ? typeof(List<Probe>) : typeof(Probe);
+        string name = ordinaryType.AssemblyQualifiedName!;
+        Assert.Same(ordinaryType, TypeProvider.Runtime.Resolve(name));
+        Assert.Same(ordinaryType, DotNetTypeRegistry.Resolve(name));
+        var context = new AssemblyLoadContext("resolution_" + Guid.NewGuid().ToString("N"), isCollectible: true);
+        try
+        {
+            var assembly = context.LoadFromAssemblyPath(typeof(Probe).Assembly.Location);
+            var localProbe = assembly.GetType(typeof(Probe).FullName!)!;
+            var contextualType = generic ? typeof(List<>).MakeGenericType(localProbe) : localProbe;
+            using (context.EnterContextualReflection())
+            {
+                Assert.Same(contextualType, TypeProvider.Runtime.Resolve(name));
+                Assert.Same(contextualType, DotNetTypeRegistry.Resolve(name));
+            }
+            Assert.Same(ordinaryType, TypeProvider.Runtime.Resolve(name));
+            Assert.Same(ordinaryType, DotNetTypeRegistry.Resolve(name));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference LookupLoadedCollectible()
     {
