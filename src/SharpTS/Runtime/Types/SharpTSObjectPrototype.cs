@@ -288,6 +288,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         // only when a specific spec test needs them.
         if (target == null) return "[object Null]";
         if (target is SharpTSUndefined) return "[object Undefined]";
+        if (interpreter?.GetSymbolPropertyValue(target, SharpTSSymbol.ToStringTag) is string customTag)
+            return $"[object {customTag}]";
         if (target is string) return "[object String]";
         if (target is double or int) return "[object Number]";
         if (target is bool) return "[object Boolean]";

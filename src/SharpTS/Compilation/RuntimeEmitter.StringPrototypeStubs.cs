@@ -469,6 +469,23 @@ public partial class RuntimeEmitter
         EmitTag("[object Undefined]");
         il.MarkLabel(notUndefLabel);
 
+        var customTag = il.DeclareLocal(_types.String);
+        var noCustomTag = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.ToStringTag);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, customTag);
+        il.Emit(OpCodes.Ldloc, customTag);
+        il.Emit(OpCodes.Brfalse, noCustomTag);
+        il.Emit(OpCodes.Ldstr, "[object ");
+        il.Emit(OpCodes.Ldloc, customTag);
+        il.Emit(OpCodes.Ldstr, "]");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "Concat", _types.String, _types.String, _types.String));
+        il.Emit(OpCodes.Br, endLabel);
+        il.MarkLabel(noCustomTag);
+
         // Math singleton
         var notMathLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

@@ -7,6 +7,8 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1949-original.ts", "const value:any={[Symbol.toStringTag]:'Widget'};console.log(Object.prototype.toString.call(value));console.log(value[Symbol.toStringTag]);", "[object Widget]\nWidget\n"];
+        yield return ["issue1949-controls.ts", "const value:any={};console.log(Object.prototype.toString.call(value));value[Symbol.toStringTag]=42;console.log(Object.prototype.toString.call(value));value[Symbol.toStringTag]='';console.log(Object.prototype.toString.call(value));delete value[Symbol.toStringTag];console.log(Object.prototype.toString.call(value),Object.prototype.toString.call(null),Object.prototype.toString.call(undefined));", "[object Object]\n[object Object]\n[object ]\n[object Object] [object Null] [object Undefined]\n"];
         yield return ["issue1948-original.ts", "'use strict';const value:any={};Object.defineProperty(value,'a',{value:1,writable:false});try{value.a=2;}catch(e:any){console.log(e.name);}console.log(value.a);", "TypeError\n1\n"];
         yield return ["issue1948-controls.ts", "const value:any={};Object.defineProperty(value,'a',{value:1,writable:false});value.a=2;console.log(value.a);function strictWrite(){'use strict';try{value.a=3;}catch(e:any){console.log(e.name);}}strictWrite();console.log(value.a);", "1\nTypeError\n1\n"];
         yield return ["issue1947-original.ts", "const proto:any={set value(v:number){(this as any).own=v;}};const value:any=Object.create(proto);value.value=9;console.log(value.own,Object.hasOwn(value,'own'),Object.hasOwn(proto,'own'));", "9 true false\n"];
