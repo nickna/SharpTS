@@ -234,31 +234,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, returnNullLabel);
 
-        void EmitGlobalDescriptorCheck(
-            string name, bool writable, bool configurable)
+        // Standard globals share two descriptor shapes. Branch to one builder
+        // per shape instead of emitting the same dictionary construction for
+        // each name; the lookup still uses the matched property name.
+        var writableGlobalLabel = il.DefineLabel();
+        var constantGlobalLabel = il.DefineLabel();
+
+        void EmitGlobalDescriptorCheck(string name, Label matchedLabel)
         {
-            var next = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, propNameLocal);
             il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Call, _types.GetMethod(
                 _types.String, "op_Equality", _types.String, _types.String));
-            il.Emit(OpCodes.Brfalse, next);
-            EmitBuiltinDataDescriptor(il, resultDictLocal, endLabel, () =>
-            {
-                il.Emit(OpCodes.Ldstr, name);
-                il.Emit(OpCodes.Call, inputs.GlobalThisGetProperty);
-            }, writable, configurable);
-            il.MarkLabel(next);
+            il.Emit(OpCodes.Brtrue, matchedLabel);
         }
-        EmitGlobalDescriptorCheck("parseInt", true, true);
-        EmitGlobalDescriptorCheck("parseFloat", true, true);
-        EmitGlobalDescriptorCheck("isNaN", true, true);
-        EmitGlobalDescriptorCheck("isFinite", true, true);
-        EmitGlobalDescriptorCheck("eval", true, true);
-        EmitGlobalDescriptorCheck("NaN", false, false);
-        EmitGlobalDescriptorCheck("Infinity", false, false);
-        EmitGlobalDescriptorCheck("undefined", false, false);
-        EmitGlobalDescriptorCheck("globalThis", true, true);
+        EmitGlobalDescriptorCheck("parseInt", writableGlobalLabel);
+        EmitGlobalDescriptorCheck("parseFloat", writableGlobalLabel);
+        EmitGlobalDescriptorCheck("isNaN", writableGlobalLabel);
+        EmitGlobalDescriptorCheck("isFinite", writableGlobalLabel);
+        EmitGlobalDescriptorCheck("eval", writableGlobalLabel);
+        EmitGlobalDescriptorCheck("NaN", constantGlobalLabel);
+        EmitGlobalDescriptorCheck("Infinity", constantGlobalLabel);
+        EmitGlobalDescriptorCheck("undefined", constantGlobalLabel);
+        EmitGlobalDescriptorCheck("globalThis", writableGlobalLabel);
         foreach (var globalName in new[]
         {
             "Array", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
@@ -267,9 +265,22 @@ public partial class RuntimeEmitter
             "SyntaxError", "URIError", "EvalError", "AggregateError", "Math", "JSON"
         })
         {
-            EmitGlobalDescriptorCheck(globalName, true, true);
+            EmitGlobalDescriptorCheck(globalName, writableGlobalLabel);
         }
         il.Emit(OpCodes.Br, returnNullLabel);
+
+        void EmitGlobalValue()
+        {
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Call, inputs.GlobalThisGetProperty);
+        }
+
+        il.MarkLabel(writableGlobalLabel);
+        EmitBuiltinDataDescriptor(il, resultDictLocal, endLabel,
+            EmitGlobalValue, writable: true, configurable: true);
+        il.MarkLabel(constantGlobalLabel);
+        EmitBuiltinDataDescriptor(il, resultDictLocal, endLabel,
+            EmitGlobalValue, writable: false, configurable: false);
         il.MarkLabel(notGlobalObjectLabel);
     }
 
