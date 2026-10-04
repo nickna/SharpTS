@@ -7,6 +7,12 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1946-original.ts", "const proto:any={base:3,get value(){return (this as any).own+this.base;}};const value:any=Object.create(proto);value.own=4;console.log(value.value,'base' in value,Object.hasOwn(value,'base'),Object.getPrototypeOf(value)===proto);", "7 true false true\n"];
+        yield return ["issue1946-controls.ts", """
+            let calls=0;const proto:any={base:3,get value(){calls++;return (this as any).own+this.base;}};const middle:any=Object.create(proto);const value:any=Object.create(middle);value.own=4;console.log(value['value'],calls,Object.hasOwn(proto,'own'));
+            Object.defineProperty(value,'value',{value:20});console.log(value.value,calls);
+            const defined:any={};Object.defineProperty(defined,'value',{get(){return (this as any).own;}});const child:any=Object.create(defined);child.own=8;console.log(child.value);
+            """, "7 1 false\n20 1\n8\n"];
         yield return ["issue1945-original.cjs", "const N=Number;console.log(Number('2'),N('2'),N===Number);", "2 2 true\n"];
         yield return ["issue1945-controls.cjs", "const N=Number;console.log(N(),N(null),N(true),N('0x10'),N(42n),Number.isNaN(N(undefined)));const value={valueOf(){return 7;}};console.log(N(value),N===Number);", "0 0 1 16 42 true\n7 true\n"];
         yield return ["issue1944-original.cjs", "const B=Boolean;console.log(Boolean(0),Boolean('x'),B(0),B('x'),B===Boolean);", "false true false true true\n"];

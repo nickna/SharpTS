@@ -2074,7 +2074,8 @@ public partial class RuntimeEmitter
                 runtime.Invocation.Method,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Sentinels.UndefinedType,
-                runtime.ObjectRead.Property
+                runtime.ObjectRead.Property,
+                runtime.ObjectPrototypes.GetPrototypeOf
             )
         );
         if (runtime.Reflect.Assignment is not null)
