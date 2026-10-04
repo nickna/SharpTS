@@ -659,6 +659,7 @@ public partial class ILCompiler
     private void AnalyzeClosuresAndPromotions(List<Stmt> statements, IReadOnlyList<ParsedModule>? modules = null)
     {
         Phase2_AnalyzeClosures(statements);
+        _closures.ConstArrowBindings = ConstArrowBindingAnalyzer.Collect(statements);
         StableMapIterationAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StableCustomIteratorAnalyzer.Analyze(
             statements, _typeMap, _closures.Analyzer, _features);
