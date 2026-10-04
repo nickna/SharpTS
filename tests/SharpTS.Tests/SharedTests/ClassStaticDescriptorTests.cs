@@ -72,8 +72,7 @@ public sealed class ClassStaticDescriptorTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n4 4\n", TestHarness.Run(source, mode));
     }
 
-    // Attribute-only compiled definitions have a separate pre-existing gap (#1959).
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void AttributeOnlyDefinitionPreservesStaticValue(ExecutionMode mode)
     {
         const string source = """
