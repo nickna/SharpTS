@@ -7,6 +7,8 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1951-original.ts", "const value:any=[1,2];const d:any=Object.getOwnPropertyDescriptor(value,'length');console.log(d.value,d.writable,d.enumerable,d.configurable);console.log(Object.prototype.propertyIsEnumerable.call(value,'length'),Object.keys(value).join(','));", "2 true false false\nfalse 0,1\n"];
+        yield return ["issue1951-controls.ts", "const a:any=[1,2];console.log(Object.prototype.propertyIsEnumerable.call(a,'0'),Object.prototype.propertyIsEnumerable.call(a,'missing'));Object.defineProperty(a,'length',{writable:false});console.log(Object.prototype.propertyIsEnumerable.call(a,'length'),Object.getOwnPropertyDescriptor(a,'length')!.writable);const s:any=new String('ab');const d:any=Object.getOwnPropertyDescriptor(s,'length');console.log(d.value,d.enumerable,Object.keys(s).join(','),Object.keys('ab').join(','));", "true false\nfalse false\n2 false 0,1 0,1\n"];
         yield return ["issue1950-original.ts", """
             let first = Symbol("first");
             let second = Symbol("second");

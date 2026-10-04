@@ -866,6 +866,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.ObjectOwnProperties,
             new PropertyIsEnumerableHelperInputs(
+                runtime.ArrayStorage,
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.RegExps,
