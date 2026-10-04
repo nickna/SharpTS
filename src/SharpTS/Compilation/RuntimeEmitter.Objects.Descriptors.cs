@@ -1582,6 +1582,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, propNameLocal);
 
+        EmitGetOwnDescriptorPrimitiveStringLength(il, propNameLocal, resultDictLocal, endLabel);
+
         EmitGetOwnDescriptorGlobalReceiver(
             il,
             new GetOwnDescriptorGlobalReceiverInputs(

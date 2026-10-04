@@ -11,6 +11,7 @@ using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
 
+[Collection("ExternalProcessTests")]
 public sealed class HistoricalRuntimeDeploymentTests
 {
     [Theory]
@@ -29,7 +30,8 @@ public sealed class HistoricalRuntimeDeploymentTests
             Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
             Assert.Contains("IL verification passed.", compile.StandardOutput);
             Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
-            Assert.Equal(expected, hosted ? RunHosted(output) : RunStandalone(output));
+            HistoricalRuntimeRegressionTests.AssertReferenceOutput(file, expected,
+                hosted ? RunHosted(output) : RunStandalone(output));
         }
     }
 

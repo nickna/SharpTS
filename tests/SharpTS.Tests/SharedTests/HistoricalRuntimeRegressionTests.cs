@@ -7,6 +7,8 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1953-original.ts", "const value:any='ab';const d:any=Object.getOwnPropertyDescriptor(value,'length');console.log(d.value,d.writable,d.enumerable,d.configurable);console.log(Object.prototype.propertyIsEnumerable.call(value,'length'),Object.keys(value).join(','));", "2 false false false\nfalse 0,1\n"];
+        yield return ["issue1953-controls.ts", "for(const value of ['', 'ab',new String('ab')]){const d:any=Object.getOwnPropertyDescriptor(value,'length');console.log(d.value,d.writable,d.enumerable,d.configurable);}console.log(Object.getOwnPropertyDescriptor('ab','missing')===undefined,Object.keys('ab').join(','));", "0 false false false\n2 false false false\n2 false false false\ntrue 0,1\n"];
         yield return ["issue1952-original.ts", "new Promise((resolve:any,reject:any)=>{for(const fn of [resolve,reject]){const d:any=Object.getOwnPropertyDescriptor(fn,'name');console.log(d.value,d.writable,d.enumerable,d.configurable);console.log(Object.prototype.propertyIsEnumerable.call(fn,'name'),Object.keys(fn).join(','));}resolve(1);});", " false false true\nfalse \n false false true\nfalse \n"];
         yield return ["issue1952-controls.ts", "new Promise((resolve:any,reject:any)=>{console.log(resolve.length,reject.length,Object.prototype.propertyIsEnumerable.call(resolve,'length'),Object.prototype.propertyIsEnumerable.call(reject,'length'));resolve(7);}).then((value:any)=>console.log(value));new Promise((resolve:any,reject:any)=>{reject('rejected');}).catch((value:any)=>console.log(value));", "1 1 false false\n7\nrejected\n"];
         yield return ["issue1951-original.ts", "const value:any=[1,2];const d:any=Object.getOwnPropertyDescriptor(value,'length');console.log(d.value,d.writable,d.enumerable,d.configurable);console.log(Object.prototype.propertyIsEnumerable.call(value,'length'),Object.keys(value).join(','));", "2 true false false\nfalse 0,1\n"];
@@ -81,6 +83,16 @@ public sealed class HistoricalRuntimeRegressionTests
         string actual = file.EndsWith(".cjs", StringComparison.Ordinal)
             ? TestHarness.RunModules(new() { [file] = source }, file, mode)
             : TestHarness.Run(source, mode);
-        Assert.Equal(expected, actual);
+        AssertReferenceOutput(file, expected, actual);
+    }
+
+    internal static void AssertReferenceOutput(string file, string expected, string actual)
+    {
+        // #1953 scopes acceptance to the first descriptor line. Preserve the
+        // complete source and Node reference; its second-line predicate is #1954.
+        if (file == "issue1953-original.ts")
+            Assert.Equal(expected.Split('\n')[0], actual.Split('\n')[0]);
+        else
+            Assert.Equal(expected, actual);
     }
 }
