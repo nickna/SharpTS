@@ -62,8 +62,7 @@ public partial class ILCompiler
                 _classes.TypedPrimitiveInstanceMethodCores.Count > 0
                     ? _classes.TypedPrimitiveInstanceMethodCores
                     : null,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
+            FunctionGenericParameters = _functions.GenericParameters,
             SuspensionFreePrimitiveAsyncCores =
                 _async.StableSuspensionFreePrimitiveCores.Count > 0
                     ? _async.StableSuspensionFreePrimitiveCores
@@ -252,8 +251,7 @@ public partial class ILCompiler
             LiteralNumericRestMethods = parentCtx.LiteralNumericRestMethods,
             FunctionLengths = parentCtx.FunctionLengths,
             FunctionNames = parentCtx.FunctionNames,
-            FunctionGenericParams = parentCtx.FunctionGenericParams,
-            IsGenericFunction = parentCtx.IsGenericFunction,
+            FunctionGenericParameters = parentCtx.FunctionGenericParameters,
             TypeMap = parentCtx.TypeMap,
             DeadCode = parentCtx.DeadCode,
             AsyncMethods = null,

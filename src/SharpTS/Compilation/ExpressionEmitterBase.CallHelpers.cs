@@ -192,8 +192,10 @@ public abstract partial class ExpressionEmitterBase
                 MethodInfo targetMethod = methodBuilder;
 
                 // Generic function instantiation
-                if (Ctx.IsGenericFunction?.TryGetValue(resolvedFuncName, out var isGeneric) == true && isGeneric)
+                if (methodBuilder.IsGenericMethodDefinition)
                 {
+                    var genericParams = Ctx.FunctionGenericParameters?.Require(methodBuilder)
+                        ?? throw new InvalidOperationException("Function generic parameter owner is unavailable.");
                     if (c.TypeArgs != null && c.TypeArgs.Count > 0)
                     {
                         Type[] typeArgs = c.TypeArgs.Select(ResolveTypeArg).ToArray();
@@ -201,9 +203,8 @@ public abstract partial class ExpressionEmitterBase
                     }
                     else
                     {
-                        var genericParams = Ctx.FunctionGenericParams![resolvedFuncName];
-                        Type[] inferredArgs = new Type[genericParams.Length];
-                        for (int i = 0; i < genericParams.Length; i++)
+                        Type[] inferredArgs = new Type[genericParams.Count];
+                        for (int i = 0; i < genericParams.Count; i++)
                         {
                             var baseConstraint = genericParams[i].BaseType;
                             inferredArgs[i] = (baseConstraint != null && !Types.IsObject(baseConstraint))

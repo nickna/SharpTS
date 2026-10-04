@@ -1941,6 +1941,17 @@ callers must not mutate them. Managed/native feature checks and member filtering
 remain at the lookup boundary. This shared cache owns no emitted declarations or
 per-compilation CLR alias bindings.
 
+### Generic function declarations
+
+`FunctionGenericParameterRegistry` owns ordinary function parameter declarations by
+`MethodBuilder` identity, including explicit empty non-generic declarations. Name and
+namespace aliases select a method but do not own generic status or parameter order.
+Registration checks owner identity, arity and order and snapshots the parameter list;
+consumers receive a read-only view. Registration remains open through guest body and
+module initializer emission and completes immediately before type finalization in both
+compiler pipelines. Completion revalidates declarations and rejects later writes.
+Nested erased functions and non-generic suspension stubs retain their existing signatures.
+
 ### Generated union metadata
 
 `UnionTypeGenerator` fixes its type mapper and marker interface at construction. The

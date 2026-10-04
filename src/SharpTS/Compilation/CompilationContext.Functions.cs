@@ -69,11 +69,7 @@ public partial class CompilationContext
     // Method overloads for default parameters: class name -> method name -> list of overload methods
     public Dictionary<string, Dictionary<string, List<MethodBuilder>>>? MethodOverloads { get; set; }
 
-    // Track generic params per function for instantiation
-    public Dictionary<string, GenericTypeParameterBuilder[]>? FunctionGenericParams { get; set; }
-
-    // Track which functions are generic definitions
-    public Dictionary<string, bool>? IsGenericFunction { get; set; }
+    public FunctionGenericParameterRegistry? FunctionGenericParameters { get; set; }
 
     /// <summary>
     /// ECMAScript <c>Function.length</c> values keyed by emitted user method. Unlike CLR

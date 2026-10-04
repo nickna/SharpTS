@@ -1097,6 +1097,7 @@ public partial class ILCompiler
     {
         _classes.GenericParameters.CompleteEmission(_classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
+        _functions.GenericParameters.CompleteEmission();
         _classes.PrivateElements.CompleteEmission();
         _classes.PropertyDispatch.CompleteEmission();
         _classes.ComputedMembers.CompleteEmission();
@@ -1661,6 +1662,7 @@ public partial class ILCompiler
     {
         _classes.GenericParameters.CompleteEmission(_classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
+        _functions.GenericParameters.CompleteEmission();
         _classes.PrivateElements.CompleteEmission();
         _classes.PropertyDispatch.CompleteEmission();
         _classes.ComputedMembers.CompleteEmission();
