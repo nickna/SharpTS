@@ -4979,11 +4979,10 @@ public class StandaloneDllTests
             "dataview_only", "const view=new DataView(new ArrayBuffer(8));view.setInt32(0,42,true);console.log(view.getInt32(0,true));",
             "42\n", "main.ts"
         },
-        // Preserve the existing compatibility limitation while changing metadata ownership.
         new object[]
         {
             "typedarray", "const buffer=new ArrayBuffer(16);const view=new DataView(buffer);view.setBigInt64(0,-1n,true);view.setBigInt64(8,123n,true);const a=new BigInt64Array(buffer);const b=new BigUint64Array(buffer);console.log(a[0],a[1],a.length,b[0],b[1]);const value:any=a;try{value[0]=1n;}catch(e:any){console.log('assignment failed');}",
-            "-1n 123n 2 18446744073709551615n 123n\nassignment failed\n", "main.ts"
+            "-1n 123n 2 18446744073709551615n 123n\n", "main.ts"
         },
         new object[]
         {
@@ -5005,11 +5004,10 @@ public class StandaloneDllTests
             "generator", "function* values():Generator<bigint,void,any>{yield BigInt('7');yield BigInt('9');}for(const n of values()){console.log(n);}",
             "7n\n9n\n", "main.ts"
         },
-        // Preserve the existing compatibility limitation while changing metadata ownership.
         new object[]
         {
             "cjs", "const B=BigInt;console.log(BigInt('123'),B('123'),B.asUintN(8,-1n),(255n).toString(16));",
-            "123n null 255n ff\n", "main.cjs"
+            "123n 123n 255n ff\n", "main.cjs"
         },
         new object[]
         {
@@ -5133,11 +5131,10 @@ public class StandaloneDllTests
             "generator", "function* values():Generator<boolean,void,any>{yield true;yield false;}for(const value of values())console.log(Boolean(value),!value);",
             "true false\nfalse true\n", "main.ts"
         },
-        // Preserve the existing compatibility limitation while changing metadata ownership.
         new object[]
         {
             "cjs", "const B=Boolean;console.log(Boolean(0),Boolean('x'),B(0),B('x'),B===Boolean);",
-            "false true null null true\n", "main.cjs"
+            "false true false true true\n", "main.cjs"
         },
         new object[]
         {
@@ -5321,17 +5318,15 @@ public class StandaloneDllTests
             "prevent_extensions", "function run(){'use strict';const value:any={a:1};Object.preventExtensions(value);value.a=2;console.log(value.a,Object.isExtensible(value),Object.isSealed(value));try{value.b=3;}catch(e:any){console.log(e.name);}}run();",
             "2 false false\nTypeError\n", true
         },
-        // Preserve the existing inherited-accessor limitation while changing storage ownership.
         new object[]
         {
             "prototype", "const proto:any={base:3,get value(){return (this as any).own+this.base;}};const value:any=Object.create(proto);value.own=4;console.log(value.value,'base' in value,Object.hasOwn(value,'base'),Object.getPrototypeOf(value)===proto);",
-            "NaN true false true\n", true
+            "7 true false true\n", true
         },
-        // Preserve the existing inherited-accessor limitation while changing storage ownership.
         new object[]
         {
             "inherited_setter", "const proto:any={set value(v:number){(this as any).own=v;}};const value:any=Object.create(proto);value.value=9;console.log(value.own,Object.hasOwn(value,'own'),Object.hasOwn(proto,'own'));",
-            "undefined false false\n", true
+            "9 true false\n", true
         },
         new object[]
         {

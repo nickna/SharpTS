@@ -45,7 +45,7 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         FieldInfo UndefinedInstance,
         EmittedNumericCoercionRuntime NumericCoercion,
-        EmittedBigIntImplementation? BigInt,
+        EmittedBigIntRuntime BigInt,
         EmittedBooleanRuntime Booleans
     );
 
@@ -434,7 +434,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notObjectTypeLabel);
 
-        if (inputs.BigInt is { } bigInt)
+        if (inputs.BigInt.Implementation is { } bigInt)
         {
             var notBigIntType = il.DefineLabel();
             var bigIntNoArg = il.DefineLabel();

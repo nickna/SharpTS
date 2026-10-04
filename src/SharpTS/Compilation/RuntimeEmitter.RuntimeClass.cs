@@ -957,6 +957,12 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.String, _types.Object]);
+        // Constructor aliases need the conversion token before invocation is
+        // emitted, after the strict conversion and prototype population tokens.
+        if (runtime.BigInt.Implementation is { } bigIntImplementation)
+            bigIntImplementation.Create = typeBuilder.DefineMethod(
+                "CreateBigInt", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.Object]);
         EmitInvokeValue(
             typeBuilder,
             runtime.Invocation,
@@ -987,7 +993,7 @@ public partial class RuntimeEmitter
                 runtime.Symbols,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.NumericCoercion,
-                runtime.BigInt.Implementation,
+                runtime.BigInt,
                 runtime.Booleans
             )
         );

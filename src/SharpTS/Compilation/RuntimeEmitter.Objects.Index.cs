@@ -2337,10 +2337,10 @@ public partial class RuntimeEmitter
         // Dictionary reuses deleted entry slots. Compact surviving entries so
         // any newly created symbol is appended after all existing symbols.
         var pairType = typeof(KeyValuePair<object, object>);
-        var snapshot = il.DeclareLocal(pairType.MakeArrayType());
+        var snapshot = il.DeclareLocal(_types.MakeArrayType(pairType));
         var position = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldloc, symDeleteDictLocal);
-        il.Emit(OpCodes.Call, typeof(Enumerable).GetMethod("ToArray")!.MakeGenericMethod(pairType));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Enumerable).GetMethod("ToArray")!, pairType));
         il.Emit(OpCodes.Stloc, snapshot);
         il.Emit(OpCodes.Ldloc, symDeleteDictLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.DictionaryObjectObject, "Clear"));

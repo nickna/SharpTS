@@ -910,6 +910,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, nullLabel);
         EmitInvokePdsSetterWithValueAndReturn(il, inputs.InvokeMethodValue, inheritedSetterLocal);
         il.MarkLabel(inheritedSetDataLabel);
+        // Constructor fallback descriptors treat reflected static values as
+        // built-in constants. User class statics still shadow on assignment;
+        // only an explicit descriptor can make those inherited fields readonly.
+        var inheritedSetOrdinaryDataLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Brfalse, inheritedSetOrdinaryDataLabel);
+        il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Brfalse, inheritedSetContinueLabel);
+        il.MarkLabel(inheritedSetOrdinaryDataLabel);
         il.Emit(OpCodes.Ldloc, inheritedSetDescriptorLocal);
         il.Emit(OpCodes.Ldstr, "writable");
         il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
