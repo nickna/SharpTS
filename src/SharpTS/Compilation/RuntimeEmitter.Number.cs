@@ -778,16 +778,21 @@ public partial class RuntimeEmitter
         // Check for 0x prefix (only if radix is 0 or 16)
         il.MarkLabel(checkHexLabel);
         il.Emit(OpCodes.Ldloc, radixLocal);
-        il.Emit(OpCodes.Brtrue, validateRadixLabel); // radix != 0, skip hex detection
+        var stripHexPrefixLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, stripHexPrefixLabel);
+        il.Emit(OpCodes.Ldloc, radixLocal);
+        il.Emit(OpCodes.Ldc_I4, 16);
+        il.Emit(OpCodes.Bne_Un, validateRadixLabel);
+        il.MarkLabel(stripHexPrefixLabel);
 
-        // radix is 0, check for 0x
+        // A hexadecimal prefix is stripped for both inferred and explicit radix 16.
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, startIndexLocal);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Add);
         var noRoomForHexLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ble, noRoomForHexLabel);
+        il.Emit(OpCodes.Blt, noRoomForHexLabel);
 
         // Check if str[startIndex] == '0' && (str[startIndex+1] == 'x' || str[startIndex+1] == 'X')
         il.Emit(OpCodes.Ldloc, strLocal);

@@ -7,6 +7,8 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1934-original.ts", "function parse(value:string,radix:number){return parseInt(value,radix);}console.log(parse('0xff',16),parse('10101',2),parse('zz',36),parse('-11',8),parse('10',1),parse('0X10',0));", "255 21 1295 -9 NaN 16\n"];
+        yield return ["issue1934-controls.ts", "function parse(value:string,radix:number){return parseInt(value,radix);}const alias:any=parseInt;console.log(parse('+0X10',16),parse('-0xff',16),parse('ff',16),alias('0xff',16),Number.parseInt('0X10',16),parse('0xff',10));console.log(parse('0x',16),parse('-0X',0));", "16 -255 255 255 16 0\nNaN NaN\n"];
         yield return ["issue1933-original.ts", "let trace='';const value:any={[Symbol.toPrimitive](hint:any){trace+=hint;return '9';}};console.log(Number(value),+value,trace);", "9 9 numbernumber\n"];
         yield return ["issue1933-controls.ts", "let trace='';const value:any={[Symbol.toPrimitive](hint:any){trace+=hint;return '9';}};console.log(Number(value),trace);console.log(Number(42n));const bad:any={[Symbol.toPrimitive](){return {};}};try{Number(bad);}catch(e:any){console.log(e.name);}", "9 number\n42\nTypeError\n"];
         yield return ["issue1932-original.ts", "let hints='';const box:any=new Number(1);box[Symbol.toPrimitive]=function(hint:any){hints+=hint+';';return 4;};console.log(box+1,box==4,String(box),hints);", "5 true 4 default;default;string;\n"];
@@ -93,7 +95,8 @@ public sealed class HistoricalRuntimeRegressionTests
                 // #1933 explicitly separates the interpreter's unary-plus discrepancy.
                 // Its Number(value) control remains dual-mode; preserve the complete
                 // original source and reference for compiled API/deployment execution.
-                if (item[0] is "issue1933-original.ts" && mode == ExecutionMode.Interpreted)
+                // #1934 similarly separates the interpreter's radix-36 discrepancy.
+                if (item[0] is "issue1933-original.ts" or "issue1934-original.ts" && mode == ExecutionMode.Interpreted)
                     continue;
                 yield return [..item, mode];
             }
