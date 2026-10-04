@@ -23,7 +23,7 @@ public static class DotNetTypeRegistry
 
     // The weak-table key owns these completed reflection results, including misses.
     // Values can refer back to the type without keeping an otherwise unused type alive.
-    // Arrays retain the existing shared, read-only-by-contract lookup semantics.
+    // Cache arrays remain private; callers receive copies containing the same member handles.
     private sealed class MemberCache
     {
         public readonly ConcurrentDictionary<(string, bool), MethodInfo[]> Methods = new();
@@ -280,7 +280,7 @@ public static class DotNetTypeRegistry
     public static MethodInfo[] GetMethods(Type type, string jsName, bool isStatic)
     {
         ManagedDotNetInterop.RequireManagedRuntime(type);
-        return GetMembers(type).Methods.GetOrAdd((jsName, isStatic), static (key, t) =>
+        var methods = GetMembers(type).Methods.GetOrAdd((jsName, isStatic), static (key, t) =>
         {
             var (name, stat) = key;
             string pascal = ToPascalCase(name);
@@ -291,6 +291,7 @@ public static class DotNetTypeRegistry
                     DotNetInteropClassifier.UnsupportedMethodReason(m) == null)
                 .ToArray();
         }, type);
+        return (MethodInfo[])methods.Clone();
     }
 
     /// <summary>
@@ -345,7 +346,7 @@ public static class DotNetTypeRegistry
     internal static PropertyInfo[] GetIndexers(Type type, bool writable)
     {
         ManagedDotNetInterop.RequireManagedRuntime(type);
-        return GetMembers(type).Indexers.GetOrAdd(writable, static (write, target) =>
+        var indexers = GetMembers(type).Indexers.GetOrAdd(writable, static (write, target) =>
         {
             return ManagedDotNetInterop.GetProperties(
                     target, BindingFlags.Public | BindingFlags.Instance)
@@ -357,6 +358,7 @@ public static class DotNetTypeRegistry
                                 p.GetIndexParameters()[0].ParameterType) == null)
                 .ToArray();
         }, type);
+        return (PropertyInfo[])indexers.Clone();
     }
 
     /// <summary>

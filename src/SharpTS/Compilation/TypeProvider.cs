@@ -73,7 +73,7 @@ public class TypeProvider
             return false;
         }
 
-        return !type.Assembly.IsDynamic;
+        return !type.Assembly.IsDynamic && !type.IsCollectible;
     }
 
     private sealed class MethodSignatureComparer : IEqualityComparer<(string, Type[])>
@@ -559,7 +559,10 @@ public class TypeProvider
     /// </summary>
     public Type Resolve(string fullName)
     {
-        return _typeCache.GetOrAdd(fullName, ResolveCore);
+        if (_typeCache.TryGetValue(fullName, out var cached))
+            return cached;
+        var type = ResolveCore(fullName);
+        return IsCacheableMetadataType(type) ? _typeCache.GetOrAdd(fullName, type) : type;
     }
 
     [UnconditionalSuppressMessage(
@@ -1332,6 +1335,8 @@ public class TypeProvider
         Justification = EmitMetadataLookupJustification)]
     public MethodInfo GetMethod(Type type, string name, params Type[] parameterTypes)
     {
+        ArgumentNullException.ThrowIfNull(parameterTypes);
+        parameterTypes = parameterTypes.Length == 0 ? Type.EmptyTypes : (Type[])parameterTypes.Clone();
         if (!IsCacheableMetadataType(type))
         {
             var emittedCache = _emittedTypeCaches.GetValue(
@@ -1587,6 +1592,8 @@ public class TypeProvider
         Justification = EmitMetadataLookupJustification)]
     public ConstructorInfo GetConstructor(Type type, params Type[] parameterTypes)
     {
+        ArgumentNullException.ThrowIfNull(parameterTypes);
+        parameterTypes = parameterTypes.Length == 0 ? Type.EmptyTypes : (Type[])parameterTypes.Clone();
         if (!IsCacheableMetadataType(type))
         {
             var emittedCache = _emittedTypeCaches.GetValue(

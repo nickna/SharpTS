@@ -1953,8 +1953,11 @@ Completed lookup results and misses are cached; exceptions publish nothing and
 remain retryable. Concurrent readers share the published result. Reset atomically
 replaces the entire generation, so an in-flight lookup cannot populate the new
 generation. Previously returned reflection metadata remains usable while retained.
-Method and indexer arrays retain their existing shared, read-only-by-contract API;
-callers must not mutate them. Managed/native feature checks and member filtering
+Method and indexer arrays are caller-owned copies of private cached arrays; the completed
+member handles retain identity. Mutating a returned array cannot affect another lookup.
+TypeProvider also snapshots signature keys and excludes collectible types from strong
+name/member caches, including non-dynamic assemblies loaded into collectible contexts.
+Managed/native feature checks and member filtering
 remain at the lookup boundary. This shared cache owns no emitted declarations or
 per-compilation CLR alias bindings.
 
