@@ -1856,6 +1856,16 @@ catalogs, reflection annotations, and generated closed .NET interop catalogs; th
 not discover arbitrary application types at runtime. See [Embedding](docs/embedding.md) and
 [Native AOT](docs/native-aot.md).
 
+### User module identities
+
+Each compilation collects a protected path-to-emitted-prefix snapshot before declarations.
+Unique filenames retain their prefixes; collisions use suffixes allocated in ordinal path
+order while reserving unambiguous names. Class, function, enum, module and hosted binding
+consumers share this owner. The active .NET namespace comes from the current module's
+stored configuration throughout emission. Imported constructors and immediate method
+calls on their results retain the exact exporting class owner. See the
+[module ownership audit](docs/compiler-ownership/M01.md) for phases and verification.
+
 ### Built-in module emission strategies
 
 `BuiltInModuleEmitterRegistry` owns the module-name dispatch index for one compiler.

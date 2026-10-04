@@ -326,9 +326,16 @@ public partial class ILCompiler
         public Dictionary<string, string> FunctionToModule { get; } = [];
         public Dictionary<string, string> EnumToModule { get; } = [];
         public Dictionary<string, string?> Namespaces { get; } = [];
+        public IReadOnlyDictionary<string, string> Names { get; set; } = new Dictionary<string, string>();
         public ModuleResolver? Resolver { get; set; }
         public string? CurrentPath { get; set; }
-        public string? CurrentDotNetNamespace { get; set; }
+        private string? _scriptDotNetNamespace;
+        public string? CurrentDotNetNamespace
+        {
+            get => CurrentPath != null && Namespaces.TryGetValue(CurrentPath, out var ns)
+                ? ns : _scriptDotNetNamespace;
+            set => _scriptDotNetNamespace = value;
+        }
         /// <summary>
         /// Maps module path to the qualified class name when the module uses `export = ClassName`.
         /// Used to enable compile-time static member resolution for imported classes.

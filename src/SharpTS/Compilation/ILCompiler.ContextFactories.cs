@@ -95,6 +95,7 @@ public partial class ILCompiler
             BlockScopedClassBuilders = _classes.BlockScopedBuilders,
             ClassRegistry = GetClassRegistry(),
             DotNetNamespace = _modules.CurrentDotNetNamespace,
+            ModuleNames = _modules.Names,
             // Ambient strict mode; bodies with their own "use strict" prologue override this.
             IsStrictMode = _isStrictMode,
             // Symbol emission: null unless this build asked for debug symbols, which is what keeps
@@ -262,6 +263,7 @@ public partial class ILCompiler
             AsyncArrowParentBuilders = _async.ArrowParentBuilders,
             // Inherit module support from parent context
             CurrentModulePath = parentCtx.CurrentModulePath,
+            ModuleNames = parentCtx.ModuleNames,
             ClassToModule = parentCtx.ClassToModule,
             FunctionToModule = parentCtx.FunctionToModule,
             EnumToModule = parentCtx.EnumToModule,

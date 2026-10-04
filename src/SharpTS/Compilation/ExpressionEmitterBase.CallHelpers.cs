@@ -2166,6 +2166,19 @@ public abstract partial class ExpressionEmitterBase
 
     #region Call Helpers
 
+    protected string ResolveInstanceClassName(Expr receiver, string simpleClassName)
+    {
+        // A namespace/named import's constructor has an exact exported owner. Reuse
+        // that identity instead of the program-wide simple class-name index.
+        if (receiver is Expr.New construction)
+        {
+            var (parts, name) = ExtractQualifiedNameFromCallee(construction.Callee);
+            if (name.Length > 0)
+                return ResolveClassNameForNew(parts, name);
+        }
+        return Ctx.ResolveClassName(simpleClassName);
+    }
+
     protected bool TryEmitDirectMethodCall(Expr receiver, string methodName, List<Expr> arguments)
     {
         string? simpleClassName = null;
@@ -2202,7 +2215,7 @@ public abstract partial class ExpressionEmitterBase
         if (simpleClassName == null)
             return false;
 
-        string className = Ctx.ResolveClassName(simpleClassName);
+        string className = ResolveInstanceClassName(receiver, simpleClassName);
         var methodBuilder = Ctx.ResolveInstanceMethod(className, methodName);
         if (methodBuilder == null)
             return false;

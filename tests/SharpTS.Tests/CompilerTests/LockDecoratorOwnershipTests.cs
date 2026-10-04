@@ -11,21 +11,23 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class LockDecoratorOwnershipTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ModuleOwnersKeepLocksInEitherImportOrder(bool reverseImports)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ModuleOwnersKeepLocksInEitherImportOrder(bool reverseImports, bool namespaced)
     {
         string root = Path.Combine(Path.GetTempPath(), "lock_owners_" + Guid.NewGuid().ToString("N"));
         string entry = Path.Combine(root, "main.ts");
         var files = new Dictionary<string, string>
         {
-            [Path.Combine(root, "left.ts")] = """
+            [Path.Combine(root, "left.ts")] = (namespaced ? "@Namespace(\"Owners.Left\")\n" : "") + """
                 export class Counter {
                     @lock read(): number { return 1; }
                     @lock async readAsync(): Promise<number> { return this.read(); }
                 }
                 """,
-            [Path.Combine(root, "right.ts")] = """
+            [Path.Combine(root, "right.ts")] = (namespaced ? "@Namespace(\"Owners.Right\")\n" : "") + """
                 export class Counter {
                     @lock read(): number { return 2; }
                     @lock async readAsync(): Promise<number> { return this.read(); }

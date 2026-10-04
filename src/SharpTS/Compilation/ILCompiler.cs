@@ -540,6 +540,7 @@ public partial class ILCompiler
         // namespace-qualified keys while a namespace's members are being defined/collected (#657).
         _definitionContext.CurrentNamespacePath = _currentNamespacePath;
         _definitionContext.DotNetNamespace = _modules.CurrentDotNetNamespace;
+        _definitionContext.ModuleNames = _modules.Names;
         _definitionContext.IsStrictMode = _isStrictMode;
         return _definitionContext;
     }
@@ -565,7 +566,8 @@ public partial class ILCompiler
             privateElements: _classes.PrivateElements,
             classToModule: _modules.ClassToModule,
             getCurrentModulePath: () => _modules.CurrentPath,
-            getDotNetNamespace: () => _modules.CurrentDotNetNamespace
+            getDotNetNamespace: () => _modules.CurrentDotNetNamespace,
+            getModuleName: path => GetDefinitionContext().GetSanitizedModuleName(path)
         );
     }
 
@@ -1315,6 +1317,7 @@ public partial class ILCompiler
     /// </summary>
     private void ModulePhase0_ExtractNamespaces(List<ParsedModule> modules)
     {
+        _modules.Names = ModuleNameRegistry.Collect(modules.Select(module => module.Path));
         foreach (var module in modules)
         {
             _modules.Namespaces[module.Path] = ExtractNamespaceFromStatements(module.Statements);

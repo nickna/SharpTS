@@ -131,7 +131,7 @@ public partial class CompilationContext
         // while its function declarations belong to the shared script scope.
         => CurrentModulePath == null || IsScriptTopLevel
             ? simpleFunctionName
-            : $"$M_{SanitizeModuleName(Path.GetFileNameWithoutExtension(CurrentModulePath))}_{simpleFunctionName}";
+            : $"$M_{GetSanitizedModuleName(CurrentModulePath)}_{simpleFunctionName}";
 
     /// <summary>
     /// Resolves a simple function name to its qualified name for lookup in the Functions dictionary.
@@ -165,7 +165,7 @@ public partial class CompilationContext
 
         if (FunctionToModule != null && FunctionToModule.TryGetValue(simpleFunctionName, out var modulePath))
         {
-            string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));
+            string sanitizedModule = GetSanitizedModuleName(modulePath);
             return $"$M_{sanitizedModule}_{simpleFunctionName}";
         }
         return simpleFunctionName;

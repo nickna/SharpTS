@@ -18,7 +18,7 @@ public partial class ILCompiler
 
     private string GetUniqueModuleTypeName(ParsedModule module)
     {
-        string baseName = $"$Module_{CompilationContext.SanitizeModuleName(module.ModuleName)}";
+        string baseName = $"$Module_{GetDefinitionContext().GetSanitizedModuleName(module.Path)}";
         string name = baseName;
         int suffix = 0;
         // Module lookup remains keyed by canonical path. CLR names need a separate
@@ -741,7 +741,7 @@ public partial class ILCompiler
     private void EmitScriptInit(ParsedModule script)
     {
         // Create initialization method in $Program
-        string methodName = $"$InitScript_{CompilationContext.SanitizeModuleName(script.ModuleName)}";
+        string methodName = $"$InitScript_{GetDefinitionContext().GetSanitizedModuleName(script.Path)}";
         var initMethod = _programType.DefineMethod(
             methodName,
             MethodAttributes.Public | MethodAttributes.Static,
@@ -752,7 +752,7 @@ public partial class ILCompiler
 
         // Create an initialized guard field in $Program
         var initializedField = _programType.DefineField(
-            $"$script_initialized_{CompilationContext.SanitizeModuleName(script.ModuleName)}",
+            $"$script_initialized_{GetDefinitionContext().GetSanitizedModuleName(script.Path)}",
             typeof(bool),
             FieldAttributes.Private | FieldAttributes.Static
         );
@@ -1158,7 +1158,7 @@ public partial class ILCompiler
     private void DefineHostedModuleRunner(ParsedModule module)
     {
         string name = "$HostedModuleRunner_" +
-            CompilationContext.SanitizeModuleName(module.ModuleName);
+            GetDefinitionContext().GetSanitizedModuleName(module.Path);
         var nameToken = new Token(TokenType.IDENTIFIER, name, null, 0);
         string? defaultBinding = RegisterHostedExportBinding(
             module, "$default", "$HostedDefault_");
@@ -1196,7 +1196,7 @@ public partial class ILCompiler
             return null;
         }
 
-        string binding = prefix + CompilationContext.SanitizeModuleName(module.ModuleName);
+        string binding = prefix + GetDefinitionContext().GetSanitizedModuleName(module.Path);
         if (!_moduleTopLevelStaticVars.TryGetValue(module.Path, out var variables))
         {
             variables = new Dictionary<string, FieldBuilder>(StringComparer.Ordinal);
@@ -1555,7 +1555,7 @@ public partial class ILCompiler
     /// </summary>
     private string GetQualifiedClassName(string simpleClassName, string modulePath)
     {
-        string sanitizedModule = CompilationContext.SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));
+        string sanitizedModule = GetDefinitionContext().GetSanitizedModuleName(modulePath);
         string baseName = $"$M_{sanitizedModule}_{simpleClassName}";
 
         // Apply .NET namespace if set

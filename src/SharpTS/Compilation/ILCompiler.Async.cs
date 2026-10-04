@@ -1831,12 +1831,8 @@ public partial class ILCompiler
             TypeBuilder? enclosingClassBuilder = null;
             if (_async.ArrowEnclosingClassNames.TryGetValue(arrow, out var className))
             {
-                // Resolve qualified class name (same as EmitMethod uses)
-                enclosingClassName = _modules.CurrentDotNetNamespace != null
-                    ? $"{_modules.CurrentDotNetNamespace}.{className}"
-                    : _modules.ClassToModule.TryGetValue(className, out var modulePath)
-                        ? $"$M_{System.IO.Path.GetFileNameWithoutExtension(modulePath)}_{className}"
-                        : className;
+                // Collection already records the qualified lexical owner.
+                enclosingClassName = className;
                 _classes.Builders.TryGetValue(enclosingClassName, out enclosingClassBuilder);
             }
 

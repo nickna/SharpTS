@@ -179,7 +179,7 @@ public partial class CompilationContext
         // If we have a module mapping, use it to create the qualified name
         if (ClassToModule != null && ClassToModule.TryGetValue(simpleClassName, out var modulePath))
         {
-            string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));
+            string sanitizedModule = GetSanitizedModuleName(modulePath);
             baseName = $"$M_{sanitizedModule}_{simpleClassName}";
         }
         else
@@ -218,7 +218,7 @@ public partial class CompilationContext
         }
         else
         {
-            string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(CurrentModulePath));
+            string sanitizedModule = GetSanitizedModuleName(CurrentModulePath);
             baseName = $"$M_{sanitizedModule}_{simpleClassName}";
         }
 
