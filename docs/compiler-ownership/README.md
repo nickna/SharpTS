@@ -66,6 +66,10 @@ passed / 0 failed / 0 skipped**. Quality gates report **28 duplicate groups / 0
 errors**. The final-source AOT analyzer inventory matches the zero-warning
 baseline, and the L01 follow-up has **19 passing** Debug checks.
 
+The full Debug core run at `355505ca` additionally records **24,128 passed / 0
+failed / 3 existing Windows skips**. The standalone discovery contains **1,995
+cases in 249 methods**, all included by the three-shard local partition.
+
 The Release All run started before the final L01 traversal follow-up. An
 additional full Debug core run checks that final source revision. The consolidated
 PR's validation results report its totals and all three standalone shard totals;
