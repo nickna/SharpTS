@@ -7,6 +7,8 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1938-original.ts", "const m:any=Math;console.log(m.max(),m.min(),m.max(1,9,3),m.min(1,-2,3),m.max(1,NaN));console.log(Object.is(m.max(-0,0),-0),Object.is(m.min(0,-0),-0));", "-Infinity Infinity 9 -2 NaN\nfalse true\n"];
+        yield return ["issue1938-controls.ts", "const min:any=Math.min;const max:any=Math.max;console.log(Object.is(Math.max(-0,0),0),Object.is(Math.max(0,-0),0),Object.is(Math.min(-0,0),-0),Object.is(Math.min(0,-0),-0));console.log(Object.is(max(-0,0),0),Object.is(max(0,-0),0),Object.is(min(-0,0),-0),Object.is(min(0,-0),-0));console.log(min(),max(),min(1,NaN),max(NaN,1),min(7,2,3),max(7,2,3));", "true true true true\ntrue true true true\nInfinity -Infinity NaN NaN 2 7\n"];
         yield return ["issue1937-original.ts", "const sign:any=Math.sign;const pow:any=Math.pow;console.log(sign(-2),sign(0),sign(3),sign(NaN),Object.is(sign(-0),-0));console.log(pow('2','3'),pow(NaN,0),pow(-1,0.5));", "-1 0 1 NaN true\n8 1 NaN\n"];
         yield return ["issue1937-controls.ts", "const sign:any=Math.sign;console.log(Object.is(Math.sign(-0),-0),Object.is(sign(-0),-0),Object.is(Math.sign(0),0),Object.is(sign(0),0));console.log(sign('-0'),Object.is(sign('-0'),-0),sign(Infinity),sign(-Infinity),sign(NaN));", "true true true true\n0 true 1 -1 NaN\n"];
         yield return ["issue1936-original.ts", "const sum:any=Math.sumPrecise;console.log(sum([Infinity,1]),sum([-Infinity,1]),sum([Infinity,-Infinity]),sum([NaN,1]),sum([Number.MAX_VALUE,Number.MAX_VALUE]));", "Infinity -Infinity NaN NaN Infinity\n"];

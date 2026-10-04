@@ -558,14 +558,12 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notNaN);
 
-        // if (isMax ? next > result : next < result) result = next;
-        var skipUpdate = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, nextLocal);
+        // Framework Min/Max implement the IEEE signed-zero tie rules as well
+        // as ordinary numeric ordering; a strict comparison loses zero signs.
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(isMax ? OpCodes.Ble : OpCodes.Bge, skipUpdate);
         il.Emit(OpCodes.Ldloc, nextLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, isMax ? "Max" : "Min", _types.Double, _types.Double));
         il.Emit(OpCodes.Stloc, resultLocal);
-        il.MarkLabel(skipUpdate);
 
         // i++
         il.Emit(OpCodes.Ldloc, iLocal);
