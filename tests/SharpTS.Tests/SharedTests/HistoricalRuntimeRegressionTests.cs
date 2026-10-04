@@ -7,6 +7,18 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1956-original.ts", """
+            function create(n: number): any {
+                let current: number = 0;
+                const object: any = { next() { return current++ + n; } };
+                current = 3;
+                return object;
+            }
+            const object: any = create(10);
+            console.log(object.next(), object.next());
+            console.log(Number.isNaN(create(NaN).next()), create(Infinity).next());
+            """, "13 14\ntrue Infinity\n"];
+        yield return ["issue1956-controls.ts", "function create(){let current:number=1;const object:any={read(){return current;},write(n:number){current=n;}};current=3;return object;}const a:any=create();const b:any=create();a.write(8);console.log(a.read(),b.read());a.write(NaN);console.log(Number.isNaN(a.read()));a.write(Infinity);console.log(a.read());function tdz(){const read:any=()=>value;try{read();}catch(e){console.log(e instanceof ReferenceError);}let value:any=4;console.log(read());}tdz();", "8 3\ntrue\nInfinity\ntrue\n4\n"];
         yield return ["issue1959-original.ts", "class Box{static count=4;}const box:any=Box;Object.defineProperty(Box,'count',{writable:false});box.count=9;console.log(box.count,Object.getOwnPropertyDescriptor(Box,'count').value);", "4 4\n"];
         yield return ["issue1959-controls.ts", "class Box<T>{static count=4;static explicit=5;}const b:any=Box;Object.defineProperty(Box,'count',{enumerable:false});let d:any=Object.getOwnPropertyDescriptor(Box,'count');console.log(d.value,d.writable,d.enumerable,d.configurable);Object.defineProperty(Box,'count',{writable:false});b.count=9;console.log(b.count);Object.defineProperty(Box,'count',{writable:true,configurable:false});b.count=12;console.log(b.count);try{Object.defineProperty(Box,'count',{configurable:true});}catch(e){console.log(e instanceof TypeError);}Object.defineProperty(Box,'explicit',{value:undefined});console.log(b.explicit,(Object.getOwnPropertyDescriptor(Box,'explicit') as any).value);class Derived extends Box<any>{}Object.defineProperty(Derived,'count',{writable:false});console.log((Derived as any).count,b.count);", "4 true false true\n4\n12\ntrue\nundefined undefined\nundefined 12\n"];
         yield return ["issue1958-original.ts", "\"use strict\";class Base<T>{static count=4;}class Derived<T> extends Base<T>{}const derived:any=Derived;Object.defineProperty(Base,'count',{value:4,writable:false});try{derived['count']=10;}catch(e){console.log(e instanceof TypeError);}console.log((Base as any).count,derived.count,Object.hasOwn(Derived,'count'));", "true\n4 4 false\n"];
