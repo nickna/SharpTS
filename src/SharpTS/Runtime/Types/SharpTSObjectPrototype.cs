@@ -317,18 +317,17 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         {
             if (primitiveType == "BigInt")
             {
-                object? tag = interpreter?.GetSymbolPropertyValue(
-                    interpreter.GetBigIntPrototype(), SharpTSSymbol.ToStringTag);
-                return tag is string text
-                    ? $"[object {text}]"
-                    : "[object Object]";
+                // The receiver lookup above already read its @@toStringTag,
+                // including inherited tags. A non-string result uses Object;
+                // rereading the prototype would ignore an own override and
+                // invoke an inherited getter twice.
+                return "[object Object]";
             }
             return primitiveType switch
             {
                 "Number" => "[object Number]",
                 "String" => "[object String]",
                 "Boolean" => "[object Boolean]",
-                "BigInt" => "[object BigInt]",
                 _ => "[object Object]",
             };
         }
