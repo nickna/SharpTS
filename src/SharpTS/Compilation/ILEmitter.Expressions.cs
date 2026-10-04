@@ -1001,22 +1001,32 @@ public partial class ILEmitter
         }
 
         // Detect property access tag (obj.method`...`) for this binding
-        bool hasThisBinding = ttl.Tag is Expr.Get;
+        bool hasThisBinding = ttl.Tag is Expr.Get or Expr.GetIndex;
         LocalBuilder? receiverLocal = null;
 
         // 1. Emit the tag function reference (and receiver for property access tags)
         if (hasThisBinding)
         {
-            var g = (Expr.Get)ttl.Tag;
+            var receiver = ttl.Tag is Expr.Get g ? g.Object : ((Expr.GetIndex)ttl.Tag).Object;
             // Emit and save the receiver object
-            EmitExpression(g.Object);
+            EmitExpression(receiver);
             EnsureBoxed();
             receiverLocal = _ctx.ILBuilder.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, receiverLocal);
             // Get the method: GetProperty(obj, name) — handles all object types including dictionaries
             IL.Emit(OpCodes.Ldloc, receiverLocal);
-            IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
+            if (ttl.Tag is Expr.Get property)
+            {
+                IL.Emit(OpCodes.Ldstr, property.Name.Lexeme);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
+            }
+            else
+            {
+                var index = ((Expr.GetIndex)ttl.Tag).Index;
+                EmitExpression(index);
+                EmitBoxIfNeeded(index);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
+            }
             // Push thisArg (receiver) for WithThis call
             IL.Emit(OpCodes.Ldloc, receiverLocal);
         }
