@@ -985,7 +985,8 @@ public partial class RuntimeEmitter
                 runtime.Symbols,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.NumericCoercion,
-                runtime.BigInt.Implementation
+                runtime.BigInt.Implementation,
+                runtime.Booleans
             )
         );
         EmitInvokeMethodValue(

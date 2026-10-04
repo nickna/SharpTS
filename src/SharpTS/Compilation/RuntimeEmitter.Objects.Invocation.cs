@@ -45,7 +45,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         FieldInfo UndefinedInstance,
         EmittedNumericCoercionRuntime NumericCoercion,
-        EmittedBigIntImplementation? BigInt
+        EmittedBigIntImplementation? BigInt,
+        EmittedBooleanRuntime Booleans
     );
 
     private readonly record struct InvokeMethodValueInputs(
@@ -483,6 +484,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notNumberTypeLabel);
+
+        var notBooleanType = il.DefineLabel();
+        var booleanNoArg = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.Type);
+        il.Emit(OpCodes.Ldtoken, _types.Boolean);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", _types.Type, _types.Type));
+        il.Emit(OpCodes.Brfalse, notBooleanType);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brfalse, booleanNoArg);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(booleanNoArg);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notBooleanType);
 
         // String call form (`Array.prototype.map.call(values, String)`). Bare
         // String is represented by the System.String Type token, so dynamic
