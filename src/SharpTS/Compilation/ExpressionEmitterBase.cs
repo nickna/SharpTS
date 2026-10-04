@@ -2300,6 +2300,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             // bare Symbol in its own pseudo-variable arm; this entry covers the
             // state-machine emitters that resolve through this base path.
             "Symbol" => Ctx.Runtime!.Symbols.Type,
+            "BigInt" => Types.BigInteger,
             // Omitted Web stream constructors fall through to ThrowUndefinedVariable.
             "ReadableStream" => Ctx.Runtime!.WebStreams?.ReadableType,
             "WritableStream" => Ctx.Runtime!.WebStreams?.WritableType,
