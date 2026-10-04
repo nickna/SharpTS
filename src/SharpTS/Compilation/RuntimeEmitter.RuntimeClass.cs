@@ -2499,7 +2499,7 @@ public partial class RuntimeEmitter
         // EmitRandom moved to before gOPD (see line ~660). The original site
         // here is now empty.
         EmitMathSumPrecise(typeBuilder, runtime.Math, new MathSumInputs(
-            runtime.Symbols.GetStorage, runtime.Symbols.Iterator, runtime.IteratorProtocol.Function, runtime.Sentinels.UndefinedType, runtime.Invocation.Method, runtime.IteratorRecords.NextMethod, runtime.IteratorRecords.InvokeNext, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value, runtime.ObjectRead.Property, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
+            runtime.ArrayStorage, runtime.Symbols.GetStorage, runtime.Symbols.Iterator, runtime.IteratorProtocol.Function, runtime.Sentinels.UndefinedType, runtime.Invocation.Method, runtime.IteratorRecords.NextMethod, runtime.IteratorRecords.InvokeNext, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value, runtime.ObjectRead.Property, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitDefineSymbolAccessor(
             typeBuilder,
             runtime.ObjectConstruction,

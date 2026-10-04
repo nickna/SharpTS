@@ -7,6 +7,8 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1936-original.ts", "const sum:any=Math.sumPrecise;console.log(sum([Infinity,1]),sum([-Infinity,1]),sum([Infinity,-Infinity]),sum([NaN,1]),sum([Number.MAX_VALUE,Number.MAX_VALUE]));", "Infinity -Infinity NaN NaN Infinity\n"];
+        yield return ["issue1936-controls.ts", "const math:any=Math;const sum:any=math.sumPrecise;console.log(math.sumPrecise([Infinity,1]),math.sumPrecise([NaN,1]),math.sumPrecise([1,2,3]),sum([1,2,3]));console.log(sum([1e16,1,-1e16]),Object.is(sum([]),-0),Object.is(sum([-0,-0]),-0));", "Infinity NaN 6 6\n1 true true\n"];
         yield return ["issue1935-original.ts", "const m:any=Math;console.log(m===globalThis.Math,m.floor===Math.floor,m.random===Math.random,m.sumPrecise===Math.sumPrecise);console.log(m.floor.name,m.floor.length,m.random.length,m.pow.length,m.hypot.length);", "true true true true\nfloor 1 0 2 2\n"];
         yield return ["issue1935-controls.ts", "const root:any=globalThis;const m:any=Math;console.log(m===root.Math,m===globalThis['Math'],root.Math.floor===Math.floor);m.extra=7;console.log(root.Math.extra,globalThis.Math===m);", "true true true\n7 true\n"];
         yield return ["issue1934-original.ts", "function parse(value:string,radix:number){return parseInt(value,radix);}console.log(parse('0xff',16),parse('10101',2),parse('zz',36),parse('-11',8),parse('10',1),parse('0X10',0));", "255 21 1295 -9 NaN 16\n"];
