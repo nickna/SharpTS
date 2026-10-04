@@ -1820,6 +1820,13 @@ There are three legitimate dependency forms:
 normally requires a soft dependency must fail clearly when the runtime is absent. Native AOT
 compiler hosts reject required managed-runtime capabilities before producing unusable output.
 
+Fixed legacy runtime bridges retain assembly-qualified type/method strings and their
+feature-specific deployment requirements. The shared emission recipe owns no generated
+handle cache. DNS's best-effort host synchronization preserves per-assembly emitted
+configuration and intentionally mutable process-level host configuration; resolver state
+belongs to each instance. See the [legacy bridge audit](docs/compiler-ownership/I04.md)
+for target identities, lifetimes and hosted/absent-runtime verification.
+
 ### Runtime tree-shaking
 
 `RuntimeFeatureDetector` derives a conservative feature set from the whole checked graph. The
