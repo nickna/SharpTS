@@ -440,6 +440,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notNaN);
+        var notZero = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, vLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bne_Un, notZero);
+        il.Emit(OpCodes.Ldloc, vLocal);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notZero);
         il.Emit(OpCodes.Ldloc, vLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Sign", _types.Double));
         il.Emit(OpCodes.Conv_R8);
