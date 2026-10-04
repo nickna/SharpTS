@@ -866,8 +866,10 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.ObjectOwnProperties,
             new PropertyIsEnumerableHelperInputs(
+                runtime.ArrayStorage,
                 runtime.DescriptorStorage,
                 runtime.Errors,
+                runtime.Promise,
                 runtime.RegExps,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
@@ -955,6 +957,12 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.String, _types.Object]);
+        // Constructor aliases need the conversion token before invocation is
+        // emitted, after the strict conversion and prototype population tokens.
+        if (runtime.BigInt.Implementation is { } bigIntImplementation)
+            bigIntImplementation.Create = typeBuilder.DefineMethod(
+                "CreateBigInt", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.Object]);
         EmitInvokeValue(
             typeBuilder,
             runtime.Invocation,
@@ -984,7 +992,9 @@ public partial class RuntimeEmitter
                 runtime.StringCoercion,
                 runtime.Symbols,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.NumericCoercion
+                runtime.NumericCoercion,
+                runtime.BigInt,
+                runtime.Booleans
             )
         );
         EmitInvokeMethodValue(
@@ -2072,7 +2082,8 @@ public partial class RuntimeEmitter
                 runtime.Invocation.Method,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Sentinels.UndefinedType,
-                runtime.ObjectRead.Property
+                runtime.ObjectRead.Property,
+                runtime.ObjectPrototypes.GetPrototypeOf
             )
         );
         if (runtime.Reflect.Assignment is not null)

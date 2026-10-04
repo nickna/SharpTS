@@ -449,8 +449,17 @@ public partial class TypeChecker
 
             // First argument must be ArrayBuffer or SharedArrayBuffer
             var bufferType = CheckExpr(newExpr.Arguments[0]);
+            bool MatchesGlobalBuffer(string name)
+            {
+                // Namespace and local interfaces can reuse the intrinsic name;
+                // only the program's global declaration surface is relevant.
+                var declaredBuffer = _globalDeclarationEnvironment?.GetTypeBinding(name);
+                return declaredBuffer is TypeInfo.Interface && IsCompatible(declaredBuffer, bufferType);
+            }
             if (bufferType is not TypeInfo.ArrayBuffer
                 && bufferType is not TypeInfo.SharedArrayBuffer
+                && !(bufferType is TypeInfo.Interface
+                    && (MatchesGlobalBuffer("ArrayBuffer") || MatchesGlobalBuffer("SharedArrayBuffer")))
                 && bufferType is not TypeInfo.Any)
             {
                 throw new TypeCheckException($"DataView buffer must be an ArrayBuffer or SharedArrayBuffer, got '{bufferType}'.", tsCode: "TS2345");

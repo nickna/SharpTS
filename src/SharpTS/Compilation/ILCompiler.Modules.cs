@@ -681,6 +681,7 @@ public partial class ILCompiler
         _modules.CurrentPath = module.Path;
         var ctx = CreateModuleTopLevelContext(il, initMethod);
         _modules.CurrentPath = savedPath;
+        ctx.IsStrictMode = Parsing.DirectivePrologue.HasUseStrict(module.Statements);
         ctx.CurrentModulePath = module.Path;
         ctx.ModuleExportFields = _modules.ExportFields;
         ctx.ModuleTypes = _modules.Types;
@@ -776,6 +777,7 @@ public partial class ILCompiler
         var ctx = CreateModuleTopLevelContext(il, initMethod);
         _modules.CurrentPath = savedPath;
         ctx.IsScriptTopLevel = true;
+        ctx.IsStrictMode = Parsing.DirectivePrologue.HasUseStrict(script.Statements);
         ctx.CurrentModulePath = script.Path;
         ctx.ModuleExportFields = _modules.ExportFields;
         ctx.ModuleTypes = _modules.Types;
@@ -1419,6 +1421,7 @@ public partial class ILCompiler
         _modules.CurrentPath = module.Path;
         CompilationContext ctx = CreateModuleTopLevelContext(il, method);
         _modules.CurrentPath = savedPath;
+        ctx.IsStrictMode = Parsing.DirectivePrologue.HasUseStrict(module.Statements);
         ctx.CurrentModulePath = module.Path;
         ctx.ModuleExportFields = _modules.ExportFields;
         ctx.ModuleTypes = _modules.Types;

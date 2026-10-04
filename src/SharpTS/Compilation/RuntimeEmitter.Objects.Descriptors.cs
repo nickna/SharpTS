@@ -393,6 +393,36 @@ public partial class RuntimeEmitter
         var symbolDescriptorHolderLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stloc, symbolDescriptorHolderLocal);
+        // Seed the holder with the current symbol property before applying a
+        // partial descriptor. Redefinition preserves omitted flags and values.
+        var existingSymbolValue = il.DeclareLocal(_types.Object);
+        var existingSymbolDescriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        var symbolHolderReady = il.DefineLabel();
+        var symbolHolderRawValue = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, symbolDefineDictLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, existingSymbolValue);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+        il.Emit(OpCodes.Brfalse, symbolHolderReady);
+        il.Emit(OpCodes.Ldloc, existingSymbolValue);
+        il.Emit(OpCodes.Isinst, inputs.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Stloc, existingSymbolDescriptor);
+        il.Emit(OpCodes.Ldloc, existingSymbolDescriptor);
+        il.Emit(OpCodes.Brfalse, symbolHolderRawValue);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorHolderLocal);
+        il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Ldloc, existingSymbolDescriptor);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DefineProperty);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, existingSymbolDescriptor);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, existingSymbolValue);
+        il.MarkLabel(symbolHolderRawValue);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorHolderLocal);
+        il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Ldloc, existingSymbolValue);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.MarkLabel(symbolHolderReady);
         il.Emit(OpCodes.Ldloc, symbolDescriptorHolderLocal);
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Ldarg_2);
@@ -1551,6 +1581,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, propNameLocal);
+
+        EmitGetOwnDescriptorPrimitiveStringLength(il, propNameLocal, resultDictLocal, endLabel);
 
         EmitGetOwnDescriptorGlobalReceiver(
             il,

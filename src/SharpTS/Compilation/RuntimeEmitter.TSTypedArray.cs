@@ -254,7 +254,8 @@ public partial class RuntimeEmitter
         StoreTypedArrayBufferCtor(arrays, name, bufferCtor);
 
         // Indexer: public object this[int index] { get; set; }
-        EmitTypedArrayIndexer(typeBuilder, arrays, bytesPerElement, signed, clamped, isFloat, isBigInt);
+        EmitTypedArrayIndexer(typeBuilder, arrays, bytesPerElement, signed, clamped, isFloat, isBigInt,
+            isBigInt ? runtime.BigInt.Implementation?.ToBigInt : null);
 
         // Unboxed numeric element accessors (#3): GetUnboxed/SetUnboxed return/accept a native
         // double, for the compiled fast path (ILEmitter binds them at statically-typed sites).
@@ -539,7 +540,8 @@ public partial class RuntimeEmitter
         bool signed,
         bool clamped,
         bool isFloat,
-        bool isBigInt)
+        bool isBigInt,
+        MethodInfo? toBigInt)
     {
         // Getter: public object Get(int index)
         var getter = typeBuilder.DefineMethod(
@@ -769,9 +771,17 @@ public partial class RuntimeEmitter
             }
             else if (isBigInt)
             {
-                // For BigInt, convert from BigInteger to long/ulong (preserves prior ToInt64 form).
+                // ToBigInt rejects Number inputs; retain the low 64 bits before narrowing.
                 setIl.Emit(OpCodes.Ldarg_2);
-                setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt64", [typeof(object)])!);
+                if (toBigInt is not null)
+                    setIl.Emit(OpCodes.Call, toBigInt);
+                setIl.Emit(OpCodes.Unbox_Any, typeof(System.Numerics.BigInteger));
+                setIl.Emit(OpCodes.Ldc_I8, -1L);
+                setIl.Emit(OpCodes.Newobj, typeof(System.Numerics.BigInteger).GetConstructor([typeof(ulong)])!);
+                setIl.Emit(OpCodes.Call, typeof(System.Numerics.BigInteger).GetMethod("op_BitwiseAnd", [typeof(System.Numerics.BigInteger), typeof(System.Numerics.BigInteger)])!);
+                setIl.Emit(OpCodes.Call, typeof(System.Numerics.BigInteger).GetMethods().Single(m =>
+                    m.Name == "op_Explicit" && m.ReturnType == typeof(ulong)
+                    && m.GetParameters()[0].ParameterType == typeof(System.Numerics.BigInteger)));
                 if (signed)
                     setIl.Emit(OpCodes.Call, UnsafeWriteUnaligned(typeof(long)));
                 else

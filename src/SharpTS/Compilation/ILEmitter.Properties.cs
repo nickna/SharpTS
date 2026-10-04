@@ -813,9 +813,9 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Br, endLabel);
 
             IL.MarkLabel(notFoundLabel);
-            // ECMA-262: missing property reads as undefined.
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
-            IL.Emit(OpCodes.Br, endLabel);
+            // A record shape describes the field, not whether Receiver owns it.
+            // Continue through ordinary [[Get]] so inherited data participates.
+            IL.Emit(OpCodes.Br, fallbackLabel);
         }
 
         IL.MarkLabel(fallbackLabel);

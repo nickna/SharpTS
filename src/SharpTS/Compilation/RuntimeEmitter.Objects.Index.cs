@@ -2328,6 +2328,50 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, symDeleteDictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "Remove", _types.Object));
+        var symbolRemoved = il.DeclareLocal(_types.Boolean);
+        il.Emit(OpCodes.Stloc, symbolRemoved);
+        var symbolDeleteDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, symbolRemoved);
+        il.Emit(OpCodes.Brfalse, symbolDeleteDone);
+
+        // Dictionary reuses deleted entry slots. Compact surviving entries so
+        // any newly created symbol is appended after all existing symbols.
+        var pairType = typeof(KeyValuePair<object, object>);
+        var snapshot = il.DeclareLocal(_types.MakeArrayType(pairType));
+        var position = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldloc, symDeleteDictLocal);
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Enumerable).GetMethod("ToArray")!, pairType));
+        il.Emit(OpCodes.Stloc, snapshot);
+        il.Emit(OpCodes.Ldloc, symDeleteDictLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.DictionaryObjectObject, "Clear"));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, position);
+        var compactLoop = il.DefineLabel();
+        var compactCheck = il.DefineLabel();
+        il.Emit(OpCodes.Br, compactCheck);
+        il.MarkLabel(compactLoop);
+        il.Emit(OpCodes.Ldloc, symDeleteDictLocal);
+        il.Emit(OpCodes.Ldloc, snapshot);
+        il.Emit(OpCodes.Ldloc, position);
+        il.Emit(OpCodes.Ldelema, pairType);
+        il.Emit(OpCodes.Call, pairType.GetProperty("Key")!.GetMethod!);
+        il.Emit(OpCodes.Ldloc, snapshot);
+        il.Emit(OpCodes.Ldloc, position);
+        il.Emit(OpCodes.Ldelema, pairType);
+        il.Emit(OpCodes.Call, pairType.GetProperty("Value")!.GetMethod!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "Add", _types.Object, _types.Object));
+        il.Emit(OpCodes.Ldloc, position);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, position);
+        il.MarkLabel(compactCheck);
+        il.Emit(OpCodes.Ldloc, position);
+        il.Emit(OpCodes.Ldloc, snapshot);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Blt, compactLoop);
+        il.MarkLabel(symbolDeleteDone);
+        il.Emit(OpCodes.Ldloc, symbolRemoved);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);

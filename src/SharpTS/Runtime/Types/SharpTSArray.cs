@@ -1410,7 +1410,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     }
 
     internal bool IsPropertyEnumerable(string name)
-        => HasOwnProperty(name)
+        => name != "length" && HasOwnProperty(name)
             && (_descriptors?.TryGetValue(name, out var flags) != true || flags.Enumerable);
 
     /// <summary>

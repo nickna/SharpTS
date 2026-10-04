@@ -16,7 +16,7 @@ public partial class RuntimeEmitter
     private readonly record struct ReflectGetInputs(MethodInfo InvokeMethodUnwrapped,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod,
         MethodInfo GetFunctionMethod, MethodInfo InvokeMethodValue, FieldInfo UndefinedInstance, Type UndefinedType,
-        MethodInfo GetProperty);
+        MethodInfo GetProperty, MethodInfo GetPrototypeOf);
 
     private readonly record struct ReflectDeletePropertyInputs(MethodInfo InvokeMethodUnwrapped,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo ToJsString, MethodInfo ObjectIsExtensible,
@@ -141,7 +141,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noGetterFieldLabel);
+        var readTargetLabel = il.DefineLabel();
+        il.Emit(OpCodes.Br, readTargetLabel);
         il.MarkLabel(ordinaryGetLabel);
+        // A missing own descriptor continues [[Get]] without changing Receiver.
+        var prototypeLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, prototypeLocal);
+        il.Emit(OpCodes.Ldloc, prototypeLocal);
+        il.Emit(OpCodes.Brfalse, readTargetLabel);
+        il.Emit(OpCodes.Ldloc, prototypeLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(readTargetLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.GetProperty);

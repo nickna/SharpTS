@@ -9,7 +9,6 @@ public partial class RuntimeEmitter
         TypeBuilder ArgumentsType,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
-        EmittedBigIntRuntime BigInt,
         EmittedBooleanRuntime Booleans,
         TypeBuilder BoundAnyFunctionType,
         TypeBuilder BoundTSFunctionType,
@@ -112,7 +111,6 @@ public partial class RuntimeEmitter
                 ArgumentsType: runtime.Arguments.Type,
                 ArrayOperations: runtime.ArrayOperations,
                 ArrayStorage: runtime.ArrayStorage,
-                BigInt: runtime.BigInt,
                 Booleans: runtime.Booleans,
                 BoundAnyFunctionType: runtime.FunctionBindings.AnyType,
                 BoundTSFunctionType: runtime.FunctionBindings.BoundType,
@@ -429,31 +427,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, endLabel);
         }
 
-        void EmitBigIntPrototypeTag()
-        {
-            // BigInt's builtin tag comes from the configurable
-            // %BigInt.prototype% @@toStringTag property. Read it dynamically:
-            // non-string replacements are ignored and fall back to "Object".
-            var tagLocal = il.DeclareLocal(_types.String);
-            var nonStringTagLabel = il.DefineLabel();
-            il.Emit(OpCodes.Call, inputs.BigInt.PrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, inputs.BigInt.PrototypeField);
-            il.Emit(OpCodes.Ldsfld, inputs.Symbols.ToStringTag);
-            il.Emit(OpCodes.Call, inputs.GetIndex);
-            il.Emit(OpCodes.Isinst, _types.String);
-            il.Emit(OpCodes.Stloc, tagLocal);
-            il.Emit(OpCodes.Ldloc, tagLocal);
-            il.Emit(OpCodes.Brfalse, nonStringTagLabel);
-            il.Emit(OpCodes.Ldstr, "[object ");
-            il.Emit(OpCodes.Ldloc, tagLocal);
-            il.Emit(OpCodes.Ldstr, "]");
-            il.Emit(OpCodes.Call, _types.GetMethod(
-                _types.String, "Concat", _types.String, _types.String, _types.String));
-            il.Emit(OpCodes.Br, endLabel);
-            il.MarkLabel(nonStringTagLabel);
-            EmitTag("[object Object]");
-        }
-
         // null
         var notNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -468,6 +441,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notUndefLabel);
         EmitTag("[object Undefined]");
         il.MarkLabel(notUndefLabel);
+
+        var customTag = il.DeclareLocal(_types.String);
+        var noCustomTag = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.ToStringTag);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, customTag);
+        il.Emit(OpCodes.Ldloc, customTag);
+        il.Emit(OpCodes.Brfalse, noCustomTag);
+        il.Emit(OpCodes.Ldstr, "[object ");
+        il.Emit(OpCodes.Ldloc, customTag);
+        il.Emit(OpCodes.Ldstr, "]");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "Concat", _types.String, _types.String, _types.String));
+        il.Emit(OpCodes.Br, endLabel);
+        il.MarkLabel(noCustomTag);
 
         // Math singleton
         var notMathLabel = il.DefineLabel();
@@ -523,7 +513,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "BigInt");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
         il.Emit(OpCodes.Brfalse, notBigIntMarkerLabel);
-        EmitBigIntPrototypeTag();
+        // The shared @@toStringTag read above includes BigInt.prototype.
+        // A missing or non-string tag leaves BigInt's fallback brand as Object.
+        EmitTag("[object Object]");
         il.MarkLabel(notBigIntMarkerLabel);
         il.MarkLabel(notBoxedTSObjectLabel);
 
@@ -628,7 +620,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brfalse, notBigIntLabel);
-        EmitBigIntPrototypeTag();
+        EmitTag("[object Object]");
         il.MarkLabel(notBigIntLabel);
 
         // Function classification — every value the emitted TypeOf reports as

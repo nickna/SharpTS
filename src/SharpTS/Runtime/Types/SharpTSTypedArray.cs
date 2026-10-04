@@ -136,6 +136,19 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public abstract object? this[int index] { get; set; }
 
+    internal static ulong ToBigInt64Bits(object? value)
+    {
+        System.Numerics.BigInteger integer = value switch
+        {
+            SharpTSBigInt bigint => bigint.Value,
+            System.Numerics.BigInteger bigint => bigint,
+            bool boolean => boolean ? System.Numerics.BigInteger.One : System.Numerics.BigInteger.Zero,
+            string text => BigIntBuiltIns.ParseBigIntString(text),
+            _ => throw new ThrowException(new SharpTSTypeError("BigInt value is required")),
+        };
+        return (ulong)(integer & ulong.MaxValue);
+    }
+
     /// <summary>
     /// Gets or sets an element using volatile semantics (for Atomics operations on shared buffers).
     /// </summary>
@@ -1054,12 +1067,7 @@ public class SharpTSBigInt64Array : SharpTSTypedArray
         set
         {
             int byteIdx = GetByteIndex(index);
-            long val = value switch
-            {
-                System.Numerics.BigInteger bi => (long)bi,
-                double d => (long)d,
-                _ => Convert.ToInt64(value)
-            };
+            long val = unchecked((long)ToBigInt64Bits(value));
             Unsafe.WriteUnaligned(ref _buffer[byteIdx], val);
         }
     }
@@ -1132,12 +1140,7 @@ public class SharpTSBigUint64Array : SharpTSTypedArray
         set
         {
             int byteIdx = GetByteIndex(index);
-            ulong val = value switch
-            {
-                System.Numerics.BigInteger bi => (ulong)bi,
-                double d => (ulong)d,
-                _ => Convert.ToUInt64(value)
-            };
+            ulong val = ToBigInt64Bits(value);
             Unsafe.WriteUnaligned(ref _buffer[byteIdx], val);
         }
     }

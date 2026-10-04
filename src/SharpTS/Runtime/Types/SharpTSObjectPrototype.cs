@@ -288,6 +288,12 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         // only when a specific spec test needs them.
         if (target == null) return "[object Null]";
         if (target is SharpTSUndefined) return "[object Undefined]";
+        if (target is SharpTSObject or SharpTSFunction or SharpTSArrowFunction
+            or SharpTSArray or SharpTSProxy or SharpTSInstance or SharpTSClass
+            or ISharpTSSymbolPropertyBag or SharpTSMath or SharpTSStringPrototype
+            or SharpTSRegExp
+            && interpreter?.GetSymbolPropertyValue(target, SharpTSSymbol.ToStringTag) is string customTag)
+            return $"[object {customTag}]";
         if (target is string) return "[object String]";
         if (target is double or int) return "[object Number]";
         if (target is bool) return "[object Boolean]";
@@ -311,18 +317,17 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         {
             if (primitiveType == "BigInt")
             {
-                object? tag = interpreter?.GetSymbolPropertyValue(
-                    interpreter.GetBigIntPrototype(), SharpTSSymbol.ToStringTag);
-                return tag is string text
-                    ? $"[object {text}]"
-                    : "[object Object]";
+                // The receiver lookup above already read its @@toStringTag,
+                // including inherited tags. A non-string result uses Object;
+                // rereading the prototype would ignore an own override and
+                // invoke an inherited getter twice.
+                return "[object Object]";
             }
             return primitiveType switch
             {
                 "Number" => "[object Number]",
                 "String" => "[object String]",
                 "Boolean" => "[object Boolean]",
-                "BigInt" => "[object BigInt]",
                 _ => "[object Object]",
             };
         }

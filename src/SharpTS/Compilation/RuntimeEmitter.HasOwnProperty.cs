@@ -27,8 +27,10 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct PropertyIsEnumerableHelperInputs(
+        EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
+        EmittedPromiseRuntime? Promise,
         EmittedRegExpRuntime RegExps,
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
@@ -750,9 +752,21 @@ public partial class RuntimeEmitter
         // otherwise report true and the PropertyIsEnumerable fallback below
         // would mistakenly inherit that as enumerable=true.
         var notFunctionBuiltinLabel = il.DefineLabel();
+        var functionBuiltinName = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
-        il.Emit(OpCodes.Brfalse, notFunctionBuiltinLabel);
+        il.Emit(OpCodes.Brtrue, functionBuiltinName);
+        if (inputs.Promise is { } promise)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, promise.ResolveCallbackType);
+            il.Emit(OpCodes.Brtrue, functionBuiltinName);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, promise.RejectCallbackType);
+            il.Emit(OpCodes.Brtrue, functionBuiltinName);
+        }
+        il.Emit(OpCodes.Br, notFunctionBuiltinLabel);
+        il.MarkLabel(functionBuiltinName);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldstr, "name");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
@@ -776,6 +790,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(noPdsLabel);
+
+        // Array length is a synthetic, non-enumerable own property even before
+        // defineProperty attaches an explicit descriptor.
+        var notArrayLength = il.DefineLabel();
+        var arrayLengthName = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, arrayLengthName);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Brfalse, notArrayLength);
+        il.MarkLabel(arrayLengthName);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, falseLabel);
+        il.MarkLabel(notArrayLength);
 
         // System.Type receivers represent built-in constructors. Their
         // descriptor-less synthetic own properties (prototype, name, length,
