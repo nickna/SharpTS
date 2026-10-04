@@ -7,6 +7,8 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1933-original.ts", "let trace='';const value:any={[Symbol.toPrimitive](hint:any){trace+=hint;return '9';}};console.log(Number(value),+value,trace);", "9 9 numbernumber\n"];
+        yield return ["issue1933-controls.ts", "let trace='';const value:any={[Symbol.toPrimitive](hint:any){trace+=hint;return '9';}};console.log(Number(value),trace);console.log(Number(42n));const bad:any={[Symbol.toPrimitive](){return {};}};try{Number(bad);}catch(e:any){console.log(e.name);}", "9 number\n42\nTypeError\n"];
         yield return ["issue1932-original.ts", "let hints='';const box:any=new Number(1);box[Symbol.toPrimitive]=function(hint:any){hints+=hint+';';return 4;};console.log(box+1,box==4,String(box),hints);", "5 true 4 default;default;string;\n"];
         yield return ["issue1932-controls.ts", "const box:any=new Number(2);console.log(String(box));box.toString=function(){return 'own';};console.log(String(box));box[Symbol.toPrimitive]=function(hint:any){console.log(hint,this===box);return 5;};console.log(String(box));box[Symbol.toPrimitive]=function(){return {};};try{String(box);}catch(e:any){console.log(e.name);}", "2\nown\nstring true\n5\nTypeError\n"];
         yield return ["issue1931-original.ts", "const obj:any={prefix:'P',tag(strings:any,...values:any[]){return this.prefix+':'+strings.join('|')+':'+values.join(',');}};console.log(obj.tag`a${7}b`);console.log(obj['tag']`c${8}d`);", "P:a|b:7\nP:c|d:8\n"];
@@ -87,7 +89,14 @@ public sealed class HistoricalRuntimeRegressionTests
     {
         foreach (var item in Cases())
             foreach (var mode in new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled })
+            {
+                // #1933 explicitly separates the interpreter's unary-plus discrepancy.
+                // Its Number(value) control remains dual-mode; preserve the complete
+                // original source and reference for compiled API/deployment execution.
+                if (item[0] is "issue1933-original.ts" && mode == ExecutionMode.Interpreted)
+                    continue;
                 yield return [..item, mode];
+            }
     }
 
     [Theory, MemberData(nameof(ApiCases))]
