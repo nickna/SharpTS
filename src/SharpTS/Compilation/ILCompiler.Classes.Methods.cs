@@ -1132,8 +1132,8 @@ public partial class ILCompiler
         FieldBuilder? reentrancyField = null;
 
         // Set up @lock decorator - reentrancy-aware Monitor pattern
-        if (hasLock && _locks.SyncLockFields.TryGetValue(typeBuilder.Name, out syncLockField) &&
-            _locks.ReentrancyFields.TryGetValue(typeBuilder.Name, out reentrancyField))
+        if (hasLock && _locks.SyncLockFields.TryGetValue(typeBuilder.FullName!, out syncLockField) &&
+            _locks.ReentrancyFields.TryGetValue(typeBuilder.FullName!, out reentrancyField))
         {
             prevReentrancyLocal = il.DeclareLocal(typeof(int));     // int __prevReentrancy
             lockTakenLocal = il.DeclareLocal(typeof(bool));         // bool __lockTaken

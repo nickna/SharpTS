@@ -1617,7 +1617,7 @@ public partial class ILCompiler
         FieldBuilder? lockReentrancyField = null;
         if (hasLock)
         {
-            var className = methodBuilder.DeclaringType!.Name;
+            var className = methodBuilder.DeclaringType!.FullName!;
             if (isInstanceMethod)
             {
                 _locks.AsyncLockFields.TryGetValue(className, out asyncLockField);
