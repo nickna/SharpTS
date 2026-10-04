@@ -947,52 +947,6 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(isObjectLikeLabel);
 
-        // Boxed primitive marker fast-path: if the receiver carries
-        // __primitiveType + __primitiveValue (Stage 4z19 wrappers), Stringify
-        // the underlying primitive directly. Without this, toString walks the
-        // prototype chain to the StringPrototypeGenericStub which doesn't read
-        // the marker — returns receiver-as-string instead of the primitive's
-        // natural string repr (`new Object(true).valueOf()` gives wrapper, not true).
-        var primValLocal = il.DeclareLocal(_types.Object);
-        var notBoxedLabel = il.DefineLabel();
-        // #574: an own (instance) toString override must win over the boxed
-        // __primitiveValue fast-path — ECMA-262 OrdinaryToPrimitive(O, "string")
-        // calls the own toString first. When the wrapper carries an own toString,
-        // defer to the OrdinaryToPrimitive section below (which invokes it). An
-        // inherited prototype toString is NOT own, so un-overridden wrappers still
-        // take the fast-path. (HasOwnPropertyHelper does not walk the prototype.)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldstr, "toString");
-        il.Emit(OpCodes.Call, peers.HasOwnProperty);
-        il.Emit(OpCodes.Brtrue, notBoxedLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Call, peers.GetProperty);
-        il.Emit(OpCodes.Stloc, primValLocal);
-        il.Emit(OpCodes.Ldloc, primValLocal);
-        il.Emit(OpCodes.Brfalse, notBoxedLabel);
-        il.Emit(OpCodes.Ldloc, primValLocal);
-        il.Emit(OpCodes.Isinst, peers.UndefinedType);
-        il.Emit(OpCodes.Brtrue, notBoxedLabel);
-        // ECMA-262 §7.1.17 step 2: throw TypeError if the unwrapped primitive
-        // is a Symbol. The entry-point check at line ~1856 only catches raw
-        // Symbol values — Object(Symbol("x")) wraps it as $Object with
-        // __primitiveValue=sym, and the unwrap below bypasses that guard,
-        // letting Stringify run on a Symbol (returns "Symbol(x)" rather than
-        // throwing). Required by indexOf/searchstring-tostring-errors et al.
-        var unwrapNotSymLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, primValLocal);
-        il.Emit(OpCodes.Isinst, peers.SymbolType);
-        il.Emit(OpCodes.Brfalse, unwrapNotSymLabel);
-        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert a Symbol value to a string");
-        il.MarkLabel(unwrapNotSymLabel);
-        // Re-enter language ToString for the primitive. This is observably
-        // different from debug Stringify for BigInt ("42" versus "42n").
-        il.Emit(OpCodes.Ldloc, primValLocal);
-        il.Emit(OpCodes.Call, coercion.ToJsString);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notBoxedLabel);
-
         // ECMA-262 7.1.1 ToPrimitive(input, "string"): GetMethod(input, @@toPrimitive)
         // takes priority over OrdinaryToPrimitive. Look up Symbol.toPrimitive in the
         // value's symbol-dict (compiled mode stores symbol-keyed properties separately
@@ -1123,6 +1077,52 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, coercion.ToJsString);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(afterToPrimSymLabel);
+
+        // Boxed primitive marker fast-path: if the receiver carries
+        // __primitiveType + __primitiveValue (Stage 4z19 wrappers), Stringify
+        // the underlying primitive directly. Without this, toString walks the
+        // prototype chain to the StringPrototypeGenericStub which doesn't read
+        // the marker — returns receiver-as-string instead of the primitive's
+        // natural string repr (`new Object(true).valueOf()` gives wrapper, not true).
+        var primValLocal = il.DeclareLocal(_types.Object);
+        var notBoxedLabel = il.DefineLabel();
+        // #574: an own (instance) toString override must win over the boxed
+        // __primitiveValue fast-path — ECMA-262 OrdinaryToPrimitive(O, "string")
+        // calls the own toString first. When the wrapper carries an own toString,
+        // defer to the OrdinaryToPrimitive section below (which invokes it). An
+        // inherited prototype toString is NOT own, so un-overridden wrappers still
+        // take the fast-path. (HasOwnPropertyHelper does not walk the prototype.)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "toString");
+        il.Emit(OpCodes.Call, peers.HasOwnProperty);
+        il.Emit(OpCodes.Brtrue, notBoxedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "__primitiveValue");
+        il.Emit(OpCodes.Call, peers.GetProperty);
+        il.Emit(OpCodes.Stloc, primValLocal);
+        il.Emit(OpCodes.Ldloc, primValLocal);
+        il.Emit(OpCodes.Brfalse, notBoxedLabel);
+        il.Emit(OpCodes.Ldloc, primValLocal);
+        il.Emit(OpCodes.Isinst, peers.UndefinedType);
+        il.Emit(OpCodes.Brtrue, notBoxedLabel);
+        // ECMA-262 §7.1.17 step 2: throw TypeError if the unwrapped primitive
+        // is a Symbol. The entry-point check at line ~1856 only catches raw
+        // Symbol values — Object(Symbol("x")) wraps it as $Object with
+        // __primitiveValue=sym, and the unwrap below bypasses that guard,
+        // letting Stringify run on a Symbol (returns "Symbol(x)" rather than
+        // throwing). Required by indexOf/searchstring-tostring-errors et al.
+        var unwrapNotSymLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, primValLocal);
+        il.Emit(OpCodes.Isinst, peers.SymbolType);
+        il.Emit(OpCodes.Brfalse, unwrapNotSymLabel);
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert a Symbol value to a string");
+        il.MarkLabel(unwrapNotSymLabel);
+        // Re-enter language ToString for the primitive. This is observably
+        // different from debug Stringify for BigInt ("42" versus "42n").
+        il.Emit(OpCodes.Ldloc, primValLocal);
+        il.Emit(OpCodes.Call, coercion.ToJsString);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notBoxedLabel);
 
         // emptyArgs = new object[0]
         var emptyArgsLocal = il.DeclareLocal(_types.ObjectArray);
