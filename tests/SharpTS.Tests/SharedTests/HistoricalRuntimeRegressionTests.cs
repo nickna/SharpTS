@@ -7,6 +7,8 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["issue1948-original.ts", "'use strict';const value:any={};Object.defineProperty(value,'a',{value:1,writable:false});try{value.a=2;}catch(e:any){console.log(e.name);}console.log(value.a);", "TypeError\n1\n"];
+        yield return ["issue1948-controls.ts", "const value:any={};Object.defineProperty(value,'a',{value:1,writable:false});value.a=2;console.log(value.a);function strictWrite(){'use strict';try{value.a=3;}catch(e:any){console.log(e.name);}}strictWrite();console.log(value.a);", "1\nTypeError\n1\n"];
         yield return ["issue1947-original.ts", "const proto:any={set value(v:number){(this as any).own=v;}};const value:any=Object.create(proto);value.value=9;console.log(value.own,Object.hasOwn(value,'own'),Object.hasOwn(proto,'own'));", "9 true false\n"];
         yield return ["issue1947-controls.ts", """
             const proto:any={get value(){return (this as any).own;},set value(v:number){(this as any).own=v;}};const middle:any=Object.create(proto);const value:any=Object.create(middle);value['value']=6;console.log(value.value,Object.hasOwn(value,'value'),Object.hasOwn(proto,'own'));
