@@ -540,6 +540,7 @@ public partial class ILCompiler
         // namespace-qualified keys while a namespace's members are being defined/collected (#657).
         _definitionContext.CurrentNamespacePath = _currentNamespacePath;
         _definitionContext.DotNetNamespace = _modules.CurrentDotNetNamespace;
+        _definitionContext.ModuleNames = _modules.Names;
         _definitionContext.IsStrictMode = _isStrictMode;
         return _definitionContext;
     }
@@ -565,7 +566,8 @@ public partial class ILCompiler
             privateElements: _classes.PrivateElements,
             classToModule: _modules.ClassToModule,
             getCurrentModulePath: () => _modules.CurrentPath,
-            getDotNetNamespace: () => _modules.CurrentDotNetNamespace
+            getDotNetNamespace: () => _modules.CurrentDotNetNamespace,
+            getModuleName: path => GetDefinitionContext().GetSanitizedModuleName(path)
         );
     }
 
@@ -659,6 +661,7 @@ public partial class ILCompiler
     private void AnalyzeClosuresAndPromotions(List<Stmt> statements, IReadOnlyList<ParsedModule>? modules = null)
     {
         Phase2_AnalyzeClosures(statements);
+        _closures.ConstArrowBindings = ConstArrowBindingAnalyzer.Collect(statements);
         StableMapIterationAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StableCustomIteratorAnalyzer.Analyze(
             statements, _typeMap, _closures.Analyzer, _features);
@@ -1097,6 +1100,7 @@ public partial class ILCompiler
     {
         _classes.GenericParameters.CompleteEmission(_classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
+        _functions.GenericParameters.CompleteEmission();
         _classes.PrivateElements.CompleteEmission();
         _classes.PropertyDispatch.CompleteEmission();
         _classes.ComputedMembers.CompleteEmission();
@@ -1313,6 +1317,7 @@ public partial class ILCompiler
     /// </summary>
     private void ModulePhase0_ExtractNamespaces(List<ParsedModule> modules)
     {
+        _modules.Names = ModuleNameRegistry.Collect(modules.Select(module => module.Path));
         foreach (var module in modules)
         {
             _modules.Namespaces[module.Path] = ExtractNamespaceFromStatements(module.Statements);
@@ -1661,6 +1666,7 @@ public partial class ILCompiler
     {
         _classes.GenericParameters.CompleteEmission(_classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
+        _functions.GenericParameters.CompleteEmission();
         _classes.PrivateElements.CompleteEmission();
         _classes.PropertyDispatch.CompleteEmission();
         _classes.ComputedMembers.CompleteEmission();

@@ -78,7 +78,15 @@ public class TypeMapper
     /// features like <see cref="DelegateAdapters"/> that need <c>$TSFunction</c> and
     /// other emitted builders.
     /// </summary>
-    public void SetRuntime(EmittedRuntime runtime) => _runtime = runtime;
+    public void SetRuntime(EmittedRuntime runtime)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        if (_runtime != null && !ReferenceEquals(_runtime, runtime))
+            throw new InvalidOperationException("The mapper runtime is already configured.");
+        if (!ReferenceEquals(runtime.RuntimeClass.Type.Module, _moduleBuilder))
+            throw new InvalidOperationException("The mapper runtime belongs to another module.");
+        _runtime = runtime;
+    }
 
     /// <summary>
     /// Per-compilation cache of TS-closure-to-.NET-delegate adapter types. Lazily
@@ -104,6 +112,11 @@ public class TypeMapper
     /// </summary>
     public void SetClassBuilders(Dictionary<string, TypeBuilder> classBuilders)
     {
+        ArgumentNullException.ThrowIfNull(classBuilders);
+        if (_classBuilders != null && !ReferenceEquals(_classBuilders, classBuilders))
+            throw new InvalidOperationException("The mapper class owner is already configured.");
+        foreach (var builder in classBuilders.Values)
+            RequireLocalClass(builder);
         _classBuilders = classBuilders;
     }
 
@@ -113,7 +126,19 @@ public class TypeMapper
     /// </summary>
     public void SetUnionGenerator(UnionTypeGenerator unionGenerator)
     {
+        ArgumentNullException.ThrowIfNull(unionGenerator);
+        if (!unionGenerator.BelongsTo(this))
+            throw new InvalidOperationException("The union generator belongs to another mapper.");
+        if (_unionGenerator != null && !ReferenceEquals(_unionGenerator, unionGenerator))
+            throw new InvalidOperationException("The mapper union owner is already configured.");
         _unionGenerator = unionGenerator;
+    }
+
+    private void RequireLocalClass(TypeBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        if (!ReferenceEquals(builder.Module, _moduleBuilder))
+            throw new InvalidOperationException("The mapped class belongs to another module.");
     }
 
     public Type MapTypeInfo(TypeInfo typeInfo) => typeInfo switch
@@ -180,7 +205,10 @@ public class TypeMapper
 
         // Then check TypeScript class builders
         if (_classBuilders != null && _classBuilders.TryGetValue(className, out var typeBuilder))
+        {
+            RequireLocalClass(typeBuilder);
             return typeBuilder;
+        }
 
         return _types.Object;
     }

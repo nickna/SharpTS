@@ -43,10 +43,8 @@ internal sealed class ArrowBoxedAdapterEmitter
     // Keyed by (typed arrow method, adapter arity). Arity is the delegate's
     // parameter count (1 for map/filter/forEach/find/…, 2 for reduce); the arrow
     // itself may declare fewer params, in which case the extra adapter args are
-    // ignored. A given arrow node is emitted by exactly one CompilationContext (the
-    // one containing its call site), so this per-context cache never double-defines;
-    // the adapter NAME is derived from the arrow's globally-unique method name so it
-    // stays collision-free across contexts that share the same $Program type.
+    // ignored. Body contexts share this compilation-owned cache, so multiple call
+    // sites for the same arrow reuse one adapter on its program/display carrier.
     private readonly Dictionary<(MethodBuilder, int, bool, bool), MethodBuilder> _cache = [];
 
     /// <summary>

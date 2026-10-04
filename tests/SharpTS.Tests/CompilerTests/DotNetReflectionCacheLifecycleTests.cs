@@ -44,16 +44,19 @@ public class DotNetReflectionCacheLifecycleTests
     }
 
     [Fact]
-    public void ResetReplacesCachedArraysWithoutInvalidatingRetainedMetadata()
+    public void ResetRebuildsOwnedCatalogsWithoutInvalidatingRetainedMetadata()
     {
-        var type = typeof(List<int>);
+        var type = new ControlledType(_ => typeof(List<int>).GetMethods());
         var methods = DotNetTypeRegistry.GetMethods(type, "add", false);
         var indexers = DotNetTypeRegistry.GetIndexers(type, true);
-        Assert.Same(methods, DotNetTypeRegistry.GetMethods(type, "add", false));
-        Assert.Same(indexers, DotNetTypeRegistry.GetIndexers(type, true));
+        Assert.NotSame(methods, DotNetTypeRegistry.GetMethods(type, "add", false));
+        Assert.Same(Assert.Single(methods), Assert.Single(DotNetTypeRegistry.GetMethods(type, "add", false)));
+        Assert.Same(Assert.Single(indexers), Assert.Single(DotNetTypeRegistry.GetIndexers(type, true)));
+        Assert.Equal(1, type.Calls);
         DotNetTypeRegistry.ClearCache();
         Assert.NotSame(methods, DotNetTypeRegistry.GetMethods(type, "add", false));
         Assert.NotSame(indexers, DotNetTypeRegistry.GetIndexers(type, true));
+        Assert.Equal(2, type.Calls);
         var list = new List<int>();
         Assert.Single(methods).Invoke(list, [7]);
         Assert.Single(indexers).SetValue(list, 9, [0]);
@@ -66,13 +69,14 @@ public class DotNetReflectionCacheLifecycleTests
         DotNetTypeRegistry.ClearCache();
         var results = await Task.WhenAll(Enumerable.Range(0, 32).Select(_ => Task.Run(() =>
             DotNetTypeRegistry.GetMethods(typeof(List<int>), "add", false))));
-        Assert.All(results, result => Assert.Same(results[0], result));
+        Assert.All(results, result => Assert.Same(Assert.Single(results[0]), Assert.Single(result)));
         Assert.Single(results[0]);
     }
 
     private sealed class ControlledType(Func<int, MethodInfo[]> lookup) : TypeDelegator(typeof(List<int>))
     {
         private int _calls;
+        public int Calls => Volatile.Read(ref _calls);
         public override MethodInfo[] GetMethods(BindingFlags bindingAttr) =>
             lookup(Interlocked.Increment(ref _calls));
     }
@@ -86,7 +90,8 @@ public class DotNetReflectionCacheLifecycleTests
         Assert.Throws<TypeLoadException>(() => DotNetTypeRegistry.GetMethods(type, "add", false));
         var methods = DotNetTypeRegistry.GetMethods(type, "add", false);
         Assert.Single(methods);
-        Assert.Same(methods, DotNetTypeRegistry.GetMethods(type, "add", false));
+        Assert.Same(Assert.Single(methods), Assert.Single(DotNetTypeRegistry.GetMethods(type, "add", false)));
+        Assert.Equal(2, type.Calls);
     }
 
     [Fact]
@@ -112,7 +117,8 @@ public class DotNetReflectionCacheLifecycleTests
             release.Set();
             var previous = await pending.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.NotSame(previous, current);
-            Assert.Same(current, DotNetTypeRegistry.GetMethods(type, "add", false));
+            Assert.Same(Assert.Single(current), Assert.Single(DotNetTypeRegistry.GetMethods(type, "add", false)));
+            Assert.Equal(2, type.Calls);
             Assert.Single(previous);
             Assert.Single(current);
         }

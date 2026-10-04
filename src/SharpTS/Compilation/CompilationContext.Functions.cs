@@ -69,11 +69,7 @@ public partial class CompilationContext
     // Method overloads for default parameters: class name -> method name -> list of overload methods
     public Dictionary<string, Dictionary<string, List<MethodBuilder>>>? MethodOverloads { get; set; }
 
-    // Track generic params per function for instantiation
-    public Dictionary<string, GenericTypeParameterBuilder[]>? FunctionGenericParams { get; set; }
-
-    // Track which functions are generic definitions
-    public Dictionary<string, bool>? IsGenericFunction { get; set; }
+    public FunctionGenericParameterRegistry? FunctionGenericParameters { get; set; }
 
     /// <summary>
     /// ECMAScript <c>Function.length</c> values keyed by emitted user method. Unlike CLR
@@ -135,7 +131,7 @@ public partial class CompilationContext
         // while its function declarations belong to the shared script scope.
         => CurrentModulePath == null || IsScriptTopLevel
             ? simpleFunctionName
-            : $"$M_{SanitizeModuleName(Path.GetFileNameWithoutExtension(CurrentModulePath))}_{simpleFunctionName}";
+            : $"$M_{GetSanitizedModuleName(CurrentModulePath)}_{simpleFunctionName}";
 
     /// <summary>
     /// Resolves a simple function name to its qualified name for lookup in the Functions dictionary.
@@ -169,7 +165,7 @@ public partial class CompilationContext
 
         if (FunctionToModule != null && FunctionToModule.TryGetValue(simpleFunctionName, out var modulePath))
         {
-            string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));
+            string sanitizedModule = GetSanitizedModuleName(modulePath);
             return $"$M_{sanitizedModule}_{simpleFunctionName}";
         }
         return simpleFunctionName;

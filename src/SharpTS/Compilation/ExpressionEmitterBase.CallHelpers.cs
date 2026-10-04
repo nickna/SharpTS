@@ -192,8 +192,10 @@ public abstract partial class ExpressionEmitterBase
                 MethodInfo targetMethod = methodBuilder;
 
                 // Generic function instantiation
-                if (Ctx.IsGenericFunction?.TryGetValue(resolvedFuncName, out var isGeneric) == true && isGeneric)
+                if (methodBuilder.IsGenericMethodDefinition)
                 {
+                    var genericParams = Ctx.FunctionGenericParameters?.Require(methodBuilder)
+                        ?? throw new InvalidOperationException("Function generic parameter owner is unavailable.");
                     if (c.TypeArgs != null && c.TypeArgs.Count > 0)
                     {
                         Type[] typeArgs = c.TypeArgs.Select(ResolveTypeArg).ToArray();
@@ -201,9 +203,8 @@ public abstract partial class ExpressionEmitterBase
                     }
                     else
                     {
-                        var genericParams = Ctx.FunctionGenericParams![resolvedFuncName];
-                        Type[] inferredArgs = new Type[genericParams.Length];
-                        for (int i = 0; i < genericParams.Length; i++)
+                        Type[] inferredArgs = new Type[genericParams.Count];
+                        for (int i = 0; i < genericParams.Count; i++)
                         {
                             var baseConstraint = genericParams[i].BaseType;
                             inferredArgs[i] = (baseConstraint != null && !Types.IsObject(baseConstraint))
@@ -2165,6 +2166,19 @@ public abstract partial class ExpressionEmitterBase
 
     #region Call Helpers
 
+    protected string ResolveInstanceClassName(Expr receiver, string simpleClassName)
+    {
+        // A namespace/named import's constructor has an exact exported owner. Reuse
+        // that identity instead of the program-wide simple class-name index.
+        if (receiver is Expr.New construction)
+        {
+            var (parts, name) = ExtractQualifiedNameFromCallee(construction.Callee);
+            if (name.Length > 0)
+                return ResolveClassNameForNew(parts, name);
+        }
+        return Ctx.ResolveClassName(simpleClassName);
+    }
+
     protected bool TryEmitDirectMethodCall(Expr receiver, string methodName, List<Expr> arguments)
     {
         string? simpleClassName = null;
@@ -2201,7 +2215,7 @@ public abstract partial class ExpressionEmitterBase
         if (simpleClassName == null)
             return false;
 
-        string className = Ctx.ResolveClassName(simpleClassName);
+        string className = ResolveInstanceClassName(receiver, simpleClassName);
         var methodBuilder = Ctx.ResolveInstanceMethod(className, methodName);
         if (methodBuilder == null)
             return false;

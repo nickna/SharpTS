@@ -91,7 +91,10 @@ public partial class CompilationContext
     /// </summary>
     public Dictionary<string, MethodBuilder>? CommonJsGetExportsMethods { get; set; }
 
-    // Cache for sanitized module names to avoid repeated string operations
+    // Protected path-keyed declaration names shared by all contexts in a compilation.
+    internal IReadOnlyDictionary<string, string> ModuleNames { get; set; } = new Dictionary<string, string>();
+
+    // Cache for standalone contexts without a collected module graph.
     private readonly Dictionary<string, string> _sanitizedModuleNameCache = [];
 
     /// <summary>
@@ -148,8 +151,10 @@ public partial class CompilationContext
     /// <summary>
     /// Gets the sanitized module name with caching to avoid repeated string operations.
     /// </summary>
-    private string GetSanitizedModuleName(string modulePath)
+    internal string GetSanitizedModuleName(string modulePath)
     {
+        if (ModuleNames.TryGetValue(modulePath, out var name))
+            return name;
         string filename = Path.GetFileNameWithoutExtension(modulePath);
         if (!_sanitizedModuleNameCache.TryGetValue(filename, out var sanitized))
         {

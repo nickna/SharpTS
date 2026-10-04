@@ -41,6 +41,7 @@ public sealed class ClassRegistry
     private readonly Dictionary<string, string>? _classToModule;
     private readonly Func<string?>? _getCurrentModulePath;
     private readonly Func<string?>? _getDotNetNamespace;
+    private readonly Func<string, string>? _getModuleName;
 
     /// <summary>
     /// Creates a new ClassRegistry wrapping the given state dictionaries.
@@ -60,7 +61,8 @@ public sealed class ClassRegistry
         PrivateClassElementRegistry privateElements,
         Dictionary<string, string>? classToModule = null,
         Func<string?>? getCurrentModulePath = null,
-        Func<string?>? getDotNetNamespace = null)
+        Func<string?>? getDotNetNamespace = null,
+        Func<string, string>? getModuleName = null)
     {
         _builders = builders;
         _superclass = superclass;
@@ -77,6 +79,7 @@ public sealed class ClassRegistry
         _classToModule = classToModule;
         _getCurrentModulePath = getCurrentModulePath;
         _getDotNetNamespace = getDotNetNamespace;
+        _getModuleName = getModuleName;
     }
 
     #region Name Resolution
@@ -93,7 +96,7 @@ public sealed class ClassRegistry
         // If we have a module mapping, use it to create the qualified name
         if (_classToModule != null && _classToModule.TryGetValue(simpleClassName, out var modulePath))
         {
-            string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));
+            string sanitizedModule = GetModuleName(modulePath);
             baseName = $"$M_{sanitizedModule}_{simpleClassName}";
         }
         else
@@ -126,7 +129,7 @@ public sealed class ClassRegistry
         }
         else
         {
-            string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(currentModulePath));
+            string sanitizedModule = GetModuleName(currentModulePath);
             baseName = $"$M_{sanitizedModule}_{simpleClassName}";
         }
 
@@ -139,6 +142,9 @@ public sealed class ClassRegistry
 
         return baseName;
     }
+
+    private string GetModuleName(string path) => _getModuleName?.Invoke(path)
+        ?? SanitizeModuleName(Path.GetFileNameWithoutExtension(path));
 
     private static string SanitizeModuleName(string name)
     {

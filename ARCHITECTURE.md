@@ -1820,6 +1820,13 @@ There are three legitimate dependency forms:
 normally requires a soft dependency must fail clearly when the runtime is absent. Native AOT
 compiler hosts reject required managed-runtime capabilities before producing unusable output.
 
+Fixed legacy runtime bridges retain assembly-qualified type/method strings and their
+feature-specific deployment requirements. The shared emission recipe owns no generated
+handle cache. DNS's best-effort host synchronization preserves per-assembly emitted
+configuration and intentionally mutable process-level host configuration; resolver state
+belongs to each instance. See the [legacy bridge audit](docs/compiler-ownership/I04.md)
+for target identities, lifetimes and hosted/absent-runtime verification.
+
 ### Runtime tree-shaking
 
 `RuntimeFeatureDetector` derives a conservative feature set from the whole checked graph. The
@@ -1856,6 +1863,16 @@ catalogs, reflection annotations, and generated closed .NET interop catalogs; th
 not discover arbitrary application types at runtime. See [Embedding](docs/embedding.md) and
 [Native AOT](docs/native-aot.md).
 
+### User module identities
+
+Each compilation collects a protected path-to-emitted-prefix snapshot before declarations.
+Unique filenames retain their prefixes; collisions use suffixes allocated in ordinal path
+order while reserving unambiguous names. Class, function, enum, module and hosted binding
+consumers share this owner. The active .NET namespace comes from the current module's
+stored configuration throughout emission. Imported constructors and immediate method
+calls on their results retain the exact exporting class owner. See the
+[module ownership audit](docs/compiler-ownership/M01.md) for phases and verification.
+
 ### Built-in module emission strategies
 
 `BuiltInModuleEmitterRegistry` owns the module-name dispatch index for one compiler.
@@ -1885,6 +1902,13 @@ registry for delegated dispatch. The former late registration block and unused e
 alias are removed. Other compiler registries and shared infrastructure still require audit.
 
 ### External CLR type declarations
+
+`TypeMapper` binds runtime, generated class and union owners once; repeating the same
+reference is idempotent, while null, replacement and foreign owners fail before publication.
+Generated class dictionaries stay live for declaration ordering, with module checks on
+consumed builders. Delegate adapters remain bound to that mapper's original runtime/module.
+Existing union and shape completion contracts remain in force. See the
+[mapper ownership audit](docs/compiler-ownership/I01.md).
 
 `TypeMapper.ExternalTypeDeclarations` owns one `ExternalTypeRegistry` per compilation.
 Class decorators and `dotnet:` imports register their aliases with this owner; class
@@ -1936,10 +1960,26 @@ Completed lookup results and misses are cached; exceptions publish nothing and
 remain retryable. Concurrent readers share the published result. Reset atomically
 replaces the entire generation, so an in-flight lookup cannot populate the new
 generation. Previously returned reflection metadata remains usable while retained.
-Method and indexer arrays retain their existing shared, read-only-by-contract API;
-callers must not mutate them. Managed/native feature checks and member filtering
+Method and indexer arrays are caller-owned copies of private cached arrays; the completed
+member handles retain identity. Mutating a returned array cannot affect another lookup.
+TypeProvider also snapshots signature keys and excludes collectible types from strong
+name/member caches, including non-dynamic assemblies loaded into collectible contexts.
+Both name resolvers bypass their default-context caches during explicit contextual
+reflection, preserving distinct CLR identities for the same assembly-qualified name.
+Managed/native feature checks and member filtering
 remain at the lookup boundary. This shared cache owns no emitted declarations or
 per-compilation CLR alias bindings.
+
+### Generic function declarations
+
+`FunctionGenericParameterRegistry` owns ordinary function parameter declarations by
+`MethodBuilder` identity, including explicit empty non-generic declarations. Name and
+namespace aliases select a method but do not own generic status or parameter order.
+Registration checks owner identity, arity and order and snapshots the parameter list;
+consumers receive a read-only view. Registration remains open through guest body and
+module initializer emission and completes immediately before type finalization in both
+compiler pipelines. Completion revalidates declarations and rejects later writes.
+Nested erased functions and non-generic suspension stubs retain their existing signatures.
 
 ### Generated union metadata
 

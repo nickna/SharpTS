@@ -17,16 +17,21 @@ public partial class CompilationContext
     public Dictionary<ArrowFunction, MethodBuilder> ArrowMethods { get; set; } = [];
 
     // Boxed-callback adapters for annotated-param array HOF callbacks (#861).
-    // Lazily created (no constructor plumbing needed); emits per-arrow
+    // Shared by contexts from the same compilation; emits per-arrow
     // object(object[,object]) adapters on $Program so a typed arrow can bind to
     // the Func<object,…> the Array*Direct helpers expect.
     private ArrowBoxedAdapterEmitter? _arrowBoxedAdapters;
-    internal ArrowBoxedAdapterEmitter ArrowBoxedAdapters => _arrowBoxedAdapters ??= new ArrowBoxedAdapterEmitter();
+    internal ArrowBoxedAdapterEmitter ArrowBoxedAdapters
+    {
+        get => _arrowBoxedAdapters ??= new ArrowBoxedAdapterEmitter();
+        set => _arrowBoxedAdapters = value;
+    }
 
-    // Module-scope const → literal-arrow bindings. Iterator-helper fast paths
+    // Unambiguous top-level const → literal-arrow bindings. Iterator-helper fast paths
     // look up `Expr.Variable` callbacks here so `const sq = x => x*x; arr.map(sq)`
     // gets the same direct-delegate dispatch as the inline-arrow form.
-    public Dictionary<string, ArrowFunction> ConstArrowBindings { get; set; } = [];
+    public IReadOnlyDictionary<string, ArrowFunction> ConstArrowBindings { get; set; } =
+        new Dictionary<string, ArrowFunction>();
 
     // Non-escaping `const NAME = (args) => …` local bindings (#858). Populated by
     // NonEscapingArrowLocalAnalyzer. EmitVarDeclaration stores the bare display instance in a typed

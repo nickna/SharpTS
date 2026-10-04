@@ -178,12 +178,12 @@ public partial class ILCompiler
 
         // Handle generic type parameters
         bool isGeneric = funcStmt.TypeParams != null && funcStmt.TypeParams.Count > 0;
-        _functions.IsGeneric[qualifiedFunctionName] = isGeneric;
+        GenericTypeParameterBuilder[] genericParams = [];
 
         if (isGeneric)
         {
             string[] typeParamNames = funcStmt.TypeParams!.Select(tp => tp.Name.Lexeme).ToArray();
-            var genericParams = methodBuilder.DefineGenericParameters(typeParamNames);
+            genericParams = methodBuilder.DefineGenericParameters(typeParamNames);
 
             // Apply constraints
             for (int i = 0; i < funcStmt.TypeParams!.Count; i++)
@@ -198,9 +198,9 @@ public partial class ILCompiler
                         EmitTypeDefinitions.SetBaseTypeConstraint(genericParams[i], constraintType);
                 }
             }
-
-            _functions.GenericParams[qualifiedFunctionName] = genericParams;
         }
+
+        _functions.GenericParameters.Declare(methodBuilder, genericParams);
 
         _functions.Builders[qualifiedFunctionName] = methodBuilder;
 
@@ -548,11 +548,8 @@ public partial class ILCompiler
         }
 
         // Add generic type parameters to context if this is a generic function
-        if (_functions.GenericParams.TryGetValue(qualifiedFunctionName, out var genericParams))
-        {
-            foreach (var gp in genericParams)
-                ctx.GenericTypeParameters[gp.Name] = gp;
-        }
+        foreach (var gp in _functions.GenericParameters.Require(methodBuilder))
+            ctx.GenericTypeParameters[gp.Name] = gp;
 
         // Define parameters with their types
         var methodParams = methodBuilder.GetParameters();

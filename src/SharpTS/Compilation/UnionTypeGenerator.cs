@@ -35,6 +35,8 @@ public class UnionTypeGenerator
 
     public bool IsComplete { get; private set; }
 
+    internal bool BelongsTo(TypeMapper mapper) => ReferenceEquals(_typeMapper, mapper);
+
     public UnionTypeGenerator(TypeMapper typeMapper, Type? unionTypeInterface = null)
     {
         ArgumentNullException.ThrowIfNull(typeMapper);

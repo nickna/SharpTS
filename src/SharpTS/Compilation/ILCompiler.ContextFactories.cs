@@ -44,6 +44,7 @@ public partial class ILCompiler
             ClosureAnalyzer = _closures.Analyzer,
             ArrowMethods = _closures.ArrowMethods,
             ConstArrowBindings = _closures.ConstArrowBindings,
+            ArrowBoxedAdapters = _closures.BoxedAdapters,
             DirectCallArrowBindings = _closures.DirectCallArrowBindings,
             StableNativeNumberGeneratorFunctions = _generators.StableNativeNumberFunctions,
             ObjectShapes = _closures.ObjectShapes,
@@ -62,8 +63,7 @@ public partial class ILCompiler
                 _classes.TypedPrimitiveInstanceMethodCores.Count > 0
                     ? _classes.TypedPrimitiveInstanceMethodCores
                     : null,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
+            FunctionGenericParameters = _functions.GenericParameters,
             SuspensionFreePrimitiveAsyncCores =
                 _async.StableSuspensionFreePrimitiveCores.Count > 0
                     ? _async.StableSuspensionFreePrimitiveCores
@@ -95,6 +95,7 @@ public partial class ILCompiler
             BlockScopedClassBuilders = _classes.BlockScopedBuilders,
             ClassRegistry = GetClassRegistry(),
             DotNetNamespace = _modules.CurrentDotNetNamespace,
+            ModuleNames = _modules.Names,
             // Ambient strict mode; bodies with their own "use strict" prologue override this.
             IsStrictMode = _isStrictMode,
             // Symbol emission: null unless this build asked for debug symbols, which is what keeps
@@ -236,6 +237,7 @@ public partial class ILCompiler
             ClosureAnalyzer = parentCtx.ClosureAnalyzer,
             ArrowMethods = parentCtx.ArrowMethods,
             ConstArrowBindings = parentCtx.ConstArrowBindings,
+            ArrowBoxedAdapters = parentCtx.ArrowBoxedAdapters,
             DirectCallArrowBindings = parentCtx.DirectCallArrowBindings,
             StableNativeNumberGeneratorFunctions = parentCtx.StableNativeNumberGeneratorFunctions,
             DisplayClasses = parentCtx.DisplayClasses,
@@ -252,8 +254,7 @@ public partial class ILCompiler
             LiteralNumericRestMethods = parentCtx.LiteralNumericRestMethods,
             FunctionLengths = parentCtx.FunctionLengths,
             FunctionNames = parentCtx.FunctionNames,
-            FunctionGenericParams = parentCtx.FunctionGenericParams,
-            IsGenericFunction = parentCtx.IsGenericFunction,
+            FunctionGenericParameters = parentCtx.FunctionGenericParameters,
             TypeMap = parentCtx.TypeMap,
             DeadCode = parentCtx.DeadCode,
             AsyncMethods = null,
@@ -262,6 +263,7 @@ public partial class ILCompiler
             AsyncArrowParentBuilders = _async.ArrowParentBuilders,
             // Inherit module support from parent context
             CurrentModulePath = parentCtx.CurrentModulePath,
+            ModuleNames = parentCtx.ModuleNames,
             ClassToModule = parentCtx.ClassToModule,
             FunctionToModule = parentCtx.FunctionToModule,
             EnumToModule = parentCtx.EnumToModule,

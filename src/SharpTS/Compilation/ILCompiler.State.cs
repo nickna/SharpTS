@@ -88,8 +88,7 @@ public partial class ILCompiler
         public Dictionary<string, Dictionary<int, MethodBuilder>> FlattenedNumericRestMethods { get; } = [];
         public Dictionary<Expr.Call, MethodBuilder> NumericRestCallMethods { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, Dictionary<int, MethodBuilder>> LiteralNumericRestMethods { get; } = [];
-        public Dictionary<string, GenericTypeParameterBuilder[]> GenericParams { get; } = [];
-        public Dictionary<string, bool> IsGeneric { get; } = [];
+        public FunctionGenericParameterRegistry GenericParameters { get; } = new();
         public Dictionary<MethodBase, int> Lengths { get; } = [];
         public Dictionary<MethodBase, string> Names { get; } = [];
 
@@ -117,14 +116,16 @@ public partial class ILCompiler
     {
         public ClosureAnalyzer Analyzer { get; set; } = null!;
         public Dictionary<Expr.ArrowFunction, MethodBuilder> ArrowMethods { get; } = new(ReferenceEqualityComparer.Instance);
+        public ArrowBoxedAdapterEmitter BoxedAdapters { get; } = new();
 
         // Maps `const NAME = (args) => …` (and `export const NAME = …`) at top-
-        // level / module scope to the literal arrow's AST node. Iterator-helper
+        // level / module scope to the literal arrow's AST node, only when whole-program
+        // analysis proves the name has a single runtime binding. Iterator-helper
         // fast paths consult this when the callback argument is `Expr.Variable`,
         // letting `arr.map(myFn)` inline through the same delegate construction
-        // as `arr.map((x) => …)`. Module-scope only: nested `const` bindings
-        // would need scope-aware shadowing; punt to v2.
-        public Dictionary<string, Expr.ArrowFunction> ConstArrowBindings { get; } = [];
+        // as `arr.map((x) => …)`. Nested bindings are counted to reject ambiguous names.
+        public IReadOnlyDictionary<string, Expr.ArrowFunction> ConstArrowBindings { get; set; } =
+            new Dictionary<string, Expr.ArrowFunction>();
 
         // `const NAME = (args) => …` local bindings whose arrow provably never escapes — only ever
         // invoked by name as `NAME(args)`. The emitter stores the bare display-class instance in a
@@ -325,9 +326,16 @@ public partial class ILCompiler
         public Dictionary<string, string> FunctionToModule { get; } = [];
         public Dictionary<string, string> EnumToModule { get; } = [];
         public Dictionary<string, string?> Namespaces { get; } = [];
+        public IReadOnlyDictionary<string, string> Names { get; set; } = new Dictionary<string, string>();
         public ModuleResolver? Resolver { get; set; }
         public string? CurrentPath { get; set; }
-        public string? CurrentDotNetNamespace { get; set; }
+        private string? _scriptDotNetNamespace;
+        public string? CurrentDotNetNamespace
+        {
+            get => CurrentPath != null && Namespaces.TryGetValue(CurrentPath, out var ns)
+                ? ns : _scriptDotNetNamespace;
+            set => _scriptDotNetNamespace = value;
+        }
         /// <summary>
         /// Maps module path to the qualified class name when the module uses `export = ClassName`.
         /// Used to enable compile-time static member resolution for imported classes.

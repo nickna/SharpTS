@@ -764,7 +764,7 @@ public partial class ILEmitter
             return true;
         }
 
-        string className = _ctx.ResolveClassName(simpleClassName);
+        string className = ResolveInstanceClassName(receiver, simpleClassName);
 
         // Look up the method and its owner in the class hierarchy. An inherited
         // primitive core is registered on the declaring base, not the exact
