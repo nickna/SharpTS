@@ -419,7 +419,8 @@ public partial class ILCompiler
         public Dictionary<Expr.ClassExpr, ClassExpressionFactory> Factories { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, string?> Superclass { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, string> EnclosingClass { get; } = new(ReferenceEqualityComparer.Instance);
-        public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>> CaptureFields { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Expr.ClassExpr, Dictionary<string, int>> CaptureSlots { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<MethodBuilder, (Expr.ClassExpr Expression, FieldBuilder Definition)> DefinitionMethods { get; } = new(ReferenceEqualityComparer.Instance);
     }
 
     /// <summary>

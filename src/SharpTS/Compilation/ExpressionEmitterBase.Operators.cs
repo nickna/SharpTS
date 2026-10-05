@@ -78,6 +78,7 @@ public abstract partial class ExpressionEmitterBase
     /// </remarks>
     protected virtual void EmitStoreVariable(string name)
     {
+        if (TryEmitStoreClassDefinitionCapture(name)) return;
         // Per-iteration loop-binding cell (#650): write through the StrongBox. This base
         // helper (used by state-machine increments/compound/logical assignment) hand-rolls
         // the store instead of routing through the resolver, so the cell case is handled here.

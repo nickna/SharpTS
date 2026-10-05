@@ -243,20 +243,27 @@ public partial class ILEmitter
         // Populate $functionDC field if this arrow captures function-level variables
         if (_ctx.ArrowFunctionDCFields?.TryGetValue(af, out var functionDCField) == true)
         {
-            if (_ctx.FunctionDisplayClassLocal != null)
+            if (_ctx.FunctionDisplayClassLocal?.LocalType == functionDCField.FieldType)
             {
                 // In function body - use local variable
                 IL.Emit(OpCodes.Dup); // Keep display class on stack
                 IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
                 IL.Emit(OpCodes.Stfld, functionDCField);
             }
-            else if (_ctx.CurrentArrowFunctionDCField != null)
+            else if (_ctx.CurrentArrowFunctionDCField?.FieldType == functionDCField.FieldType)
             {
                 // In arrow body - get from parent arrow's $functionDC field
                 IL.Emit(OpCodes.Dup); // Keep display class on stack
                 IL.Emit(OpCodes.Ldarg_0); // Load parent display class
                 IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
                 IL.Emit(OpCodes.Stfld, functionDCField);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Dup);
+                if (TryEmitClassDefinitionEnvironment(functionDCField.FieldType))
+                    IL.Emit(OpCodes.Stfld, functionDCField);
+                else IL.Emit(OpCodes.Pop);
             }
         }
 

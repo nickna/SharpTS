@@ -9,8 +9,10 @@ public sealed class EmittedClassDefinitionRuntime
     internal EmittedClassDefinitionRuntime() { }
     internal sealed record Declarations(TypeBuilder Type, Type InstanceInterface,
         MethodInfo GetDefinition, ConstructorBuilder Constructor, FieldBuilder Template,
-        FieldBuilder Factory, FieldBuilder Prototype, MethodBuilder Create, MethodBuilder Construct,
-        MethodBuilder ReadProperty, MethodBuilder Invoke);
+        FieldBuilder Factory, FieldBuilder Prototype, FieldBuilder Keys, FieldBuilder Parent, FieldBuilder Captures, MethodBuilder Create, MethodBuilder Construct,
+        MethodBuilder ReadProperty, MethodBuilder Invoke, TypeBuilder CaptureType, ConstructorBuilder CaptureConstructor,
+        FieldBuilder CaptureOwner, FieldBuilder CaptureField, MethodBuilder ReadCapture, MethodBuilder WriteCapture,
+        MethodBuilder FindEnvironment);
 
     private Declarations? _declarations;
     private Declarations Required => _declarations
@@ -23,10 +25,17 @@ public sealed class EmittedClassDefinitionRuntime
     public FieldBuilder Template => Required.Template;
     public FieldBuilder Factory => Required.Factory;
     public FieldBuilder Prototype => Required.Prototype;
+    public FieldBuilder Keys => Required.Keys;
+    public FieldBuilder Parent => Required.Parent;
+    public FieldBuilder Captures => Required.Captures;
     public MethodBuilder Create => Required.Create;
     public MethodBuilder Construct => Required.Construct;
     public MethodBuilder ReadProperty => Required.ReadProperty;
     public MethodBuilder Invoke => Required.Invoke;
+    public ConstructorBuilder CaptureConstructor => Required.CaptureConstructor;
+    public MethodBuilder ReadCapture => Required.ReadCapture;
+    public MethodBuilder WriteCapture => Required.WriteCapture;
+    public MethodBuilder FindEnvironment => Required.FindEnvironment;
 
     internal void Declare(Declarations declarations)
     {
@@ -34,11 +43,15 @@ public sealed class EmittedClassDefinitionRuntime
         if (_declarations is not null || IsComplete)
             throw new InvalidOperationException("Class-definition metadata has already been declared.");
         if (new MemberInfo[] { declarations.Constructor, declarations.Template, declarations.Factory,
-                declarations.Prototype, declarations.Create, declarations.Construct,
-                declarations.ReadProperty, declarations.Invoke }
+                declarations.Prototype, declarations.Keys, declarations.Parent, declarations.Captures, declarations.Create, declarations.Construct,
+                declarations.ReadProperty, declarations.Invoke, declarations.ReadCapture, declarations.WriteCapture,
+                declarations.FindEnvironment }
             .Any(member => member.DeclaringType != declarations.Type)
             || declarations.GetDefinition.DeclaringType != declarations.InstanceInterface
-            || declarations.InstanceInterface.Module != declarations.Type.Module)
+            || declarations.InstanceInterface.Module != declarations.Type.Module
+            || declarations.CaptureType.Module != declarations.Type.Module
+            || new MemberInfo[] { declarations.CaptureConstructor, declarations.CaptureOwner, declarations.CaptureField }
+                .Any(member => member.DeclaringType != declarations.CaptureType))
             throw new InvalidOperationException("Class-definition handles must belong to their declared owner.");
         _declarations = declarations;
     }
@@ -47,7 +60,8 @@ public sealed class EmittedClassDefinitionRuntime
     {
         var declarations = Required;
         if (IsComplete) throw new InvalidOperationException("Class-definition emission is already complete.");
-        if (new[] { declarations.Create, declarations.Construct, declarations.ReadProperty, declarations.Invoke }
+        if (new[] { declarations.Create, declarations.Construct, declarations.ReadProperty, declarations.Invoke,
+                declarations.ReadCapture, declarations.WriteCapture, declarations.FindEnvironment }
             .Any(method => method.GetILGenerator().ILOffset == 0))
             throw new InvalidOperationException("Class-definition method bodies have not all been emitted.");
         IsComplete = true;

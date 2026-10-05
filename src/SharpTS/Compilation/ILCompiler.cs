@@ -927,6 +927,8 @@ public partial class ILCompiler
 
     private void PredefineTopLevelClassExpressionTypes(IEnumerable<Stmt> statements)
     {
+        var collector = new ClassExpressionTemplateCollector(CollectClassExpression);
+        foreach (var statement in statements) collector.Visit(statement);
         foreach (var stmt in statements)
         {
             Expr.ClassExpr? classExpr = stmt switch
@@ -943,6 +945,15 @@ public partial class ILCompiler
             CollectClassExpression(classExpr);
             if (!_classExprs.Builders.ContainsKey(classExpr))
                 DefineClassExpression(classExpr);
+        }
+    }
+
+    private sealed class ClassExpressionTemplateCollector(Action<Expr.ClassExpr> collect) : Parsing.Visitors.AstVisitorBase
+    {
+        protected override void VisitClassExpr(Expr.ClassExpr expression)
+        {
+            collect(expression);
+            base.VisitClassExpr(expression);
         }
     }
 

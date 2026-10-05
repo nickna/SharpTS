@@ -55,6 +55,8 @@ public partial class ILCompiler
         string name = expression.Name?.Lexeme
             ?? _classExprs.VarToClassExpr.FirstOrDefault(entry => ReferenceEquals(entry.Value, expression)).Key
             ?? "";
-        _classExprs.Factories[expression] = new(method, template, name, GetClassConstructorLength(expression.Methods));
+        var initializer = _programType.DefineMethod("$Initialize_" + _classExprs.Names[expression],
+            MethodAttributes.Assembly | MethodAttributes.Static, _types.Void, [_runtime.ClassDefinitions.Type]);
+        _classExprs.Factories[expression] = new(method, template, name, GetClassConstructorLength(expression.Methods), initializer, []);
     }
 }

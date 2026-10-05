@@ -279,6 +279,17 @@ public class SuperConstructorHandler : ICallHandler
         // evaluating and discarding surplus values safely, it publishes the
         // exact caller list when the base constructor binds `arguments`.
         emitter.EmitStaticCallArguments(arguments, parentCtor);
+        if (ctx.CurrentClassExpr is { } expression
+            && ctx.ClassExprDefinitionFields?.TryGetValue(expression, out var definitionField) == true
+            && parentCtor.GetParameters().LastOrDefault()?.ParameterType == ctx.Runtime!.ClassDefinitions.Type)
+        {
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, EmitterTypeHelpers.SelfFieldReference(definitionField));
+            il.Emit(OpCodes.Castclass, ctx.Runtime.ClassDefinitions.Type);
+            il.Emit(OpCodes.Ldfld, ctx.Runtime.ClassDefinitions.Parent);
+            il.Emit(OpCodes.Isinst, ctx.Runtime.ClassDefinitions.Type);
+        }
 
         System.Reflection.ConstructorInfo ctorToCall = parentCtor;
         Type? baseType = ctx.CurrentClassBuilder?.BaseType;

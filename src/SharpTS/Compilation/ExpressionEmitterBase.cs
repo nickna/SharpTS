@@ -771,6 +771,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitThis()
     {
+        if (TryEmitGuestThis()) return;
         var thisField = GetThisField();
         if (thisField != null)
         {
@@ -821,6 +822,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected virtual void EmitVariable(Expr.Variable v)
     {
         if (TryEmitClassDefinitionSelf(v.Name.Lexeme)) return;
+        if (TryEmitClassDefinitionCapture(v.Name.Lexeme)) return;
         string name = v.Name.Lexeme;
 
         if (TryEmitEnumInitializerMember(name))
@@ -900,6 +902,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
         IL.Emit(OpCodes.Dup);
 
+        if (TryEmitStoreClassDefinitionCapture(name)) { SetStackUnknown(); return; }
         if (TryEmitGlobalStore(name)) return;
 
         Resolver.TryStoreVariable(name);
@@ -1938,7 +1941,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         && names.TryGetValue(capturedVar, out var storage)
             ? storage : capturedVar;
 
-    private void EmitCapturingArrowViaHooks(Expr.ArrowFunction af, MethodBuilder method, ConstructorBuilder displayCtor)
+    protected void EmitCapturingArrowViaHooks(Expr.ArrowFunction af, MethodBuilder method, ConstructorBuilder displayCtor)
     {
         EmitCapturingArrowDisplayViaHooks(af, displayCtor);
         Types.EmitLoadMethodInfoViaHandle(IL, method);
@@ -1972,13 +1975,19 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // than a by-value snapshot — the write case that was previously rejected (#674). The arrow's
         // own snapshot fields (populated below) deliberately omit these vars (see the function-DC
         // skip in CollectAndDefineArrowFunctions), so the two paths don't both materialize them.
-        if (Ctx.ArrowFunctionDCFields?.TryGetValue(af, out var arrowFunctionDCField) == true &&
-            GetFunctionDCField() is FieldBuilder stateMachineFunctionDC)
+        if (Ctx.ArrowFunctionDCFields?.TryGetValue(af, out var arrowFunctionDCField) == true)
         {
             IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Ldarg_0);
-            IL.Emit(OpCodes.Ldfld, stateMachineFunctionDC);
-            IL.Emit(OpCodes.Stfld, arrowFunctionDCField);
+            if (GetFunctionDCField() is FieldBuilder stateMachineFunctionDC &&
+                stateMachineFunctionDC.FieldType == arrowFunctionDCField.FieldType)
+            {
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, stateMachineFunctionDC);
+                IL.Emit(OpCodes.Stfld, arrowFunctionDCField);
+            }
+            else if (TryEmitClassDefinitionEnvironment(arrowFunctionDCField.FieldType))
+                IL.Emit(OpCodes.Stfld, arrowFunctionDCField);
+            else IL.Emit(OpCodes.Pop);
         }
 
         if (Ctx.DisplayClassFields?.TryGetValue(af, out var fieldMap) == true)
@@ -2004,6 +2013,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 // stub never populates, so resolving it via the map would snapshot null
                 // (NRE when the arrow dereferences `this`). The real receiver lives in the
                 // builder's dedicated ThisField (set by the instance-method stub).
+                else if (capturedVar == "this" && TryEmitGuestThis()) { }
                 else if (capturedVar == "this" && GetThisField() is FieldBuilder thisField)
                 {
                     IL.Emit(OpCodes.Ldarg_0);
@@ -2018,7 +2028,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 {
                     IL.Emit(OpCodes.Ldloc, local);
                 }
-                else if (!TryEmitGlobalVariable(sourceVar))
+                else if (!TryEmitClassDefinitionCapture(sourceVar) && !TryEmitGlobalVariable(sourceVar))
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
@@ -2411,6 +2421,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected bool TryEmitStaticClassMethodValue(Expr.Get g)
     {
+        if (Ctx.ClassDefinitionParameterIndex != null || Ctx.ClassDefinitionVariableName != null) return false;
         if (g.Object is not Expr.This || Ctx.IsInstanceMethod || Ctx.CurrentClassBuilder == null)
             return false;
 
@@ -2899,6 +2910,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     protected virtual void EmitGet(Expr.Get g)
     {
+        if (TryEmitGuestThisGet(g)) return;
         if (StringEmitter.TryEmitPrimitiveStringLengthGet(this, g))
             return;
 

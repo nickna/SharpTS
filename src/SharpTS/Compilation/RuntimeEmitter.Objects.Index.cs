@@ -48,6 +48,7 @@ public partial class RuntimeEmitter
         MethodBuilder InvokeMethodUnwrapped,
         MethodBuilder InvokeMethodValue,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedRegExpRuntime RegExps,
         EmittedStringCoercionRuntime StringCoercion,
@@ -120,7 +121,6 @@ public partial class RuntimeEmitter
         objectRead.Index = method;
 
         var il = method.GetILGenerator();
-        EmitClassDefinitionSymbolReceiver(il, inputs.ClassDefinitions, inputs.Symbols.Type);
         var arrayLabel = il.DefineLabel();
         var stringLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
@@ -286,6 +286,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
         var symbolFoundLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, symbolFoundLabel);
+
+        // Definition-owned computed members live on the guest prototype,
+        // independently of the shared CLR template's symbol registry.
+        var prototype = il.DeclareLocal(_types.Object);
+        var prototypeLoop = il.DefineLabel();
+        var noPrototype = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, prototype);
+        il.MarkLabel(prototypeLoop);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Brfalse, noPrototype);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, symbolValueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+        il.Emit(OpCodes.Brtrue, symbolFoundLabel);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, prototype);
+        il.Emit(OpCodes.Br, prototypeLoop);
+        il.MarkLabel(noPrototype);
 
         // #266: symbol-keyed class accessor (`get [Symbol.x]() {...}`). After an
         // own symbol data property misses, consult the per-class accessor registry
@@ -1194,7 +1217,6 @@ public partial class RuntimeEmitter
         objectWrite.Index = method;
 
         var il = method.GetILGenerator();
-        EmitClassDefinitionSymbolReceiver(il, inputs.ClassDefinitions, inputs.Symbols.Type);
         var dictLabel = il.DefineLabel();
         var dictStringKeyLabel = il.DefineLabel();
         var dictNumericKeyLabel = il.DefineLabel();
@@ -1415,6 +1437,7 @@ public partial class RuntimeEmitter
         // strict).
         il.MarkLabel(symbolKeyLabel);
         {
+            EmitInheritedSymbolSetter(il, inputs.ObjectPrototypes, inputs.Symbols, inputs.DescriptorStorage, inputs.InvokeMethodValue);
             // #266: symbol-keyed class accessor setter (`set [Symbol.x](v) {...}`).
             // A registered setter takes the write (accessor semantics) instead of
             // storing a data property. Found setter is a MethodInfo invoked with the
@@ -1941,6 +1964,64 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, objectWrite.Property);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitInheritedSymbolSetter(ILGenerator il, EmittedObjectPrototypeRuntime prototypes,
+        EmittedSymbolRuntime symbols, EmittedDescriptorStorageRuntime storage, MethodBuilder invoke)
+    {
+        var done = il.DefineLabel();
+        var prototype = il.DeclareLocal(_types.Object);
+        var value = il.DeclareLocal(_types.Object);
+        var descriptor = il.DeclareLocal(storage.DescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, symbols.GetStorage);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, value);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+        il.Emit(OpCodes.Brtrue, done);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, prototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, prototype);
+        var loop = il.DefineLabel();
+        var next = il.DefineLabel();
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Call, symbols.GetStorage);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, value);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+        il.Emit(OpCodes.Brfalse, next);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Isinst, storage.DescriptorType);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Brfalse, done);
+        var noSetter = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, noSetter);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, invoke);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noSetter);
+        il.Emit(OpCodes.Br, done);
+        il.MarkLabel(next);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Call, prototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, prototype);
+        il.Emit(OpCodes.Br, loop);
+        il.MarkLabel(done);
     }
 
     /// <summary>

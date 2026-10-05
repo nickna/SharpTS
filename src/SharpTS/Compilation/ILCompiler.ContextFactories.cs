@@ -93,8 +93,9 @@ public partial class ILCompiler
             TopLevelNumericConstantValues = _topLevelNumericConstantValues,
             ClassExprBuilders = _classExprs.Builders,
             ClassExprFactories = _classExprs.Factories,
+            ClassExprDefinitionFields = _classExprs.DefinitionFields,
             ClassExprStaticMethods = _classExprs.StaticMethods,
-            ClassExprCaptureFields = _classExprs.CaptureFields,
+            ClassExprCaptureSlots = _classExprs.CaptureSlots,
             DeferredClassDefinitions = _classes.DeferredDefinitions,
             BlockScopedClassBuilders = _classes.BlockScopedBuilders,
             ClassRegistry = GetClassRegistry(),
@@ -168,6 +169,27 @@ public partial class ILCompiler
         ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: true);
         AttachLocalSymbols(ctx);
         return ctx;
+    }
+
+    private void ApplyClassDefinitionStateMachineContext(CompilationContext ctx, MethodBuilder method, bool isInstance)
+    {
+        if (_classExprs.DefinitionMethods.TryGetValue(method, out var owner))
+        {
+            ctx.CurrentClassExpr = owner.Expression;
+            ctx.CurrentClassBuilder = _classExprs.Builders[owner.Expression];
+            ctx.ClassDefinitionOwnerField = owner.Definition;
+            ctx.GuestThisVariableName = "__this";
+            foreach (var parameter in owner.Expression.TypeParams ?? [])
+                ctx.GenericTypeParameters[parameter.Name.Lexeme] = _types.Object;
+        }
+        else
+        {
+            ctx.CurrentClassExpr = _classExprs.Builders.FirstOrDefault(entry => ReferenceEquals(entry.Value, method.DeclaringType)).Key;
+        }
+        if (ctx.CurrentClassExpr != null)
+            ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;
+        if (ctx.CurrentClassExpr != null && !isInstance)
+            ctx.ClassDefinitionVariableName = "__classDefinition";
     }
 
     /// <summary>
@@ -276,7 +298,8 @@ public partial class ILCompiler
             TypeEmitterRegistry = parentCtx.TypeEmitterRegistry,
             ClassExprBuilders = parentCtx.ClassExprBuilders,
             ClassExprFactories = parentCtx.ClassExprFactories,
-            ClassExprCaptureFields = parentCtx.ClassExprCaptureFields,
+            ClassExprDefinitionFields = parentCtx.ClassExprDefinitionFields,
+            ClassExprCaptureSlots = parentCtx.ClassExprCaptureSlots,
             BlockScopedClassBuilders = parentCtx.BlockScopedClassBuilders,
             DeferredClassDefinitions = parentCtx.DeferredClassDefinitions,
             IsStrictMode = parentCtx.IsStrictMode,

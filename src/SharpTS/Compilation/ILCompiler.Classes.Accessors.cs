@@ -31,6 +31,8 @@ public partial class ILCompiler
         MethodAttributes attrs = MethodAttributes.Public | MethodAttributes.HideBySig;
         if (accessor.IsStatic) attrs |= MethodAttributes.Static;
         Type[] paramTypes = isGetter ? [] : [typeof(object)];
+        if (accessor.IsStatic && _classExprs.Builders.Values.Any(builder => ReferenceEquals(builder, typeBuilder)))
+            paramTypes = [_runtime.ClassDefinitions.Type, .. paramTypes];
 
         var methodBuilder = typeBuilder.DefineMethod(
             $"$sym_{(isGetter ? "get" : "set")}_{list.Count}",

@@ -88,6 +88,7 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct SetPropertyStrictInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
         TypeBuilder BoundAnyFunctionType,
@@ -787,7 +788,6 @@ public partial class RuntimeEmitter
         var method = (MethodBuilder)objectWrite.Property;
 
         var il = method.GetILGenerator();
-        EmitClassDefinitionTemplateReceiver(il, inputs.ClassDefinitions);
         var nullLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
         var tsObjectLabel = il.DefineLabel();
@@ -967,6 +967,9 @@ public partial class RuntimeEmitter
         // this, the assignment would fall through to SetFieldsProperty which is a
         // class-instance path that doesn't match $TSFunction.
         var tsFunctionSetLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
+        il.Emit(OpCodes.Brtrue, tsFunctionSetLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, tsFunctionSetLabel);
@@ -2045,6 +2048,9 @@ public partial class RuntimeEmitter
         // $TSFunction — mirror the non-strict SetProperty branch (functions as objects carry
         // user-assigned properties through PDSDefineProperty).
         var tsFunctionSetStrictLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
+        il.Emit(OpCodes.Brtrue, tsFunctionSetStrictLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, tsFunctionSetStrictLabel);

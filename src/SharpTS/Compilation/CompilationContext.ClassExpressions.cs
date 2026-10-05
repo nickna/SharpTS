@@ -12,6 +12,7 @@ public partial class CompilationContext
     // Class expression builders (class expr node -> type builder)
     public Dictionary<Expr.ClassExpr, TypeBuilder>? ClassExprBuilders { get; set; }
     internal Dictionary<Expr.ClassExpr, ClassExpressionFactory>? ClassExprFactories { get; set; }
+    internal Dictionary<Expr.ClassExpr, FieldBuilder>? ClassExprDefinitionFields { get; set; }
 
     // Class expression extended tracking
     public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>>? ClassExprBackingFields { get; set; }
@@ -27,10 +28,15 @@ public partial class CompilationContext
     public Dictionary<Expr.ClassExpr, ConstructorBuilder>? ClassExprConstructors { get; set; }
     public ClassGenericParameterRegistry? ClassGenericParameters { get; set; }
     public Dictionary<Expr.ClassExpr, string?>? ClassExprSuperclass { get; set; }
-    public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>>? ClassExprCaptureFields { get; set; }
+    public Dictionary<Expr.ClassExpr, Dictionary<string, int>>? ClassExprCaptureSlots { get; set; }
 
     // Current class expression being compiled
     public Expr.ClassExpr? CurrentClassExpr { get; set; }
+    internal int? ClassDefinitionParameterIndex { get; set; }
+    internal int? ClassDefinitionThisParameterIndex { get; set; }
+    internal string? ClassDefinitionVariableName { get; set; }
+    internal FieldBuilder? ClassDefinitionOwnerField { get; set; }
+    internal string? GuestThisVariableName { get; set; }
 
     // Variable name to class expression mapping (for static member access)
     public Dictionary<string, Expr.ClassExpr>? VarToClassExpr { get; set; }

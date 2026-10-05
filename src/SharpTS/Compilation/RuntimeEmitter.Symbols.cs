@@ -17,7 +17,7 @@ public partial class RuntimeEmitter
 
         var method = typeBuilder.DefineMethod(
             "GetSymbolDict",
-            MethodAttributes.Private | MethodAttributes.Static,
+            MethodAttributes.Assembly | MethodAttributes.Static,
             symbolDictType,
             [_types.Object]
         );

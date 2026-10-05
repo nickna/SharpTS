@@ -23,15 +23,42 @@ public partial class RuntimeEmitter
         var template = type.DefineField("Template", _types.Type, FieldAttributes.Assembly);
         var factory = type.DefineField("Factory", factoryType, FieldAttributes.Assembly);
         var prototype = type.DefineField("Prototype", _types.Object, FieldAttributes.Assembly);
+        var keys = type.DefineField("Keys", _types.ObjectArray, FieldAttributes.Assembly);
+        var parent = type.DefineField("Parent", _types.Object, FieldAttributes.Assembly);
+        var captures = type.DefineField("Captures", _types.ObjectArray, FieldAttributes.Assembly);
         var create = type.DefineMethod("Create", MethodAttributes.Public | MethodAttributes.Static,
-            type, [_types.Type, factoryType, _types.String, _types.Double, _types.Object]);
+            type, [_types.Type, factoryType, _types.String, _types.Double, _types.Object, _types.ObjectArray, _types.ObjectArray]);
         var construct = type.DefineMethod("Construct", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [type, _types.ObjectArray]);
         var read = type.DefineMethod("ReadProperty", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [type, _types.String]);
         var invoke = type.DefineMethod("Invoke", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
+        var captureType = module.DefineType("$ClassCapture", TypeAttributes.Public | TypeAttributes.Sealed);
+        var captureOwner = captureType.DefineField("Owner", _types.Object, FieldAttributes.Assembly);
+        var captureField = captureType.DefineField("Field", _types.FieldInfo, FieldAttributes.Assembly);
+        var captureConstructor = captureType.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard,
+            [_types.Object, _types.FieldInfo]);
+        il = captureConstructor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, captureOwner);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stfld, captureField);
+        il.Emit(OpCodes.Ret);
+        var readCapture = type.DefineMethod("ReadCapture", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
+        var writeCapture = type.DefineMethod("WriteCapture", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void, [type, _types.Int32, _types.Object]);
+        var findEnvironment = type.DefineMethod("FindEnvironment", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [type, _types.Type]);
+        EmitClassCaptureBodies(captureType, captureOwner, captureField, captures, readCapture, writeCapture, findEnvironment);
+        captureType.CreateType();
         definitions.Declare(new(type, instanceInterface, instanceInterface.GetMethod(getter.Name)!,
-            constructor, template, factory, prototype, create, construct, read, invoke));
+            constructor, template, factory, prototype, keys, parent, captures, create, construct, read, invoke,
+            captureType, captureConstructor, captureOwner, captureField, readCapture, writeCapture, findEnvironment));
     }
 
     private void EmitClassDefinitionBodies(EmittedRuntime runtime)
@@ -50,6 +77,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, definition);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stfld, definitions.Factory);
+        il.Emit(OpCodes.Ldloc, definition);
+        il.Emit(OpCodes.Ldarg_S, (byte)5);
+        il.Emit(OpCodes.Stfld, definitions.Keys);
+        il.Emit(OpCodes.Ldloc, definition);
+        il.Emit(OpCodes.Ldarg_S, (byte)4);
+        il.Emit(OpCodes.Stfld, definitions.Parent);
+        il.Emit(OpCodes.Ldloc, definition);
+        il.Emit(OpCodes.Ldarg_S, (byte)6);
+        il.Emit(OpCodes.Stfld, definitions.Captures);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
         il.Emit(OpCodes.Stloc, prototype);
@@ -240,29 +276,4 @@ public partial class RuntimeEmitter
         definitions.CompleteEmission();
     }
 
-    private void EmitClassDefinitionTemplateReceiver(ILGenerator il, EmittedClassDefinitionRuntime definitions)
-    {
-        var ordinary = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, definitions.Type);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brfalse, ordinary);
-        il.Emit(OpCodes.Ldfld, definitions.Template);
-        il.Emit(OpCodes.Starg_S, (byte)0);
-        var ready = il.DefineLabel();
-        il.Emit(OpCodes.Br, ready);
-        il.MarkLabel(ordinary);
-        il.Emit(OpCodes.Pop);
-        il.MarkLabel(ready);
-    }
-
-    private void EmitClassDefinitionSymbolReceiver(ILGenerator il, EmittedClassDefinitionRuntime definitions, Type symbolType)
-    {
-        var ordinary = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, symbolType);
-        il.Emit(OpCodes.Brfalse, ordinary);
-        EmitClassDefinitionTemplateReceiver(il, definitions);
-        il.MarkLabel(ordinary);
-    }
 }

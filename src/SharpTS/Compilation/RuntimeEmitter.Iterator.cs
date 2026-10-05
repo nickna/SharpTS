@@ -32,6 +32,7 @@ public partial class RuntimeEmitter
 
 
     private readonly record struct IteratorFunctionInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedFunctionConstructionRuntime FunctionConstruction,
         EmittedGeneratorRuntime Generators,
@@ -879,7 +880,7 @@ public partial class RuntimeEmitter
         EmitGetIteratorFunction(
             typeBuilder,
             runtime.IteratorProtocol,
-            new IteratorFunctionInputs(runtime.DescriptorStorage, runtime.FunctionConstruction, runtime.Generators, runtime.NodeStreams, runtime.ObjectRead, runtime.SymbolAccessors, runtime.Symbols, runtime.Sentinels.UndefinedInstance)
+            new IteratorFunctionInputs(runtime.ClassDefinitions, runtime.DescriptorStorage, runtime.FunctionConstruction, runtime.Generators, runtime.NodeStreams, runtime.ObjectRead, runtime.SymbolAccessors, runtime.Symbols, runtime.Sentinels.UndefinedInstance)
         );
         EmitIteratorClose(
             typeBuilder,
@@ -1267,6 +1268,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(tryRegistryLabel);
+        var ordinaryRegistry = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.InstanceInterface);
+        il.Emit(OpCodes.Brfalse, ordinaryRegistry);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Index);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinaryRegistry);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindMethod);
@@ -1274,7 +1284,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, registryValueLabel);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, returnUndefinedLabel);
-
         il.MarkLabel(registryValueLabel);
         il.Emit(OpCodes.Ret);
 

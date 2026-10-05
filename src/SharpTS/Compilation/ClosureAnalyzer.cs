@@ -41,6 +41,7 @@ public class ClosureAnalyzer : AstVisitorBase
 
     // Stack of function scopes - tracks the function node at each nesting level
     private readonly Stack<object?> _functionStack = new();
+    private readonly Stack<(Expr.ClassExpr Expression, HashSet<object?> EnclosingFunctions)> _classCaptureOwners = new();
 
     // Maps function node → set of its local variables that are captured by inner closures
     private readonly Dictionary<object, HashSet<string>> _functionCapturedLocals = [];
@@ -399,6 +400,9 @@ public class ClosureAnalyzer : AstVisitorBase
             // This enables function-level display class creation
             // Walk up the function stack to find which function defines this variable
             var definingFunc = FindDefiningFunction(name);
+            foreach (var (expression, enclosingFunctions) in _classCaptureOwners)
+                if (definingFunc == null || enclosingFunctions.Contains(definingFunc))
+                    _captures[expression].Add(name);
             if (definingFunc != null)
             {
                 // The variable is defined in some function, not at top level
@@ -679,12 +683,12 @@ public class ClosureAnalyzer : AstVisitorBase
         // Class expressions don't declare the class name in the outer scope
         // (unlike class declarations), but we still need to analyze all bodies
 
+        _classCaptureOwners.Push((expr, _functionStack.ToHashSet()));
         // Analyze field initializers for captured variables
-        foreach (var field in expr.Fields)
-        {
-            if (field.Initializer != null)
-                Visit(field.Initializer);
-        }
+        AnalyzeFunctionBody(expr, [], expr.Fields.Where(field => field.Initializer != null)
+            .Select(field => (Stmt)new Stmt.Expression(field.Initializer!))
+            .Concat((expr.StaticInitializers ?? []).OfType<Stmt.StaticBlock>().SelectMany(block => block.Body))
+            .ToList());
 
         // Analyze methods
         foreach (var method in expr.Methods)
@@ -705,6 +709,7 @@ public class ClosureAnalyzer : AstVisitorBase
                 AnalyzeFunctionBody(accessor, parameters, accessor.Body);
             }
         }
+        _classCaptureOwners.Pop();
     }
 
     protected override void VisitBlock(Stmt.Block stmt)

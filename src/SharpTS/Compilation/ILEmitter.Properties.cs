@@ -18,6 +18,7 @@ public partial class ILEmitter
 {
     protected override void EmitGet(Expr.Get g)
     {
+        if (TryEmitGuestThisGet(g)) return;
         if (TryEmitStableRecordDestructureGet(g))
             return;
 
@@ -218,7 +219,7 @@ public partial class ILEmitter
 
         // Handle static member access via 'this' in static context (static blocks, static methods)
         // In static blocks, 'this' refers to the class constructor, so this.property accesses static members
-        if (g.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.CurrentClassBuilder != null)
+        if (g.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.ClassDefinitionParameterIndex == null && _ctx.CurrentClassBuilder != null)
         {
             // Use cached CurrentClassName instead of linear search
             string? currentClassName = _ctx.CurrentClassName;
@@ -315,18 +316,7 @@ public partial class ILEmitter
             }
         }
 
-        // Handle static member access via class expression variable
-        if (g.Object is Expr.Variable classExprVar &&
-            _ctx.VarToClassExpr != null &&
-            _ctx.VarToClassExpr.TryGetValue(classExprVar.Name.Lexeme, out var classExpr) &&
-            _ctx.ClassExprStaticFields != null &&
-            _ctx.ClassExprStaticFields.TryGetValue(classExpr, out var exprStaticFields) &&
-            exprStaticFields.TryGetValue(g.Name.Lexeme, out var exprStaticField))
-        {
-            IL.Emit(OpCodes.Ldsfld, exprStaticField);
-            SetStackUnknown();
-            return;
-        }
+
 
         // Handle static property access on external .NET types (@DotNetType)
         if (g.Object is Expr.Variable extVar && _ctx.TypeMapper.ExternalTypes.TryGetValue(extVar.Name.Lexeme, out var externalType))
@@ -1053,7 +1043,7 @@ public partial class ILEmitter
         }
 
         // Handle static property assignment via 'this' in static context (static blocks, static methods)
-        if (s.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.CurrentClassBuilder != null)
+        if (s.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.ClassDefinitionParameterIndex == null && _ctx.CurrentClassBuilder != null)
         {
             // First check for class expressions
             if (_ctx.CurrentClassExpr != null &&

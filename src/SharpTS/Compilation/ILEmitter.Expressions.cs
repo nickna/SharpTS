@@ -48,6 +48,7 @@ public partial class ILEmitter
         if (TryEmitDefaultParameterTdz(name))
             return;
         if (TryEmitClassDefinitionSelf(name)) return;
+        if (TryEmitClassDefinitionCapture(name)) return;
 
         if (_ctx.LexicalInitializerTdzName == name)
         {
@@ -403,6 +404,16 @@ public partial class ILEmitter
         // emits Box+Dup and leaves a dangling value on the stack, which propagates through the
         // rest of the module body and ultimately trips PathStackDepth at the final ret.
         if (TryEmitCjsAssign(a)) return;
+
+        if (TryGetClassDefinitionCaptureSlot(a.Name.Lexeme, out _))
+        {
+            EmitExpression(a.Value);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Dup);
+            TryEmitStoreClassDefinitionCapture(a.Name.Lexeme);
+            SetStackUnknown();
+            return;
+        }
 
         // Promoted string-accumulator append (#857): `s = s + E` where `s` is a StringBuilder slot.
         // Emit `sb.Append(E)` instead of evaluating `s + E` (String.Concat) and storing — turning the
@@ -845,6 +856,19 @@ public partial class ILEmitter
 
     protected override void EmitThis()
     {
+        if (TryEmitGuestThis()) return;
+        if (_ctx.ClassDefinitionThisParameterIndex is { } parameter)
+        {
+            IL.Emit(OpCodes.Ldarg, parameter);
+            SetStackUnknown();
+            return;
+        }
+        if (_ctx.ClassDefinitionParameterIndex != null)
+        {
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.FunctionValues.CurrentThisField);
+            SetStackUnknown();
+            return;
+        }
         _resolver.LoadThis();
         SetStackUnknown();
     }

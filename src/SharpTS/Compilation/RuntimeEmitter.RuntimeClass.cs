@@ -1363,6 +1363,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.ObjectWrite,
             new SetPropertyStrictInputs(
+                runtime.ClassDefinitions,
                 runtime.ArrayOperations,
                 runtime.ArrayStorage,
                 runtime.FunctionBindings.AnyType,
@@ -1491,6 +1492,7 @@ public partial class RuntimeEmitter
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.Invocation.Method,
                 runtime.ObjectDescriptors,
+                runtime.ObjectPrototypes,
                 runtime.ObjectStorage,
                 runtime.RegExps,
                 runtime.StringCoercion,

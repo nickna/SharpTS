@@ -125,10 +125,11 @@ public partial class ILCompiler
 
         il.Emit(OpCodes.Newobj, smBuilder.Constructor);
 
-        if (isInstanceMethod && smBuilder.ThisField != null)
+        if (smBuilder.ThisField != null)
         {
             il.Emit(OpCodes.Dup);      // Keep state machine reference on stack
-            il.Emit(OpCodes.Ldarg_0);  // 'this' is at arg 0 for instance methods
+            if (isInstanceMethod) il.Emit(OpCodes.Ldarg_0);
+            else il.Emit(OpCodes.Ldsfld, _runtime.FunctionValues.CurrentThisField);
             il.Emit(OpCodes.Stfld, smBuilder.ThisField);
         }
 
