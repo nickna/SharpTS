@@ -768,6 +768,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.Operators,
             new TypeOfInputs(
+                runtime.ClassDefinitions,
                 runtime.ArrayOperations,
                 runtime.FunctionBindings.AnyType,
                 runtime.FunctionBindings.BoundType,
@@ -919,6 +920,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.Operators,
             new InstanceOfInputs(
+                runtime.ClassDefinitions,
                 runtime.Abort,
                 runtime.BoxedPrimitives,
                 runtime.FunctionIntrospection.GetProperty,
@@ -1128,6 +1130,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.FunctionIntrospection,
             new IsConstructorInputs(
+                runtime.ClassDefinitions,
                 runtime.FunctionBindings,
                 runtime.FunctionValues,
                 runtime.FunctionAttributes,
@@ -1194,6 +1197,7 @@ public partial class RuntimeEmitter
         EmitGetProperty(
             runtime.ObjectRead,
             new GetPropertyInputs(
+                runtime.ClassDefinitions,
                 runtime.Abort,
                 runtime.Arguments.LengthField,
                 runtime.Arguments.Type,
@@ -1259,6 +1263,7 @@ public partial class RuntimeEmitter
                 runtime.WeakSet
             )
         );
+        EmitClassDefinitionBodies(runtime);
         // UnwrapIfBoxed's body is filled after GetIndex below.  In addition to
         // GetProperty/InvokeMethodValue it now uses indexed symbol lookup for
         // the @@toPrimitive hook.
@@ -1321,6 +1326,7 @@ public partial class RuntimeEmitter
         EmitSetProperty(
             runtime.ObjectWrite,
             new SetPropertyInputs(
+                runtime.ClassDefinitions,
                 runtime.Abort,
                 runtime.Arguments.LengthField,
                 runtime.Arguments.Type,
@@ -1471,6 +1477,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.ObjectRead,
             new GetIndexInputs(
+                runtime.ClassDefinitions,
                 runtime.ArrayOperations,
                 runtime.ArrayStorage,
                 runtime.FunctionBindings.BoundType,
@@ -1509,6 +1516,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.ObjectWrite,
             new SetIndexInputs(
+                runtime.ClassDefinitions,
                 runtime.ArrayOperations,
                 runtime.ArrayStorage,
                 runtime.Buffer,
@@ -1985,6 +1993,7 @@ public partial class RuntimeEmitter
             runtime.ClassPrototypes,
             runtime.ObjectPrototypes,
             new ObjectGetPrototypeOfInputs(
+                runtime.ClassDefinitions,
                 runtime.ArrayOperations,
                 runtime.Booleans,
                 runtime.FunctionBindings.BoundType,

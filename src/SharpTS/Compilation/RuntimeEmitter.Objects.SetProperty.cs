@@ -54,6 +54,7 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct SetPropertyInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedAbortRuntime? Abort,
         FieldBuilder ArgumentsLengthField,
         TypeBuilder ArgumentsType,
@@ -786,6 +787,7 @@ public partial class RuntimeEmitter
         var method = (MethodBuilder)objectWrite.Property;
 
         var il = method.GetILGenerator();
+        EmitClassDefinitionTemplateReceiver(il, inputs.ClassDefinitions);
         var nullLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
         var tsObjectLabel = il.DefineLabel();

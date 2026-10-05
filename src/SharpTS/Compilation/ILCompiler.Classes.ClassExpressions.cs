@@ -83,6 +83,18 @@ public partial class ILCompiler
 
         _classes.GenericParameters.Declare(typeBuilder, classGenericParams ?? []);
 
+        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.ClassDefinitions.InstanceInterface);
+        var definitionField = typeBuilder.DefineField("$definition", _types.Object, FieldAttributes.Private);
+        _classExprs.DefinitionFields[classExpr] = definitionField;
+        var definitionGetter = typeBuilder.DefineMethod("$GetClassDefinition",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.Object, Type.EmptyTypes);
+        typeBuilder.DefineMethodOverride(definitionGetter, _runtime.ClassDefinitions.GetDefinition);
+        var definitionIl = definitionGetter.GetILGenerator();
+        definitionIl.Emit(OpCodes.Ldarg_0);
+        definitionIl.Emit(OpCodes.Ldfld, EmitterTypeHelpers.SelfFieldReference(definitionField));
+        definitionIl.Emit(OpCodes.Ret);
+
         // NOW resolve superclass (may use our generic params for type arguments)
         Type? baseType = null;
         if (superclassName != null)
@@ -346,7 +358,7 @@ public partial class ILCompiler
         var ctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            ctorParamTypes
+            [.. ctorParamTypes, _runtime.ClassDefinitions.Type]
         );
         if (constructor == null && superclassName == "Array")
             MarkJsVariadicConstructor(ctorBuilder);
@@ -354,6 +366,7 @@ public partial class ILCompiler
         _classes.Constructors[className] = ctorBuilder;
         RegisterArgumentsCapturingMethod(ctorBuilder, constructor?.Body);
         DefineClassPrototypeConstructor(typeBuilder);
+        DefineClassExpressionFactory(classExpr, typeBuilder, ctorBuilder, ctorParamTypes);
 
         // Define static methods (computed symbol-keyed methods are handled by
         // DefineClassExpressionSymbolMethods below, like the class-declaration path).
@@ -696,6 +709,9 @@ public partial class ILCompiler
         var constructor = classExpr.Methods.FirstOrDefault(m => !m.IsStatic && m.Name.Lexeme == "constructor" && m.Body != null);
 
         var il = ctorBuilder.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg, ctorBuilder.GetParameters().Length);
+        il.Emit(OpCodes.Stfld, EmitterTypeHelpers.SelfFieldReference(_classExprs.DefinitionFields[classExpr]));
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField, ctorBuilder);
         ctx.IsInstanceMethod = true;
 
@@ -800,7 +816,7 @@ public partial class ILCompiler
                 ctx.DefineParameter(constructor.Parameters[i].Name.Lexeme, i + 1, paramType);
             }
 
-            var constructorParamTypes = ctorBuilder.GetParameters().Select(p => p.ParameterType).ToArray();
+            var constructorParamTypes = ctorBuilder.GetParameters().SkipLast(1).Select(p => p.ParameterType).ToArray();
             EmitFunctionEnvironmentPrologue(
                 il,
                 ctx,

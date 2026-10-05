@@ -308,6 +308,7 @@ public partial class RuntimeEmitter
         EmitHasFieldsInterface(moduleBuilder, runtime.ObjectFields);
         runtime.ObjectFields.CompleteEmission();
         EmitCompactObjectRecordInterface(moduleBuilder, runtime.Records);
+        DefineClassDefinitionTypes(moduleBuilder, runtime.ClassDefinitions);
 
         // Emit $Object class for standalone object support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
@@ -609,6 +610,7 @@ public partial class RuntimeEmitter
             moduleBuilder,
             runtime.FunctionBindings,
             new FunctionBindWrapperClassInputs(
+                runtime.ClassDefinitions,
                 runtime.FunctionValues,
                 runtime.ArrayOperations,
                 runtime.Map,
@@ -698,6 +700,7 @@ public partial class RuntimeEmitter
             runtime.RuntimeClass.Type,
             runtime.DynamicConstruction,
             new NewOnFunctionInputs(
+                runtime.ClassDefinitions,
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.FunctionBindings,
@@ -716,6 +719,7 @@ public partial class RuntimeEmitter
             runtime.RuntimeClass.Type,
             runtime.DynamicConstruction,
             new ConstructDynamicValueInputs(
+                runtime.ClassDefinitions,
                 runtime.BoxedPrimitives,
                 runtime.Errors,
                 runtime.FunctionConstruction,

@@ -820,6 +820,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitVariable(Expr.Variable v)
     {
+        if (TryEmitClassDefinitionSelf(v.Name.Lexeme)) return;
         string name = v.Name.Lexeme;
 
         if (TryEmitEnumInitializerMember(name))
@@ -975,9 +976,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         // Handle static field assignment: Class.field = value
         if (s.Object is Expr.Variable classVar &&
-            Ctx.Classes.TryGetValue(Ctx.ResolveClassName(classVar.Name.Lexeme), out var staticSetClassBuilder))
+            Ctx.Classes.TryGetValue(Ctx.ResolveClassName(Ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme), out var staticSetClassBuilder))
         {
-            string resolvedClassName = Ctx.ResolveClassName(classVar.Name.Lexeme);
+            string resolvedClassName = Ctx.ResolveClassName(Ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme);
             if (Ctx.ClassRegistry!.TryGetOwnCallableStaticField(resolvedClassName, s.Name.Lexeme, staticSetClassBuilder, out var staticField))
             {
                 EmitExpression(s.Value);
@@ -1653,6 +1654,15 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitUserClassNew(List<string> namespaceParts, string className, Expr.New n)
     {
+        if (n.Callee is Expr.Variable variable && Ctx.VarToClassExpr?.ContainsKey(variable.Name.Lexeme) == true)
+        {
+            EmitExpression(n.Callee);
+            EnsureBoxed();
+            EmitArgsArrayWithSpread(n.Arguments);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.DynamicConstruction.Value);
+            SetStackUnknown();
+            return;
+        }
         string resolvedClassName = ResolveClassNameForNew(namespaceParts, className);
 
         // Check class expression constructors (e.g., const C = class { }; new C())
@@ -2381,9 +2391,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected virtual bool TryEmitStaticFieldAccess(Expr.Get g)
     {
         if (g.Object is Expr.Variable classVar &&
-            Ctx.Classes.TryGetValue(Ctx.ResolveClassName(classVar.Name.Lexeme), out var staticFieldClassBuilder))
+            Ctx.Classes.TryGetValue(Ctx.ResolveClassName(Ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme), out var staticFieldClassBuilder))
         {
-            string resolvedClassName = Ctx.ResolveClassName(classVar.Name.Lexeme);
+            string resolvedClassName = Ctx.ResolveClassName(Ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme);
             if (Ctx.ClassRegistry!.TryGetCallableStaticField(resolvedClassName, g.Name.Lexeme, staticFieldClassBuilder, out var staticField))
             {
                 EmitStaticFieldLoadWithShadow(resolvedClassName, staticFieldClassBuilder, g.Name.Lexeme, staticField!);
@@ -2530,7 +2540,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         IL.Emit(OpCodes.Pop);
     }
 
-    private void EmitClassHeritageValue(Expr heritage, string? innerClassName)
+    protected void EmitClassHeritageValue(Expr heritage, string? innerClassName)
     {
         switch (heritage)
         {

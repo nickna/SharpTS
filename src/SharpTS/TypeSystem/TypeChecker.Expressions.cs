@@ -2704,6 +2704,8 @@ public partial class TypeChecker
 
         // Check method bodies
         TypeEnvironment classEnv = new(_environment);
+        if (classExpr.Name is { } innerName)
+            classEnv.Define(innerName.Lexeme, classExprResultType);
         if (classTypeParams != null)
         {
             for (int i = 0; i < classTypeParams.Count; i++)
@@ -2739,7 +2741,11 @@ public partial class TypeChecker
             {
                 TypeEnvironment methodEnv;
                 if (method.IsStatic)
+                {
                     methodEnv = new TypeEnvironment(prevEnv);
+                    if (classExpr.Name is { } staticInnerName)
+                        methodEnv.Define(staticInnerName.Lexeme, classExprResultType);
+                }
                 else
                     methodEnv = new TypeEnvironment(_environment);
 

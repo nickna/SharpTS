@@ -28,6 +28,7 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct ObjectGetPrototypeOfInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedBooleanRuntime Booleans,
         TypeBuilder BoundTSFunctionType,
@@ -670,6 +671,19 @@ public partial class RuntimeEmitter
 
         // Also check local _prototypeStore table for backward compatibility
         il.MarkLabel(checkLocalTableLabel);
+        var notAssociatedInstance = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.InstanceInterface);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, notAssociatedInstance);
+        il.Emit(OpCodes.Callvirt, inputs.ClassDefinitions.GetDefinition);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, notAssociatedInstance);
+        il.Emit(OpCodes.Ldfld, inputs.ClassDefinitions.Prototype);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notAssociatedInstance);
+        il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldsfld, prototypeStoreField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, tempLocal);

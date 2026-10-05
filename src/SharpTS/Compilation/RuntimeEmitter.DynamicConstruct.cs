@@ -6,6 +6,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly record struct ConstructDynamicValueInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedBoxedPrimitiveRuntime BoxedPrimitives,
         EmittedErrorRuntime Errors,
         EmittedFunctionConstructionRuntime FunctionConstruction,
@@ -42,6 +43,17 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var throwLabel = il.DefineLabel();
+
+        var notClassDefinition = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, notClassDefinition);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ClassDefinitions.Construct);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notClassDefinition);
+        il.Emit(OpCodes.Pop);
 
         // null / $Undefined → TypeError
         il.Emit(OpCodes.Ldarg_0);

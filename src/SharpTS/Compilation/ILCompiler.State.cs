@@ -415,6 +415,8 @@ public partial class ILCompiler
         public Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> Getters { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> Setters { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, ConstructorBuilder> Constructors { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Expr.ClassExpr, FieldBuilder> DefinitionFields { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Expr.ClassExpr, ClassExpressionFactory> Factories { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, string?> Superclass { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, string> EnclosingClass { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>> CaptureFields { get; } = new(ReferenceEqualityComparer.Instance);

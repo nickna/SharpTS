@@ -1867,58 +1867,13 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     /// values to <paramref name="method"/> as an object array.
     /// </summary>
     protected void EmitDeferredComputedKeys(MethodBuilder method, IReadOnlyList<Expr> keys)
-    {
-        var values = new List<LocalBuilder>(keys.Count);
-        foreach (var key in keys)
-        {
-            EmitExpression(key);
-            EnsureBoxed();
-            var isSymbol = IL.DefineLabel();
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Isinst, Ctx.Runtime!.Symbols.Type);
-            IL.Emit(OpCodes.Brtrue, isSymbol);
-            IL.Emit(OpCodes.Call, Ctx.Runtime.StringCoercion.ToJsString);
-            IL.MarkLabel(isSymbol);
-            values.Add(_helpers.SpillStoreObject());
-        }
-
-        IL.Emit(OpCodes.Ldc_I4, values.Count);
-        IL.Emit(OpCodes.Newarr, Types.Object);
-        for (int i = 0; i < values.Count; i++)
-        {
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Ldc_I4, i);
-            IL.Emit(OpCodes.Ldloc, values[i]);
-            IL.Emit(OpCodes.Stelem_Ref);
-        }
-        IL.Emit(OpCodes.Call, method);
-    }
+        => EmitDefinitionComputedKeys(method, keys);
 
     /// <summary>
     /// Default implementation for class expressions.
     /// Loads the pre-defined TypeBuilder as a Type object at runtime.
     /// </summary>
-    protected override void EmitClassExpression(Expr.ClassExpr ce)
-    {
-        if (Ctx?.ClassExprBuilders != null && Ctx.ClassExprBuilders.TryGetValue(ce, out var typeBuilder))
-        {
-            EmitClassHeritageExpression(ce.SuperclassExpr, ce.Name?.Lexeme);
-            IL.Emit(OpCodes.Ldtoken, typeBuilder);
-            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassInitialization.RunDefinition);
-            if (Ctx.DeferredClassDefinitions?.TryGet(ce, out var deferred) == true)
-                EmitDeferredComputedKeys(deferred.Registrar, deferred.Keys);
-            IL.Emit(OpCodes.Ldtoken, typeBuilder);
-            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-            SetStackUnknown();
-        }
-        else
-        {
-            // Fallback: push null (should not happen if collection worked)
-            IL.Emit(OpCodes.Ldnull);
-            SetStackUnknown();
-        }
-    }
+    protected override void EmitClassExpression(Expr.ClassExpr ce) => EmitGuestClassDefinition(ce);
 
     #endregion
 

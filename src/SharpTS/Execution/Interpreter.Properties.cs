@@ -1624,6 +1624,8 @@ public partial class Interpreter
         // shadowed them with a static property (handled above).
         if (memberName == "name") return klass.Name;
         if (memberName == "length") return (double)klass.Arity();
+        if (memberName is "bind" or "call" or "apply")
+            return FunctionBuiltIns.GetMember(klass, memberName);
 
         // Class constructors are function objects and therefore inherit the
         // ordinary Object.prototype methods through Function.prototype.

@@ -43,6 +43,7 @@ public class SharpTSClass(
     public string Name { get; } = name;
     public SharpTSClass? Superclass { get; } = superclass;
     public bool IsAbstract { get; } = isAbstract;
+    internal RuntimeEnvironment? InitializerEnvironment { get; set; }
     private readonly FrozenDictionary<string, ISharpTSCallable> _methods = methods.ToFrozenDictionary();
     private readonly FrozenDictionary<string, ISharpTSCallable> _staticMethods = staticMethods.ToFrozenDictionary();
     private readonly Dictionary<string, object?> _staticProperties = staticProperties;
@@ -183,13 +184,13 @@ public class SharpTSClass(
         foreach (var field in _instanceFields)
         {
             object? value = field.Initializer != null
-                ? interpreter.Evaluate(field.Initializer)
+                ? interpreter.EvaluateClassInitializer(this, instance, field.Initializer)
                 : field.ComputedKey != null ? SharpTSUndefined.Instance : null;
 
             // Check if this is a computed property name
             if (field.ComputedKey != null)
             {
-                object? key = interpreter.Evaluate(field.ComputedKey);
+                object? key = interpreter.EvaluateClassInitializer(this, instance, field.ComputedKey);
                 if (key is SharpTSSymbol symbol)
                 {
                     // Symbol key - store in symbol fields
@@ -515,7 +516,7 @@ public class SharpTSClass(
         foreach (var field in _instancePrivateFields)
         {
             object? value = field.Initializer != null
-                ? interpreter.Evaluate(field.Initializer)
+                ? interpreter.EvaluateClassInitializer(this, instance, field.Initializer)
                 : null;
             fields[field.Name.Lexeme] = value;
         }
@@ -622,7 +623,7 @@ public class SharpTSClass(
         foreach (var autoAccessor in _instanceAutoAccessors)
         {
             object? value = autoAccessor.Initializer != null
-                ? interpreter.Evaluate(autoAccessor.Initializer)
+                ? interpreter.EvaluateClassInitializer(this, instance, autoAccessor.Initializer)
                 : null;
             storage[autoAccessor.Name.Lexeme] = value;
         }

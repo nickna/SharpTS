@@ -2278,6 +2278,7 @@ public partial class Interpreter
                     staticSetters: staticSetters.Count > 0 ? staticSetters : null);
 
             klass.BindPrivateMemberOwners();
+            klass.InitializerEnvironment = classEnv;
 
             if (symbolAccessors != null)
             {

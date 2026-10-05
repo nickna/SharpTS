@@ -1004,8 +1004,7 @@ public partial class ILCompiler
         var skipLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Call, _runtime.ClassPrototypes.Get);
+        il.Emit(OpCodes.Call, _runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, prototypeLocal);
 
         il.Emit(OpCodes.Ldarg_0);

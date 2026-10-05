@@ -33,6 +33,7 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct FunctionBindWrapperClassInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedFunctionValueRuntime FunctionValues,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedMapRuntime? Map,
@@ -1494,6 +1495,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, callableTargetLabel);
         }
         AcceptCallable(inputs.FunctionValues.Type);
+        AcceptCallable(inputs.ClassDefinitions.Type);
         AcceptCallable(functionBindings.BoundType);
         AcceptCallable(functionBindings.AnyType);
         AcceptCallable(functionBindings.BindType);

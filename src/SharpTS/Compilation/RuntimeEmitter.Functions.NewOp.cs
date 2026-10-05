@@ -6,6 +6,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     internal readonly record struct NewOnFunctionInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
         EmittedFunctionBindingRuntime FunctionBindings,
@@ -44,6 +45,17 @@ public partial class RuntimeEmitter
         var method = dynamicConstruction.Function;
 
         var il = method.GetILGenerator();
+
+        var notClassDefinition = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, notClassDefinition);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ClassDefinitions.Construct);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notClassDefinition);
+        il.Emit(OpCodes.Pop);
 
         var newObjLocal = il.DeclareLocal(inputs.ObjectStorage.Type);
         var resultLocal = il.DeclareLocal(_types.Object);

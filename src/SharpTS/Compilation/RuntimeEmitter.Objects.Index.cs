@@ -6,6 +6,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly record struct SetIndexInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedBufferRuntime? Buffer,
@@ -33,6 +34,7 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct GetIndexInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
         TypeBuilder BoundTSFunctionType,
@@ -118,6 +120,7 @@ public partial class RuntimeEmitter
         objectRead.Index = method;
 
         var il = method.GetILGenerator();
+        EmitClassDefinitionSymbolReceiver(il, inputs.ClassDefinitions, inputs.Symbols.Type);
         var arrayLabel = il.DefineLabel();
         var stringLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
@@ -1191,6 +1194,7 @@ public partial class RuntimeEmitter
         objectWrite.Index = method;
 
         var il = method.GetILGenerator();
+        EmitClassDefinitionSymbolReceiver(il, inputs.ClassDefinitions, inputs.Symbols.Type);
         var dictLabel = il.DefineLabel();
         var dictStringKeyLabel = il.DefineLabel();
         var dictNumericKeyLabel = il.DefineLabel();

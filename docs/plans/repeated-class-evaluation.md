@@ -97,3 +97,37 @@ new syntax and unrelated conformance failures remain their existing tasks. The
 inline prototype-call IL failure is a separate verification defect,
 [#1966](https://github.com/nickna/SharpTS/issues/1966); its failure
 is retained rather than used to claim this representation work is repaired.
+
+## Implementation evidence for #1964
+
+Each class-expression evaluation now returns a fresh emitted `$ClassDefinition`
+with its own prototype, constructor back-reference, name and arity. A generated
+factory passes the selected definition into the shared template's constructor
+before instance field initialization. Generic arguments are erased at that
+factory boundary, so instances of one guest definition share its prototype.
+Runtime construction, Reflect construction, `typeof`, and `instanceof` recognize
+these definition values. The interpreter uses definition identity for class
+brands and evaluates instance initializers with their owning environment and
+receiver. Named expressions retain their local body binding.
+
+`RepeatedClassDefinitionTests` covers repeated evaluations in functions, loops,
+closures, modules, async and generator suspension, plus generic arguments,
+initializers, prototype mutation, default arguments and bound construction. The
+ten source controls run in both engines and as serialized, IL-verified programs.
+The module control runs in both engines. A reused runtime emitter test separately
+verifies fresh metadata ownership and saved IL in ordinary and hosted emission;
+this is emission evidence, not a hosted class-factory execution claim.
+
+On Windows ARM64/.NET 10.0.12 and Node v25.5.0, the unchanged
+`constructors-only.ts` now prints `false` in verified CLI standalone output.
+`prototype-separate-values.ts` prints `false`, `false`, `true true`, and
+`true false`, matching Node. Both standalone runs complete within 30 seconds
+with empty stderr and without SharpTS.dll in the output directory. The inline
+`identity.ts` source remains the separate #1966 verifier control.
+
+The affected class-expression/owner/local-class, constructor, generic, computed
+member, namespace and prototype suite passes all 1,181 tests with compiled IL
+verification enabled. The full Release solution build and code-quality gates
+pass (28 duplicate groups, zero errors). The actual AOT/trim/single-file analyzer
+passes the unchanged zero-warning baseline. Definition-owned computed keys,
+capture snapshots and static initialization continue in #1965.

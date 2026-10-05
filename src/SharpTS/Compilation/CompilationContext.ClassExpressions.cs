@@ -11,6 +11,7 @@ public partial class CompilationContext
 
     // Class expression builders (class expr node -> type builder)
     public Dictionary<Expr.ClassExpr, TypeBuilder>? ClassExprBuilders { get; set; }
+    internal Dictionary<Expr.ClassExpr, ClassExpressionFactory>? ClassExprFactories { get; set; }
 
     // Class expression extended tracking
     public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>>? ClassExprBackingFields { get; set; }

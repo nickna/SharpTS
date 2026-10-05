@@ -25,6 +25,21 @@ public partial class ILEmitter
 
         var (namespaceParts, className) = ExtractQualifiedNameFromCallee(n.Callee);
 
+        if (n.Callee is Expr.Variable expressionVariable
+            && _ctx.VarToClassExpr?.ContainsKey(expressionVariable.Name.Lexeme) == true
+            && _resolver.HasVariable(expressionVariable.Name.Lexeme))
+        {
+            EmitExpression(n.Callee);
+            EnsureBoxed();
+            var definition = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, definition);
+            IL.Emit(OpCodes.Ldloc, definition);
+            EmitArgsArrayWithSpread(n.Arguments);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.Value);
+            SetStackUnknown();
+            return;
+        }
+
         if (n.Callee is Expr.Variable constructorVariable
             && _ctx.TypeMap?.Get(n.Callee) is SharpTS.TypeSystem.TypeInfo.GenericClass
             && _resolver.HasVariable(constructorVariable.Name.Lexeme))
