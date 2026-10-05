@@ -16,7 +16,7 @@ namespace SharpTS.Tests.CompilerTests;
 /// <summary>
 /// Tests that ensure compiled DLLs remain standalone (no SharpTS.dll dependency).
 /// </summary>
-public class StandaloneDllTests
+public partial class StandaloneDllTests
 {
     [Theory]
     [MemberData(nameof(SharedTests.WindowsProcessShutdownTests.OriginalCases), MemberType = typeof(SharedTests.WindowsProcessShutdownTests))]

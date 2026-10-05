@@ -11,12 +11,9 @@ using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
 
-[Collection("ExternalProcessTests")]
-public sealed class HistoricalRuntimeDeploymentTests
+internal static class HistoricalRuntimeDeploymentTests
 {
-    [Theory]
-    [MemberData(nameof(HistoricalRuntimeRegressionTests.Cases), MemberType = typeof(HistoricalRuntimeRegressionTests))]
-    public void Isolated_PreservedSourcesExecuteStandaloneAndHosted(string file, string source, string expected)
+    public static void AssertDeployment(string file, string source, string expected)
     {
         using var directory = CliTestHelper.CreateTempDirectory();
         var path = directory.CreateFile(file, source);
@@ -75,24 +72,16 @@ public sealed class HistoricalRuntimeDeploymentTests
 
     private static string RunHosted(string dll)
     {
-        lock (TestHarness.ConsoleLock)
-        {
-            var dispatcher = new DeterministicHostDispatcher();
-            var sink = new RecordingErrorSink();
-            var priorOut = Console.Out;
-            using var output = new StringWriter();
-            Console.SetOut(output);
-            try
-            {
-                using var runtime = SharpTSHostedAssembly.CreateRuntime(
-                    Assembly.Load(File.ReadAllBytes(dll)), dispatcher, new RecordingLifetime(), sink);
-                Task initialization = runtime.InitializeAsync();
-                dispatcher.RunUntil(() => initialization.IsCompleted, timeout: TimeSpan.FromSeconds(30));
-                initialization.GetAwaiter().GetResult();
-                Assert.Empty(sink.Errors);
-                return output.ToString().Replace("\r\n", "\n");
-            }
-            finally { Console.SetOut(priorOut); }
-        }
+        var dispatcher = new DeterministicHostDispatcher();
+        var sink = new RecordingErrorSink();
+        using var output = new StringWriter();
+        using var capture = AsyncLocalConsoleRedirector.WithOut(output);
+        using var runtime = SharpTSHostedAssembly.CreateRuntime(
+            Assembly.Load(File.ReadAllBytes(dll)), dispatcher, new RecordingLifetime(), sink);
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted, timeout: TimeSpan.FromSeconds(30));
+        initialization.GetAwaiter().GetResult();
+        Assert.Empty(sink.Errors);
+        return output.ToString().Replace("\r\n", "\n");
     }
 }
