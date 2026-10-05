@@ -712,10 +712,14 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldc_I4_0);
         IL.Emit(OpCodes.Stloc, padIndexLocal);
         var padCheckLabel = IL.DefineLabel();
-        var padNextLabel = IL.DefineLabel();
-        IL.Emit(OpCodes.Br, padCheckLabel);
+        var padDoneLabel = IL.DefineLabel();
 
-        IL.MarkLabel(padNextLabel);
+        // The loop body must be reachable in a forward scan even when the
+        // enclosing expression carries values on the evaluation stack (#1966).
+        IL.MarkLabel(padCheckLabel);
+        IL.Emit(OpCodes.Ldloc, padIndexLocal);
+        IL.Emit(OpCodes.Ldloc, arityLocal);
+        IL.Emit(OpCodes.Bge, padDoneLabel);
         IL.Emit(OpCodes.Ldloc, parametersLocal);
         IL.Emit(OpCodes.Ldloc, padIndexLocal);
         IL.Emit(OpCodes.Ldelem_Ref);
@@ -735,10 +739,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Add);
         IL.Emit(OpCodes.Stloc, padIndexLocal);
 
-        IL.MarkLabel(padCheckLabel);
-        IL.Emit(OpCodes.Ldloc, padIndexLocal);
-        IL.Emit(OpCodes.Ldloc, arityLocal);
-        IL.Emit(OpCodes.Blt, padNextLabel);
+        IL.Emit(OpCodes.Br, padCheckLabel);
+        IL.MarkLabel(padDoneLabel);
 
         for (int i = 0; i < argTemps.Count; i++)
         {

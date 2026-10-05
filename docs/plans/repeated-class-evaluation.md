@@ -131,3 +131,21 @@ verification enabled. The full Release solution build and code-quality gates
 pass (28 duplicate groups, zero errors). The actual AOT/trim/single-file analyzer
 passes the unchanged zero-warning baseline. Definition-owned computed keys,
 capture snapshots and static initialization continue in #1965.
+
+## Implementation evidence for #1966
+
+The unchanged inline `identity.ts` reproduced the reported `BackwardBranch`
+error at offset 709 after #1964. The reflection constructor's argument-padding
+loop jumped forward over its body and then backward into it while the enclosing
+prototype query retained values on the evaluation stack. Moving the loop check
+to the top makes its stack height determinable in one forward scan.
+
+The original source now passes CLI IL verification and prints `false` / `false`
+in standalone output, matching Node, within 30 seconds with empty stderr.
+`InlineConstructorPrototypeTests` verifies all three source controls as saved
+assemblies and executes them in both engines and without SharpTS.dll. Additional
+controls retain left-to-right, exactly-once callee/argument evaluation, omitted
+parameter defaults, and prototype identity for an aliased CLR constructor.
+All 279 affected constructor, class-expression owner, generic-constructor and
+prototype tests pass with compiled verification enabled; the Release core/test
+build passes. The original reference expectation and verifier remain intact.
