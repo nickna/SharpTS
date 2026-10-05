@@ -2574,7 +2574,12 @@ public partial class TypeChecker
                 {
                     var method = implementations[0];
                     var funcType = BuildMethodFuncType(method);
-                    if (method.IsStatic)
+                    if (method.IsPrivate)
+                    {
+                        if (method.IsStatic) mutableClass.StaticPrivateMethods[methodName] = funcType;
+                        else mutableClass.PrivateMethods[methodName] = funcType;
+                    }
+                    else if (method.IsStatic)
                         mutableClass.StaticMethods[methodName] = funcType;
                     else
                         mutableClass.Methods[methodName] = funcType;
@@ -2593,7 +2598,12 @@ public partial class TypeChecker
                 TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
                     ?? TypeInfo.Any.Shared;
 
-                if (field.IsStatic)
+                if (field.IsPrivate)
+                {
+                    if (field.IsStatic) mutableClass.StaticPrivateFields[fieldName] = fieldType;
+                    else mutableClass.PrivateFields[fieldName] = fieldType;
+                }
+                else if (field.IsStatic)
                     mutableClass.StaticProperties[fieldName] = fieldType;
                 else
                     mutableClass.FieldTypes[fieldName] = fieldType;
@@ -2754,7 +2764,11 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    declaredMethodType = method.IsStatic
+                    declaredMethodType = method.IsPrivate
+                        ? method.IsStatic
+                            ? classTypeForBody.StaticPrivateMethodTypes[method.Name.Lexeme]
+                            : classTypeForBody.PrivateMethodTypes[method.Name.Lexeme]
+                        : method.IsStatic
                         ? classTypeForBody.StaticMethods[method.Name.Lexeme]
                         : classTypeForBody.Methods[method.Name.Lexeme];
                 }
@@ -2959,7 +2973,11 @@ public partial class TypeChecker
             foreach (var field in classExpr.Fields.Where(f => f.Initializer != null))
             {
                 TypeInfo initType = CheckExpr(field.Initializer!);
-                TypeInfo fieldDeclaredType = field.IsStatic
+                TypeInfo fieldDeclaredType = field.IsPrivate
+                    ? field.IsStatic
+                        ? classTypeForBody.StaticPrivateFieldTypes[field.Name.Lexeme]
+                        : classTypeForBody.PrivateFieldTypes[field.Name.Lexeme]
+                    : field.IsStatic
                     ? classTypeForBody.StaticProperties[field.Name.Lexeme]
                     : classTypeForBody.FieldTypes[field.Name.Lexeme];
 

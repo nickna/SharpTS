@@ -25,6 +25,14 @@ public partial class ILEmitter
 
         var (namespaceParts, className) = ExtractQualifiedNameFromCallee(n.Callee);
 
+        if (n.Callee is Expr.Variable constructorVariable
+            && _ctx.TypeMap?.Get(n.Callee) is SharpTS.TypeSystem.TypeInfo.GenericClass
+            && _resolver.HasVariable(constructorVariable.Name.Lexeme))
+        {
+            EmitCalleeExprConstruction(n);
+            return;
+        }
+
         // A block-scoped class is a runtime lexical binding to a pre-emitted
         // Type token. Construct through the value path so TDZ and shadowing are
         // respected instead of resolving the internal Type globally.
@@ -633,7 +641,13 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Ldc_I4, i);
-                Type genericArgument = _ctx.TypeMapper.MapTypeInfo(instantiated.TypeArguments[i]);
+                Type genericArgument = instantiated.TypeArguments[i] switch
+                {
+                    SharpTS.TypeSystem.TypeInfo.StringLiteral => _ctx.Types.String,
+                    SharpTS.TypeSystem.TypeInfo.NumberLiteral => _ctx.Types.Double,
+                    SharpTS.TypeSystem.TypeInfo.BooleanLiteral => _ctx.Types.Boolean,
+                    var argument => _ctx.TypeMapper.MapTypeInfo(argument)
+                };
                 // CLR generic arguments cannot be System.Void; erase void/never to object here.
                 if (_ctx.Types.IsVoid(genericArgument))
                     genericArgument = _ctx.Types.Object;

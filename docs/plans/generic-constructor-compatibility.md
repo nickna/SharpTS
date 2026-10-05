@@ -101,3 +101,27 @@ Stop after this declared distinct-generic-constructor relation passes the pinned
 boundary and controls. Repeated class evaluation/computed keys remain #1906;
 arbitrary dynamic superclass support remains #1907. General structural class,
 conditional-type or inference conformance is outside this successor.
+
+## Implementation evidence (#1963)
+
+The constructor relation now projects constructor parameters, constructed instance
+members and required static members into a single contextual signature relation.
+Alpha-renaming and inference therefore use one substitution across all three.
+Private/protected declaration origins and ECMAScript private brands are checked
+before structural projection, including separate static visibility metadata and
+common-base origins. Existing declaration-identity fast paths and cache keys remain.
+Class expressions now publish their private field/method metadata as private metadata.
+
+Runtime construction reads generic constructor bindings rather than selecting the
+original expression template after reassignment. Literal inferred type arguments
+are widened to their corresponding CLR primitive when closing an aliased constructor.
+
+On Windows ARM64/.NET 10.0.12, all three retained positive sources match Node in CLI
+interpretation and IL-verified standalone output. Their shared tests also exercise
+the interpreter, in-process compiled execution and serialized verification/execution
+with 30-second harness deadlines. All four retained negatives remain rejected.
+The final focused selection passes 52 tests; the broader generic/compatibility/class
+expression/private-field selection passes 936 tests with compiled IL verification.
+Release, code-quality gates and the actual analyzer-aware AOT/trim/single-file build
+pass; its zero-warning inventory matches the committed baseline. Hosted execution
+was not exercised by these new tests.
