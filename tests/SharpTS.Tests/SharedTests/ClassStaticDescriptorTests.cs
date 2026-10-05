@@ -20,9 +20,7 @@ public sealed class ClassStaticDescriptorTests
         Assert.Equal("12\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    // #1900 owns the interpreter repair; the compiled inherited-descriptor
-    // failure is recorded separately from the frozen epic in #1958.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void StrictWritesRejectOwnAndInheritedNonWritableStatics(ExecutionMode mode)
     {
         const string source = """
@@ -56,8 +54,7 @@ public sealed class ClassStaticDescriptorTests
         Assert.Equal("true\n4\n", TestHarness.Run(source, mode));
     }
 
-    // The compiled read-modify-write path separately omits strict rejection (#1960).
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void ReadModifyWriteOperationsRespectNonWritableStatic(ExecutionMode mode)
     {
         const string source = """
@@ -74,8 +71,7 @@ public sealed class ClassStaticDescriptorTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n4 4\n", TestHarness.Run(source, mode));
     }
 
-    // Attribute-only compiled definitions have a separate pre-existing gap (#1959).
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void AttributeOnlyDefinitionPreservesStaticValue(ExecutionMode mode)
     {
         const string source = """

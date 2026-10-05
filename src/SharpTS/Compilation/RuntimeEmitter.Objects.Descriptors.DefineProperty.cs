@@ -196,6 +196,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brtrue, receiverIsSynthableLabel);
+        // Emitted class constructors expose static fields through System.Type.
+        // Only an own field supplies an existing data descriptor; inherited
+        // fields must retain the defaults for a newly defined own property.
+        var notOwnStaticField = il.DefineLabel();
+        var staticOwner = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Stloc, staticOwner);
+        il.Emit(OpCodes.Ldloc, staticOwner);
+        il.Emit(OpCodes.Brfalse, notOwnStaticField);
+        il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldloc, staticOwner);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+        il.Emit(OpCodes.Brfalse, notOwnStaticField);
+        var staticFieldOwner = EmitStaticMemberLookupOwner(il, staticOwner, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Ldloc, staticFieldOwner);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        il.Emit(OpCodes.Brtrue, receiverIsSynthableLabel);
+        il.MarkLabel(notOwnStaticField);
         var checkSynthListLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);

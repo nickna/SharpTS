@@ -29,17 +29,6 @@ public partial class RuntimeEmitter
         MethodInfo CreateException,
         ConstructorInfo TypeErrorCtor);
 
-    private readonly record struct ExplicitNumberInputs(
-        Type UndefinedType,
-        Type SymbolType,
-        Type ObjectType,
-        MethodInfo GetProperty,
-        MethodInfo InvokeMethodValue,
-        MethodInfo ToJsString,
-        MethodInfo BigIntToNumber,
-        MethodInfo CreateException,
-        ConstructorInfo TypeErrorCtor);
-
     // Immutable inputs for language ToString while peer families retain their own declarations.
     // Constructed for this body only; never retained as emitter state.
     private readonly record struct StringCoercionInputs(
@@ -947,52 +936,6 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(isObjectLikeLabel);
 
-        // Boxed primitive marker fast-path: if the receiver carries
-        // __primitiveType + __primitiveValue (Stage 4z19 wrappers), Stringify
-        // the underlying primitive directly. Without this, toString walks the
-        // prototype chain to the StringPrototypeGenericStub which doesn't read
-        // the marker — returns receiver-as-string instead of the primitive's
-        // natural string repr (`new Object(true).valueOf()` gives wrapper, not true).
-        var primValLocal = il.DeclareLocal(_types.Object);
-        var notBoxedLabel = il.DefineLabel();
-        // #574: an own (instance) toString override must win over the boxed
-        // __primitiveValue fast-path — ECMA-262 OrdinaryToPrimitive(O, "string")
-        // calls the own toString first. When the wrapper carries an own toString,
-        // defer to the OrdinaryToPrimitive section below (which invokes it). An
-        // inherited prototype toString is NOT own, so un-overridden wrappers still
-        // take the fast-path. (HasOwnPropertyHelper does not walk the prototype.)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldstr, "toString");
-        il.Emit(OpCodes.Call, peers.HasOwnProperty);
-        il.Emit(OpCodes.Brtrue, notBoxedLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Call, peers.GetProperty);
-        il.Emit(OpCodes.Stloc, primValLocal);
-        il.Emit(OpCodes.Ldloc, primValLocal);
-        il.Emit(OpCodes.Brfalse, notBoxedLabel);
-        il.Emit(OpCodes.Ldloc, primValLocal);
-        il.Emit(OpCodes.Isinst, peers.UndefinedType);
-        il.Emit(OpCodes.Brtrue, notBoxedLabel);
-        // ECMA-262 §7.1.17 step 2: throw TypeError if the unwrapped primitive
-        // is a Symbol. The entry-point check at line ~1856 only catches raw
-        // Symbol values — Object(Symbol("x")) wraps it as $Object with
-        // __primitiveValue=sym, and the unwrap below bypasses that guard,
-        // letting Stringify run on a Symbol (returns "Symbol(x)" rather than
-        // throwing). Required by indexOf/searchstring-tostring-errors et al.
-        var unwrapNotSymLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, primValLocal);
-        il.Emit(OpCodes.Isinst, peers.SymbolType);
-        il.Emit(OpCodes.Brfalse, unwrapNotSymLabel);
-        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert a Symbol value to a string");
-        il.MarkLabel(unwrapNotSymLabel);
-        // Re-enter language ToString for the primitive. This is observably
-        // different from debug Stringify for BigInt ("42" versus "42n").
-        il.Emit(OpCodes.Ldloc, primValLocal);
-        il.Emit(OpCodes.Call, coercion.ToJsString);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notBoxedLabel);
-
         // ECMA-262 7.1.1 ToPrimitive(input, "string"): GetMethod(input, @@toPrimitive)
         // takes priority over OrdinaryToPrimitive. Look up Symbol.toPrimitive in the
         // value's symbol-dict (compiled mode stores symbol-keyed properties separately
@@ -1123,6 +1066,52 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, coercion.ToJsString);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(afterToPrimSymLabel);
+
+        // Boxed primitive marker fast-path: if the receiver carries
+        // __primitiveType + __primitiveValue (Stage 4z19 wrappers), Stringify
+        // the underlying primitive directly. Without this, toString walks the
+        // prototype chain to the StringPrototypeGenericStub which doesn't read
+        // the marker — returns receiver-as-string instead of the primitive's
+        // natural string repr (`new Object(true).valueOf()` gives wrapper, not true).
+        var primValLocal = il.DeclareLocal(_types.Object);
+        var notBoxedLabel = il.DefineLabel();
+        // #574: an own (instance) toString override must win over the boxed
+        // __primitiveValue fast-path — ECMA-262 OrdinaryToPrimitive(O, "string")
+        // calls the own toString first. When the wrapper carries an own toString,
+        // defer to the OrdinaryToPrimitive section below (which invokes it). An
+        // inherited prototype toString is NOT own, so un-overridden wrappers still
+        // take the fast-path. (HasOwnPropertyHelper does not walk the prototype.)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "toString");
+        il.Emit(OpCodes.Call, peers.HasOwnProperty);
+        il.Emit(OpCodes.Brtrue, notBoxedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "__primitiveValue");
+        il.Emit(OpCodes.Call, peers.GetProperty);
+        il.Emit(OpCodes.Stloc, primValLocal);
+        il.Emit(OpCodes.Ldloc, primValLocal);
+        il.Emit(OpCodes.Brfalse, notBoxedLabel);
+        il.Emit(OpCodes.Ldloc, primValLocal);
+        il.Emit(OpCodes.Isinst, peers.UndefinedType);
+        il.Emit(OpCodes.Brtrue, notBoxedLabel);
+        // ECMA-262 §7.1.17 step 2: throw TypeError if the unwrapped primitive
+        // is a Symbol. The entry-point check at line ~1856 only catches raw
+        // Symbol values — Object(Symbol("x")) wraps it as $Object with
+        // __primitiveValue=sym, and the unwrap below bypasses that guard,
+        // letting Stringify run on a Symbol (returns "Symbol(x)" rather than
+        // throwing). Required by indexOf/searchstring-tostring-errors et al.
+        var unwrapNotSymLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, primValLocal);
+        il.Emit(OpCodes.Isinst, peers.SymbolType);
+        il.Emit(OpCodes.Brfalse, unwrapNotSymLabel);
+        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert a Symbol value to a string");
+        il.MarkLabel(unwrapNotSymLabel);
+        // Re-enter language ToString for the primitive. This is observably
+        // different from debug Stringify for BigInt ("42" versus "42n").
+        il.Emit(OpCodes.Ldloc, primValLocal);
+        il.Emit(OpCodes.Call, coercion.ToJsString);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notBoxedLabel);
 
         // emptyArgs = new object[0]
         var emptyArgsLocal = il.DeclareLocal(_types.ObjectArray);
@@ -1273,22 +1262,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitToNumber(TypeBuilder typeBuilder, EmittedNumericCoercionRuntime numeric,
-        AbstractNumberInputs peers)
+    private void EmitNumericToPrimitive(ILGenerator il, AbstractNumberInputs peers, LocalBuilder argLocal)
     {
-        var method = (MethodBuilder)numeric.ToNumber;
-
-        var il = method.GetILGenerator();
-        var resultLocal = il.DeclareLocal(_types.Double);
-
-        // ECMA-262 7.1.4 ToNumber on object: ToPrimitive(value, "number") which
-        // tries valueOf first, then toString. Without this, Math.hypot(obj-with-
-        // throwing-valueOf) silently returns NaN instead of propagating the
-        // throw. Apply for Dictionary or $Object only.
-        var argLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stloc, argLocal);
-
         var skipToPrimLabelTop = il.DefineLabel();
         var doToPrimLabelTop = il.DefineLabel();
 
@@ -1540,6 +1515,25 @@ public partial class RuntimeEmitter
         il.MarkLabel(afterTeT);
 
         il.MarkLabel(skipToPrimLabelTop);
+    }
+
+    private void EmitToNumber(TypeBuilder typeBuilder, EmittedNumericCoercionRuntime numeric,
+        AbstractNumberInputs peers)
+    {
+        var method = (MethodBuilder)numeric.ToNumber;
+
+        var il = method.GetILGenerator();
+        var resultLocal = il.DeclareLocal(_types.Double);
+
+        // ECMA-262 7.1.4 ToNumber on object: ToPrimitive(value, "number") which
+        // tries valueOf first, then toString. Without this, Math.hypot(obj-with-
+        // throwing-valueOf) silently returns NaN instead of propagating the
+        // throw. Apply for Dictionary or $Object only.
+        var argLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, argLocal);
+
+        EmitNumericToPrimitive(il, peers, argLocal);
 
         // ECMA-262 7.1.4 ToNumber on Symbol → throws TypeError. Without this,
         // Convert.ToDouble would catch the InvalidCastException → NaN → 0,
@@ -1890,7 +1884,7 @@ public partial class RuntimeEmitter
     }
 
     private void EmitConvertToNumber(TypeBuilder typeBuilder, EmittedNumericCoercionRuntime numeric,
-        ExplicitNumberInputs peers)
+        AbstractNumberInputs peers, MethodInfo bigIntToNumber)
     {
         var method = (MethodBuilder)numeric.ConvertToNumber;
 
@@ -1914,101 +1908,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, argLocal);
 
-        var skipToPrimLabel = il.DefineLabel();
-        var doToPrimLabel = il.DefineLabel();
-
-        // Number(array) uses the same Array-to-primitive conversion as the
-        // abstract ToNumber operation above.
-        var notArrayConvertLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Brfalse, notArrayConvertLabel);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Call, peers.ToJsString);
-        il.Emit(OpCodes.Stloc, argLocal);
-        il.Emit(OpCodes.Br, skipToPrimLabel);
-        il.MarkLabel(notArrayConvertLabel);
-
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brtrue, doToPrimLabel);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.ObjectType);
-        il.Emit(OpCodes.Brfalse, skipToPrimLabel);
-        il.MarkLabel(doToPrimLabel);
-
-        // ToPrimitive: try valueOf, then toString. Mirrors EmitLengthToPrimitive's
-        // logic but writes to argLocal so the existing branches below see the
-        // (possibly replaced) primitive value.
-        var emptyArgsLocal = il.DeclareLocal(_types.ObjectArray);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Stloc, emptyArgsLocal);
-
-        void TryToPrim(string name, Label afterLabel)
-        {
-            var fnLocal = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldloc, argLocal);
-            il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, peers.GetProperty);
-            il.Emit(OpCodes.Stloc, fnLocal);
-            il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Brfalse, afterLabel);
-            il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Isinst, peers.UndefinedType);
-            il.Emit(OpCodes.Brtrue, afterLabel);
-
-            var resultLocal = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldloc, argLocal);
-            il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Ldloc, emptyArgsLocal);
-            il.Emit(OpCodes.Call, peers.InvokeMethodValue);
-            il.Emit(OpCodes.Stloc, resultLocal);
-
-            // Still object? Fall through to next attempt without committing.
-            il.Emit(OpCodes.Ldloc, resultLocal);
-            il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-            il.Emit(OpCodes.Brtrue, afterLabel);
-            il.Emit(OpCodes.Ldloc, resultLocal);
-            il.Emit(OpCodes.Isinst, peers.ObjectType);
-            il.Emit(OpCodes.Brtrue, afterLabel);
-            il.Emit(OpCodes.Ldloc, resultLocal);
-            il.Emit(OpCodes.Stloc, argLocal);
-        }
-
-        var afterValueOf = il.DefineLabel();
-        TryToPrim("valueOf", afterValueOf);
-        il.MarkLabel(afterValueOf);
-
-        var afterToString = il.DefineLabel();
-        var stillObj = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brtrue, stillObj);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.ObjectType);
-        il.Emit(OpCodes.Brfalse, afterToString);
-        il.MarkLabel(stillObj);
-        TryToPrim("toString", afterToString);
-        il.MarkLabel(afterToString);
-
-        // ECMA-262 7.1.1.1 OrdinaryToPrimitive: if neither valueOf nor toString
-        // returned a primitive (both returned objects, or neither was callable),
-        // throw TypeError. Pre-fix: the value fell through to NaN, silently
-        // masking the spec-required throw.
-        var afterTypeErrorLabel = il.DefineLabel();
-        var stillObjAfterToString = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brtrue, stillObjAfterToString);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.ObjectType);
-        il.Emit(OpCodes.Brfalse, afterTypeErrorLabel);
-        il.MarkLabel(stillObjAfterToString);
-        GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert object to primitive value");
-        il.MarkLabel(afterTypeErrorLabel);
-
-        il.MarkLabel(skipToPrimLabel);
+        EmitNumericToPrimitive(il, peers, argLocal);
 
         // null => 0.0
         il.Emit(OpCodes.Ldloc, argLocal);
@@ -2035,7 +1935,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notBigIntConvLabel);
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
-        il.Emit(OpCodes.Call, peers.BigIntToNumber);
+        il.Emit(OpCodes.Call, bigIntToNumber);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBigIntConvLabel);
 

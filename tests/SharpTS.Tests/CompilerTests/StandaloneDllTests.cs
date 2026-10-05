@@ -16,7 +16,7 @@ namespace SharpTS.Tests.CompilerTests;
 /// <summary>
 /// Tests that ensure compiled DLLs remain standalone (no SharpTS.dll dependency).
 /// </summary>
-public class StandaloneDllTests
+public partial class StandaloneDllTests
 {
     [Theory]
     [MemberData(nameof(SharedTests.WindowsProcessShutdownTests.OriginalCases), MemberType = typeof(SharedTests.WindowsProcessShutdownTests))]
@@ -4026,7 +4026,7 @@ public class StandaloneDllTests
             {
                 ["main.ts"] = "const obj:any={prefix:'P',tag(strings:any,...values:any[]){return this.prefix+':'+strings.join('|')+':'+values.join(',');}};console.log(obj.tag`a${7}b`);console.log(obj['tag']`c${8}d`);"
             },
-            "P:a|b:7\nundefined:c|d:8\n", "main.ts", true
+            "P:a|b:7\nP:c|d:8\n", "main.ts", true
         },
         new object[]
         {
@@ -4404,7 +4404,7 @@ public class StandaloneDllTests
             {
                 ["main.ts"] = "let hints='';const box:any=new Number(1);box[Symbol.toPrimitive]=function(hint:any){hints+=hint+';';return 4;};console.log(box+1,box==4,String(box),hints);"
             },
-            "5 true 1 default;default;\n", "main.ts", true
+            "5 true 4 default;default;string;\n", "main.ts", true
         },
         new object[]
         {
@@ -4513,7 +4513,7 @@ public class StandaloneDllTests
             {
                 ["main.ts"] = "function parse(value:string,radix:number){return parseInt(value,radix);}console.log(parse('0xff',16),parse('10101',2),parse('zz',36),parse('-11',8),parse('10',1),parse('0X10',0));"
             },
-            "0 21 1295 -9 NaN 16\n", "main.ts", true
+            "255 21 1295 -9 NaN 16\n", "main.ts", true
         },
         new object[]
         {
@@ -4719,7 +4719,7 @@ public class StandaloneDllTests
             {
                 ["main.ts"] = "const sign:any=Math.sign;const pow:any=Math.pow;console.log(sign(-2),sign(0),sign(3),sign(NaN),Object.is(sign(-0),-0));console.log(pow('2','3'),pow(NaN,0),pow(-1,0.5));"
             },
-            "-1 0 1 NaN false\n8 1 NaN\n", "main.ts", true
+            "-1 0 1 NaN true\n8 1 NaN\n", "main.ts", true
         },
         new object[]
         {
@@ -4743,7 +4743,7 @@ public class StandaloneDllTests
             {
                 ["main.ts"] = "const m:any=Math;console.log(m.max(),m.min(),m.max(1,9,3),m.min(1,-2,3),m.max(1,NaN));console.log(Object.is(m.max(-0,0),-0),Object.is(m.min(0,-0),-0));"
             },
-            "-Infinity Infinity 9 -2 NaN\ntrue false\n", "main.ts", true
+            "-Infinity Infinity 9 -2 NaN\nfalse true\n", "main.ts", true
         },
         new object[]
         {
@@ -4767,7 +4767,7 @@ public class StandaloneDllTests
             {
                 ["main.ts"] = "const m:any=Math;console.log(m===globalThis.Math,m.floor===Math.floor,m.random===Math.random,m.sumPrecise===Math.sumPrecise);console.log(m.floor.name,m.floor.length,m.random.length,m.pow.length,m.hypot.length);"
             },
-            "false true true true\nfloor 1 0 2 2\n", "main.ts", true
+            "true true true true\nfloor 1 0 2 2\n", "main.ts", true
         },
         new object[]
         {
@@ -4815,7 +4815,7 @@ public class StandaloneDllTests
             {
                 ["main.ts"] = "const sum:any=Math.sumPrecise;console.log(sum([Infinity,1]),sum([-Infinity,1]),sum([Infinity,-Infinity]),sum([NaN,1]),sum([Number.MAX_VALUE,Number.MAX_VALUE]));"
             },
-            "0 -Infinity NaN 0 Infinity\n", "main.ts", true
+            "Infinity -Infinity NaN NaN Infinity\n", "main.ts", true
         },
         new object[]
         {
@@ -5014,17 +5014,15 @@ public class StandaloneDllTests
             "minimal", "const value=1;",
             "", "main.ts"
         },
-        // Preserve the existing compatibility limitation while changing metadata ownership.
         new object[]
         {
             "async_static", "async function run(){const n=await Promise.resolve(7n);console.log(BigInt.asIntN(3,n),n+2n);}run().catch((e:any)=>console.log(e.name,e.message));",
-            "ReferenceError Undefined variable 'BigInt'.\n", "main.ts"
+            "-1n 9n\n", "main.ts"
         },
-        // Preserve the existing compatibility limitation while changing metadata ownership.
         new object[]
         {
             "generator_literal", "function* values():Generator<bigint,void,any>{yield 7n;yield 9n;}try{for(const n of values()){console.log(n*2n);}}catch(e:any){console.log('literal generator failed');}",
-            "literal generator failed\n", "main.ts"
+            "14n\n18n\n", "main.ts"
         },
     ];
 
@@ -5181,11 +5179,10 @@ public class StandaloneDllTests
             "boxed", "console.log(Number(Object(3)),Number(Object(false)),Number(Object('7')));",
             "3 0 7\n", "main.ts"
         },
-        // Preserve the existing compatibility limitation while changing metadata ownership.
         new object[]
         {
             "exotic", "let trace='';const value:any={[Symbol.toPrimitive](hint:any){trace+=hint;return '9';}};console.log(Number(value),+value,trace);",
-            "NaN 9 number\n", "main.ts"
+            "9 9 numbernumber\n", "main.ts"
         },
         new object[]
         {

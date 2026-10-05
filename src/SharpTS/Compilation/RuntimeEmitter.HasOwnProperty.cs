@@ -730,6 +730,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Stloc, nameLocal);
 
+        // String exotic objects have a non-enumerable intrinsic length; their
+        // indexed characters still use the ordinary own-property fallback.
+        var notStringLength = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, notStringLength);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, falseLabel);
+        il.MarkLabel(notStringLength);
+
         // RegExp lastIndex is an intrinsic own non-enumerable property. It is
         // not placed in PDS until user code redefines its attributes.
         if (inputs.RegExps.Implementation is not null)

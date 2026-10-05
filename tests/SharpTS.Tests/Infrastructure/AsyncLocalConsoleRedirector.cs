@@ -85,6 +85,27 @@ internal static class AsyncLocalConsoleRedirector
         return true;
     }
 
+    // Serial tests of APIs that use Console.SetOut/SetError need the same public
+    // writer contract as their callers. Restore the raw proxies afterward so
+    // parallel compiled tests retain context-local, unsynchronized routing.
+    public static IDisposable SynchronizeWriters()
+    {
+        var stdout = Console.Out;
+        var stderr = Console.Error;
+        Console.SetOut(stdout);
+        Console.SetError(stderr);
+        return new WriterRestorer(stdout, stderr);
+    }
+
+    private sealed class WriterRestorer(TextWriter stdout, TextWriter stderr) : IDisposable
+    {
+        public void Dispose()
+        {
+            if (!TrySetConsoleField("s_out", stdout)) Console.SetOut(stdout);
+            if (!TrySetConsoleField("s_error", stderr)) Console.SetError(stderr);
+        }
+    }
+
     /// <summary>
     /// Captures <see cref="Console.Out"/> for the current logical-execution context into
     /// a fresh <see cref="StringBuilder"/>. Dispose the returned scope to restore the prior

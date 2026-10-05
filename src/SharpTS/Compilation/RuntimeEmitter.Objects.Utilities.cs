@@ -48,6 +48,7 @@ public partial class RuntimeEmitter
 
     // Scoped exact-sum construction inputs; peer declarations stay with their own families.
     private readonly record struct MathSumInputs(
+        EmittedArrayStorageRuntime Arrays,
         MethodInfo GetSymbolDict,
         FieldInfo SymbolIterator,
         MethodInfo GetIteratorFunction,
@@ -757,6 +758,9 @@ public partial class RuntimeEmitter
         math.SumPrecise = method;
 
         var il = method.GetILGenerator();
+        // Numeric-mode arrays inherit List<object> with an empty boxed store.
+        // Materialize it before indexed summation observes Count and Item.
+        EmitDeoptArgIfNumericArrayStorage(il, peers.Arrays, 0);
         var list = il.DeclareLocal(_types.ListOfObject);
         var symbolDict = il.DeclareLocal(_types.DictionaryObjectObject);
         var iteratorFunction = il.DeclareLocal(_types.Object);

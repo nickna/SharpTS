@@ -10,6 +10,19 @@ namespace SharpTS.Compilation;
 /// </summary>
 public abstract partial class ExpressionEmitterBase
 {
+    // PutValue uses the strictness of the expression's enclosing code, including
+    // state-machine bodies. Call only after the read and any short-circuit check.
+    protected void EmitPropertyWrite(bool indexed)
+    {
+        if (Ctx.IsStrictMode)
+        {
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Call, indexed ? Ctx.Runtime!.ObjectWrite.IndexStrict : Ctx.Runtime!.ObjectWrite.PropertyStrict);
+        }
+        else
+            IL.Emit(OpCodes.Call, indexed ? Ctx.Runtime!.ObjectWrite.Index : Ctx.Runtime!.ObjectWrite.Property);
+    }
+
     /// <summary>
     /// Emits the logical condition check for &&=, ||=, ??= operators.
     /// After this, the stack has the current value and control flows to either
@@ -253,7 +266,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: true, pi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldstr, get.Name.Lexeme),
-                Ctx.Runtime!.ObjectRead.Property, Ctx.Runtime!.ObjectWrite.Property);
+                Ctx.Runtime!.ObjectRead.Property, indexed: false);
             return;
         }
 
@@ -265,7 +278,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: true, pi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldloc, indexLocal),
-                Ctx.Runtime!.ObjectRead.Index, Ctx.Runtime!.ObjectWrite.Index);
+                Ctx.Runtime!.ObjectRead.Index, indexed: true);
             return;
         }
 
@@ -314,7 +327,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: false, poi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldstr, get.Name.Lexeme),
-                Ctx.Runtime!.ObjectRead.Property, Ctx.Runtime!.ObjectWrite.Property);
+                Ctx.Runtime!.ObjectRead.Property, indexed: false);
             return;
         }
 
@@ -326,7 +339,7 @@ public abstract partial class ExpressionEmitterBase
             EmitMemberAccessIncrement(
                 isPrefix: false, poi.Operator.Type, objLocal,
                 emitKey: () => IL.Emit(OpCodes.Ldloc, indexLocal),
-                Ctx.Runtime!.ObjectRead.Index, Ctx.Runtime!.ObjectWrite.Index);
+                Ctx.Runtime!.ObjectRead.Index, indexed: true);
             return;
         }
 
@@ -400,7 +413,7 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     private void EmitMemberAccessIncrement(
         bool isPrefix, TokenType op, LocalBuilder objLocal, Action emitKey,
-        MethodBuilder getMethod, MethodBuilder setMethod)
+        MethodBuilder getMethod, bool indexed)
     {
         double delta = op == TokenType.PLUS_PLUS ? 1.0 : -1.0;
 
@@ -418,7 +431,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, objLocal);
         emitKey();
         IL.Emit(OpCodes.Ldloc, newValue);
-        IL.Emit(OpCodes.Call, setMethod);
+        EmitPropertyWrite(indexed);
 
         IL.Emit(OpCodes.Ldloc, resultValue);
         SetStackUnknown();
@@ -503,7 +516,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
             IL.Emit(OpCodes.Ldloc, newValue);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
+            EmitPropertyWrite(indexed: false);
 
             IL.Emit(OpCodes.Ldloc, resultValue);
             SetStackUnknown();
@@ -543,7 +556,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldstr, ls.Name.Lexeme);
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
+        EmitPropertyWrite(indexed: false);
         IL.Emit(OpCodes.Ldloc, resultLocal);
         IL.Emit(OpCodes.Br, endLabel);
 
@@ -583,7 +596,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldloc, indexLocal);
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
+        EmitPropertyWrite(indexed: true);
         IL.Emit(OpCodes.Ldloc, resultLocal);
         IL.Emit(OpCodes.Br, endLabel);
 
@@ -641,7 +654,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
                 IL.Emit(OpCodes.Ldstr, cs.Name.Lexeme);
                 IL.Emit(OpCodes.Ldloc, inheritedResultTemp);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
+                EmitPropertyWrite(indexed: false);
 
                 IL.Emit(OpCodes.Ldloc, inheritedResultTemp);
                 SetStackUnknown();
@@ -677,7 +690,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, objTemp);
         IL.Emit(OpCodes.Ldstr, cs.Name.Lexeme);
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
+        EmitPropertyWrite(indexed: false);
 
         IL.Emit(OpCodes.Ldloc, resultLocal);
         SetStackUnknown();
@@ -717,7 +730,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, objTemp);
         IL.Emit(OpCodes.Ldloc, indexTemp);
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
+        EmitPropertyWrite(indexed: true);
 
         IL.Emit(OpCodes.Ldloc, resultLocal);
         SetStackUnknown();

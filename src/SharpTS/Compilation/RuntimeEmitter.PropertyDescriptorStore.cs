@@ -1239,7 +1239,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static $CompiledPropertyDescriptor? GetStaticShadow(object typeObj, string propertyKey)
     /// Walks the constructor Type chain (typeObj and each <c>BaseType</c>) probing each class's PDS
-    /// store, returning the nearest own-shadow descriptor or null. A subclass static-field write
+    /// store, returning the nearest own-shadow descriptor or null when a nearer ordinary static
+    /// field takes precedence. A subclass static-field write
     /// (<c>Sub.field = v</c>) stores a per-subclass shadow keyed by the subclass Type (the SetProperty
     /// System.Type arm); inherited static-field reads consult this before falling back to the declaring
     /// base's field so JS own-shadow semantics hold in compiled mode (issue #339). Mirrors the inline
@@ -1273,7 +1274,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnNullLabel);
 
         // desc = GetPropertyDescriptor(walkType, propertyKey);
+        // Generic class constructor values use the definition token, whereas
+        // BaseType may be a constructed Base<T>. Probe the same PDS identity.
+        var descriptorOwner = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldloc, walkTypeLocal);
+        il.Emit(OpCodes.Stloc, descriptorOwner);
+        var probeDescriptor = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descriptorOwner);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsGenericType").GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, probeDescriptor);
+        il.Emit(OpCodes.Ldloc, descriptorOwner);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+        il.Emit(OpCodes.Stloc, descriptorOwner);
+        il.MarkLabel(probeDescriptor);
+        il.Emit(OpCodes.Ldloc, descriptorOwner);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, storage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
@@ -1285,8 +1299,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ret);
 
-        // walkType = walkType.BaseType; continue;
         il.MarkLabel(nextLabel);
+        // An ordinary own field is a writable data property. It hides farther
+        // descriptors just as an own PDS entry does; callers fall back to the
+        // nearest resolved CLR field when no descriptor is returned.
+        il.Emit(OpCodes.Ldloc, descriptorOwner);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        il.Emit(OpCodes.Brtrue, returnNullLabel);
+
+        // walkType = walkType.BaseType; continue;
         il.Emit(OpCodes.Ldloc, walkTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "BaseType").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, walkTypeLocal);

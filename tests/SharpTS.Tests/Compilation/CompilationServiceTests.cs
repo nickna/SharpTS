@@ -19,8 +19,12 @@ public class CompilationServiceCollection
 }
 
 [Collection("CompilationService")]
-public class CompilationServiceTests
+public class CompilationServiceTests : IDisposable
 {
+    private readonly IDisposable _writers = AsyncLocalConsoleRedirector.SynchronizeWriters();
+
+    public void Dispose() => _writers.Dispose();
+
     // -------------------------------------------------------------------------
     // Compile
     // -------------------------------------------------------------------------
@@ -223,10 +227,16 @@ public class CompilationServiceTests
         var priorErr = Console.Error;
 
         var result = CompilationService.Compile("console.log(\"x\");");
-        CompilationService.Execute(result.AssemblyBytes!, new StringWriter());
-
-        Assert.Same(priorOut, Console.Out);
-        Assert.Same(priorErr, Console.Error);
+        Assert.True(result.Success);
+        for (int invocation = 0; invocation < 2; invocation++)
+        {
+            using var output = new StringWriter();
+            var run = CompilationService.Execute(result.AssemblyBytes!, output);
+            Assert.True(run.Success, run.Error);
+            Assert.Equal("x\n", output.ToString().Replace("\r\n", "\n"));
+            Assert.Same(priorOut, Console.Out);
+            Assert.Same(priorErr, Console.Error);
+        }
     }
 
     [Fact]

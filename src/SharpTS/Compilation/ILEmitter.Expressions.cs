@@ -24,20 +24,7 @@ public partial class ILEmitter
                 EmitBoolConstant(b);
                 break;
             case System.Numerics.BigInteger bi:
-                if (bi >= long.MinValue && bi <= long.MaxValue)
-                {
-                    // Optimization: Use BigInteger(long) constructor for small values
-                    IL.Emit(OpCodes.Ldc_I8, (long)bi);
-                    IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.BigInteger, _ctx.Types.Int64));
-                }
-                else
-                {
-                    // Fallback: Parse from string for large values
-                    IL.Emit(OpCodes.Ldstr, bi.ToString());
-                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.BigInteger, "Parse", _ctx.Types.String));
-                }
-                IL.Emit(OpCodes.Box, _ctx.Types.BigInteger);
-                SetStackUnknown();
+                EmitBigIntConstant(bi);
                 break;
             case Runtime.Types.SharpTSUndefined:
                 EmitUndefinedConstant();
@@ -1001,22 +988,32 @@ public partial class ILEmitter
         }
 
         // Detect property access tag (obj.method`...`) for this binding
-        bool hasThisBinding = ttl.Tag is Expr.Get;
+        bool hasThisBinding = ttl.Tag is Expr.Get or Expr.GetIndex;
         LocalBuilder? receiverLocal = null;
 
         // 1. Emit the tag function reference (and receiver for property access tags)
         if (hasThisBinding)
         {
-            var g = (Expr.Get)ttl.Tag;
+            var receiver = ttl.Tag is Expr.Get g ? g.Object : ((Expr.GetIndex)ttl.Tag).Object;
             // Emit and save the receiver object
-            EmitExpression(g.Object);
+            EmitExpression(receiver);
             EnsureBoxed();
             receiverLocal = _ctx.ILBuilder.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, receiverLocal);
             // Get the method: GetProperty(obj, name) — handles all object types including dictionaries
             IL.Emit(OpCodes.Ldloc, receiverLocal);
-            IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
+            if (ttl.Tag is Expr.Get property)
+            {
+                IL.Emit(OpCodes.Ldstr, property.Name.Lexeme);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
+            }
+            else
+            {
+                var index = ((Expr.GetIndex)ttl.Tag).Index;
+                EmitExpression(index);
+                EmitBoxIfNeeded(index);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
+            }
             // Push thisArg (receiver) for WithThis call
             IL.Emit(OpCodes.Ldloc, receiverLocal);
         }
