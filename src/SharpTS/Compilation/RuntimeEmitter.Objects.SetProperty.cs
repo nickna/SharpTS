@@ -2079,9 +2079,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, arraySetStrictLabel);
 
-        // Class bodies are strict. Generic static data-field writes must use the
+        // Class bodies are strict. Emitted static data-field writes must use the
         // same storage/shadow path as value-position writes outside the class.
-        // Restrict this bridge to emitted generic classes with a reflected data
+        // Restrict this bridge to emitted classes with a reflected data
         // field; other receiver kinds retain their dedicated assignment paths.
         EmitRejectInheritedStaticDataWrite(il, inputs.DescriptorStorage, inputs.IHasFieldsInterface, inputs.Errors, strict: true);
         var notGenericStaticField = il.DefineLabel();
@@ -2090,9 +2090,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Type);
         il.Emit(OpCodes.Stloc, genericOwner);
         il.Emit(OpCodes.Ldloc, genericOwner);
-        il.Emit(OpCodes.Brfalse, notGenericStaticField);
-        il.Emit(OpCodes.Ldloc, genericOwner);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "ContainsGenericParameters")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, notGenericStaticField);
         il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);

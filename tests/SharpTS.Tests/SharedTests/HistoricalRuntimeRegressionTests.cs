@@ -7,6 +7,33 @@ public sealed class HistoricalRuntimeRegressionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        foreach (bool generic in new[] { false, true })
+        {
+            string parameter = generic ? "<T>" : "";
+            string source = $$"""
+                class Base{{parameter}}{static count=1;}
+                class Middle{{parameter}} extends Base{{parameter}}{static count=4;}
+                class Leaf{{parameter}} extends Middle{{parameter}}{}
+                const b:any=Base,m:any=Middle,l:any=Leaf;
+                Object.defineProperty(Base,'count',{writable:false});
+                l.count=9;
+                console.log(b.count,m.count,l.count,Object.hasOwn(Leaf,'count'));
+                class StrictLeaf{{parameter}} extends Middle{{parameter}}{}
+                const s:any=StrictLeaf;
+                function assign(){'use strict';s['count']=10;}
+                assign();
+                console.log(b.count,m.count,s.count,Object.hasOwn(StrictLeaf,'count'));
+                function update(){'use strict';++l.count;}
+                update();console.log(l.count,m.count);
+                Object.defineProperty(Middle,'count',{writable:false});
+                class Blocked{{parameter}} extends Middle{{parameter}}{}
+                const blocked:any=Blocked;
+                function reject(){'use strict';blocked.count=11;}
+                try{reject();}catch(e){console.log(e instanceof TypeError);}
+                console.log(blocked.count,Object.hasOwn(Blocked,'count'));
+                """;
+            yield return [$"issue1958-nearest-{generic}.ts", source, "1 4 9 true\n1 4 10 true\n10 4\ntrue\n4 false\n"];
+        }
         yield return ["issue1960-index-controls.ts", "\"use strict\";const a:any=[4];Object.defineProperty(a,'0',{writable:false});try{++a[0];}catch(e){console.log(e instanceof TypeError);}try{a[0]--;}catch(e){console.log(e instanceof TypeError);}try{a[0]+=2;}catch(e){console.log(e instanceof TypeError);}try{a[0]&&=9;}catch(e){console.log(e instanceof TypeError);}let hits=0;console.log(a[0]||=++hits,a[0]??=++hits,hits,a[0]);", "true\ntrue\ntrue\ntrue\n4 4 0 4\n"];
         yield return ["issue1960-original.ts", "\"use strict\";class Box<T>{static count=4;}const box:any=Box;Object.defineProperty(Box,'count',{value:4,writable:false});try{box.count++;}catch(e){console.log(e instanceof TypeError);}try{box.count+=2;}catch(e){console.log(e instanceof TypeError);}try{box.count*=2;}catch(e){console.log(e instanceof TypeError);}try{box.count&&=3;}catch(e){console.log(e instanceof TypeError);}console.log(box.count,Object.getOwnPropertyDescriptor(Box,'count').value);", "true\ntrue\ntrue\ntrue\n4 4\n"];
         yield return ["issue1960-strict-controls.ts", "\"use strict\";class Box{static count=4;static zero=0;static nil:any=undefined;}const b:any=Box;for(const key of ['count','zero','nil']){Object.defineProperty(Box,key,{writable:false});}function attempt(action:any){try{action();}catch(e){console.log(e instanceof TypeError);}}attempt(()=>{'use strict';++b.count;});attempt(()=>{'use strict';b.count--;});attempt(()=>{'use strict';b.count+=2;});attempt(()=>{'use strict';b.count&&=9;});attempt(()=>{'use strict';b.zero||=1;});attempt(()=>{'use strict';b.nil??=1;});let hits=0;console.log(b.count||=++hits,b.count??=++hits,b.zero&&=++hits,hits);console.log(b.count,b.zero,b.nil);", "true\ntrue\ntrue\ntrue\ntrue\ntrue\n4 4 0 0\n4 0 undefined\n"];
