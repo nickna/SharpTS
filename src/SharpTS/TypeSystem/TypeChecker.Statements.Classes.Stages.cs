@@ -89,7 +89,7 @@ public partial class TypeChecker
             _environment.DefineType(classStmt.Name.Lexeme, genericClassType);
             // For body check, freeze the mutable class (methods/fields have TypeParameter types)
             classTypeForBody = mutableClass.Freeze();
-            _typeMap.SetClassType(classStmt.Name.Lexeme, classTypeForBody);
+            _typeMap.SetClassType(classStmt, classTypeForBody);
         }
         else
         {
@@ -97,7 +97,7 @@ public partial class TypeChecker
             TypeInfo.Class classType = mutableClass.Freeze();
             _environment.Define(classStmt.Name.Lexeme, classType);
             _environment.DefineType(classStmt.Name.Lexeme, classType);
-            _typeMap.SetClassType(classStmt.Name.Lexeme, classType);
+            _typeMap.SetClassType(classStmt, classType);
             classTypeForBody = classType;
         }
         return classTypeForBody;
@@ -392,14 +392,14 @@ public partial class TypeChecker
                 var frozen = mutableClass.FreezeGeneric(classTypeParams);
                 _environment.Define(classStmt.Name.Lexeme, frozen);
                 _environment.DefineType(classStmt.Name.Lexeme, frozen);
-                _typeMap.SetClassType(classStmt.Name.Lexeme, mutableClass.Freeze());
+                _typeMap.SetClassType(classStmt, mutableClass.Freeze());
             }
             else
             {
                 var refrozen = mutableClass.Freeze();
                 _environment.Define(classStmt.Name.Lexeme, refrozen);
                 _environment.DefineType(classStmt.Name.Lexeme, refrozen);
-                _typeMap.SetClassType(classStmt.Name.Lexeme, refrozen);
+                _typeMap.SetClassType(classStmt, refrozen);
             }
             // Structural compatibility results cache on CacheKey() (carries the stable DeclarationId),
             // so any comparison made against the placeholder during the body pass must not be reused.

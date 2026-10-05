@@ -20,6 +20,21 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILCompiler
 {
+    private readonly struct ClassNamespaceScope : IDisposable
+    {
+        private readonly ILCompiler _compiler;
+        private readonly string? _previous;
+
+        public ClassNamespaceScope(ILCompiler compiler, Stmt.Class declaration)
+        {
+            _compiler = compiler;
+            _previous = compiler._currentNamespacePath;
+            compiler._currentNamespacePath = compiler._classes.DeclarationNamespaces.GetValueOrDefault(declaration);
+        }
+
+        public void Dispose() => _compiler._currentNamespacePath = _previous;
+    }
+
     private static void MarkJsVariadicConstructor(ConstructorBuilder constructor)
     {
         var parameter = constructor.DefineParameter(
@@ -36,8 +51,22 @@ public partial class ILCompiler
         // Get qualified class name (includes module prefix and .NET namespace if set)
         string qualifiedClassName = GetQualifiedClassDeclarationName(classStmt);
 
+        var checkedClass = _typeMap.GetClassType(classStmt);
+        if (_currentNamespacePath is not null)
+            qualifiedClassName = ctx.GetQualifiedClassName(
+                $"$nsclass_{_currentNamespacePath.Replace('.', '_')}_{checkedClass?.Core.DeclarationId}_{classStmt.Name.Lexeme}");
+        _classes.DeclarationNames[classStmt] = qualifiedClassName;
+        _classes.DeclarationNamespaces[classStmt] = _currentNamespacePath;
+        _classes.ScopedNames[(_modules.CurrentPath, _currentNamespacePath, classStmt.Name.Lexeme)] = qualifiedClassName;
+        if (checkedClass is not null)
+        {
+            _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = qualifiedClassName;
+            _typeMapper.RegisterCheckedClassName(checkedClass.Core.DeclarationId, qualifiedClassName);
+            _typeMap.SetClassType(qualifiedClassName, checkedClass);
+        }
+
         // Track simple name -> module mapping for later lookups
-        if (_modules.CurrentPath != null && !_classes.BlockScopedNames.ContainsKey(classStmt))
+        if (_modules.CurrentPath != null && _currentNamespacePath is null && !_classes.BlockScopedNames.ContainsKey(classStmt))
         {
             _modules.ClassToModule[classStmt.Name.Lexeme] = _modules.CurrentPath;
         }
@@ -114,6 +143,9 @@ public partial class ILCompiler
             qualifiedClassName,
             typeAttrs
         );
+        typeBuilder.SetCustomAttribute(
+            _runtime.FunctionAttributes.FunctionNameCtor,
+            CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.FunctionNameCtor, classStmt.Name.Lexeme));
         if (_classes.BlockScopedNames.ContainsKey(classStmt))
             _classes.BlockScopedBuilders[classStmt] = typeBuilder;
 

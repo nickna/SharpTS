@@ -1215,6 +1215,7 @@ public partial class RuntimeEmitter
                 runtime.FunctionBindings.ApplyType,
                 runtime.FunctionBindings.BindType,
                 runtime.FunctionBindings.CallType,
+                runtime.FunctionAttributes,
                 runtime.FunctionPrototypes.Prototype,
                 runtime.FunctionPrototypes.Populate,
                 runtime.FunctionIntrospection.GetProperty,

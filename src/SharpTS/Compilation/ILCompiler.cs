@@ -1420,6 +1420,8 @@ public partial class ILCompiler
 
     private string GetQualifiedClassDeclarationName(Stmt.Class classStmt, bool resolve = false)
     {
+        if (_classes.DeclarationNames.TryGetValue(classStmt, out var declared))
+            return declared;
         if (_classes.BlockScopedNames.TryGetValue(classStmt, out var generated))
             return generated;
         var ctx = GetDefinitionContext();

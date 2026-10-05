@@ -56,6 +56,16 @@ public class TypeMap
     /// </summary>
     public void SetClassType(string className, TypeInfo.Class classType) => _classTypes[className] = classType;
 
+    private readonly Dictionary<Stmt.Class, TypeInfo.Class> _classDeclarations = new(ReferenceEqualityComparer.Instance);
+
+    public void SetClassType(Stmt.Class declaration, TypeInfo.Class classType)
+    {
+        _classDeclarations[declaration] = classType;
+        SetClassType(declaration.Name.Lexeme, classType);
+    }
+
+    public TypeInfo.Class? GetClassType(Stmt.Class declaration) => _classDeclarations.GetValueOrDefault(declaration);
+
     /// <summary>
     /// Gets the class type by name, or null if not found.
     /// </summary>

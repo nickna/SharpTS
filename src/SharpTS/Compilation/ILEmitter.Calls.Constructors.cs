@@ -58,6 +58,7 @@ public partial class ILEmitter
 
         // 4. ILEmitter-specific: resolve class name with namespace imports and imported class aliases
         string resolvedClassName = ResolveClassNameForNew(namespaceParts, className);
+        resolvedClassName = _ctx.ResolveClassName(_ctx.TypeMap?.Get(n.Callee), resolvedClassName);
 
         // 5. ILEmitter-specific: external .NET type construction
         if (_ctx.TypeMapper.ExternalTypes.TryGetValue(className, out var externalType) ||

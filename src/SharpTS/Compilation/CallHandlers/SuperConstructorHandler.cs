@@ -41,7 +41,7 @@ public class SuperConstructorHandler : ICallHandler
 
         // Try class declaration constructors first
         var parentCtor = ctx.CurrentSuperclassName != null
-            ? ctx.ClassRegistry?.GetConstructor(ctx.CurrentSuperclassName)
+            ? ctx.ClassRegistry?.GetConstructorByQualifiedName(ctx.ResolveClassName(ctx.CurrentSuperclassName))
             : null;
         if (parentCtor != null)
         {

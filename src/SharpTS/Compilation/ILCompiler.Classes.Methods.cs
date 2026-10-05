@@ -30,6 +30,7 @@ public partial class ILCompiler
     {
         foreach (var classStmt in CollectClassDeclarations(statements))
         {
+            using var namespaceScope = new ClassNamespaceScope(this, classStmt);
             if (classStmt.IsDeclare)
                 continue;
 
@@ -50,6 +51,7 @@ public partial class ILCompiler
     /// </summary>
     private void DefineClassMethodsOnly(Stmt.Class classStmt)
     {
+        using var namespaceScope = new ClassNamespaceScope(this, classStmt);
         // Skip @DotNetType external type classes - they don't have TypeBuilders
         if (classStmt.IsDeclare)
             return;
@@ -84,7 +86,7 @@ public partial class ILCompiler
             if (constructor != null)
             {
                 ctorParamTypes = ParameterTypeResolver.ResolveConstructorParameters(
-                    classStmt.Name.Lexeme, constructor.Parameters, _typeMapper, _typeMap);
+                    qualifiedClassName, constructor.Parameters, _typeMapper, _typeMap);
             }
             else if (classStmt.SuperclassExpr != null)
             {
@@ -172,7 +174,7 @@ public partial class ILCompiler
 
             // Use typed parameters from TypeMap
             var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
-                classStmt.Name.Lexeme, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
+                qualifiedClassName, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
             // Set return type based on method kind
             // Must check async generator FIRST since it has both IsAsync and IsGenerator true
             var returnType = (method.IsAsync && method.IsGenerator) ? _types.IAsyncEnumerableOfObject :
@@ -201,7 +203,7 @@ public partial class ILCompiler
 
             // Use typed parameters from TypeMap
             var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
-                classStmt.Name.Lexeme, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
+                qualifiedClassName, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
 
             MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.Virtual;
             if (method.IsAbstract)
@@ -546,6 +548,7 @@ public partial class ILCompiler
 
     private void EmitClassMethods(Stmt.Class classStmt)
     {
+        using var namespaceScope = new ClassNamespaceScope(this, classStmt);
         if (!_classes.EmittedMethodBodies.Add(classStmt))
             return;
 

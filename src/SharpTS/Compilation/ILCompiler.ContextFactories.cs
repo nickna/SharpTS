@@ -38,7 +38,8 @@ public partial class ILCompiler
     /// </summary>
     private CompilationContext CreateBaseCompilationContext(ILGenerator il, MethodBase? method = null)
     {
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders,
+            NamespaceFieldsForModule(_modules.CurrentPath), NamespaceVarsForModule(_modules.CurrentPath), _types)
         {
             // Closure analysis registries
             ClosureAnalyzer = _closures.Analyzer,
@@ -81,6 +82,8 @@ public partial class ILCompiler
             StaticDirectEvalStatements = _staticDirectEvalStatements,
             StaticIndirectEvalCalls = _staticIndirectEvalCalls,
             TypeMap = _typeMap,
+            CheckedClassNames = _classes.CheckedDeclarationNames,
+            ScopedClassNames = _classes.ScopedNames,
             DeadCode = _deadCodeInfo,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
@@ -256,6 +259,8 @@ public partial class ILCompiler
             FunctionNames = parentCtx.FunctionNames,
             FunctionGenericParameters = parentCtx.FunctionGenericParameters,
             TypeMap = parentCtx.TypeMap,
+            CheckedClassNames = parentCtx.CheckedClassNames,
+            ScopedClassNames = parentCtx.ScopedClassNames,
             DeadCode = parentCtx.DeadCode,
             AsyncMethods = null,
             AsyncArrowBuilders = _async.ArrowBuilders,
@@ -326,6 +331,8 @@ public partial class ILCompiler
         return new CompilationContext(null!, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
         {
             ClassToModule = _modules.ClassToModule,
+            CheckedClassNames = _classes.CheckedDeclarationNames,
+            ScopedClassNames = _classes.ScopedNames,
             FunctionToModule = _modules.FunctionToModule,
             EnumToModule = _modules.EnumToModule,
             IsStrictMode = _isStrictMode

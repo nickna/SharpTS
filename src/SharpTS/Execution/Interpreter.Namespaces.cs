@@ -47,6 +47,10 @@ public partial class Interpreter
                 {
                     namespaceEnv.DefineNamespace(memberName, nestedNs);
                 }
+                else
+                {
+                    namespaceEnv.Define(memberName, memberValue);
+                }
             }
         }
 

@@ -141,7 +141,8 @@ public partial class ILEmitter
 
             case Stmt.Class classStmt:
                 // Classes are defined separately - store the Type in namespace
-                if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(classStmt.Name.Lexeme), out var classType))
+                if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(
+                    _ctx.TypeMap?.GetClassType(classStmt), classStmt.Name.Lexeme), out var classType))
                 {
                     IL.Emit(OpCodes.Ldsfld, nsField);
                     IL.Emit(OpCodes.Ldstr, classStmt.Name.Lexeme);

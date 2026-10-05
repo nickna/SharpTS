@@ -86,6 +86,7 @@ public partial class RuntimeEmitter
         TypeBuilder FunctionApplyWrapperType,
         TypeBuilder FunctionBindWrapperType,
         TypeBuilder FunctionCallWrapperType,
+        EmittedFunctionAttributesRuntime FunctionAttributes,
         FieldBuilder FunctionPrototypeField,
         MethodBuilder FunctionPrototypePopulateMethod,
         MethodBuilder GetFunctionMethod,
@@ -2440,6 +2441,24 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "BigInt");
             il.Emit(OpCodes.Ret);
             il.MarkLabel(genericTypeNameLabel);
+            var reflectedTypeNameLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldtoken, inputs.FunctionAttributes.FunctionNameType);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsDefined", _types.Type, _types.Boolean));
+            il.Emit(OpCodes.Brfalse, reflectedTypeNameLabel);
+            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldtoken, inputs.FunctionAttributes.FunctionNameType);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetCustomAttributes", _types.Type, _types.Boolean));
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Castclass, inputs.FunctionAttributes.FunctionNameType);
+            il.Emit(OpCodes.Ldfld, inputs.FunctionAttributes.FunctionNameValueField);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(reflectedTypeNameLabel);
             il.Emit(OpCodes.Ldloc, typeLocal);
             il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
             il.Emit(OpCodes.Ret);

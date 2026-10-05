@@ -2176,7 +2176,7 @@ public abstract partial class ExpressionEmitterBase
             if (name.Length > 0)
                 return ResolveClassNameForNew(parts, name);
         }
-        return Ctx.ResolveClassName(simpleClassName);
+        return Ctx.ResolveClassName(Ctx.TypeMap?.Get(receiver), simpleClassName);
     }
 
     protected bool TryEmitDirectMethodCall(Expr receiver, string methodName, List<Expr> arguments)

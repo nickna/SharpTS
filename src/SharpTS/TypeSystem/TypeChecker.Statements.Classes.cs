@@ -1460,7 +1460,7 @@ public partial class TypeChecker
             parentEnv.Define(classStmt.Name.Lexeme, classType);
             parentEnv.DefineType(classStmt.Name.Lexeme, classType);
         }
-        _typeMap.SetClassType(classStmt.Name.Lexeme, classType);
+        _typeMap.SetClassType(classStmt, classType);
 
         } // End EnvironmentScope
     }

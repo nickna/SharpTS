@@ -160,6 +160,15 @@ public partial class CompilationContext
     /// </remarks>
     public string ResolveClassName(string simpleClassName)
     {
+        var namespacePath = CurrentNamespacePath;
+        var declarationModule = IsScriptTopLevel ? null : CurrentModulePath;
+        while (namespacePath is not null)
+        {
+            if (ScopedClassNames.TryGetValue((declarationModule, namespacePath, simpleClassName), out var scoped)) return scoped;
+            int dot = namespacePath.LastIndexOf('.');
+            namespacePath = dot < 0 ? null : namespacePath[..dot];
+        }
+        if (ScopedClassNames.TryGetValue((declarationModule, null, simpleClassName), out var local)) return local;
         // A local declaration wins over the shared import/name index, which can
         // also contain a same-named class from another module.
         if (CurrentModulePath is not null)
@@ -195,6 +204,33 @@ public partial class CompilationContext
 
         return baseName;
     }
+
+    internal IReadOnlyDictionary<int, string> CheckedClassNames { get; set; } = new Dictionary<int, string>();
+    internal IReadOnlyDictionary<(string? Module, string? Namespace, string Name), string> ScopedClassNames { get; set; }
+        = new Dictionary<(string?, string?, string), string>();
+
+    internal string ResolveClassName(SharpTS.TypeSystem.TypeInfo? type, string fallback)
+    {
+        int? declaration = type switch
+        {
+            SharpTS.TypeSystem.TypeInfo.Class c => c.Core.DeclarationId,
+            SharpTS.TypeSystem.TypeInfo.GenericClass c => c.Core.DeclarationId,
+            SharpTS.TypeSystem.TypeInfo.MutableClass c => c.DeclarationId,
+            SharpTS.TypeSystem.TypeInfo.Instance i => GetCheckedClassDeclaration(i.ClassType),
+            SharpTS.TypeSystem.TypeInfo.InstantiatedGeneric i => GetCheckedClassDeclaration(i.GenericDefinition),
+            _ => null
+        };
+        return declaration is { } id && CheckedClassNames.TryGetValue(id, out var name) ? name : ResolveClassName(fallback);
+    }
+
+    private static int? GetCheckedClassDeclaration(SharpTS.TypeSystem.TypeInfo type) => type switch
+    {
+        SharpTS.TypeSystem.TypeInfo.Class c => c.Core.DeclarationId,
+        SharpTS.TypeSystem.TypeInfo.GenericClass c => c.Core.DeclarationId,
+        SharpTS.TypeSystem.TypeInfo.MutableClass c => c.DeclarationId,
+        SharpTS.TypeSystem.TypeInfo.InstantiatedGeneric i => GetCheckedClassDeclaration(i.GenericDefinition),
+        _ => null
+    };
 
     /// <summary>
     /// Gets the qualified class name for the current module context.

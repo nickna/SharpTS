@@ -237,9 +237,9 @@ public partial class ILEmitter
             return;
 
         // Handle static member access via class name
-        if (g.Object is Expr.Variable classVar)
+        if (g.Object is Expr.Variable classVar && !_resolver.HasVariable(classVar.Name.Lexeme))
         {
-            string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
+            string resolvedClassName = _ctx.ResolveClassName(_ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme);
             if (_ctx.Classes.TryGetValue(resolvedClassName, out var classBuilder))
             {
                 // Try static getter first (for auto-accessors and explicit static accessors)
@@ -1084,9 +1084,9 @@ public partial class ILEmitter
         // Handle static property assignment via class name: delegate to EmitStaticMemberSet
         // which handles setters (auto-accessor + explicit), regular static fields, and private
         // static fields with correct signature-driven coercion + return-value handling.
-        if (s.Object is Expr.Variable classVar)
+        if (s.Object is Expr.Variable classVar && !_resolver.HasVariable(classVar.Name.Lexeme))
         {
-            string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
+            string resolvedClassName = _ctx.ResolveClassName(_ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme);
             if (_ctx.Classes.TryGetValue(resolvedClassName, out var classBuilder))
             {
                 if (EmitStaticMemberSet(resolvedClassName, classBuilder, s.Name.Lexeme, s.Value))
@@ -2500,7 +2500,7 @@ public partial class ILEmitter
             return true;
         }
 
-        string className = _ctx.ResolveClassName(simpleClassName);
+        string className = _ctx.ResolveClassName(receiverType, simpleClassName);
 
         // Convert TypeScript camelCase property name to .NET PascalCase for lookup
         string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);
@@ -2587,7 +2587,7 @@ public partial class ILEmitter
             return true;
         }
 
-        string className = _ctx.ResolveClassName(simpleClassName);
+        string className = _ctx.ResolveClassName(receiverType, simpleClassName);
 
         // Convert TypeScript camelCase property name to .NET PascalCase for lookup
         string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);

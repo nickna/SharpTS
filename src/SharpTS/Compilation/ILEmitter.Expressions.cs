@@ -242,7 +242,7 @@ public partial class ILEmitter
         }
 
         // Check if it's a class - load the Type object
-        if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(name), out var classType))
+        if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(_ctx.TypeMap?.Get(v), name), out var classType))
         {
             IL.Emit(OpCodes.Ldtoken, classType);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));

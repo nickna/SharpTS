@@ -89,3 +89,25 @@ evidence remains missing; the new controls demonstrate the same diagnostic famil
 without claiming to reconstruct the historical source.
 
 The finite successor is [#1968](https://github.com/nickna/SharpTS/issues/1968).
+
+## Implementation verification (#1968)
+
+The checked declaration now supplies the canonical emitted class owner. Namespace
+and module scopes are retained through method, constructor and property-dispatch
+emission, and checked references resolve that owner. Namespace object and variable
+storage is module-local. Interpreter exports accept namespace declarations, and
+reopened namespaces retain earlier exported class bindings. Emitted class metadata
+keeps the guest simple name independently of the canonical CLR name.
+
+Both sibling fixtures now print `1 2 9`; both module import orders print `1 2`.
+These unchanged fixtures pass API execution in both engines and CLI compilation,
+IL verification and standalone execution, with empty stderr and a 30-second
+per-case deadline. Additional shared controls cover nested/reopened namespaces,
+private storage/origins, typed signatures, inheritance, bare self-construction,
+module namespace variables and constructor aliases with observable names.
+
+The affected namespace/class-expression/generic/private/module selection passes
+711 tests with `SHARPTS_VERIFY_COMPILED=1`, including #1781's original standalone
+construction regression. The quality gate passes. Release and actual AOT analyzer
+baseline checks pass; the analyzer inventory has zero warnings. Hosted execution is not claimed
+for the new fixtures. The historical baseline evidence above remains unchanged.

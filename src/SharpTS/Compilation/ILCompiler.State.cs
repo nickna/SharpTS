@@ -23,6 +23,10 @@ public partial class ILCompiler
         public HashSet<Stmt.Class> Declarations { get; } = new(ReferenceEqualityComparer.Instance);
         public HashSet<Stmt.Class> EmittedMethodBodies { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, TypeBuilder> Builders { get; } = [];
+        public Dictionary<Stmt.Class, string> DeclarationNames { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Stmt.Class, string?> DeclarationNamespaces { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<int, string> CheckedDeclarationNames { get; } = [];
+        public Dictionary<(string? Module, string? Namespace, string Name), string> ScopedNames { get; } = [];
         public Dictionary<Stmt.Class, string> BlockScopedNames { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Stmt.Class, TypeBuilder> BlockScopedBuilders { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, string?> Superclass { get; } = [];
