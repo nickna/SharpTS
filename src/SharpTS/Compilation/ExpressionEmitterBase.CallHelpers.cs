@@ -2176,7 +2176,8 @@ public abstract partial class ExpressionEmitterBase
         {
             var (parts, name) = ExtractQualifiedNameFromCallee(construction.Callee);
             if (name.Length > 0)
-                return ResolveClassNameForNew(parts, name);
+                return Ctx.ResolveClassName(Ctx.TypeMap?.Get(construction.Callee),
+                    ResolveClassNameForNew(parts, name));
         }
         return Ctx.ResolveClassName(Ctx.TypeMap?.Get(receiver), simpleClassName);
     }
