@@ -27,55 +27,69 @@ public partial class RuntimeEmitter
         var parent = type.DefineField("Parent", _types.Object, FieldAttributes.Assembly);
         var captures = type.DefineField("Captures", _types.ObjectArray, FieldAttributes.Assembly);
         var privateMembers = type.DefineField("PrivateMembers", _types.DictionaryStringObject, FieldAttributes.Assembly);
-        var create = type.DefineMethod("Create", MethodAttributes.Public | MethodAttributes.Static,
-            type, [_types.Type, factoryType, _types.String, _types.Double, _types.Object, _types.ObjectArray, _types.ObjectArray]);
+        var create = _features.UsesUserClasses
+            ? type.DefineMethod("Create", MethodAttributes.Public | MethodAttributes.Static,
+                type, [_types.Type, factoryType, _types.String, _types.Double, _types.Object, _types.ObjectArray, _types.ObjectArray]) : null;
         var construct = type.DefineMethod("Construct", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [type, _types.ObjectArray]);
         var read = type.DefineMethod("ReadProperty", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [type, _types.String]);
         var invoke = type.DefineMethod("Invoke", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
-        var captureType = module.DefineType("$ClassCapture", TypeAttributes.Public | TypeAttributes.Sealed);
-        var captureOwner = captureType.DefineField("Owner", _types.Object, FieldAttributes.Assembly);
-        var captureField = captureType.DefineField("Field", _types.FieldInfo, FieldAttributes.Assembly);
-        var captureConstructor = captureType.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard,
-            [_types.Object, _types.FieldInfo]);
-        il = captureConstructor.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, captureOwner);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stfld, captureField);
-        il.Emit(OpCodes.Ret);
-        var readCapture = type.DefineMethod("ReadCapture", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object, [_types.Object]);
-        var writeCapture = type.DefineMethod("WriteCapture", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Void, [type, _types.Int32, _types.Object]);
-        var findEnvironment = type.DefineMethod("FindEnvironment", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object, [type, _types.Type]);
-        var validateParent = type.DefineMethod("ValidateParent", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object, [_types.Object]);
-        var initializeReceiver = type.DefineMethod("InitializeReceiver", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Void, [_types.Object, _types.Object, _types.ObjectArray]);
-        var getParent = type.DefineMethod("GetParent", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object, [_types.Object]);
-        var readArgument = type.DefineMethod("ReadArgument", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object, [_types.ObjectArray, _types.Int32]);
-        var readPrototypeProperty = type.DefineMethod("ReadPrototypeProperty", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object, [_types.Object, _types.Object, _types.String]);
-        var readSuper = type.DefineMethod("ReadSuper", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object, [_types.Object, _types.Object, _types.String, _types.Boolean]);
-        EmitClassCaptureBodies(captureType, captureOwner, captureField, captures, readCapture, writeCapture, findEnvironment);
-        captureType.CreateType();
+        TypeBuilder? captureType = null;
+        FieldBuilder? captureOwner = null, captureField = null;
+        ConstructorBuilder? captureConstructor = null;
+        MethodBuilder? readCapture = null, writeCapture = null, findEnvironment = null;
+        if (_features.UsesUserClasses)
+        {
+            captureType = module.DefineType("$ClassCapture", TypeAttributes.Public | TypeAttributes.Sealed);
+            captureOwner = captureType.DefineField("Owner", _types.Object, FieldAttributes.Assembly);
+            captureField = captureType.DefineField("Field", _types.FieldInfo, FieldAttributes.Assembly);
+            captureConstructor = captureType.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard,
+                [_types.Object, _types.FieldInfo]);
+            il = captureConstructor.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, captureOwner);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Stfld, captureField);
+            il.Emit(OpCodes.Ret);
+            readCapture = type.DefineMethod("ReadCapture", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.Object]);
+            writeCapture = type.DefineMethod("WriteCapture", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Void, [type, _types.Int32, _types.Object]);
+            findEnvironment = type.DefineMethod("FindEnvironment", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [type, _types.Type]);
+            EmitClassCaptureBodies(captureType, captureOwner, captureField, captures, readCapture, writeCapture, findEnvironment);
+            captureType.CreateType();
+        }
+        var validateParent = _features.UsesUserClasses
+            ? type.DefineMethod("ValidateParent", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.Object]) : null;
+        var initializeReceiver = _features.UsesUserClasses
+            ? type.DefineMethod("InitializeReceiver", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Void, [_types.Object, _types.Object, _types.ObjectArray]) : null;
+        var getParent = _features.UsesUserClasses
+            ? type.DefineMethod("GetParent", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.Object]) : null;
+        var readArgument = _features.UsesUserClasses
+            ? type.DefineMethod("ReadArgument", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.ObjectArray, _types.Int32]) : null;
+        var readPrototypeProperty = _features.UsesUserClasses
+            ? type.DefineMethod("ReadPrototypeProperty", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.Object, _types.Object, _types.String]) : null;
+        var readSuper = _features.UsesUserClasses
+            ? type.DefineMethod("ReadSuper", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.Object, _types.Object, _types.String, _types.Boolean]) : null;
         definitions.Declare(new(type, instanceInterface, instanceInterface.GetMethod(getter.Name)!,
             constructor, template, factory, prototype, keys, parent, captures, privateMembers, create, construct, read, invoke,
             captureType, captureConstructor, captureOwner, captureField, readCapture, writeCapture, findEnvironment,
             validateParent, initializeReceiver, getParent, readArgument, readPrototypeProperty, readSuper));
     }
 
-    private void EmitClassDefinitionBodies(EmittedRuntime runtime)
+    private void EmitClassDefinitionCreation(EmittedRuntime runtime)
     {
         var definitions = runtime.ClassDefinitions;
         var storage = runtime.DescriptorStorage;
@@ -233,8 +247,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, storage.DefineProperty);
             il.Emit(OpCodes.Pop);
         }
+    }
 
-        il = definitions.Construct.GetILGenerator();
+    private void EmitClassDefinitionBodies(EmittedRuntime runtime)
+    {
+        var definitions = runtime.ClassDefinitions;
+        var storage = runtime.DescriptorStorage;
+        if (definitions.HasRuntimeParentHelpers)
+            EmitClassDefinitionCreation(runtime);
+        var il = definitions.Construct.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, definitions.Factory);
         il.Emit(OpCodes.Ldarg_1);
@@ -299,7 +320,8 @@ public partial class RuntimeEmitter
         il = definitions.Invoke.GetILGenerator();
         GuestErrorEmitter.ThrowError(il, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
             "Class constructor cannot be invoked without 'new'");
-        EmitRuntimeParentBodies(runtime);
+        if (definitions.HasRuntimeParentHelpers)
+            EmitRuntimeParentBodies(runtime);
         definitions.Type.CreateType();
         definitions.CompleteEmission();
     }
