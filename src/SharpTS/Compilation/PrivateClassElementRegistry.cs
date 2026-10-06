@@ -103,6 +103,7 @@ public sealed class PrivateClassElements
     public IReadOnlyDictionary<string, PrivateMethodValue> MethodValues { get; }
     public PrivateInstanceBridge? InstanceBridge { get; }
     public FieldBuilder? Storage { get; }
+    public FieldBuilder? StaticPresence { get; internal set; }
     public IReadOnlyList<string> FieldNames { get; }
     public IReadOnlyDictionary<string, FieldBuilder> StaticFields { get; }
     public IReadOnlyDictionary<string, MethodBuilder> Methods { get; }

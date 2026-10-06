@@ -2727,6 +2727,7 @@ public partial class TypeChecker
         TypeEnvironment prevEnv = _environment;
         TypeInfo.Class? prevClass = _currentClass;
         _environment = classEnv;
+        _privateInEnclosingClasses.Push(prevClass);
         _currentClass = classTypeForBody is TypeInfo.Class c ? c : mutableClass.Freeze();
 
         // Set when a method's inferred (un-annotated) return type is resolved during the body
@@ -2994,6 +2995,7 @@ public partial class TypeChecker
         finally
         {
             _environment = prevEnv;
+            _privateInEnclosingClasses.Pop();
             _currentClass = prevClass;
         }
 

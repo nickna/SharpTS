@@ -97,6 +97,7 @@ public partial class ILCompiler
             RuntimeClassDeclarations = _runtimeClassDeclarations,
             ClassExprStaticMethods = _classExprs.StaticMethods,
             ClassExprCaptureSlots = _classExprs.CaptureSlots,
+            ClassExprEnclosingClasses = _classExprs.EnclosingClass,
             DeferredClassDefinitions = _classes.DeferredDefinitions,
             BlockScopedClassBuilders = _classes.BlockScopedBuilders,
             ClassRegistry = GetClassRegistry(),
@@ -303,11 +304,13 @@ public partial class ILCompiler
             ClassExprDefinitionFields = parentCtx.ClassExprDefinitionFields,
             RuntimeClassDeclarations = parentCtx.RuntimeClassDeclarations,
             ClassExprCaptureSlots = parentCtx.ClassExprCaptureSlots,
+            ClassExprEnclosingClasses = parentCtx.ClassExprEnclosingClasses,
             BlockScopedClassBuilders = parentCtx.BlockScopedClassBuilders,
             DeferredClassDefinitions = parentCtx.DeferredClassDefinitions,
             IsStrictMode = parentCtx.IsStrictMode,
             // ES2022 Private Class Elements support - inherit from parent context
             CurrentClassName = parentCtx.CurrentClassName,
+            EnclosingClassNames = parentCtx.EnclosingClassNames,
             CurrentClassBuilder = parentCtx.CurrentClassBuilder,
             HasGuestReceiver = parentCtx.HasGuestReceiver,
             // Registry services

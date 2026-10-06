@@ -282,34 +282,44 @@ public partial class TypeChecker
         TypeInfo.MutableClass mutableClass)
     {
         bool anyInferredFieldTypeResolved = false;
-
-        // Second pass: check static property initializers at class scope
-        foreach (var field in classStmt.Fields)
+        var previousClass = _currentClass;
+        _privateInEnclosingClasses.Push(previousClass);
+        _currentClass = classTypeForBody;
+        try
         {
-            if (field.IsStatic && field.Initializer != null)
+
+            // Static private names are visible before their fields are installed.
+            foreach (var field in classStmt.Fields)
             {
-                TypeInfo initType = CheckExpr(field.Initializer);
-                // For ES2022 private static fields, look in StaticPrivateFieldTypes
-                TypeInfo staticFieldDeclaredType = field.IsPrivate
-                    ? classTypeForBody.StaticPrivateFieldTypes[GetFieldMemberName(field)]
-                    : classTypeForBody.StaticProperties[GetFieldMemberName(field)];
-                if (field.TypeAnnotation is null)
+                if (field.IsStatic && field.Initializer != null)
                 {
-                    TypeInfo inferredFieldType = WidenLiteralType(initType);
-                    if (field.IsPrivate)
-                        mutableClass.StaticPrivateFields[GetFieldMemberName(field)] = inferredFieldType;
-                    else
-                        mutableClass.StaticProperties[GetFieldMemberName(field)] = inferredFieldType;
-                    anyInferredFieldTypeResolved = true;
-                    continue;
-                }
-                if (!IsCompatible(staticFieldDeclaredType, initType))
-                {
-                    throw new TypeCheckException($" Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.", tsCode: "TS2322");
+                    TypeInfo initType = CheckExpr(field.Initializer);
+                    TypeInfo staticFieldDeclaredType = field.IsPrivate
+                        ? classTypeForBody.StaticPrivateFieldTypes[GetFieldMemberName(field)]
+                        : classTypeForBody.StaticProperties[GetFieldMemberName(field)];
+                    if (field.TypeAnnotation is null)
+                    {
+                        TypeInfo inferredFieldType = WidenLiteralType(initType);
+                        if (field.IsPrivate)
+                            mutableClass.StaticPrivateFields[GetFieldMemberName(field)] = inferredFieldType;
+                        else
+                            mutableClass.StaticProperties[GetFieldMemberName(field)] = inferredFieldType;
+                        anyInferredFieldTypeResolved = true;
+                        continue;
+                    }
+                    if (!IsCompatible(staticFieldDeclaredType, initType))
+                    {
+                        throw new TypeCheckException($" Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.", tsCode: "TS2322");
+                    }
                 }
             }
+            return anyInferredFieldTypeResolved;
         }
-        return anyInferredFieldTypeResolved;
+        finally
+        {
+            _privateInEnclosingClasses.Pop();
+            _currentClass = previousClass;
+        }
     }
 
     // Checks initializers at declaration scope before static blocks, preserving diagnostic order.

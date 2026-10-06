@@ -1,8 +1,12 @@
-# Private-in investigation controls (#1903)
+# Private-in regression controls (#1962)
 
 These new sources are not recovered historical reproducers. The implementation
 design and recorded evidence are in `docs/plans/private-in-brand-checks.md`.
 Implementation is tracked by [#1962](https://github.com/nickna/SharpTS/issues/1962).
+The positive controls are now exercised by `PrivateInTests` in both engines,
+including serialized IL verification. CLI verification and execution use a
+30-second deadline for each process. The proxy control deploys `SharpTS.dll`;
+the other positive controls also run without it.
 
 Node v25.5.0 and TypeScript 7.0.2 accept the three positive sources. The two brand
 files each print `true true` twice followed by `false false` three times.

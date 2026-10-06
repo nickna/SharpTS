@@ -206,6 +206,9 @@ public partial class TypeChecker
             case Expr.Grouping grouping:
                 assigned = AnalyzeInitializationExpression(grouping.Expression, assigned);
                 break;
+            case Expr.PrivateIn presence:
+                assigned = AnalyzeInitializationExpression(presence.Object, assigned);
+                break;
             case Expr.Ternary ternary:
             {
                 var afterCondition = AnalyzeInitializationExpression(

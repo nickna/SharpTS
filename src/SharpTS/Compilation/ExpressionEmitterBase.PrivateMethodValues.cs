@@ -45,17 +45,32 @@ public abstract partial class ExpressionEmitterBase
 
     protected bool TryEmitGuestStaticPrivateField(Expr receiverExpression, Token token, Expr? assignedValue = null)
     {
-        if (Ctx.GuestThisVariableName == null || Ctx.CurrentClassName is not { } current) return false;
+        if ((Ctx.GuestThisVariableName == null && assignedValue == null) || Ctx.CurrentClassName is not { } current) return false;
         string name = token.Lexeme.TrimStart('#');
         string owner = Ctx.ResolvePrivateFieldOwner(current, name);
-        if (Ctx.ClassRegistry?.GetPrivateElements(owner)?.StaticFields.ContainsKey(name) != true) return false;
+        var declaration = Ctx.ClassRegistry?.GetPrivateElements(owner);
+        if (declaration?.StaticFields.ContainsKey(name) != true) return false;
         var receiver = SpillGenericPrivateOperand(receiverExpression);
         var value = assignedValue == null ? null : SpillGenericPrivateOperand(assignedValue);
         EmitOrdinaryStaticPrivateBrandCheck(owner, receiver, name);
-        if (!Ctx.ClassRegistry.TryGetCallableStaticPrivateField(owner, name, out var field))
+        if (!Ctx.ClassRegistry!.TryGetCallableStaticPrivateField(owner, name, out var field))
             throw new InvalidOperationException("Static private field has no callable owner.");
         if (value == null) IL.Emit(OpCodes.Ldsfld, field!);
-        else { IL.Emit(OpCodes.Ldloc, value); IL.Emit(OpCodes.Stsfld, field!); IL.Emit(OpCodes.Ldloc, value); }
+        else
+        {
+            // A successful receiver brand check does not install a later field.
+            var presence = field!.DeclaringType!.IsConstructedGenericType
+                ? EmitterTypeHelpers.ResolveField(field.DeclaringType, declaration.StaticPresence!)
+                : declaration.StaticPresence!;
+            var installed = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldsfld, presence);
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Callvirt, Types.GetMethod(typeof(HashSet<string>), "Contains", Types.String));
+            IL.Emit(OpCodes.Brtrue, installed);
+            GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime!, $"Cannot access private member #{name} before initialization");
+            IL.MarkLabel(installed);
+            IL.Emit(OpCodes.Ldloc, value); IL.Emit(OpCodes.Stsfld, field); IL.Emit(OpCodes.Ldloc, value);
+        }
         SetStackUnknown();
         return true;
     }
@@ -101,6 +116,19 @@ public abstract partial class ExpressionEmitterBase
         {
             IL.Emit(OpCodes.Ldloc, definition);
             IL.Emit(OpCodes.Ldfld, Ctx.Runtime!.ClassDefinitions.PrivateMembers);
+            if (value != null)
+            {
+                var slots = IL.DeclareLocal(Types.DictionaryStringObject);
+                var installed = IL.DefineLabel();
+                IL.Emit(OpCodes.Stloc, slots);
+                IL.Emit(OpCodes.Ldloc, slots);
+                IL.Emit(OpCodes.Ldstr, $"field:{name}");
+                IL.Emit(OpCodes.Callvirt, Types.GetMethod(Types.DictionaryStringObject, "ContainsKey", Types.String));
+                IL.Emit(OpCodes.Brtrue, installed);
+                GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime!, $"Cannot access private member #{name} before initialization");
+                IL.MarkLabel(installed);
+                IL.Emit(OpCodes.Ldloc, slots);
+            }
         }
         else if (declaration.InstanceBridge is { } bridge)
             IL.Emit(OpCodes.Ldloc, EmitGenericPrivateBrandCheck(bridge, receiver, name));

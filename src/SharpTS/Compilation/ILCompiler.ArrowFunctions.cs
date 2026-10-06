@@ -1056,6 +1056,9 @@ public partial class ILCompiler
             case Expr.GetPrivate gp:
                 CollectArrowsFromExpr(gp.Object);
                 break;
+            case Expr.PrivateIn presence:
+                CollectArrowsFromExpr(presence.Object);
+                break;
             case Expr.SetPrivate sp2:
                 CollectArrowsFromExpr(sp2.Object);
                 CollectArrowsFromExpr(sp2.Value);

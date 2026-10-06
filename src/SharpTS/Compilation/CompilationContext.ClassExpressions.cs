@@ -30,6 +30,8 @@ public partial class CompilationContext
     public ClassGenericParameterRegistry? ClassGenericParameters { get; set; }
     public Dictionary<Expr.ClassExpr, string?>? ClassExprSuperclass { get; set; }
     public Dictionary<Expr.ClassExpr, Dictionary<string, int>>? ClassExprCaptureSlots { get; set; }
+    internal const string PrivateOwnerCaptureName = "'privateOwner";
+    internal IReadOnlyDictionary<Expr.ClassExpr, string>? ClassExprEnclosingClasses { get; set; }
 
     // Current class expression being compiled
     public Expr.ClassExpr? CurrentClassExpr { get; set; }

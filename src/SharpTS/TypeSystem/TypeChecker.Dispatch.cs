@@ -34,6 +34,7 @@ public partial class TypeChecker
         Expr.Get e => VisitGet(e),
         Expr.Set e => VisitSet(e),
         Expr.GetPrivate e => VisitGetPrivate(e),
+        Expr.PrivateIn e => VisitPrivateIn(e),
         Expr.SetPrivate e => VisitSetPrivate(e),
         Expr.CallPrivate e => VisitCallPrivate(e),
         Expr.This e => VisitThis(e),

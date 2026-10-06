@@ -2122,7 +2122,8 @@ public partial class Interpreter
                 if (field.IsPrivate)
                 {
                     if (!field.IsStatic) instancePrivateFields.Add(field);
-                    else if (!hasStaticInitializers) staticPrivateFields[field.Name.Lexeme] = field.Initializer == null ? SharpTSUndefined.Instance : Evaluate(field.Initializer);
+                    else staticPrivateFields[field.Name.Lexeme] = !hasStaticInitializers && field.Initializer != null
+                        ? Evaluate(field.Initializer) : SharpTSUndefined.Instance;
                 }
                 else if (field.IsStatic)
                 {
@@ -2290,6 +2291,9 @@ public partial class Interpreter
 
             klass.BindPrivateMemberOwners();
             klass.InitializerEnvironment = classEnv;
+            klass.OrderedInstanceFields = classExpr.Fields.Where(field => !field.IsStatic)
+                .SelectMany(field => (field.IsPrivate ? instancePrivateFields : instanceFields)
+                    .Where(captured => captured.Name == field.Name)).ToList();
 
             if (symbolAccessors != null)
             {
@@ -2329,7 +2333,7 @@ public partial class Interpreter
                                 object? fieldValue = field.Initializer != null
                                     ? Evaluate(field.Initializer)
                                     : field.ComputedKey != null ? SharpTSUndefined.Instance : null;
-                                if (field.IsPrivate) klass.SetStaticPrivateField(field.Name.Lexeme, fieldValue);
+                                if (field.IsPrivate) klass.InstallStaticPrivateField(field.Name.Lexeme, fieldValue);
                                 else if (field.ComputedKey != null && computedMemberKeys[field.ComputedKey] is SharpTSSymbol symbol)
                                     klass.SetStaticBySymbol(symbol, fieldValue);
                                 else

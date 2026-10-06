@@ -258,109 +258,11 @@ public partial class ILCompiler
         }
 
         // Emit instance field initializers to backing fields (before constructor body)
-        // Note: Declare fields are excluded - they have no initialization
-        var instanceFieldsWithInit = classStmt.Fields.Where(f =>
-            !f.IsStatic && !f.IsPrivate && !f.IsDeclare &&
-            (f.Initializer != null || f.ComputedKey != null)).ToList();
-        if (instanceFieldsWithInit.Count > 0)
-        {
-            ctx.FieldsField = fieldsField;
-            ctx.IsInstanceMethod = true;
-            var initEmitter = new ILEmitter(ctx);
-
-            foreach (var field in instanceFieldsWithInit)
-            {
-                // Handle computed property names (e.g., [mySymbol]: string = "value")
-                if (field.ComputedKey != null)
-                {
-                    // Computed keys use dynamic SetIndex to support Symbol keys
-                    // Stack: this
-                    il.Emit(OpCodes.Ldarg_0);
-                    // Load the key captured when the class definition was evaluated.
-                    il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field));
-                    // Emit initializer value; a field with no initializer is still an own
-                    // property whose value is undefined.
-                    if (field.Initializer != null)
-                    {
-                        initEmitter.EmitExpression(field.Initializer);
-                        initEmitter.EmitBoxIfNeeded(field.Initializer);
-                    }
-                    else
-                    {
-                        il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
-                    }
-                    // Call Runtime.SetIndex(object, key, value)
-                    il.Emit(OpCodes.Call, _runtime.ObjectWrite.Index);
-                    continue;
-                }
-
-                string fieldName = field.Name.Lexeme;
-                string pascalName = NamingConventions.ToPascalCase(fieldName);
-
-                // Check if this is a declared property with a backing field (using PascalCase key)
-                if (_typedInterop.PropertyBackingFields.TryGetValue(className, out var backingFields) &&
-                    backingFields.TryGetValue(pascalName, out var backingField))
-                {
-                    // Store directly in backing field
-                    il.Emit(OpCodes.Ldarg_0);  // this
-
-                    // Emit initializer expression
-                    initEmitter.EmitExpression(field.Initializer!);
-
-                    // Convert to proper type if needed
-                    Type targetType = _typedInterop.PropertyTypes[className][pascalName];
-                    EmitTypeConversion(il, initEmitter, field.Initializer!, targetType);
-
-                    il.Emit(OpCodes.Stfld, backingField);
-                }
-                else
-                {
-                    // Fallback: store in _extras dictionary (for fields without backing fields)
-                    il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
-                    il.Emit(OpCodes.Ldstr, fieldName);
-                    // number[] unboxing: an `arr: number[] = []` field is created as a numeric $Array
-                    // (escaping by nature — a field is aliasable), so `this.arr[i]=v` writes unboxed.
-                    if (!initEmitter.TryEmitNumericEmptyArrayInit(field.TypeAnnotation, field.Initializer))
-                    {
-                        initEmitter.EmitExpression(field.Initializer!);
-                        initEmitter.EmitBoxIfNeeded(field.Initializer!);
-                    }
-                    il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
-                }
-            }
-        }
-
-        // Initialize instance declare fields (without initializers) to null in _extras dictionary
-        // TypeScript semantics: uninitialized fields return null/undefined, not CLR defaults
-        var instanceDeclareFields = classStmt.Fields.Where(f =>
-            !f.IsStatic && !f.IsPrivate && f.IsDeclare && f.Initializer == null && f.ComputedKey == null).ToList();
-        foreach (var field in instanceDeclareFields)
-        {
-            string fieldName = field.Name.Lexeme;
-            // Store null in _extras dictionary
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
-            il.Emit(OpCodes.Ldstr, fieldName);
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
-        }
-
-        // A derived class does not install its private brand until super() returns. Deferring
-        // this prevents a base field initializer that dispatches into the derived instance from
-        // observing derived private elements prematurely.
         bool deferPrivateInitialization = constructor?.Body != null
             && classStmt.SuperclassExpr != null
             && constructor.Body.Any(ContainsSuperCall);
-        bool privateInitializationEmitted = false;
-        if (!deferPrivateInitialization)
-        {
-            // ES2022: Initialize instance private fields. Private fields use a
-            // ConditionalWeakTable for GC-friendly per-instance storage.
-            EmitPrivateFieldInitialization(il, className, classStmt, ctx);
-            privateInitializationEmitted = true;
-        }
-
+        bool privateInitializationEmitted = !deferPrivateInitialization;
+        if (!deferPrivateInitialization) EmitOrderedFieldInitializers();
         // TypeScript 4.9+: Initialize instance auto-accessor backing fields
         if (classStmt.AutoAccessors != null)
         {
@@ -421,7 +323,7 @@ public partial class ILCompiler
                     emitter.EmitStatement(stmt);
                     if (!privateInitializationEmitted && ContainsSuperCall(stmt))
                     {
-                        EmitPrivateFieldInitialization(il, className, classStmt, ctx);
+                        EmitOrderedFieldInitializers();
                         privateInitializationEmitted = true;
                     }
                 }
@@ -431,77 +333,134 @@ public partial class ILCompiler
         }
 
         il.Emit(OpCodes.Ret);
+
+        void EmitOrderedFieldInitializers()
+        {
+            // Note: Declare fields are excluded - they have no initialization
+            var instanceFieldsWithInit = classStmt.Fields.Where(f =>
+                !f.IsStatic && !f.IsDeclare &&
+                (f.IsPrivate || f.Initializer != null || f.ComputedKey != null)).ToList();
+            if (instanceFieldsWithInit.Count > 0 || _classes.PrivateElements.Require(className).Storage != null)
+            {
+                ctx.FieldsField = fieldsField;
+                ctx.IsInstanceMethod = true;
+                var initEmitter = new ILEmitter(ctx);
+
+                var privateStorage = EmitPrivateFieldStorage(il, className);
+                foreach (var field in instanceFieldsWithInit)
+                {
+                    if (field.IsPrivate)
+                    {
+                        EmitPrivateFieldInitializer(il, field, privateStorage!, initEmitter);
+                        continue;
+                    }
+                    // Handle computed property names (e.g., [mySymbol]: string = "value")
+                    if (field.ComputedKey != null)
+                    {
+                        // Computed keys use dynamic SetIndex to support Symbol keys
+                        // Stack: this
+                        il.Emit(OpCodes.Ldarg_0);
+                        // Load the key captured when the class definition was evaluated.
+                        il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field));
+                        // Emit initializer value; a field with no initializer is still an own
+                        // property whose value is undefined.
+                        if (field.Initializer != null)
+                        {
+                            initEmitter.EmitExpression(field.Initializer);
+                            initEmitter.EmitBoxIfNeeded(field.Initializer);
+                        }
+                        else
+                        {
+                            il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+                        }
+                        // Call Runtime.SetIndex(object, key, value)
+                        il.Emit(OpCodes.Call, _runtime.ObjectWrite.Index);
+                        continue;
+                    }
+
+                    string fieldName = field.Name.Lexeme;
+                    string pascalName = NamingConventions.ToPascalCase(fieldName);
+
+                    // Check if this is a declared property with a backing field (using PascalCase key)
+                    if (_typedInterop.PropertyBackingFields.TryGetValue(className, out var backingFields) &&
+                        backingFields.TryGetValue(pascalName, out var backingField))
+                    {
+                        // Store directly in backing field
+                        il.Emit(OpCodes.Ldarg_0);  // this
+
+                        // Emit initializer expression
+                        initEmitter.EmitExpression(field.Initializer!);
+
+                        // Convert to proper type if needed
+                        Type targetType = _typedInterop.PropertyTypes[className][pascalName];
+                        EmitTypeConversion(il, initEmitter, field.Initializer!, targetType);
+
+                        il.Emit(OpCodes.Stfld, backingField);
+                    }
+                    else
+                    {
+                        // Fallback: store in _extras dictionary (for fields without backing fields)
+                        il.Emit(OpCodes.Ldarg_0);
+                        il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
+                        il.Emit(OpCodes.Ldstr, fieldName);
+                        // number[] unboxing: an `arr: number[] = []` field is created as a numeric $Array
+                        // (escaping by nature — a field is aliasable), so `this.arr[i]=v` writes unboxed.
+                        if (!initEmitter.TryEmitNumericEmptyArrayInit(field.TypeAnnotation, field.Initializer))
+                        {
+                            initEmitter.EmitExpression(field.Initializer!);
+                            initEmitter.EmitBoxIfNeeded(field.Initializer!);
+                        }
+                        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+                    }
+                }
+            }
+
+            // Initialize instance declare fields (without initializers) to null in _extras dictionary
+            // TypeScript semantics: uninitialized fields return null/undefined, not CLR defaults
+            var instanceDeclareFields = classStmt.Fields.Where(f =>
+                !f.IsStatic && !f.IsPrivate && f.IsDeclare && f.Initializer == null && f.ComputedKey == null).ToList();
+            foreach (var field in instanceDeclareFields)
+            {
+                string fieldName = field.Name.Lexeme;
+                // Store null in _extras dictionary
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
+                il.Emit(OpCodes.Ldstr, fieldName);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+            }
+
+
+        }
     }
 
-    /// <summary>
-    /// Emits IL to initialize ES2022 private fields for a new instance.
-    /// Creates a Dictionary with initial values and adds it to the ConditionalWeakTable.
-    /// </summary>
-    private void EmitPrivateFieldInitialization(
-        ILGenerator il,
-        string className,
-        Stmt.Class classStmt,
-        CompilationContext ctx)
+    // Install the method brand before evaluating fields; each field becomes present
+    // only after its initializer completes.
+    private LocalBuilder? EmitPrivateFieldStorage(ILGenerator il, string className)
     {
-        // Check if this class has instance private fields
-        var privateElements = _classes.PrivateElements.Require(className);
-        if (privateElements.Storage is not { } storageField)
-            return;
+        var elements = _classes.PrivateElements.Require(className);
+        if (elements.Storage is not { } storage) return null;
+        var slots = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldc_I4, elements.FieldNames.Count);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, _types.Int32));
+        il.Emit(OpCodes.Stloc, slots);
+        il.Emit(OpCodes.Ldsfld, EmitterTypeHelpers.SelfFieldReference(storage));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, slots);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(storage.FieldType, "Add", typeof(object), _types.DictionaryStringObject));
+        return slots;
+    }
 
-        var fieldNames = privateElements.FieldNames;
-
-        var instancePrivateFields = classStmt.Fields
-            .Where(f => f.IsPrivate && !f.IsStatic)
-            .ToList();
-
-        ctx.FieldsField = null; // Not using _fields for private field init
-        ctx.IsInstanceMethod = true;
-        var initEmitter = new ILEmitter(ctx);
-
-        // Create local for the fields dictionary
-        var dictType = typeof(Dictionary<string, object?>);
-        var dictLocal = il.DeclareLocal(dictType);
-
-        // Dictionary<string, object?> __fields = new Dictionary<string, object?>(capacity)
-        il.Emit(OpCodes.Ldc_I4, fieldNames.Count);
-        il.Emit(OpCodes.Newobj, dictType.GetConstructor([typeof(int)])!);
-        il.Emit(OpCodes.Stloc, dictLocal);
-
-        // Add each private field with its initializer value (or null)
-        foreach (var field in instancePrivateFields)
+    private void EmitPrivateFieldInitializer(ILGenerator il, Stmt.Field field, LocalBuilder slots, ILEmitter emitter)
+    {
+        il.Emit(OpCodes.Ldloc, slots);
+        il.Emit(OpCodes.Ldstr, field.Name.Lexeme.TrimStart('#'));
+        if (field.Initializer is { } initializer)
         {
-            string fieldName = field.Name.Lexeme;
-            if (fieldName.StartsWith('#'))
-                fieldName = fieldName[1..];
-
-            // __fields[fieldName] = initializer ?? null
-            il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Ldstr, fieldName);
-
-            if (field.Initializer != null)
-            {
-                initEmitter.EmitExpression(field.Initializer);
-                initEmitter.EmitBoxIfNeeded(field.Initializer);
-            }
-            else
-            {
-                il.Emit(OpCodes.Ldnull);
-            }
-
-            il.Emit(OpCodes.Callvirt, dictType.GetMethod("set_Item", [typeof(string), typeof(object)])!);
+            emitter.EmitExpression(initializer);
+            emitter.EmitBoxIfNeeded(initializer);
         }
-
-        // __privateFields.Add(this, __fields)
-        var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
-        var addMethod = _types.GetMethod(
-            cwtType,
-            "Add",
-            typeof(object),
-            typeof(Dictionary<string, object?>));
-
-        il.Emit(OpCodes.Ldsfld, storageField);       // __privateFields
-        il.Emit(OpCodes.Ldarg_0);                    // this
-        il.Emit(OpCodes.Ldloc, dictLocal);           // __fields
-        il.Emit(OpCodes.Callvirt, addMethod);
+        else il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
     }
 }

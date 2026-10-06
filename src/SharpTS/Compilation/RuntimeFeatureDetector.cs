@@ -1591,6 +1591,9 @@ public sealed class RuntimeFeatureDetector
             case Expr.GetPrivate gp:
                 VisitExpr(gp.Object);
                 break;
+            case Expr.PrivateIn presence:
+                VisitExpr(presence.Object);
+                break;
             case Expr.SetPrivate sp:
                 VisitExpr(sp.Object);
                 VisitExpr(sp.Value);

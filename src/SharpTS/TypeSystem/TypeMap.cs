@@ -14,6 +14,10 @@ namespace SharpTS.TypeSystem;
 public class TypeMap
 {
     private readonly Dictionary<Expr, TypeInfo> _types = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Token, TypeInfo.Class> _privateInOwners = new(ReferenceEqualityComparer.Instance);
+
+    internal void SetPrivateInOwner(Token name, TypeInfo.Class owner) => _privateInOwners[name] = owner;
+    internal TypeInfo.Class? GetPrivateInOwner(Token name) => _privateInOwners.GetValueOrDefault(name);
     private readonly Dictionary<string, TypeInfo.Class> _classTypes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo.Function> _functionTypes = new(StringComparer.Ordinal);
     private readonly Dictionary<Expr.ClassExpr, TypeInfo.Class> _classExprTypes = new(ReferenceEqualityComparer.Instance);

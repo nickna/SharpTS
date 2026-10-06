@@ -257,6 +257,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             case Expr.GetPrivate gp:
                 EmitGetPrivate(gp);
                 break;
+            case Expr.PrivateIn presence:
+                EmitPrivateIn(presence);
+                break;
             case Expr.SetPrivate sp:
                 EmitSetPrivate(sp);
                 break;

@@ -229,6 +229,13 @@ public abstract partial class ExpressionEmitterBase
         var values = new List<LocalBuilder>(names.Count);
         foreach (var name in names)
         {
+            if (name == CompilationContext.PrivateOwnerCaptureName)
+            {
+                if (!TryEmitOwnedClassDefinition())
+                    throw new InvalidOperationException("Nested private names require their enclosing class evaluation.");
+                values.Add(_helpers.SpillStoreObject());
+                continue;
+            }
             FieldInfo? field = null;
             if (Ctx.CellBindingLocals.TryGetValue(name, out var cell))
             {

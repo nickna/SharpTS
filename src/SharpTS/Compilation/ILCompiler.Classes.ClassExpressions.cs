@@ -52,6 +52,9 @@ public partial class ILCompiler
             lexicalCaptures.UnionWith(_closures.Analyzer.GetCaptures(accessor));
         if (classExpr.Name != null)
             lexicalCaptures.Remove(classExpr.Name.Lexeme);
+        if (_classExprs.EnclosingClass.TryGetValue(classExpr, out var lexicalClass)
+            && _classExprs.Names.ContainsValue(lexicalClass))
+            lexicalCaptures.Add(CompilationContext.PrivateOwnerCaptureName);
         _classExprs.CaptureSlots[classExpr] = lexicalCaptures.OrderBy(name => name, StringComparer.Ordinal)
             .Select((name, index) => (name, index)).ToDictionary(entry => entry.name, entry => entry.index, StringComparer.Ordinal);
 
@@ -224,6 +227,8 @@ public partial class ILCompiler
 
         // Store the type builder
         _classExprs.Builders[classExpr] = typeBuilder;
+        if (_typeMap.GetClassExprType(classExpr) is { } checkedClass)
+            _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = className;
     }
 
     /// <summary>
@@ -584,8 +589,15 @@ public partial class ILCompiler
         ctx.CurrentClassBuilder = typeBuilder;
         ctx.EmittingTypeBuilder = typeBuilder;
         ctx.CurrentClassName = className;
-        if (_classExprs.EnclosingClass.TryGetValue(classExpr, out var enclosingClassName))
-            ctx.EnclosingClassNames = [enclosingClassName];
+        List<string> enclosingClasses = [];
+        var lexicalExpression = classExpr;
+        while (_classExprs.EnclosingClass.TryGetValue(lexicalExpression, out var enclosingClassName))
+        {
+            enclosingClasses.Add(enclosingClassName);
+            lexicalExpression = _classExprs.Names.FirstOrDefault(entry => entry.Value == enclosingClassName).Key;
+            if (lexicalExpression is null) break;
+        }
+        ctx.EnclosingClassNames = enclosingClasses;
         ctx.CurrentSuperclassName = _classExprs.Superclass.GetValueOrDefault(classExpr);
         ctx.PropertyBackingFields = _typedInterop.PropertyBackingFields;
         ctx.ClassProperties = _typedInterop.ClassProperties;
@@ -822,11 +834,14 @@ public partial class ILCompiler
 
         void EmitInstanceFieldInitializers()
         {
-            var savedFields = ctx.FieldsField;
-            EmitPrivateFieldInitialization(il, className, ClassExpressionDeclaration(classExpr), ctx);
-            ctx.FieldsField = savedFields;
-            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsPrivate && !f.IsDeclare && (f.Initializer != null || f.ComputedKey != null)))
+            var privateStorage = EmitPrivateFieldStorage(il, className);
+            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsDeclare && (f.IsPrivate || f.Initializer != null || f.ComputedKey != null)))
             {
+                if (field.IsPrivate)
+                {
+                    EmitPrivateFieldInitializer(il, field, privateStorage!, emitter);
+                    continue;
+                }
                 if (field.ComputedKey != null)
                 {
                     il.Emit(OpCodes.Ldarg_0);
@@ -971,6 +986,7 @@ public partial class ILCompiler
         {
             Expr.Call call => call.Callee is Expr.Super,
             Expr.Binary bin => ContainsSuperCallInExpr(bin.Left) || ContainsSuperCallInExpr(bin.Right),
+            Expr.PrivateIn presence => ContainsSuperCallInExpr(presence.Object),
             Expr.Logical log => ContainsSuperCallInExpr(log.Left) || ContainsSuperCallInExpr(log.Right),
             Expr.Grouping grp => ContainsSuperCallInExpr(grp.Expression),
             _ => false

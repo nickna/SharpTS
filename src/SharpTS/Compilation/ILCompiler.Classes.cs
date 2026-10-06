@@ -558,6 +558,9 @@ public partial class ILCompiler
             ? DefinePrivateInstanceBridge(typeBuilder, privateStorage, privateMethods) : null;
         _classes.PrivateElements.Declare(className, typeBuilder, privateStorage,
             privateFieldNames, privateStaticFields, privateMethods, privateStaticMethods, instanceBridge);
+        if (privateStaticFields.Count > 0)
+            _classes.PrivateElements.Require(className).StaticPresence = typeBuilder.DefineField(
+                "__installedStaticPrivateFields", typeof(HashSet<string>), FieldAttributes.Assembly | FieldAttributes.Static);
         DefinePrivateMethodValues(className, typeBuilder, classStmt, expression);
     }
 
