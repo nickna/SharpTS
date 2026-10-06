@@ -13,6 +13,7 @@ public partial class CompilationContext
     public Dictionary<Expr.ClassExpr, TypeBuilder>? ClassExprBuilders { get; set; }
     internal Dictionary<Expr.ClassExpr, ClassExpressionFactory>? ClassExprFactories { get; set; }
     internal Dictionary<Expr.ClassExpr, FieldBuilder>? ClassExprDefinitionFields { get; set; }
+    internal Dictionary<Stmt.Class, Expr.ClassExpr>? RuntimeClassDeclarations { get; set; }
 
     // Class expression extended tracking
     public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>>? ClassExprBackingFields { get; set; }

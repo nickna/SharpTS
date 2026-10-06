@@ -3279,6 +3279,18 @@ public partial class ILEmitter
 
     private void EmitBlockScopedClassDeclaration(Stmt.Class classStmt)
     {
+        if (_ctx.RuntimeClassDeclarations?.TryGetValue(classStmt, out var runtimeExpression) == true)
+        {
+            EmitGuestClassDefinition(runtimeExpression);
+            var definition = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, definition);
+            if (_ctx.Locals.GetLocal(classStmt.Name.Lexeme) is { } binding)
+            {
+                IL.Emit(OpCodes.Ldloc, definition);
+                IL.Emit(OpCodes.Stloc, binding);
+            }
+            return;
+        }
         var scopedClasses = _ctx.BlockScopedClassBuilders;
         TypeBuilder? builder = null;
         bool isBlockScoped = scopedClasses != null

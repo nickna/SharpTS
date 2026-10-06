@@ -97,7 +97,10 @@ public partial class ILCompiler
 
         // NOW resolve superclass (may use our generic params for type arguments)
         Type? baseType = null;
-        if (superclassName != null)
+        bool runtimeHeritage = classExpr.SuperclassExpr != null && _typeMap.Get(classExpr.SuperclassExpr) is TSTypeInfo.Any
+            && superclassName is not ("Array" or "Promise")
+            && !Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(superclassName ?? "");
+        if (superclassName != null && !runtimeHeritage)
         {
             // Check class declarations first (with module resolution)
             var resolvedSuperName = GetDefinitionContext().ResolveClassName(superclassName);
@@ -360,6 +363,7 @@ public partial class ILCompiler
             CallingConventions.Standard,
             [.. ctorParamTypes, _runtime.ClassDefinitions.Type]
         );
+        if (HasRuntimeParent(classExpr)) _usesRuntimeParents = true;
         if (constructor == null && superclassName == "Array")
             MarkJsVariadicConstructor(ctorBuilder);
         _classExprs.Constructors[classExpr] = ctorBuilder;
@@ -507,6 +511,10 @@ public partial class ILCompiler
 
         string className = _classExprs.Names[classExpr];
         var fieldsField = _classes.InstanceFieldsField[className];
+        if (_usesRuntimeParents && !typeBuilder.IsGenericTypeDefinition && !_classes.ErrorSubclasses.Contains(className)
+            && typeBuilder.BaseType is not { Name: "$Array" or "$Promise" }
+            && SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr)))
+            EmitReceiverInitializer(typeBuilder, ClassExpressionDeclaration(classExpr), classExpr);
 
         // Emit the constructor-free prototype path before the .cctor that uses it.
         EmitClassPrototypeConstructor(typeBuilder);
@@ -647,6 +655,15 @@ public partial class ILCompiler
         var constructor = classExpr.Methods.FirstOrDefault(m => !m.IsStatic && m.Name.Lexeme == "constructor" && m.Body != null);
 
         var il = ctorBuilder.GetILGenerator();
+        if (HasRuntimeParent(classExpr))
+        {
+            // The definition factory allocates through the bookkeeping constructor
+            // and uses the explicit-receiver adapter for guest initialization.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _types.ObjectDefaultCtor);
+            il.Emit(OpCodes.Ret);
+            return;
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg, ctorBuilder.GetParameters().Length);
         il.Emit(OpCodes.Stfld, EmitterTypeHelpers.SelfFieldReference(_classExprs.DefinitionFields[classExpr]));
@@ -920,8 +937,11 @@ public partial class ILCompiler
             return _classExprs.ToDefine.FirstOrDefault(candidate =>
                 _typeMap.GetClassExprType(candidate)?.Core.DeclarationId == parentId);
 
-        // Untyped heritage retains the existing fallback until its runtime value
-        // can be represented as a CLR base; checked declarations never use it.
+        if (classExpr.SuperclassExpr != null && _typeMap.Get(classExpr.SuperclassExpr) is TSTypeInfo.Any)
+            return null;
+
+        // Only checked heritage can select a CLR base. Untyped values are retained
+        // in the guest definition and dispatched through its runtime parent.
         return _classExprs.Superclass.GetValueOrDefault(classExpr) is { } name
             ? _classExprs.VarToClassExpr.GetValueOrDefault(name) : null;
     }

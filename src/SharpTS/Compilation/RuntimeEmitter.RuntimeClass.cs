@@ -921,6 +921,7 @@ public partial class RuntimeEmitter
             runtime.Operators,
             new InstanceOfInputs(
                 runtime.ClassDefinitions,
+                runtime.ClassPrototypes,
                 runtime.Abort,
                 runtime.BoxedPrimitives,
                 runtime.FunctionIntrospection.GetProperty,

@@ -30,6 +30,7 @@ public partial class ILCompiler
     {
         foreach (var classStmt in CollectClassDeclarations(statements))
         {
+            if (_runtimeClassDeclarations.ContainsKey(classStmt)) continue;
             using var namespaceScope = new ClassNamespaceScope(this, classStmt);
             if (classStmt.IsDeclare)
                 continue;
@@ -588,6 +589,9 @@ public partial class ILCompiler
 
         // Emit constructor
         EmitConstructor(typeBuilder, classStmt, fieldsField);
+        if (_usesRuntimeParents && !typeBuilder.IsGenericTypeDefinition && typeBuilder.BaseType is not { Name: "$Array" or "$Promise" }
+            && !_classes.ErrorSubclasses.Contains(qualifiedClassName) && SupportsReceiverInitialization(classStmt))
+            EmitReceiverInitializer(typeBuilder, classStmt);
 
         // Emit the compiler-only constructor used to create Constructor.prototype
         // without running JavaScript constructor bodies or field initializers.

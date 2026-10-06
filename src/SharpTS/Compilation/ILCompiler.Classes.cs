@@ -46,6 +46,7 @@ public partial class ILCompiler
     private void DefineClass(Stmt.Class classStmt)
     {
         _classes.Declarations.Add(classStmt);
+        if (TryDefineRuntimeClassDeclaration(classStmt)) return;
         var ctx = GetDefinitionContext();
 
         // Get qualified class name (includes module prefix and .NET namespace if set)
@@ -237,7 +238,7 @@ public partial class ILCompiler
         }
 
         // Track Error subclass status (direct or transitive)
-        if (classStmt.SuperclassExpr != null && Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!))
+        if (Expr.GetSuperclassLeafName(classStmt.SuperclassExpr) is { } errorParentName && Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(errorParentName))
         {
             _classes.ErrorSubclasses.Add(qualifiedClassName);
         }

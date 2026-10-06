@@ -12,7 +12,8 @@ public sealed class EmittedClassDefinitionRuntime
         FieldBuilder Factory, FieldBuilder Prototype, FieldBuilder Keys, FieldBuilder Parent, FieldBuilder Captures, FieldBuilder PrivateMembers, MethodBuilder Create, MethodBuilder Construct,
         MethodBuilder ReadProperty, MethodBuilder Invoke, TypeBuilder CaptureType, ConstructorBuilder CaptureConstructor,
         FieldBuilder CaptureOwner, FieldBuilder CaptureField, MethodBuilder ReadCapture, MethodBuilder WriteCapture,
-        MethodBuilder FindEnvironment);
+        MethodBuilder FindEnvironment, MethodBuilder ValidateParent, MethodBuilder InitializeReceiver,
+        MethodBuilder GetParent, MethodBuilder ReadArgument, MethodBuilder ReadPrototypeProperty, MethodBuilder ReadSuper);
 
     private Declarations? _declarations;
     private Declarations Required => _declarations
@@ -37,6 +38,12 @@ public sealed class EmittedClassDefinitionRuntime
     public MethodBuilder ReadCapture => Required.ReadCapture;
     public MethodBuilder WriteCapture => Required.WriteCapture;
     public MethodBuilder FindEnvironment => Required.FindEnvironment;
+    public MethodBuilder ValidateParent => Required.ValidateParent;
+    public MethodBuilder InitializeReceiver => Required.InitializeReceiver;
+    public MethodBuilder GetParent => Required.GetParent;
+    public MethodBuilder ReadArgument => Required.ReadArgument;
+    public MethodBuilder ReadPrototypeProperty => Required.ReadPrototypeProperty;
+    public MethodBuilder ReadSuper => Required.ReadSuper;
 
     internal void Declare(Declarations declarations)
     {
@@ -46,7 +53,8 @@ public sealed class EmittedClassDefinitionRuntime
         if (new MemberInfo[] { declarations.Constructor, declarations.Template, declarations.Factory,
                 declarations.Prototype, declarations.Keys, declarations.Parent, declarations.Captures, declarations.PrivateMembers, declarations.Create, declarations.Construct,
                 declarations.ReadProperty, declarations.Invoke, declarations.ReadCapture, declarations.WriteCapture,
-                declarations.FindEnvironment }
+                declarations.FindEnvironment, declarations.ValidateParent, declarations.InitializeReceiver,
+                declarations.GetParent, declarations.ReadArgument, declarations.ReadPrototypeProperty, declarations.ReadSuper }
             .Any(member => member.DeclaringType != declarations.Type)
             || declarations.GetDefinition.DeclaringType != declarations.InstanceInterface
             || declarations.InstanceInterface.Module != declarations.Type.Module
@@ -62,7 +70,9 @@ public sealed class EmittedClassDefinitionRuntime
         var declarations = Required;
         if (IsComplete) throw new InvalidOperationException("Class-definition emission is already complete.");
         if (new[] { declarations.Create, declarations.Construct, declarations.ReadProperty, declarations.Invoke,
-                declarations.ReadCapture, declarations.WriteCapture, declarations.FindEnvironment }
+                declarations.ReadCapture, declarations.WriteCapture, declarations.FindEnvironment,
+                declarations.ValidateParent, declarations.InitializeReceiver, declarations.GetParent,
+                declarations.ReadArgument, declarations.ReadPrototypeProperty, declarations.ReadSuper }
             .Any(method => method.GetILGenerator().ILOffset == 0))
             throw new InvalidOperationException("Class-definition method bodies have not all been emitted.");
         IsComplete = true;

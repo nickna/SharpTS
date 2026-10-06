@@ -172,7 +172,8 @@ public partial class ILCompiler
             var parameterTypes = method.GetParameters().Skip(1).Select(parameter => parameter.ParameterType).ToArray();
             for (int i = 0; i < source.Parameters.Count; i++) ctx.DefineParameter(source.Parameters[i].Name.Lexeme, i + 2, parameterTypes[i]);
             var emitter = new ILEmitter(ctx);
-            EmitFunctionEnvironmentPrologue(il, ctx, emitter, source.Parameters, source.Body, parameterTypes, argumentOffset: 2);
+            EmitFunctionEnvironmentPrologue(il, ctx, emitter, source.Parameters, source.Body, parameterTypes,
+                argumentOffset: 2, publishedArgsLeadingSkip: 1);
             InitializeSyncMethodCapturedParameters(ctx, il, source, method, argumentOffset: 2);
             foreach (var statement in source.Body ?? []) emitter.EmitStatement(statement);
             if (emitter.HasDeferredReturns) emitter.FinalizeReturns();

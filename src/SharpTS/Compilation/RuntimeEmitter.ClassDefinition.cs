@@ -55,11 +55,24 @@ public partial class RuntimeEmitter
             _types.Void, [type, _types.Int32, _types.Object]);
         var findEnvironment = type.DefineMethod("FindEnvironment", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [type, _types.Type]);
+        var validateParent = type.DefineMethod("ValidateParent", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
+        var initializeReceiver = type.DefineMethod("InitializeReceiver", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void, [_types.Object, _types.Object, _types.ObjectArray]);
+        var getParent = type.DefineMethod("GetParent", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
+        var readArgument = type.DefineMethod("ReadArgument", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.ObjectArray, _types.Int32]);
+        var readPrototypeProperty = type.DefineMethod("ReadPrototypeProperty", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.Object, _types.String]);
+        var readSuper = type.DefineMethod("ReadSuper", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.Object, _types.String, _types.Boolean]);
         EmitClassCaptureBodies(captureType, captureOwner, captureField, captures, readCapture, writeCapture, findEnvironment);
         captureType.CreateType();
         definitions.Declare(new(type, instanceInterface, instanceInterface.GetMethod(getter.Name)!,
             constructor, template, factory, prototype, keys, parent, captures, privateMembers, create, construct, read, invoke,
-            captureType, captureConstructor, captureOwner, captureField, readCapture, writeCapture, findEnvironment));
+            captureType, captureConstructor, captureOwner, captureField, readCapture, writeCapture, findEnvironment,
+            validateParent, initializeReceiver, getParent, readArgument, readPrototypeProperty, readSuper));
     }
 
     private void EmitClassDefinitionBodies(EmittedRuntime runtime)
@@ -254,6 +267,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(inheritedProperty);
+        var noParentProperty = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, definitions.Parent);
+        il.Emit(OpCodes.Brfalse, noParentProperty);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, definitions.Parent);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noParentProperty);
         var ordinary = il.DefineLabel();
         foreach (var name in new[] { "bind", "call", "apply", "name", "length", "prototype" })
         {
@@ -276,6 +299,7 @@ public partial class RuntimeEmitter
         il = definitions.Invoke.GetILGenerator();
         GuestErrorEmitter.ThrowError(il, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
             "Class constructor cannot be invoked without 'new'");
+        EmitRuntimeParentBodies(runtime);
         definitions.Type.CreateType();
         definitions.CompleteEmission();
     }

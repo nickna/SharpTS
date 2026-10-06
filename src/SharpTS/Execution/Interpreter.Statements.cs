@@ -2030,7 +2030,7 @@ public partial class Interpreter
                     throw new InterpreterException(
                         $"Class '{classStmt.Name.Lexeme}' cannot extend built-in '{builtInCtor.Name}': subclassing this built-in is not supported yet.");
                 }
-                throw new InterpreterException("Superclass must be a class.");
+                throw new ThrowException(new SharpTSTypeError("Superclass must be a class constructor."));
             }
         }
 

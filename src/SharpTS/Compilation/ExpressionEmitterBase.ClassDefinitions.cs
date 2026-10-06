@@ -6,6 +6,31 @@ namespace SharpTS.Compilation;
 
 public abstract partial class ExpressionEmitterBase
 {
+    protected bool TryEmitGuestSuperCall(Expr.Call call)
+    {
+        if (!Ctx.HasGuestReceiver || call.Callee is not Expr.Super { Method: not null } super
+            || super.Method.Lexeme == "constructor") return false;
+        var receiver = SpillBoxed(new Expr.This(new Token(TokenType.THIS, "this", null, 0)));
+        EmitGuestSuperValue(super.Method.Lexeme, receiver);
+        EmitGuestMethodInvocation(receiver, call.Arguments);
+        return true;
+    }
+
+    protected void EmitGuestSuperValue(string name, LocalBuilder receiver)
+    {
+        if (Ctx.CurrentClassExpr != null && TryEmitOwnedClassDefinition()) { }
+        else
+        {
+            IL.Emit(OpCodes.Ldtoken, Ctx.CurrentClassBuilder!);
+            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        }
+        IL.Emit(OpCodes.Ldloc, receiver);
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(Ctx.IsInstanceMethod ? OpCodes.Ldc_I4_0 : OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassDefinitions.ReadSuper);
+        SetStackUnknown();
+    }
+
     protected bool TryEmitGuestThisSet(Expr.Set set)
     {
         if (set.Object is not Expr.This || (!Ctx.HasGuestReceiver && Ctx.GuestThisVariableName == null)) return false;
@@ -162,6 +187,9 @@ public abstract partial class ExpressionEmitterBase
         {
             EmitClassHeritageValue(heritage, expression.Name?.Lexeme);
             EnsureBoxed();
+            if ((factory!.Template.BaseType == null || factory.Template.BaseType == Types.Object)
+                && heritage is not Expr.ClassExpr { Methods.Count: 0, Fields.Count: 0 })
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassDefinitions.ValidateParent);
         }
         else IL.Emit(OpCodes.Ldnull);
         var parent = _helpers.SpillStoreObject();

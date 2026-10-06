@@ -1826,6 +1826,23 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
     private void EmitStateMachineClassDeclaration(Stmt.Class classStmt)
     {
+        if (Ctx.RuntimeClassDeclarations?.TryGetValue(classStmt, out var runtimeExpression) == true)
+        {
+            EmitGuestClassDefinition(runtimeExpression);
+            var definition = IL.DeclareLocal(Types.Object);
+            IL.Emit(OpCodes.Stloc, definition);
+            string name = GetClassStorageName(classStmt);
+            if (GetHoistedVariableField(name) is { } binding)
+            {
+                IL.Emit(OpCodes.Ldarg_0); IL.Emit(OpCodes.Ldloc, definition); IL.Emit(OpCodes.Stfld, binding);
+            }
+            else
+            {
+                var definitionLocal = Ctx.Locals.GetLocal(name) ?? Ctx.Locals.DeclareLocal(name, Types.Object, classStmt);
+                IL.Emit(OpCodes.Ldloc, definition); IL.Emit(OpCodes.Stloc, definitionLocal);
+            }
+            return;
+        }
         TypeBuilder? builder = null;
         if (Ctx.BlockScopedClassBuilders?.TryGetValue(classStmt, out var scopedBuilder) == true)
             builder = scopedBuilder;

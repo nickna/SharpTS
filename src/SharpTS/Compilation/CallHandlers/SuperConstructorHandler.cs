@@ -22,6 +22,17 @@ public class SuperConstructorHandler : ICallHandler
             return false;
 
         var ctx = emitter.Context;
+        if (ctx.HasGuestReceiver && ctx.ClassDefinitionParameterIndex is { } definitionParameter)
+        {
+            emitter.IL.Emit(OpCodes.Ldarg, definitionParameter);
+            emitter.IL.Emit(OpCodes.Call, ctx.Runtime!.ClassDefinitions.GetParent);
+            emitter.IL.Emit(OpCodes.Ldarg_0);
+            emitter.EmitArgsArrayWithSpread(call.Arguments);
+            emitter.IL.Emit(OpCodes.Call, ctx.Runtime.ClassDefinitions.InitializeReceiver);
+            emitter.IL.Emit(OpCodes.Ldarg_0);
+            emitter.SetStackUnknown();
+            return true;
+        }
 
         // The emitted base is chosen from checked declaration identity. Prefer its
         // expression-owned constructor before any same-named lexical declaration.

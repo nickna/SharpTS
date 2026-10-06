@@ -21,37 +21,60 @@ public partial class ILCompiler
         var method = _programType.DefineMethod("$Create_" + _classExprs.Names[expression],
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.ObjectArray, _types.Object]);
         var il = method.GetILGenerator();
-        if (_functions.MethodsCapturingArguments.Contains(constructor))
+        if (HasRuntimeParent(expression))
         {
+            var receiver = il.DeclareLocal(template);
+            ConstructorInfo allocation = _classes.PrototypeConstructors[builder];
+            if (template != builder) allocation = EmitterTypeHelpers.ResolveConstructor(template, allocation);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Newobj, allocation);
+            il.Emit(OpCodes.Stloc, receiver);
+            il.Emit(OpCodes.Ldloc, receiver);
+            il.Emit(OpCodes.Ldarg_1);
+            FieldInfo definitionField = _classExprs.DefinitionFields[expression];
+            if (template != builder) definitionField = EmitterTypeHelpers.ResolveField(template, definitionField);
+            il.Emit(OpCodes.Stfld, definitionField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, receiver);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Stsfld, _runtime.Arguments.CurrentField);
+            il.Emit(OpCodes.Call, _runtime.ClassDefinitions.InitializeReceiver);
+            il.Emit(OpCodes.Ldloc, receiver);
+            il.Emit(OpCodes.Ret);
         }
-        for (int i = 0; i < parameterTypes.Length; i++)
+        else
         {
-            if (parameterTypes[i] == _types.ObjectArray)
+            if (_functions.MethodsCapturingArguments.Contains(constructor))
             {
                 il.Emit(OpCodes.Ldarg_0);
-                continue;
+                il.Emit(OpCodes.Stsfld, _runtime.Arguments.CurrentField);
             }
-            var missing = il.DefineLabel();
-            var ready = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldlen);
-            il.Emit(OpCodes.Conv_I4);
-            il.Emit(OpCodes.Ldc_I4, i);
-            il.Emit(OpCodes.Ble, missing);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldc_I4, i);
-            il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Br, ready);
-            il.MarkLabel(missing);
-            il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
-            il.MarkLabel(ready);
+            for (int i = 0; i < parameterTypes.Length; i++)
+            {
+                if (parameterTypes[i] == _types.ObjectArray)
+                {
+                    il.Emit(OpCodes.Ldarg_0);
+                    continue;
+                }
+                var missing = il.DefineLabel();
+                var ready = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldlen);
+                il.Emit(OpCodes.Conv_I4);
+                il.Emit(OpCodes.Ldc_I4, i);
+                il.Emit(OpCodes.Ble, missing);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldc_I4, i);
+                il.Emit(OpCodes.Ldelem_Ref);
+                il.Emit(OpCodes.Br, ready);
+                il.MarkLabel(missing);
+                il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+                il.MarkLabel(ready);
+            }
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, _runtime.ClassDefinitions.Type);
+            il.Emit(OpCodes.Newobj, target);
+            il.Emit(OpCodes.Ret);
         }
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, _runtime.ClassDefinitions.Type);
-        il.Emit(OpCodes.Newobj, target);
-        il.Emit(OpCodes.Ret);
         string name = expression.Name?.Lexeme
             ?? _classExprs.VarToClassExpr.FirstOrDefault(entry => ReferenceEquals(entry.Value, expression)).Key
             ?? "";
