@@ -26,7 +26,7 @@ public sealed class EmittedClassDefinitionRuntimeTests
     {
         var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
         var owners = new HashSet<EmittedClassDefinitionRuntime>();
-        foreach (string source in new[] { "const n = 1;", "async function f() { await Promise.resolve(1); } f();" })
+        foreach (string source in new[] { "const n = 1;", "class Item {}", "async function f() { await Promise.resolve(1); } f();", "const Item = class {};" })
         {
             var assembly = new PersistedAssemblyBuilder(new AssemblyName($"definitions_{Guid.NewGuid():N}"), typeof(object).Assembly);
             var module = assembly.DefineDynamicModule("main");
@@ -35,8 +35,15 @@ public sealed class EmittedClassDefinitionRuntimeTests
             var owner = runtime.ClassDefinitions;
             Assert.True(owner.IsComplete);
             Assert.True(owners.Add(owner));
-            Assert.Same(module, owner.Create.Module);
-            Assert.Same(owner.Type, owner.Create.DeclaringType);
+            Assert.Same(module, owner.Construct.Module);
+            Assert.Same(owner.Type, owner.Construct.DeclaringType);
+            Assert.Equal(features.UsesUserClasses, owner.HasRuntimeParentHelpers);
+            if (features.UsesUserClasses)
+            {
+                Assert.Same(module, owner.Create.Module);
+                Assert.Same(owner.Type, owner.Create.DeclaringType);
+            }
+            else Assert.Throws<InvalidOperationException>(() => owner.Create);
             Assert.Throws<InvalidOperationException>(owner.CompleteEmission);
             using var bytes = new MemoryStream();
             assembly.Save(bytes);
