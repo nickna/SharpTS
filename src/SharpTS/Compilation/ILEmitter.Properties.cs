@@ -19,6 +19,7 @@ public partial class ILEmitter
     protected override void EmitGet(Expr.Get g)
     {
         if (TryEmitGuestThisGet(g)) return;
+        if (TryEmitEventEmitterFacadeGet(g)) return;
         if (TryEmitStableRecordDestructureGet(g))
             return;
 
