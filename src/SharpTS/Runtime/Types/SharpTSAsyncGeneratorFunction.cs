@@ -39,8 +39,8 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSCallable, IReceiverBindable
         _thisBound = thisBound;
         _boundThis = boundThis;
         _boundSuper = boundSuper;
-        _arity = declaration.Parameters?.Count(
-            p => p.DefaultValue == null && !p.IsRest && !p.IsOptional) ?? 0;
+        _arity = declaration.IsPrivate ? declaration.Parameters.TakeWhile(p => p.DefaultValue == null && !p.IsRest).Count()
+            : declaration.Parameters?.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional) ?? 0;
     }
 
     public int Arity() => _arity;
@@ -48,7 +48,11 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSCallable, IReceiverBindable
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
         // Create a new environment for this generator invocation
-        RuntimeEnvironment environment = new(_closure) { PrivateClass = PrivateOwner };
+        RuntimeEnvironment environment = new(_closure, strictMode: _declaration.IsPrivate ? true : null) { PrivateClass = PrivateOwner };
+        if (_declaration.IsPrivate)
+        {
+            environment.Define("this", _thisBound ? _boundThis : SharpTSUndefined.Instance);
+        }
 
         // #775: an async generator expression / object method binds its own dynamic `this`. The bound
         // receiver (or globalThis for a plain call) is defined in the generator's OWN body environment,

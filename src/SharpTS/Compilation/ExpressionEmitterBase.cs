@@ -957,6 +957,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     protected virtual void EmitSet(Expr.Set s)
     {
+        if (TryEmitGuestThisSet(s)) return;
         // CommonJS: `module.exports = X` → stsfld $exports.
         if (TryEmitCjsSet(s)) return;
 
@@ -1021,6 +1022,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitGetPrivate(Expr.GetPrivate gp)
     {
+        if (TryEmitPrivateMethodValue(gp)) return;
+        if (TryEmitDefinitionPrivateField(gp.Object, gp.Name)) return;
+        if (TryEmitGuestStaticPrivateField(gp.Object, gp.Name)) return;
+        if (TryEmitGuestInstancePrivateField(gp.Object, gp.Name)) return;
         if (TryEmitGenericPrivateGet(gp))
             return;
         string fieldName = gp.Name.Lexeme;
@@ -1089,6 +1094,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitSetPrivate(Expr.SetPrivate sp)
     {
+        if (TryEmitDefinitionPrivateField(sp.Object, sp.Name, sp.Value)) return;
+        if (TryEmitGuestStaticPrivateField(sp.Object, sp.Name, sp.Value)) return;
+        if (TryEmitGuestInstancePrivateField(sp.Object, sp.Name, sp.Value)) return;
         if (TryEmitGenericPrivateSet(sp))
             return;
         string fieldName = sp.Name.Lexeme;
@@ -1169,6 +1177,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitCallPrivate(Expr.CallPrivate cp)
     {
+        if (TryEmitDefinitionPrivateCall(cp)) return;
         if (TryEmitGenericPrivateCall(cp))
             return;
         string methodName = cp.Name.Lexeme;

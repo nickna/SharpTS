@@ -16,6 +16,17 @@ public partial class ILCompiler
         ctx.ClassDefinitionThisParameterIndex = 0;
         var emitter = new ILEmitter(ctx);
         var storage = _runtime.DescriptorStorage;
+        foreach (var value in _classes.PrivateElements.Require(_classExprs.Names[expression]).MethodValues.Values)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.PrivateMembers);
+            il.Emit(OpCodes.Ldstr, $"method:{value.Source.Name.Lexeme.TrimStart('#')}");
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Newobj, value.Constructor);
+            EmitMethodInfoLiteral(il, value.Method, value.Type);
+            il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+        }
 
         var members = new List<(int Position, bool Static, Expr Key, MethodBuilder Method, bool? Getter, IReadOnlyList<Stmt.Parameter> Parameters)>();
         foreach (var method in expression.Methods.Where(method => method.Body != null &&
@@ -44,6 +55,16 @@ public partial class ILCompiler
         {
             if (initializer is Stmt.Field field && field.IsStatic && !field.IsDeclare)
             {
+                if (field.IsPrivate)
+                {
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.PrivateMembers);
+                    il.Emit(OpCodes.Ldstr, $"field:{field.Name.Lexeme.TrimStart('#')}");
+                    if (field.Initializer != null) { emitter.EmitExpression(field.Initializer); emitter.EmitBoxIfNeeded(field.Initializer); }
+                    else il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+                    continue;
+                }
                 il.Emit(OpCodes.Ldarg_0);
                 EmitKey(field.ComputedKey ?? new Expr.Literal(field.Name.Lexeme));
                 if (field.Initializer != null)

@@ -9,7 +9,7 @@ public sealed class EmittedClassDefinitionRuntime
     internal EmittedClassDefinitionRuntime() { }
     internal sealed record Declarations(TypeBuilder Type, Type InstanceInterface,
         MethodInfo GetDefinition, ConstructorBuilder Constructor, FieldBuilder Template,
-        FieldBuilder Factory, FieldBuilder Prototype, FieldBuilder Keys, FieldBuilder Parent, FieldBuilder Captures, MethodBuilder Create, MethodBuilder Construct,
+        FieldBuilder Factory, FieldBuilder Prototype, FieldBuilder Keys, FieldBuilder Parent, FieldBuilder Captures, FieldBuilder PrivateMembers, MethodBuilder Create, MethodBuilder Construct,
         MethodBuilder ReadProperty, MethodBuilder Invoke, TypeBuilder CaptureType, ConstructorBuilder CaptureConstructor,
         FieldBuilder CaptureOwner, FieldBuilder CaptureField, MethodBuilder ReadCapture, MethodBuilder WriteCapture,
         MethodBuilder FindEnvironment);
@@ -28,6 +28,7 @@ public sealed class EmittedClassDefinitionRuntime
     public FieldBuilder Keys => Required.Keys;
     public FieldBuilder Parent => Required.Parent;
     public FieldBuilder Captures => Required.Captures;
+    public FieldBuilder PrivateMembers => Required.PrivateMembers;
     public MethodBuilder Create => Required.Create;
     public MethodBuilder Construct => Required.Construct;
     public MethodBuilder ReadProperty => Required.ReadProperty;
@@ -43,7 +44,7 @@ public sealed class EmittedClassDefinitionRuntime
         if (_declarations is not null || IsComplete)
             throw new InvalidOperationException("Class-definition metadata has already been declared.");
         if (new MemberInfo[] { declarations.Constructor, declarations.Template, declarations.Factory,
-                declarations.Prototype, declarations.Keys, declarations.Parent, declarations.Captures, declarations.Create, declarations.Construct,
+                declarations.Prototype, declarations.Keys, declarations.Parent, declarations.Captures, declarations.PrivateMembers, declarations.Create, declarations.Construct,
                 declarations.ReadProperty, declarations.Invoke, declarations.ReadCapture, declarations.WriteCapture,
                 declarations.FindEnvironment }
             .Any(member => member.DeclaringType != declarations.Type)

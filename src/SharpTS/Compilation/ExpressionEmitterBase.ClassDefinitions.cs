@@ -6,6 +6,40 @@ namespace SharpTS.Compilation;
 
 public abstract partial class ExpressionEmitterBase
 {
+    protected bool TryEmitGuestThisSet(Expr.Set set)
+    {
+        if (set.Object is not Expr.This || (!Ctx.HasGuestReceiver && Ctx.GuestThisVariableName == null)) return false;
+        var receiver = SpillBoxed(set.Object);
+        var value = SpillBoxed(set.Value);
+        IL.Emit(OpCodes.Ldloc, receiver); IL.Emit(OpCodes.Ldstr, set.Name.Lexeme); IL.Emit(OpCodes.Ldloc, value);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.PropertyStrict);
+        IL.Emit(OpCodes.Ldloc, value);
+        SetStackUnknown();
+        return true;
+    }
+
+    protected bool TryEmitGuestThisCall(Expr.Call call)
+    {
+        if (call.Callee is not Expr.Get { Object: Expr.This, Optional: false } get || call.Optional
+            || (!Ctx.HasGuestReceiver && Ctx.GuestThisVariableName == null)) return false;
+        var receiver = SpillBoxed(get.Object);
+        IL.Emit(OpCodes.Ldloc, receiver); IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
+        EmitGuestMethodInvocation(receiver, call.Arguments);
+        return true;
+    }
+
+    protected void EmitGuestMethodInvocation(LocalBuilder receiver, IReadOnlyList<Expr> argumentExpressions)
+    {
+        var callable = _helpers.SpillStoreObject();
+        EmitArgsArrayWithSpread(argumentExpressions);
+        var arguments = _helpers.SpillStoreObject();
+        IL.Emit(OpCodes.Ldloc, receiver); IL.Emit(OpCodes.Ldloc, callable); IL.Emit(OpCodes.Ldloc, arguments);
+        IL.Emit(OpCodes.Castclass, Types.ObjectArray); IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
+        SetStackUnknown();
+    }
+
     protected bool TryEmitClassDefinitionSelf(string name)
     {
         var expression = Ctx.CurrentClassExpr ?? Ctx.ClassExprBuilders?
@@ -62,7 +96,13 @@ public abstract partial class ExpressionEmitterBase
 
     protected bool TryEmitGuestThisGet(Expr.Get get)
     {
-        if (get.Object is not Expr.This || get.Optional || !TryEmitGuestThis()) return false;
+        if (get.Object is not Expr.This || get.Optional) return false;
+        if (!TryEmitGuestThis())
+        {
+            if (!Ctx.HasGuestReceiver) return false;
+            EmitThis();
+            EnsureBoxed();
+        }
         IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
         SetStackUnknown();

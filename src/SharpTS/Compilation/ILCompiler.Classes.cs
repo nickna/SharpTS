@@ -449,7 +449,8 @@ public partial class ILCompiler
         TypeBuilder typeBuilder,
         string className,
         Stmt.Class classStmt,
-        GenericTypeParameterBuilder[]? classGenericParams)
+        GenericTypeParameterBuilder[]? classGenericParams,
+        Expr.ClassExpr? expression = null)
     {
         // Collect private fields (IsPrivate flag indicates #field syntax)
         var instancePrivateFields = classStmt.Fields.Where(f => f.IsPrivate && !f.IsStatic).ToList();
@@ -538,7 +539,8 @@ public partial class ILCompiler
             if (methodName.StartsWith('#'))
                 methodName = methodName[1..];
 
-            var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
+            var paramTypes = (expression == null ? Array.Empty<Type>() : new Type[] { _runtime.ClassDefinitions.Type })
+                .Concat(method.Parameters.Select(_ => typeof(object))).ToArray();
             Type returnType = ResolvePrivateMethodReturnType(method, isStatic: true);
 
             // Use Assembly (internal) visibility so nested async/generator state machines can access this method
@@ -555,6 +557,7 @@ public partial class ILCompiler
             ? DefinePrivateInstanceBridge(typeBuilder, privateStorage, privateMethods) : null;
         _classes.PrivateElements.Declare(className, typeBuilder, privateStorage,
             privateFieldNames, privateStaticFields, privateMethods, privateStaticMethods, instanceBridge);
+        DefinePrivateMethodValues(className, typeBuilder, classStmt, expression);
     }
 
     private PrivateInstanceBridge DefinePrivateInstanceBridge(TypeBuilder owner, FieldBuilder storage,

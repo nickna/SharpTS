@@ -1848,6 +1848,7 @@ public partial class ILCompiler
             // ES2022 Private Class Elements support
             ctx.CurrentClassName = enclosingClassName;
             ctx.CurrentClassBuilder = enclosingClassBuilder;
+            ctx.HasGuestReceiver = _guestReceiverArrows.Contains(arrow);
             ApplyCapturedTopLevelVariableAccess(ctx);
             // #1222: lets the shadow-capture check distinguish a #1201-lifted binding
             // (home = entry-DC field, must stay live) from a block-scoped shadow

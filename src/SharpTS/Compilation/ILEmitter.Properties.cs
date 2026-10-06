@@ -959,6 +959,7 @@ public partial class ILEmitter
 
     protected override void EmitSet(Expr.Set s)
     {
+        if (TryEmitGuestThisSet(s)) return;
         // CommonJS: `module.exports = X` writes → stsfld $exports
         if (TryEmitCjsSet(s)) return;
 

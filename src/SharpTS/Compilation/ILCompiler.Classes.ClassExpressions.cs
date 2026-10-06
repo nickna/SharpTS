@@ -194,7 +194,7 @@ public partial class ILCompiler
         // parameter) cannot be widened to / narrowed from the object-typed $IHasFields slots
         // without box/unbox of `T`, which yields unverifiable IL. Like class declarations
         // (ILCompiler.Classes.cs), these fields live in the `_fields` dictionary instead (#291).
-        foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsDeclare && f.ComputedKey == null))
+        foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsPrivate && !f.IsDeclare && f.ComputedKey == null))
         {
             bool isGenericField = classGenericParams != null &&
                 field.TypeAnnotation != null &&
@@ -205,7 +205,7 @@ public partial class ILCompiler
         }
 
         // Define static fields (use object type for compatibility with existing emission code)
-        foreach (var field in classExpr.Fields.Where(f => f.IsStatic))
+        foreach (var field in classExpr.Fields.Where(f => f.IsStatic && !f.IsPrivate))
         {
             var staticField = typeBuilder.DefineField(
                 field.Name.Lexeme,
@@ -481,6 +481,8 @@ public partial class ILCompiler
                 .Select(field => (field.ComputedKey!, field.Name.Start)))
             .OrderBy(entry => entry.Start).Select(entry => entry.Item1).ToArray();
         _classExprs.Factories[classExpr] = _classExprs.Factories[classExpr] with { Keys = keys };
+        DefinePrivateClassElements(typeBuilder, className, ClassExpressionDeclaration(classExpr),
+            _classes.GenericParameters.Require(typeBuilder).ToArray(), classExpr);
     }
 
     /// <summary>
@@ -550,6 +552,7 @@ public partial class ILCompiler
 
         // Emit symbol-keyed computed accessor bodies (#281)
         EmitClassExpressionSymbolAccessors(classExpr, typeBuilder, fieldsField);
+        EmitClassExpressionPrivateMethodBodies(classExpr, typeBuilder);
 
         // Emit $IHasFields interface method bodies (now that method builders are available)
         EmitHasFieldsInterfaceMethodBodies(className, classExpr);
@@ -624,6 +627,11 @@ public partial class ILCompiler
     {
         var cctor = typeBuilder.DefineTypeInitializer();
         var il = cctor.GetILGenerator();
+        if (_classes.PrivateElements.Require(_classExprs.Names[classExpr]).Storage is { } privateStorage)
+        {
+            il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(privateStorage.FieldType));
+            il.Emit(OpCodes.Stsfld, EmitterTypeHelpers.SelfFieldReference(privateStorage));
+        }
         EmitClassPrototypeRegistration(il, typeBuilder, GetClassConstructorLength(classExpr.Methods));
         il.Emit(OpCodes.Ret);
         EmitClassDefinitionInitializer(classExpr, typeBuilder);
@@ -797,7 +805,10 @@ public partial class ILCompiler
 
         void EmitInstanceFieldInitializers()
         {
-            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsDeclare && (f.Initializer != null || f.ComputedKey != null)))
+            var savedFields = ctx.FieldsField;
+            EmitPrivateFieldInitialization(il, className, ClassExpressionDeclaration(classExpr), ctx);
+            ctx.FieldsField = savedFields;
+            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsPrivate && !f.IsDeclare && (f.Initializer != null || f.ComputedKey != null)))
             {
                 if (field.ComputedKey != null)
                 {

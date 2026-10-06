@@ -39,14 +39,17 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
     private readonly RuntimeEnvironment _closure;
     private readonly int _arity;
     internal SharpTSClass? PrivateOwner { get; set; }
+    private readonly bool _receiverBound;
     // JS: functions (including async) are objects and support property assignment.
     private Dictionary<string, object?>? _properties;
 
-    public SharpTSAsyncFunction(Stmt.Function declaration, RuntimeEnvironment closure)
+    public SharpTSAsyncFunction(Stmt.Function declaration, RuntimeEnvironment closure, bool receiverBound = false)
     {
         _declaration = declaration;
         _closure = closure;
-        _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+        _receiverBound = receiverBound;
+        _arity = declaration.IsPrivate ? declaration.Parameters.TakeWhile(p => p.DefaultValue == null && !p.IsRest).Count()
+            : declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
     }
 
     public bool TryGetProperty(string name, out object? value)
@@ -117,7 +120,12 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
     /// </summary>
     public async Task<object?> CallAsync(Interpreter interpreter, List<object?> arguments)
     {
-        RuntimeEnvironment environment = new(_closure) { PrivateClass = PrivateOwner };
+        RuntimeEnvironment environment = new(_closure, strictMode: _declaration.IsPrivate ? true : null) { PrivateClass = PrivateOwner };
+        if (_declaration.IsPrivate)
+        {
+            environment.Define("this", _receiverBound && _closure.TryGet("this", out var receiver)
+                ? receiver.ToObject() : SharpTSUndefined.Instance);
+        }
         await ParameterBinder.BindAsync(_declaration.Parameters, arguments, environment, interpreter);
 
         if (_declaration.Body == null)
@@ -164,7 +172,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
             // 'super' not in scope - ignore
         }
 
-        return new SharpTSAsyncFunction(_declaration, environment) { PrivateOwner = PrivateOwner };
+        return new SharpTSAsyncFunction(_declaration, environment, receiverBound: true) { PrivateOwner = PrivateOwner };
     }
 
     /// <summary>
@@ -176,7 +184,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
     {
         RuntimeEnvironment environment = new(_closure);
         environment.Define("this", thisObject);
-        return new SharpTSAsyncFunction(_declaration, environment) { PrivateOwner = PrivateOwner };
+        return new SharpTSAsyncFunction(_declaration, environment, receiverBound: true) { PrivateOwner = PrivateOwner };
     }
 
     public SharpTSAsyncFunction BindStatic(SharpTSClass klass)
@@ -185,7 +193,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
         environment.Define("this", klass);
         if (klass.Superclass != null)
             environment.Define("super", klass.Superclass);
-        return new SharpTSAsyncFunction(_declaration, environment) { PrivateOwner = PrivateOwner };
+        return new SharpTSAsyncFunction(_declaration, environment, receiverBound: true) { PrivateOwner = PrivateOwner };
     }
 
     public override string ToString() => $"<async fn {_declaration.Name.Lexeme}>";

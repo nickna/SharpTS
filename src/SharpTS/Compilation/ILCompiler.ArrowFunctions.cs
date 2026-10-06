@@ -1511,6 +1511,7 @@ public partial class ILCompiler
         ctx.CurrentClassName = _async.ArrowEnclosingClassNames.TryGetValue(arrow, out var enclosingClassName)
             ? enclosingClassName
             : null;
+        ctx.HasGuestReceiver = _guestReceiverArrows.Contains(arrow);
         if (ctx.CurrentClassName != null)
             ctx.CurrentClassBuilder = _classes.Builders.GetValueOrDefault(ctx.CurrentClassName);
         ctx.CurrentSuperclassIsAnonymousEmptyClass = _arrowsInAnonymousEmptyDerivedClass.Contains(arrow);

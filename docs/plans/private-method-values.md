@@ -1,5 +1,53 @@
 # Private-method values: bounded implementation design (#1901)
 
+## Implementation evidence (#1961)
+
+Private method extraction now returns a canonical, unbound callable after checking
+the receiver against the lexical declaration's brand. Ordinary declarations cache
+their callable in a non-generic adapter; generic instance access uses the existing
+private-instance bridge. Class expressions cache private callables and static
+private state on each evaluated class definition. Repeated expression evaluations
+therefore retain different brands, values, and captured environments.
+
+The adapter executes the source body with an explicit guest receiver. Public
+property reads, writes, calls, and returned closures use that receiver. Private
+access continues to use the lexical owner's storage, including after suspension.
+Name, arity, defaults/rest, strict receiver semantics, and non-constructibility use
+the emitted function contracts. `PrivateClassElementRegistry` checks adapter,
+cache, constructor, and initializer ownership and requires their emitted bodies
+before completion. No runtime type generation or SharpTS deployment dependency
+is introduced.
+
+`PrivateMethodValueTests` executes eleven sources in interpretation, in-process
+compilation, verified saved IL, and standalone deployment. The sources cover
+generic identity, extraction evaluation once, borrowed receivers, public writes
+and calls, private brands, static state, all four method kinds, returned closures,
+defaults/rest, and a timer suspension. Separate tests cover same-named module
+declarations and checker rejection of outside access, assignment, and undeclared
+private names. Node v25.5.0 matches all eleven expected outputs; TypeScript 7.0.2
+accepts the two retained positive fixtures and rejects the outside-access control.
+
+A targeted Test262 comparison against unchanged `c782c870`, at the pinned corpus
+revision `d5e73fc8d2c663554fb72e2380a8c2bc1a318a33`, improves
+`private-method-get-and-call.js` from RuntimeError to Pass in both engines, with
+no regressions in the eight selected files. Three metadata files retain their
+parser errors (method-trailing semicolons), and three compiled inherited/inner
+arrow controls retain their runtime errors. These outcomes are not counted as
+passing conformance checks or silently removed from the comparison.
+
+Final verification passes 22 focused tests and 779 affected regressions with
+strict compiled IL verification enabled. The retained positive CLI fixtures also
+pass saved-assembly IL verification and exact-output standalone execution without
+SharpTS.dll. The Release solution build and all code-quality gates pass; the
+analyzer-aware restore/rebuild reports zero AOT/trim/single-file warnings and
+matches the checked baseline. The bounded regression selection excludes the
+pre-existing lock-decorator IL failure reproduced at `69f2b081`; the separate
+async-arrow/inheritance IL failures recorded for #1965 remain unchanged.
+
+The remaining runtime-valued local declaration work is tracked separately by
+#1967; this evidence does not claim that repeatedly executed local declarations
+already receive the class-expression evaluation identity.
+
 ## Evidence and disposition
 
 The notes linked by #1901 and #1854 report preserved generic and non-generic

@@ -164,6 +164,7 @@ public partial class ILEmitter
 
     protected override void EmitCall(Expr.Call c)
     {
+        if (TryEmitGuestThisCall(c)) return;
         if (TryEmitPromotedObjectConsumer(c)) return;
         if (TryEmitNumericRestCompanionCall(c)) return;
         // A lexical super() inside an immediately invoked arrow must still be

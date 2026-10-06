@@ -1300,6 +1300,10 @@ public partial class TypeChecker
         {
             return fieldType;
         }
+        if (_currentClass.PrivateMethodTypes.TryGetValue(fieldName, out var methodType))
+            return methodType;
+        if (_currentClass.StaticPrivateMethodTypes.TryGetValue(fieldName, out var staticMethodType))
+            return staticMethodType;
 
         // Check static private fields if accessing on the class itself
         if (IsStaticPrivateConstructor(objType) && _currentClass.StaticPrivateFieldTypes.TryGetValue(fieldName, out var staticFieldType))

@@ -780,6 +780,7 @@ public partial class ILCompiler
                 throw new InvalidOperationException($"Private method '{qualifiedClassName}.{methodName}' has not been declared.");
             EmitPrivateMethodBody(typeBuilder, methodBuilder, method, fieldsField, qualifiedClassName, method.IsStatic);
         }
+        EmitPrivateMethodValueBodies(qualifiedClassName);
         _classes.PrivateElements.MarkBodiesEmitted(qualifiedClassName);
     }
 

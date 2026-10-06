@@ -128,7 +128,7 @@ public partial class Interpreter
         // binding `this` to a fresh object whose prototype is Foo.prototype.
         // Without this, `self instanceof Yallist` is false and packages
         // recurse infinitely.
-        if (klass is SharpTSFunction userFn)
+        if (klass is SharpTSFunction { IsPrivateMethod: false } userFn)
         {
             // Build a new `this` object backed by the function's prototype.
             if (!userFn.TryGetProperty("prototype", out var protoObj))
@@ -362,7 +362,7 @@ public partial class Interpreter
         // Build a fresh `this` with prototype linkage, bind it, then call —
         // so `this instanceof Foo` returns true (Node CJS pattern used by
         // e.g. yallist, EventEmitter sub-classes).
-        if (klass is SharpTSFunction userFn)
+        if (klass is SharpTSFunction { IsPrivateMethod: false } userFn)
         {
             if (!userFn.TryGetProperty("prototype", out var protoObj))
             {
@@ -1552,6 +1552,7 @@ public partial class Interpreter
     /// </summary>
     internal static bool IsNonConstructorWrapper(object? callable) => callable
         is ISharpTSNonConstructorCallable
+        or SharpTSFunction { IsPrivateMethod: true }
         or SharpTSArrowFunction { HasOwnThis: false }
         or SharpTSAsyncFunction
         or SharpTSAsyncArrowFunction
@@ -3102,6 +3103,24 @@ public partial class Interpreter
 
     private RuntimeValue GetPrivateCore(object? obj, string fieldName)
     {
+        var owner = _environment.PrivateClass;
+        if (owner?.HasStaticPrivateField(fieldName) == true)
+        {
+            if (!ReferenceEquals(obj, owner)) throw new ThrowException(new SharpTSTypeError($"Cannot access private member {fieldName} from an object whose class did not declare it"));
+            return owner.GetStaticPrivateFieldRV(fieldName);
+        }
+        if (owner?.GetPrivateMethod(fieldName) is { } privateMethod)
+        {
+            if (obj == null || !owner.HasPrivateBrand(obj))
+                throw new ThrowException(new SharpTSTypeError($"Cannot access private member {fieldName} from an object whose class did not declare it"));
+            return RuntimeValue.FromBoxed(privateMethod);
+        }
+        if (owner?.GetStaticPrivateMethod(fieldName) is { } staticMethod)
+        {
+            if (!ReferenceEquals(obj, owner))
+                throw new ThrowException(new SharpTSTypeError($"Cannot access private member {fieldName} from an object whose class did not declare it"));
+            return RuntimeValue.FromBoxed(staticMethod);
+        }
         // Handle static private field access on class
         if (obj is SharpTSClass klass)
         {
@@ -3122,7 +3141,7 @@ public partial class Interpreter
             return declaringClass.GetPrivateFieldRV(instance, fieldName);
         }
 
-        throw new InterpreterException($"Cannot read private field '{fieldName}' from non-class value.");
+        throw new ThrowException(new SharpTSTypeError($"Cannot read private field '{fieldName}' from non-class value."));
     }
 
     /// <summary>
@@ -3145,6 +3164,12 @@ public partial class Interpreter
 
     private RuntimeValue SetPrivateCore(object? obj, RuntimeValue value, string fieldName)
     {
+        if (_environment.PrivateClass is { } owner && owner.HasStaticPrivateField(fieldName))
+        {
+            if (!ReferenceEquals(obj, owner)) throw new ThrowException(new SharpTSTypeError($"Cannot access private member {fieldName} from an object whose class did not declare it"));
+            owner.SetStaticPrivateField(fieldName, value.ToObject());
+            return value;
+        }
         // Handle static private field assignment on class
         if (obj is SharpTSClass klass)
         {
@@ -3215,7 +3240,7 @@ public partial class Interpreter
                 throw new InterpreterException($"Static private method '{methodName}' does not exist on class '{klass.Name}'.");
             }
 
-            return RuntimeValue.FromBoxed(method.CallBoxed(this, arguments));
+            return RuntimeValue.FromBoxed(SharpTSClass.BindStaticMethod(method, klass).CallBoxed(this, arguments));
         }
 
         // Instance private method call

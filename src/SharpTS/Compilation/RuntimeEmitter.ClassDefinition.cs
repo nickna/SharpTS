@@ -26,6 +26,7 @@ public partial class RuntimeEmitter
         var keys = type.DefineField("Keys", _types.ObjectArray, FieldAttributes.Assembly);
         var parent = type.DefineField("Parent", _types.Object, FieldAttributes.Assembly);
         var captures = type.DefineField("Captures", _types.ObjectArray, FieldAttributes.Assembly);
+        var privateMembers = type.DefineField("PrivateMembers", _types.DictionaryStringObject, FieldAttributes.Assembly);
         var create = type.DefineMethod("Create", MethodAttributes.Public | MethodAttributes.Static,
             type, [_types.Type, factoryType, _types.String, _types.Double, _types.Object, _types.ObjectArray, _types.ObjectArray]);
         var construct = type.DefineMethod("Construct", MethodAttributes.Public | MethodAttributes.Static,
@@ -57,7 +58,7 @@ public partial class RuntimeEmitter
         EmitClassCaptureBodies(captureType, captureOwner, captureField, captures, readCapture, writeCapture, findEnvironment);
         captureType.CreateType();
         definitions.Declare(new(type, instanceInterface, instanceInterface.GetMethod(getter.Name)!,
-            constructor, template, factory, prototype, keys, parent, captures, create, construct, read, invoke,
+            constructor, template, factory, prototype, keys, parent, captures, privateMembers, create, construct, read, invoke,
             captureType, captureConstructor, captureOwner, captureField, readCapture, writeCapture, findEnvironment));
     }
 
@@ -86,6 +87,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, definition);
         il.Emit(OpCodes.Ldarg_S, (byte)6);
         il.Emit(OpCodes.Stfld, definitions.Captures);
+        il.Emit(OpCodes.Ldloc, definition);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        il.Emit(OpCodes.Stfld, definitions.PrivateMembers);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
         il.Emit(OpCodes.Stloc, prototype);

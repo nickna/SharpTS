@@ -173,6 +173,7 @@ public partial class ILCompiler
 
     private void ApplyClassDefinitionStateMachineContext(CompilationContext ctx, MethodBuilder method, bool isInstance)
     {
+        ApplyPrivateMethodValueContext(ctx, method);
         if (_classExprs.DefinitionMethods.TryGetValue(method, out var owner))
         {
             ctx.CurrentClassExpr = owner.Expression;
@@ -306,6 +307,7 @@ public partial class ILCompiler
             // ES2022 Private Class Elements support - inherit from parent context
             CurrentClassName = parentCtx.CurrentClassName,
             CurrentClassBuilder = parentCtx.CurrentClassBuilder,
+            HasGuestReceiver = parentCtx.HasGuestReceiver,
             // Registry services
             ClassRegistry = parentCtx.ClassRegistry,
             // Entry-point display class for captured top-level variables

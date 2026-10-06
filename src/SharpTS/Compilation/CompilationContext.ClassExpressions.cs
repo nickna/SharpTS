@@ -37,6 +37,7 @@ public partial class CompilationContext
     internal string? ClassDefinitionVariableName { get; set; }
     internal FieldBuilder? ClassDefinitionOwnerField { get; set; }
     internal string? GuestThisVariableName { get; set; }
+    internal bool HasGuestReceiver { get; set; }
 
     // Variable name to class expression mapping (for static member access)
     public Dictionary<string, Expr.ClassExpr>? VarToClassExpr { get; set; }

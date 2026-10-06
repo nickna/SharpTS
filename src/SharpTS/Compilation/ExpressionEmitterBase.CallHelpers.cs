@@ -30,6 +30,7 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitCall(Expr.Call c)
     {
+        if (TryEmitGuestThisCall(c)) return;
         if (TryEmitNumericRestCompanionCall(c)) return;
         if (TryEmitStaticIndirectEvalGlobal(c))
             return;
