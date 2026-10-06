@@ -136,6 +136,11 @@ public partial class RuntimeEmitter
         // null check on obj
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
+        // Internal protocol probes also pass the emitted undefined sentinel.
+        // It has no symbol properties or prototype to traverse.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, nullLabel);
 
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         var notProxyLabel = il.DefineLabel();
