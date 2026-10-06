@@ -541,6 +541,9 @@ public partial class ILCompiler
                         _currentEnclosingFunctionName = GetDefinitionContext().GetQualifiedFunctionName(f.Name.Lexeme);
                         _currentEnclosingFunctionStmt = f;
                     }
+                    // Generator methods own invocation storage even inside a class factory.
+                    if (isClassMember && f.IsGenerator)
+                        _currentEnclosingFunctionStmt = f;
                     _currentEnclosingCallable = f;
                     _currentCollectStrict = previousStrict
                         || _currentCollectClassName != null
