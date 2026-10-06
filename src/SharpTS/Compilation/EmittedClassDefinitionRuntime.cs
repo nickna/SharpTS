@@ -57,7 +57,10 @@ public sealed class EmittedClassDefinitionRuntime
                 declarations.GetParent, declarations.ReadArgument, declarations.ReadPrototypeProperty, declarations.ReadSuper }
             .Any(member => member.DeclaringType != declarations.Type)
             || declarations.GetDefinition.DeclaringType != declarations.InstanceInterface
-            || declarations.InstanceInterface.Module != declarations.Type.Module
+            // A completed interface exposes RuntimeModule, while its in-memory
+            // owner still exposes RuntimeModuleBuilder. Their MVID is the same
+            // module identity even though the reflection wrappers differ.
+            || declarations.InstanceInterface.Module.ModuleVersionId != declarations.Type.Module.ModuleVersionId
             || declarations.CaptureType.Module != declarations.Type.Module
             || new MemberInfo[] { declarations.CaptureConstructor, declarations.CaptureOwner, declarations.CaptureField }
                 .Any(member => member.DeclaringType != declarations.CaptureType))
