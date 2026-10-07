@@ -94,11 +94,13 @@ export class LspStdioClient {
 
   notify(method, params) { this.#send({ method, params }); }
 
-  request(method, params) {
-    if (this.#closing) return Promise.reject(new Error("LSP client is closing"));
-    if (this.#failure) return Promise.reject(this.#failure);
+  request(method, params) { return this.beginRequest(method, params).response; }
+
+  /** Cancellation sends the LSP notification; it never invents a local server response. */
+  beginRequest(method, params) {
     const id = this.#nextId++;
-    return new Promise((resolve, reject) => {
+    const response = this.#closing ? Promise.reject(new Error("LSP client is closing"))
+      : this.#failure ? Promise.reject(this.#failure) : new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
         reject(new Error(`LSP ${method} timed out: ${this.#stderr}`));
@@ -112,6 +114,14 @@ export class LspStdioClient {
         reject(error);
       }
     });
+    return {
+      id, response,
+      cancel: () => {
+        if (!this.#pending.has(id)) return false;
+        this.notify("$/cancelRequest", { id });
+        return true;
+      },
+    };
   }
 
   async close() {

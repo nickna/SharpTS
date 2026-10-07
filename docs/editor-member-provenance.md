@@ -44,8 +44,11 @@ member reference behind. Trusted declaration files retain their authoritative co
 definition and known-reference queries require that resolved identity. Project
 graph completeness is a separate analysis fact.
 
-These frozen definition/reference helpers expose analysis data for later editor
-consumers. Member capture itself does not add LSP definition/reference results.
+Full-mode go-to-definition consumes these proven origins after lexical binding selection.
+It returns each canonical group's exact source declaration-name locations, deduplicated and
+ordered by path and span. Targets use their own captured source document, including dirty
+dependencies. Unrelated graph incompleteness does not erase a proven target; stale results
+are discarded. Reference discovery is a separate consumer of the same frozen identities.
 
 Every new member identity currently denies rename. A parameter-property's
 constructor-local lexical binding also denies rename because editing that facet
@@ -55,8 +58,9 @@ specific local domain; this index does not grant that permission.
 
 `MemberIndexTests`, `SourceMemberDeclarationTests`, `SourceMemberOccurrenceTests`
 and `MemberAnalysisTests` verify identities, operation evidence, source ownership,
-refusals and snapshot lifetime. `RenameServiceTests` independently protects the
-parameter-property gate.
+refusals and snapshot lifetime. The member definition service, snapshot and handler tests
+verify final locations, lexical precedence, capture reuse and cancellation/currentness.
+`RenameServiceTests` independently protects the parameter-property gate.
 
 The optional [member provenance benchmark](../benchmarks/member-provenance/README.md)
 compares ordinary and enabled checking against the preceding commit, including

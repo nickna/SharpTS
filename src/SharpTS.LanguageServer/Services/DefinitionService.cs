@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using SharpTS.Parsing;
 
 namespace SharpTS.LanguageServer.Services;
 
@@ -14,7 +15,7 @@ internal sealed record NavigationDefinitionResult(
     }
 }
 
-/// <summary>Resolves source positions to checker-bound declarations across a module graph.</summary>
+/// <summary>Resolves lexical bindings and proven source members to their declarations.</summary>
 public sealed class DefinitionService : IDisposable
 {
     private readonly SemanticAnalysisService _analysis;
@@ -59,19 +60,43 @@ public sealed class DefinitionService : IDisposable
         if (lease is null) return new NavigationDefinitionResult([]);
         CheckedNavigationModel model = lease.Model;
         int offset = model.Document.Lines.ToOffset((int)position.Line + 1, (int)position.Character + 1);
-        var locations = new List<Location>();
-        var seen = new HashSet<(string Path, int Start)>();
-        foreach (var symbol in model.Bindings.FindSymbols(model.Document, offset))
+        var targets = new List<(string Path, SourceDocument Document, Token Name)>();
+        var seen = new Dictionary<string, HashSet<SourceSpan>>(StringComparer.OrdinalIgnoreCase);
+        var symbols = model.Bindings.FindSymbols(model.Document, offset);
+        if (symbols.Count != 0)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            foreach (var declaration in symbol.Declarations)
+            // A lexical binding remains authoritative even if it has no navigable declaration.
+            // In particular, import/namespace bindings must not fall through to a same-spelled member.
+            foreach (var symbol in symbols)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (seen.Add((declaration.Document.Path, declaration.Name.Start)))
-                    locations.Add(NavigationLocations.From(declaration.Document, declaration.Name));
+                foreach (var declaration in symbol.Declarations)
+                    AddTarget(declaration.Document, declaration.Name);
             }
         }
+        else
+        {
+            foreach (var declaration in model.Members.FindDefinitions(model.Document, offset))
+                AddTarget(declaration.Document, declaration.Name);
+        }
+
+        var locations = new List<Location>(targets.Count);
+        foreach (var target in targets.OrderBy(target => target.Path, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(target => target.Path, StringComparer.Ordinal)
+            .ThenBy(target => target.Name.Start).ThenBy(target => target.Name.End))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            locations.Add(NavigationLocations.From(target.Document, target.Name));
+        }
         return new NavigationDefinitionResult(locations.ToArray(), lease.Validation);
+
+        void AddTarget(SourceDocument document, Token name)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string path = Path.IsPathFullyQualified(document.Path) ? Path.GetFullPath(document.Path) : document.Path;
+            if (!seen.TryGetValue(path, out var spans)) seen.Add(path, spans = []);
+            if (spans.Add(name.Span)) targets.Add((path, document, name));
+        }
     }
 
     public void Dispose()

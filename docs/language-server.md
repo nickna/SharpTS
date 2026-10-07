@@ -127,6 +127,21 @@ Interop hover, completion, and diagnostics honor these custom references. Genera
 reference's ordinary TypeScript symbols. The server does not guess navigation or rename results
 for unresolved symbols.
 
+## Source definitions
+
+Full mode resolves lexical names and supported source class members using the checked
+receiver's declaration identity. Inherited members target their base declaration; overrides
+target their own declaration. Getter/setter pairs and overload groups return their exact
+declaration-name locations. Source class expressions, user `.d.ts` classes, parameter-properties,
+auto-accessors and ECMAScript `#private` members participate where the checker proves the origin.
+
+Definition preserves lexical/type/namespace/label navigation and GUI navigation precedence.
+A known member target can be returned even when an unrelated project root is unavailable.
+Ambiguous unions, unproved receiver paths, structural members, dynamic keys and locationless
+CLR/builtin members supply no new class-member target. The
+[member provenance contract](editor-member-provenance.md) lists the exact supported operations
+and current checker limits. Definition support alone does not grant member rename permission.
+
 ## Shared analysis
 
 Definition, references, lexical rename, and full diagnostics share completed analyses for the
@@ -158,8 +173,9 @@ For a local protocol smoke test after a Release build, run:
 node scripts/test-analysis-snapshots.mjs
 ```
 
-The test exercises real stdio navigation, watched closed-file changes, dirty overlays, reverse
-importer creation, rename, and interop-only capability isolation.
+The test exercises real stdio navigation, source class member targets, watched closed-file
+changes, dirty overlays, reverse importer creation, rename, cancellation transport and
+interop-only capability isolation.
 
 The [editor analysis benchmark](../benchmarks/editor-analysis/README.md) records a comparison with
 `df4589b7` on Windows Arm64/.NET 10.0.12 (2026-10-07 UTC). The sequence contains definition,

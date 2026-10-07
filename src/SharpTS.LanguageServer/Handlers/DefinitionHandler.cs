@@ -8,7 +8,7 @@ using SharpTS.LanguageServer.Project;
 namespace SharpTS.LanguageServer.Handlers;
 
 /// <summary>
-/// Serves <c>textDocument/definition</c> for checker-resolved value and type bindings.
+/// Serves <c>textDocument/definition</c> for checker-resolved lexical bindings and source members.
 /// </summary>
 /// <remarks>
 /// Registered only in <see cref="LanguageFeatureMode.Full"/> so the VS Code extension continues

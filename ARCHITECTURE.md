@@ -161,6 +161,12 @@ independently of graph completeness, until lexical and property edits can be coo
 The [member provenance contract](docs/editor-member-provenance.md) records supported operations
 and checker paths that currently cannot establish a source origin.
 
+Full-mode `DefinitionService` selects lexical bindings first and only falls back to complete,
+unambiguous frozen member origins when no lexical facet is selected. It projects canonical
+declaration names through each target document's own line index, deduplicates full path/span
+locations and orders results deterministically. Known definitions do not require an exhaustive
+workspace graph. The existing request guard and analysis validation still refuse stale results.
+
 `WithEditorMetadata` additionally captures actual declaration/occurrence types, source-linked
 checker scopes, receiver member projections and invocation candidates/selections. Publication
 in `FrozenEditorSemanticIndex` replaces raw types with bounded TypeScript presentations and
