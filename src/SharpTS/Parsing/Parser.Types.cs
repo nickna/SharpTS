@@ -67,6 +67,36 @@ public partial class Parser
 
     private string ParseTypeAnnotation()
     {
+        if (!EditorSyntaxEnabled) return ParseTypeAnnotationCore();
+        int start = CurrentSourceStart();
+        string annotation = ParseTypeAnnotationCore();
+        RecordWrittenType(_lastTypeNode, start, EditorSyntaxRole.Annotation);
+        return annotation;
+    }
+
+    private void RecordWrittenType(TypeNode? node, int start, EditorSyntaxRole role = EditorSyntaxRole.Whole)
+    {
+        if (!EditorSyntaxEnabled || node is null || start < 0) return;
+        if (node is NamedTypeNode named)
+        {
+            if (named.NameTokens is { } qualifiedNames)
+                foreach (var name in qualifiedNames) RecordEditorName(name, node);
+            else if (named.NameToken is { } name) RecordEditorName(name, node);
+        }
+        else if (node is InferTypeNode { NameToken: { } inferredName })
+            RecordEditorName(inferredName, node, EditorSyntaxRole.DeclarationName);
+        // Transparent productions reuse their child's semantic node. Its tight written range
+        // remains authoritative; annotations and parenthesized spellings are separate views.
+        if (role != EditorSyntaxRole.Whole || !_spans.TryGetSpan(node, out _))
+        {
+            var span = new SourceSpan(start, ConsumedSourceEnd);
+            _spans.Record(node, span);
+            RecordEditorRange(node, span, EditorSyntaxKind.Type, role);
+        }
+    }
+
+    private string ParseTypeAnnotationCore()
+    {
         _lastTypeNode = null;
         // Handle type predicate return types: "asserts x is T", "asserts x", "x is T"
         // These only appear as function return types but are parsed as type annotations
@@ -123,6 +153,7 @@ public partial class Parser
     /// </summary>
     private string ParseFunctionTypeBody()
     {
+        int parameterListStart = Previous().Start;
         int startLine = Previous().Line; // the '(' the caller consumed
         string? thisType = null;
         TypeNode? thisTypeNode = null;
@@ -149,6 +180,8 @@ public partial class Parser
         {
             while (true)
             {
+                int parameterStart = CurrentSourceStart();
+                Token? parameterName = null;
                 // Handle rest parameter: ...args: number[]
                 bool isRest = Match(TokenType.DOT_DOT_DOT);
 
@@ -172,7 +205,8 @@ public partial class Parser
                 else if ((Check(TokenType.IDENTIFIER) || IsContextualKeyword(Peek().Type)) &&
                     (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
                 {
-                    paramName = Advance().Lexeme; // name may be a contextual keyword, e.g. `set: Set<T>`
+                    parameterName = Advance(); // name may be a contextual keyword, e.g. `set: Set<T>`
+                    paramName = parameterName.Lexeme;
                     if (Match(TokenType.QUESTION))
                     {
                         isOptional = true;
@@ -194,7 +228,8 @@ public partial class Parser
                          (PeekNext().Type == TokenType.RIGHT_PAREN || PeekNext().Type == TokenType.COMMA))
                 {
                     // Bare parameter name with no annotation: implicit `any`.
-                    paramName = Advance().Lexeme;
+                    parameterName = Advance();
+                    paramName = parameterName.Lexeme;
                     paramType = "any";
                     paramTypeNode = new NamedTypeNode("any", null, Previous().Line);
                 }
@@ -207,7 +242,12 @@ public partial class Parser
                 if (paramTypeNode is null)
                     nodeComplete = false;
                 else
-                    paramNodes.Add(new ParameterTypeNode(paramName, paramTypeNode, isOptional, isRest, paramTypeNode.Line));
+                {
+                    var parameter = new ParameterTypeNode(paramName, paramTypeNode, isOptional, isRest, paramTypeNode.Line);
+                    paramNodes.Add(parameter);
+                    RecordEditorRange(parameter, new SourceSpan(parameterStart, ConsumedSourceEnd), EditorSyntaxKind.Name, EditorSyntaxRole.Parameter);
+                    if (parameterName is not null) RecordEditorName(parameterName, parameter, EditorSyntaxRole.DeclarationName);
+                }
 
                 // Preserve optional/rest info in the type string representation
                 if (isRest)
@@ -223,6 +263,7 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_PAREN, "Expect ')' after function type parameters.");
+        int parameterListEnd = ConsumedSourceEnd;
         Consume(TokenType.ARROW, "Expect '=>' after function type parameters.");
         string returnType = ParseTypeAnnotation();
         TypeNode? returnTypeNode = TakeTypeNode();
@@ -231,6 +272,7 @@ public partial class Parser
         _lastTypeNode = nodeComplete && returnTypeNode is not null
             ? new FunctionTypeNode(thisTypeNode, paramNodes, returnTypeNode, startLine)
             : null;
+        RecordEditorRange(_lastTypeNode, new SourceSpan(parameterListStart, parameterListEnd), EditorSyntaxKind.ParameterList);
 
         // Build the function type string
         if (thisType != null)
@@ -277,7 +319,7 @@ public partial class Parser
     /// </summary>
     private bool ParenGroupFollowedByArrow()
     {
-        int saved = _current;
+        var saved = SaveCursor();
         int depth = 1; // the opening '(' has already been consumed
         while (!IsAtEnd() && depth > 0)
         {
@@ -286,7 +328,7 @@ public partial class Parser
             else if (type == TokenType.RIGHT_PAREN) depth--;
         }
         bool followedByArrow = depth == 0 && Check(TokenType.ARROW);
-        _current = saved;
+        RestoreCursor(saved);
         return followedByArrow;
     }
 
@@ -296,6 +338,7 @@ public partial class Parser
     /// </summary>
     private string ParseConditionalType()
     {
+        int start = EditorSyntaxEnabled ? CurrentSourceStart() : -1;
         // Entering a full-type position re-allows conditional types (tsc: parseType resets the
         // DisallowConditionalTypes context). Restored before every return so an enclosing extends
         // clause keeps its disallow state after a bracketed sub-parse.
@@ -303,7 +346,9 @@ public partial class Parser
         _disallowConditionalTypes = false;
         try
         {
-            return ParseConditionalTypeCore();
+            string type = ParseConditionalTypeCore();
+            RecordWrittenType(_lastTypeNode, start);
+            return type;
         }
         finally
         {
@@ -325,7 +370,7 @@ public partial class Parser
 
         // This might be a constraint in generics - we need to look ahead
         // for the ternary operator to confirm this is a conditional type
-        int saved = _current;
+        var saved = SaveCursor();
         Advance(); // consume 'extends'
 
         int conditionalLine = Previous().Line;
@@ -342,7 +387,7 @@ public partial class Parser
         if (!Check(TokenType.QUESTION))
         {
             // Not a conditional type - backtrack
-            _current = saved;
+            RestoreCursor(saved);
             _lastTypeNode = checkNode;
             return checkType;
         }
@@ -367,6 +412,15 @@ public partial class Parser
     }
 
     private string ParseUnionType()
+    {
+        if (!EditorSyntaxEnabled) return ParseUnionTypeCore();
+        int start = CurrentSourceStart();
+        string type = ParseUnionTypeCore();
+        RecordWrittenType(_lastTypeNode, start);
+        return type;
+    }
+
+    private string ParseUnionTypeCore()
     {
         // Tolerate a leading '|' before the first member (common when each member
         // is written on its own line):  type T = | A | B;
@@ -403,6 +457,15 @@ public partial class Parser
     /// </summary>
     private string ParseIntersectionType()
     {
+        if (!EditorSyntaxEnabled) return ParseIntersectionTypeCore();
+        int start = CurrentSourceStart();
+        string type = ParseIntersectionTypeCore();
+        RecordWrittenType(_lastTypeNode, start);
+        return type;
+    }
+
+    private string ParseIntersectionTypeCore()
+    {
         // Tolerate a leading '&' before the first member (common when each member
         // is written on its own line):  type T = & A & B;
         Match(TokenType.AMPERSAND);
@@ -434,6 +497,15 @@ public partial class Parser
 
     private string ParsePrimaryType()
     {
+        if (!EditorSyntaxEnabled) return ParsePrimaryTypeCore();
+        int start = CurrentSourceStart();
+        string type = ParsePrimaryTypeCore();
+        RecordWrittenType(_lastTypeNode, start);
+        return type;
+    }
+
+    private string ParsePrimaryTypeCore()
+    {
         string typeName;
         // Node under construction for this primary type (type-AST migration). Branches with node
         // support assign it; the common tail publishes it. EARLY returns clear the side channel
@@ -459,7 +531,7 @@ public partial class Parser
             Token paramName = Consume(TokenType.IDENTIFIER, "Expect type parameter name after 'infer'.");
             if (Check(TokenType.EXTENDS))
             {
-                int savedPos = _current;
+                var savedPos = SaveCursor();
                 bool outerDisallow = _disallowConditionalTypes;
                 Advance(); // consume 'extends'
                 // The constraint itself never contains a top-level conditional (tsc parses it in a
@@ -473,7 +545,7 @@ public partial class Parser
                     // `infer U extends T ?` where conditional types are allowed: the `extends`
                     // starts a conditional type whose check type is the bare `infer U`, not a
                     // constraint (tsc's speculative lookahead). Backtrack to before 'extends'.
-                    _current = savedPos;
+                    RestoreCursor(savedPos);
                 }
                 else
                 {
@@ -682,6 +754,7 @@ public partial class Parser
         // Handle parenthesized types: (string | number) or function types: (x: number) => number
         else if (Match(TokenType.LEFT_PAREN))
         {
+            int groupingStart = Previous().Start;
             // Check if this is a function type by looking for:
             // 1. Empty params: () =>
             // 2. Named params: (identifier :
@@ -689,13 +762,13 @@ public partial class Parser
             if (Check(TokenType.RIGHT_PAREN))
             {
                 // () - check if followed by =>
-                int saved = _current;
+                var saved = SaveCursor();
                 Advance(); // consume )
                 if (Check(TokenType.ARROW))
                 {
                     isFunctionType = true;
                 }
-                _current = saved; // backtrack
+                RestoreCursor(saved); // backtrack
             }
             else if ((Check(TokenType.IDENTIFIER) || Check(TokenType.THIS)
                       || IsContextualKeyword(Peek().Type)) &&
@@ -730,6 +803,8 @@ public partial class Parser
                 typeName = "(" + ParseConditionalType() + ")";
                 typeNode = TakeTypeNode(); // parens are semantically transparent
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after grouped type.");
+                RecordEditorRange(typeNode, new SourceSpan(groupingStart, ConsumedSourceEnd),
+                    EditorSyntaxKind.Grouping, origin: EditorSyntaxOrigin.Grouping);
             }
         }
         // Handle template literal types: `literal` or `prefix${Type}suffix`
@@ -824,7 +899,7 @@ public partial class Parser
         // where the lexer produces >> as a single token that we need to split.
         if (Check(TokenType.LESS))
         {
-            int saved = _current;
+            var saved = SaveCursor();
             Advance(); // consume <
             // Multiline declaration files often format a generic union/intersection
             // with its operator first: `Autocomplete< | "a" | "b" >`.
@@ -851,11 +926,11 @@ public partial class Parser
                         : null;
                 }
                 else
-                    _current = saved; // Backtrack if not a valid generic type
+                    RestoreCursor(saved); // Backtrack if not a valid generic type
             }
             else
             {
-                _current = saved; // Backtrack if not a type
+                RestoreCursor(saved); // Backtrack if not a type
             }
         }
 
@@ -863,7 +938,7 @@ public partial class Parser
         while (Check(TokenType.LEFT_BRACKET)
                && !(_ambientClassDepth > 0 && Previous().Line < Peek().Line))
         {
-            int saved = _current;
+            var saved = SaveCursor();
             Advance(); // consume [
 
             if (Check(TokenType.RIGHT_BRACKET))
@@ -1174,9 +1249,13 @@ public partial class Parser
                 }
 
                 if (TakeTypeNode() is { } propertyNode)
-                    memberNodes.Add(new PropertyMemberNode(
+                {
+                    var memberNode = new PropertyMemberNode(
                         propertyName.Lexeme, propertyNode, isOptional, isMethodMember,
-                        propertyName.Line, hasExplicitType));
+                        propertyName.Line, hasExplicitType);
+                    memberNodes.Add(memberNode);
+                    RecordWrittenMember(memberNode, propertyName);
+                }
                 else
                     nodeComplete = false;
 
@@ -1204,7 +1283,7 @@ public partial class Parser
     /// </summary>
     private bool IsMappedTypeStart()
     {
-        int saved = _current;
+        var saved = SaveCursor();
         try
         {
             // Skip optional modifiers: +readonly, -readonly, readonly
@@ -1213,7 +1292,7 @@ public partial class Parser
                 Advance();
                 if (!Check(TokenType.READONLY))
                 {
-                    _current = saved;
+                    RestoreCursor(saved);
                     return false;
                 }
                 Advance();
@@ -1226,7 +1305,7 @@ public partial class Parser
             // Must have [ next
             if (!Check(TokenType.LEFT_BRACKET))
             {
-                _current = saved;
+                RestoreCursor(saved);
                 return false;
             }
             Advance(); // consume [
@@ -1234,14 +1313,14 @@ public partial class Parser
             // Must have identifier
             if (!Check(TokenType.IDENTIFIER))
             {
-                _current = saved;
+                RestoreCursor(saved);
                 return false;
             }
             Advance();
 
             // Must have 'in' keyword (distinguishes from index signature which has ':')
             bool isMapped = Check(TokenType.IN);
-            _current = saved;
+            RestoreCursor(saved);
             return isMapped;
         }
         catch (OperationCanceledException)
@@ -1250,7 +1329,7 @@ public partial class Parser
         }
         catch
         {
-            _current = saved;
+            RestoreCursor(saved);
             return false;
         }
     }
@@ -1441,7 +1520,9 @@ public partial class Parser
                 throw new Exception($"Parse Error: Required type parameter '{name.Lexeme}' cannot follow optional type parameter with default.");
             }
 
-            typeParams.Add(new TypeParam(name, constraint, defaultType, isConst, variance, constraintNode, defaultNode));
+            var parameter = new TypeParam(name, constraint, defaultType, isConst, variance, constraintNode, defaultNode);
+            typeParams.Add(parameter);
+            RecordEditorName(name, parameter, EditorSyntaxRole.DeclarationName);
             if (!Match(TokenType.COMMA) || Check(TokenType.GREATER))
                 break;
         }
@@ -1481,12 +1562,12 @@ public partial class Parser
     {
         argNodes = null;
         if (!Check(TokenType.LESS)) return null;
-        int saved = _current;
+        var saved = SaveCursor();
 
         try
         {
             Advance(); // consume <
-            if (!IsTypeStart()) { _current = saved; return null; }
+            if (!IsTypeStart()) { RestoreCursor(saved); return null; }
 
             List<string> args = [ParseTypeAnnotation()];
             List<TypeNode?> nodes = [TakeTypeNode()];
@@ -1496,7 +1577,7 @@ public partial class Parser
                 nodes.Add(TakeTypeNode());
             }
 
-            if (!CheckGreaterInTypeContext()) { _current = saved; return null; }
+            if (!CheckGreaterInTypeContext()) { RestoreCursor(saved); return null; }
             MatchGreaterInTypeContext(); // consume >
             argNodes = nodes;
             return args;
@@ -1507,7 +1588,7 @@ public partial class Parser
         }
         catch
         {
-            _current = saved;
+            RestoreCursor(saved);
             return null;
         }
     }
@@ -1522,12 +1603,12 @@ public partial class Parser
     {
         argNodes = null;
         if (!Check(TokenType.LESS)) return null;
-        int saved = _current;
+        var saved = SaveCursor();
 
         try
         {
             Advance(); // consume <
-            if (!IsTypeStart()) { _current = saved; return null; }
+            if (!IsTypeStart()) { RestoreCursor(saved); return null; }
 
             List<string> args = [ParseTypeAnnotation()];
             List<TypeNode?> nodes = [TakeTypeNode()];
@@ -1537,11 +1618,11 @@ public partial class Parser
                 nodes.Add(TakeTypeNode());
             }
 
-            if (!CheckGreaterInTypeContext()) { _current = saved; return null; }
+            if (!CheckGreaterInTypeContext()) { RestoreCursor(saved); return null; }
             MatchGreaterInTypeContext(); // consume >
 
             // Must be followed by '(' for a call
-            if (!Check(TokenType.LEFT_PAREN)) { _current = saved; return null; }
+            if (!Check(TokenType.LEFT_PAREN)) { RestoreCursor(saved); return null; }
             Advance(); // consume (
 
             argNodes = nodes;
@@ -1553,7 +1634,7 @@ public partial class Parser
         }
         catch
         {
-            _current = saved;
+            RestoreCursor(saved);
             return null;
         }
     }

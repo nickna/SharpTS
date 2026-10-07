@@ -168,6 +168,7 @@ internal static class NavigationModelBuilder
             {
                 JsxOptions = workspace.JsxOptions,
                 RecoverParseErrors = true,
+                CaptureEditorSyntax = true,
             }.WithCancellation(cancellationToken);
 
             bool allRootsLoaded = true;

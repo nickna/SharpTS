@@ -206,6 +206,12 @@ public class ModuleResolver
     /// </summary>
     public bool RecoverParseErrors { get; set; }
 
+    /// <summary>
+    /// Captures written expression/type ranges and editor contexts for source-backed modules.
+    /// Ordinary compiler parses keep this optional bookkeeping disabled.
+    /// </summary>
+    public bool CaptureEditorSyntax { get; set; }
+
     private static bool IsJsxSourcePath(string path) =>
         path.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase);
@@ -925,6 +931,7 @@ public class ModuleResolver
                 .AsDeclarationFile(IsDeclarationFilePath(absolutePath))
                 .WithFilePath(absolutePath)
                 .WithMaxErrors(RecoverParseErrors ? 1000 : 10);
+            if (CaptureEditorSyntax) parser.WithEditorSyntax();
             if (isJsxSource)
                 parser.WithJsx(source, (JsxOptions ?? JsxParseOptions.Default).ApplyPragmas(lexer.Pragmas));
             var parseResult = parser.Parse();
@@ -1291,6 +1298,7 @@ public class ModuleResolver
             var parser = new Parser(tokens, decoratorMode)
                 .WithCancellation(EffectiveCancellationToken)
                 .WithSourceDocument(document);
+            if (CaptureEditorSyntax) parser.WithEditorSyntax();
             var parseResult = parser.Parse();
             if (!parseResult.IsSuccess)
                 throw new Exception(parseResult.Diagnostics.First().ToString());

@@ -14,7 +14,7 @@ internal sealed record AnalysisStatistics(long Builds, long Checks, long CacheHi
 /// only workspace invalidation or disposal cancels shared work. Every reuse verifies the exact
 /// observed filesystem inputs, including missing resolution candidates and directory inventories.
 /// </summary>
-public sealed class SemanticAnalysisService : IDisposable
+public sealed partial class SemanticAnalysisService : IDisposable
 {
     private readonly object _gate = new();
     private readonly NavigationWorkspaceContext _workspace;
@@ -237,6 +237,7 @@ public sealed class SemanticAnalysisService : IDisposable
                     foreach (RequestKey key in keys) _cache.Add(key, entry);
                     _bytes += data.EstimatedBytes;
                     while (_lru.Count > _maxSnapshots || _bytes > _maxRetainedBytes) Remove(_lru.First!.Value);
+                    TrimEditorSyntax();
                 }
             }
             return data;
@@ -291,6 +292,7 @@ public sealed class SemanticAnalysisService : IDisposable
         {
             if (_disposed) return;
             _generation++;
+            ClearEditorSyntax();
             foreach (BuildState state in _inflight.Values) state.Cancellation.Cancel();
             while (_lru.First is { } node) Remove(node.Value);
         }
@@ -405,7 +407,8 @@ internal sealed class AnalysisData
         Model = model; Workspace = workspace; Inputs = inputs; Validation = validation; _metadata = metadata;
         var snapshots = (workspace?.Models ?? [model]).Select(item => item.Snapshot).Distinct().ToArray();
         EstimatedBytes = inputs.EstimatedBytes + snapshots.Sum(snapshot =>
-            snapshot.Documents.Sum(document => (long)document.Document.Text.Length * 2 + document.Tokens.Count * 96L) +
+            snapshot.Documents.Sum(document => (long)document.Document.Text.Length * 2 + document.Tokens.Count * 96L +
+                (document.Syntax?.EstimatedBytes ?? 0)) +
             snapshot.TypeCount * 128L);
     }
     public CheckedNavigationModel Model { get; }

@@ -48,6 +48,7 @@ internal sealed class AnalysisDocument
     public SourceDocument Document { get; }
     public IReadOnlyList<Token> Tokens { get; }
     public IReadOnlyList<Stmt> Statements { get; }
+    public EditorSyntaxIndex? Syntax => Document.EditorSyntax;
     public IReadOnlyList<SharpDiagnostic> ParseDiagnostics { get; }
     public bool HitParseErrorLimit { get; }
     public bool HasRecoveredSyntax { get; }

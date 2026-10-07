@@ -124,6 +124,17 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     /// <returns>A ParseDiagnosticResult containing parsed statements and any errors encountered.</returns>
     public ParseDiagnosticResult Parse()
     {
+        try { return ParseCore(); }
+        finally
+        {
+            _spans.Copied = null;
+            _editorSyntax = null;
+            _splitTokenEdits = null;
+        }
+    }
+
+    private ParseDiagnosticResult ParseCore()
+    {
         _cancellationToken.ThrowIfCancellationRequested();
         List<Stmt> statements = [];
 
@@ -160,6 +171,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
                 if (_diagnostics.HitErrorLimit)
                 {
                     _cancellationToken.ThrowIfCancellationRequested();
+                    PublishEditorSyntax(statements);
                     return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics, HitErrorLimit: true);
                 }
             }
@@ -209,6 +221,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         }
 
         _cancellationToken.ThrowIfCancellationRequested();
+        PublishEditorSyntax(statements);
         return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics);
     }
 
@@ -224,14 +237,14 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         // Directives must be string literals followed by semicolons at the beginning
         while (Check(TokenType.STRING))
         {
-            int saved = _current;
+            var saved = SaveCursor();
             Token stringToken = Advance();
 
             // Must be followed by semicolon (or end of input for single-statement case)
             if (!Match(TokenType.SEMICOLON))
             {
                 // Not a directive - restore position and stop
-                _current = saved;
+                RestoreCursor(saved);
                 break;
             }
 
@@ -422,7 +435,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         if (IsContextualKeyword(Peek().Type))
         {
             var token = Advance();
-            return new Token(TokenType.IDENTIFIER, token.Lexeme, null, token.Line);
+            return AliasEditorToken(new Token(TokenType.IDENTIFIER, token.Lexeme, null, token.Line), token);
         }
 
         throw new Exception(message);
@@ -441,12 +454,12 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         if (Check(TokenType.STRING))
         {
             var lit = Advance();
-            return new Token(TokenType.IDENTIFIER, (string)lit.Literal!, null, lit.Line);
+            return AliasEditorToken(new Token(TokenType.IDENTIFIER, (string)lit.Literal!, null, lit.Line), lit);
         }
         if (Check(TokenType.NUMBER))
         {
             var lit = Advance();
-            return new Token(TokenType.IDENTIFIER, lit.Literal!.ToString()!, null, lit.Line);
+            return AliasEditorToken(new Token(TokenType.IDENTIFIER, lit.Literal!.ToString()!, null, lit.Line), lit);
         }
         return ConsumePropertyName(message);
     }
@@ -495,7 +508,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         {
             Advance();
             // Convert keyword token to identifier token for AST consistency
-            return new Token(TokenType.IDENTIFIER, current.Lexeme, null, current.Line);
+            return AliasEditorToken(new Token(TokenType.IDENTIFIER, current.Lexeme, null, current.Line), current);
         }
 
         throw new Exception(message);
@@ -603,14 +616,14 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
     private Expr? TryParseAngleBracketAssertion()
     {
-        int saved = _current;
+        var saved = SaveCursor();
         try
         {
             Advance(); // consume <
-            if (!IsTypeStart()) { _current = saved; return null; }
+            if (!IsTypeStart()) { RestoreCursor(saved); return null; }
 
             string typeName = ParseTypeAnnotation();
-            if (!Check(TokenType.GREATER)) { _current = saved; return null; }
+            if (!Check(TokenType.GREATER)) { RestoreCursor(saved); return null; }
             Advance(); // consume >
 
             Expr expression = Unary();
@@ -620,7 +633,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         {
             throw;
         }
-        catch { _current = saved; return null; }
+        catch { RestoreCursor(saved); return null; }
     }
 
     private bool IsTypeStart() =>
@@ -698,11 +711,17 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             // Carrying that offset forward keeps the rest of the token locatable in the source.
             case TokenType.GREATER_GREATER:
                 // Split >> into > (consumed) and > (remaining)
+                RecordSplitToken(current);
+                _partialGreaterIndex = _current;
+                _partialGreaterEnd = Shift(current, 1);
                 _tokens[_current] = new Token(TokenType.GREATER, ">", null, current.Line, Shift(current, 1));
                 return true;
 
             case TokenType.GREATER_GREATER_GREATER:
                 // Split >>> into > (consumed) and >> (remaining)
+                RecordSplitToken(current);
+                _partialGreaterIndex = _current;
+                _partialGreaterEnd = Shift(current, 1);
                 _tokens[_current] = new Token(TokenType.GREATER_GREATER, ">>", null, current.Line, Shift(current, 1));
                 return true;
 

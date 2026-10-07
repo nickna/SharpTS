@@ -133,6 +133,22 @@ Recovered syntax and partial semantics are explicit; recovered configured roots 
 rename completeness false. Workspace expansion can reuse an already checked source component
 without inserting a closed declaration into the open-buffer overlay.
 
+Editor parses opt into a flat, document-owned `EditorSyntaxIndex` over the existing AST references.
+Its immutable ranges distinguish written names/expressions/types, grouping/header/body views,
+source-equivalent replacements, generated syntax, and recovered syntax. Invocation metadata
+captures the actual parentheses and top-level commas during parsing. Lookup uses deterministic
+range/role ordering; TSX lowering retains original source ownership without turning generated
+factory calls into written invocations. Ordinary compiler parsing keeps this index disabled.
+The [syntax coverage table](docs/editor-syntax-coverage.md) defines supported views and limits.
+
+`Parser.ParseForEditor` clones the source capture for bounded cursor-local missing member names
+and unfinished call/new lists. It preserves all original offsets, marks synthetic holes and
+delimiters as non-authoritative, and never checks or adds bindings to the recovered artifact.
+`SemanticAnalysisService` keys these artifacts by base document identity, cursor, query, and
+recovery policy. Its separate LRU retains at most 32 artifacts and 8 MiB of estimated payload
+within the service's combined byte budget; invalidation clears both caches. Cursor keys do not
+keep the original checked AST alive after its snapshot is evicted.
+
 Identical in-flight requests coalesce. Caller cancellation stops only that caller's wait;
 invalidation/disposal owns build cancellation. At most two builds execute and sixteen builds are
 admitted concurrently. Completed entries use LRU eviction with an eight-entry bound and a 64 MiB

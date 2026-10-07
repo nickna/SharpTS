@@ -142,6 +142,11 @@ without entering the cache. Concurrent identical requests share work, and cancel
 does not cancel another request's analysis. Interop-only with `sharpts-only` diagnostics keeps
 general analysis lazy; explicitly selecting `all` still requests full parser/checker diagnostics.
 
+Checked source documents also retain exact written syntax ranges for later editor queries.
+Unfinished member and call/new contexts use a separate bounded parse of the same text; these
+recovery artifacts cannot supply authoritative rename locations or change the checked graph.
+The recovery cache retains at most 32 artifacts and 8 MiB within the shared 64 MiB estimate.
+
 For a local protocol smoke test after a Release build, run:
 
 ```bash

@@ -36,18 +36,34 @@ public partial class Parser
     /// </summary>
     private Expr CommaExpression()
     {
+        int start = CurrentSourceStart();
         Expr expr = Assignment();
 
         while (Match(TokenType.COMMA))
         {
             Expr right = Assignment();
-            expr = new Expr.Comma(expr, right);
+            expr = CompleteExpression(new Expr.Comma(expr, right), start);
         }
 
         return expr;
     }
 
     private Expr Assignment()
+    {
+        int start = CurrentSourceStart();
+        Expr expression = CompleteExpression(AssignmentCore(), start);
+        Token? name = expression switch
+        {
+            Expr.Assign assign => assign.Name,
+            Expr.CompoundAssign assign => assign.Name,
+            Expr.LogicalAssign assign => assign.Name,
+            _ => null,
+        };
+        if (name is not null) RecordEditorName(name, expression);
+        return expression;
+    }
+
+    private Expr AssignmentCore()
     {
         // Check for single-parameter arrow function without parentheses: x => expr.
         // Also accept TS contextual keywords as the param name (e.g.
@@ -58,8 +74,10 @@ public partial class Parser
             Token raw = Advance(); // consume identifier/contextual keyword
             Token paramName = raw.Type == TokenType.IDENTIFIER
                 ? raw
-                : new Token(TokenType.IDENTIFIER, raw.Lexeme, null, raw.Line);
+                : new Token(TokenType.IDENTIFIER, raw.Lexeme, null, raw.Line, raw.Start);
             Advance(); // consume '=>'
+            int headerEnd = ConsumedSourceEnd;
+            int bodyStart = CurrentSourceStart();
 
             // Parse the body - either block or expression
             List<Stmt>? body = null;
@@ -76,7 +94,11 @@ public partial class Parser
             }
 
             var param = new Stmt.Parameter(paramName, null, null);
-            return new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: [param], ExpressionBody: exprBody, BlockBody: body, ReturnType: null);
+            RecordEditorRange(param, raw.Span, EditorSyntaxKind.ParameterList, EditorSyntaxRole.Parameter);
+            RecordEditorName(paramName, param, EditorSyntaxRole.DeclarationName);
+            var arrow = new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: [param], ExpressionBody: exprBody, BlockBody: body, ReturnType: null);
+            RecordFunctionExpressionSyntax(arrow, raw.Start, raw.Start, raw.End, headerEnd, bodyStart);
+            return arrow;
         }
 
         // Check for single-parameter async arrow function: async x => expr
@@ -162,11 +184,17 @@ public partial class Parser
                     new Token(TokenType.IDENTIFIER, "import.meta", null, importMeta.Keyword.Line),
                     value);
             case Expr.Get get:
-                return onGet(get, value);
+                Expr set = onGet(get, value);
+                CopyEditorSyntax(get, set);
+                return set;
             case Expr.GetPrivate getPrivate when onGetPrivate != null:
-                return onGetPrivate(getPrivate, value);
+                Expr privateSet = onGetPrivate(getPrivate, value);
+                CopyEditorSyntax(getPrivate, privateSet);
+                return privateSet;
             case Expr.GetIndex getIndex:
-                return onGetIndex(getIndex, value);
+                Expr indexSet = onGetIndex(getIndex, value);
+                CopyEditorSyntax(getIndex, indexSet);
+                return indexSet;
             default:
                 throw new Exception(errorMessage);
         }
@@ -174,6 +202,7 @@ public partial class Parser
 
     private Expr Ternary()
     {
+        int start = CurrentSourceStart();
         Expr expr = NullishCoalescing();
 
         if (Match(TokenType.QUESTION))
@@ -181,7 +210,7 @@ public partial class Parser
             Expr thenBranch = Ternary();
             Consume(TokenType.COLON, "Expect ':' in ternary expression.");
             Expr elseBranch = Ternary();
-            expr = new Expr.Ternary(expr, thenBranch, elseBranch);
+            expr = CompleteExpression(new Expr.Ternary(expr, thenBranch, elseBranch), start);
         }
 
         return expr;
@@ -189,12 +218,13 @@ public partial class Parser
 
     private Expr NullishCoalescing()
     {
+        int start = CurrentSourceStart();
         Expr expr = Or();
 
         while (Match(TokenType.QUESTION_QUESTION))
         {
             Expr right = Or();
-            expr = new Expr.NullishCoalescing(expr, right);
+            expr = CompleteExpression(new Expr.NullishCoalescing(expr, right), start);
         }
 
         return expr;
@@ -202,13 +232,14 @@ public partial class Parser
 
     private Expr Or()
     {
+        int start = CurrentSourceStart();
         Expr expr = And();
 
         while (Match(TokenType.OR_OR))
         {
             Token op = Previous();
             Expr right = And();
-            expr = new Expr.Logical(expr, op, right);
+            expr = CompleteExpression(new Expr.Logical(expr, op, right), start);
         }
 
         return expr;
@@ -216,13 +247,14 @@ public partial class Parser
 
     private Expr And()
     {
+        int start = CurrentSourceStart();
         Expr expr = BitwiseOr();
 
         while (Match(TokenType.AND_AND))
         {
             Token op = Previous();
             Expr right = BitwiseOr();
-            expr = new Expr.Logical(expr, op, right);
+            expr = CompleteExpression(new Expr.Logical(expr, op, right), start);
         }
 
         return expr;
@@ -230,13 +262,14 @@ public partial class Parser
 
     private Expr BitwiseOr()
     {
+        int start = CurrentSourceStart();
         Expr expr = BitwiseXor();
 
         while (Match(TokenType.PIPE))
         {
             Token op = Previous();
             Expr right = BitwiseXor();
-            expr = new Expr.Binary(expr, op, right);
+            expr = CompleteExpression(new Expr.Binary(expr, op, right), start);
         }
 
         return expr;
@@ -244,13 +277,14 @@ public partial class Parser
 
     private Expr BitwiseXor()
     {
+        int start = CurrentSourceStart();
         Expr expr = BitwiseAnd();
 
         while (Match(TokenType.CARET))
         {
             Token op = Previous();
             Expr right = BitwiseAnd();
-            expr = new Expr.Binary(expr, op, right);
+            expr = CompleteExpression(new Expr.Binary(expr, op, right), start);
         }
 
         return expr;
@@ -258,13 +292,14 @@ public partial class Parser
 
     private Expr BitwiseAnd()
     {
+        int start = CurrentSourceStart();
         Expr expr = Equality();
 
         while (Match(TokenType.AMPERSAND))
         {
             Token op = Previous();
             Expr right = Equality();
-            expr = new Expr.Binary(expr, op, right);
+            expr = CompleteExpression(new Expr.Binary(expr, op, right), start);
         }
 
         return expr;
@@ -272,6 +307,7 @@ public partial class Parser
 
     private Expr Equality()
     {
+        int start = CurrentSourceStart();
         Expr expr = Comparison();
 
         while (Match(TokenType.BANG_EQUAL, TokenType.EQUAL_EQUAL,
@@ -279,7 +315,7 @@ public partial class Parser
         {
             Token op = Previous();
             Expr right = Comparison();
-            expr = new Expr.Binary(expr, op, right);
+            expr = CompleteExpression(new Expr.Binary(expr, op, right), start);
         }
 
         return expr;
@@ -287,12 +323,14 @@ public partial class Parser
 
     private Expr Comparison()
     {
+        int start = CurrentSourceStart();
         Expr expr;
         if (Match(TokenType.PRIVATE_IDENTIFIER))
         {
             Token name = Previous();
             Consume(TokenType.IN, "Private identifier must be followed by 'in'.");
-            expr = new Expr.PrivateIn(name, Shift());
+            expr = CompleteExpression(new Expr.PrivateIn(name, Shift()), start);
+            RecordEditorName(name, expr, EditorSyntaxRole.PrivateName);
         }
         else expr = Shift();
 
@@ -305,14 +343,14 @@ public partial class Parser
             RecordErrorAt(JsxRootLine(expr),
                 "JSX expressions must have one parent element.", "TS2657");
             Expr right = ParseJsxElement();
-            expr = new Expr.Comma(expr, right);
+            expr = CompleteExpression(new Expr.Comma(expr, right), start);
         }
 
         while (Match(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL, TokenType.IN, TokenType.INSTANCEOF))
         {
             Token op = Previous();
             Expr right = Shift();
-            expr = new Expr.Binary(expr, op, right);
+            expr = CompleteExpression(new Expr.Binary(expr, op, right), start);
         }
 
         return expr;
@@ -341,13 +379,14 @@ public partial class Parser
 
     private Expr Shift()
     {
+        int start = CurrentSourceStart();
         Expr expr = Term();
 
         while (Match(TokenType.LESS_LESS, TokenType.GREATER_GREATER, TokenType.GREATER_GREATER_GREATER))
         {
             Token op = Previous();
             Expr right = Term();
-            expr = new Expr.Binary(expr, op, right);
+            expr = CompleteExpression(new Expr.Binary(expr, op, right), start);
         }
 
         return expr;
@@ -355,13 +394,14 @@ public partial class Parser
 
     private Expr Term()
     {
+        int start = CurrentSourceStart();
         Expr expr = Factor();
 
         while (Match(TokenType.MINUS, TokenType.PLUS))
         {
             Token op = Previous();
             Expr right = Factor();
-            expr = new Expr.Binary(expr, op, right);
+            expr = CompleteExpression(new Expr.Binary(expr, op, right), start);
         }
 
         return expr;
@@ -369,13 +409,14 @@ public partial class Parser
 
     private Expr Factor()
     {
+        int start = CurrentSourceStart();
         Expr expr = Exponentiation();
 
         while (Match(TokenType.SLASH, TokenType.STAR, TokenType.PERCENT))
         {
             Token op = Previous();
             Expr right = Exponentiation();
-            expr = new Expr.Binary(expr, op, right);
+            expr = CompleteExpression(new Expr.Binary(expr, op, right), start);
         }
 
         return expr;
@@ -383,6 +424,7 @@ public partial class Parser
 
     private Expr Exponentiation()
     {
+        int start = CurrentSourceStart();
         Expr expr = Unary();
 
         // ** is right-associative, so we use recursion instead of a loop
@@ -390,7 +432,7 @@ public partial class Parser
         {
             Token op = Previous();
             Expr right = Exponentiation(); // Right-associative
-            expr = new Expr.Binary(expr, op, right);
+            expr = CompleteExpression(new Expr.Binary(expr, op, right), start);
         }
 
         return expr;
@@ -398,6 +440,13 @@ public partial class Parser
 
     private Expr Unary()
     {
+        int start = CurrentSourceStart();
+        return CompleteExpression(UnaryCore(), start);
+    }
+
+    private Expr UnaryCore()
+    {
+        int start = CurrentSourceStart();
         // Check for generic arrow function: <T>(x) => ...
         if (Check(TokenType.LESS))
         {
@@ -505,14 +554,20 @@ public partial class Parser
             // Parse arguments. `new X` without parens is valid JS —
             // equivalent to `new X()`. Spread args (`new X(...iter)`) are allowed.
             List<Expr> arguments = [];
+            List<Token>? commas = EditorSyntaxEnabled ? [] : null;
+            Token? open = null;
+            Token? close = null;
+            int repairs = _editorRecoveryCount;
             if (Match(TokenType.LEFT_PAREN))
             {
-                ParseNewArgumentList(arguments);
+                open = Previous();
+                close = ParseInvocationArguments(arguments, commas);
             }
 
-            // Allow operations on new expressions
-            // Examples: new Date().toISOString()
-            Expr newExpr = new Expr.New(callee, typeArgs, arguments, typeArgNodes);
+            Expr newExpr = CompleteRecoveredExpression(new Expr.New(callee, typeArgs, arguments, typeArgNodes),
+                start, repairs != _editorRecoveryCount);
+            if (open is not null) RecordCallSyntax(newExpr, callee, open, close?.Start < 0 ? null : close,
+                commas ?? [], isNew: true, recovered: repairs != _editorRecoveryCount);
             return ParseCallChain(newExpr);
         }
 
@@ -532,15 +587,14 @@ public partial class Parser
     /// </summary>
     private Expr ParseCallChain(Expr expr)
     {
+        int start = ExpressionStart(expr);
         while (true)
         {
-            // Check for type arguments before call: func<T>(args)
+            Token operation = Peek();
+            Expr receiver = expr;
             List<string>? typeArgs = null;
             List<TypeNode?>? typeArgNodes = null;
-            if (Check(TokenType.LESS))
-            {
-                typeArgs = TryParseTypeArgumentsForCall(out typeArgNodes);
-            }
+            if (Check(TokenType.LESS)) typeArgs = TryParseTypeArgumentsForCall(out typeArgNodes);
 
             if (typeArgs != null || Match(TokenType.LEFT_PAREN))
             {
@@ -548,156 +602,144 @@ public partial class Parser
             }
             else if (Match(TokenType.DOT))
             {
-                // Check for private identifier access: obj.#field
                 if (Match(TokenType.PRIVATE_IDENTIFIER))
                 {
                     Token name = Previous();
-                    // Check for method call: obj.#method(args)
-                    if (Check(TokenType.LEFT_PAREN))
+                    if (Match(TokenType.LEFT_PAREN))
                     {
-                        Consume(TokenType.LEFT_PAREN, "Expect '(' after private method name.");
+                        Token open = Previous();
+                        int repairs = _editorRecoveryCount;
                         List<Expr> args = [];
-                        if (!Check(TokenType.RIGHT_PAREN))
-                        {
-                            while (true)
-                            {
-                                if (Match(TokenType.DOT_DOT_DOT))
-                                {
-                                    args.Add(new Expr.Spread(Expression()));
-                                }
-                                else
-                                {
-                                    args.Add(Expression());
-                                }
-                                if (!Match(TokenType.COMMA)) break;
-                                // ES2017 trailing comma.
-                                if (Check(TokenType.RIGHT_PAREN)) break;
-                            }
-                        }
-                        Consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
-                        expr = new Expr.CallPrivate(expr, name, args);
+                        List<Token>? commas = EditorSyntaxEnabled ? [] : null;
+                        Token close = ParseInvocationArguments(args, commas);
+                        expr = CompleteRecoveredExpression(new Expr.CallPrivate(receiver, name, args), start,
+                            repairs != _editorRecoveryCount);
+                        RecordMemberSyntax(expr, receiver, name, operation.Span, isPrivate: true);
+                        RecordCallSyntax(expr, receiver, open, close.Start < 0 ? null : close,
+                            commas ?? [], recovered: repairs != _editorRecoveryCount);
                     }
                     else
                     {
-                        // Field access: obj.#field
-                        expr = new Expr.GetPrivate(expr, name);
+                        expr = CompleteExpression(new Expr.GetPrivate(receiver, name), start);
+                        RecordMemberSyntax(expr, receiver, name, operation.Span, isPrivate: true);
                     }
                 }
                 else
                 {
-                    Token name = ConsumePropertyName("Expect property name after '.'.");
-                    if (expr is Expr.Variable v && v.Name.Lexeme == "console" && name.Lexeme == "log")
-                    {
-                        expr = new Expr.Variable(new Token(TokenType.IDENTIFIER, "console.log", null, name.Line));
-                    }
-                    else
-                    {
-                        expr = new Expr.Get(expr, name);
-                    }
+                    Token name = ConsumeEditorMemberName("Expect property name after '.'.");
+                    expr = receiver is Expr.Variable v && v.Name.Lexeme == "console" && name.Lexeme == "log"
+                        ? new Expr.Variable(new Token(TokenType.IDENTIFIER, "console.log", null, name.Line))
+                        : new Expr.Get(receiver, name);
+                    CompleteRecoveredExpression(expr, start, name.Start < 0 && EditorRecoveryEnabled);
+                    RecordMemberSyntax(expr, receiver, name, operation.Span,
+                        recovered: name.Start < 0 && EditorRecoveryEnabled);
                 }
             }
             else if (Match(TokenType.QUESTION_DOT))
             {
-                if (Match(TokenType.LEFT_PAREN))
-                {
-                    // ?.() — optional call
-                    expr = FinishCall(expr, optional: true);
-                }
+                if (Match(TokenType.LEFT_PAREN)) expr = FinishCall(expr, optional: true);
                 else if (Match(TokenType.LEFT_BRACKET))
                 {
-                    // ?.[] — optional bracket access
+                    Token key = Peek();
                     Expr index = Expression();
                     Consume(TokenType.RIGHT_BRACKET, "Expect ']' after index.");
-                    expr = new Expr.GetIndex(expr, index, Optional: true);
+                    expr = CompleteExpression(new Expr.GetIndex(receiver, index, Optional: true), start);
+                    if (index is Expr.Literal && key.Type is TokenType.STRING or TokenType.NUMBER)
+                        RecordMemberSyntax(expr, receiver, key, operation.Span, optional: true, isIndex: true);
                 }
                 else
                 {
-                    // ?.prop — optional property access (existing behavior)
-                    Token name = ConsumePropertyName("Expect property name after '?.'.");
-                    expr = new Expr.Get(expr, name, Optional: true);
+                    Token name = ConsumeEditorMemberName("Expect property name after '?.'.");
+                    expr = CompleteRecoveredExpression(new Expr.Get(receiver, name, Optional: true), start,
+                        name.Start < 0 && EditorRecoveryEnabled);
+                    RecordMemberSyntax(expr, receiver, name, operation.Span, optional: true,
+                        recovered: name.Start < 0 && EditorRecoveryEnabled);
                 }
             }
             else if (Match(TokenType.LEFT_BRACKET))
             {
+                Token key = Peek();
                 Expr index = Expression();
                 Consume(TokenType.RIGHT_BRACKET, "Expect ']' after index.");
-                expr = new Expr.GetIndex(expr, index);
+                expr = CompleteExpression(new Expr.GetIndex(receiver, index), start);
+                if (index is Expr.Literal && key.Type is TokenType.STRING or TokenType.NUMBER)
+                    RecordMemberSyntax(expr, receiver, key, operation.Span, isIndex: true);
             }
             else if (!HasLineTerminatorBeforeCurrent() && Match(TokenType.PLUS_PLUS, TokenType.MINUS_MINUS))
             {
-                // Postfix increment/decrement (restricted: no LineTerminator before ++/--)
                 Token op = Previous();
                 if (expr is not (Expr.Variable or Expr.Get or Expr.GetIndex))
-                {
                     throw new Exception("Invalid operand for postfix increment/decrement.");
-                }
-                expr = new Expr.PostfixIncrement(expr, op);
+                expr = CompleteExpression(new Expr.PostfixIncrement(expr, op), start);
             }
             else if (Match(TokenType.AS))
             {
-                // Check for 'as const' - constant assertion for deep readonly inference
                 if (Check(TokenType.CONST))
                 {
-                    Advance(); // consume 'const'
-                    expr = new Expr.TypeAssertion(expr, "const");
+                    Advance();
+                    expr = CompleteExpression(new Expr.TypeAssertion(expr, "const"), start);
                 }
                 else
                 {
-                    // Type assertion: expr as Type
                     string targetType = ParseTypeAnnotation();
-                    expr = new Expr.TypeAssertion(expr, targetType, TakeTypeNode());
+                    expr = CompleteExpression(new Expr.TypeAssertion(expr, targetType, TakeTypeNode()), start);
                 }
             }
             else if (Match(TokenType.SATISFIES))
             {
-                // Satisfies operator: expr satisfies Type (TS 4.9+)
-                // Validates that expr matches Type without widening the inferred type
                 string constraintType = ParseTypeAnnotation();
-                expr = new Expr.Satisfies(expr, constraintType, TakeTypeNode());
+                expr = CompleteExpression(new Expr.Satisfies(expr, constraintType, TakeTypeNode()), start);
             }
             else if (Match(TokenType.BANG))
-            {
-                // Non-null assertion: expr!
-                // Asserts the value is not null/undefined at compile time
-                expr = new Expr.NonNullAssertion(expr);
-            }
-            // Tagged template literal: expr`template ${x} literal`
+                expr = CompleteExpression(new Expr.NonNullAssertion(expr), start);
             else if (Check(TokenType.TEMPLATE_FULL) || Check(TokenType.TEMPLATE_HEAD))
-            {
-                expr = ParseTaggedTemplateLiteral(expr);
-            }
-            else
-            {
-                break;
-            }
+                expr = CompleteExpression(ParseTaggedTemplateLiteral(expr), start);
+            else break;
         }
-
         return expr;
     }
 
     private Expr FinishCall(Expr callee, List<string>? typeArgs = null, bool optional = false, List<TypeNode?>? typeArgNodes = null)
     {
+        Token open = Previous();
+        int start = ExpressionStart(callee);
+        int repairs = _editorRecoveryCount;
         List<Expr> arguments = [];
-        if (!Check(TokenType.RIGHT_PAREN))
-        {
-            while (true)
-            {
-                if (Match(TokenType.DOT_DOT_DOT))
-                {
-                    arguments.Add(new Expr.Spread(Expression()));
-                }
-                else
-                {
-                    arguments.Add(Expression());
-                }
-                if (!Match(TokenType.COMMA)) break;
-                // ES2017 trailing comma: `f(a, b,)` — swallow the comma and stop.
-                if (Check(TokenType.RIGHT_PAREN)) break;
-            }
-        }
+        List<Token>? commas = EditorSyntaxEnabled ? [] : null;
+        Token close = ParseInvocationArguments(arguments, commas);
+        var call = CompleteRecoveredExpression(new Expr.Call(callee, close, typeArgs, arguments, optional, typeArgNodes),
+            start, repairs != _editorRecoveryCount);
+        RecordCallSyntax(call, callee, open, close.Start < 0 ? null : close, commas ?? [],
+            optional: optional, recovered: repairs != _editorRecoveryCount);
+        return call;
+    }
 
-        Token paren = Consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
-        return new Expr.Call(callee, paren, typeArgs, arguments, optional, typeArgNodes);
+    private Token ParseInvocationArguments(List<Expr> arguments, List<Token>? commas)
+    {
+        bool recovery = EditorRecoveryEnabled;
+        if (recovery) _editorArgumentDepth++;
+        try
+        {
+            if (!Check(TokenType.RIGHT_PAREN))
+            {
+                while (true)
+                {
+                    if (AtEditorRecoveryBoundary() && !Check(TokenType.COMMA)) break;
+                    if (Match(TokenType.DOT_DOT_DOT))
+                    {
+                        int spreadStart = Previous().Start;
+                        arguments.Add(CompleteExpression(new Expr.Spread(Expression()), spreadStart));
+                    }
+                    else if (TryEditorArgumentHole(out Expr hole)) arguments.Add(hole);
+                    else arguments.Add(Expression());
+                    if (!Match(TokenType.COMMA)) break;
+                    commas?.Add(Previous());
+                    if (Check(TokenType.RIGHT_PAREN)) break;
+                }
+            }
+            return ConsumeEditorClosingParen("Expect ')' after arguments.");
+        }
+        finally { if (recovery) _editorArgumentDepth--; }
     }
 
     /// <summary>
@@ -709,6 +751,7 @@ public partial class Parser
     /// </summary>
     private Expr ParseNewCallee()
     {
+        int start = CurrentSourceStart();
         Expr callee;
 
         // Nested `new`: `new new X()` parses as `new (new X())` — the inner `new X()`
@@ -718,11 +761,19 @@ public partial class Parser
             Expr innerCallee = ParseNewCallee();
             List<string>? innerTypeArgs = TryParseTypeArguments(out var innerTypeArgNodes);
             List<Expr> innerArgs = [];
+            List<Token>? commas = EditorSyntaxEnabled ? [] : null;
+            Token? open = null;
+            Token? close = null;
+            int repairs = _editorRecoveryCount;
             if (Match(TokenType.LEFT_PAREN))
             {
-                ParseNewArgumentList(innerArgs);
+                open = Previous();
+                close = ParseInvocationArguments(innerArgs, commas);
             }
-            callee = new Expr.New(innerCallee, innerTypeArgs, innerArgs, innerTypeArgNodes);
+            callee = CompleteRecoveredExpression(new Expr.New(innerCallee, innerTypeArgs, innerArgs, innerTypeArgNodes),
+                start, repairs != _editorRecoveryCount);
+            if (open is not null) RecordCallSyntax(callee, innerCallee, open, close?.Start < 0 ? null : close,
+                commas ?? [], isNew: true, recovered: repairs != _editorRecoveryCount);
         }
         else
         {
@@ -738,14 +789,24 @@ public partial class Parser
         {
             if (Match(TokenType.DOT))
             {
-                Token name = ConsumePropertyName("Expect identifier after '.' in new expression.");
-                callee = new Expr.Get(callee, name);
+                Token operation = Previous();
+                Expr receiver = callee;
+                Token name = ConsumeEditorMemberName("Expect identifier after '.' in new expression.");
+                callee = CompleteRecoveredExpression(new Expr.Get(receiver, name), start,
+                    name.Start < 0 && EditorRecoveryEnabled);
+                RecordMemberSyntax(callee, receiver, name, operation.Span,
+                    recovered: name.Start < 0 && EditorRecoveryEnabled);
             }
             else if (Match(TokenType.LEFT_BRACKET))
             {
+                Token operation = Previous();
+                Token key = Peek();
+                Expr receiver = callee;
                 Expr index = Expression();
                 Consume(TokenType.RIGHT_BRACKET, "Expect ']' after index in new expression.");
-                callee = new Expr.GetIndex(callee, index);
+                callee = CompleteExpression(new Expr.GetIndex(receiver, index), start);
+                if (index is Expr.Literal && key.Type is TokenType.STRING or TokenType.NUMBER)
+                    RecordMemberSyntax(callee, receiver, key, operation.Span, isIndex: true);
             }
             else
             {
@@ -756,33 +817,14 @@ public partial class Parser
         return callee;
     }
 
-    /// <summary>
-    /// Parses the argument list of a `new` expression after the opening `(`.
-    /// Supports spread (`...iter`) and ES2017 trailing comma. Consumes the closing `)`.
-    /// </summary>
-    private void ParseNewArgumentList(List<Expr> arguments)
+    private Expr Primary()
     {
-        if (!Check(TokenType.RIGHT_PAREN))
-        {
-            while (true)
-            {
-                if (Match(TokenType.DOT_DOT_DOT))
-                {
-                    arguments.Add(new Expr.Spread(Expression()));
-                }
-                else
-                {
-                    arguments.Add(Expression());
-                }
-                if (!Match(TokenType.COMMA)) break;
-                // ES2017 trailing comma: `new X(a, b,)`.
-                if (Check(TokenType.RIGHT_PAREN)) break;
-            }
-        }
-        Consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
+        int start = CurrentSourceStart();
+        Token first = Peek();
+        return CompletePrimaryExpression(PrimaryCore(), start, first);
     }
 
-    private Expr Primary()
+    private Expr PrimaryCore()
     {
         if (Match(TokenType.FALSE)) return new Expr.Literal(false);
         if (Match(TokenType.TRUE)) return new Expr.Literal(true);
@@ -869,7 +911,7 @@ public partial class Parser
                      or TokenType.LEFT_PAREN))
         {
             var token = Advance();
-            return new Expr.Variable(new Token(TokenType.IDENTIFIER, token.Lexeme, null, token.Line));
+            return new Expr.Variable(new Token(TokenType.IDENTIFIER, token.Lexeme, null, token.Line, token.Start));
         }
 
         if (Match(TokenType.LEFT_BRACKET))
@@ -892,7 +934,8 @@ public partial class Parser
 
                 if (Match(TokenType.DOT_DOT_DOT))
                 {
-                    elements.Add(new Expr.Spread(Expression()));
+                    int spreadStart = Previous().Start;
+                    elements.Add(CompleteExpression(new Expr.Spread(Expression()), spreadStart));
                 }
                 else
                 {
@@ -915,6 +958,7 @@ public partial class Parser
                 {
                     // Handle trailing comma: { a: 1, b: 2, }
                     if (Check(TokenType.RIGHT_BRACE)) break;
+                    int propertyStart = CurrentSourceStart();
 
                     // Check for spread: { ...obj }
                     if (Match(TokenType.DOT_DOT_DOT))
@@ -972,6 +1016,7 @@ public partial class Parser
                             accessorKey = new Expr.IdentifierKey(propName);
                         }
 
+                        int parameterStart = CurrentSourceStart();
                         Consume(TokenType.LEFT_PAREN, isGetter
                             ? "Expect '(' after getter name."
                             : "Expect '(' after setter name.");
@@ -993,10 +1038,14 @@ public partial class Parser
                                 paramTypeNode = TakeTypeNode();
                             }
                             setterParam = new Stmt.Parameter(paramName, paramType, null, false, TypeAnnotationNode: paramTypeNode);
+                            RecordEditorRange(setterParam, new SourceSpan(paramName.Start, ConsumedSourceEnd),
+                                EditorSyntaxKind.ParameterList, EditorSyntaxRole.Parameter);
+                            RecordEditorName(paramName, setterParam, EditorSyntaxRole.DeclarationName);
                             accessorParams.Add(setterParam);
                             Consume(TokenType.RIGHT_PAREN, "Expect ')' after setter parameter.");
                         }
 
+                        int parameterEnd = ConsumedSourceEnd;
                         string? accessorReturnType = null;
                         TypeNode? accessorReturnTypeNode = null;
                         if (Match(TokenType.COLON))
@@ -1005,6 +1054,8 @@ public partial class Parser
                             accessorReturnTypeNode = TakeTypeNode();
                         }
 
+                        int headerEnd = ConsumedSourceEnd;
+                        int bodyStart = CurrentSourceStart();
                         Consume(TokenType.LEFT_BRACE, isGetter
                             ? "Expect '{' before getter body."
                             : "Expect '{' before setter body.");
@@ -1023,6 +1074,8 @@ public partial class Parser
                             HasOwnThis: true,
                             ReturnTypeNode: accessorReturnTypeNode
                         );
+                        RecordFunctionExpressionSyntax(accessorExpr, propertyStart, parameterStart,
+                            parameterEnd, headerEnd, bodyStart);
                         properties.Add(new Expr.Property(
                             accessorKey,
                             accessorExpr,
@@ -1040,7 +1093,7 @@ public partial class Parser
 
                         if (Check(TokenType.LEFT_PAREN))
                         {
-                            var methodExpr = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator);
+                            var methodExpr = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator, propertyStart);
                             properties.Add(new Expr.Property(new Expr.ComputedKey(keyExpr), methodExpr));
                             continue;
                         }
@@ -1060,7 +1113,7 @@ public partial class Parser
 
                         if (Check(TokenType.LEFT_PAREN))
                         {
-                            var methodExpr = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator);
+                            var methodExpr = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator, propertyStart);
                             properties.Add(new Expr.Property(key, methodExpr));
                             continue;
                         }
@@ -1079,7 +1132,7 @@ public partial class Parser
 
                         if (Check(TokenType.LEFT_PAREN))
                         {
-                            var methodExpr = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator);
+                            var methodExpr = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator, propertyStart);
                             properties.Add(new Expr.Property(key, methodExpr));
                             continue;
                         }
@@ -1098,7 +1151,7 @@ public partial class Parser
                     if (Check(TokenType.LEFT_PAREN))
                     {
                         // Method shorthand: { fn() {} }
-                        value = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator);
+                        value = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator, propertyStart);
                     }
                     else if (Match(TokenType.COLON))
                     {
@@ -1111,13 +1164,14 @@ public partial class Parser
                         // Only valid as an object DESTRUCTURING pattern; stored as `{ x: (x = 5) }` so the
                         // #754 assignment-destructuring lowering recovers the `(target, default)`. A
                         // pure-expression `{ x = 5 }` is rejected in CheckObject via IsShorthandDefault (#780).
-                        value = new Expr.Assign(name, Expression());
+                        value = CompleteExpression(new Expr.Assign(name, Expression()), name.Start);
+                        RecordEditorName(name, value);
                         isShorthandDefault = true;
                     }
                     else
                     {
                         // Shorthand property: { x } -> { x: x }
-                        value = new Expr.Variable(name);
+                        value = CompletePrimaryExpression(new Expr.Variable(name), name.Start, name);
                     }
 
                     properties.Add(new Expr.Property(new Expr.IdentifierKey(name), value,
@@ -1232,8 +1286,11 @@ public partial class Parser
     /// values, and an optional <c>this:</c> parameter (TypeScript).
     /// Returns an ArrowFunction with <c>HasOwnThis=true</c>.
     /// </summary>
-    private Expr.ArrowFunction ParseObjectMethodShorthand(bool isAsync = false, bool isGenerator = false)
+    private Expr.ArrowFunction ParseObjectMethodShorthand(bool isAsync = false, bool isGenerator = false,
+        int sourceStart = -1)
     {
+        int start = sourceStart >= 0 ? sourceStart : CurrentSourceStart();
+        int parameterStart = CurrentSourceStart();
         Consume(TokenType.LEFT_PAREN, "Expect '(' in method shorthand.");
 
         string? thisType = null;
@@ -1279,6 +1336,7 @@ public partial class Parser
             } while (Match(TokenType.COMMA));
         }
         Consume(TokenType.RIGHT_PAREN, "Expect ')' after method parameters.");
+        int parameterEnd = ConsumedSourceEnd;
 
         string? returnType = null;
         TypeNode? returnTypeNode = null;
@@ -1288,13 +1346,15 @@ public partial class Parser
             returnTypeNode = TakeTypeNode();
         }
 
+        int headerEnd = ConsumedSourceEnd;
+        int bodyStart = CurrentSourceStart();
         Consume(TokenType.LEFT_BRACE, "Expect '{' before method body.");
         List<Stmt> body = ParseFunctionExpressionBody(parameters);
 
         body = PrependDestructuringPrologue(destructuredParams, body);
         body = VarHoister.Hoist(body, _spans);
 
-        return new Expr.ArrowFunction(
+        var arrow = new Expr.ArrowFunction(
             Name: null,
             TypeParams: null,
             ThisType: thisType,
@@ -1307,6 +1367,8 @@ public partial class Parser
             IsGenerator: isGenerator,
             ThisTypeNode: thisTypeNode,
             ReturnTypeNode: returnTypeNode);
+        RecordFunctionExpressionSyntax(arrow, start, parameterStart, parameterEnd, headerEnd, bodyStart);
+        return arrow;
     }
 
     private Expr ParseTemplateLiteral()
@@ -1391,7 +1453,19 @@ public partial class Parser
     // Returns null if not an arrow function (caller should parse as grouping)
     private Expr? TryParseArrowFunction(bool isAsync = false)
     {
+        int repairs = _editorRecoveryCount;
+        Expr? expression = TryParseArrowFunctionCore(isAsync);
+        if (expression is null) _editorRecoveryCount = repairs;
+        return expression;
+    }
+
+    private Expr? TryParseArrowFunctionCore(bool isAsync)
+    {
         int savedPosition = _current;
+        ParserCursorCheckpoint savedCursor = SaveCursor();
+        int parameterStart = Previous().Start;
+        int start = isAsync && _current >= 2 && _tokens[_current - 2].Type == TokenType.ASYNC
+            ? _tokens[_current - 2].Start : parameterStart;
 
         // Try to parse parameter list
         List<Stmt.Parameter> parameters = [];
@@ -1403,7 +1477,7 @@ public partial class Parser
             if (!Check(TokenType.IDENTIFIER) && !IsContextualKeyword(Peek().Type) &&
                 !Check(TokenType.LEFT_BRACKET) && !Check(TokenType.LEFT_BRACE) && !Check(TokenType.DOT_DOT_DOT))
             {
-                _current = savedPosition;
+                RestoreCursor(savedCursor);
                 return null;
             }
 
@@ -1427,7 +1501,7 @@ public partial class Parser
                     }
                     catch
                     {
-                        _current = savedPosition;
+                        RestoreCursor(savedCursor);
                         return null;
                     }
                 }
@@ -1438,14 +1512,14 @@ public partial class Parser
 
                     if (!Check(TokenType.IDENTIFIER) && !IsContextualKeyword(Peek().Type))
                     {
-                        _current = savedPosition;
+                        RestoreCursor(savedCursor);
                         return null;
                     }
 
                     Token paramTok = Advance();
                     Token paramName = paramTok.Type == TokenType.IDENTIFIER
                         ? paramTok
-                        : new Token(TokenType.IDENTIFIER, paramTok.Lexeme, null, paramTok.Line);
+                        : new Token(TokenType.IDENTIFIER, paramTok.Lexeme, null, paramTok.Line, paramTok.Start);
                     // The shared tail consumes '?'/type/default: (x?: T = v) => ...  (if this
                     // isn't an arrow, the outer speculative parse backtracks, so consuming here
                     // is safe).
@@ -1454,7 +1528,7 @@ public partial class Parser
                     // Rest parameter must be last
                     if (isRest && Check(TokenType.COMMA))
                     {
-                        _current = savedPosition;
+                        RestoreCursor(savedCursor);
                         return null; // Invalid: rest must be last
                     }
                 }
@@ -1463,9 +1537,11 @@ public partial class Parser
 
         if (!Match(TokenType.RIGHT_PAREN))
         {
-            _current = savedPosition;
+            RestoreCursor(savedCursor);
             return null;
         }
+
+        int parameterEnd = ConsumedSourceEnd;
 
         // Check for optional return type
         string? returnType = null;
@@ -1485,7 +1561,7 @@ public partial class Parser
             }
             catch
             {
-                _current = savedPosition;
+                RestoreCursor(savedCursor);
                 return null;
             }
         }
@@ -1493,9 +1569,12 @@ public partial class Parser
         // Must see '=>' for it to be an arrow function
         if (!Match(TokenType.ARROW))
         {
-            _current = savedPosition;
+            RestoreCursor(savedCursor);
             return null;
         }
+
+        int headerEnd = ConsumedSourceEnd;
+        int bodyStart = CurrentSourceStart();
 
         // Parse body - either block or expression
         List<Stmt>? body = null;
@@ -1535,7 +1614,9 @@ public partial class Parser
         if (body != null)
             body = VarHoister.Hoist(body, _spans);
 
-        return new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: parameters, ExpressionBody: exprBody, BlockBody: body, ReturnType: returnType, IsAsync: isAsync, ReturnTypeNode: returnTypeNode);
+        var arrow = new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: parameters, ExpressionBody: exprBody, BlockBody: body, ReturnType: returnType, IsAsync: isAsync, ReturnTypeNode: returnTypeNode);
+        RecordFunctionExpressionSyntax(arrow, start, parameterStart, parameterEnd, headerEnd, bodyStart);
+        return arrow;
     }
 
     /// <summary>
@@ -1544,13 +1625,22 @@ public partial class Parser
     /// </summary>
     private Expr? TryParseGenericArrowFunction(bool isAsync = false)
     {
+        int repairs = _editorRecoveryCount;
+        Expr? expression = TryParseGenericArrowFunctionCore(isAsync);
+        if (expression is null) _editorRecoveryCount = repairs;
+        return expression;
+    }
+
+    private Expr? TryParseGenericArrowFunctionCore(bool isAsync)
+    {
         int savedPosition = _current;
+        ParserCursorCheckpoint savedCursor = SaveCursor();
         try
         {
             List<TypeParam>? typeParams = ParseTypeParameters();
             if (typeParams == null || typeParams.Count == 0)
             {
-                _current = savedPosition;
+                RestoreCursor(savedCursor);
                 return null;
             }
 
@@ -1571,23 +1661,30 @@ public partial class Parser
                 typeParams[0].Default is null &&
                 !hasTypeParameterComma)
             {
-                _current = savedPosition;
+                RestoreCursor(savedCursor);
                 return null;
             }
 
             if (!Match(TokenType.LEFT_PAREN))
             {
-                _current = savedPosition;
+                RestoreCursor(savedCursor);
                 return null;
             }
 
             Expr? arrowExpr = TryParseArrowFunction(isAsync);
             if (arrowExpr is Expr.ArrowFunction arrow)
             {
-                return arrow with { TypeParams = typeParams };
+                var genericArrow = arrow with { TypeParams = typeParams };
+                CopyEditorSyntax(arrow, genericArrow);
+                if (_editorFunctionHeaders?.TryGetValue(arrow, out var header) == true)
+                    RecordFunctionExpressionSyntax(genericArrow,
+                        _tokens[isAsync && savedPosition > 0 && _tokens[savedPosition - 1].Type == TokenType.ASYNC
+                            ? savedPosition - 1 : savedPosition].Start,
+                        header.ParameterStart, header.ParameterEnd, header.HeaderEnd, header.BodyStart);
+                return genericArrow;
             }
 
-            _current = savedPosition;
+            RestoreCursor(savedCursor);
             return null;
         }
         catch (OperationCanceledException)
@@ -1596,7 +1693,7 @@ public partial class Parser
         }
         catch
         {
-            _current = savedPosition;
+            RestoreCursor(savedCursor);
             return null;
         }
     }
@@ -1608,6 +1705,7 @@ public partial class Parser
     /// </summary>
     private Expr FunctionExpression(bool isAsync = false)
     {
+        int start = isAsync && _current >= 2 ? _tokens[_current - 2].Start : Previous().Start;
         // Check for generator function: function* () { } (or async function* () {})
         bool isGenerator = Match(TokenType.STAR);
 
@@ -1622,6 +1720,7 @@ public partial class Parser
         // Parse type parameters: function<T, U>(params) { }
         List<TypeParam>? typeParams = ParseTypeParameters();
 
+        int parameterStart = CurrentSourceStart();
         Consume(TokenType.LEFT_PAREN, "Expect '(' after function name.");
         List<Stmt.Parameter> parameters = [];
         List<(Token SynthName, DestructurePattern Pattern)> destructuredParams = [];
@@ -1676,6 +1775,7 @@ public partial class Parser
             } while (Match(TokenType.COMMA));
         }
         Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+        int parameterEnd = ConsumedSourceEnd;
 
         string? returnType = null;
         TypeNode? returnTypeNode = null;
@@ -1685,6 +1785,8 @@ public partial class Parser
             returnTypeNode = TakeTypeNode();
         }
 
+        int headerEnd = ConsumedSourceEnd;
+        int bodyStart = CurrentSourceStart();
         Consume(TokenType.LEFT_BRACE, "Expect '{' before function body.");
         List<Stmt> body = ParseFunctionExpressionBody(parameters);
 
@@ -1694,7 +1796,7 @@ public partial class Parser
         body = VarHoister.Hoist(body, _spans);
 
         // Return as ArrowFunction with block body (HasOwnThis=true for function expressions)
-        return new Expr.ArrowFunction(
+        var arrow = new Expr.ArrowFunction(
             Name: functionName,
             TypeParams: typeParams,
             ThisType: thisType,
@@ -1708,6 +1810,8 @@ public partial class Parser
             ThisTypeNode: thisTypeNode,
             ReturnTypeNode: returnTypeNode
         );
+        RecordFunctionExpressionSyntax(arrow, start, parameterStart, parameterEnd, headerEnd, bodyStart);
+        return arrow;
     }
 
     // Parse function type annotation like "(number) => number" or "(this: Window, e: Event) => void"

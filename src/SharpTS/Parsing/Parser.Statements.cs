@@ -29,7 +29,13 @@ public partial class Parser
         if (Match(TokenType.DO)) return DoWhileStatement();
         if (Match(TokenType.WHILE)) return WhileStatement();
         if (Match(TokenType.RETURN)) return ReturnStatement();
-        if (Match(TokenType.LEFT_BRACE)) return new Stmt.Block(Block());
+        if (Match(TokenType.LEFT_BRACE))
+        {
+            int start = Previous().Start;
+            var block = new Stmt.Block(Block());
+            RecordEditorRange(block, new SourceSpan(start, ConsumedSourceEnd), EditorSyntaxKind.Block, EditorSyntaxRole.Body);
+            return block;
+        }
 
         // Check for labeled statement: identifier : statement
         if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.COLON)

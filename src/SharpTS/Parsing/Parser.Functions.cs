@@ -4,6 +4,9 @@ public partial class Parser
 {
     private Stmt FunctionDeclaration(string kind, bool isAsync = false, bool isGenerator = false, bool isDeclare = false, (Token Name, Expr? ComputedKey)? computedMethod = null)
     {
+        int headerStart = CurrentSourceStart();
+        if (_current > 0 && _tokens[_current - 1].Type == TokenType.FUNCTION)
+            headerStart = _tokens[_current - 1].Start;
         isDeclare |= _isDeclarationFile;
 
         Token name;
@@ -39,7 +42,7 @@ public partial class Parser
         // Parse type parameters (e.g., <T, U extends Base>)
         List<TypeParam>? typeParams = ParseTypeParameters();
 
-        Consume(TokenType.LEFT_PAREN, $"Expect '(' after {kind} name.");
+        Token parametersOpen = Consume(TokenType.LEFT_PAREN, $"Expect '(' after {kind} name.");
         List<Stmt.Parameter> parameters = [];
         List<(Token SynthName, DestructurePattern Pattern)> destructuredParams = [];
 
@@ -134,7 +137,7 @@ public partial class Parser
                 }
             } while (Match(TokenType.COMMA));
         }
-        Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+        Token parametersClose = Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
 
         string? returnType = null;
         TypeNode? returnTypeNode = null;
@@ -151,14 +154,18 @@ public partial class Parser
         if (hasSignatureTerminator || (isDeclare && !Check(TokenType.LEFT_BRACE)))
         {
             // Overload signature - no body, just declaration
-            return new Stmt.Function(name, typeParams, thisType, parameters, null, returnType, IsAsync: isAsync, IsGenerator: isGenerator, IsDeclare: isDeclare, ComputedKey: computedKey, ThisTypeNode: thisTypeNode, ReturnTypeNode: returnTypeNode);
+            var signature = new Stmt.Function(name, typeParams, thisType, parameters, null, returnType, IsAsync: isAsync, IsGenerator: isGenerator, IsDeclare: isDeclare, ComputedKey: computedKey, ThisTypeNode: thisTypeNode, ReturnTypeNode: returnTypeNode);
+            RecordFunctionSyntax(signature, headerStart, parametersOpen, parametersClose,
+                ConsumedSourceEnd, null);
+            return signature;
         }
 
         // Save current strict mode state before parsing function body
         bool previousStrictMode = _isStrictMode;
 
-        Consume(TokenType.LEFT_BRACE, $"Expect '{{' before {kind} body.");
+        Token bodyOpen = Consume(TokenType.LEFT_BRACE, $"Expect '{{' before {kind} body.");
         List<Stmt> body = Block(parseFunctionPrologue: true, setStrictMode: true);
+        int bodyEnd = ConsumedSourceEnd;
 
         // Validate duplicate parameter names in strict mode
         // This must happen after body parsing because the function's own "use strict" directive
@@ -199,7 +206,26 @@ public partial class Parser
         // declarations + assignments. Cheap no-op if no `var` keywords are present.
         body = VarHoister.Hoist(body, _spans);
 
-        return new Stmt.Function(name, typeParams, thisType, parameters, body, returnType, IsAsync: isAsync, IsGenerator: isGenerator, ComputedKey: computedKey, ThisTypeNode: thisTypeNode, ReturnTypeNode: returnTypeNode);
+        var function = new Stmt.Function(name, typeParams, thisType, parameters, body, returnType, IsAsync: isAsync, IsGenerator: isGenerator, ComputedKey: computedKey, ThisTypeNode: thisTypeNode, ReturnTypeNode: returnTypeNode);
+        RecordFunctionSyntax(function, headerStart, parametersOpen, parametersClose,
+            bodyOpen.Start, new SourceSpan(bodyOpen.Start, bodyEnd));
+        return function;
+    }
+
+    private void RecordFunctionSyntax(Stmt.Function function, int headerStart, Token parametersOpen,
+        Token parametersClose, int headerEnd, SourceSpan? body)
+    {
+        if (!EditorSyntaxEnabled) return;
+        RecordEditorRange(function, new SourceSpan(headerStart, body?.End ?? headerEnd), EditorSyntaxKind.Function);
+        if (function.ComputedKey is null)
+            RecordEditorName(function.Name, function, function.IsPrivate ? EditorSyntaxRole.PrivateName :
+                EditorSyntaxRole.DeclarationName);
+        RecordEditorRange(function, new SourceSpan(headerStart, headerEnd),
+            EditorSyntaxKind.Function, EditorSyntaxRole.Header);
+        RecordEditorRange(function, new SourceSpan(parametersOpen.Start, parametersClose.End),
+            EditorSyntaxKind.ParameterList);
+        if (body is { } span)
+            RecordEditorRange(function, span, EditorSyntaxKind.Function, EditorSyntaxRole.Body);
     }
 
     /// <summary>
