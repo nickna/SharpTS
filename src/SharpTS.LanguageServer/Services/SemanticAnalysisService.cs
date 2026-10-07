@@ -409,7 +409,7 @@ internal sealed class AnalysisData
         EstimatedBytes = inputs.EstimatedBytes + snapshots.Sum(snapshot =>
             snapshot.Documents.Sum(document => (long)document.Document.Text.Length * 2 + document.Tokens.Count * 96L +
                 (document.Syntax?.EstimatedBytes ?? 0)) +
-            snapshot.TypeCount * 128L);
+            snapshot.TypeCount * 128L + snapshot.Members.EstimatedBytes);
     }
     public CheckedNavigationModel Model { get; }
     public CheckedNavigationWorkspace? Workspace { get; }

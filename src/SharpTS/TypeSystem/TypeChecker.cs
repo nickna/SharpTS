@@ -62,6 +62,17 @@ public partial class TypeChecker
     /// </summary>
     public BindingIndex Bindings { get; } = new();
 
+    private MemberIndex? _members;
+    /// <summary>Source-class member facts; empty unless editor provenance was explicitly requested.</summary>
+    public MemberIndex Members => _members ?? MemberIndex.Empty;
+
+    public TypeChecker WithMemberProvenance(bool enabled = true)
+    {
+        _members = enabled ? _members ?? new MemberIndex() : null;
+        if (!enabled) _sourceClassNesting = null;
+        return this;
+    }
+
     private SourceDocument? CurrentSourceDocument =>
         _currentModule?.Document ?? _standaloneSourceDocument;
 
@@ -1180,7 +1191,7 @@ public partial class TypeChecker
 
             if (param.IsRest)
             {
-                DeclareValue(paramScope, param.Name, paramType);
+                DeclareParameterValue(paramScope, param, paramType);
                 continue;
             }
 
@@ -1215,9 +1226,9 @@ public partial class TypeChecker
                 requiredParams++;
             }
 
-            DeclareValue(
+            DeclareParameterValue(
                 paramScope,
-                param.Name,
+                param,
                 param.IsOptional && param.DefaultValue == null
                     ? CreateUnion(paramType, TypeInfo.Undefined.Shared)
                     : paramType);
@@ -1328,6 +1339,8 @@ public partial class TypeChecker
     {
         _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
+        _members?.Clear();
+        _sourceClassNesting = null;
         _checkedVarRedeclarationSymbols.Clear();
         _explicitAnyVarSymbols.Clear();
         _uninitializedImplicitAnyVarSymbols.Clear();
@@ -1408,6 +1421,8 @@ public partial class TypeChecker
     {
         _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
+        _members?.Clear();
+        _sourceClassNesting = null;
         _checkedVarRedeclarationSymbols.Clear();
         _explicitAnyVarSymbols.Clear();
         _uninitializedImplicitAnyVarSymbols.Clear();
@@ -1693,6 +1708,8 @@ public partial class TypeChecker
     public TypeMap CheckModules(List<ParsedModule> modules, ModuleResolver resolver)
     {
         Bindings.Clear();
+        _members?.Clear();
+        _sourceClassNesting = null;
         _checkedVarRedeclarationSymbols.Clear();
         _explicitAnyVarSymbols.Clear();
         _uninitializedImplicitAnyVarSymbols.Clear();

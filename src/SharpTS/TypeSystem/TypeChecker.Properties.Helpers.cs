@@ -133,11 +133,13 @@ public partial class TypeChecker
             if (staticMethods != null && staticMethods.TryGetValue(memberName.Lexeme, out var staticMethodType))
             {
                 EnforceStaticMemberAccess(current, memberName);
+                ObserveSourceMemberSelection(memberName, current, MemberFacet.Static);
                 return staticMethodType;
             }
             if (staticProps != null && staticProps.TryGetValue(memberName.Lexeme, out var staticPropType))
             {
                 EnforceStaticMemberAccess(current, memberName);
+                ObserveSourceMemberSelection(memberName, current, MemberFacet.Static);
                 return staticPropType;
             }
             current = GetSuperclass(current);
@@ -330,7 +332,7 @@ public partial class TypeChecker
         if (instance.ClassType is TypeInfo.InstantiatedGeneric ig &&
             ig.GenericDefinition is TypeInfo.GenericClass gc)
         {
-            return CheckGetOnGenericInstance(gc, ig.TypeArguments, memberNameStr);
+            return CheckGetOnGenericInstance(gc, ig.TypeArguments, memberName);
         }
 
         // Handle regular class instance. ResolvedClassType unwraps MutableClass to its
@@ -366,8 +368,9 @@ public partial class TypeChecker
     /// <summary>
     /// Type checks member access on a generic class instance.
     /// </summary>
-    private TypeInfo CheckGetOnGenericInstance(TypeInfo.GenericClass gc, List<TypeInfo> typeArgs, string memberName)
+    private TypeInfo CheckGetOnGenericInstance(TypeInfo.GenericClass gc, List<TypeInfo> typeArgs, Token memberToken)
     {
+        string memberName = memberToken.Lexeme;
         // Build substitution map from type parameters to type arguments
         Dictionary<string, TypeInfo> subs = [];
         for (int i = 0; i < gc.TypeParams.Count; i++)
@@ -376,18 +379,21 @@ public partial class TypeChecker
         // Check for getter first
         if (gc.Getters?.TryGetValue(memberName, out var getterType) == true)
         {
+            ObserveSourceMemberSelection(memberToken, gc, MemberFacet.Instance);
             return Substitute(getterType, subs);
         }
 
         // Check for field
         if (gc.FieldTypes?.TryGetValue(memberName, out var fieldType) == true)
         {
+            ObserveSourceMemberSelection(memberToken, gc, MemberFacet.Instance);
             return Substitute(fieldType, subs);
         }
 
         // Check for method
         if (gc.Methods.TryGetValue(memberName, out var methodType))
         {
+            ObserveSourceMemberSelection(memberToken, gc, MemberFacet.Instance);
             return SubstituteMethodType(methodType, subs);
         }
 
@@ -400,9 +406,15 @@ public partial class TypeChecker
                 var superMethods = GetMethods(currentSuper);
                 var superFields = GetFieldTypes(currentSuper);
                 if (superMethods != null && superMethods.TryGetValue(memberName, out var superMethod))
+                {
+                    ObserveSourceMemberSelection(memberToken, currentSuper, MemberFacet.Instance);
                     return superMethod;
+                }
                 if (superFields != null && superFields.TryGetValue(memberName, out var superField))
+                {
+                    ObserveSourceMemberSelection(memberToken, currentSuper, MemberFacet.Instance);
                     return superField;
+                }
                 currentSuper = GetSuperclass(currentSuper);
             }
         }
@@ -474,6 +486,7 @@ public partial class TypeChecker
             var getters = GetGetters(current);
             if (getters != null && getters.TryGetValue(memberNameStr, out var getterType))
             {
+                ObserveSourceMemberSelection(memberName, current, MemberFacet.Instance);
                 return substitutions.Count > 0 ? Substitute(getterType, substitutions) : getterType;
             }
 
@@ -500,6 +513,7 @@ public partial class TypeChecker
             var methods = GetMethods(current);
             if (methods != null && methods.TryGetValue(memberNameStr, out var methodType))
             {
+                ObserveSourceMemberSelection(memberName, current, MemberFacet.Instance);
                 return substitutions.Count > 0 ? Substitute(methodType, substitutions) : methodType;
             }
 
@@ -507,6 +521,7 @@ public partial class TypeChecker
             var fieldTypes = GetFieldTypes(current);
             if (fieldTypes != null && fieldTypes.TryGetValue(memberNameStr, out var fieldType))
             {
+                ObserveSourceMemberSelection(memberName, current, MemberFacet.Instance);
                 return substitutions.Count > 0 ? Substitute(fieldType, substitutions) : fieldType;
             }
 

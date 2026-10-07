@@ -1,0 +1,58 @@
+# Source class member provenance
+
+`TypeChecker.WithMemberProvenance()` records source class origins separately from
+lexical bindings. The language server freezes both indexes into one checked
+analysis. This is metadata for editor consumers; it does not change diagnostics,
+type results or runtime behavior. Ordinary compiler checking leaves capture off.
+
+Member uses also require parser-owned authoritative source views from
+`WithSourceDocument(document).WithEditorSyntax()`. The language-server builder
+enables both. Enabling checker capture alone can retain direct declarations,
+but use occurrences remain unavailable without those exact written-owner views.
+
+One captured document and reference-equal class AST define a canonical source
+owner. Checker declaration IDs observed during preparation and body checking are
+aliases of that owner. The first observed ID is its stable canonical ID; integer
+equality alone does not establish source identity. A new checker generation
+produces new member identities. Frozen copies remain independent of later checks.
+
+| Source or operation | Provenance contract |
+| --- | --- |
+| Identifier-named source fields, methods, auto-accessors and parameter-properties | Direct source declarations form canonical groups, with separate instance/static facets. User `.d.ts` classes and class expressions participate. |
+| Legal overloads and getter/setter pairs | One canonical group retains every source declaration. Invalid mixed declarations do not merge merely because their names collide. |
+| Inherited and generic members | The checker-selected declaring class supplies the origin. An override has its own origin; supported instantiated/inherited generic lookups retain the base origin. |
+| Named reads, writes, calls, `this` and `super` | Actual successful checker-selected lookup branches record separate operation facts. A failed call can retain a proven member read without claiming call proof. |
+| Repeated checker passes | A later check replaces the same AST owner's operation fact. Distinct owners or operations combine conservatively; earlier speculative failures cannot poison an authoritative recheck. |
+| Union members | Every required constituent must be supported and agree on one canonical origin. Different origins remain explicit candidates and yield no authoritative definition/reference result. |
+| Nullable optional access and unvisited intersection constituents | Unproven branches keep the aggregate unavailable. The index does not run additional checker lookups to infer an identity. |
+| ECMAScript private reads/writes/calls | The checker-selected lexical owner and nominal receiver must prove the correct instance/static private facet. Source-owner aliases preserve that proof across checker passes. |
+| `#field in candidate` | A successful check names the exact lexical brand, including a checker-valid `object` or `any` candidate. The probed object's nominal class is not the brand identity. |
+| Updates | A checked operand such as `c.value++` can retain a proven read. Existing update checking does not establish a separate source-member write. |
+| Compound/logical member assignments and literal-key class indexing | Existing paths such as `c.value += 1`, `c.value ||= 1` and `c['value']` can return `any` without selecting a named class member. Those paths remain unavailable. Exact key ranges are necessary, but do not themselves prove an origin. |
+| Property-flow narrowings | The current early return supplies a narrowed type without a new member selection. Carrying the previous origin would require provenance to follow the same narrowing-context invalidation, scope and merge rules; no global name/path guess is used. |
+| Existing `any` fallbacks | Generic self-typed method parameters and some forward class-typed `.ts` parameters currently become `any`. Capture on/off preserve that behavior and refuse a fabricated origin; supported local construction and declaration-order-safe types still participate. |
+| Structural/interface/record/mapped/index-signature, dynamic/unknown/error, CLR and built-in domains | No source class identity is fabricated. Quoted/numeric/arbitrary computed declarations are outside this first source-member scope. |
+| Generated syntax | An in-range token is insufficient. The exact occurrence owner needs an authoritative written member-name view, so generated parameter-property prologue writes cannot impersonate source uses. |
+
+`MemberResolution` retains candidates and lookup completeness separately.
+`IsResolved` requires one candidate and complete required evidence. Frozen
+definition and known-reference queries require that resolved identity. Project
+graph completeness is a separate analysis fact.
+
+These frozen definition/reference helpers expose analysis data for later editor
+consumers. Member capture itself does not add LSP definition/reference results.
+
+Every new member identity currently denies rename. A parameter-property's
+constructor-local lexical binding also denies rename because editing that facet
+alone would miss property uses. Ordinary lexical bindings retain their existing
+complete-graph rename behavior. Later private rename support must prove its
+specific local domain; this index does not grant that permission.
+
+`MemberIndexTests`, `SourceMemberDeclarationTests`, `SourceMemberOccurrenceTests`
+and `MemberAnalysisTests` verify identities, operation evidence, source ownership,
+refusals and snapshot lifetime. `RenameServiceTests` independently protects the
+parameter-property gate.
+
+The optional [member provenance benchmark](../benchmarks/member-provenance/README.md)
+compares ordinary and enabled checking against the preceding commit, including
+allocation, retained publication size and semantic identity fingerprints.

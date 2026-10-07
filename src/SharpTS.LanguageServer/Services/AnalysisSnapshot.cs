@@ -78,9 +78,11 @@ internal sealed class AnalysisSnapshot
         bool hasRecoveredSyntax = false,
         bool hasPartialSemantics = false,
         AnalysisOptions? options = null,
-        IReadOnlyList<AnalysisDependency>? dependencies = null)
+        IReadOnlyList<AnalysisDependency>? dependencies = null,
+        FrozenMemberIndex? members = null)
     {
         Bindings = bindings;
+        Members = members ?? FrozenMemberIndex.Empty;
         _typeMap = typeMap;
         Documents = documents.ToImmutableArray();
         _documentsByPath = documents.ToFrozenDictionary(
@@ -97,6 +99,7 @@ internal sealed class AnalysisSnapshot
     }
 
     public FrozenBindingIndex Bindings { get; }
+    public FrozenMemberIndex Members { get; }
     public IReadOnlyList<AnalysisDocument> Documents { get; }
     public IReadOnlyList<SharpDiagnostic> Diagnostics { get; }
     public NavigationGraphScope Scope { get; }

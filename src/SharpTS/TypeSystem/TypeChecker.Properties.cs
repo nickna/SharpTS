@@ -31,6 +31,15 @@ public partial class TypeChecker
 
     private TypeInfo CheckSuper(Expr.Super expr)
     {
+        using var memberLookup = expr.Method is { } name
+            ? BeginSourceMemberLookup(expr, name, MemberOperation.Read) : null;
+        TypeInfo result = CheckSuperCore(expr);
+        memberLookup?.Succeed();
+        return result;
+    }
+
+    private TypeInfo CheckSuperCore(Expr.Super expr)
+    {
         if (_currentClass == null)
         {
             throw new TypeCheckException("Cannot use 'super' outside of a class.", tsCode: "TS2335");
@@ -71,6 +80,7 @@ public partial class TypeChecker
             {
                 if (GetMethodAccess(current)?.GetValueOrDefault(expr.Method.Lexeme) == AccessModifier.Private)
                     throw new TypeCheckException($" Property '{expr.Method.Lexeme}' is private and only accessible within class '{GetClassName(current)}'.", tsCode: "TS2341");
+                ObserveSourceMemberSelection(expr.Method, current, MemberFacet.Instance);
                 return substitutions.Count == 0 ? methodType : Substitute(methodType, substitutions);
             }
             current = GetSuperclass(current);
@@ -120,6 +130,14 @@ public partial class TypeChecker
     }
 
     private TypeInfo CheckGet(Expr.Get get)
+    {
+        using var memberLookup = BeginSourceMemberLookup(get, get.Name, MemberOperation.Read);
+        TypeInfo result = CheckGetCore(get);
+        memberLookup?.Succeed();
+        return result;
+    }
+
+    private TypeInfo CheckGetCore(Expr.Get get)
     {
         if (get.Object is Expr.Variable variable &&
             _excessivelyRecursiveVariables.Contains(variable.Name.Lexeme))
@@ -200,6 +218,7 @@ public partial class TypeChecker
             return windowGlobalMember;
 
         TypeInfo objType = CheckExpr(get.Object);
+        ExpectSourceMemberReceiver(objType);
 
         if (_hasDefaultLibraries &&
             get.Object is Expr.Variable { Name.Lexeme: "top" } &&
@@ -697,6 +716,14 @@ public partial class TypeChecker
 
     private TypeInfo CheckSet(Expr.Set set)
     {
+        using var memberLookup = BeginSourceMemberLookup(set, set.Name, MemberOperation.Write);
+        TypeInfo result = CheckSetCore(set);
+        memberLookup?.Succeed();
+        return result;
+    }
+
+    private TypeInfo CheckSetCore(Expr.Set set)
+    {
         bool directGlobalObject = set.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
             set.Object is Expr.This && _currentFunctionReturnType is null;
         if (_hasDefaultLibraries && directGlobalObject &&
@@ -736,6 +763,7 @@ public partial class TypeChecker
         {
             objType = declaredUnion;
         }
+        ExpectSourceMemberReceiver(objType);
 
         if (objType is TypeInfo.Undefined && set.Object is Expr.This)
         {
@@ -825,6 +853,7 @@ public partial class TypeChecker
                 if (staticMethods != null && staticMethods.TryGetValue(set.Name.Lexeme, out var staticMethodType))
                 {
                     EnforceStaticMemberAccess(current, set.Name);
+                    ObserveSourceMemberSelection(set.Name, current, MemberFacet.Static);
                     TypeInfo methodValueType = CheckExpr(set.Value);
                     if (!IsCompatible(staticMethodType, methodValueType))
                         throw new TypeCheckException($" Cannot assign '{methodValueType}' to static method '{set.Name.Lexeme}' of type '{staticMethodType}'.", tsCode: "TS2322");
@@ -836,6 +865,7 @@ public partial class TypeChecker
                     EnforceStaticMemberAccess(current, set.Name);
                     if (ClassInfoAccessor.Get(current, c => c.Core.StaticReadonlyFields, gc => gc.Core.StaticReadonlyFields)?.Contains(set.Name.Lexeme) == true)
                         throw new TypeCheckException($" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.", tsCode: "TS2540");
+                    ObserveSourceMemberSelection(set.Name, current, MemberFacet.Static);
                     TypeInfo valueType = CheckExpr(set.Value);
                     if (!IsCompatible(staticPropType, valueType))
                     {
@@ -865,6 +895,7 @@ public partial class TypeChecker
                  // Check for setter
                  if (gc.Setters?.TryGetValue(memberName, out var setterType) == true)
                  {
+                     ObserveSourceMemberSelection(set.Name, gc, MemberFacet.Instance);
                      var substitutedType = Substitute(setterType, subs);
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(substitutedType, valueType))
@@ -878,6 +909,7 @@ public partial class TypeChecker
                  // Check for field
                  if (gc.FieldTypes?.TryGetValue(memberName, out var fieldType) == true)
                  {
+                     ObserveSourceMemberSelection(set.Name, gc, MemberFacet.Instance);
                      var substitutedType = Substitute(fieldType, subs);
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(substitutedType, valueType))
@@ -904,6 +936,7 @@ public partial class TypeChecker
                  var getters = GetGetters(current);
                  if (setters != null && setters.TryGetValue(memberName, out var setterType))
                  {
+                     ObserveSourceMemberSelection(set.Name, current, MemberFacet.Instance);
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(setterType, valueType))
                      {
@@ -971,6 +1004,7 @@ public partial class TypeChecker
                  var fieldTypes = GetFieldTypes(current);
                  if (fieldTypes != null && fieldTypes.TryGetValue(memberName, out var fieldDeclType))
                  {
+                     ObserveSourceMemberSelection(set.Name, current, MemberFacet.Instance);
                      if (fieldDeclType is not (TypeInfo.Inferred or TypeInfo.Any)
                          && !IsCompatible(fieldDeclType, fieldValueType))
                      {
@@ -1283,6 +1317,14 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckGetPrivate(Expr.GetPrivate get)
     {
+        using var memberLookup = BeginSourceMemberLookup(get, get.Name, MemberOperation.Read);
+        TypeInfo result = CheckGetPrivateCore(get);
+        memberLookup?.Succeed();
+        return result;
+    }
+
+    private TypeInfo CheckGetPrivateCore(Expr.GetPrivate get)
+    {
         // Verify we're inside a class body
         if (_currentClass == null)
         {
@@ -1298,16 +1340,24 @@ public partial class TypeChecker
         // Look up in current class's private fields (NOT inherited - private fields are not inherited)
         if (_currentClass.PrivateFieldTypes.TryGetValue(fieldName, out var fieldType))
         {
+            ObservePrivateSourceMemberSelection(get.Name, objType, _currentClass, MemberFacet.PrivateInstance);
             return fieldType;
         }
         if (_currentClass.PrivateMethodTypes.TryGetValue(fieldName, out var methodType))
+        {
+            ObservePrivateSourceMemberSelection(get.Name, objType, _currentClass, MemberFacet.PrivateInstance);
             return methodType;
+        }
         if (_currentClass.StaticPrivateMethodTypes.TryGetValue(fieldName, out var staticMethodType))
+        {
+            ObservePrivateSourceMemberSelection(get.Name, objType, _currentClass, MemberFacet.PrivateStatic);
             return staticMethodType;
+        }
 
         // Check static private fields if accessing on the class itself
         if (IsStaticPrivateConstructor(objType) && _currentClass.StaticPrivateFieldTypes.TryGetValue(fieldName, out var staticFieldType))
         {
+            ObservePrivateSourceMemberSelection(get.Name, objType, _currentClass, MemberFacet.PrivateStatic);
             return staticFieldType;
         }
 
@@ -1318,6 +1368,14 @@ public partial class TypeChecker
     /// Type checks ES2022 private field assignment: obj.#field = value
     /// </summary>
     private TypeInfo CheckSetPrivate(Expr.SetPrivate set)
+    {
+        using var memberLookup = BeginSourceMemberLookup(set, set.Name, MemberOperation.Write);
+        TypeInfo result = CheckSetPrivateCore(set);
+        memberLookup?.Succeed();
+        return result;
+    }
+
+    private TypeInfo CheckSetPrivateCore(Expr.SetPrivate set)
     {
         // Verify we're inside a class body
         if (_currentClass == null)
@@ -1333,10 +1391,12 @@ public partial class TypeChecker
         TypeInfo? fieldType = null;
         if (_currentClass.PrivateFieldTypes.TryGetValue(fieldName, out var pf))
         {
+            ObservePrivateSourceMemberSelection(set.Name, objType, _currentClass, MemberFacet.PrivateInstance);
             fieldType = pf;
         }
         else if (IsStaticPrivateConstructor(objType) && _currentClass.StaticPrivateFieldTypes.TryGetValue(fieldName, out var spf))
         {
+            ObservePrivateSourceMemberSelection(set.Name, objType, _currentClass, MemberFacet.PrivateStatic);
             fieldType = spf;
         }
 
@@ -1358,6 +1418,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckCallPrivate(Expr.CallPrivate call)
     {
+        ForgetSourceMemberCall(call, call.Name, call);
         // Verify we're inside a class body
         if (_currentClass == null)
         {
@@ -1369,6 +1430,7 @@ public partial class TypeChecker
 
         // Look up in current class's private methods (NOT inherited)
         TypeInfo? methodType = null;
+        MemberFacet selectedFacet = MemberFacet.PrivateInstance;
         if (_currentClass.PrivateMethodTypes.TryGetValue(methodName, out var pm))
         {
             methodType = pm;
@@ -1376,6 +1438,7 @@ public partial class TypeChecker
         else if (IsStaticPrivateConstructor(objType) && _currentClass.StaticPrivateMethodTypes.TryGetValue(methodName, out var spm))
         {
             methodType = spm;
+            selectedFacet = MemberFacet.PrivateStatic;
         }
 
         if (methodType == null)
@@ -1388,6 +1451,7 @@ public partial class TypeChecker
         {
             throw new TypeCheckException($" Private member '{methodName}' is not a method.", tsCode: "TS2349");
         }
+        RecordPrivateSourceMemberRead(call, call.Name, objType, _currentClass, selectedFacet);
 
         // Check argument count
         if (call.Arguments.Count < funcType.RequiredParams)
@@ -1421,6 +1485,7 @@ public partial class TypeChecker
             }
         }
 
+        RecordProvenSourceMemberCall(call, call.Name, call);
         return funcType.ReturnType;
     }
 

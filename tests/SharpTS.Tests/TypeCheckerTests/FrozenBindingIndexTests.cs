@@ -7,6 +7,26 @@ namespace SharpTS.Tests.TypeCheckerTests;
 public sealed class FrozenBindingIndexTests
 {
     [Fact]
+    public void RenameDenialIsMonotonicAndCopiedAtPublication()
+    {
+        var document = new SourceDocument("parameter-property.ts", "value");
+        var index = new BindingIndex();
+        BindingSymbol mutable = index.Declare(Name("value", 0), document, BindingNamespace.Value);
+        FrozenBindingIndex before = index.Freeze();
+
+        mutable.DenyRename(BindingRenameEligibility.ParameterPropertyRequiresCoordinatedEdits);
+        mutable.DenyRename(BindingRenameEligibility.AllowedLexical);
+        FrozenBindingIndex after = index.Freeze();
+        index.Clear();
+
+        Assert.Equal(BindingRenameEligibility.AllowedLexical,
+            Assert.Single(before.FindSymbols(document, 0)).RenameEligibility);
+        Assert.Equal(BindingRenameEligibility.ParameterPropertyRequiresCoordinatedEdits,
+            Assert.Single(after.FindSymbols(document, 0)).RenameEligibility);
+        Assert.Single(after.FindDefinitions(document, 0));
+    }
+
+    [Fact]
     public void PublishedDeclarationsAndOccurrencesSurviveFurtherCheckingAndClear()
     {
         var document = new SourceDocument("frozen.ts", "value value value value");

@@ -178,3 +178,8 @@ Full mode produces a rename edit only when the server has loaded every configure
 project reference needed for the selected semantic binding. It deliberately refuses rename for an
 incomplete graph rather than returning a partial cross-file edit. General object/class
 property-member rename is not currently offered.
+
+Constructor parameter-properties, such as `constructor(public value: number)`, also refuse rename
+from their declaration or constructor-local uses: those edits would need to coordinate the
+property name and its uses. Ordinary constructor parameters retain lexical rename support when
+the configured graph is complete.

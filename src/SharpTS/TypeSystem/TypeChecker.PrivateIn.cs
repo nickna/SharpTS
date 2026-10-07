@@ -9,6 +9,10 @@ public partial class TypeChecker
 
     internal TypeInfo VisitPrivateIn(Expr.PrivateIn expr)
     {
+        SourceDocument? sourceDocument = Members.IsEnabled ? CurrentSourceDocument : null;
+        Token? writtenName = sourceDocument is null ? null : WrittenSourceMemberName(sourceDocument, expr, expr.Name);
+        if (writtenName is not null)
+            Members.RemoveOperation(sourceDocument, writtenName, MemberOperation.Presence, expr);
         if (_currentClass == null)
             throw new TypeCheckException("Private identifiers are not allowed outside class bodies.", tsCode: "TS18016");
         string name = expr.Name.Lexeme;
@@ -23,6 +27,21 @@ public partial class TypeChecker
             throw new TypeCheckException("Object is of type 'unknown'.", tsCode: "TS18046");
         if (!IsAnyPermissive(type) && IsInvalidPrivateInReceiver(type))
             throw new TypeCheckException($"Type '{type}' is not assignable to type 'object'.", tsCode: "TS2322");
+        if (writtenName is not null)
+        {
+            // Presence checks name the lexical brand even when the probed object is not
+            // nominally an instance of the declaring class. The checker recorded that owner.
+            TypeInfo.Class? checkedOwner = _typeMap.GetPrivateInOwner(expr.Name);
+            if (checkedOwner is not null)
+            {
+                MemberFacet facet = checkedOwner.PrivateFieldTypes.ContainsKey(name) ||
+                    checkedOwner.PrivateMethodTypes.ContainsKey(name)
+                    ? MemberFacet.PrivateInstance : MemberFacet.PrivateStatic;
+                Members.Bind(sourceDocument, writtenName,
+                    Members.ResolveSelected(checkedOwner.Core.DeclarationId, facet, name),
+                    MemberOperation.Presence, owner: expr);
+            }
+        }
         return TypeInfo.Primitive.Boolean;
     }
 

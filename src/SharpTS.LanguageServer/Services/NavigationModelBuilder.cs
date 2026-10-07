@@ -16,6 +16,7 @@ internal sealed record CheckedNavigationModel(
 {
     public NavigationGraphScope Scope => Snapshot.Scope;
     public FrozenBindingIndex Bindings => Snapshot.Bindings;
+    public FrozenMemberIndex Members => Snapshot.Members;
 }
 
 /// <summary>
@@ -267,7 +268,8 @@ internal static class NavigationModelBuilder
 
             checker = new TypeChecker(workspace.CheckerOptions)
                 .WithFilePath(absolutePath)
-                .WithCancellation(cancellationToken);
+                .WithCancellation(cancellationToken)
+                .WithMemberProvenance();
             checker.SetDecoratorMode(workspace.DecoratorMode);
             modulesToCheck = resolver.GetModulesInOrder(connectedRoots);
             allRootsLoaded &= modulesToCheck.All(module => module.ParseDiagnostics.Count == 0);
@@ -310,7 +312,8 @@ internal static class NavigationModelBuilder
                 diagnostic.Severity == SharpTS.Diagnostics.DiagnosticSeverity.Error),
             options: new AnalysisOptions(workspace.DecoratorMode, workspace.JsxOptions, workspace.CheckerOptions),
             dependencies: modulesToCheck.SelectMany(module => module.Dependencies.Concat(module.ReferencedScripts)
-                .Select(dependency => new AnalysisDependency(module.Path, dependency.Path))).ToArray());
+                .Select(dependency => new AnalysisDependency(module.Path, dependency.Path))).ToArray(),
+            members: checker.Members.Freeze());
         return new ProjectBuildResult(new CheckedNavigationModel(snapshot, document), isComplete);
     }
 

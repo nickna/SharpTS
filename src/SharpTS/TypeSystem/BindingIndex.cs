@@ -14,6 +14,13 @@ public enum BindingNamespace
     Label,
 }
 
+/// <summary>Whether edits for this lexical binding are independently safe.</summary>
+public enum BindingRenameEligibility
+{
+    AllowedLexical,
+    ParameterPropertyRequiresCoordinatedEdits,
+}
+
 /// <summary>
 /// One source declaration participating in a semantic binding.
 /// </summary>
@@ -56,6 +63,13 @@ public sealed class BindingSymbol
     public string Name { get; }
     public BindingNamespace Namespace { get; }
     public IReadOnlyList<BindingDeclaration> Declarations => _declarations;
+    public BindingRenameEligibility RenameEligibility { get; private set; }
+
+    internal void DenyRename(BindingRenameEligibility reason)
+    {
+        if (reason != BindingRenameEligibility.AllowedLexical)
+            RenameEligibility = reason;
+    }
 
     internal void AddDeclaration(SourceDocument? document, Token name)
     {
@@ -110,7 +124,8 @@ public sealed class BindingIndex
                     symbol.Id,
                     symbol.Name,
                     symbol.Namespace,
-                    symbol.Declarations));
+                    symbol.Declarations,
+                    symbol.RenameEligibility));
             }
         }
 
@@ -377,18 +392,21 @@ public sealed class FrozenBindingSymbol
         int id,
         string name,
         BindingNamespace bindingNamespace,
-        IReadOnlyList<BindingDeclaration> declarations)
+        IReadOnlyList<BindingDeclaration> declarations,
+        BindingRenameEligibility renameEligibility)
     {
         Id = id;
         Name = name;
         Namespace = bindingNamespace;
         Declarations = declarations.ToImmutableArray();
+        RenameEligibility = renameEligibility;
     }
 
     public int Id { get; }
     public string Name { get; }
     public BindingNamespace Namespace { get; }
     public IReadOnlyList<BindingDeclaration> Declarations { get; }
+    public BindingRenameEligibility RenameEligibility { get; }
 }
 
 /// <summary>

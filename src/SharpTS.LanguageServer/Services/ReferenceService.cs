@@ -8,7 +8,8 @@ internal sealed record NavigationReferenceResult(
     IReadOnlyList<Location> Locations,
     IReadOnlyList<string> ConfigPaths,
     bool IsComplete,
-    IReadOnlyList<AnalysisValidation>? Validations = null)
+    IReadOnlyList<AnalysisValidation>? Validations = null,
+    bool IsRenameEligible = false)
 {
     public bool IsCurrent(CancellationToken cancellationToken = default)
     {
@@ -97,11 +98,15 @@ public sealed class ReferenceService : IDisposable
             return new NavigationReferenceResult([], model.Scope.ConfigPath is null ? [] : [model.Scope.ConfigPath],
                 model.Scope.IsComplete, validations);
 
+        bool isRenameEligible = selectedSymbols.All(symbol =>
+            symbol.RenameEligibility == BindingRenameEligibility.AllowedLexical);
+
         var locations = new Dictionary<LocationKey, Location>();
         AddOccurrences(locations, model.Bindings.FindReferences(selectedSymbols, includeDeclaration), cancellationToken);
         if (workspaceRoots is not { Count: > 0 })
             return new NavigationReferenceResult(Sort(locations.Values),
-                model.Scope.ConfigPath is null ? [] : [model.Scope.ConfigPath], model.Scope.IsComplete, validations);
+                model.Scope.ConfigPath is null ? [] : [model.Scope.ConfigPath], model.Scope.IsComplete, validations,
+                isRenameEligible);
 
         BindingAnchor[] anchors = selectedSymbols.SelectMany(symbol => symbol.Declarations.Select(declaration =>
             new BindingAnchor(Path.GetFullPath(declaration.Document.Path), declaration.Name.Start, symbol.Namespace)))
@@ -136,12 +141,15 @@ public sealed class ReferenceService : IDisposable
                             matchingSymbols.Add(candidate);
                     }
                 }
+                isRenameEligible &= matchingSymbols.All(symbol =>
+                    symbol.RenameEligibility == BindingRenameEligibility.AllowedLexical);
                 AddOccurrences(locations, projectModel.Bindings.FindReferences(matchingSymbols.ToArray(), includeDeclaration),
                     cancellationToken);
             }
         }
         return new NavigationReferenceResult(Sort(locations.Values),
-            configPaths.Order(StringComparer.OrdinalIgnoreCase).ToArray(), isComplete, validations.Distinct().ToArray());
+            configPaths.Order(StringComparer.OrdinalIgnoreCase).ToArray(), isComplete, validations.Distinct().ToArray(),
+            isRenameEligible);
     }
 
     private static void AddOccurrences(Dictionary<LocationKey, Location> locations,

@@ -54,7 +54,7 @@ public sealed class RenameService
 
     private static LspRange? PrepareValue(string path, Position position, NavigationReferenceResult result)
     {
-        if (!result.IsComplete || result.Locations.Count == 0) return null;
+        if (!result.IsComplete || !result.IsRenameEligible || result.Locations.Count == 0) return null;
         DocumentUri currentUri = DocumentUri.FromFileSystemPath(Path.GetFullPath(path));
         return result.Locations.Where(location => location.Uri == currentUri)
             .Select(location => location.Range).FirstOrDefault(range => Contains(range, position));
@@ -62,7 +62,7 @@ public sealed class RenameService
 
     private static WorkspaceEdit? RenameValue(string newName, NavigationReferenceResult result)
     {
-        if (!result.IsComplete || result.Locations.Count == 0) return null;
+        if (!result.IsComplete || !result.IsRenameEligible || result.Locations.Count == 0) return null;
         return new WorkspaceEdit
         {
             Changes = result.Locations.GroupBy(location => location.Uri).ToDictionary(group => group.Key,

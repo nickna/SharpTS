@@ -2476,6 +2476,7 @@ public partial class TypeChecker
             : new TypeInfo.MutableClass(className, previousClass.Core.DeclarationId);
         mutableClass.Superclass = superclass;
         mutableClass.IsAbstract = classExpr.IsAbstract;
+        RegisterSourceClassMembers(classExpr, mutableClass.DeclarationId);
 
         // If named, define the name in class body scope for self-reference
         if (classExpr.Name != null)
@@ -2790,9 +2791,9 @@ public partial class TypeChecker
 
                 var bodyParamTypes = WidenOptionalParamsForBody(methodType.ParamTypes, method.Parameters);
                 for (int i = 0; i < method.Parameters.Count; i++)
-                    DeclareValue(
+                    DeclareParameterValue(
                         methodEnv,
-                        method.Parameters[i].Name,
+                        method.Parameters[i],
                         bodyParamTypes[i]);
 
                 TypeEnvironment previousEnvFunc = _environment;
@@ -2930,9 +2931,9 @@ public partial class TypeChecker
                         if (accessor.SetterParam != null)
                         {
                             TypeInfo setterParamType = classTypeForBody.Setters[accessor.Name.Lexeme];
-                            DeclareValue(
+                            DeclareParameterValue(
                                 accessorEnv,
-                                accessor.SetterParam.Name,
+                                accessor.SetterParam,
                                 setterParamType);
                         }
                     }

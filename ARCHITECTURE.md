@@ -125,7 +125,7 @@ run before publication, reuse, and the final handler response. Lifecycle and fil
 notifications invalidate the service and cancel obsolete builds.
 
 A completed `AnalysisSnapshot` owns source documents, tokens, recovered parser output, a private
-TypeMap, frozen bindings, diagnostics, options, and graph/completeness facts. No checker or resolver
+TypeMap, frozen bindings/member origins, diagnostics, options, and graph/completeness facts. No checker or resolver
 escapes the builder. Published ASTs are read-only inputs and must never be checked again. Embedded
 standard-library ASTs remain shared read-only compiler inputs. Cursor-specific recovery must use
 separate artifacts keyed by caret/query context and policy, never mutate a base snapshot.
@@ -140,6 +140,26 @@ captures the actual parentheses and top-level commas during parsing. Lookup uses
 range/role ordering; TSX lowering retains original source ownership without turning generated
 factory calls into written invocations. Ordinary compiler parsing keeps this index disabled.
 The [syntax coverage table](docs/editor-syntax-coverage.md) defines supported views and limits.
+
+Editor checking opts into a generation-owned `MemberIndex`, independent of the lexical
+`BindingIndex`. Reference-equal source class owners and captured documents identify canonical
+instance/static/private member groups. Actual checker declaration IDs alias that source owner
+across preparatory passes; generic instantiation and inherited lookup retain its origin. Overloads and
+getter/setter pairs share their source group. Parameter-properties retain separate lexical and
+property identities. Lookup hooks record the member selected by the checker, including operation
+facts and finite candidate sets. An aggregate is authoritative only when every required selection
+is supported and agrees on one origin. Structural, dynamic, CLR/built-in and index-signature
+fallbacks do not acquire fabricated source identities.
+
+`FrozenMemberIndex` copies completed identities and occurrences into the same analysis snapshot,
+without retaining the checker. Ordinary compiler checking leaves member capture disabled.
+Current compound/logical and literal-index paths that fall back to `any` without selecting a
+named source member remain unavailable; checked update operands can retain a proven read without
+claiming write proof. This metadata does not change checker diagnostics or class compatibility.
+Every new member identity denies rename. Lexical parameter-property bindings also deny rename,
+independently of graph completeness, until lexical and property edits can be coordinated.
+The [member provenance contract](docs/editor-member-provenance.md) records supported operations
+and checker paths that currently cannot establish a source origin.
 
 `Parser.ParseForEditor` clones the source capture for bounded cursor-local missing member names
 and unfinished call/new lists. It preserves all original offsets, marks synthetic holes and

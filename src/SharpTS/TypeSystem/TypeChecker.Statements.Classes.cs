@@ -604,6 +604,7 @@ public partial class TypeChecker
                     : new TypeInfo.MutableClass(classStmt.Name.Lexeme, declarationId);
             mutableClass.Superclass = superclass;
             mutableClass.IsAbstract = classStmt.IsAbstract;
+            RegisterSourceClassMembers(classStmt, mutableClass.DeclarationId);
             classTypeEnv.Define(classStmt.Name.Lexeme, mutableClass);
             // `this` in an instance method signature is the polymorphic instance type, not the
             // global object. Make it visible while collecting signatures so `K extends keyof this`
@@ -804,9 +805,9 @@ public partial class TypeChecker
             var bodyParamTypes = WidenOptionalParamsForBody(methodType.ParamTypes, method.Parameters);
             for (int i = 0; i < method.Parameters.Count; i++)
             {
-                DeclareValue(
+                DeclareParameterValue(
                     methodEnv,
-                    method.Parameters[i].Name,
+                    method.Parameters[i],
                     bodyParamTypes[i]);
             }
 
@@ -990,9 +991,9 @@ public partial class TypeChecker
                         TypeInfo setterParamType = accessorName != null
                             ? mutableClass.Setters[accessorName]
                             : (accessor.SetterParam.Type != null ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)! : TypeInfo.Any.Shared);
-                        DeclareValue(
+                        DeclareParameterValue(
                             accessorEnv,
-                            accessor.SetterParam.Name,
+                            accessor.SetterParam,
                             setterParamType);
                     }
                 }
@@ -1284,6 +1285,7 @@ public partial class TypeChecker
             Superclass = superclass,
             IsAbstract = classStmt.IsAbstract
         };
+        RegisterSourceClassMembers(classStmt, mutableClass.DeclarationId);
         classTypeEnv.Define(classStmt.Name.Lexeme, mutableClass);
         classTypeEnv.Define("this", new TypeInfo.Instance(mutableClass));
 
