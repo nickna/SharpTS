@@ -1,4 +1,3 @@
-using SharpTS.Compilation;
 using SharpTS.LanguageServer;
 using SharpTS.LanguageServer.Conversions;
 using SharpTS.LanguageServer.Project;
@@ -51,38 +50,31 @@ for (int i = 0; i < args.Length; i++)
 
 try
 {
-    // Resolve @DotNetType targets against the project's referenced assemblies (via
-    // MetadataLoadContext). With no project/refs the loader still resolves the BCL.
-    var paths = new List<string>(references);
-    if (projectFile != null && File.Exists(projectFile))
-        paths.AddRange(CsprojParser.Parse(projectFile));
-
-    // sharpts.json (walked up from the workspace root = CWD, matching the CLI's
-    // discovery from the entry script) supplies more paths for the SAME loader:
-    // Resolve, not Load — the editor process inspects workspace assemblies through
-    // the MetadataLoadContext and never executes their code. Read once at startup,
-    // like --project. A broken manifest must not kill the server: log and continue.
+    // Acquire manifest packages once at startup, preserving the existing startup behavior.
+    // All later configuration validation and metadata captures are read-only: they inspect
+    // already restored assets and never launch restore during editor requests.
     try
     {
-        var refSet = SharpTS.References.DotNetReferences.Resolve(Environment.CurrentDirectory, []);
-        paths.AddRange(refSet.References.Select(r => r.Path));
+        SharpTS.References.DotNetReferences.Resolve(Environment.CurrentDirectory, []);
     }
     catch (Exception ex)
     {
         await Console.Error.WriteLineAsync($"[LSP] sharpts.json ignored: {ex.Message}");
     }
 
-    using var loader = new ReloadingAssemblyReferenceLoader(paths, sdkPath);
-    Func<IEnumerable<string>> typeNames = () => loader.GetAllPublicTypes()
-        .Select(t => t.FullName)
-        .Where(n => !string.IsNullOrEmpty(n))
-        .Cast<string>();
+    using var metadata = new AnalysisMetadataProvider(
+        projectFile,
+        references,
+        sdkPath,
+        Environment.CurrentDirectory,
+        message => Console.Error.WriteLine($"[LSP] {message}"));
 
     await SharpTSLanguageServer.RunAsync(
-        loader.TryResolve,
-        typeNames,
+        metadata.Resolve,
+        metadata.GetTypeNames,
         mode,
-        diagnosticMode);
+        diagnosticMode,
+        metadataProvider: metadata);
 }
 catch (Exception ex)
 {

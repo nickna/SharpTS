@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 /** Small bounded stdio client for repository smoke tests, with no runtime dependencies. */
 export class LspStdioClient {
   registeredMethods = [];
+  notifications = [];
   #process;
   #pending = new Map();
   #nextId = 1;
@@ -84,6 +85,9 @@ export class LspStdioClient {
         this.#pending.delete(message.id);
         clearTimeout(pending.timer);
         pending.resolve(message);
+      } else if (message.method) {
+        this.notifications.push(message);
+        if (this.notifications.length > 1024) this.notifications.shift();
       }
     }
   }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SharpTS.IO;
 
 namespace SharpTS.References;
 
@@ -12,7 +13,7 @@ internal static class ProjectAssetsReader
 {
     public static RestoreResult Read(string assetsPath, string manifestPath, string targetFramework)
     {
-        using var doc = JsonDocument.Parse(File.ReadAllText(assetsPath));
+        using var doc = JsonDocument.Parse(CompilerFileSystem.ReadAllText(assetsPath));
         var root = doc.RootElement;
 
         // Package install roots (usually just ~/.nuget/packages/, but nuget.config
@@ -130,7 +131,7 @@ internal static class ProjectAssetsReader
         foreach (var folder in packageFolders)
         {
             string candidate = Path.GetFullPath(Path.Combine(folder, relative));
-            if (File.Exists(candidate)) return candidate;
+            if (CompilerFileSystem.FileExists(candidate)) return candidate;
         }
         return null;
     }

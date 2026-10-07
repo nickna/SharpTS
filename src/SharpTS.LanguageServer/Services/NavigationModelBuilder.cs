@@ -5,14 +5,18 @@ using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using SharpTS.TypeSystem.Exceptions;
+using System.Collections.Immutable;
 using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 
 namespace SharpTS.LanguageServer.Services;
 
 internal sealed record CheckedNavigationModel(
-    TypeChecker Checker,
-    SourceDocument Document,
-    NavigationGraphScope Scope);
+    AnalysisSnapshot Snapshot,
+    SourceDocument Document)
+{
+    public NavigationGraphScope Scope => Snapshot.Scope;
+    public FrozenBindingIndex Bindings => Snapshot.Bindings;
+}
 
 /// <summary>
 /// Describes the bounded root set used to discover reverse navigation edges.
@@ -36,7 +40,9 @@ internal static class NavigationModelBuilder
         string path,
         string text,
         IReadOnlyDictionary<string, string>? openDocuments,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action? beforeCheck = null,
+        bool hasPartialMetadata = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string absolutePath = Path.GetFullPath(path);
@@ -69,7 +75,7 @@ internal static class NavigationModelBuilder
                     overlay,
                     configuredWorkspace,
                     requireMembership: true,
-                    cancellationToken);
+                    cancellationToken, beforeCheck, hasPartialMetadata);
                 if (configured.Model is not null)
                     return configured.Model;
             }
@@ -80,7 +86,7 @@ internal static class NavigationModelBuilder
             overlay,
             NavigationWorkspace.Unconfigured(absolutePath, configPath),
             requireMembership: false,
-            cancellationToken).Model;
+            cancellationToken, beforeCheck, hasPartialMetadata).Model;
     }
 
     public static CheckedNavigationWorkspace BuildWorkspace(
@@ -88,7 +94,11 @@ internal static class NavigationModelBuilder
         string text,
         IReadOnlyDictionary<string, string>? openDocuments,
         IReadOnlyList<string> workspaceRoots,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action? beforeCheck = null,
+        IReadOnlyList<CheckedNavigationModel>? reuseModels = null,
+        bool preserveCapturedOverlay = false,
+        bool hasPartialMetadata = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string absolutePath = Path.GetFullPath(path);
@@ -96,6 +106,8 @@ internal static class NavigationModelBuilder
             absolutePath,
             text,
             openDocuments);
+        if (preserveCapturedOverlay && openDocuments?.ContainsKey(absolutePath) != true)
+            overlay.Remove(absolutePath);
         NavigationProjectCatalog catalog =
             NavigationProjectCatalog.Discover(workspaceRoots);
         var models = new List<CheckedNavigationModel>();
@@ -104,20 +116,29 @@ internal static class NavigationModelBuilder
         foreach (TsConfigResult project in catalog.Projects)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            CheckedNavigationModel? reused = reuseModels?.FirstOrDefault(model =>
+                string.Equals(model.Scope.ConfigPath, project.ConfigPath, StringComparison.OrdinalIgnoreCase) &&
+                model.Snapshot.TryGetDocument(absolutePath, out _));
+            if (reused is not null && reused.Snapshot.TryGetDocument(absolutePath, out var reusedDocument))
+            {
+                models.Add(new CheckedNavigationModel(reused.Snapshot, reusedDocument!.Document));
+                isComplete &= reused.Scope.IsComplete;
+                continue;
+            }
             ProjectBuildResult result = TryBuildProject(
                 absolutePath,
                 overlay,
                 NavigationWorkspace.FromProject(project),
                 requireMembership: true,
-                cancellationToken);
+                cancellationToken, beforeCheck, hasPartialMetadata);
             isComplete &= result.IsComplete;
             if (result.Model is not null)
                 models.Add(result.Model);
         }
 
         return new CheckedNavigationWorkspace(
-            models,
-            catalog.ConfigPaths,
+            models.ToImmutableArray(),
+            catalog.ConfigPaths.ToImmutableArray(),
             isComplete && models.Count > 0);
     }
 
@@ -126,11 +147,15 @@ internal static class NavigationModelBuilder
         IReadOnlyDictionary<string, string> overlay,
         NavigationWorkspace workspace,
         bool requireMembership,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action? beforeCheck,
+        bool hasPartialMetadata)
     {
         ModuleResolver resolver;
         List<ParsedModule> modulesToCheck;
-        CheckedNavigationModel model;
+        TypeChecker checker;
+        SourceDocument document;
+        NavigationGraphScope scope;
         bool isComplete;
         try
         {
@@ -142,7 +167,8 @@ internal static class NavigationModelBuilder
                 virtualFilesFallBackToDisk: true)
             {
                 JsxOptions = workspace.JsxOptions,
-            };
+                RecoverParseErrors = true,
+            }.WithCancellation(cancellationToken);
 
             bool allRootsLoaded = true;
             List<ParsedModule> declarationRoots = [];
@@ -151,9 +177,11 @@ internal static class NavigationModelBuilder
                 cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
-                    declarationRoots.Add(
-                        resolver.LoadModule(declarationPath, workspace.DecoratorMode));
+                    ParsedModule declaration = resolver.LoadModule(declarationPath, workspace.DecoratorMode);
+                    declarationRoots.Add(declaration);
+                    allRootsLoaded &= declaration.ParseDiagnostics.Count == 0;
                 }
+                catch (OperationCanceledException) { throw; }
                 catch
                 {
                     allRootsLoaded = false;
@@ -172,9 +200,11 @@ internal static class NavigationModelBuilder
                     ParsedModule root = resolver.LoadProgram(
                         rootPath,
                         workspace.DecoratorMode);
+                    allRootsLoaded &= root.ParseDiagnostics.Count == 0;
                     if (!loadedRoots.Contains(root))
                         loadedRoots.Add(root);
                 }
+                catch (OperationCanceledException) { throw; }
                 catch
                 {
                     allRootsLoaded = false;
@@ -187,8 +217,9 @@ internal static class NavigationModelBuilder
                 return new ProjectBuildResult(null, allRootsLoaded);
 
             entry ??= resolver.LoadProgram(absolutePath, workspace.DecoratorMode);
-            if (entry.Document is not { } document)
+            if (entry.Document is not { } entryDocument)
                 return new ProjectBuildResult(null, IsComplete: false);
+            document = entryDocument;
             if (!loadedRoots.Contains(entry))
                 loadedRoots.Add(entry);
 
@@ -217,6 +248,7 @@ internal static class NavigationModelBuilder
                     if (!loadedRoots.Contains(root))
                         loadedRoots.Add(root);
                 }
+                catch (OperationCanceledException) { throw; }
                 catch
                 {
                     // Configured roots, not unrelated dirty buffers, define completeness.
@@ -227,23 +259,21 @@ internal static class NavigationModelBuilder
                 declarationRoots.Concat(loadedRoots));
             HashSet<ParsedModule> component = FindConnectedComponent(
                 entry,
-                loadedModules);
+                loadedModules, cancellationToken);
             List<ParsedModule> connectedRoots = loadedRoots
                 .Where(component.Contains)
                 .ToList();
 
-            var checker = new TypeChecker(workspace.CheckerOptions)
+            checker = new TypeChecker(workspace.CheckerOptions)
                 .WithFilePath(absolutePath)
                 .WithCancellation(cancellationToken);
             checker.SetDecoratorMode(workspace.DecoratorMode);
             modulesToCheck = resolver.GetModulesInOrder(connectedRoots);
-            model = new CheckedNavigationModel(
-                checker,
-                document,
-                new NavigationGraphScope(
+            allRootsLoaded &= modulesToCheck.All(module => module.ParseDiagnostics.Count == 0);
+            scope = new NavigationGraphScope(
                     workspace.ConfigPath,
                     workspace.RootFiles,
-                    workspace.IsConfigured && isMember && allRootsLoaded));
+                    workspace.IsConfigured && isMember && allRootsLoaded);
             isComplete = workspace.IsConfigured && allRootsLoaded;
         }
         catch (OperationCanceledException)
@@ -257,9 +287,12 @@ internal static class NavigationModelBuilder
 
         // The checker already recovers expected source errors. Internal checking failures must
         // reach the host's observation boundary instead of silently triggering a fallback model.
+        TypeMap typeMap;
         try
         {
-            model.Checker.CheckModules(modulesToCheck, resolver);
+            beforeCheck?.Invoke();
+            cancellationToken.ThrowIfCancellationRequested();
+            typeMap = checker.CheckModules(modulesToCheck, resolver);
         }
         catch (TypeCheckException)
         {
@@ -267,16 +300,28 @@ internal static class NavigationModelBuilder
             return new ProjectBuildResult(null, IsComplete: false);
         }
         cancellationToken.ThrowIfCancellationRequested();
-        return new ProjectBuildResult(model, isComplete);
+        var documents = modulesToCheck.Where(module => module.Document is not null)
+            .Select(module => new AnalysisDocument(module.Document!, module.Tokens,
+                module.Statements, module.ParseDiagnostics, module.HitParseErrorLimit)).ToArray();
+        var snapshot = new AnalysisSnapshot(checker.Bindings.Freeze(), typeMap, documents,
+            checker.GetDiagnostics(), scope,
+            hasPartialSemantics: hasPartialMetadata || checker.GetDiagnostics().Any(diagnostic =>
+                diagnostic.Severity == SharpTS.Diagnostics.DiagnosticSeverity.Error),
+            options: new AnalysisOptions(workspace.DecoratorMode, workspace.JsxOptions, workspace.CheckerOptions),
+            dependencies: modulesToCheck.SelectMany(module => module.Dependencies.Concat(module.ReferencedScripts)
+                .Select(dependency => new AnalysisDependency(module.Path, dependency.Path))).ToArray());
+        return new ProjectBuildResult(new CheckedNavigationModel(snapshot, document), isComplete);
     }
 
     private static HashSet<ParsedModule> FindConnectedComponent(
         ParsedModule entry,
-        IReadOnlyList<ParsedModule> modules)
+        IReadOnlyList<ParsedModule> modules,
+        CancellationToken cancellationToken)
     {
         var reverseEdges = new Dictionary<ParsedModule, List<ParsedModule>>();
         foreach (var module in modules)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (var dependency in module.Dependencies.Concat(module.ReferencedScripts))
             {
                 if (!reverseEdges.TryGetValue(dependency, out var importers))
@@ -293,6 +338,7 @@ internal static class NavigationModelBuilder
 
         while (pending.TryDequeue(out var current))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (var adjacent in current.Dependencies.Concat(current.ReferencedScripts))
             {
                 if (component.Add(adjacent))

@@ -17,13 +17,16 @@ public sealed class TextDocumentSyncHandler : TextDocumentSyncHandlerBase
 {
     private readonly DocumentStore _store;
     private readonly DiagnosticsCoordinator _diagnostics;
+    private readonly SemanticAnalysisService? _analysis;
 
     public TextDocumentSyncHandler(
         DocumentStore store,
-        DiagnosticsCoordinator diagnostics)
+        DiagnosticsCoordinator diagnostics,
+        SemanticAnalysisService? analysis = null)
     {
         _store = store;
         _diagnostics = diagnostics;
+        _analysis = analysis;
     }
 
     public override TextDocumentAttributes GetTextDocumentAttributes(DocumentUri uri) => new(uri, "typescript");
@@ -36,6 +39,7 @@ public sealed class TextDocumentSyncHandler : TextDocumentSyncHandlerBase
                 request.TextDocument.Text,
                 request.TextDocument.Version ?? 0))
         {
+            _analysis?.InvalidateAll();
             _diagnostics.Queue(uri);
         }
         return Unit.Task;
@@ -53,6 +57,7 @@ public sealed class TextDocumentSyncHandler : TextDocumentSyncHandlerBase
                 version,
                 request.ContentChanges))
         {
+            _analysis?.InvalidateAll();
             _diagnostics.Queue(uri);
         }
         return Unit.Task;
@@ -63,7 +68,10 @@ public sealed class TextDocumentSyncHandler : TextDocumentSyncHandlerBase
     public override Task<Unit> Handle(DidCloseTextDocumentParams request, CancellationToken ct)
     {
         if (_store.Remove(request.TextDocument.Uri.ToString()) is { } closed)
+        {
+            _analysis?.InvalidateAll();
             _diagnostics.Close(closed);
+        }
         return Unit.Task;
     }
 

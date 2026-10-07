@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Xml.Linq;
+using SharpTS.IO;
+using SharpTS.Compilation;
 
 namespace SharpTS.LanguageServer.Documentation;
 
@@ -8,7 +10,9 @@ namespace SharpTS.LanguageServer.Documentation;
 /// </summary>
 public sealed class XmlDocLoader
 {
-    private readonly Dictionary<string, XDocument?> _loadedDocs = new();
+    private const int CacheLimit = 64;
+    private readonly object _gate = new();
+    private readonly Dictionary<string, CachedDocument> _loadedDocs = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets the summary documentation for a type.
@@ -92,32 +96,42 @@ public sealed class XmlDocLoader
 
     private XDocument? GetDocument(Assembly assembly)
     {
-        var location = assembly.Location;
+        var location = AssemblyReferenceLoader.GetSourcePath(assembly);
         if (string.IsNullOrEmpty(location))
             return null;
 
-        if (_loadedDocs.TryGetValue(location, out var cached))
-            return cached;
-
         var xmlPath = Path.ChangeExtension(location, ".xml");
-        if (!File.Exists(xmlPath))
-        {
-            _loadedDocs[location] = null;
-            return null;
-        }
-
+        string? text;
         try
         {
-            var doc = XDocument.Load(xmlPath);
-            _loadedDocs[location] = doc;
-            return doc;
+            text = CompilerFileSystem.FileExists(xmlPath) ? CompilerFileSystem.ReadAllText(xmlPath) : null;
         }
-        catch
+        catch (OperationCanceledException) { throw; }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+
+        lock (_gate)
         {
-            _loadedDocs[location] = null;
-            return null;
+            if (_loadedDocs.TryGetValue(location, out CachedDocument? cached) &&
+                string.Equals(cached.Text, text, StringComparison.Ordinal))
+            {
+                return cached.Document;
+            }
+
+            XDocument? document = null;
+            if (text is not null)
+            {
+                try { document = XDocument.Parse(text); }
+                catch (System.Xml.XmlException) { }
+            }
+            if (!_loadedDocs.ContainsKey(location) && _loadedDocs.Count >= CacheLimit)
+                _loadedDocs.Remove(_loadedDocs.Keys.First());
+            _loadedDocs[location] = new CachedDocument(text, document);
+            return document;
         }
     }
+
+    private sealed record CachedDocument(string? Text, XDocument? Document);
 
     private static string CleanupDocumentation(string text)
     {

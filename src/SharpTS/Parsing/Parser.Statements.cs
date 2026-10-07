@@ -488,6 +488,10 @@ public partial class Parser
                 var decl = Declaration();
                 if (decl != null) statements.Add(decl);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 RecordError(ex.Message);

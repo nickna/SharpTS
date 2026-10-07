@@ -113,6 +113,47 @@ User code imports only public specifiers. `primitive:` modules are private imple
 The user-facing declaration, interpreter export, and compiled emitter for a built-in must describe
 the same surface. See [`src/SharpTS/stdlib/CONTRIBUTING.md`](src/SharpTS/stdlib/CONTRIBUTING.md).
 
+## Editor analysis
+
+`SharpTS.LanguageServer.Services.SemanticAnalysisService` owns completed editor analyses.
+`DocumentStore.TryCapture` supplies one immutable open-buffer capture. The analysis key includes
+that capture's versions/text, workspace roots, and service generation; each build records exact
+compiler filesystem reads, probes, and inventories through the scoped `CompilerFileSystem` seam.
+This includes negative import/configuration probes and disconnected configured roots, since a
+closed root can become a reverse importer. Physical validation and CLR metadata generation checks
+run before publication, reuse, and the final handler response. Lifecycle and file/folder
+notifications invalidate the service and cancel obsolete builds.
+
+A completed `AnalysisSnapshot` owns source documents, tokens, recovered parser output, a private
+TypeMap, frozen bindings, diagnostics, options, and graph/completeness facts. No checker or resolver
+escapes the builder. Published ASTs are read-only inputs and must never be checked again. Embedded
+standard-library ASTs remain shared read-only compiler inputs. Cursor-specific recovery must use
+separate artifacts keyed by caret/query context and policy, never mutate a base snapshot.
+Recovered syntax and partial semantics are explicit; recovered configured roots keep lexical
+rename completeness false. Workspace expansion can reuse an already checked source component
+without inserting a closed declaration into the open-buffer overlay.
+
+Identical in-flight requests coalesce. Caller cancellation stops only that caller's wait;
+invalidation/disposal owns build cancellation. At most two builds execute and sixteen builds are
+admitted concurrently. Completed entries use LRU eviction with an eight-entry bound and a 64 MiB
+estimated source/semantic payload budget. This estimate is not a total heap bound: it excludes CLR
+assembly image ownership and approximates AST/binding overhead. Active leases survive eviction;
+cache/lease disposal releases metadata generations when their last owner finishes. Shared build
+failures remain observable on stderr even if every caller has cancelled.
+
+`AnalysisMetadataProvider` captures read-only project/manifest inputs and reference-counted
+`MetadataLoadContext` generations. Captured private assembly bytes permit replacing user DLLs
+while older requests finish; content fingerprints detect same-size/timestamp changes. XML docs
+and decorator type-name caches validate against their own content/generation. Query-time refresh
+does not run restore or load user assemblies into the execution runtime. The installed default
+framework is a fixed host input; an explicit SDK directory is a mutable observed input.
+
+Interop editor services use these metadata views. General checker CLR synthesis still follows
+the runtime registry path: routing metadata-only Types through synthesis requires metadata-safe
+attribute/primitive inspection and scoped synthesis identities. Missing custom-reference general
+symbols remain partial and acquire no guessed source binding. The shared analysis service
+conservatively invalidates on metadata changes without claiming that synthesis bridge.
+
 ## Interpreter architecture
 
 The interpreter evaluates expressions to `RuntimeValue` and executes statements against a

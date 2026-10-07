@@ -31,7 +31,7 @@ public partial class TypeChecker
     {
         if (IsBareTypeName(typeName))
             return ResolveTypeName(typeName);
-        return Parser.TryParseTypeFragment(typeName) is { } node
+        return Parser.TryParseTypeFragment(typeName, _cancellationToken) is { } node
             ? TryToTypeInfo(node) ?? TypeInfo.Any.Shared
             : TypeInfo.Any.Shared;
     }

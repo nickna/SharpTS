@@ -3,6 +3,7 @@ using OmniSharp.Extensions.LanguageServer.Server;
 using SharpTS.LanguageServer.Handlers;
 using SharpTS.LanguageServer.Conversions;
 using SharpTS.LanguageServer.Services;
+using SharpTS.LanguageServer.Project;
 
 namespace SharpTS.LanguageServer;
 
@@ -27,10 +28,12 @@ public static class SharpTSLanguageServer
         Func<IEnumerable<string>>? typeNames = null,
         LanguageFeatureMode mode = LanguageFeatureMode.Full,
         DiagnosticPublishMode diagnosticMode =
-            DiagnosticPublishMode.SharpTsOnly)
+            DiagnosticPublishMode.SharpTsOnly,
+        AnalysisMetadataProvider? metadataProvider = null)
     {
         var workspaceContext = new NavigationWorkspaceContext();
         var diagnosticsSettings = new DiagnosticsSettings(diagnosticMode);
+        using var analysis = new SemanticAnalysisService(workspaceContext, metadataProvider);
         var server = await OmniSharp.Extensions.LanguageServer.Server.LanguageServer.From(options =>
         {
             options
@@ -41,24 +44,32 @@ public static class SharpTSLanguageServer
                 })
                 .WithInput(Console.OpenStandardInput())
                 .WithOutput(Console.OpenStandardOutput())
-                .WithServices(services => services
+                .WithServices(services =>
+                {
+                    services
                     .AddSingleton(workspaceContext)
                     .AddSingleton(diagnosticsSettings)
+                    .AddSingleton(analysis)
                     .AddSingleton<DocumentStore>()
-                    .AddSingleton(new DiagnosticsService(resolve, typeNames))
+                    .AddSingleton(new DiagnosticsService(resolve, typeNames, analysis, metadataProvider))
                     .AddSingleton<DocumentDependencyGraph>()
                     .AddSingleton<DiagnosticsCoordinator>()
-                    .AddSingleton(new DecoratorService(resolve, typeNames))
+                    .AddSingleton(new DecoratorService(resolve, typeNames,
+                        metadataProvider is null ? null : () => metadataProvider.CurrentGeneration))
                     .AddSingleton(new MemberHoverService(resolve))
                     .AddSingleton<GuiContractService>()
                     .AddSingleton<InteropCodeActionService>()
                     .AddSingleton<DocumentSymbolService>()
                     .AddSingleton<DefinitionService>()
                     .AddSingleton<ReferenceService>()
-                    .AddSingleton<RenameService>())
+                    .AddSingleton<RenameService>();
+                    if (metadataProvider is not null) services.AddSingleton(metadataProvider);
+                })
                 // Served in both modes: this is the interop knowledge no other server has.
                 .WithHandler<TextDocumentSyncHandler>()
                 .WithHandler<ConfigurationHandler>()
+                .WithHandler<AnalysisWatchedFilesHandler>()
+                .WithHandler<AnalysisWorkspaceFoldersHandler>()
                 .WithHandler<HoverHandler>()
                 .WithHandler<CompletionHandler>()
                 .WithHandler<SignatureHelpHandler>()

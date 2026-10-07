@@ -35,7 +35,10 @@ public partial class Parser
     {
         int line = 1;
         for (int i = 0; i < offset && i < _source!.Length; i++)
+        {
+            CheckCancellation();
             if (_source[i] == '\n') line++;
+        }
         return line;
     }
 
@@ -49,6 +52,7 @@ public partial class Parser
     {
         for (int i = _current; i < _tokens.Count; i++)
         {
+            CheckCancellation();
             Token t = _tokens[i];
             if (t.Start < 0) continue;              // parser-synthesized (e.g. '>>' splits)
             if (t.Start > offset) break;            // stream disagrees — corrupted
@@ -93,12 +97,14 @@ public partial class Parser
 
     private void SpliceRelexedTokens(int offset)
     {
-        var relexed = Lexer.Relex(_source!, offset, LineAtOffset(offset), _templateInterpolationDepth);
+        var relexed = Lexer.Relex(_source!, offset, LineAtOffset(offset), _templateInterpolationDepth,
+            _cancellationToken);
 
         int spliceEnd = _tokens.Count;   // exclusive end of the replaced range
         int insertCount = relexed.Count; // fresh tokens to insert (default: all, incl. EOF)
         for (int n = 0; n < relexed.Count; n++)
         {
+            CheckCancellation();
             var (token, neutralAfter) = relexed[n];
             if (!neutralAfter || token.Type == TokenType.EOF) continue;
             int match = FindExactToken(token);
@@ -118,6 +124,7 @@ public partial class Parser
     {
         for (int i = _current; i < _tokens.Count; i++)
         {
+            CheckCancellation();
             Token t = _tokens[i];
             if (t.Start < 0) continue;
             if (t.Start > fresh.Start) return -1;
@@ -415,12 +422,15 @@ public partial class Parser
             bool suppressNextSpreadRightBraceError = false;
             while (true)
             {
+                _cancellationToken.ThrowIfCancellationRequested();
                 // A recovered child can end at EOF after trivia that produced no token;
                 // derive the line from the source offset rather than Previous(), whose
                 // token may still be on the opening line.
                 var scan = JsxText.ScanText(_source!, childStart, LineAtOffset(childStart));
+                _cancellationToken.ThrowIfCancellationRequested();
                 foreach (var error in scan.Errors ?? [])
                 {
+                    CheckCancellation();
                     // The right brace immediately following a JSX spread child closes the
                     // spread syntax consumed by ParseJsxExpressionChild; it is not JSX text.
                     if (error.Character == '}' &&
@@ -433,6 +443,7 @@ public partial class Parser
                 }
                 suppressNextSpreadRightBraceError = false;
                 string? text = JsxText.CookChildText(scan.Raw);
+                _cancellationToken.ThrowIfCancellationRequested();
                 if (text is not null)
                 {
                     children.Add(new Expr.Literal(text));
@@ -469,6 +480,7 @@ public partial class Parser
                     while (childContentOffset < _source!.Length &&
                            char.IsWhiteSpace(_source[childContentOffset]))
                     {
+                        CheckCancellation();
                         childContentOffset++;
                     }
                     bool childStartedWithSlash = childContentOffset < _source.Length &&
@@ -506,6 +518,10 @@ public partial class Parser
                                 ex.Message, ex.TsCode);
                             childStart = offset >= 0 ? offset : _source!.Length;
                             continue;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
                         }
                         catch
                         {
@@ -727,6 +743,7 @@ public partial class Parser
                !char.IsWhiteSpace(_source[end]) &&
                _source[end] is not '>' and not '/' and not '=')
         {
+            CheckCancellation();
             end++;
         }
 
@@ -739,6 +756,7 @@ public partial class Parser
 
         decoded = Regex.Replace(raw, @"\\u\{([0-9a-fA-F]+)\}|\\u([0-9a-fA-F]{4})", match =>
         {
+            CheckCancellation();
             string digits = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
             int codePoint = int.Parse(digits, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
             return char.ConvertFromUtf32(codePoint);
@@ -753,6 +771,7 @@ public partial class Parser
         int braceDepth = 0;
         for (int i = openOffset + 1; i < _source!.Length; i++)
         {
+            CheckCancellation();
             char c = _source[i];
             if (c == '\n') line++;
             if (quote != '\0')
@@ -890,10 +909,15 @@ public partial class Parser
         Token equals = Previous();
         int probe = equals.Start >= 0 ? equals.Start + equals.Lexeme.Length : -1;
         while (probe >= 0 && probe < _source!.Length && char.IsWhiteSpace(_source[probe]))
+        {
+            CheckCancellation();
             probe++;
+        }
         if (probe >= 0 && probe < _source!.Length && _source[probe] is '"' or '\'')
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             var scan = JsxText.CookAttributeValue(_source, probe, equals.Line);
+            _cancellationToken.ThrowIfCancellationRequested();
             // When the upfront lex agrees on the string's extent, just consume its token;
             // otherwise the stream is corrupted from here — repair it from after the quote.
             Token valueToken = Peek();

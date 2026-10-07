@@ -1,3 +1,4 @@
+using SharpTS.IO;
 using System.Text.Json;
 
 namespace SharpTS.Configuration;
@@ -28,6 +29,7 @@ internal static class TsConfigDeclarationResolver
                 // Configuration loading records the selection even when packages
                 // are not installed yet. Program loading produces the diagnostic.
                 try { result.Add(ResolveTypePackage(type, roots)); }
+                catch (OperationCanceledException) { throw; }
                 catch (Exception) { }
             }
         }
@@ -35,9 +37,9 @@ internal static class TsConfigDeclarationResolver
         {
             foreach (string root in roots)
             {
-                if (!Directory.Exists(root))
+                if (!CompilerFileSystem.DirectoryExists(root))
                     continue;
-                foreach (string directory in Directory.EnumerateDirectories(root))
+                foreach (string directory in CompilerFileSystem.EnumerateDirectories(root))
                 {
                     string name = Path.GetFileName(directory);
                     if (name.StartsWith('.'))
@@ -76,7 +78,7 @@ internal static class TsConfigDeclarationResolver
         foreach (string directory in Ancestors(configDirectory))
         {
             string candidate = Path.Combine(directory, "node_modules", "typescript", "lib", fileName);
-            if (File.Exists(candidate))
+            if (CompilerFileSystem.FileExists(candidate))
                 return Path.GetFullPath(candidate);
         }
 
@@ -106,16 +108,16 @@ internal static class TsConfigDeclarationResolver
 
     private static string? TryFindDeclarationEntry(string packageDirectory)
     {
-        if (!Directory.Exists(packageDirectory))
+        if (!CompilerFileSystem.DirectoryExists(packageDirectory))
             return null;
 
         string packageJson = Path.Combine(packageDirectory, "package.json");
-        if (File.Exists(packageJson))
+        if (CompilerFileSystem.FileExists(packageJson))
         {
             try
             {
                 using var document = JsonDocument.Parse(
-                    File.ReadAllText(packageJson),
+                    CompilerFileSystem.ReadAllText(packageJson),
                     new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
                 var root = document.RootElement;
                 foreach (string key in new[] { "types", "typings" })
@@ -125,7 +127,7 @@ internal static class TsConfigDeclarationResolver
                     {
                         string candidate = Path.GetFullPath(
                             Path.Combine(packageDirectory, property.GetString()!));
-                        if (File.Exists(candidate))
+                        if (CompilerFileSystem.FileExists(candidate))
                             return candidate;
                     }
                 }
@@ -137,7 +139,7 @@ internal static class TsConfigDeclarationResolver
         }
 
         string index = Path.Combine(packageDirectory, "index.d.ts");
-        return File.Exists(index) ? Path.GetFullPath(index) : null;
+        return CompilerFileSystem.FileExists(index) ? Path.GetFullPath(index) : null;
     }
 
     private static IEnumerable<string> FindVisibleTypeRoots(string startDirectory)
@@ -145,7 +147,7 @@ internal static class TsConfigDeclarationResolver
         foreach (string directory in Ancestors(startDirectory))
         {
             string root = Path.Combine(directory, "node_modules", "@types");
-            if (Directory.Exists(root))
+            if (CompilerFileSystem.DirectoryExists(root))
                 yield return Path.GetFullPath(root);
         }
     }

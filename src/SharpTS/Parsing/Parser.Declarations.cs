@@ -517,6 +517,10 @@ public partial class Parser
 
             return new Stmt.CallSignature(sigTypeParams, parameters, returnType, returnTypeNode);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch
         {
             _current = saved;
@@ -555,6 +559,10 @@ public partial class Parser
             ConsumeInterfaceMemberSeparator();
 
             return new Stmt.ConstructorSignature(sigTypeParams, parameters, returnType, returnTypeNode);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {

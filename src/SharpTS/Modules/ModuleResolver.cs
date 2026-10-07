@@ -1,3 +1,4 @@
+using SharpTS.IO;
 using System.Collections.Frozen;
 using SharpTS.Configuration;
 using System.Text.Json;
@@ -54,6 +55,19 @@ public class ModuleResolver
     /// </summary>
     private readonly Dictionary<string, string>? _virtualFiles;
     private readonly bool _virtualFilesFallBackToDisk;
+    private CancellationToken _cancellationToken;
+
+    /// <summary>Observes editor cancellation during loading, parsing and graph traversal.</summary>
+    public ModuleResolver WithCancellation(CancellationToken cancellationToken)
+    {
+        _cancellationToken = cancellationToken;
+        return this;
+    }
+
+    private CancellationToken EffectiveCancellationToken => _cancellationToken.CanBeCanceled
+        ? _cancellationToken : CompilerFileSystem.CancellationToken;
+
+    private void ThrowIfCancellationRequested() => EffectiveCancellationToken.ThrowIfCancellationRequested();
 
     /// <summary>
     /// Creates a new module resolver rooted at the given path.
@@ -139,26 +153,32 @@ public class ModuleResolver
 
     private bool ResolverFileExists(string path)
     {
-        if (_virtualFiles is null) return File.Exists(path);
+        ThrowIfCancellationRequested();
+        if (_virtualFiles is null) return CompilerFileSystem.FileExists(path);
         return _virtualFiles.ContainsKey(NormalizePath(path)) ||
-               (_virtualFilesFallBackToDisk && File.Exists(path));
+               (_virtualFilesFallBackToDisk && CompilerFileSystem.FileExists(path));
     }
 
     private bool ResolverDirectoryExists(string path)
     {
-        if (_virtualFiles is null) return Directory.Exists(path);
+        ThrowIfCancellationRequested();
+        if (_virtualFiles is null) return CompilerFileSystem.DirectoryExists(path);
         var canonical = NormalizePath(path);
         var prefix = canonical + Path.DirectorySeparatorChar;
         foreach (var k in _virtualFiles.Keys)
+        {
+            ThrowIfCancellationRequested();
             if (k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
-        return _virtualFilesFallBackToDisk && Directory.Exists(path);
+        }
+        return _virtualFilesFallBackToDisk && CompilerFileSystem.DirectoryExists(path);
     }
 
     private string ResolverReadAllText(string path)
     {
+        ThrowIfCancellationRequested();
         if (_virtualFiles is not null && _virtualFiles.TryGetValue(NormalizePath(path), out var src))
             return src;
-        return File.ReadAllText(path);
+        return CompilerFileSystem.ReadAllText(path);
     }
 
     /// <summary>
@@ -222,6 +242,7 @@ public class ModuleResolver
         ResolutionKind kind,
         bool preferDeclarations)
     {
+        ThrowIfCancellationRequested();
         string currentDir = Path.GetDirectoryName(currentModulePath) ?? _basePath;
 
         // dotnet: scheme — .NET interop imports resolve via reflection, not the file system.
@@ -423,6 +444,7 @@ public class ModuleResolver
 
         while (currentDir != null)
         {
+            ThrowIfCancellationRequested();
             string packageDir = Path.Combine(currentDir, "node_modules", packageName);
 
             if (ResolverDirectoryExists(packageDir))
@@ -607,6 +629,7 @@ public class ModuleResolver
         string? dir = startDir;
         while (dir != null)
         {
+            ThrowIfCancellationRequested();
             string pkgPath = Path.Combine(dir, "package.json");
             var pkg = LoadPackageJson(pkgPath);
             if (pkg != null)
@@ -640,6 +663,7 @@ public class ModuleResolver
         string? dir = startDir;
         while (dir != null)
         {
+            ThrowIfCancellationRequested();
             string pkgPath = Path.Combine(dir, "package.json");
             var pkg = LoadPackageJson(pkgPath);
             if (pkg?.Name == packageName && pkg.Exports != null)
@@ -689,6 +713,7 @@ public class ModuleResolver
         if (ResolverFileExists(path))
         {
             try { pkg = ModulePackageJson.TryLoadFromContent(ResolverReadAllText(path)); }
+            catch (OperationCanceledException) { throw; }
             catch { pkg = null; }
         }
         _packageJsonCache[path] = pkg;
@@ -777,6 +802,7 @@ public class ModuleResolver
     /// <exception cref="Exception">If a circular dependency is detected</exception>
     public ParsedModule LoadModule(string absolutePath, DecoratorMode decoratorMode = DecoratorMode.None)
     {
+        ThrowIfCancellationRequested();
         if (absolutePath.StartsWith(AmbientModulePrefix, StringComparison.Ordinal))
         {
             return _moduleCache.TryGetValue(absolutePath, out var ambient)
@@ -887,12 +913,14 @@ public class ModuleResolver
             string source = ResolverReadAllText(absolutePath);
 
             bool isJsxSource = IsJsxSourcePath(absolutePath);
-            var lexer = new Lexer(source) { JsxTolerant = isJsxSource };
+            var lexer = new Lexer(source) { JsxTolerant = isJsxSource }
+                .WithCancellation(EffectiveCancellationToken);
             var tokens = lexer.ScanTokens();
             // Parse into a document so the module keeps its text, checksum and statement spans —
             // what debug symbols and editor navigation both resolve positions against.
             var document = new SourceDocument(absolutePath, source);
             var parser = new Parser(tokens, decoratorMode)
+                .WithCancellation(EffectiveCancellationToken)
                 .WithSourceDocument(document)
                 .AsDeclarationFile(IsDeclarationFilePath(absolutePath))
                 .WithFilePath(absolutePath)
@@ -916,6 +944,8 @@ public class ModuleResolver
             var statements = parseResult.Statements;
             var module = new ParsedModule(absolutePath, statements)
             {
+                Tokens = tokens.ToArray(),
+                HitParseErrorLimit = parseResult.HitErrorLimit,
                 IsDeclarationFile = IsDeclarationFilePath(absolutePath),
                 Document = document,
             };
@@ -925,7 +955,8 @@ public class ModuleResolver
             module.IsScript = ScriptDetector.IsScriptFile(statements);
 
             // Determine if this is a CommonJS module
-            module.IsCommonJs = CommonJsDetector.Detect(absolutePath) == CommonJsDetector.ModuleKind.CommonJs;
+            module.IsCommonJs = CommonJsDetector.Detect(
+                absolutePath, ResolverFileExists, ResolverReadAllText) == CommonJsDetector.ModuleKind.CommonJs;
 
             // CommonJS files are modules, not scripts — they have isolated scope and their own
             // synthetic require/module/exports bindings. Override the no-import/export heuristic.
@@ -1012,6 +1043,7 @@ public class ModuleResolver
             // Recursively load imported modules
             foreach (var stmt in statements)
             {
+                ThrowIfCancellationRequested();
                 if (stmt is Stmt.Import import)
                 {
                     if (module.IsDeclarationFile
@@ -1251,18 +1283,21 @@ public class ModuleResolver
         _loadingModules.Add(virtualPath);
         try
         {
-            var lexer = new Lexer(tsSource.Text);
+            var lexer = new Lexer(tsSource.Text).WithCancellation(EffectiveCancellationToken);
             var tokens = lexer.ScanTokens();
             // Marked virtual: the stdlib is embedded in the compiler, so there is no file on disk a
             // debugger could open — its text has to travel with the symbols instead.
             var document = new SourceDocument(virtualPath, tsSource.Text, isVirtual: true);
-            var parser = new Parser(tokens, decoratorMode).WithSourceDocument(document);
+            var parser = new Parser(tokens, decoratorMode)
+                .WithCancellation(EffectiveCancellationToken)
+                .WithSourceDocument(document);
             var parseResult = parser.Parse();
             if (!parseResult.IsSuccess)
                 throw new Exception(parseResult.Diagnostics.First().ToString());
 
             var module = new ParsedModule(virtualPath, parseResult.Statements)
             {
+                Tokens = tokens.ToArray(),
                 IsScript = false,
                 IsCommonJs = false,
                 Document = document,
@@ -1275,6 +1310,7 @@ public class ModuleResolver
             // both transparently.
             foreach (var stmt in parseResult.Statements)
             {
+                ThrowIfCancellationRequested();
                 if (stmt is Stmt.Import import)
                 {
                     var importedPath = ResolveModulePath(import.ModulePath, virtualPath);
@@ -1317,14 +1353,16 @@ public class ModuleResolver
         DecoratorMode decoratorMode,
         bool stdlibOnly = false)
     {
-        var walker = new CjsRequireWalker();
+        var walker = new CjsRequireWalker(EffectiveCancellationToken);
         foreach (var stmt in statements)
         {
+            ThrowIfCancellationRequested();
             walker.Visit(stmt);
         }
 
         foreach (var specifier in walker.Specifiers)
         {
+            ThrowIfCancellationRequested();
             // Built-in modules: skip — they're not loaded via the file system.
             if (BuiltInModuleRegistry.IsBuiltIn(specifier.StartsWith("node:") ? specifier[5..] : specifier))
                 continue;
@@ -1336,6 +1374,10 @@ public class ModuleResolver
                 // "require" entry, not "import" (matches Node semantics).
                 requiredPath = ResolveRuntimeModulePath(
                     specifier, absolutePath, ResolutionKind.Cjs);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {
@@ -1354,6 +1396,10 @@ public class ModuleResolver
             {
                 requiredModule = LoadModule(requiredPath, decoratorMode);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch
             {
                 continue;
@@ -1369,9 +1415,21 @@ public class ModuleResolver
     /// <summary>
     /// AST walker that collects literal-specifier require() call arguments from a CJS body.
     /// </summary>
-    private sealed class CjsRequireWalker : AstVisitorBase
+    private sealed class CjsRequireWalker(CancellationToken cancellationToken) : AstVisitorBase
     {
         public List<string> Specifiers { get; } = [];
+
+        public override void Visit(Expr expression)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            base.Visit(expression);
+        }
+
+        public override void Visit(Stmt statement)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            base.Visit(statement);
+        }
 
         protected override void VisitCall(Expr.Call expr)
         {
@@ -1406,11 +1464,13 @@ public class ModuleResolver
     /// <summary>Returns the union of executable root graphs in dependency order.</summary>
     public List<ParsedModule> GetRuntimeModulesInOrder(IEnumerable<ParsedModule> entryPoints)
     {
+        ThrowIfCancellationRequested();
         List<ParsedModule> result = [];
         HashSet<string> visited = [];
 
         void Visit(ParsedModule module)
         {
+            ThrowIfCancellationRequested();
             if (!visited.Add(module.Path))
                 return;
 
@@ -1435,10 +1495,13 @@ public class ModuleResolver
     /// </summary>
     public void RegisterAmbientModuleDeclarations(IEnumerable<ParsedModule> declarationModules)
     {
+        ThrowIfCancellationRequested();
         foreach (var declarationFile in declarationModules)
         {
+            ThrowIfCancellationRequested();
             foreach (var statement in declarationFile.Statements)
             {
+                ThrowIfCancellationRequested();
                 if (statement is not Stmt.DeclareModule declaration ||
                     declaration.ModulePath.StartsWith("./", StringComparison.Ordinal) ||
                     declaration.ModulePath.StartsWith("../", StringComparison.Ordinal))
@@ -1465,6 +1528,7 @@ public class ModuleResolver
                 }
                 foreach (Stmt member in declaration.Members)
                 {
+                    ThrowIfCancellationRequested();
                     if (!module.Statements.Any(existing => ReferenceEquals(existing, member)))
                         module.Statements.Add(member);
                 }
@@ -1477,11 +1541,13 @@ public class ModuleResolver
     /// <summary>Returns the union of several root graphs in dependency order.</summary>
     public List<ParsedModule> GetModulesInOrder(IEnumerable<ParsedModule> entryPoints)
     {
+        ThrowIfCancellationRequested();
         List<ParsedModule> result = [];
         HashSet<string> visited = [];
 
         void Visit(ParsedModule module)
         {
+            ThrowIfCancellationRequested();
             if (visited.Contains(module.Path))
             {
                 return;
@@ -1512,7 +1578,8 @@ public class ModuleResolver
     /// <summary>Real source files currently present in the resolver cache.</summary>
     public IReadOnlyList<string> LoadedFilePaths =>
         _moduleCache.Keys
-            .Where(File.Exists)
+            .Where(Path.IsPathFullyQualified)
+            .Where(CompilerFileSystem.FileExists)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
 
@@ -1521,6 +1588,7 @@ public class ModuleResolver
     /// </summary>
     public ParsedModule? GetCachedModule(string absolutePath)
     {
+        ThrowIfCancellationRequested();
         // Don't normalize virtual paths (builtin: sentinels, stdlib: TS sources, dotnet:
         // interop modules, primitive: C# interop modules — none resolve to a real filesystem path).
         if (!absolutePath.StartsWith(BuiltInModuleRegistry.BuiltInPrefix)
@@ -1542,6 +1610,7 @@ public class ModuleResolver
     /// </summary>
     public ParsedModule LoadProgram(string absolutePath, DecoratorMode decoratorMode = DecoratorMode.None)
     {
+        ThrowIfCancellationRequested();
         var entry = LoadModule(absolutePath, decoratorMode);
         if (!_programOptions.NoLib && !entry.NoDefaultLib)
         {
@@ -1551,13 +1620,14 @@ public class ModuleResolver
 
             foreach (string name in requested)
             {
+                ThrowIfCancellationRequested();
                 ParsedModule library;
                 if (TypeScriptLibProvider.TryGetParsed(name, out _))
                 {
                     library = LoadTypeScriptLibModule(
                         TypeScriptLibProvider.GetVirtualPath(name), decoratorMode);
                 }
-                else if (_virtualFiles is null)
+                else if (_virtualFiles is null || _virtualFilesFallBackToDisk)
                 {
                     // Preserve support for project-local custom library files while
                     // using embedded declarations for the standard TypeScript set.
@@ -1578,6 +1648,7 @@ public class ModuleResolver
 
         foreach (string typeName in GetAutomaticTypeDirectiveNames(absolutePath))
         {
+            ThrowIfCancellationRequested();
             string? declarationPath = ResolveTypeReferenceDirective(typeName, absolutePath);
             if (declarationPath is null)
             {
@@ -1617,12 +1688,14 @@ public class ModuleResolver
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string root in GetEffectiveTypeRoots(containingFile))
         {
+            ThrowIfCancellationRequested();
             if (_virtualFiles is not null)
             {
                 string prefix = NormalizePath(root).TrimEnd(Path.DirectorySeparatorChar)
                     + Path.DirectorySeparatorChar;
                 foreach (string path in _virtualFiles.Keys)
                 {
+                    ThrowIfCancellationRequested();
                     if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                         continue;
                     string relative = path[prefix.Length..];
@@ -1635,14 +1708,15 @@ public class ModuleResolver
                             : package);
                     }
                 }
-                continue;
+                if (!_virtualFilesFallBackToDisk)
+                    continue;
             }
 
-            if (!Directory.Exists(root))
+            if (!CompilerFileSystem.DirectoryExists(root))
                 continue;
             try
             {
-                foreach (string directory in Directory.EnumerateDirectories(root))
+                foreach (string directory in CompilerFileSystem.EnumerateDirectories(root))
                 {
                     string package = Path.GetFileName(directory);
                     names.Add(package.Contains("__", StringComparison.Ordinal)
@@ -1664,6 +1738,7 @@ public class ModuleResolver
 
         foreach (string root in GetEffectiveTypeRoots(containingFile))
         {
+            ThrowIfCancellationRequested();
             string packageDir = Path.Combine(root, packageDirectoryName);
             if (!ResolverDirectoryExists(packageDir))
                 continue;
@@ -1817,6 +1892,7 @@ public class ModuleResolver
         string? directory = Path.GetDirectoryName(Path.GetFullPath(containingFile));
         while (directory is not null)
         {
+            ThrowIfCancellationRequested();
             roots.Add(Path.Combine(directory, "node_modules", "@types"));
             directory = FileDiscovery.AmbientParent(directory);
         }
@@ -1825,6 +1901,7 @@ public class ModuleResolver
 
     private ParsedModule LoadTypeScriptLibModule(string virtualPath, DecoratorMode decoratorMode)
     {
+        ThrowIfCancellationRequested();
         virtualPath = TypeScriptLibProvider.GetVirtualPath(virtualPath);
         if (_moduleCache.TryGetValue(virtualPath, out var cached))
             return cached;
@@ -1892,6 +1969,7 @@ public class ModuleResolver
 
         foreach (var path in paths)
         {
+            ThrowIfCancellationRequested();
             try
             {
                 string resolvedPath = ResolveRuntimeModulePath(path, basePath);
@@ -1914,6 +1992,10 @@ public class ModuleResolver
                     loaded.IsDynamicImportOnly = true;
                     newModules.Add(loaded);
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {

@@ -43,14 +43,21 @@ public partial class Parser
     /// char-scanning re-parser. The try/catch covers lex/parse ONLY; resolution errors
     /// (TS2456/TS2314/TS1331, …) happen in the checker and propagate there.
     /// </summary>
-    internal static TypeNode? TryParseTypeFragment(string annotation)
+    internal static TypeNode? TryParseTypeFragment(string annotation, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var parser = new Parser(new Lexer(annotation).ScanTokens());
+            var parser = new Parser(new Lexer(annotation).WithCancellation(cancellationToken).ScanTokens())
+                .WithCancellation(cancellationToken);
             parser.ParseTypeAnnotation();          // rendered string result discarded
             var node = parser.TakeTypeNode();
+            cancellationToken.ThrowIfCancellationRequested();
             return parser.IsAtEnd() ? node : null; // reject partial parses ("number garbage")
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
@@ -248,6 +255,7 @@ public partial class Parser
         int depth = 0;
         for (int index = _current; index < _tokens.Count; index++)
         {
+            CheckCancellation();
             if (_tokens[index].Type == open)
                 depth++;
             else if (_tokens[index].Type == close && --depth == 0)
@@ -1236,6 +1244,10 @@ public partial class Parser
             _current = saved;
             return isMapped;
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch
         {
             _current = saved;
@@ -1489,6 +1501,10 @@ public partial class Parser
             argNodes = nodes;
             return args;
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch
         {
             _current = saved;
@@ -1530,6 +1546,10 @@ public partial class Parser
 
             argNodes = nodes;
             return args;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {

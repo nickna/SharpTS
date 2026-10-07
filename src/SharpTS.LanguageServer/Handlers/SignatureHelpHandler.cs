@@ -3,6 +3,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server.Capabilities;
 using SharpTS.LanguageServer.Services;
+using SharpTS.LanguageServer.Project;
 
 namespace SharpTS.LanguageServer.Handlers;
 
@@ -11,25 +12,28 @@ public sealed class SignatureHelpHandler : SignatureHelpHandlerBase
 {
     private readonly DocumentStore _store;
     private readonly DecoratorService _decorators;
+    private readonly AnalysisMetadataProvider? _metadata;
 
-    public SignatureHelpHandler(DocumentStore store, DecoratorService decorators)
+    public SignatureHelpHandler(DocumentStore store, DecoratorService decorators, AnalysisMetadataProvider? metadata = null)
     {
         _store = store;
         _decorators = decorators;
+        _metadata = metadata;
     }
 
     public override Task<SignatureHelp?> Handle(SignatureHelpParams request, CancellationToken ct)
     {
-        if (!_store.TryGetSnapshot(
+        if (!_store.TryCapture(
                 request.TextDocument.Uri.ToString(),
-                out DocumentSnapshot? snapshot))
+                out DocumentRequestSnapshot? capture))
             return Task.FromResult<SignatureHelp?>(null);
+        using var guard = new EditorRequestGuard(_store, capture, _metadata, ct);
 
-        return Task.FromResult(
-            _decorators.SignatureHelp(
-                snapshot.Text,
+        SignatureHelp? result = _decorators.SignatureHelp(
+                capture.Document.Text,
                 request.Position.Line,
-                request.Position.Character));
+                request.Position.Character);
+        return Task.FromResult(guard.IsCurrent(ct) ? result : null);
     }
 
     protected override SignatureHelpRegistrationOptions CreateRegistrationOptions(

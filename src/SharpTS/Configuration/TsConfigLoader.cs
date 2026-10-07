@@ -1,3 +1,4 @@
+using SharpTS.IO;
 using System.Text.Json;
 using SharpTS.Parsing;
 
@@ -47,15 +48,15 @@ public static class TsConfigLoader
     {
         string full = Path.GetFullPath(projectPath);
 
-        if (Directory.Exists(full))
+        if (CompilerFileSystem.DirectoryExists(full))
         {
             string inDir = Path.Combine(full, FileName);
-            if (File.Exists(inDir)) return inDir;
+            if (CompilerFileSystem.FileExists(inDir)) return inDir;
 
             throw new Exception($"Error: -p/--project: no {FileName} in '{full}'.");
         }
 
-        if (File.Exists(full)) return full;
+        if (CompilerFileSystem.FileExists(full)) return full;
 
         throw new Exception($"Error: -p/--project: '{projectPath}' does not exist (resolved to '{full}').");
     }
@@ -67,7 +68,7 @@ public static class TsConfigLoader
     public static TsConfigResult Load(string path)
     {
         string full = Path.GetFullPath(path);
-        if (!File.Exists(full))
+        if (!CompilerFileSystem.FileExists(full))
             throw new FileNotFoundException($"{FileName} not found at: {full}", full);
 
         var chain = new List<(string Path, TsConfigJson Json)>();
@@ -83,6 +84,7 @@ public static class TsConfigLoader
     /// </summary>
     private static void LoadInto(string path, List<(string, TsConfigJson)> chain, List<string> onStack)
     {
+        CompilerFileSystem.ThrowIfCancellationRequested();
         string full = Path.GetFullPath(path);
 
         int existing = onStack.FindIndex(p => string.Equals(p, full, PathComparison));
@@ -106,8 +108,7 @@ public static class TsConfigLoader
     {
         try
         {
-            using var stream = File.OpenRead(full);
-            return JsonSerializer.Deserialize(stream, TsConfigJsonContext.Default.TsConfigJson)
+            return JsonSerializer.Deserialize(CompilerFileSystem.ReadAllText(full), TsConfigJsonContext.Default.TsConfigJson)
                 ?? throw new Exception($"Error: {FileName} ('{full}') is empty or null.");
         }
         catch (JsonException ex)
@@ -156,8 +157,8 @@ public static class TsConfigLoader
         if (isRelative)
         {
             string candidate = Path.GetFullPath(Path.Combine(declaringDir, spec));
-            if (File.Exists(candidate)) return candidate;
-            if (!Path.HasExtension(candidate) && File.Exists(candidate + ".json")) return candidate + ".json";
+            if (CompilerFileSystem.FileExists(candidate)) return candidate;
+            if (!Path.HasExtension(candidate) && CompilerFileSystem.FileExists(candidate + ".json")) return candidate + ".json";
 
             throw new Exception(
                 $"Error: {FileName} ('{declaringFile}'): cannot resolve 'extends' target '{spec}' " +
@@ -171,7 +172,7 @@ public static class TsConfigLoader
             string baseDir = Path.Combine(dir, "node_modules", spec);
             foreach (var candidate in new[] { baseDir, baseDir + ".json", Path.Combine(baseDir, FileName) })
             {
-                if (File.Exists(candidate)) return Path.GetFullPath(candidate);
+                if (CompilerFileSystem.FileExists(candidate)) return Path.GetFullPath(candidate);
             }
             dir = FileDiscovery.AmbientParent(dir);
         }

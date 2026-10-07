@@ -24,23 +24,21 @@ public sealed class RenameHandler : RenameHandlerBase
         _workspace = workspace;
     }
 
-    public override Task<WorkspaceEdit?> Handle(
+    public override async Task<WorkspaceEdit?> Handle(
         RenameParams request,
         CancellationToken ct)
     {
         string uri = request.TextDocument.Uri.ToString();
         if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
-            return Task.FromResult<WorkspaceEdit?>(null);
+            return null;
 
         ct.ThrowIfCancellationRequested();
-        return Task.FromResult(
-            _rename.Rename(
-                request.TextDocument.Uri.GetFileSystemPath(),
-                snapshot.Document.Text,
-                request.Position,
-                request.NewName,
-                snapshot.TextOverlay,
-                _workspace.SnapshotRoots()));
+        long workspaceVersion = _workspace.Version;
+        var result = await _rename.RenameAsync(snapshot, request.Position, request.NewName,
+            _workspace.SnapshotRoots(), ct);
+        ct.ThrowIfCancellationRequested();
+        return _store.IsCurrent(uri, snapshot.Document.Version, snapshot.WorkspaceVersion) &&
+            _workspace.Version == workspaceVersion && result.Domain.IsCurrent(ct) ? result.Value : null;
     }
 
     protected override RenameRegistrationOptions CreateRegistrationOptions(
@@ -77,25 +75,21 @@ public sealed class PrepareRenameHandler : PrepareRenameHandlerBase
         _workspace = workspace;
     }
 
-    public override Task<RangeOrPlaceholderRange?> Handle(
+    public override async Task<RangeOrPlaceholderRange?> Handle(
         PrepareRenameParams request,
         CancellationToken ct)
     {
         string uri = request.TextDocument.Uri.ToString();
         if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
-            return Task.FromResult<RangeOrPlaceholderRange?>(null);
+            return null;
 
         ct.ThrowIfCancellationRequested();
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Range? range = _rename.Prepare(
-            request.TextDocument.Uri.GetFileSystemPath(),
-            snapshot.Document.Text,
-            request.Position,
-            snapshot.TextOverlay,
-            _workspace.SnapshotRoots());
-        return Task.FromResult(
-            range is null
-                ? null
-                : new RangeOrPlaceholderRange(range));
+        long workspaceVersion = _workspace.Version;
+        var result = await _rename.PrepareAsync(snapshot, request.Position, _workspace.SnapshotRoots(), ct);
+        ct.ThrowIfCancellationRequested();
+        if (!_store.IsCurrent(uri, snapshot.Document.Version, snapshot.WorkspaceVersion) ||
+            _workspace.Version != workspaceVersion || !result.Domain.IsCurrent(ct)) return null;
+        return result.Value is null ? null : new RangeOrPlaceholderRange(result.Value);
     }
 
     protected override RenameRegistrationOptions CreateRegistrationOptions(

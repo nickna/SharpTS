@@ -29,12 +29,18 @@ public class ParsedModule
     /// </summary>
     public List<Stmt> Statements { get; }
 
+    /// <summary>Source tokens retained with this parse, empty for synthetic modules.</summary>
+    public IReadOnlyList<Token> Tokens { get; set; } = [];
+
     /// <summary>
     /// Recoverable syntax diagnostics produced while parsing this module. Empty during
     /// normal product loading, which remains fail-fast; conformance and editor-style
     /// callers can opt into retaining the partial AST and these diagnostics.
     /// </summary>
     public List<Diagnostic> ParseDiagnostics { get; } = [];
+
+    /// <summary>Whether parser recovery stopped at its diagnostic limit.</summary>
+    public bool HitParseErrorLimit { get; set; }
 
     /// <summary>
     /// True for a synthetic module created from <c>declare module "name"</c>.

@@ -115,6 +115,58 @@ sharpts-lsp --sdk-path /path/to/reference/assemblies
 A `sharpts.json` reference manifest found from the workspace root is also honored. Referenced
 assembly outputs are reloaded safely when they change.
 
+Editor requests capture one CLR metadata generation and inspect assembly bytes without locking
+the original DLLs. Project, manifest, and assembly changes are revalidated before a result is
+returned. Package acquisition happens at startup; requests use already restored package assets.
+If a manifest adds a package that has not been restored, restore it and restart the server.
+An explicit `--sdk-path` is revalidated, while the automatically selected installed SDK/runtime
+is fixed for the server lifetime; restart after replacing that installation.
+
+Interop hover, completion, and diagnostics honor these custom references. General checker
+`dotnet:` synthesis still uses the existing runtime registry and may not resolve a custom
+reference's ordinary TypeScript symbols. The server does not guess navigation or rename results
+for unresolved symbols.
+
+## Shared analysis
+
+Definition, references, lexical rename, and full diagnostics share completed analyses for the
+same captured open buffers and project state. File notifications invalidate analyses promptly;
+clients without watching support still get physical dependency/configuration validation on every
+reuse. Creating a missing import, changing a closed file, or changing project membership causes
+a fresh check. Results that become stale during a request are discarded.
+
+The cache keeps at most eight completed entries and evicts the least recently used entries when
+their estimated source/semantic payload exceeds 64 MiB. This estimate excludes CLR assembly
+images and is not a limit on total process memory. Oversized analyses can serve active requests
+without entering the cache. Concurrent identical requests share work, and cancelling one request
+does not cancel another request's analysis. Interop-only with `sharpts-only` diagnostics keeps
+general analysis lazy; explicitly selecting `all` still requests full parser/checker diagnostics.
+
+For a local protocol smoke test after a Release build, run:
+
+```bash
+node scripts/test-analysis-snapshots.mjs
+```
+
+The test exercises real stdio navigation, watched closed-file changes, dirty overlays, reverse
+importer creation, rename, and interop-only capability isolation.
+
+The [editor analysis benchmark](../benchmarks/editor-analysis/README.md) records a comparison with
+`df4589b7` on Windows Arm64/.NET 10.0.12 (2026-10-07 UTC). The sequence contains definition,
+workspace references, statement retrieval, and full diagnostics; JIT/filesystem caches are warm.
+
+| Fixture | Cache-cold median, before → shared | Warm median, before → shared | Checks, cold / warm before → shared |
+| --- | --- | --- | --- |
+| One source file | 18.03 → 16.65 ms | 13.65 → 5.38 ms | 4 / 3 → 1 / 0 |
+| 25 source files, four projects | 188.80 → 136.19 ms | 117.69 → 21.21 ms | 6 / 5 → 3 / 0 |
+
+Cold definitions add about 2.12 ms and 11.70 ms respectively for capture, immutable publication,
+and validation. Warm diagnostics also pay validation costs instead of trusting a stale cache.
+Direct document validation medians were 0.55 ms and 2.44 ms; workspace validation was 0.70 ms
+and 6.17 ms. Measured cache retention was about
+19 KiB and 3.42 MB respectively; these fixtures exclude CLR metadata and do not predict large
+project memory. The benchmark report includes allocations, percentiles, and measurement limits.
+
 ## Rename safety
 
 Full mode produces a rename edit only when the server has loaded every configured project root and

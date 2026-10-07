@@ -519,6 +519,10 @@ public partial class Parser
                 }
             }
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 RecordError(ex.Message);
@@ -1021,6 +1025,10 @@ public partial class Parser
                     }
                 }
             }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

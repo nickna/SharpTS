@@ -1,0 +1,274 @@
+{
+  "issue": 1975,
+  "baselineCommit": "df4589b7",
+  "comparison": "Equivalent existing service queries with exact matching result fingerprints",
+  "featureOrder": [
+    "definition",
+    "references",
+    "statements+full diagnostics"
+  ],
+  "baseline": {
+    "implementation": "df4589b7",
+    "timestampUtc": "2026-10-07T05:15:11.0123089Z",
+    "runtime": ".NET 10.0.12",
+    "os": "Microsoft Windows 10.0.26220",
+    "architecture": "Arm64",
+    "processorCount": 12,
+    "coldSamples": 11,
+    "warmSamples": 31,
+    "methodology": "Same definition, references(includeDeclaration=true, workspace roots), statements, full diagnostics sequence. Fresh service cache for each cold sample; repeated unchanged capture for warm samples. Process/JIT/filesystem caches warmed. Deterministic noLib/types=[] fixtures isolate source graph. Services only, no transport or CLR metadata provider. Allocation measured process-wide across async workers. Baseline CheckModules entry counter is the only archived production source change; current uses Statistics.Checks. Retained heap is noisy process-wide full-GC live heap, cache bytes are implementation estimates.",
+    "reports": [
+      {
+        "name": "small",
+        "SourceFiles": 1,
+        "Projects": 1,
+        "sourceBytes": 60,
+        "cold": {
+          "medianMilliseconds": 18.0292,
+          "p90Milliseconds": 19.6395,
+          "medianAllocatedBytes": 724768,
+          "checksPerSequence": [
+            4
+          ],
+          "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+          "featureMedianMilliseconds": [
+            4.6038,
+            8.9513,
+            4.5929
+          ],
+          "featureMedianAllocatedBytes": [
+            181992,
+            357224,
+            181696
+          ]
+        },
+        "warm": {
+          "medianMilliseconds": 13.6526,
+          "p90Milliseconds": 14.3327,
+          "medianAllocatedBytes": 534448,
+          "checksPerSequence": [
+            3
+          ],
+          "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+          "featureMedianMilliseconds": [
+            4.6065,
+            9.042,
+            0.0037
+          ],
+          "featureMedianAllocatedBytes": [
+            172544,
+            357256,
+            792
+          ]
+        },
+        "retention": {
+          "LiveHeapWithCacheBytes": 494880,
+          "LiveHeapAfterCacheClearBytes": 492464,
+          "CacheRetainedHeapBytes": 2416,
+          "EstimatedCachedBytes": null,
+          "CachedSnapshots": null
+        },
+        "validation": null
+      },
+      {
+        "name": "multi-project",
+        "SourceFiles": 25,
+        "Projects": 4,
+        "sourceBytes": 57003,
+        "cold": {
+          "medianMilliseconds": 188.7964,
+          "p90Milliseconds": 190.9428,
+          "medianAllocatedBytes": 55990232,
+          "checksPerSequence": [
+            6
+          ],
+          "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+          "featureMedianMilliseconds": [
+            33.1713,
+            120.4202,
+            34.7538
+          ],
+          "featureMedianAllocatedBytes": [
+            10636496,
+            34289728,
+            10959048
+          ]
+        },
+        "warm": {
+          "medianMilliseconds": 117.6894,
+          "p90Milliseconds": 133.2203,
+          "medianAllocatedBytes": 40532368,
+          "checksPerSequence": [
+            5
+          ],
+          "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+          "featureMedianMilliseconds": [
+            23.5061,
+            89.0481,
+            0.0133
+          ],
+          "featureMedianAllocatedBytes": [
+            9652360,
+            30768656,
+            6392
+          ]
+        },
+        "retention": {
+          "LiveHeapWithCacheBytes": 892048,
+          "LiveHeapAfterCacheClearBytes": 810104,
+          "CacheRetainedHeapBytes": 81944,
+          "EstimatedCachedBytes": null,
+          "CachedSnapshots": null
+        },
+        "validation": null
+      }
+    ]
+  },
+  "current": {
+    "implementation": "shared-snapshots-current",
+    "timestampUtc": "2026-10-07T05:15:15.6793508Z",
+    "runtime": ".NET 10.0.12",
+    "os": "Microsoft Windows 10.0.26220",
+    "architecture": "Arm64",
+    "processorCount": 12,
+    "coldSamples": 11,
+    "warmSamples": 31,
+    "methodology": "Same definition, references(includeDeclaration=true, workspace roots), statements, full diagnostics sequence. Fresh service cache for each cold sample; repeated unchanged capture for warm samples. Process/JIT/filesystem caches warmed. Deterministic noLib/types=[] fixtures isolate source graph. Services only, no transport or CLR metadata provider. Allocation measured process-wide across async workers. Baseline CheckModules entry counter is the only archived production source change; current uses Statistics.Checks. Retained heap is noisy process-wide full-GC live heap, cache bytes are implementation estimates.",
+    "reports": [
+      {
+        "name": "small",
+        "SourceFiles": 1,
+        "Projects": 1,
+        "sourceBytes": 60,
+        "cold": {
+          "medianMilliseconds": 16.6515,
+          "p90Milliseconds": 17.2711,
+          "medianAllocatedBytes": 471216,
+          "checksPerSequence": [
+            1
+          ],
+          "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+          "featureMedianMilliseconds": [
+            6.7273,
+            8.1286,
+            1.6929
+          ],
+          "featureMedianAllocatedBytes": [
+            237496,
+            196680,
+            33256
+          ]
+        },
+        "warm": {
+          "medianMilliseconds": 5.3849,
+          "p90Milliseconds": 5.576,
+          "medianAllocatedBytes": 117080,
+          "checksPerSequence": [
+            0
+          ],
+          "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+          "featureMedianMilliseconds": [
+            1.1133,
+            2.5489,
+            1.6735
+          ],
+          "featureMedianAllocatedBytes": [
+            21968,
+            58000,
+            33256
+          ]
+        },
+        "retention": {
+          "LiveHeapWithCacheBytes": 552024,
+          "LiveHeapAfterCacheClearBytes": 532944,
+          "CacheRetainedHeapBytes": 19080,
+          "EstimatedCachedBytes": 4788,
+          "CachedSnapshots": 2
+        },
+        "validation": {
+          "document": {
+            "inputs": 14,
+            "observedInputEstimatedBytes": 546,
+            "medianMilliseconds": 0.548,
+            "p90Milliseconds": 0.6994,
+            "medianAllocatedBytes": 8728
+          },
+          "workspace": {
+            "inputs": 17,
+            "observedInputEstimatedBytes": 802,
+            "medianMilliseconds": 0.701,
+            "p90Milliseconds": 0.8896,
+            "medianAllocatedBytes": 10152
+          }
+        }
+      },
+      {
+        "name": "multi-project",
+        "SourceFiles": 25,
+        "Projects": 4,
+        "sourceBytes": 57003,
+        "cold": {
+          "medianMilliseconds": 136.1945,
+          "p90Milliseconds": 138.0312,
+          "medianAllocatedBytes": 31683360,
+          "checksPerSequence": [
+            3
+          ],
+          "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+          "featureMedianMilliseconds": [
+            44.8743,
+            83.8138,
+            6.5008
+          ],
+          "featureMedianAllocatedBytes": [
+            13033408,
+            17762904,
+            775576
+          ]
+        },
+        "warm": {
+          "medianMilliseconds": 21.2132,
+          "p90Milliseconds": 23.2735,
+          "medianAllocatedBytes": 3320816,
+          "checksPerSequence": [
+            0
+          ],
+          "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+          "featureMedianMilliseconds": [
+            3.1244,
+            12.9861,
+            4.8504
+          ],
+          "featureMedianAllocatedBytes": [
+            511664,
+            1928840,
+            775352
+          ]
+        },
+        "retention": {
+          "LiveHeapWithCacheBytes": 7846784,
+          "LiveHeapAfterCacheClearBytes": 4430816,
+          "CacheRetainedHeapBytes": 3415968,
+          "EstimatedCachedBytes": 2726372,
+          "CachedSnapshots": 2
+        },
+        "validation": {
+          "document": {
+            "inputs": 35,
+            "observedInputEstimatedBytes": 56358,
+            "medianMilliseconds": 2.4402,
+            "p90Milliseconds": 2.8914,
+            "medianAllocatedBytes": 252304
+          },
+          "workspace": {
+            "inputs": 93,
+            "observedInputEstimatedBytes": 121054,
+            "medianMilliseconds": 6.172,
+            "p90Milliseconds": 6.6782,
+            "medianAllocatedBytes": 549440
+          }
+        }
+      }
+    ]
+  }
+}

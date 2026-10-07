@@ -3,6 +3,7 @@ using System.Security;
 using System.Security.Cryptography;
 using System.Text;
 using SharpTS.Runtime;
+using SharpTS.IO;
 
 namespace SharpTS.References;
 
@@ -30,6 +31,23 @@ internal static class NuGetRestorer
 {
     /// <summary>Target framework for the restore graph; matches the SharpTS runtime.</summary>
     private const string TargetFramework = "net10.0";
+
+    /// <summary>Reads only a successful restore whose package set still matches the manifest.</summary>
+    public static RestoreResult ReadRestored(SharpTsManifest manifest)
+    {
+        string restoreDir = Path.Combine(manifest.ManifestDirectory, ".sharpts");
+        string assetsPath = Path.Combine(restoreDir, "obj", "project.assets.json");
+        string hashPath = Path.Combine(restoreDir, "restore.hash");
+        if (!CompilerFileSystem.FileExists(assetsPath) ||
+            !CompilerFileSystem.FileExists(hashPath) ||
+            CompilerFileSystem.ReadAllText(hashPath).Trim() != ComputeHash(manifest.Packages!))
+        {
+            throw new Exception(
+                $"Error: sharpts.json ('{manifest.ManifestPath}') packages need restore. " +
+                "Restart the language server or run SharpTS to restore them; editor queries do not launch restore.");
+        }
+        return ProjectAssetsReader.Read(assetsPath, manifest.ManifestPath, TargetFramework);
+    }
 
     public static RestoreResult Restore(SharpTsManifest manifest)
     {

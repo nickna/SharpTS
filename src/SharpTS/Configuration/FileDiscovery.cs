@@ -1,3 +1,4 @@
+using SharpTS.IO;
 using System.Text.Json;
 
 namespace SharpTS.Configuration;
@@ -36,6 +37,7 @@ internal static class FileDiscovery
         bool isStartDirectory = true;
         while (dir != null)
         {
+            CompilerFileSystem.ThrowIfCancellationRequested();
             var currentPath = NormalizeDir(dir.FullName);
 
             if (stopDirFullName != null &&
@@ -51,7 +53,7 @@ internal static class FileDiscovery
             }
 
             var candidate = Path.Combine(dir.FullName, fileName);
-            if (File.Exists(candidate))
+            if (CompilerFileSystem.FileExists(candidate))
                 return Path.GetFullPath(candidate);
 
             isStartDirectory = false;

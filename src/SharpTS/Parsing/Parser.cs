@@ -38,6 +38,23 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private int _ambientNamespaceDepth = 0;
     private int _ambientClassDepth = 0;
     private bool _isDeclarationFile = false;
+    private CancellationToken _cancellationToken;
+    private int _cancellationCheckpoints;
+
+    /// <summary>Observes cancellation while parsing; cancellation is never a syntax diagnostic.</summary>
+    public Parser WithCancellation(CancellationToken cancellationToken)
+    {
+        _cancellationToken = cancellationToken;
+        _cancellationCheckpoints = 0;
+        return this;
+    }
+
+    private void CheckCancellation()
+    {
+        // Lookahead and cursor movement share a cheap, allocation-free polling budget.
+        if (_cancellationToken.CanBeCanceled && (_cancellationCheckpoints++ & 255) == 0)
+            _cancellationToken.ThrowIfCancellationRequested();
+    }
 
     // Strict mode tracking - tracks whether we're in a strict mode context
     private bool _isStrictMode = false;
@@ -107,6 +124,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     /// <returns>A ParseDiagnosticResult containing parsed statements and any errors encountered.</returns>
     public ParseDiagnosticResult Parse()
     {
+        _cancellationToken.ThrowIfCancellationRequested();
         List<Stmt> statements = [];
 
         // Parse directive prologue at the start of the file
@@ -125,17 +143,25 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
         while (!IsAtEnd())
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var decl = Declaration();
                 if (decl != null) statements.Add(decl);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 RecordError(ex.Message, (ex as ParseError)?.TsCode);
                 Synchronize();
                 if (_diagnostics.HitErrorLimit)
+                {
+                    _cancellationToken.ThrowIfCancellationRequested();
                     return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics, HitErrorLimit: true);
+                }
             }
         }
 
@@ -146,17 +172,22 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         {
             int insertAt = 0;
             while (insertAt < statements.Count && statements[insertAt] is Stmt.Directive)
+            {
+                CheckCancellation();
                 insertAt++;
+            }
             statements.Insert(insertAt, BuildJsxRuntimeImport());
         }
 
         // Apply var hoisting to the top-level (module/script) statement list. Function bodies
         // and arrow function bodies are hoisted at their respective parse sites.
+        _cancellationToken.ThrowIfCancellationRequested();
         statements = VarHoister.Hoist(statements, _spans);
 
         // Lift generator function expressions to top-level function declarations so the
         // existing generator-declaration IL pipeline handles them. No-op when the module
         // contains no `function*() {...}` expressions.
+        _cancellationToken.ThrowIfCancellationRequested();
         statements = GeneratorArrowLifter.Lift(statements, _spans);
 
         // TypeScript reports TS1155 as a grammar diagnostic from the checker. Checker
@@ -168,6 +199,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         {
             foreach (Token name in _uninitializedConstDeclarations)
             {
+                CheckCancellation();
                 _diagnostics.AddError(
                     DiagnosticCode.ParseError,
                     "'const' declarations must be initialized.",
@@ -176,6 +208,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             }
         }
 
+        _cancellationToken.ThrowIfCancellationRequested();
         return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics);
     }
 
@@ -501,6 +534,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
     private Token Advance()
     {
+        CheckCancellation();
         if (!IsAtEnd()) _current++;
         return Previous();
     }
@@ -517,6 +551,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
     private Token PeekAt(int offset)
     {
+        CheckCancellation();
         int i = _current + offset;
         return i >= _tokens.Count ? _tokens[^1] : _tokens[i];
     }
@@ -580,6 +615,10 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
             Expr expression = Unary();
             return new Expr.TypeAssertion(expression, typeName);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch { _current = saved; return null; }
     }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SharpTS.Configuration;
+using SharpTS.IO;
 
 namespace SharpTS.References;
 
@@ -31,14 +32,15 @@ public static class SharpTsManifestLoader
     /// </summary>
     public static SharpTsManifest Load(string path)
     {
-        if (!File.Exists(path))
+        if (!CompilerFileSystem.FileExists(path))
             throw new FileNotFoundException($"sharpts.json not found at: {path}", path);
 
         SharpTsManifest? manifest;
         try
         {
-            using var stream = File.OpenRead(path);
-            manifest = JsonSerializer.Deserialize(stream, SharpTsManifestContext.Default.SharpTsManifest);
+            manifest = JsonSerializer.Deserialize(
+                CompilerFileSystem.ReadAllText(path),
+                SharpTsManifestContext.Default.SharpTsManifest);
         }
         catch (JsonException ex)
         {

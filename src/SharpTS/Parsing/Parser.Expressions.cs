@@ -1421,6 +1421,10 @@ public partial class Parser
                         parameters.Add(parameter);
                         destructuredParams.Add((parameter.Name, pattern));
                     }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
                     catch
                     {
                         _current = savedPosition;
@@ -1474,6 +1478,10 @@ public partial class Parser
             {
                 returnType = ParseFunctionTypeAnnotation();
                 returnTypeNode = TakeTypeNode();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {
@@ -1553,7 +1561,10 @@ public partial class Parser
             // does not retain whether a single-parameter list ended in one.
             bool hasTypeParameterComma = false;
             for (int i = savedPosition; i < _current; i++)
+            {
+                CheckCancellation();
                 hasTypeParameterComma |= _tokens[i].Type == TokenType.COMMA;
+            }
             if (_jsx is not null &&
                 typeParams.Count == 1 &&
                 typeParams[0].Constraint is null &&
@@ -1578,6 +1589,10 @@ public partial class Parser
 
             _current = savedPosition;
             return null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
