@@ -1,6 +1,7 @@
 using SharpTS.IO;
 using System.Collections.Frozen;
 using SharpTS.Configuration;
+using SharpTS.Diagnostics;
 using System.Text.Json;
 using SharpTS.Modules.Stdlib;
 using SharpTS.Modules.Stdlib.Providers;
@@ -211,6 +212,13 @@ public class ModuleResolver
     /// Ordinary compiler parses keep this optional bookkeeping disabled.
     /// </summary>
     public bool CaptureEditorSyntax { get; set; }
+
+    /// <summary>
+    /// Uses a fresh cursor-specific editor parse for this exact source-backed module. Set before
+    /// loading the graph; all other module parsing and resolution retain their ordinary policy.
+    /// RecoverParseErrors controls whether its retained repair diagnostics are accepted.
+    /// </summary>
+    public EditorParseTarget? EditorParseTarget { get; set; }
 
     private static bool IsJsxSourcePath(string path) =>
         path.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
@@ -925,16 +933,34 @@ public class ModuleResolver
             // Parse into a document so the module keeps its text, checksum and statement spans —
             // what debug symbols and editor navigation both resolve positions against.
             var document = new SourceDocument(absolutePath, source);
-            var parser = new Parser(tokens, decoratorMode)
-                .WithCancellation(EffectiveCancellationToken)
-                .WithSourceDocument(document)
-                .AsDeclarationFile(IsDeclarationFilePath(absolutePath))
-                .WithFilePath(absolutePath)
-                .WithMaxErrors(RecoverParseErrors ? 1000 : 10);
-            if (CaptureEditorSyntax) parser.WithEditorSyntax();
-            if (isJsxSource)
-                parser.WithJsx(source, (JsxOptions ?? JsxParseOptions.Default).ApplyPragmas(lexer.Pragmas));
-            var parseResult = parser.Parse();
+            ParseDiagnosticResult parseResult;
+            IReadOnlyList<Token> retainedTokens;
+            if (EditorParseTarget is { } target && string.Equals(Path.GetFullPath(target.Path), absolutePath,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            {
+                // Keep the original lexer above: its reference directives and per-file pragmas
+                // still drive the normal resolver/program pipeline below. The private editor
+                // parse owns entirely new tokens, AST and source metadata.
+                var artifact = Parser.ParseForEditor(document, target.CursorOffset, target.QueryKind, target.Policy,
+                    decoratorMode, JsxOptions, EffectiveCancellationToken);
+                document = artifact.Document;
+                retainedTokens = artifact.Tokens;
+                parseResult = artifact.ParseResult;
+            }
+            else
+            {
+                var parser = new Parser(tokens, decoratorMode)
+                    .WithCancellation(EffectiveCancellationToken)
+                    .WithSourceDocument(document)
+                    .AsDeclarationFile(IsDeclarationFilePath(absolutePath))
+                    .WithFilePath(absolutePath)
+                    .WithMaxErrors(RecoverParseErrors ? 1000 : 10);
+                if (CaptureEditorSyntax) parser.WithEditorSyntax();
+                if (isJsxSource)
+                    parser.WithJsx(source, (JsxOptions ?? JsxParseOptions.Default).ApplyPragmas(lexer.Pragmas));
+                parseResult = parser.Parse();
+                retainedTokens = tokens.ToArray();
+            }
 
             // Product loading remains fail-fast. Diagnostic-oriented callers can keep
             // the recovered statement list and compare the parser diagnostics instead.
@@ -951,7 +977,7 @@ public class ModuleResolver
             var statements = parseResult.Statements;
             var module = new ParsedModule(absolutePath, statements)
             {
-                Tokens = tokens.ToArray(),
+                Tokens = retainedTokens,
                 HitParseErrorLimit = parseResult.HitErrorLimit,
                 IsDeclarationFile = IsDeclarationFilePath(absolutePath),
                 Document = document,

@@ -90,10 +90,37 @@ it does not remove that name and expose a potentially shadowed outer binding.
 
 The shared cache includes the query index's estimated payload. This estimate approximates
 collection/object overhead and is separate from measured retained heap; it is not a process
-memory limit. Full-mode hover consumes these values; completion and signature help use later
-feature handlers. Capture itself does not change advertised capabilities.
+memory limit. Full-mode hover and completion consume these values; signature help uses a later
+feature handler. Capture itself does not change advertised capabilities.
+
+## Completion consumption
+
+`SemanticCompletionService` projects visible bindings and receiver members directly from
+the frozen query index. It filters unavailable facts, invalid identifier spellings and
+type-only namespace exports in value access. Results are sorted and deduplicated, contain at
+most 256 items and use plain text edits replacing the exact whole identifier. Details are
+limited to 1,024 UTF-16 characters. Structural candidates retain no invented class identity.
+
+Completed source syntax supplies the context for ordinary queries. An unfinished member
+operator can request a fresh cursor-specific checked program through `SemanticAnalysisService`;
+the [syntax contract](editor-syntax-coverage.md) describes that isolated parse and its limits.
+A parse-only artifact never supplies receiver proof. A missing, stale or foreign seed uses
+the configured cold path, and recovered output is revalidated before returning. Lexical
+completion refuses documents with parse diagnostics because a discarded declaration could
+hide a same-spelled outer binding. It does not create a second scope engine.
+Unused lazy aliases therefore supply no typed completion item. Existing checker call results
+also remain authoritative: an annotated source-class function can currently yield checked
+`any` at its call site despite its declared signature, so that receiver has no member results.
 
 ## Verification and measured cost
+
+The #1978 completion extension adds 99 focused cases and passed 3,318 affected tests, the
+TypeScript smoke profile (32 corpus cases/17 harness tests) and 9 targeted Test262 cases.
+Four real stdio completion clients passed full/interop-only mode isolation, incomplete
+member access, applied UTF-16/CRLF edits, restricted item kinds and dirty dependency/close
+behavior. Hover and shared-analysis stdio regressions also passed. Cursor tests cover
+configuration/resolution fidelity, fresh AST ownership, seed validation, coalescing,
+cancellation, stale inputs, cache limits and independent metadata leases.
 
 The #1977 hover extension passed 3,219 affected tests, the same TypeScript smoke profile
 (32 corpus cases/17 harness tests), and 9 targeted Test262 tests. Real stdio hover clients

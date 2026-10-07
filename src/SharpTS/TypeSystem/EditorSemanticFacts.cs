@@ -21,7 +21,8 @@ public sealed record EditorInvocationCandidate(int Ordinal, TypeInfo OriginalSig
 public sealed record EditorReceiverCandidate(string Name, TypeInfo? Type,
     EditorMemberKind Kind = EditorMemberKind.Property, AccessModifier Access = AccessModifier.Public,
     MemberFacet? Facet = null, bool IsReadonly = false, bool IsOptional = false,
-    SourceMemberSymbol? Source = null, IReadOnlyDictionary<string, TypeInfo>? Substitutions = null);
+    SourceMemberSymbol? Source = null, IReadOnlyDictionary<string, TypeInfo>? Substitutions = null,
+    BindingNamespace? NamespaceFacet = null);
 
 // Build-only provenance for a public overload family whose runtime/checker surface may
 // subsequently be replaced by its implementation. Never retained by frozen query values.
@@ -54,7 +55,7 @@ public sealed record EditorSourceScope(int Id, SourceDocument? Document, object 
     IReadOnlyList<EditorVisibleBinding> Bindings);
 public sealed record EditorReceiverMember(string Name, EditorTypePresentation Type,
     EditorMemberKind Kind, AccessModifier Access, MemberFacet? Facet, bool IsReadonly,
-    bool IsOptional, EditorSourceMemberIdentity? Source);
+    bool IsOptional, EditorSourceMemberIdentity? Source, BindingNamespace? NamespaceFacet = null);
 public sealed record EditorReceiverSet(IReadOnlyList<EditorReceiverMember> Members,
     bool IsComplete, bool IsTruncated, EditorTypePresentation? ReceiverType = null)
 {

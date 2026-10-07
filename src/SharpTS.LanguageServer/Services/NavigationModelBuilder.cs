@@ -44,7 +44,8 @@ internal static class NavigationModelBuilder
         IReadOnlyDictionary<string, string>? openDocuments,
         CancellationToken cancellationToken = default,
         Action? beforeCheck = null,
-        bool hasPartialMetadata = false)
+        bool hasPartialMetadata = false,
+        EditorParseTarget? editorParseTarget = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string absolutePath = Path.GetFullPath(path);
@@ -77,10 +78,13 @@ internal static class NavigationModelBuilder
                     overlay,
                     configuredWorkspace,
                     requireMembership: true,
-                    cancellationToken, beforeCheck, hasPartialMetadata);
+                    cancellationToken, beforeCheck, hasPartialMetadata, editorParseTarget);
                 if (configured.Model is not null)
                     return configured.Model;
             }
+            // Cursor facts must use the captured configured program. Falling back to default
+            // options after a load/check/membership failure could invent usable candidates.
+            if (editorParseTarget is not null) return null;
         }
 
         return TryBuildProject(
@@ -88,7 +92,7 @@ internal static class NavigationModelBuilder
             overlay,
             NavigationWorkspace.Unconfigured(absolutePath, configPath),
             requireMembership: false,
-            cancellationToken, beforeCheck, hasPartialMetadata).Model;
+            cancellationToken, beforeCheck, hasPartialMetadata, editorParseTarget).Model;
     }
 
     public static CheckedNavigationWorkspace BuildWorkspace(
@@ -151,7 +155,8 @@ internal static class NavigationModelBuilder
         bool requireMembership,
         CancellationToken cancellationToken,
         Action? beforeCheck,
-        bool hasPartialMetadata)
+        bool hasPartialMetadata,
+        EditorParseTarget? editorParseTarget = null)
     {
         ModuleResolver resolver;
         List<ParsedModule> modulesToCheck;
@@ -171,6 +176,7 @@ internal static class NavigationModelBuilder
                 JsxOptions = workspace.JsxOptions,
                 RecoverParseErrors = true,
                 CaptureEditorSyntax = true,
+                EditorParseTarget = editorParseTarget,
             }.WithCancellation(cancellationToken);
 
             bool allRootsLoaded = true;

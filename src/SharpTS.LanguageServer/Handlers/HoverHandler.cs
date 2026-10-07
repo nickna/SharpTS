@@ -62,7 +62,7 @@ public sealed class HoverHandler : HoverHandlerBase
     protected override HoverRegistrationOptions CreateRegistrationOptions(
         HoverCapability capability, ClientCapabilities clientCapabilities)
     {
-        var preferred = capability.ContentFormat?.FirstOrDefault(format => format == MarkupKind.Markdown ||
+        var preferred = capability?.ContentFormat?.FirstOrDefault(format => format == MarkupKind.Markdown ||
             format == MarkupKind.PlainText);
         _format = preferred == MarkupKind.Markdown ? MarkupKind.Markdown : MarkupKind.PlainText;
         return new() { DocumentSelector = TextDocumentSelector.ForLanguage("typescript", "typescriptreact") };

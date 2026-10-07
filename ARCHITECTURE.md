@@ -188,12 +188,32 @@ request ordinary semantic analysis. The handler negotiates Markdown/plain text a
 the captured state before returning its exact UTF-16 source range.
 
 `Parser.ParseForEditor` clones the source capture for bounded cursor-local missing member names
-and unfinished call/new lists. It preserves all original offsets, marks synthetic holes and
-delimiters as non-authoritative, and never checks or adds bindings to the recovered artifact.
-`SemanticAnalysisService` keys these artifacts by base document identity, cursor, query, and
+and unfinished call/new lists, including a hidden name after `super.`. A repair gap must contain
+the caret between consumed source and the next real token. Comma-run lookahead stops beyond the
+remaining repair budget and polls cancellation. It preserves original offsets and marks holes
+and recovered delimiters as non-authoritative. Bare `this.#` lexical failure and arbitrary broken
+enclosing braces remain unavailable. The parser itself never checks or adds bindings.
+
+Semantic cursor analysis uses an opt-in exact `ModuleResolver.EditorParseTarget` to create a fresh
+target parse inside a fresh checked graph. The original lexer retains reference directives and
+JSX pragmas; ordinary configuration, resolution, imports and program/library processing continue.
+Other source modules parse normally, and embedded read-only library declarations remain on their
+existing shared path. A configured cursor build refuses default-option fallback if configuration
+loading or membership fails, or checking cannot produce a model. Published base graphs and cached
+parse-only artifacts are never checked again.
+
+Seeded builds require the same service owner, exact originating request stamp and target path,
+plus current inputs. They replay captured reads, probes and inventories before reconstructing
+the program, observe extra inputs, capture their own fresh metadata view and validate both seed
+and combined inputs before publication. Missing or mismatched seeds use a fresh configured build.
+Checked cursor entries share the ordinary admission/LRU/64 MiB estimated budget below, with an
+additional four-entry cursor cap and no ordinary document aliases. Opaque weak-table identities
+in their keys do not retain a base AST; the shared build owns its seed lease only until completion.
+
+The existing parse-only syntax cache remains independent of checked cursor graphs.
+`SemanticAnalysisService` keys those artifacts by base document identity, cursor, query and
 recovery policy. Its separate LRU retains at most 32 artifacts and 8 MiB of estimated payload
-within the service's combined byte budget; invalidation clears both caches. Cursor keys do not
-keep the original checked AST alive after its snapshot is evicted.
+within the combined byte budget; invalidation clears both syntax artifacts and checked analyses.
 
 Identical in-flight requests coalesce. Caller cancellation stops only that caller's wait;
 invalidation/disposal owns build cancellation. At most two builds execute and sixteen builds are

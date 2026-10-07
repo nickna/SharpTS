@@ -3,6 +3,7 @@ using System.Text;
 using SharpTS.Configuration;
 using SharpTS.IO;
 using SharpTS.LanguageServer.Project;
+using SharpTS.Parsing;
 
 namespace SharpTS.LanguageServer.Services;
 
@@ -71,7 +72,8 @@ public sealed partial class SemanticAnalysisService : IDisposable
         GetAsync(AnalysisRequest.From(path, text, openDocuments, roots), anchorPath, seed, cancellationToken);
 
     private async Task<AnalysisLease?> GetAsync(AnalysisRequest request, string? anchorPath,
-        AnalysisLease? seed, CancellationToken cancellationToken)
+        AnalysisLease? seed, CancellationToken cancellationToken,
+        EditorParseTarget? cursorTarget = null, object? seedIdentity = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string selectedPath = anchorPath is null ? request.Path : Path.GetFullPath(anchorPath);
@@ -82,7 +84,8 @@ public sealed partial class SemanticAnalysisService : IDisposable
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            key = new(selectedPath, request.Stamp, anchorPath is not null, _generation);
+            key = new(selectedPath, request.Stamp, anchorPath is not null, _generation,
+                cursorTarget, seedIdentity);
             if (_cache.TryGetValue(key, out capturedEntry)) cached = capturedEntry.Data.Acquire(selectedPath);
             if (cached is null && _inflight.TryGetValue(key, out state)) state.Waiters++;
         }
@@ -131,7 +134,8 @@ public sealed partial class SemanticAnalysisService : IDisposable
                 }
             }
             finally { if (admitted) _admission.Release(); }
-            if (retryCache) return await GetAsync(request, anchorPath, seed, cancellationToken).ConfigureAwait(false);
+            if (retryCache) return await GetAsync(request, anchorPath, seed, cancellationToken,
+                cursorTarget, seedIdentity).ConfigureAwait(false);
         }
         try
         {
@@ -177,6 +181,13 @@ public sealed partial class SemanticAnalysisService : IDisposable
             var aliases = new List<string>();
             using (CompilerFileSystem.Use(observer, ct))
             {
+                if (state.Key.CursorTarget is not null && seed is not null)
+                {
+                    // Reconstruct configuration/resolution from the exact captured reads, never
+                    // from a published AST. The fresh check owns every parser/checker object.
+                    if (!seed.IsCurrent(ct)) return null;
+                    observer.Include(seed.Inputs);
+                }
                 metadata = _metadata?.Capture();
                 using var metadataScope = metadata?.EnterScope();
                 void BeforeActualCheck()
@@ -199,8 +210,9 @@ public sealed partial class SemanticAnalysisService : IDisposable
                 else
                 {
                     model = NavigationModelBuilder.TryBuild(request.Path, request.Text,
-                        request.Overlay, ct, BeforeActualCheck, hasPartialMetadata: metadata?.IsComplete == false);
-                    if (model is not null)
+                        request.Overlay, ct, BeforeActualCheck, hasPartialMetadata: metadata?.IsComplete == false,
+                        editorParseTarget: state.Key.CursorTarget);
+                    if (model is not null && state.Key.CursorTarget is null)
                     {
                         foreach (AnalysisDocument document in model.Snapshot.Documents)
                         {
@@ -220,7 +232,7 @@ public sealed partial class SemanticAnalysisService : IDisposable
                 _metadata, metadataGeneration, state.WorkspaceVersion, _workspace);
             if (seed is not null && !seed.IsCurrent(state.Cancellation.Token)) return null;
             if (!validation.IsCurrent(state.Cancellation.Token)) return null;
-            data = new AnalysisData(model, workspace, inputs, validation, metadata);
+            data = new AnalysisData(model, workspace, inputs, validation, metadata, request.Stamp);
             metadata = null; // ownership transferred
             lock (_gate)
             {
@@ -237,6 +249,7 @@ public sealed partial class SemanticAnalysisService : IDisposable
                     foreach (RequestKey key in keys) _cache.Add(key, entry);
                     _bytes += data.EstimatedBytes;
                     while (_lru.Count > _maxSnapshots || _bytes > _maxRetainedBytes) Remove(_lru.First!.Value);
+                    TrimCursorAnalyses();
                     TrimEditorSyntax();
                 }
             }
@@ -323,7 +336,8 @@ public sealed partial class SemanticAnalysisService : IDisposable
         // Semaphores remain alive until any already-running waiters/builds finish.
     }
 
-    private sealed record RequestKey(string Path, string Stamp, bool Workspace, long Generation);
+    private sealed record RequestKey(string Path, string Stamp, bool Workspace, long Generation,
+        EditorParseTarget? CursorTarget = null, object? SeedIdentity = null);
     private sealed class BuildState(RequestKey key, long workspaceVersion)
     {
         public RequestKey Key { get; } = key;
@@ -386,6 +400,8 @@ internal sealed class AnalysisValidation(SemanticAnalysisService owner, long gen
     ObservedCompilerInputs inputs, AnalysisMetadataProvider? metadata, int? metadataGeneration,
     long workspaceVersion, NavigationWorkspaceContext workspace)
 {
+    internal bool IsOwnedBy(SemanticAnalysisService service) => ReferenceEquals(owner, service);
+
     public bool IsCurrent(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -402,9 +418,11 @@ internal sealed class AnalysisData
     private int _references = 1;
     private readonly AnalysisMetadataView? _metadata;
     public AnalysisData(CheckedNavigationModel model, CheckedNavigationWorkspace? workspace,
-        ObservedCompilerInputs inputs, AnalysisValidation validation, AnalysisMetadataView? metadata)
+        ObservedCompilerInputs inputs, AnalysisValidation validation, AnalysisMetadataView? metadata,
+        string requestStamp)
     {
         Model = model; Workspace = workspace; Inputs = inputs; Validation = validation; _metadata = metadata;
+        RequestStamp = requestStamp;
         var snapshots = (workspace?.Models ?? [model]).Select(item => item.Snapshot).Distinct().ToArray();
         EstimatedBytes = inputs.EstimatedBytes + snapshots.Sum(snapshot =>
             snapshot.Documents.Sum(document => (long)document.Document.Text.Length * 2 + document.Tokens.Count * 96L +
@@ -416,6 +434,7 @@ internal sealed class AnalysisData
     public ObservedCompilerInputs Inputs { get; }
     public AnalysisValidation Validation { get; }
     public long EstimatedBytes { get; }
+    public string RequestStamp { get; }
     public void Retain()
     {
         int current;
@@ -452,6 +471,7 @@ internal sealed class AnalysisLease : IDisposable
     public CheckedNavigationWorkspace? Workspace => _data.Workspace;
     public ObservedCompilerInputs Inputs => _data.Inputs;
     public AnalysisValidation Validation => _data.Validation;
+    internal string RequestStamp => _data.RequestStamp;
     public bool IsCurrent(CancellationToken cancellationToken = default) => Validation.IsCurrent(cancellationToken);
     public IDisposable EnterMetadataScope()
     {

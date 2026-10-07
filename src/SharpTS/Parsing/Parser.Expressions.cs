@@ -848,7 +848,11 @@ public partial class Parser
             }
             Token operation = Consume(TokenType.DOT, "Expect '.' or '(' after 'super'.");
             Token method;
-            if (Match(TokenType.IDENTIFIER, TokenType.CONSTRUCTOR))
+            if (AtEditorRecoveryBoundary())
+            {
+                method = ConsumeEditorMemberName("Expect superclass method name.");
+            }
+            else if (Match(TokenType.IDENTIFIER, TokenType.CONSTRUCTOR))
             {
                 method = Previous();
             }
@@ -856,8 +860,9 @@ public partial class Parser
             {
                 throw new Exception("Expect superclass method name.");
             }
-            var superMember = CompleteExpression(new Expr.Super(keyword, method), keyword.Start);
-            RecordMemberSyntax(superMember, superMember, method, operation.Span);
+            bool recovered = method.Start < 0;
+            var superMember = CompleteRecoveredExpression(new Expr.Super(keyword, method), keyword.Start, recovered);
+            RecordMemberSyntax(superMember, superMember, method, operation.Span, recovered: recovered);
             return superMember;
         }
 

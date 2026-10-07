@@ -4,6 +4,9 @@ namespace SharpTS.Parsing;
 
 public enum EditorQueryKind { Syntax, Hover, Completion, SignatureHelp }
 
+/// <summary>Requests one fresh cursor-specific parse inside an otherwise ordinary module graph.</summary>
+public sealed record EditorParseTarget(string Path, int CursorOffset, EditorQueryKind QueryKind, EditorRecoveryPolicy Policy);
+
 /// <summary>Limits grammar repairs in one private, cursor-specific editor parse.</summary>
 public sealed record EditorRecoveryPolicy(int Version = 1, int MaxRepairs = 16, int MaxNesting = 8)
 {
@@ -144,7 +147,9 @@ public partial class Parser
     {
         if (!EditorRecoveryEnabled) return false;
         Token next = Peek();
-        return next.Start >= _editorCursor &&
+        // Only the actual missing gap may contain the caret. A later incomplete statement
+        // must not become repairable merely because its next token follows this cursor.
+        return ConsumedSourceEnd <= _editorCursor && next.Start >= _editorCursor &&
             (IsAtEnd() || next.Type is TokenType.RIGHT_PAREN or TokenType.RIGHT_BRACKET or
                 TokenType.RIGHT_BRACE or TokenType.SEMICOLON or TokenType.COMMA);
     }
@@ -166,8 +171,15 @@ public partial class Parser
         // Only a run of missing trailing arguments may precede the cursor. Do not reinterpret
         // arbitrary broken expressions, strings or JSX text as argument separators.
         int probe = _current;
+        int remaining = Math.Min(_editorRecoveryPolicy!.MaxRepairs, 64) - _editorRecoveryCount;
+        int inspected = 0;
         while (probe < _tokens.Count && _tokens[probe].Type == TokenType.COMMA &&
-            _tokens[probe].Start < _editorCursor) probe++;
+            _tokens[probe].Start < _editorCursor)
+        {
+            CheckCancellation();
+            if (++inspected > remaining) return false;
+            probe++;
+        }
         if (probe >= _tokens.Count || _tokens[probe].Start < _editorCursor ||
             _tokens[probe].Type is not (TokenType.EOF or TokenType.RIGHT_PAREN or
                 TokenType.RIGHT_BRACKET or TokenType.RIGHT_BRACE or TokenType.SEMICOLON) ||

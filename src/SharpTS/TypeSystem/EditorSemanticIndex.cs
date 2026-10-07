@@ -345,7 +345,8 @@ public sealed class EditorSemanticIndex
                 EditorTypeRenderer.Render(unproven ? null : candidate.Type, EditorTypeRenderContext.Value, substitutions: candidate.Substitutions,
                     callableSurfaces: _callableSurfaces), candidate.Kind,
                 candidate.Access, candidate.Facet, candidate.IsReadonly, candidate.IsOptional,
-                candidate.Source is { } source ? new(source.Id, source.Generation, source.DeclaringClassId, source.Declarations.ToImmutableArray()) : null);
+                candidate.Source is { } source ? new(source.Id, source.Generation, source.DeclaringClassId, source.Declarations.ToImmutableArray()) : null,
+                candidate.NamespaceFacet);
             })
                 .ToImmutableArray(), draft.Complete, draft.Truncated, draft.ReceiverType is null ? null : Type(draft.ReceiverType)));
         }

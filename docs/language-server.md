@@ -3,7 +3,7 @@
 `sharpts-lsp` is a standard language server over stdio. It provides SharpTS-specific .NET interop
 diagnostics, hover, completion, signature help, and quick fixes in every mode. Its full mode also
 provides document symbols, definition, references, and completeness-gated rename for standalone
-editors, plus semantic hover for ordinary TypeScript symbols.
+editors, plus semantic hover and lexical/member completion for ordinary TypeScript symbols.
 
 Formatting is supplied by the editor and an external formatter. Neither language-feature mode
 advertises document, range or on-type formatting. See [Formatting TypeScript and TSX](formatting.md)
@@ -161,9 +161,35 @@ text format. Existing GUI, decorator and CLR hover keeps priority. Full-mode CLR
 and ordinary hover share the checked snapshot, including files that mix interop and ordinary
 TypeScript. Interop-only continues to serve SharpTS-specific hover without ordinary results.
 
+## Ordinary TypeScript completion
+
+Full mode offers visible names in supported value/type contexts and accessible members of
+checked class, namespace, interface and record receivers. Imports use their local alias;
+shadowing, TDZ visibility, static/instance access and private/protected accessibility follow
+the checker. Unknown or dynamic receivers supply no guessed members. Namespace value access
+omits type-only exports. Existing GUI and decorator completion keeps priority in both modes.
+
+Manual invocation and partial identifiers use plain text items with bounded type details and
+exact UTF-16 replacement edits, including the suffix after the cursor. Full mode adds `.` and
+`?` triggers to the existing SharpTS triggers. Item kinds honor the client's advertised set;
+semantic completion does not require snippets or an item-resolution request.
+
+Unfinished `receiver.` and `receiver?.` expressions use a fresh checked cursor graph from the
+captured program. Repeated requests reuse it. The bounded parser repairs missing expression
+parts; it does not repair arbitrary damaged enclosing scopes. Lexical completion refuses
+documents with parse errors, and comments, literals, nonmember dots and unsupported contexts
+return no semantic candidates. A bare `this.#` currently fails lexing; `this.` can still offer
+accessible private names. Auto-imports, quoted-key rewrites, keywords and ordinary JSX tag or
+attribute completion are outside this feature.
+
+Unused lazy type aliases have no available completion type until the checker resolves them.
+Some annotated source-class function returns currently check a call as `any` despite the
+function's declared return type; such receivers supply no members. Inferred class returns and
+checked structural returns can supply their proven members.
+
 ## Shared analysis
 
-Hover, definition, references, lexical rename, and full diagnostics share completed analyses for the
+Hover, completion, definition, references, lexical rename, and full diagnostics share completed analyses for the
 same captured open buffers and project state. File notifications invalidate analyses promptly;
 clients without watching support still get physical dependency/configuration validation on every
 reuse. Creating a missing import, changing a closed file, or changing project membership causes
@@ -176,21 +202,28 @@ without entering the cache. Concurrent identical requests share work, and cancel
 does not cancel another request's analysis. Interop-only with `sharpts-only` diagnostics keeps
 general analysis lazy; explicitly selecting `all` still requests full parser/checker diagnostics.
 
-Checked source documents also retain exact written syntax ranges for later editor queries.
-Unfinished member and call/new contexts use a separate bounded parse of the same text; these
-recovery artifacts cannot supply authoritative rename locations or change the checked graph.
-The recovery cache retains at most 32 artifacts and 8 MiB within the shared 64 MiB estimate.
+Checked source documents also retain exact written syntax ranges for editor queries. Cursor
+recovery creates fresh tokens, AST and checker facts through the same configured module
+pipeline, including captured dirty dependencies. It never mutates a completed analysis or
+borrows a previous receiver type. Cursor analyses share admission, cancellation and the eight
+entry/64 MiB cache budget, with an additional maximum of four completed cursor entries. A
+configured program that cannot be reconstructed supplies no recovered result.
+
+The separate parse-only recovery cache retains at most 32 artifacts and 8 MiB within the shared
+64 MiB estimate. Those artifacts supply syntax context and cannot prove authoritative rename
+locations or semantic results on their own.
 
 Completed analyses also retain [bounded semantic query values](editor-semantic-queries.md):
 checked declaration/occurrence types, visible bindings, accessible receiver members and actual
-call/new candidate decisions. Ordinary hover consumes these values; completion and signature
-help use later feature handlers. They do not retain the checker's mutable environments.
+call/new candidate decisions. Ordinary hover and completion consume these values; signature
+help uses a later feature handler. They do not retain the checker's mutable environments.
 
 For a local protocol smoke test after a Release build, run:
 
 ```bash
 node scripts/test-analysis-snapshots.mjs
 node scripts/test-semantic-hover.mjs
+node scripts/test-semantic-completion.mjs
 ```
 
 The test exercises real stdio navigation, source class member targets, watched closed-file
@@ -199,6 +232,9 @@ interop-only capability isolation.
 The hover smoke runs full/interop-only clients with both markup formats, checking exact
 ordinary ranges, dirty imported types, close-to-disk restoration and retained CLR/decorator
 hover.
+The completion smoke checks full/interop-only triggers, ordinary and unfinished buffers,
+applied CRLF/UTF-16 edits, restricted item kinds, dirty dependencies and retained decorator
+completion.
 
 The [editor analysis benchmark](../benchmarks/editor-analysis/README.md) records a comparison with
 `df4589b7` on Windows Arm64/.NET 10.0.12 (2026-10-07 UTC). The sequence contains definition,

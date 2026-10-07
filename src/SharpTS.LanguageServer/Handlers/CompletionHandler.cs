@@ -7,29 +7,33 @@ using SharpTS.LanguageServer.Project;
 
 namespace SharpTS.LanguageServer.Handlers;
 
-/// <summary>Completion of the builtin SharpTS decorators after an <c>@</c>.</summary>
+/// <summary>SharpTS-specific completion in both modes, with checked semantic fallback in full mode.</summary>
 public sealed class CompletionHandler : CompletionHandlerBase
 {
     private readonly DocumentStore _store;
     private readonly DecoratorService _decorators;
     private readonly GuiContractService _gui;
     private readonly AnalysisMetadataProvider? _metadata;
+    private readonly SemanticCompletionService? _semantic;
+    private HashSet<CompletionItemKind>? _supportedKinds;
 
     public CompletionHandler(DocumentStore store, DecoratorService decorators, GuiContractService? gui = null,
-        AnalysisMetadataProvider? metadata = null)
+        AnalysisMetadataProvider? metadata = null, SemanticCompletionService? semantic = null)
     {
         _store = store;
         _decorators = decorators;
         _gui = gui ?? new GuiContractService();
         _metadata = metadata;
+        _semantic = semantic;
     }
 
-    public override Task<CompletionList> Handle(CompletionParams request, CancellationToken ct)
+    public override async Task<CompletionList> Handle(CompletionParams request, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         if (!_store.TryCapture(
                 request.TextDocument.Uri.ToString(),
                 out DocumentRequestSnapshot? capture))
-            return Task.FromResult(new CompletionList());
+            return new CompletionList();
         using var guard = new EditorRequestGuard(_store, capture, _metadata, ct);
         DocumentSnapshot snapshot = capture.Document;
 
@@ -38,7 +42,19 @@ public sealed class CompletionHandler : CompletionHandlerBase
             snapshot.Text,
             request.Position.Line,
             request.Position.Character);
-        return Task.FromResult(guard.IsCurrent(ct) ? list ?? new CompletionList() : new CompletionList());
+        AnalysisValidation? validation = null;
+        if (list is null && _semantic is not null)
+        {
+            var semantic = await _semantic.CompletionAsync(capture, request.Position, ct).ConfigureAwait(false);
+            list = semantic.List;
+            validation = semantic.Validation;
+            if (_supportedKinds is not null)
+                list = new CompletionList(list.Items.Select(item => _supportedKinds.Contains(item.Kind) ? item :
+                    item with { Kind = _supportedKinds.Contains(CompletionItemKind.Text) ? CompletionItemKind.Text : default }),
+                    list.IsIncomplete);
+        }
+        ct.ThrowIfCancellationRequested();
+        return guard.IsCurrent(ct) && (validation?.IsCurrent(ct) ?? true) ? list ?? new CompletionList() : new CompletionList();
     }
 
     // No resolve step needed — items are fully populated up front.
@@ -47,9 +63,13 @@ public sealed class CompletionHandler : CompletionHandlerBase
 
     protected override CompletionRegistrationOptions CreateRegistrationOptions(
         CompletionCapability capability, ClientCapabilities clientCapabilities)
-        => new()
+    {
+        _supportedKinds = capability?.CompletionItemKind?.ValueSet?.ToHashSet();
+        return new()
         {
             DocumentSelector = TextDocumentSelector.ForLanguage("typescript", "typescriptreact"),
-            TriggerCharacters = new[] { "@", "<", " ", "=", "\"" }
+            TriggerCharacters = _semantic is null ? new[] { "@", "<", " ", "=", "\"" } :
+                new[] { "@", "<", " ", "=", "\"", ".", "?" }
         };
+    }
 }

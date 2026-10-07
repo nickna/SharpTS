@@ -104,6 +104,11 @@ public partial class TypeChecker
             {
                 if (sets.Skip(1).Any(set => !set.Members.ContainsKey(name))) continue;
                 var candidates = sets.Select(set => set.Members[name]).ToArray();
+                // A namespace type export is not a common runtime property when another
+                // branch exposes a value with the same spelling.
+                if (candidates.Any(candidate => candidate.NamespaceFacet == BindingNamespace.Type) &&
+                    candidates.Any(candidate => candidate.NamespaceFacet != BindingNamespace.Type))
+                { result.IsComplete = false; continue; }
                 // Present each branch with its own generic substitutions before combining.
                 // A mixed generic union is honest partial data until that presentation exists.
                 if (candidates.Any(candidate => candidate.Substitutions is { Count: > 0 }))
@@ -162,8 +167,22 @@ public partial class TypeChecker
                 CollectEditorGenericInterfaceMembers(interfaceDefinition, projection, substitutions);
                 return projection;
             case TypeInfo.Namespace ns:
-                foreach (var (name, memberType) in ns.Values) { if (!projection.Visit()) break; projection.Add(new(name, memberType, EditorMemberKind.NamespaceMember)); }
-                foreach (var (name, memberType) in ns.Types) { if (!projection.Visit()) break; projection.Add(new(name, memberType, EditorMemberKind.NamespaceMember)); }
+                foreach (var (name, memberType) in ns.Values)
+                {
+                    if (!projection.Visit()) break;
+                    // Module namespace compatibility types can flatten both export facets
+                    // into Values. Their canonical binding maps retain the actual facet.
+                    BindingNamespace? facet = EditorNamespaceFacet(ns, name);
+                    if (facet is null) { projection.IsComplete = false; continue; }
+                    projection.Add(new(name, memberType, EditorMemberKind.NamespaceMember, NamespaceFacet: facet));
+                }
+                foreach (var (name, memberType) in ns.Types)
+                {
+                    if (!projection.Visit()) break;
+                    BindingNamespace? facet = EditorNamespaceFacet(ns, name);
+                    if (facet is null) { projection.IsComplete = false; continue; }
+                    projection.Add(new(name, memberType, EditorMemberKind.NamespaceMember, NamespaceFacet: facet));
+                }
                 return projection;
             case TypeInfo.Enum enumeration:
                 foreach (string name in enumeration.Members.Keys) { if (!projection.Visit()) break; projection.Add(new(name, enumeration)); }
@@ -192,6 +211,16 @@ public partial class TypeChecker
         }
         projection.IsComplete = false;
         return projection;
+    }
+
+    private static BindingNamespace? EditorNamespaceFacet(TypeInfo.Namespace ns, string name)
+    {
+        if (ns.ValueBindings?.ContainsKey(name) == true) return BindingNamespace.Value;
+        if (ns.TypeBindings?.ContainsKey(name) == true) return BindingNamespace.Type;
+        bool value = ns.Values.ContainsKey(name), type = ns.Types.ContainsKey(name);
+        // Distinct namespace bags themselves prove a single facet. An overlapping flattened
+        // entry without canonical binding proof remains unavailable instead of guessing.
+        return value == type ? null : value ? BindingNamespace.Value : BindingNamespace.Type;
     }
 
     private void CollectEditorGenericInterfaceMembers(TypeInfo.GenericInterface contract, EditorMemberProjection result,
