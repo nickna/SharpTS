@@ -31,7 +31,8 @@ public partial class RuntimeEmitter
         EmittedObjectDescriptorRuntime ObjectDescriptors, MethodInfo ObjectHasOwn,
         Type SymbolType, MethodInfo SymbolFor, MethodInfo SymbolKeyFor,
         EmittedBigIntImplementation? BigInt, EmittedPromiseRuntime? Promise,
-        Type ErrorType, MethodInfo ErrorIsError, EmittedDateImplementation? Dates);
+        Type ErrorType, MethodInfo ErrorIsError, EmittedDateImplementation? Dates,
+        EmittedMapRuntime? Map);
 
     /// <summary>
     /// Defines the <c>LookupBuiltInStaticMember</c> <see cref="MethodBuilder"/>
@@ -106,6 +107,9 @@ public partial class RuntimeEmitter
 
         // Array.* — stored-as-value Array reference accessing static members.
         EmitLookup(_types.IListOfObject, "isArray", inputs.IsArray, 1);
+
+        if (inputs.Map is { } map)
+            EmitLookup(_types.DictionaryObjectObject, "groupBy", map.GroupBy, 2);
 
         // Number.* — bare `Number` identifier now resolves to typeof(double)
         // via issue #62, so the value-form path lands here.

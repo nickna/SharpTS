@@ -42,6 +42,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\fixtures\SharpTS.ConsoleRestorationFixture\SharpTS.ConsoleRestorationFixture.csproj" />
+    <ProjectReference Include="..\fixtures\SharpTS.HostedInitializationFixture\SharpTS.HostedInitializationFixture.csproj" />
     <ProjectReference Include="..\fixtures\SharpTS.ProcessTreeFixture\SharpTS.ProcessTreeFixture.csproj" />
     <ProjectReference Include="..\..\src\SharpTS\SharpTS.csproj" />
     <ProjectReference Include="..\..\src\SharpTS.DebugAdapter\SharpTS.DebugAdapter.csproj" />
