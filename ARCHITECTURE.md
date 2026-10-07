@@ -483,7 +483,7 @@ Missing, null, duplicate and completed declaration writes
 are rejected, while failed completion permits supplying an omitted declaration
 or emitting the missing body.
 The body emitter receives explicit method handles and cohesive peer components,
-including optional BigInt, Promise and Date implementations selected by orchestration.
+including optional BigInt, Promise, Date and Map implementations selected by orchestration.
 It does not read global feature flags. Tests cover independent supplied metadata,
 all optional combinations, reused emitters, cached wrappers, method names/arities,
 standalone and hosted deployment. Hosted emission retains its existing Promise

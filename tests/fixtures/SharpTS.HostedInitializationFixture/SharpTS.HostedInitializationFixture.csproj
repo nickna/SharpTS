@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../src/SharpTS.Hosting.Abstractions/SharpTS.Hosting.Abstractions.csproj" />
+    <Compile Include="../../SharpTS.Tests/Hosting/DeterministicHostDispatcher.cs" Link="DeterministicHostDispatcher.cs" />
+  </ItemGroup>
+</Project>

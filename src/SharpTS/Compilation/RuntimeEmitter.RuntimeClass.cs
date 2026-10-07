@@ -2786,20 +2786,6 @@ public partial class RuntimeEmitter
                 runtime.Errors.CreateException,
                 runtime.Errors.TypeErrorConstructor),
             runtime.Dates.Implementation is not null ? new BoxedDateInputs(runtime.Dates.RequireImplementation().Type, runtime.Dates.RequireImplementation().ToStringMethod) : null);
-        // Fill in LookupBuiltInStaticMember's body now that IsArray, NumberIs*,
-        // StringFrom*, TSFunctionCtor (#63) and DateNow (value-form `Date.now`,
-        // gated on UsesDate) are all in place. Only the body is late — the
-        // MethodBuilder was defined early, so earlier emitters can call it.
-        EmitLookupBuiltInStaticMemberBody(runtime.BuiltInStatics,
-            new BuiltInStaticDispatchInputs(
-                runtime.FunctionConstruction.GetOrCreate, runtime.ArrayOperations.IsArray, runtime.Numbers,
-                runtime.Strings.FromCharCode, runtime.Strings.FromCodePoint, runtime.Templates.Raw,
-                runtime.ObjectKeys, runtime.ObjectOperations, runtime.ObjectState, runtime.ObjectPrototypes,
-                runtime.ObjectDescriptors, runtime.ObjectOwnProperties.HasOwn,
-                runtime.Symbols.Type, runtime.Symbols.For, runtime.Symbols.KeyFor,
-                runtime.BigInt.Implementation, _features.UsesPromise ? runtime.RequirePromise() : null,
-                runtime.Errors.Type, runtime.Errors.IsError, runtime.Dates.Implementation));
-        runtime.BuiltInStatics.CompleteEmission();
         // RegExp methods moved earlier — emitted before EmitStringPrototypePopulate.
         // Error methods
         EmitErrorMethods(
@@ -2920,6 +2906,19 @@ public partial class RuntimeEmitter
                 )
             );
         }
+        // Fill the forward-declared lookup only after all backing statics,
+        // including optional Map.groupBy, have been declared. Earlier property
+        // and descriptor bodies retain the same forward MethodBuilder.
+        EmitLookupBuiltInStaticMemberBody(runtime.BuiltInStatics,
+            new BuiltInStaticDispatchInputs(
+                runtime.FunctionConstruction.GetOrCreate, runtime.ArrayOperations.IsArray, runtime.Numbers,
+                runtime.Strings.FromCharCode, runtime.Strings.FromCodePoint, runtime.Templates.Raw,
+                runtime.ObjectKeys, runtime.ObjectOperations, runtime.ObjectState, runtime.ObjectPrototypes,
+                runtime.ObjectDescriptors, runtime.ObjectOwnProperties.HasOwn,
+                runtime.Symbols.Type, runtime.Symbols.For, runtime.Symbols.KeyFor,
+                runtime.BigInt.Implementation, _features.UsesPromise ? runtime.RequirePromise() : null,
+                runtime.Errors.Type, runtime.Errors.IsError, runtime.Dates.Implementation, runtime.Map));
+        runtime.BuiltInStatics.CompleteEmission();
         // Set methods — gated on UsesSet.
         if (runtime.Set is not null)
             EmitSetMethods(
