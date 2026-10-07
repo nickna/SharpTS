@@ -7,14 +7,17 @@ public partial class TypeChecker
     // Observations belong to one real checker lookup. Nested receiver/RHS checks get their
     // own frame; no class hierarchy is walked again merely to provide editor metadata.
     private SourceMemberLookup? _sourceMemberLookup;
+    private bool ShouldCaptureSourceMemberFacts => Members.IsEnabled &&
+        (_suppressDiagnostics == 0 || _currentModule?.IsDeclarationFile == true);
 
     private SourceMemberLookup? BeginSourceMemberLookup(Expr owner, Token name, MemberOperation operation)
     {
         if (!Members.IsEnabled || CurrentSourceDocument is not { } document) return null;
+        if (!ShouldCaptureSourceMemberFacts && _sourceMemberLookup is null) return null;
         Token? written = WrittenSourceMemberName(document, owner, name);
         if (written is null) return null;
         return _sourceMemberLookup = new SourceMemberLookup(this, _sourceMemberLookup,
-            document, owner, name, written, operation);
+            document, owner, name, written, operation, ShouldCaptureSourceMemberFacts);
     }
 
     private static Token? WrittenSourceMemberName(SourceDocument document, object owner, Token name)
@@ -35,7 +38,7 @@ public partial class TypeChecker
 
     private void ObserveSourceMemberSelection(Token name, TypeInfo declaringType, MemberFacet facet)
     {
-        if (_sourceMemberLookup is not { } lookup || !ReferenceEquals(lookup.Name, name)) return;
+        if (_sourceMemberLookup is not { CanPublish: true } lookup || !ReferenceEquals(lookup.Name, name)) return;
         int declarationId = SelectedSourceClassId(declaringType);
         lookup.Observe(Members.ResolveSelected(declarationId, facet, name.Lexeme));
     }
@@ -53,7 +56,7 @@ public partial class TypeChecker
     private void ObservePrivateSourceMemberSelection(Token name, TypeInfo receiver,
         TypeInfo.Class lexicalOwner, MemberFacet facet)
     {
-        if (_sourceMemberLookup is not { } lookup || !ReferenceEquals(lookup.Name, name)) return;
+        if (_sourceMemberLookup is not { CanPublish: true } lookup || !ReferenceEquals(lookup.Name, name)) return;
         // The existing private checker consults lexical maps permissively. Metadata must not
         // claim a nominal owner for an any/structural receiver or the wrong static facet.
         if (!HasPrivateSourceOwner(receiver, lexicalOwner.Core.DeclarationId,
@@ -80,7 +83,7 @@ public partial class TypeChecker
 
     private void RecordSourceMemberCall(Expr.Call call)
     {
-        if (!Members.IsEnabled || CurrentSourceDocument is not { } document) return;
+        if (!ShouldCaptureSourceMemberFacts || CurrentSourceDocument is not { } document) return;
         Expr callee = call.Callee;
         while (true)
         {
@@ -105,7 +108,7 @@ public partial class TypeChecker
 
     private void RecordProvenSourceMemberCall(Expr nameOwner, Token name, Expr call)
     {
-        if (!Members.IsEnabled || CurrentSourceDocument is not { } document ||
+        if (!ShouldCaptureSourceMemberFacts || CurrentSourceDocument is not { } document ||
             WrittenSourceMemberName(document, nameOwner, name) is not { } written) return;
         // This runs only after the real call checker succeeds. Invalid arguments can retain
         // their independently proven member read, without acquiring call eligibility.
@@ -115,14 +118,14 @@ public partial class TypeChecker
 
     private void ForgetSourceMemberCall(Expr owner, Token name, Expr nameOwner)
     {
-        if (!Members.IsEnabled || CurrentSourceDocument is not { } document ||
+        if (!ShouldCaptureSourceMemberFacts || CurrentSourceDocument is not { } document ||
             WrittenSourceMemberName(document, nameOwner, name) is not { } written) return;
         Members.RemoveOperation(document, written, MemberOperation.Call, owner);
     }
 
     private void ForgetSourceMemberCall(Expr.Call call)
     {
-        if (!Members.IsEnabled) return;
+        if (!ShouldCaptureSourceMemberFacts) return;
         Expr callee = call.Callee;
         while (true)
         {
@@ -147,19 +150,21 @@ public partial class TypeChecker
     private void RecordPrivateSourceMemberRead(Expr owner, Token name, TypeInfo receiver,
         TypeInfo.Class lexicalOwner, MemberFacet facet)
     {
+        if (!ShouldCaptureSourceMemberFacts) return;
         using var lookup = BeginSourceMemberLookup(owner, name, MemberOperation.Read);
         ObservePrivateSourceMemberSelection(name, receiver, lexicalOwner, facet);
         lookup?.Succeed();
     }
 
     private sealed class SourceMemberLookup(TypeChecker checker, SourceMemberLookup? previous,
-        SourceDocument document, Expr owner, Token name, Token writtenName, MemberOperation operation) : IDisposable
+        SourceDocument document, Expr owner, Token name, Token writtenName, MemberOperation operation, bool canPublish) : IDisposable
     {
         private List<MemberResolution>? _selections;
         private int _requiredSelections = 1;
         private bool _supportedReceiver = true;
         private bool _succeeded;
         public Token Name { get; } = name;
+        public bool CanPublish { get; } = canPublish;
 
         public void ExpectReceiver(TypeInfo receiver)
         {
@@ -173,6 +178,7 @@ public partial class TypeChecker
         public void Dispose()
         {
             checker._sourceMemberLookup = previous;
+            if (!CanPublish) return;
             List<MemberResolution> parts = _selections ?? [];
             if (!_succeeded || !_supportedReceiver || parts.Count != _requiredSelections)
                 parts.Add(MemberResolution.Unavailable);

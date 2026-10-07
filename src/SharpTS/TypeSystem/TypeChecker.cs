@@ -88,6 +88,7 @@ public partial class TypeChecker
             mergeWithLocal);
         environment.Define(declaration.Lexeme, type);
         environment.DefineValueBinding(declaration.Lexeme, symbol);
+        RecordEditorBinding(environment, declaration, symbol, BindingNamespace.Value, type, EditorFactAvailability.Available);
     }
 
     private BindingSymbol RegisterValueDeclaration(
@@ -104,6 +105,7 @@ public partial class TypeChecker
             BindingNamespace.Value,
             existing);
         environment.DefineValueBinding(declaration.Lexeme, symbol);
+        RecordEditorBinding(environment, declaration, symbol, BindingNamespace.Value, null, EditorFactAvailability.Unavailable);
         return symbol;
     }
 
@@ -135,6 +137,7 @@ public partial class TypeChecker
             BindingNamespace.Type,
             existing);
         environment.DefineTypeBinding(declaration.Lexeme, symbol);
+        RecordEditorBinding(environment, declaration, symbol, BindingNamespace.Type, null, EditorFactAvailability.Unavailable);
         return symbol;
     }
 
@@ -155,6 +158,7 @@ public partial class TypeChecker
             environment.GetLocalTypeSymbol(declaration.Name.Lexeme));
         environment.DefineTypeBinding(declaration.Name.Lexeme, symbol);
         environment.DefineTypeParameter(declaration.Name.Lexeme, typeParameter);
+        RecordEditorBinding(environment, declaration.Name, symbol, BindingNamespace.Type, typeParameter, EditorFactAvailability.Available);
     }
 
     private void DefineSourceTypeParameter(
@@ -169,6 +173,7 @@ public partial class TypeChecker
             environment.GetLocalTypeSymbol(declaration.Lexeme));
         environment.DefineTypeBinding(declaration.Lexeme, symbol);
         environment.DefineTypeParameter(declaration.Lexeme, typeParameter);
+        RecordEditorBinding(environment, declaration, symbol, BindingNamespace.Type, typeParameter, EditorFactAvailability.Available);
     }
 
     private void BindTypeUse(NamedTypeNode named)
@@ -1139,7 +1144,8 @@ public partial class TypeChecker
     private (List<TypeInfo> paramTypes, int requiredParams, bool hasRest, List<string> paramNames) BuildFunctionSignature(
         List<Stmt.Parameter> parameters,
         bool validateDefaults,
-        string contextName)
+        string contextName,
+        object? editorOwner = null)
     {
         List<TypeInfo> paramTypes = [];
         List<string> paramNames = [];
@@ -1152,6 +1158,8 @@ public partial class TypeChecker
         // to an outer binding or errors. A preceding bare-optional parameter is visible here with
         // its WIDENED (possibly-undefined) type, matching what the function body itself would see.
         var paramScope = new TypeEnvironment(_environment);
+        if (editorOwner is not null)
+            RegisterEditorParameterScope(editorOwner, paramScope);
 
         foreach (var param in parameters)
         {
@@ -1341,6 +1349,7 @@ public partial class TypeChecker
         Bindings.Clear();
         _members?.Clear();
         _sourceClassNesting = null;
+        ResetEditorMetadata();
         _checkedVarRedeclarationSymbols.Clear();
         _explicitAnyVarSymbols.Clear();
         _uninitializedImplicitAnyVarSymbols.Clear();
@@ -1355,6 +1364,7 @@ public partial class TypeChecker
         ResetInterfaceDeclarationTracking();
         ResetFunctionDeclarationTracking();
         _standaloneSourceDocument = sourceDocument;
+        if (sourceDocument is not null) RegisterEditorScope(sourceDocument, _environment, EditorScopeKind.Source);
 
         // Clear caches for fresh check
         _compatibilityCache = null;
@@ -1395,11 +1405,17 @@ public partial class TypeChecker
         // forward-reference a later block-scoped binding — #533)
         HoistLexicalDeclarations(statements);
 
+        // Hoisting may inspect bodies speculatively. Publish source queries only from the
+        // following authoritative statement pass, preserving exact callable source maps.
+        ClearEditorDocument(sourceDocument);
+        if (sourceDocument is not null) RegisterEditorScope(sourceDocument, _environment, EditorScopeKind.Source);
+
         foreach (Stmt statement in statements)
         {
             CheckStmt(statement);
         }
 
+        CaptureEditorGlobals(_environment);
         return _typeMap;
     }
 
@@ -1423,6 +1439,7 @@ public partial class TypeChecker
         Bindings.Clear();
         _members?.Clear();
         _sourceClassNesting = null;
+        ResetEditorMetadata();
         _checkedVarRedeclarationSymbols.Clear();
         _explicitAnyVarSymbols.Clear();
         _uninitializedImplicitAnyVarSymbols.Clear();
@@ -1437,6 +1454,7 @@ public partial class TypeChecker
         ResetInterfaceDeclarationTracking();
         ResetFunctionDeclarationTracking();
         _standaloneSourceDocument = sourceDocument;
+        if (sourceDocument is not null) RegisterEditorScope(sourceDocument, _environment, EditorScopeKind.Source);
 
         _diagnostics.Clear();
         bool previousRecoveryMode = _recoveryMode;
@@ -1487,11 +1505,15 @@ public partial class TypeChecker
             // forward-reference a later block-scoped binding — #533)
             HoistLexicalDeclarations(statements);
 
+            ClearEditorDocument(sourceDocument);
+            if (sourceDocument is not null) RegisterEditorScope(sourceDocument, _environment, EditorScopeKind.Source);
+
             foreach (Stmt statement in statements)
             {
                 ThrowIfCancellationRequested();
                 if (_diagnostics.HitErrorLimit)
                 {
+                    CaptureEditorGlobals(_environment);
                     return new TypeCheckDiagnosticResult(_typeMap, _diagnostics.Diagnostics, HitErrorLimit: true);
                 }
 
@@ -1508,6 +1530,7 @@ public partial class TypeChecker
             // Cancellation during the final statement must not return a successful analysis.
             ThrowIfCancellationRequested();
 
+            CaptureEditorGlobals(_environment);
             return new TypeCheckDiagnosticResult(_typeMap, _diagnostics.Diagnostics);
         }
         finally
@@ -1710,6 +1733,7 @@ public partial class TypeChecker
         Bindings.Clear();
         _members?.Clear();
         _sourceClassNesting = null;
+        ResetEditorMetadata();
         _checkedVarRedeclarationSymbols.Clear();
         _explicitAnyVarSymbols.Clear();
         _uninitializedImplicitAnyVarSymbols.Clear();
@@ -1912,6 +1936,7 @@ public partial class TypeChecker
 
             _currentModule = module;
             _filePath = module.Path; // diagnostic attribution — see first pass (#216)
+            ClearEditorDocument(module.Document);
 
             if (module.IsScript)
             {
@@ -1919,6 +1944,8 @@ public partial class TypeChecker
                 // Type-check in the shared script environment
                 using (new EnvironmentScope(this, scriptEnv))
                 {
+                    if (module.Document is { } sourceDocument)
+                        RegisterEditorScope(sourceDocument, scriptEnv, EditorScopeKind.Source);
                     // Pre-register type declarations (may have been done in first pass, but safe to repeat)
                     PreRegisterTypeDeclarations(module.Statements);
 
@@ -1971,6 +1998,8 @@ public partial class TypeChecker
                 // Global script declarations (including lib.*.d.ts and global
                 // augmentations) are visible inside external modules too.
                 var moduleEnv = new TypeEnvironment(scriptEnv);
+                if (module.Document is { } sourceDocument)
+                    RegisterEditorScope(sourceDocument, moduleEnv, EditorScopeKind.Source);
 
                 // CJS modules have module, exports, and global in scope
                 if (module.IsCommonJs)
@@ -2060,6 +2089,7 @@ public partial class TypeChecker
         _filePath = null;
         _currentStatementLine = null;
         ThrowIfCancellationRequested();
+        CaptureEditorGlobals(scriptEnv);
         return _typeMap;
     }
 
@@ -2205,6 +2235,8 @@ public partial class TypeChecker
     /// </summary>
     private void CollectScriptDeclarations(ParsedModule script, TypeEnvironment scriptEnv)
     {
+        if (CurrentSourceDocument is { } sourceDocument)
+            RegisterEditorScope(sourceDocument, scriptEnv, EditorScopeKind.Source);
         using (new EnvironmentScope(this, scriptEnv))
         {
             // Pre-register type declarations (interfaces, enums, type aliases)
@@ -2281,6 +2313,8 @@ public partial class TypeChecker
         // shared script environment as the authoritative module pass so the preparatory
         // export surface does not collapse to an empty namespace.
         var moduleEnv = new TypeEnvironment(scriptEnv);
+        if (module.Document is { } sourceDocument)
+            RegisterEditorScope(sourceDocument, moduleEnv, EditorScopeKind.Source);
 
         // CJS modules have module, exports, and global in scope
         if (module.IsCommonJs)
@@ -2996,6 +3030,15 @@ public partial class TypeChecker
         Bindings.Bind(localName, CurrentSourceDocument, binding);
         if (importedToken is not null && !ReferenceEquals(importedToken, localName))
             Bindings.Bind(importedToken, CurrentSourceDocument, binding);
+        if (ShouldCaptureEditorFacts && CurrentSourceDocument?.EditorSyntax is { } syntax &&
+            syntax.Records.Any(record => record.IsAuthoritative && ReferenceEquals(record.Token, localName)))
+        {
+            TypeInfo? importedType = bindingNamespace == BindingNamespace.Type
+                ? environment.GetTypeBinding(localName.Lexeme) : environment.Get(localName.Lexeme);
+            EditorFacts.RecordDeclaration(CurrentSourceDocument, localName, localName, binding, bindingNamespace, importedType);
+            if (FindEditorScope(environment) is { } scope)
+                EditorFacts.BindLocal(scope, localName.Lexeme, bindingNamespace, binding, importedType, localName);
+        }
         return binding;
     }
 

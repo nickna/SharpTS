@@ -56,6 +56,7 @@ public partial class TypeChecker
         // Bind the alias's own type parameters (with constraints) so references inside the
         // body resolve to TypeParameter — constraint checks then go through apparent types.
         var aliasEnv = new TypeEnvironment(_environment);
+        RegisterEditorScope(stmt, aliasEnv, EditorScopeKind.Class, EditorSyntaxRole.Whole);
         if (stmt.TypeParameters is { Count: > 0 } tps)
         {
             var previous = _environment;

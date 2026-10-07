@@ -69,7 +69,8 @@ public partial class TypeChecker
         var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
             method.Parameters,
             validateDefaults: true,
-            contextName: $"method '{method.Name.Lexeme}'"
+            contextName: $"method '{method.Name.Lexeme}'",
+            editorOwner: method
         );
 
         TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
@@ -89,8 +90,10 @@ public partial class TypeChecker
         }
 
         TypeInfo? explicitThisType = ResolveAnnotation(method.ThisType, method.ThisTypeNode);
-        return new TypeInfo.Function(
+        var signature = new TypeInfo.Function(
             paramTypes, returnType, requiredParams, hasRest, explicitThisType, paramNames);
+        RegisterEditorSignature(signature, method, method.Name);
+        return signature;
     }
 
     // Signature collection runs in the caller-owned class type environment and populates
@@ -238,6 +241,7 @@ public partial class TypeChecker
                 }
 
                 var overloadedFunc = new TypeInfo.OverloadedFunction(signatureTypes, implType);
+                RegisterEditorPublicSignatures(overloadedFunc, signatureTypes);
 
                 if (implementation.IsStatic)
                     mutableClass.StaticMethods[methodName] = overloadedFunc;
@@ -531,6 +535,7 @@ public partial class TypeChecker
             {
                 if (initializer is Stmt.StaticBlock block)
                 {
+                    RegisterEditorScope(block, staticBlockEnv);
                     using var _ = new EnvironmentScope(this, staticBlockEnv);
                     bool previousInStaticBlock = _inStaticBlock;
                     bool previousInStaticMethod = _inStaticMethod;
@@ -605,7 +610,9 @@ public partial class TypeChecker
             mutableClass.Superclass = superclass;
             mutableClass.IsAbstract = classStmt.IsAbstract;
             RegisterSourceClassMembers(classStmt, mutableClass.DeclarationId);
+            MarkEditorBodyEntered(classStmt);
             classTypeEnv.Define(classStmt.Name.Lexeme, mutableClass);
+            BindEditorClassSelf(classStmt, classTypeEnv, mutableClass);
             // `this` in an instance method signature is the polymorphic instance type, not the
             // global object. Make it visible while collecting signatures so `K extends keyof this`
             // and `value: this[K]` retain their indexed-access relationship.
@@ -742,6 +749,7 @@ public partial class TypeChecker
             }
 
             // Get the method type (could be Function or OverloadedFunction)
+            RegisterEditorScope(method, methodEnv, EditorScopeKind.Function, EditorSyntaxRole.Whole);
             // For ES2022 private methods, look in PrivateMethodTypes/StaticPrivateMethodTypes
             TypeInfo declaredMethodType;
             if (method.ComputedKey != null)
@@ -826,6 +834,7 @@ public partial class TypeChecker
 
             bool inferringMethodReturn = methodType.ReturnType is TypeInfo.Inferred;
             _environment = methodEnv;
+            MarkEditorBodyEntered(method);
             if (inferringMethodReturn)
             {
                 _inferredReturnTypes = new List<TypeInfo>();
@@ -900,6 +909,9 @@ public partial class TypeChecker
                     // by their @@name (e.g. @@iterator), not the synthetic `<computed>` lexeme; an
                     // arbitrary computed key (no well-known @@name) carries no static member to update.
                     var updatedMethodType = new TypeInfo.Function(methodType.ParamTypes, inferredReturn, methodType.RequiredParams, methodType.HasRestParam, methodType.ThisType, methodType.ParamNames);
+                    RegisterEditorSignature(updatedMethodType, method, method.Name);
+                    if (declaredMethodType is TypeInfo.OverloadedFunction publicOverload)
+                        RegisterEditorPublicSignatures(updatedMethodType, publicOverload.Signatures);
                     string? mName = method.ComputedKey != null
                         ? TryGetWellKnownSymbolMemberName(method.ComputedKey)
                         : method.Name.Lexeme;
@@ -970,6 +982,7 @@ public partial class TypeChecker
             foreach (var accessor in classStmt.Accessors)
             {
                 TypeEnvironment accessorEnv = new TypeEnvironment(_environment);
+                RegisterEditorScope(accessor, accessorEnv, EditorScopeKind.Function);
                 string? accessorName = accessor.ComputedKey != null
                     ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
                     : accessor.Name.Lexeme;
@@ -1008,6 +1021,7 @@ public partial class TypeChecker
                 bool previousInStaticAcc = _inStaticMethod;
 
                 _environment = accessorEnv;
+                MarkEditorBodyEntered(accessor);
                 _currentFunctionReturnType = accessorReturnType;
                 bool inferringGetter = accessor.Kind.Type == TokenType.GET
                     && accessorReturnType is TypeInfo.Inferred;
@@ -1262,6 +1276,8 @@ public partial class TypeChecker
 
         // Handle generic type parameters
         TypeEnvironment classTypeEnv = new(_environment);
+        MarkEditorBodyEntered(classStmt);
+        RegisterEditorScope(classStmt, classTypeEnv, EditorScopeKind.Class, EditorSyntaxRole.Whole);
         List<TypeInfo.TypeParameter>? classTypeParams = null;
         if (classStmt.TypeParams != null && classStmt.TypeParams.Count > 0)
         {
@@ -1287,6 +1303,7 @@ public partial class TypeChecker
         };
         RegisterSourceClassMembers(classStmt, mutableClass.DeclarationId);
         classTypeEnv.Define(classStmt.Name.Lexeme, mutableClass);
+        BindEditorClassSelf(classStmt, classTypeEnv, mutableClass);
         classTypeEnv.Define("this", new TypeInfo.Instance(mutableClass));
 
         using (new EnvironmentScope(this, classTypeEnv))
@@ -1332,7 +1349,8 @@ public partial class TypeChecker
             var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
                 method.Parameters,
                 validateDefaults: true,
-                contextName: $"method '{method.Name.Lexeme}'"
+                contextName: $"method '{method.Name.Lexeme}'",
+                editorOwner: method
             );
 
             TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
@@ -1351,7 +1369,9 @@ public partial class TypeChecker
                 }
             }
 
-            return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, null, paramNames);
+            var signature = new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, null, paramNames);
+            RegisterEditorSignature(signature, method, method.Name);
+            return signature;
         }
 
         // Collect method signatures (all methods in declare class are treated as signatures)

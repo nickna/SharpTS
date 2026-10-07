@@ -174,6 +174,24 @@ public sealed class MemberIndex
         _classAliases.TryGetValue(leftId, out int left) &&
         _classAliases.TryGetValue(rightId, out int right) && left == right;
 
+    public SourceClassInfo? GetClassInfo(int declarationId) => IsEnabled &&
+        _classAliases.TryGetValue(declarationId, out int canonicalId) ? _classes.GetValueOrDefault(canonicalId) : null;
+
+    /// <summary>Discards preparatory uses while preserving exact declaration identities/aliases.</summary>
+    public void ClearDocumentUses(SourceDocument? document)
+    {
+        if (!IsEnabled || document is null) return;
+        foreach (var (token, occurrence) in _occurrences.Where(pair => ReferenceEquals(pair.Value.Document, document)).ToArray())
+        {
+            if (!occurrence.IsDeclaration) { _occurrences.Remove(token); continue; }
+            foreach (var operation in occurrence.Selections.Keys.Where(operation => operation != MemberOperation.Declaration).ToArray())
+            {
+                occurrence.Selections.Remove(operation);
+                occurrence.OwnerFacts.Remove(operation);
+            }
+        }
+    }
+
     public void Bind(SourceDocument? document, Token name, MemberResolution resolution,
         MemberOperation operations, bool isDeclaration = false, object? owner = null)
     {

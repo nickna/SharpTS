@@ -24,9 +24,25 @@ public partial class TypeChecker
     /// <returns>The resolved TypeInfo for the expression.</returns>
     private TypeInfo CheckExpr(Expr expr)
     {
-        TypeInfo result = DispatchExpr(expr);
-        _typeMap.Set(expr, result);
-        return result;
+        if (!EditorFacts.IsEnabled)
+        {
+            TypeInfo ordinaryResult = DispatchExpr(expr);
+            _typeMap.Set(expr, ordinaryResult);
+            return ordinaryResult;
+        }
+        BeginEditorExpression(expr);
+        try
+        {
+            TypeInfo result = DispatchExpr(expr);
+            _typeMap.Set(expr, result);
+            RecordEditorExpressionType(expr, result);
+            return result;
+        }
+        catch
+        {
+            FailEditorExpression(expr);
+            throw;
+        }
     }
 
     /// <summary>
@@ -38,6 +54,23 @@ public partial class TypeChecker
     /// context — falls through to plain <see cref="CheckExpr"/>.
     /// </summary>
     private TypeInfo CheckExprWithContext(Expr expr, TypeInfo? contextualType)
+    {
+        if (!EditorFacts.IsEnabled) return CheckExprWithContextCore(expr, contextualType);
+        BeginEditorExpression(expr);
+        try
+        {
+            TypeInfo result = CheckExprWithContextCore(expr, contextualType);
+            RecordEditorExpressionType(expr, result);
+            return result;
+        }
+        catch
+        {
+            FailEditorExpression(expr);
+            throw;
+        }
+    }
+
+    private TypeInfo CheckExprWithContextCore(Expr expr, TypeInfo? contextualType)
     {
         if (contextualType is null) return CheckExpr(expr);
 
@@ -1589,6 +1622,28 @@ public partial class TypeChecker
         string contextualReturnTsCode = "TS2322",
         bool useContextualReturnType = true)
     {
+        if (!EditorFacts.IsEnabled)
+            return CheckArrowFunctionCore(arrow, expectedType, contextualReturnTsCode, useContextualReturnType);
+        BeginEditorExpression(arrow);
+        try
+        {
+            TypeInfo result = CheckArrowFunctionCore(arrow, expectedType, contextualReturnTsCode, useContextualReturnType);
+            RecordEditorExpressionType(arrow, result);
+            return result;
+        }
+        catch
+        {
+            FailEditorExpression(arrow);
+            throw;
+        }
+    }
+
+    private TypeInfo CheckArrowFunctionCore(
+        Expr.ArrowFunction arrow,
+        TypeInfo? expectedType,
+        string contextualReturnTsCode,
+        bool useContextualReturnType)
+    {
         // Extract expected function type for parameter inference
         TypeInfo.Function? expectedFuncType = GetContextualFunctionType(expectedType);
 
@@ -1609,6 +1664,7 @@ public partial class TypeChecker
         if (arrow.TypeParams != null && arrow.TypeParams.Count > 0)
         {
             typeParamEnv = new TypeEnvironment(_environment);
+            RegisterEditorScope(arrow, typeParamEnv, EditorScopeKind.Function, EditorSyntaxRole.Whole);
             using (new EnvironmentScope(this, typeParamEnv))
                 typeParams = BuildGenericTypeParameters(
                     arrow.TypeParams,
@@ -1641,6 +1697,7 @@ public partial class TypeChecker
             // self-reference resolves to an outer binding or errors. Mirrors BuildFunctionSignature,
             // which the function-declaration/method path already uses (#698).
             var paramScope = new TypeEnvironment(_environment);
+            RegisterEditorParameterScope(arrow, paramScope);
 
             // Build parameter types and check defaults
             for (int i = 0; i < arrow.Parameters.Count; i++)
@@ -1725,6 +1782,7 @@ public partial class TypeChecker
 
         // Create new environment for function body
         TypeEnvironment arrowEnv = new(typeParamEnv);
+        RegisterEditorScope(arrow, arrowEnv, EditorScopeKind.Function, EditorSyntaxRole.Whole);
 
         // For named function expressions, add the function name to the inner scope
         // This enables recursion: const f = function myFunc(n) { return myFunc(n-1); }
@@ -1763,6 +1821,7 @@ public partial class TypeChecker
 
         bool inferringArrowReturn = returnType is TypeInfo.Inferred;
         _environment = arrowEnv;
+        MarkEditorBodyEntered(arrow);
         if (inferringArrowReturn)
         {
             _inferredReturnTypes = new List<TypeInfo>();
@@ -1930,9 +1989,12 @@ public partial class TypeChecker
                 _activeLabels[kvp.Key] = kvp.Value;
         }
 
-        return typeParams != null && typeParams.Count > 0
+        TypeInfo completedType = typeParams != null && typeParams.Count > 0
             ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
             : new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
+        RecordEditorExpressionType(arrow, completedType);
+        if (arrow.Name is { } sourceName) RegisterEditorSignature(completedType, arrow, sourceName);
+        return completedType;
     }
 
     private TypeInfo.Function? GetContextualFunctionType(TypeInfo? type)
@@ -2462,6 +2524,8 @@ public partial class TypeChecker
         // Handle generic type parameters
         List<TypeInfo.TypeParameter>? classTypeParams = null;
         TypeEnvironment classTypeEnv = new(_environment);
+        MarkEditorBodyEntered(classExpr);
+        RegisterEditorScope(classExpr, classTypeEnv, EditorScopeKind.Class, EditorSyntaxRole.Whole);
         if (classExpr.TypeParams != null && classExpr.TypeParams.Count > 0)
         {
             // Multi-pass under classTypeEnv so a constraint referencing a later parameter resolves
@@ -2492,7 +2556,8 @@ public partial class TypeChecker
                 var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
                     method.Parameters,
                     validateDefaults: true,
-                    contextName: $"method '{method.Name.Lexeme}'"
+                    contextName: $"method '{method.Name.Lexeme}'",
+                    editorOwner: method
                 );
 
                 TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
@@ -2514,7 +2579,9 @@ public partial class TypeChecker
                     }
                 }
 
-                return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, null, paramNames);
+                var signature = new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, null, paramNames);
+                RegisterEditorSignature(signature, method, method.Name);
+                return signature;
             }
 
             // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their
@@ -2565,6 +2632,7 @@ public partial class TypeChecker
                     }
 
                     var overloadedFunc = new TypeInfo.OverloadedFunction(signatureTypes, implType);
+                    RegisterEditorPublicSignatures(overloadedFunc, signatureTypes);
                     if (implementation.IsStatic)
                         mutableClass.StaticMethods[methodName] = overloadedFunc;
                     else
@@ -2705,6 +2773,8 @@ public partial class TypeChecker
 
         // Check method bodies
         TypeEnvironment classEnv = new(_environment);
+        RegisterEditorScope(classExpr, classEnv, EditorScopeKind.Class, EditorSyntaxRole.Whole);
+        BindEditorClassSelf(classExpr, classEnv, classExprResultType);
         if (classExpr.Name is { } innerName)
             classEnv.Define(innerName.Lexeme, classExprResultType);
         if (classTypeParams != null)
@@ -2751,6 +2821,7 @@ public partial class TypeChecker
                 else
                     methodEnv = new TypeEnvironment(_environment);
 
+                RegisterEditorScope(method, methodEnv, EditorScopeKind.Function, EditorSyntaxRole.Whole);
                 TypeInfo declaredMethodType;
                 if (method.ComputedKey != null)
                 {
@@ -2809,6 +2880,7 @@ public partial class TypeChecker
 
                 bool inferringMethodReturn = methodType.ReturnType is TypeInfo.Inferred;
                 _environment = methodEnv;
+                MarkEditorBodyEntered(method);
                 if (inferringMethodReturn)
                 {
                     _inferredReturnTypes = new List<TypeInfo>();
@@ -2876,6 +2948,9 @@ public partial class TypeChecker
                         // by their @@name (e.g. @@iterator); an arbitrary computed key (no well-known
                         // @@name) carries no static member to update.
                         var updatedMethodType = new TypeInfo.Function(methodType.ParamTypes, inferredReturn, methodType.RequiredParams, methodType.HasRestParam, methodType.ThisType, methodType.ParamNames);
+                        RegisterEditorSignature(updatedMethodType, method, method.Name);
+                        if (declaredMethodType is TypeInfo.OverloadedFunction publicOverload)
+                            RegisterEditorPublicSignatures(updatedMethodType, publicOverload.Signatures);
                         string? mName = method.ComputedKey != null
                             ? TryGetWellKnownSymbolMemberName(method.ComputedKey)
                             : method.Name.Lexeme;
@@ -2919,6 +2994,7 @@ public partial class TypeChecker
                 foreach (var accessor in classExpr.Accessors)
                 {
                     TypeEnvironment accessorEnv = new TypeEnvironment(_environment);
+                    RegisterEditorScope(accessor, accessorEnv, EditorScopeKind.Function);
                     TypeInfo accessorReturnType;
 
                     if (accessor.Kind.Type == TokenType.GET)
@@ -2946,6 +3022,7 @@ public partial class TypeChecker
                     bool previousInStaticAcc = _inStaticMethod;
 
                     _environment = accessorEnv;
+                    MarkEditorBodyEntered(accessor);
                     _currentFunctionReturnType = accessorReturnType;
                     _loopDepth = 0;
                     _switchDepth = 0;

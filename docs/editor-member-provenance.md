@@ -16,6 +16,11 @@ aliases of that owner. The first observed ID is its stable canonical ID; integer
 equality alone does not establish source identity. A new checker generation
 produces new member identities. Frozen copies remain independent of later checks.
 
+Suppressed preparatory source checks do not publish use operations. Before a source document's
+authoritative pass, use facts are cleared while its declaration groups and nominal aliases
+remain registered. A body skipped by the final check therefore cannot leave a preparatory
+member reference behind. Trusted declaration files retain their authoritative collection pass.
+
 | Source or operation | Provenance contract |
 | --- | --- |
 | Identifier-named source fields, methods, auto-accessors and parameter-properties | Direct source declarations form canonical groups, with separate instance/static facets. User `.d.ts` classes and class expressions participate. |

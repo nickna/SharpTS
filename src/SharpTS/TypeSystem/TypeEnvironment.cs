@@ -132,6 +132,9 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
     /// <summary>The type-facet names defined directly in this scope.</summary>
     public IEnumerable<string> TypeNames => _types.Keys;
 
+    /// <summary>Local source type-facet spellings, including lazily resolved aliases.</summary>
+    internal IEnumerable<string> TypeBindingNames => _typeBindings.Keys;
+
     /// <summary>
     /// Marks a variable as const (read-only). Used for named function expressions
     /// where the function name cannot be reassigned inside the function body.

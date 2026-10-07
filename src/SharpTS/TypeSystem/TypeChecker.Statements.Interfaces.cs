@@ -236,6 +236,7 @@ public partial class TypeChecker
         // Handle generic type parameters with two-pass approach to support recursive constraints
         List<TypeInfo.TypeParameter>? interfaceTypeParams = null;
         TypeEnvironment interfaceTypeEnv = new(_environment);
+        RegisterEditorScope(interfaceStmt, interfaceTypeEnv, EditorScopeKind.Class, EditorSyntaxRole.Whole);
         if (interfaceStmt.TypeParams != null && interfaceStmt.TypeParams.Count > 0)
         {
             interfaceTypeParams = [];
@@ -423,6 +424,7 @@ public partial class TypeChecker
         // Handle generic type parameters with two-pass approach to support recursive constraints (e.g., T extends TreeNode<T>)
         List<TypeInfo.TypeParameter>? interfaceTypeParams = null;
         TypeEnvironment interfaceTypeEnv = new(_environment);
+        RegisterEditorScope(interfaceStmt, interfaceTypeEnv, EditorScopeKind.Class, EditorSyntaxRole.Whole);
         if (interfaceStmt.TypeParams != null && interfaceStmt.TypeParams.Count > 0)
         {
             using (new EnvironmentScope(this, interfaceTypeEnv))

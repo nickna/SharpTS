@@ -147,6 +147,11 @@ Unfinished member and call/new contexts use a separate bounded parse of the same
 recovery artifacts cannot supply authoritative rename locations or change the checked graph.
 The recovery cache retains at most 32 artifacts and 8 MiB within the shared 64 MiB estimate.
 
+Completed analyses also retain [bounded semantic query values](editor-semantic-queries.md):
+checked declaration/occurrence types, visible bindings, accessible receiver members and actual
+call/new candidate decisions. These values prepare the later ordinary hover, completion and
+signature-help handlers. They do not run a second checker or retain its mutable environments.
+
 For a local protocol smoke test after a Release build, run:
 
 ```bash

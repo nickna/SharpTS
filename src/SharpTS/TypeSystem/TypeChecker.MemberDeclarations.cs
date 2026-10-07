@@ -23,6 +23,7 @@ public partial class TypeChecker
             symbol.DenyRename(BindingRenameEligibility.ParameterPropertyRequiresCoordinatedEdits);
         environment.Define(parameter.Name.Lexeme, type);
         environment.DefineValueBinding(parameter.Name.Lexeme, symbol);
+        RecordEditorBinding(environment, parameter.Name, symbol, BindingNamespace.Value, type, EditorFactAvailability.Available);
     }
 
     private void RegisterSourceClassMembers(Stmt.Class declaration, int declarationId) =>

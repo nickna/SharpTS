@@ -31,6 +31,7 @@ public partial class TypeChecker
 
     private TypeInfo CheckSuper(Expr.Super expr)
     {
+        CaptureEditorSuperReceiver(expr);
         using var memberLookup = expr.Method is { } name
             ? BeginSourceMemberLookup(expr, name, MemberOperation.Read) : null;
         TypeInfo result = CheckSuperCore(expr);
@@ -1418,6 +1419,14 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckCallPrivate(Expr.CallPrivate call)
     {
+        using var invocationAttempt = BeginEditorInvocation(call, EditorInvocationKind.PrivateCall, call.Arguments);
+        TypeInfo result = CheckCallPrivateCore(call);
+        invocationAttempt?.Succeed(result);
+        return result;
+    }
+
+    private TypeInfo CheckCallPrivateCore(Expr.CallPrivate call)
+    {
         ForgetSourceMemberCall(call, call.Name, call);
         // Verify we're inside a class body
         if (_currentClass == null)
@@ -1451,6 +1460,9 @@ public partial class TypeChecker
         {
             throw new TypeCheckException($" Private member '{methodName}' is not a method.", tsCode: "TS2349");
         }
+        if (EditorFacts.IsEnabled && HasPrivateSourceOwner(objType, _currentClass.Core.DeclarationId,
+                selectedFacet == MemberFacet.PrivateStatic))
+            RecordEditorCallCandidates(funcType);
         RecordPrivateSourceMemberRead(call, call.Name, objType, _currentClass, selectedFacet);
 
         // Check argument count
@@ -1486,6 +1498,7 @@ public partial class TypeChecker
         }
 
         RecordProvenSourceMemberCall(call, call.Name, call);
+        RecordEditorInvocationSelection(funcType);
         return funcType.ReturnType;
     }
 

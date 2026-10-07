@@ -161,6 +161,16 @@ independently of graph completeness, until lexical and property edits can be coo
 The [member provenance contract](docs/editor-member-provenance.md) records supported operations
 and checker paths that currently cannot establish a source origin.
 
+`WithEditorMetadata` additionally captures actual declaration/occurrence types, source-linked
+checker scopes, receiver member projections and invocation candidates/selections. Publication
+in `FrozenEditorSemanticIndex` replaces raw types with bounded TypeScript presentations and
+copies identities/collections; no type environment, mutable class or inference callback escapes.
+Failed attempts clear stale results. Recovery, holes and incomplete candidates cannot establish
+an overload winner. Source scopes preserve unavailable shadowing locals and canonical import
+identities. Projections inspect already checked types without another inference pass, and
+ordinary checking leaves capture disabled. The [semantic query contract](docs/editor-semantic-queries.md)
+defines authority, unsupported paths and presentation limits.
+
 `Parser.ParseForEditor` clones the source capture for bounded cursor-local missing member names
 and unfinished call/new lists. It preserves all original offsets, marks synthetic holes and
 delimiters as non-authoritative, and never checks or adds bindings to the recovered artifact.

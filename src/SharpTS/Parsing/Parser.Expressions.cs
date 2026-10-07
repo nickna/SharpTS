@@ -846,7 +846,7 @@ public partial class Parser
                 // super() - constructor call, Method is null
                 return new Expr.Super(keyword, null);
             }
-            Consume(TokenType.DOT, "Expect '.' or '(' after 'super'.");
+            Token operation = Consume(TokenType.DOT, "Expect '.' or '(' after 'super'.");
             Token method;
             if (Match(TokenType.IDENTIFIER, TokenType.CONSTRUCTOR))
             {
@@ -856,7 +856,9 @@ public partial class Parser
             {
                 throw new Exception("Expect superclass method name.");
             }
-            return new Expr.Super(keyword, method);
+            var superMember = CompleteExpression(new Expr.Super(keyword, method), keyword.Start);
+            RecordMemberSyntax(superMember, superMember, method, operation.Span);
+            return superMember;
         }
 
         // Dynamic import: import(pathExpr) or import.meta

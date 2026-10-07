@@ -9,7 +9,7 @@ public partial class TypeChecker
 
     internal TypeInfo VisitPrivateIn(Expr.PrivateIn expr)
     {
-        SourceDocument? sourceDocument = Members.IsEnabled ? CurrentSourceDocument : null;
+        SourceDocument? sourceDocument = ShouldCaptureSourceMemberFacts ? CurrentSourceDocument : null;
         Token? writtenName = sourceDocument is null ? null : WrittenSourceMemberName(sourceDocument, expr, expr.Name);
         if (writtenName is not null)
             Members.RemoveOperation(sourceDocument, writtenName, MemberOperation.Presence, expr);
