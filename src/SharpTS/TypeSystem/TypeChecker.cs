@@ -1163,7 +1163,7 @@ public partial class TypeChecker
 
         foreach (var param in parameters)
         {
-            TypeInfo? resolvedParameter = ResolveAnnotation(param.Type, param.TypeAnnotationNode);
+            TypeInfo? resolvedParameter = ResolveAnnotation(param.Type, param.TypeAnnotationNode, param);
             if (resolvedParameter is null && param.DestructuredProperties is { Count: > 0 } properties)
             {
                 var fields = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
@@ -3031,11 +3031,23 @@ public partial class TypeChecker
         if (importedToken is not null && !ReferenceEquals(importedToken, localName))
             Bindings.Bind(importedToken, CurrentSourceDocument, binding);
         if (ShouldCaptureEditorFacts && CurrentSourceDocument?.EditorSyntax is { } syntax &&
-            syntax.Records.Any(record => record.IsAuthoritative && ReferenceEquals(record.Token, localName)))
+            syntax.Records.FirstOrDefault(record => record.IsAuthoritative && record.Kind == EditorSyntaxKind.Name &&
+                record.Role == EditorSyntaxRole.DeclarationName && record.Token is not null && (record.Node switch
+                {
+                    Stmt.ImportSpecifier specifier => ReferenceEquals(specifier.LocalName ?? specifier.Imported, localName),
+                    Stmt.Import import => ReferenceEquals(import.DefaultImport, localName) || ReferenceEquals(import.NamespaceImport, localName),
+                    _ => ReferenceEquals(record.Token, localName),
+                })) is { } source)
         {
             TypeInfo? importedType = bindingNamespace == BindingNamespace.Type
                 ? environment.GetTypeBinding(localName.Lexeme) : environment.Get(localName.Lexeme);
-            EditorFacts.RecordDeclaration(CurrentSourceDocument, localName, localName, binding, bindingNamespace, importedType);
+            Token writtenName = source.Token!;
+            Bindings.Bind(writtenName, CurrentSourceDocument, binding);
+            if (source.Node is Stmt.ImportSpecifier specifier && importedToken is not null)
+                foreach (var imported in syntax.GetRecords(specifier).Where(record => record.IsAuthoritative &&
+                    record.Kind == EditorSyntaxKind.Name && record.Role == EditorSyntaxRole.Name && record.Token is not null))
+                    Bindings.Bind(imported.Token!, CurrentSourceDocument, binding);
+            EditorFacts.RecordDeclaration(CurrentSourceDocument, source.Node, writtenName, binding, bindingNamespace, importedType);
             if (FindEditorScope(environment) is { } scope)
                 EditorFacts.BindLocal(scope, localName.Lexeme, bindingNamespace, binding, importedType, localName);
         }

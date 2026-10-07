@@ -13,9 +13,10 @@ public static class EditorTypeRenderer
 {
     public static EditorTypePresentation Render(TypeInfo? type,
         EditorTypeRenderContext context = EditorTypeRenderContext.Type, EditorRenderLimits? limits = null,
-        IReadOnlyDictionary<string, TypeInfo>? substitutions = null)
+        IReadOnlyDictionary<string, TypeInfo>? substitutions = null,
+        IReadOnlyDictionary<TypeInfo, EditorCallableSurface>? callableSurfaces = null)
     {
-        var writer = new Writer(limits ?? new(), substitutions);
+        var writer = new Writer(limits ?? new(), substitutions, callableSurfaces);
         writer.Type(type, 0, context);
         return writer.Presentation(0, 0, 0);
     }
@@ -23,9 +24,10 @@ public static class EditorTypeRenderer
     public static EditorSignaturePresentation RenderSignature(TypeInfo? signature,
         bool isConstructor = false, TypeInfo? constructedType = null,
         IReadOnlyList<TypeInfo.TypeParameter>? typeParameters = null, EditorRenderLimits? limits = null,
-        IReadOnlyDictionary<string, TypeInfo>? substitutions = null)
+        IReadOnlyDictionary<string, TypeInfo>? substitutions = null,
+        IReadOnlyDictionary<TypeInfo, EditorCallableSurface>? callableSurfaces = null)
     {
-        var writer = new Writer(limits ?? new(), substitutions);
+        var writer = new Writer(limits ?? new(), substitutions, callableSurfaces);
         return writer.Signature(signature, 0, isConstructor, constructedType, typeParameters, arrow: false);
     }
 
@@ -35,6 +37,7 @@ public static class EditorTypeRenderer
         private readonly HashSet<TypeInfo> _active = new(ReferenceEqualityComparer.Instance);
         private readonly EditorRenderLimits _limits;
         private readonly IReadOnlyDictionary<string, TypeInfo>? _substitutions;
+        private readonly IReadOnlyDictionary<TypeInfo, EditorCallableSurface>? _callableSurfaces;
         private readonly HashSet<string> _shadowed = new(StringComparer.Ordinal);
         private int _suppressSubstitutions;
         private int _nodes;
@@ -43,9 +46,11 @@ public static class EditorTypeRenderer
         private bool _exhausted;
         private bool Full => _exhausted || _text.Length >= _limits.MaxCharacters;
 
-        public Writer(EditorRenderLimits limits, IReadOnlyDictionary<string, TypeInfo>? substitutions)
+        public Writer(EditorRenderLimits limits, IReadOnlyDictionary<string, TypeInfo>? substitutions,
+            IReadOnlyDictionary<TypeInfo, EditorCallableSurface>? callableSurfaces)
         {
             _substitutions = substitutions;
+            _callableSurfaces = callableSurfaces;
             _limits = new(Math.Clamp(limits.MaxDepth, 1, 32), Math.Clamp(limits.MaxNodes, 1, 4096),
                 Math.Clamp(limits.MaxCharacters, 16, 65536), Math.Clamp(limits.MaxCandidates, 1, 256));
         }
@@ -101,6 +106,13 @@ public static class EditorTypeRenderer
             if (++_nodes > _limits.MaxNodes || depth >= _limits.MaxDepth || !_active.Add(type)) { Ellipsis(); return; }
             try
             {
+                // The family is attached to this exact checker object, never inferred from
+                // a matching name/shape or attached to an instantiated selected signature.
+                if (_callableSurfaces?.TryGetValue(type, out var surface) == true)
+                {
+                    Overloads(surface.Signatures, surface.TypeParameters, depth + 1);
+                    return;
+                }
                 switch (type)
                 {
                     case TypeInfo.Primitive primitive:

@@ -95,14 +95,16 @@ public sealed class EditorReceiverQueryTests
         var members = Members(analysis, "member");
         Assert.True(members.IsComplete);
         Assert.Equal("Array<number>", Assert.Single(members.Members, member => member.Name == "value").Type.Text);
-        string method = Assert.Single(members.Members, member => member.Name == "method").Type.Text;
+        var method = Assert.Single(members.Members, member => member.Name == "method").Type;
         var ordinary = Check(source, enabled: false);
         var sourceClass = Assert.IsType<Stmt.Class>(ordinary.Statements[0]);
         var actualMethod = ordinary.Types.GetClassType(sourceClass)!.Methods["method"];
-        Assert.Equal(EditorTypeRenderer.Render(actualMethod, EditorTypeRenderContext.Value).Text, method);
-        // This checker path currently erases the generic method's local parameter to any.
-        // Editor projection preserves that result; renderer shadowing has a separate test.
-        Assert.Equal("(input: any) => any", method);
+        // This checker path does not install the method-local U while resolving the
+        // written signature. The ordinary checker still falls back to any; editor
+        // presentation refuses that unresolved annotation rather than claiming any.
+        Assert.Equal("(input: any) => any", EditorTypeRenderer.Render(actualMethod, EditorTypeRenderContext.Value).Text);
+        Assert.False(method.IsAvailable);
+        Assert.Equal("unavailable", method.Text);
         Assert.NotNull(Assert.Single(members.Members, member => member.Name == "value").Source);
     }
 

@@ -544,7 +544,7 @@ public partial class Parser
         if (IsContextualKeyword(Peek().Type))
         {
             var token = Advance();
-            return new Token(TokenType.IDENTIFIER, token.Lexeme, null, token.Line);
+            return AliasEditorToken(new Token(TokenType.IDENTIFIER, token.Lexeme, null, token.Line), token);
         }
         throw new Exception($"Parse Error at line {Peek().Line}: {errorMessage}");
     }

@@ -8,6 +8,7 @@ public enum EditorInvocationKind { Call, New, PrivateCall }
 public enum EditorInvocationStatus { Unavailable, CandidatesOnly, Selected }
 public enum EditorMemberKind { Property, Method, Accessor, Field, AutoAccessor, ParameterProperty, NamespaceMember }
 public enum EditorTypeRenderContext { Type, Value }
+public enum EditorAnnotationSlot { Type, Return, This, Constraint, Default }
 
 public sealed record EditorSourceSlot(SourceDocument? Document, object Owner, Token? Name = null,
     int? OverloadOrdinal = null);
@@ -22,6 +23,11 @@ public sealed record EditorReceiverCandidate(string Name, TypeInfo? Type,
     MemberFacet? Facet = null, bool IsReadonly = false, bool IsOptional = false,
     SourceMemberSymbol? Source = null, IReadOnlyDictionary<string, TypeInfo>? Substitutions = null);
 
+// Build-only provenance for a public overload family whose runtime/checker surface may
+// subsequently be replaced by its implementation. Never retained by frozen query values.
+public sealed record EditorCallableSurface(IReadOnlyList<TypeInfo> Signatures,
+    IReadOnlyList<TypeInfo.TypeParameter>? TypeParameters = null);
+
 public sealed record EditorTypePresentation(string Text, bool IsAvailable, bool IsTruncated);
 public sealed record EditorParameterPresentation(string Name, SourceSpan LabelRange,
     EditorTypePresentation Type, bool IsOptional, bool IsRest);
@@ -34,6 +40,8 @@ public sealed record EditorBindingIdentity(int Id, int Generation, string Canoni
 public sealed record EditorSourceMemberIdentity(int Id, long Generation, int DeclaringClassId,
     IReadOnlyList<SourceMemberDeclaration> Declarations);
 public sealed record EditorOccurrenceFact(SourceDocument Document, Expr Owner, SourceSpan? Span,
+    EditorTypePresentation Type, EditorFactAvailability Availability);
+public sealed record EditorTypeUseFact(SourceDocument Document, TypeNode Owner, SourceSpan? Span,
     EditorTypePresentation Type, EditorFactAvailability Availability);
 public sealed record EditorDeclarationFact(EditorSourceSlot Source, string LocalName,
     BindingNamespace Facet, EditorBindingIdentity? Binding, EditorTypePresentation Type,
@@ -48,7 +56,7 @@ public sealed record EditorReceiverMember(string Name, EditorTypePresentation Ty
     EditorMemberKind Kind, AccessModifier Access, MemberFacet? Facet, bool IsReadonly,
     bool IsOptional, EditorSourceMemberIdentity? Source);
 public sealed record EditorReceiverSet(IReadOnlyList<EditorReceiverMember> Members,
-    bool IsComplete, bool IsTruncated)
+    bool IsComplete, bool IsTruncated, EditorTypePresentation? ReceiverType = null)
 {
     public static EditorReceiverSet Unavailable { get; } = new([], false, false);
 }

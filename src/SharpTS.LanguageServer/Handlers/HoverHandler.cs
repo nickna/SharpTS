@@ -7,7 +7,7 @@ using SharpTS.LanguageServer.Project;
 
 namespace SharpTS.LanguageServer.Handlers;
 
-/// <summary>Hover for SharpTS decorators (resolved .NET type + XML doc).</summary>
+/// <summary>Interop hover in both modes, with shared semantic fallback in full mode.</summary>
 public sealed class HoverHandler : HoverHandlerBase
 {
     private readonly DocumentStore _store;
@@ -15,36 +15,56 @@ public sealed class HoverHandler : HoverHandlerBase
     private readonly MemberHoverService _members;
     private readonly GuiContractService _gui;
     private readonly AnalysisMetadataProvider? _metadata;
+    private readonly SemanticHoverService? _semantic;
+    private MarkupKind _format = MarkupKind.PlainText;
 
     public HoverHandler(DocumentStore store, DecoratorService decorators, MemberHoverService members,
-        GuiContractService? gui = null, AnalysisMetadataProvider? metadata = null)
+        GuiContractService? gui = null, AnalysisMetadataProvider? metadata = null,
+        SemanticHoverService? semantic = null)
     {
         _store = store;
         _decorators = decorators;
         _members = members;
         _gui = gui ?? new GuiContractService();
         _metadata = metadata;
+        _semantic = semantic;
     }
 
-    public override Task<Hover?> Handle(HoverParams request, CancellationToken ct)
+    public override async Task<Hover?> Handle(HoverParams request, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         if (!_store.TryCapture(
                 request.TextDocument.Uri.ToString(),
                 out DocumentRequestSnapshot? capture))
-            return Task.FromResult<Hover?>(null);
+            return null;
         using var guard = new EditorRequestGuard(_store, capture, _metadata, ct);
         DocumentSnapshot snapshot = capture.Document;
 
         int line = request.Position.Line, ch = request.Position.Character;
-        // Decorator hover first (cursor on @DotNetType / a builtin); then .NET member hover.
+        // Preserve the existing priority without starting shared analysis for a cheap result.
         Hover? result =
             _gui.Hover(snapshot.FilePath, snapshot.Text, line, ch) ??
             _decorators.Hover(snapshot.Text, line, ch) ??
-            _members.Hover(snapshot.Text, line, ch);
-        return Task.FromResult(guard.IsCurrent(ct) ? result : null);
+            (_semantic is null ? _members.Hover(snapshot.Text, line, ch, ct) :
+                _members.DeclarationHover(snapshot.Text, line, ch, ct));
+        AnalysisValidation? validation = null;
+        if (result is null && _semantic is not null)
+        {
+            var semantic = await _semantic.HoverAsync(capture, request.Position, _format, ct).ConfigureAwait(false);
+            result = semantic.Hover;
+            validation = semantic.Validation;
+        }
+        ct.ThrowIfCancellationRequested();
+        return guard.IsCurrent(ct) && (validation?.IsCurrent(ct) ?? true)
+            ? SemanticHoverService.AdaptMarkup(result, _format) : null;
     }
 
     protected override HoverRegistrationOptions CreateRegistrationOptions(
         HoverCapability capability, ClientCapabilities clientCapabilities)
-        => new() { DocumentSelector = TextDocumentSelector.ForLanguage("typescript", "typescriptreact") };
+    {
+        var preferred = capability.ContentFormat?.FirstOrDefault(format => format == MarkupKind.Markdown ||
+            format == MarkupKind.PlainText);
+        _format = preferred == MarkupKind.Markdown ? MarkupKind.Markdown : MarkupKind.PlainText;
+        return new() { DocumentSelector = TextDocumentSelector.ForLanguage("typescript", "typescriptreact") };
+    }
 }

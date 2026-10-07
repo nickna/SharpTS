@@ -55,8 +55,8 @@ public partial class TypeChecker
             result = [];
             foreach (var tp in decls)
             {
-                TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
-                TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
+                TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode, tp, EditorAnnotationSlot.Constraint);
+                TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode, tp, EditorAnnotationSlot.Default);
                 var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
                 result.Add(typeParam);
                 DefineSourceTypeParameter(env, tp, typeParam);
@@ -365,7 +365,7 @@ public partial class TypeChecker
 
             foreach (var param in arrow.Parameters)
             {
-                TypeInfo paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode)
+                TypeInfo paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode, param)
                     ?? TypeInfo.Any.Shared;
 
                 if (param.IsRest)
@@ -399,7 +399,7 @@ public partial class TypeChecker
             else if (arrow.ReturnType != null)
             {
                 // Use the return type from the arrow function
-                returnType = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode)!;
+                returnType = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode, arrow, EditorAnnotationSlot.Return)!;
             }
             else
             {
@@ -416,7 +416,7 @@ public partial class TypeChecker
             }
 
             // Handle 'this' type
-            TypeInfo? thisType = ResolveAnnotation(arrow.ThisType, arrow.ThisTypeNode);
+            TypeInfo? thisType = ResolveAnnotation(arrow.ThisType, arrow.ThisTypeNode, arrow, EditorAnnotationSlot.This);
             if (arrow.HasOwnThis && thisType == null)
             {
                 thisType = TypeInfo.Any.Shared;
@@ -477,10 +477,10 @@ public partial class TypeChecker
                     editorOwner: funcStmt
                 );
 
-                TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode)
+                TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode, funcStmt, EditorAnnotationSlot.Return)
                     ?? TypeInfo.Any.Shared; // Any during hoisting — real type inferred when body is checked
 
-                TypeInfo? thisType = ResolveAnnotation(funcStmt.ThisType, funcStmt.ThisTypeNode);
+                TypeInfo? thisType = ResolveAnnotation(funcStmt.ThisType, funcStmt.ThisTypeNode, funcStmt, EditorAnnotationSlot.This);
 
                 // Restore environment before defining function type
                 _environment = previousEnvForParsing;
@@ -568,7 +568,7 @@ public partial class TypeChecker
             funcEnv.Define(paramNames[i], paramTypes[i]);
 
         bool inferringReturnType = funcStmt.ReturnType == null;
-        TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode)
+        TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode, funcStmt, EditorAnnotationSlot.Return)
             ?? TypeInfo.Inferred.Shared;
 
         // Validate type predicate return types
@@ -576,7 +576,7 @@ public partial class TypeChecker
             ValidateTypePredicateReturnType(returnType, funcStmt.Parameters, funcStmt.Name.Lexeme);
 
         // Parse explicit 'this' type if present
-        TypeInfo? thisType = ResolveAnnotation(funcStmt.ThisType, funcStmt.ThisTypeNode);
+        TypeInfo? thisType = ResolveAnnotation(funcStmt.ThisType, funcStmt.ThisTypeNode, funcStmt, EditorAnnotationSlot.This);
 
         _environment = previousEnvForParsing;
 
@@ -894,8 +894,8 @@ public partial class TypeChecker
                 var updatedFuncType = typeParams != null && typeParams.Count > 0
                     ? (TypeInfo)new TypeInfo.GenericFunction(typeParams, paramTypes, inferredReturn, requiredParams, hasRest, thisType, paramNames)
                     : new TypeInfo.Function(paramTypes, inferredReturn, requiredParams, hasRest, thisType, paramNames);
-                if (EditorFacts.IsEnabled && previousEnv.Get(funcName) is { } oldFunction && GetEditorPublicSignatures(oldFunction) is { } publicSignatures)
-                    RegisterEditorPublicSignatures(updatedFuncType, publicSignatures);
+                if (EditorFacts.IsEnabled && previousEnv.Get(funcName) is { } oldFunction)
+                    CopyEditorPublicSignatures(oldFunction, updatedFuncType);
                 previousEnv.Define(funcName, updatedFuncType);
                 RegisterEditorSignature(updatedFuncType, funcStmt, funcStmt.Name);
                 if (suppress)

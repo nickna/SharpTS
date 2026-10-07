@@ -177,6 +177,16 @@ identities. Projections inspect already checked types without another inference 
 ordinary checking leaves capture disabled. The [semantic query contract](docs/editor-semantic-queries.md)
 defines authority, unsupported paths and presentation limits.
 
+Full-mode `SemanticHoverService` selects exact written declaration, occurrence, annotation and
+member facts from that shared snapshot. Type-use capture records existing resolution decisions;
+unresolved named fallbacks remain unavailable even when the compiler represents them as `any`.
+Bounded callable presentation uses the public overload surface retained during checking, including
+callables nested in other types. Private calls, assignments, brand checks and `super` use separate
+name/receiver facts rather than an enclosing expression's result. Existing GUI/decorator/CLR hover
+keeps precedence; full-mode CLR usage shares the checked analysis, while interop-only does not
+request ordinary semantic analysis. The handler negotiates Markdown/plain text and revalidates
+the captured state before returning its exact UTF-16 source range.
+
 `Parser.ParseForEditor` clones the source capture for bounded cursor-local missing member names
 and unfinished call/new lists. It preserves all original offsets, marks synthetic holes and
 delimiters as non-authoritative, and never checks or adds bindings to the recovered artifact.

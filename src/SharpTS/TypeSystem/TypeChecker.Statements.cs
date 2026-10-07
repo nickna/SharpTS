@@ -122,7 +122,7 @@ public partial class TypeChecker
             // never referenced, so resolve that targeted declaration form eagerly.
             if (_hasDefaultLibraries &&
                 stmt.TypeDefinition.Contains("typeof globalThis", StringComparison.Ordinal))
-                _ = ResolveAnnotation(stmt.TypeDefinition, stmt.TypeDefinitionNode);
+                _ = ResolveAnnotation(stmt.TypeDefinition, stmt.TypeDefinitionNode, stmt);
         }
         // After defining (so the alias stays usable even when a clause is malformed): validate
         // the infer declarations of every conditional type in the alias body.
@@ -214,7 +214,7 @@ public partial class TypeChecker
         // initializer either and must still be rejected.
         TypeInfo? declaredType = stmt.TypeAnnotation == "unique symbol" && stmt.IsDeclare
             ? new TypeInfo.UniqueSymbol(stmt.Name.Lexeme, $"typeof {stmt.Name.Lexeme}")
-            : ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode);
+            : ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt);
         if (stmt.TypeAnnotationNode is NamedTypeNode { Name: var annotatedAlias } &&
             _recursiveGenericIndexedAliases.Contains(annotatedAlias))
             _excessivelyRecursiveVariables.Add(stmt.Name.Lexeme);
@@ -712,7 +712,7 @@ public partial class TypeChecker
         }
         else if (stmt.TypeAnnotation != null)
         {
-            constDeclaredType = ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode)!;
+            constDeclaredType = ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt)!;
             if (constDeclaredType is TypeInfo.Any)
                 ReportUnknownTypeName(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt.Name.Line);
             _environment.Define(stmt.Name.Lexeme, constDeclaredType);
@@ -1816,7 +1816,7 @@ public partial class TypeChecker
             TypeInfo? declaredType = null;
             if (binding.TypeAnnotation != null)
             {
-                declaredType = ResolveAnnotation(binding.TypeAnnotation, binding.TypeAnnotationNode);
+                declaredType = ResolveAnnotation(binding.TypeAnnotation, binding.TypeAnnotationNode, binding);
                 if (declaredType != null && !IsCompatible(declaredType, initType))
                 {
                     throw new TypeMismatchException(declaredType, initType, binding.Name!.Line, tsCode: "TS2322");

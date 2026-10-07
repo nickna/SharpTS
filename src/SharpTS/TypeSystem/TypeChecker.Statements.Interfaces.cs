@@ -259,8 +259,8 @@ public partial class TypeChecker
                     TypeInfo? defaultType = null;
                     try
                     {
-                        constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
-                        defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
+                        constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode, tp, EditorAnnotationSlot.Constraint);
+                        defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode, tp, EditorAnnotationSlot.Default);
                     }
                     catch
                     {
@@ -287,7 +287,7 @@ public partial class TypeChecker
             {
                 try
                 {
-                    var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode)!;
+                    var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode, member)!;
 
                     // Check if this is a duplicate member name (overload)
                     if (members.TryGetValue(member.Name.Lexeme, out var existingType))
@@ -468,7 +468,7 @@ public partial class TypeChecker
                     tsCode: "TS7008"));
             }
 
-            var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode)!;
+            var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode, member)!;
 
             if (member.Name.Lexeme == "@@keyFor")
             {

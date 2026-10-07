@@ -11,6 +11,7 @@ public sealed class EditorSemanticIndex
     private static long _nextGeneration;
     internal static EditorSemanticIndex Empty { get; } = new(false);
     private readonly Dictionary<OwnerKey, OccurrenceDraft> _occurrences = new(OwnerComparer.Instance);
+    private readonly Dictionary<OwnerKey, OccurrenceDraft> _typeUses = new(OwnerComparer.Instance);
     private readonly Dictionary<OwnerKey, List<DeclarationDraft>> _declarations = new(OwnerComparer.Instance);
     private readonly Dictionary<OwnerKey, ReceiverDraft> _receivers = new(OwnerComparer.Instance);
     private readonly Dictionary<OwnerKey, InvocationDraft> _invocations = new(OwnerComparer.Instance);
@@ -18,6 +19,8 @@ public sealed class EditorSemanticIndex
     private readonly Dictionary<int, ScopeDraft> _scopesById = [];
     private readonly Dictionary<OwnerKey, List<SourceSpan>> _enteredBodies = new(OwnerComparer.Instance);
     private readonly Dictionary<TypeInfo, int> _signatureIds = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<TypeInfo, EditorCallableSurface> _callableSurfaces = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<OwnerKey, Dictionary<EditorAnnotationSlot, bool>> _annotationProofs = new(OwnerComparer.Instance);
     private int _nextScope = 1;
 
     public EditorSemanticIndex() : this(true) { }
@@ -28,7 +31,9 @@ public sealed class EditorSemanticIndex
     public void Clear()
     {
         if (!IsEnabled) return;
-        _occurrences.Clear(); _declarations.Clear(); _receivers.Clear(); _invocations.Clear();
+        _occurrences.Clear(); _typeUses.Clear(); _declarations.Clear(); _receivers.Clear(); _invocations.Clear();
+        _callableSurfaces.Clear();
+        _annotationProofs.Clear();
         _scopes.Clear(); _scopesById.Clear(); _enteredBodies.Clear(); _signatureIds.Clear(); _nextScope = 1;
         Generation = Interlocked.Increment(ref _nextGeneration);
     }
@@ -38,6 +43,7 @@ public sealed class EditorSemanticIndex
     {
         if (!IsEnabled) return;
         foreach (var key in _occurrences.Keys.Where(key => ReferenceEquals(key.Document, document)).ToArray()) _occurrences.Remove(key);
+        foreach (var key in _typeUses.Keys.Where(key => ReferenceEquals(key.Document, document)).ToArray()) _typeUses.Remove(key);
         foreach (var key in _declarations.Keys.Where(key => ReferenceEquals(key.Document, document)).ToArray()) _declarations.Remove(key);
         foreach (var key in _receivers.Keys.Where(key => ReferenceEquals(key.Document, document)).ToArray()) _receivers.Remove(key);
         foreach (var key in _invocations.Keys.Where(key => ReferenceEquals(key.Document, document)).ToArray()) _invocations.Remove(key);
@@ -57,12 +63,12 @@ public sealed class EditorSemanticIndex
         _receivers.Remove(key);
     }
 
-    public void CompleteExpression(SourceDocument? document, Expr owner, TypeInfo? type)
+    public void CompleteExpression(SourceDocument? document, Expr owner, TypeInfo? type, BindingSymbol? binding = null)
     {
         if (!IsEnabled || document is null) return;
         _occurrences[new(document, owner)] = new(type, type is null or TypeInfo.Inferred
             ? EditorFactAvailability.Unavailable : document.EditorSyntax?.GetRecords(owner).Any(record =>
-                record.Origin == EditorSyntaxOrigin.Recovered) == true ? EditorFactAvailability.Recovered : EditorFactAvailability.Available);
+                record.Origin == EditorSyntaxOrigin.Recovered) == true ? EditorFactAvailability.Recovered : EditorFactAvailability.Available, binding);
     }
 
     public void FailExpression(SourceDocument? document, Expr owner, bool preserveReceiver = false)
@@ -71,6 +77,35 @@ public sealed class EditorSemanticIndex
         var key = new OwnerKey(document, owner);
         _occurrences[key] = new(null, EditorFactAvailability.Unavailable);
         if (!preserveReceiver) _receivers.Remove(key);
+    }
+
+    public void BeginTypeUse(SourceDocument? document, TypeNode owner)
+    {
+        if (IsEnabled && document is not null) _typeUses[new(document, owner)] = new(null, EditorFactAvailability.Unavailable);
+    }
+
+    public void CompleteTypeUse(SourceDocument? document, TypeNode owner, TypeInfo? type,
+        EditorFactAvailability availability = EditorFactAvailability.Available)
+    {
+        if (IsEnabled && document is not null) _typeUses[new(document, owner)] = new(type,
+            type is null or TypeInfo.Inferred ? EditorFactAvailability.Unavailable : availability);
+    }
+
+    public void RegisterCallableSurface(TypeInfo actual, IReadOnlyList<TypeInfo> signatures,
+        IReadOnlyList<TypeInfo.TypeParameter>? typeParameters = null)
+    {
+        if (!IsEnabled) return;
+        _callableSurfaces[actual] = new(signatures.Take(33).ToImmutableArray(), typeParameters?.Take(33).ToImmutableArray());
+    }
+
+    // Like public signature identity, eligibility can be learned while constructing the
+    // exact type in an earlier pass. Only final source facts consume it at publication.
+    public void RecordAnnotationProof(SourceDocument? document, object owner, EditorAnnotationSlot slot, bool isProven)
+    {
+        if (!IsEnabled || document is null) return;
+        var key = new OwnerKey(document, owner);
+        if (!_annotationProofs.TryGetValue(key, out var slots)) _annotationProofs.Add(key, slots = []);
+        slots[slot] = isProven;
     }
 
     public void RecordDeclaration(SourceDocument? document, object owner, Token name, BindingSymbol? symbol,
@@ -120,7 +155,8 @@ public sealed class EditorSemanticIndex
     }
 
     public void SetReceiverMembers(SourceDocument? document, Expr receiver,
-        IReadOnlyList<EditorReceiverCandidate> candidates, bool isComplete = true, bool isTruncated = false)
+        IReadOnlyList<EditorReceiverCandidate> candidates, bool isComplete = true, bool isTruncated = false,
+        TypeInfo? receiverType = null)
     {
         if (!IsEnabled || document is null) return;
         var copied = candidates.Take(256).Select(candidate => candidate with
@@ -128,7 +164,7 @@ public sealed class EditorSemanticIndex
             Substitutions = candidate.Substitutions?.ToFrozenDictionary(StringComparer.Ordinal),
         }).ToImmutableArray();
         bool truncated = isTruncated || candidates.Count > 256;
-        _receivers[new(document, receiver)] = new(copied, isComplete && !truncated, truncated);
+        _receivers[new(document, receiver)] = new(copied, isComplete && !truncated, truncated, receiverType);
     }
 
     public void BeginInvocation(SourceDocument? document, Expr owner, EditorInvocationKind kind,
@@ -201,6 +237,41 @@ public sealed class EditorSemanticIndex
     public FrozenEditorSemanticIndex Freeze(CancellationToken cancellationToken = default)
     {
         if (!IsEnabled) return FrozenEditorSemanticIndex.Empty;
+        var ownerProof = new Dictionary<OwnerKey, bool>(OwnerComparer.Instance);
+        bool UnprovenOwner(OwnerKey key)
+        {
+            if (ownerProof.TryGetValue(key, out bool unproven)) return unproven;
+            cancellationToken.ThrowIfCancellationRequested();
+            unproven = _annotationProofs.TryGetValue(key, out var slots) && slots.Values.Any(proven => !proven);
+            IEnumerable<object> signatureParts = key.Owner switch
+            {
+                Stmt.Function function => function.Parameters.Cast<object>().Concat(function.TypeParams ?? []),
+                Expr.ArrowFunction function => function.Parameters.Cast<object>().Concat(function.TypeParams ?? []),
+                Stmt.Accessor { SetterParam: { } parameter } => [parameter],
+                Stmt.Var { TypeAnnotation: null, Initializer: { } initializer } => [initializer],
+                Stmt.Const { TypeAnnotation: null } constant => [constant.Initializer],
+                Stmt.Field { TypeAnnotation: null, Initializer: { } initializer } => [initializer],
+                Expr.Grouping grouping => [grouping.Expression],
+                Expr.NonNullAssertion assertion => [assertion.Expression],
+                _ => [],
+            };
+            if (!unproven)
+                foreach (var part in signatureParts)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (UnprovenOwner(new(key.Document, part))) { unproven = true; break; }
+                }
+            ownerProof[key] = unproven;
+            return unproven;
+        }
+        var unprovenBindings = new HashSet<BindingSymbol>(ReferenceEqualityComparer.Instance);
+        foreach (var (key, drafts) in _declarations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (UnprovenOwner(key))
+                foreach (var draft in drafts)
+                    if (draft.Symbol is { } symbol) unprovenBindings.Add(symbol);
+        }
         var bindings = new Dictionary<BindingSymbol, EditorBindingIdentity>(ReferenceEqualityComparer.Instance);
         EditorBindingIdentity? Binding(BindingSymbol? symbol)
         {
@@ -213,8 +284,8 @@ public sealed class EditorSemanticIndex
         EditorTypePresentation Type(TypeInfo? type, BindingNamespace facet = BindingNamespace.Type)
         {
             if (type is null) return new("unavailable", false, false);
-            if (facet == BindingNamespace.Value) return EditorTypeRenderer.Render(type, EditorTypeRenderContext.Value);
-            if (!presentations.TryGetValue(type, out var presentation)) presentations.Add(type, presentation = EditorTypeRenderer.Render(type));
+            if (facet == BindingNamespace.Value) return EditorTypeRenderer.Render(type, EditorTypeRenderContext.Value, callableSurfaces: _callableSurfaces);
+            if (!presentations.TryGetValue(type, out var presentation)) presentations.Add(type, presentation = EditorTypeRenderer.Render(type, callableSurfaces: _callableSurfaces));
             return presentation;
         }
         static EditorFactAvailability Availability(EditorFactAvailability requested, EditorTypePresentation type) =>
@@ -224,7 +295,16 @@ public sealed class EditorSemanticIndex
         {
             cancellationToken.ThrowIfCancellationRequested();
             var type = Type(draft.Type, BindingNamespace.Value);
-            occurrences.Add(new(key.Document!, (Expr)key.Owner, SourceRange(key.Document!, key.Owner), type, Availability(draft.Availability, type)));
+            occurrences.Add(new(key.Document!, (Expr)key.Owner, SourceRange(key.Document!, key.Owner), type,
+                Availability(UnprovenOwner(key) || draft.Binding is { } binding && unprovenBindings.Contains(binding)
+                    ? EditorFactAvailability.Unavailable : draft.Availability, type)));
+        }
+        var typeUses = new List<EditorTypeUseFact>();
+        foreach (var (key, draft) in _typeUses)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var type = Type(draft.Type);
+            typeUses.Add(new(key.Document!, (TypeNode)key.Owner, TypeSourceRange(key.Document!, key.Owner), type, Availability(draft.Availability, type)));
         }
         var declarations = new List<EditorDeclarationFact>();
         foreach (var (key, drafts) in _declarations)
@@ -233,7 +313,8 @@ public sealed class EditorSemanticIndex
                 cancellationToken.ThrowIfCancellationRequested();
                 var type = Type(draft.Type, draft.Facet);
                 declarations.Add(new(new(key.Document, key.Owner, draft.Name), draft.Name.Lexeme, draft.Facet,
-                    Binding(draft.Symbol), type, Availability(draft.Availability, type)));
+                    Binding(draft.Symbol), type, Availability(UnprovenOwner(key) || draft.Symbol is { } symbol && unprovenBindings.Contains(symbol)
+                        ? EditorFactAvailability.Unavailable : draft.Availability, type)));
             }
         var scopes = new List<EditorSourceScope>();
         foreach (var draft in _scopes.Values)
@@ -241,9 +322,12 @@ public sealed class EditorSemanticIndex
             cancellationToken.ThrowIfCancellationRequested();
             var locals = draft.Bindings.Values.Select(local =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var type = Type(local.Type, local.Facet);
                 return new EditorVisibleBinding(local.Spelling, local.Facet, Binding(local.Symbol), type,
-                    local.Owner is TypeEnvironment ? null : local.Owner, local.AvailableFrom, Availability(local.Availability, type));
+                    local.Owner is TypeEnvironment ? null : local.Owner, local.AvailableFrom,
+                    Availability(local.Owner is { } owner && UnprovenOwner(new(draft.Key.Document, owner)) ||
+                        local.Symbol is { } symbol && unprovenBindings.Contains(symbol) ? EditorFactAvailability.Unavailable : local.Availability, type));
             }).ToImmutableArray();
             scopes.Add(new(draft.Id, draft.Key.Document, draft.Key.Owner is TypeEnvironment ? new object() : draft.Key.Owner,
                 draft.Span, draft.Parent, draft.Kind, locals));
@@ -252,34 +336,51 @@ public sealed class EditorSemanticIndex
         foreach (var (key, draft) in _receivers)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            receivers.Add(key, new(draft.Candidates.Select(candidate => new EditorReceiverMember(candidate.Name,
-                EditorTypeRenderer.Render(candidate.Type, EditorTypeRenderContext.Value, substitutions: candidate.Substitutions), candidate.Kind,
+            receivers.Add(key, new(draft.Candidates.Select(candidate =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                bool unproven = UnprovenOwner(key) || candidate.Source?.Declarations.Any(declaration => declaration.Owner is { } owner &&
+                    UnprovenOwner(new(declaration.Document, owner))) == true;
+                return new EditorReceiverMember(candidate.Name,
+                EditorTypeRenderer.Render(unproven ? null : candidate.Type, EditorTypeRenderContext.Value, substitutions: candidate.Substitutions,
+                    callableSurfaces: _callableSurfaces), candidate.Kind,
                 candidate.Access, candidate.Facet, candidate.IsReadonly, candidate.IsOptional,
-                candidate.Source is { } source ? new(source.Id, source.Generation, source.DeclaringClassId, source.Declarations.ToImmutableArray()) : null))
-                .ToImmutableArray(), draft.Complete, draft.Truncated));
+                candidate.Source is { } source ? new(source.Id, source.Generation, source.DeclaringClassId, source.Declarations.ToImmutableArray()) : null);
+            })
+                .ToImmutableArray(), draft.Complete, draft.Truncated, draft.ReceiverType is null ? null : Type(draft.ReceiverType)));
         }
         var invocations = new List<EditorInvocationFact>();
         foreach (var (key, draft) in _invocations)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var candidates = draft.Candidates.Select(candidate => new EditorInvocationSignature(candidate.Ordinal,
+            var candidates = draft.Candidates.Select(candidate =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return new EditorInvocationSignature(candidate.Ordinal,
                 _signatureIds[candidate.OriginalSignature], EditorTypeRenderer.RenderSignature(candidate.OriginalSignature,
-                    draft.Kind == EditorInvocationKind.New, candidate.ConstructedType, candidate.TypeParameters),
+                    draft.Kind == EditorInvocationKind.New, candidate.ConstructedType, candidate.TypeParameters,
+                    callableSurfaces: _callableSurfaces),
                 candidate.InstantiatedSignature is null ? null : EditorTypeRenderer.RenderSignature(candidate.InstantiatedSignature,
-                    draft.Kind == EditorInvocationKind.New), candidate.Origin,
-                candidate.ConstructedType is null ? null : Type(candidate.ConstructedType), candidate.IsImplicit)).ToImmutableArray();
+                    draft.Kind == EditorInvocationKind.New, callableSurfaces: _callableSurfaces), candidate.Origin,
+                candidate.ConstructedType is null ? null : Type(candidate.ConstructedType), candidate.IsImplicit);
+            }).ToImmutableArray();
             invocations.Add(new(key.Document!, (Expr)key.Owner, draft.Kind, candidates, draft.SelectedOrdinal,
                 draft.SelectedSignature is null ? null : EditorTypeRenderer.RenderSignature(draft.SelectedSignature,
-                    draft.Kind == EditorInvocationKind.New, draft.Kind == EditorInvocationKind.New ? draft.Result : null), draft.Result is null ? null : Type(draft.Result),
+                    draft.Kind == EditorInvocationKind.New, draft.Kind == EditorInvocationKind.New ? draft.Result : null,
+                    callableSurfaces: _callableSurfaces), draft.Result is null ? null : Type(draft.Result),
                 draft.Status, draft.Complete, draft.Recovered, draft.Holes));
         }
         var bodies = _enteredBodies.ToDictionary(pair => pair.Key,
             pair => (IReadOnlyList<SourceSpan>)pair.Value.ToImmutableArray(), OwnerComparer.Instance);
-        return new(Generation, occurrences, declarations, scopes, receivers, invocations, bodies, cancellationToken);
+        return new(Generation, occurrences, declarations, scopes, receivers, invocations, bodies, cancellationToken, typeUses);
     }
 
     internal static SourceSpan? SourceRange(SourceDocument document, object owner) => document.EditorSyntax?
         .GetRecords(owner).Where(record => record.IsAuthoritative && record.Role == EditorSyntaxRole.Whole)
+        .OrderBy(record => record.Span.Length).Select(record => (SourceSpan?)record.Span).FirstOrDefault();
+
+    private static SourceSpan? TypeSourceRange(SourceDocument document, object owner) => document.EditorSyntax?
+        .GetRecords(owner).Where(record => record.IsAuthoritative && record.Kind == EditorSyntaxKind.Type)
         .OrderBy(record => record.Span.Length).Select(record => (SourceSpan?)record.Span).FirstOrDefault();
 
     internal readonly record struct OwnerKey(SourceDocument? Document, object Owner);
@@ -296,10 +397,10 @@ public sealed class EditorSemanticIndex
         public bool Equals(OwnerKey left, OwnerKey right) => ReferenceEquals(left.Document, right.Document) && ReferenceEquals(left.Owner, right.Owner);
         public int GetHashCode(OwnerKey key) => HashCode.Combine(key.Document is null ? 0 : RuntimeHelpers.GetHashCode(key.Document), RuntimeHelpers.GetHashCode(key.Owner));
     }
-    private sealed record OccurrenceDraft(TypeInfo? Type, EditorFactAvailability Availability);
+    private sealed record OccurrenceDraft(TypeInfo? Type, EditorFactAvailability Availability, BindingSymbol? Binding = null);
     private sealed record DeclarationDraft(Token Name, BindingSymbol? Symbol, BindingNamespace Facet, TypeInfo? Type, EditorFactAvailability Availability);
     private sealed record LocalDraft(string Spelling, BindingNamespace Facet, BindingSymbol? Symbol, TypeInfo? Type, object? Owner, int AvailableFrom, EditorFactAvailability Availability);
-    private sealed record ReceiverDraft(IReadOnlyList<EditorReceiverCandidate> Candidates, bool Complete, bool Truncated);
+    private sealed record ReceiverDraft(IReadOnlyList<EditorReceiverCandidate> Candidates, bool Complete, bool Truncated, TypeInfo? ReceiverType);
     private sealed record InvocationDraft(EditorInvocationKind Kind, IReadOnlyList<EditorInvocationCandidate> Candidates,
         int? SelectedOrdinal, TypeInfo? SelectedSignature, TypeInfo? Result, EditorInvocationStatus Status, bool Complete, bool Recovered, bool Holes);
     private sealed class ScopeDraft(int id, OwnerKey key, SourceSpan? span, int? parent, EditorScopeKind kind)
@@ -317,6 +418,7 @@ public sealed class EditorSemanticIndex
 public sealed class FrozenEditorSemanticIndex
 {
     private readonly FrozenDictionary<EditorSemanticIndex.OwnerKey, EditorOccurrenceFact> _occurrences;
+    private readonly FrozenDictionary<EditorSemanticIndex.OwnerKey, EditorTypeUseFact> _typeUses;
     private readonly FrozenDictionary<EditorSemanticIndex.OwnerKey, EditorReceiverSet> _receivers;
     private readonly FrozenDictionary<EditorSemanticIndex.OwnerKey, EditorInvocationFact> _invocations;
     private readonly FrozenDictionary<int, EditorSourceScope> _scopes;
@@ -332,12 +434,14 @@ public sealed class FrozenEditorSemanticIndex
         IReadOnlyDictionary<EditorSemanticIndex.OwnerKey, EditorReceiverSet> receivers,
         IEnumerable<EditorInvocationFact> invocations,
         IReadOnlyDictionary<EditorSemanticIndex.OwnerKey, IReadOnlyList<SourceSpan>>? enteredBodies = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, IEnumerable<EditorTypeUseFact>? typeUses = null)
     {
         Generation = generation;
         Occurrences = occurrences.ToImmutableArray(); Declarations = declarations.ToImmutableArray();
+        TypeUses = typeUses?.ToImmutableArray() ?? [];
         Scopes = scopes.ToImmutableArray(); Invocations = invocations.ToImmutableArray();
         _occurrences = Occurrences.ToFrozenDictionary(fact => new EditorSemanticIndex.OwnerKey(fact.Document, fact.Owner), EditorSemanticIndex.OwnerComparer.Instance);
+        _typeUses = TypeUses.ToFrozenDictionary(fact => new EditorSemanticIndex.OwnerKey(fact.Document, fact.Owner), EditorSemanticIndex.OwnerComparer.Instance);
         _receivers = receivers.ToFrozenDictionary(EditorSemanticIndex.OwnerComparer.Instance);
         _invocations = Invocations.ToFrozenDictionary(fact => new EditorSemanticIndex.OwnerKey(fact.Document, fact.Owner), EditorSemanticIndex.OwnerComparer.Instance);
         _scopes = Scopes.ToFrozenDictionary(scope => scope.Id);
@@ -355,21 +459,27 @@ public sealed class FrozenEditorSemanticIndex
     }
     public long Generation { get; }
     public IReadOnlyList<EditorOccurrenceFact> Occurrences { get; }
+    public IReadOnlyList<EditorTypeUseFact> TypeUses { get; }
     public IReadOnlyList<EditorDeclarationFact> Declarations { get; }
     public IReadOnlyList<EditorSourceScope> Scopes { get; }
     public IReadOnlyList<EditorInvocationFact> Invocations { get; }
-    public int Count => Occurrences.Count + Declarations.Count + Scopes.Count + Invocations.Count +
+    public int Count => Occurrences.Count + TypeUses.Count + Declarations.Count + Scopes.Count + Invocations.Count +
         _receivers.Values.Sum(set => set.Members.Count) + _enteredBodies.Values.Sum(spans => spans.Count);
     public long EstimatedBytes => Occurrences.Sum(fact => 96L + fact.Type.Text.Length * 2L) +
+        TypeUses.Sum(fact => 96L + fact.Type.Text.Length * 2L) +
         Declarations.Sum(fact => 144L + (fact.LocalName.Length + fact.Type.Text.Length) * 2L) +
         Scopes.Sum(scope => 96L + scope.Bindings.Sum(local => 128L + (local.LocalName.Length + local.Type.Text.Length) * 2L)) +
-        _receivers.Values.Sum(set => 64L + set.Members.Sum(member => 128L + (member.Name.Length + member.Type.Text.Length) * 2L)) +
+        _receivers.Values.Sum(set => 64L + (set.ReceiverType?.Text.Length ?? 0) * 2L + set.Members.Sum(member => 128L + (member.Name.Length + member.Type.Text.Length) * 2L)) +
         Invocations.Sum(fact => 128L + fact.Candidates.Sum(candidate => 192L + candidate.Declared.Label.Length * 2L + (candidate.Instantiated?.Label.Length ?? 0) * 2L)) +
         _enteredBodies.Values.Sum(spans => 56L + spans.Count * 8L) +
         _ownerScopes.Values.Sum(scopes => 56L + scopes.Count * 8L) +
         _lexicalContexts.Values.Sum(contexts => 56L + contexts.Count * 8L) + _unvisitedLocalScopes.Count * 16L;
 
     public EditorOccurrenceFact? GetOccurrence(SourceDocument document, Expr owner) => _occurrences.GetValueOrDefault(new(document, owner));
+    public EditorTypeUseFact? GetTypeUse(SourceDocument document, TypeNode owner) => _typeUses.GetValueOrDefault(new(document, owner));
+    public EditorTypeUseFact? FindTypeUse(SourceDocument document, int offset) => TypeUses
+        .Where(fact => ReferenceEquals(fact.Document, document) && fact.Span?.Contains(offset) == true)
+        .OrderBy(fact => fact.Span!.Value.Length).ThenByDescending(fact => fact.Span!.Value.Start).FirstOrDefault();
     public EditorOccurrenceFact? FindOccurrence(SourceDocument document, int offset) => Occurrences
         .Where(fact => ReferenceEquals(fact.Document, document) && fact.Span?.Contains(offset) == true)
         .OrderBy(fact => fact.Span!.Value.Length).ThenByDescending(fact => fact.Span!.Value.Start).FirstOrDefault();

@@ -130,13 +130,13 @@ public partial class TypeChecker
             _checker.ThrowIfCancellationRequested();
             if (depth > 32 || _candidates.Count >= 32) { _complete = false; return; }
             if (callee is not (TypeInfo.OverloadedFunction or TypeInfo.GenericOverloadedFunction or TypeInfo.OverloadSet) &&
-                _checker.GetEditorPublicSignatures(callee) is { } publicSignatures)
+                _checker.GetEditorCallableSurface(callee) is { } publicSurface)
             {
-                foreach (var signature in publicSignatures)
+                foreach (var signature in publicSurface.Signatures)
                 {
                     if (_candidates.Count >= 32) { _complete = false; break; }
-                    if (callee is TypeInfo.GenericFunction generic && signature is TypeInfo.Function)
-                        Add(signature, generic.TypeParams);
+                    if (publicSurface.TypeParameters is { Count: > 0 } && signature is TypeInfo.Function)
+                        Add(signature, publicSurface.TypeParameters);
                     else AddCallCandidates(signature, optional, depth + 1);
                 }
                 return;

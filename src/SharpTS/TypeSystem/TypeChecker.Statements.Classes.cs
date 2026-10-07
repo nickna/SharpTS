@@ -73,7 +73,7 @@ public partial class TypeChecker
             editorOwner: method
         );
 
-        TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
+        TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode, method, EditorAnnotationSlot.Return)
             ?? TypeInfo.Inferred.Shared;
 
         // Wrap return type for generator/async generator methods (skip when inferring)
@@ -89,7 +89,7 @@ public partial class TypeChecker
             }
         }
 
-        TypeInfo? explicitThisType = ResolveAnnotation(method.ThisType, method.ThisTypeNode);
+        TypeInfo? explicitThisType = ResolveAnnotation(method.ThisType, method.ThisTypeNode, method, EditorAnnotationSlot.This);
         var signature = new TypeInfo.Function(
             paramTypes, returnType, requiredParams, hasRest, explicitThisType, paramNames);
         RegisterEditorSignature(signature, method, method.Name);
@@ -169,7 +169,7 @@ public partial class TypeChecker
             var representative = implementations.Count == 1 ? implementations[0] : members[^1];
             var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
                 representative.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
-            TypeInfo factoryReturn = ResolveAnnotation(representative.ReturnType, representative.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
+            TypeInfo factoryReturn = ResolveAnnotation(representative.ReturnType, representative.ReturnTypeNode, representative, EditorAnnotationSlot.Return) ?? TypeInfo.Inferred.Shared;
             var funcType = new TypeInfo.Function(cParamTypes, factoryReturn, cRequired, cHasRest, null, cParamNames);
             if (representative.IsStatic)
                 mutableClass.StaticMethods[memberName] = funcType;
@@ -300,7 +300,7 @@ public partial class TypeChecker
                     field.Name.Line,
                     tsCode: "TS2502"));
             }
-            TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
+            TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode, field)
                 ?? TypeInfo.Any.Shared;
 
             // TS1166: a computed DATA-property name (a class field, unlike a method/accessor) must be a
@@ -399,7 +399,7 @@ public partial class TypeChecker
                 if (accessor.Kind.Type == TokenType.GET)
                 {
                     TypeInfo getterRetType = accessor.ReturnType != null
-                        ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
+                        ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode, accessor, EditorAnnotationSlot.Return)!
                         : TypeInfo.Inferred.Shared;
                     mutableClass.Getters[propName] = getterRetType;
 
@@ -412,7 +412,7 @@ public partial class TypeChecker
                 else // SET
                 {
                     TypeInfo paramType = accessor.SetterParam?.Type != null
-                        ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)!
+                        ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode, accessor.SetterParam)!
                         : TypeInfo.Inferred.Shared;
                     mutableClass.Setters[propName] = paramType;
 
@@ -463,7 +463,7 @@ public partial class TypeChecker
                 TypeInfo accessorType;
                 if (autoAccessor.TypeAnnotation != null)
                 {
-                    accessorType = ResolveAnnotation(autoAccessor.TypeAnnotation, autoAccessor.TypeAnnotationNode)!;
+                    accessorType = ResolveAnnotation(autoAccessor.TypeAnnotation, autoAccessor.TypeAnnotationNode, autoAccessor)!;
                 }
                 else if (autoAccessor.Initializer != null)
                 {
@@ -768,7 +768,7 @@ public partial class TypeChecker
                 {
                     var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
                         method.Parameters, validateDefaults: true, contextName: "computed method");
-                    TypeInfo cReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
+                    TypeInfo cReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode, method, EditorAnnotationSlot.Return) ?? TypeInfo.Inferred.Shared;
                     declaredMethodType = new TypeInfo.Function(cParamTypes, cReturn, cRequired, cHasRest, null, cParamNames);
                 }
             }
@@ -803,7 +803,7 @@ public partial class TypeChecker
             // the body permissively typed as any.
             if (method.ReturnType != null)
             {
-                TypeInfo currentReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)!;
+                TypeInfo currentReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode, method, EditorAnnotationSlot.Return)!;
                 methodType = methodType with { ReturnType = currentReturn };
             }
 
@@ -910,8 +910,7 @@ public partial class TypeChecker
                     // arbitrary computed key (no well-known @@name) carries no static member to update.
                     var updatedMethodType = new TypeInfo.Function(methodType.ParamTypes, inferredReturn, methodType.RequiredParams, methodType.HasRestParam, methodType.ThisType, methodType.ParamNames);
                     RegisterEditorSignature(updatedMethodType, method, method.Name);
-                    if (declaredMethodType is TypeInfo.OverloadedFunction publicOverload)
-                        RegisterEditorPublicSignatures(updatedMethodType, publicOverload.Signatures);
+                    CopyEditorPublicSignatures(declaredMethodType, updatedMethodType);
                     string? mName = method.ComputedKey != null
                         ? TryGetWellKnownSymbolMemberName(method.ComputedKey)
                         : method.Name.Lexeme;
@@ -992,7 +991,7 @@ public partial class TypeChecker
                 {
                     accessorReturnType = accessorName != null
                         ? mutableClass.Getters[accessorName]
-                        : (accessor.ReturnType != null ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)! : TypeInfo.Any.Shared);
+                        : (accessor.ReturnType != null ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode, accessor, EditorAnnotationSlot.Return)! : TypeInfo.Any.Shared);
                 }
                 else
                 {
@@ -1003,7 +1002,7 @@ public partial class TypeChecker
                     {
                         TypeInfo setterParamType = accessorName != null
                             ? mutableClass.Setters[accessorName]
-                            : (accessor.SetterParam.Type != null ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)! : TypeInfo.Any.Shared);
+                            : (accessor.SetterParam.Type != null ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode, accessor.SetterParam)! : TypeInfo.Any.Shared);
                         DeclareParameterValue(
                             accessorEnv,
                             accessor.SetterParam,
@@ -1353,7 +1352,7 @@ public partial class TypeChecker
                 editorOwner: method
             );
 
-            TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
+            TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode, method, EditorAnnotationSlot.Return)
                 ?? TypeInfo.Inferred.Shared;
 
             // Wrap return type for generator/async generator methods (skip when inferring)
@@ -1422,7 +1421,7 @@ public partial class TypeChecker
         {
             string fieldName = GetFieldMemberName(field);
             if (!TryResolveAmbientMember(
-                    () => ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode) ?? TypeInfo.Any.Shared,
+                    () => ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode, field) ?? TypeInfo.Any.Shared,
                     out TypeInfo fieldType))
                 continue;
 
@@ -1455,7 +1454,7 @@ public partial class TypeChecker
 
                 if (!TryResolveAmbientMember(
                         () => accessor.ReturnType != null
-                            ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
+                            ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode, accessor, EditorAnnotationSlot.Return)!
                             : TypeInfo.Any.Shared,
                         out TypeInfo accessorType))
                     continue;

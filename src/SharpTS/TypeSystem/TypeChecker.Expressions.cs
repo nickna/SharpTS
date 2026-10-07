@@ -511,8 +511,10 @@ public partial class TypeChecker
         // the string resolver (the '>' of '=>' reads as a closing bracket, so the conditional's
         // '?' is missed and the type garbles). The node path resolves it structurally; the string
         // path stays the fallback for any node the migration doesn't cover yet (#346).
+        long editorVersion = BeginEditorExpressionAnnotation(ta);
         TypeInfo targetType = (ta.TargetTypeNode is { } targetNode ? TryToTypeInfo(targetNode) : null)
             ?? ToTypeInfo(ta.TargetType);
+        CompleteEditorExpressionAnnotation(ta, editorVersion);
 
         // Allow any <-> anything (escape hatch)
         if (sourceType is TypeInfo.Any || targetType is TypeInfo.Any)
@@ -538,8 +540,10 @@ public partial class TypeChecker
         TypeInfo inferredType = CheckExpr(sat.Expression);
         // Node-first, mirroring CheckTypeAssertion (#346): a composite constraint such as a
         // conditional with a function-type extends clause garbles in the string resolver.
+        long editorVersion = BeginEditorExpressionAnnotation(sat);
         TypeInfo constraintType = (sat.ConstraintTypeNode is { } constraintNode ? TryToTypeInfo(constraintNode) : null)
             ?? ToTypeInfo(sat.ConstraintType);
+        CompleteEditorExpressionAnnotation(sat, editorVersion);
 
         // Escape hatches - any/unknown constraints always pass
         if (constraintType is TypeInfo.Any or TypeInfo.Unknown)
@@ -887,7 +891,7 @@ public partial class TypeChecker
                 getterNames.Add(name);
                 if (prop.Value is Expr.ArrowFunction arrow && arrow.ReturnType != null)
                 {
-                    fields[name] = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode)!;
+                    fields[name] = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode, arrow, EditorAnnotationSlot.Return)!;
                 }
                 else
                 {
@@ -909,7 +913,7 @@ public partial class TypeChecker
                     // If getter already defined the type, verify compatibility
                     if (!fields.ContainsKey(name))
                     {
-                        fields[name] = ResolveAnnotation(arrow.Parameters[0].Type, arrow.Parameters[0].TypeAnnotationNode)!;
+                        fields[name] = ResolveAnnotation(arrow.Parameters[0].Type, arrow.Parameters[0].TypeAnnotationNode, arrow.Parameters[0])!;
                     }
                 }
                 else if (!fields.ContainsKey(name))
@@ -1683,7 +1687,7 @@ public partial class TypeChecker
             // Parse explicit 'this' type if present (for object literal method shorthand)
             // Note: Arrow function expressions shouldn't have 'this' parameter in standard TypeScript,
             // but we support it for object literal method shorthand which is parsed as ArrowFunction.
-            thisType = ResolveAnnotation(arrow.ThisType, arrow.ThisTypeNode);
+            thisType = ResolveAnnotation(arrow.ThisType, arrow.ThisTypeNode, arrow, EditorAnnotationSlot.This);
 
             // For function expressions and object method shorthand (HasOwnThis=true), allow 'this' even without explicit type annotation
             // TypeScript infers 'this' as the containing object type - use _pendingObjectThisType if available
@@ -1708,7 +1712,7 @@ public partial class TypeChecker
                 if (param.Type != null)
                 {
                     // Explicit type annotation - use it
-                    paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode)!;
+                    paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode, param)!;
                 }
                 else if (expectedFuncType != null && i < expectedFuncType.ParamTypes.Count)
                 {
@@ -1761,7 +1765,7 @@ public partial class TypeChecker
             // Determine return type (use expected type if available and no explicit annotation)
             if (arrow.ReturnType != null)
             {
-                returnType = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode)!;
+                returnType = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode, arrow, EditorAnnotationSlot.Return)!;
             }
             else if (expectedFuncType != null && useContextualReturnType)
             {
@@ -2560,7 +2564,7 @@ public partial class TypeChecker
                     editorOwner: method
                 );
 
-                TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
+                TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode, method, EditorAnnotationSlot.Return)
                     ?? TypeInfo.Inferred.Shared;
 
                 // Wrap return type for generator/async generator methods (skip when inferring).
@@ -2595,7 +2599,7 @@ public partial class TypeChecker
                     continue;
                 var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
                     method.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
-                TypeInfo factoryReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
+                TypeInfo factoryReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode, method, EditorAnnotationSlot.Return) ?? TypeInfo.Inferred.Shared;
                 var computedFunc = new TypeInfo.Function(cParamTypes, factoryReturn, cRequired, cHasRest, null, cParamNames);
                 if (method.IsStatic)
                     mutableClass.StaticMethods[memberName] = computedFunc;
@@ -2664,7 +2668,7 @@ public partial class TypeChecker
             foreach (var field in classExpr.Fields)
             {
                 string fieldName = field.Name.Lexeme;
-                TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
+                TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode, field)
                     ?? TypeInfo.Any.Shared;
 
                 if (field.IsPrivate)
@@ -2691,14 +2695,14 @@ public partial class TypeChecker
                     if (accessor.Kind.Type == TokenType.GET)
                     {
                         TypeInfo getterRetType = accessor.ReturnType != null
-                            ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
+                            ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode, accessor, EditorAnnotationSlot.Return)!
                             : TypeInfo.Any.Shared;
                         mutableClass.Getters[propName] = getterRetType;
                     }
                     else
                     {
                         TypeInfo paramType = accessor.SetterParam?.Type != null
-                            ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)!
+                            ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode, accessor.SetterParam)!
                             : TypeInfo.Any.Shared;
                         mutableClass.Setters[propName] = paramType;
                     }
@@ -2837,7 +2841,7 @@ public partial class TypeChecker
                     {
                         var (cpt, creq, chr, cpn) = BuildFunctionSignature(
                             method.Parameters, validateDefaults: true, contextName: "computed method");
-                        TypeInfo cr = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
+                        TypeInfo cr = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode, method, EditorAnnotationSlot.Return) ?? TypeInfo.Inferred.Shared;
                         declaredMethodType = new TypeInfo.Function(cpt, cr, creq, chr, null, cpn);
                     }
                 }
@@ -2949,8 +2953,7 @@ public partial class TypeChecker
                         // @@name) carries no static member to update.
                         var updatedMethodType = new TypeInfo.Function(methodType.ParamTypes, inferredReturn, methodType.RequiredParams, methodType.HasRestParam, methodType.ThisType, methodType.ParamNames);
                         RegisterEditorSignature(updatedMethodType, method, method.Name);
-                        if (declaredMethodType is TypeInfo.OverloadedFunction publicOverload)
-                            RegisterEditorPublicSignatures(updatedMethodType, publicOverload.Signatures);
+                        CopyEditorPublicSignatures(declaredMethodType, updatedMethodType);
                         string? mName = method.ComputedKey != null
                             ? TryGetWellKnownSymbolMemberName(method.ComputedKey)
                             : method.Name.Lexeme;

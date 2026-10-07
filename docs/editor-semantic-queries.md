@@ -25,6 +25,7 @@ these vetoes, never a replacement scope or inferred type.
 | --- | --- | --- |
 | Declaration type | Final checked declaration, after widening/contextual checking | A failed declaration is unavailable; an initializer's narrower type does not replace its declared type. |
 | Occurrence type | Successful checking of the exact written expression | Generated/recovered expressions cannot establish an authoritative type. An attempted failure replaces an earlier successful fact. |
+| Annotation type use | Actual resolution of the exact written type node | Unknown-name fallbacks do not prove a resolved type. Query capture does not force lazy aliases or run another resolution pass. |
 | Visible bindings | Checker-owned environments linked to captured source scopes | Local spellings retain canonical imported identity and value/type facets. Unavailable or TDZ locals still shadow outer names. |
 | Receiver members | Already checked receiver type and actual lexical class context | Class accessibility, static/instance/private facets and known generic substitutions are retained. Structural members have no invented class origin. |
 | Invocation candidates | Resolved callable/constructable type, before argument validation | Public overloads exclude the implementation signature. Unresolved callee types remain unavailable. |
@@ -36,6 +37,16 @@ or source range. Implicit constructors are marked as implicit and point to the e
 class, rather than claiming a constructor declaration exists.
 
 The query layer does not perform another inference pass or evaluate a type merely for display.
+Exact public callable surfaces also govern nested declaration, occurrence and receiver
+presentations when the checker has flattened an overload family into its implementation.
+Annotation eligibility is learned at the existing resolution decision and propagated through
+exact source declaration/binding identities. Unknown-name fallbacks cannot become proven
+declaration, occurrence, visible-local or receiver-member types merely because the checker
+represents them as `any`. Alias expansion retains that eligibility through its existing cache,
+without publishing substituted facts for the alias definition's original type nodes.
+Direct assertion initializers retain the same eligibility through grouping and non-null
+wrappers. This is a source-owner check; arbitrary expression/dataflow propagation still follows
+the compiler's existing checked type facts.
 Unused lazy type aliases retain their spelling and binding identity with an unavailable resolved
 type. Generic union projection currently omits a name when any branch carries a generic
 substitution map, even if those maps match, and marks the result partial. Existing unsupported
@@ -44,14 +55,18 @@ static `super` member lookup and function/record `new` fallbacks without a check
 decision. Instance `super` candidates follow the checker's method-only domain. Source navigation
 still requires the narrower [member provenance contract](editor-member-provenance.md).
 
-Some generic class paths retain unannotated instance fields and generic method parameters as
-checked `any`; the query layer preserves those results. Runtime constructor checking can replace
+Some generic class paths retain unannotated instance fields as checked `any`; the query layer
+preserves those results. A generic method annotation that the checker cannot resolve remains
+unavailable for editor presentation. Runtime constructor checking can replace
 a public overload set with its implementation function. Editor capture keeps the exact original
 public candidates separately, but that implementation-only validation cannot prove selection
 of a public overload. Ambient constructor overloads retain the actual chosen signature.
 Accessor storage that merges static/instance declarations with the same spelling cannot supply
 an unambiguous declaration type. Computed/quoted/numeric member declaration slots remain outside
 this source-name domain. A catch body that the checker does not visit supplies no invented facts.
+Legacy private/abstract annotations whose structured nodes are not attached to the checker's
+resolution slot can still prove their declaration/member eligibility through that exact owner.
+The detached annotation spelling itself has no invented resolved type-use fact.
 
 ## Bounds and presentation
 
@@ -75,18 +90,24 @@ it does not remove that name and expose a potentially shadowed outer binding.
 
 The shared cache includes the query index's estimated payload. This estimate approximates
 collection/object overhead and is separate from measured retained heap; it is not a process
-memory limit. Editor feature handlers are introduced in the later hover, completion and
-signature-help issues; this foundation alone does not change their advertised capabilities.
+memory limit. Full-mode hover consumes these values; completion and signature help use later
+feature handlers. Capture itself does not change advertised capabilities.
 
 ## Verification and measured cost
 
-The implementation passed 97 focused tests, 3,128 affected tests, the TypeScript smoke
+The #1977 hover extension passed 3,219 affected tests, the same TypeScript smoke profile
+(32 corpus cases/17 harness tests), and 9 targeted Test262 tests. Real stdio hover clients
+passed in full/interop-only modes with Markdown/plain text, including imported dirty types,
+exact CRLF/UTF-16 ranges and retained CLR/decorator hover. Existing shared-analysis stdio
+navigation, rename and cancellation contracts also passed.
+
+The #1976 foundation passed 97 focused tests, 3,128 affected tests, the TypeScript smoke
 profile (32 corpus cases across 17 harness tests) and 9 targeted Test262 tests. Selected
 shared runtime parity passed 204/204 in compiled/interpreted modes. Existing full-mode
 and interop-only stdio contracts also passed.
 
 The [replayable benchmark](../benchmarks/editor-semantics/README.md) compares the exact
-`1cfcc46a` baseline with current ordinary, member-only and editor capture on identical
+`1cfcc46a` baseline with #1976 ordinary, member-only and editor capture on identical
 freshly parsed graphs. Diagnostics, public types and lexical identity fingerprints match
 across all variants. The recorded single-machine Windows ARM64/.NET 10.0.12 run found
 no ordinary median regression above 10%; ordinary allocations increased by 1.31%/1.15%

@@ -22,6 +22,12 @@ public partial class TypeChecker
     /// </summary>
     internal TypeInfo? TryToTypeInfo(TypeNode node)
     {
+        if (!IsEditorSourceType(node)) return TryToTypeInfoCore(node);
+        return ResolveEditorTypeUse(node, () => TryToTypeInfoCore(node));
+    }
+
+    private TypeInfo? TryToTypeInfoCore(TypeNode node)
+    {
         switch (node)
         {
             // A bare name resolves through the shared single-name resolver — type parameters,
@@ -486,8 +492,8 @@ public partial class TypeChecker
             // Second pass: resolve constraints/defaults now that all names are in scope.
             foreach (var tp in typeParameters)
             {
-                TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
-                TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
+                TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode, tp, EditorAnnotationSlot.Constraint);
+                TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode, tp, EditorAnnotationSlot.Default);
                 var resolved = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
                 typeParams.Add(resolved);
                 DefineSourceTypeParameter(typeParamEnv, tp, resolved);
@@ -596,7 +602,7 @@ public partial class TypeChecker
             TypeInfo? result;
             using (new EnvironmentScope(this, aliasEnv))
             {
-                result = TryToTypeInfo(definitionNode);
+                result = ResolveEditorAliasDefinition(definitionNode);
             }
             if (result is null) return null;
 
@@ -689,7 +695,25 @@ public partial class TypeChecker
     /// <summary>
     /// Resolves a variable annotation node-first with string fallback, recording coverage stats.
     /// </summary>
-    private TypeInfo? ResolveAnnotation(string? annotation, TypeNode? annotationNode)
+    private TypeInfo? ResolveAnnotation(string? annotation, TypeNode? annotationNode,
+        object? sourceOwner = null, EditorAnnotationSlot slot = EditorAnnotationSlot.Type)
+    {
+        if (EditorFacts.IsEnabled && sourceOwner is not null && annotation is not null && _editorTypeUseSuppression == 0 &&
+            CurrentSourceDocument is { EditorSyntax: { } syntax } document &&
+            syntax.GetRecords(sourceOwner).Any(record => record.IsAuthoritative && record.Kind == EditorSyntaxKind.Name))
+        {
+            long version = _editorUnprovenTypeVersion;
+            EditorFacts.RecordAnnotationProof(document, sourceOwner, slot, false);
+            TypeInfo? result = ResolveAnnotation(annotation, annotationNode);
+            EditorFacts.RecordAnnotationProof(document, sourceOwner, slot, result is not null && version == _editorUnprovenTypeVersion);
+            return result;
+        }
+        if (annotationNode is null || !IsEditorSourceType(annotationNode))
+            return ResolveAnnotationCore(annotation, annotationNode);
+        return ResolveEditorTypeUse(annotationNode, () => ResolveAnnotationCore(annotation, annotationNode));
+    }
+
+    private TypeInfo? ResolveAnnotationCore(string? annotation, TypeNode? annotationNode)
     {
         if (annotationNode is not null && TryToTypeInfo(annotationNode) is { } fromNode)
         {

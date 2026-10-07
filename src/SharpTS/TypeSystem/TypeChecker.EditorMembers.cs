@@ -58,7 +58,7 @@ public partial class TypeChecker
             CollectEditorClassMembers(superclass, isStatic: false, includePrivate: false);
         EditorFacts.SetReceiverMembers(document, expression,
             projection.Members.Values.Where(candidate => candidate.Kind == EditorMemberKind.Method).ToArray(),
-            projection.IsComplete, projection.IsTruncated);
+            projection.IsComplete, projection.IsTruncated, _inStaticMethod ? null : superclass);
     }
 
     private sealed class EditorMemberProjection

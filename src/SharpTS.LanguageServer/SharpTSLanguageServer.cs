@@ -63,6 +63,7 @@ public static class SharpTSLanguageServer
                     .AddSingleton<DefinitionService>()
                     .AddSingleton<ReferenceService>()
                     .AddSingleton<RenameService>();
+                    if (mode == LanguageFeatureMode.Full) services.AddSingleton<SemanticHoverService>();
                     if (metadataProvider is not null) services.AddSingleton(metadataProvider);
                 })
                 // Served in both modes: this is the interop knowledge no other server has.

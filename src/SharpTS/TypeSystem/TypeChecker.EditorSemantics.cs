@@ -11,7 +11,11 @@ public partial class TypeChecker
     private int? _editorGlobalScope;
     private static readonly object EditorGlobalOwner = new();
     private Dictionary<TypeInfo, EditorSourceSlot>? _editorSignatureSources;
-    private Dictionary<TypeInfo, IReadOnlyList<TypeInfo>>? _editorPublicSignatures;
+    private Dictionary<TypeInfo, EditorCallableSurface>? _editorPublicSignatures;
+    private EditorTypeResolutionAttempt? _editorTypeResolutionAttempt;
+    private Dictionary<string, bool>? _editorAliasResolutionProof;
+    private long _editorUnprovenTypeVersion;
+    private int _editorTypeUseSuppression;
     private Dictionary<int, SourceSpan?>? _editorScopeSpans;
     private Stack<EditorActiveScope>? _editorActiveScopes;
     private Dictionary<int, EditorScopeKind>? _editorScopeKinds;
@@ -45,6 +49,10 @@ public partial class TypeChecker
         _editorGlobalScope = null;
         _editorSignatureSources = null;
         _editorPublicSignatures = null;
+        _editorTypeResolutionAttempt = null;
+        _editorAliasResolutionProof = null;
+        _editorUnprovenTypeVersion = 0;
+        _editorTypeUseSuppression = 0;
         _editorScopeSpans = null;
         _editorActiveScopes = null;
         _editorScopeKinds = null;
@@ -65,7 +73,13 @@ public partial class TypeChecker
     private void RecordEditorExpressionType(Expr expression, TypeInfo type)
     {
         if (!IsEditorSourceExpression(expression)) return;
-        EditorFacts.CompleteExpression(CurrentSourceDocument, expression, type);
+        BindingSymbol? binding = expression switch
+        {
+            Expr.Variable variable => _environment.GetValueBinding(variable.Name.Lexeme),
+            Expr.Assign assignment => _environment.GetValueBinding(assignment.Name.Lexeme),
+            _ => null,
+        };
+        EditorFacts.CompleteExpression(CurrentSourceDocument, expression, type, binding);
         if (expression is Expr.ClassExpr) CaptureEditorClassDeclarations(expression, type);
         CaptureEditorReceiver(expression, type);
     }
@@ -336,14 +350,100 @@ public partial class TypeChecker
         _editorSignatureSources?.GetValueOrDefault(signature);
 
     private IReadOnlyList<TypeInfo>? GetEditorPublicSignatures(TypeInfo signature) =>
+        _editorPublicSignatures?.GetValueOrDefault(signature)?.Signatures;
+
+    private EditorCallableSurface? GetEditorCallableSurface(TypeInfo signature) =>
         _editorPublicSignatures?.GetValueOrDefault(signature);
+
+    private void CopyEditorPublicSignatures(TypeInfo? original, TypeInfo replacement)
+    {
+        if (!EditorFacts.IsEnabled || original is null || GetEditorCallableSurface(original) is not { } surface) return;
+        (_editorPublicSignatures ??= new(ReferenceEqualityComparer.Instance))[replacement] = surface;
+        EditorFacts.RegisterCallableSurface(replacement, surface.Signatures, surface.TypeParameters);
+    }
 
     private void RegisterEditorPublicSignatures(TypeInfo actual, IReadOnlyList<TypeInfo> signatures)
     {
         if (!EditorFacts.IsEnabled) return;
         // One sentinel preserves incompleteness without retaining an unbounded public family.
-        (_editorPublicSignatures ??= new(ReferenceEqualityComparer.Instance))[actual] = signatures.Take(33).ToArray();
+        IReadOnlyList<TypeInfo.TypeParameter>? typeParameters = actual switch
+        {
+            TypeInfo.GenericOverloadedFunction generic => generic.TypeParams,
+            TypeInfo.GenericFunction generic => generic.TypeParams,
+            _ => null,
+        };
+        var surface = new EditorCallableSurface(signatures.Take(33).ToArray(), typeParameters?.Take(33).ToArray());
+        (_editorPublicSignatures ??= new(ReferenceEqualityComparer.Instance))[actual] = surface;
+        EditorFacts.RegisterCallableSurface(actual, surface.Signatures, surface.TypeParameters);
     }
+
+    private bool IsEditorSourceType(TypeNode node) => ShouldCaptureEditorFacts && _editorTypeUseSuppression == 0 &&
+        CurrentSourceDocument?.EditorSyntax?.GetRecords(node).Any(record => record.IsAuthoritative &&
+            record.Kind == EditorSyntaxKind.Type) == true;
+
+    // Only wraps work already requested by the checker. Unknown-name fallbacks mark the
+    // active attempt at the resolver decision, without running a second name/type lookup.
+    private TypeInfo? ResolveEditorTypeUse(TypeNode node, Func<TypeInfo?> resolve)
+    {
+        var previous = _editorTypeResolutionAttempt;
+        var attempt = new EditorTypeResolutionAttempt();
+        var document = CurrentSourceDocument;
+        _editorTypeResolutionAttempt = attempt;
+        EditorFacts.BeginTypeUse(document, node);
+        try
+        {
+            TypeInfo? result = resolve();
+            EditorFacts.CompleteTypeUse(document, node, attempt.IsUnproven ? null : result);
+            return result;
+        }
+        catch
+        {
+            EditorFacts.CompleteTypeUse(document, node, null);
+            throw;
+        }
+        finally
+        {
+            if (attempt.IsUnproven && previous is not null) previous.IsUnproven = true;
+            _editorTypeResolutionAttempt = previous;
+        }
+    }
+
+    private void MarkEditorUnprovenTypeName()
+    {
+        if (EditorFacts.IsEnabled) _editorUnprovenTypeVersion++;
+        if (_editorTypeResolutionAttempt is { } attempt) attempt.IsUnproven = true;
+    }
+
+    private TypeInfo? ResolveEditorAliasDefinition(TypeNode node)
+    {
+        if (!EditorFacts.IsEnabled) return TryToTypeInfo(node);
+        _editorTypeUseSuppression++;
+        try { return TryToTypeInfo(node); }
+        finally { _editorTypeUseSuppression--; }
+    }
+
+    private TypeInfo UnprovenEditorTypeFallback()
+    {
+        MarkEditorUnprovenTypeName();
+        return TypeInfo.Any.Shared;
+    }
+
+    private long BeginEditorExpressionAnnotation(Expr owner)
+    {
+        if (!EditorFacts.IsEnabled || _editorTypeUseSuppression != 0 ||
+            CurrentSourceDocument?.EditorSyntax?.GetRecords(owner).Any(record => record.IsAuthoritative &&
+                record.Kind == EditorSyntaxKind.Expression) != true) return -1;
+        EditorFacts.RecordAnnotationProof(CurrentSourceDocument, owner, EditorAnnotationSlot.Type, false);
+        return _editorUnprovenTypeVersion;
+    }
+
+    private void CompleteEditorExpressionAnnotation(Expr owner, long version)
+    {
+        if (version >= 0)
+            EditorFacts.RecordAnnotationProof(CurrentSourceDocument, owner, EditorAnnotationSlot.Type, version == _editorUnprovenTypeVersion);
+    }
+
+    private sealed class EditorTypeResolutionAttempt { public bool IsUnproven { get; set; } }
 
     private EditorSourceSlot? GetEditorClassSource(TypeInfo type) =>
         Members.GetClassInfo(SelectedSourceClassId(type)) is { } source

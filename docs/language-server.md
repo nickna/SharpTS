@@ -3,7 +3,7 @@
 `sharpts-lsp` is a standard language server over stdio. It provides SharpTS-specific .NET interop
 diagnostics, hover, completion, signature help, and quick fixes in every mode. Its full mode also
 provides document symbols, definition, references, and completeness-gated rename for standalone
-editors.
+editors, plus semantic hover for ordinary TypeScript symbols.
 
 Formatting is supplied by the editor and an external formatter. Neither language-feature mode
 advertises document, range or on-type formatting. See [Formatting TypeScript and TSX](formatting.md)
@@ -142,9 +142,28 @@ CLR/builtin members supply no new class-member target. The
 [member provenance contract](editor-member-provenance.md) lists the exact supported operations
 and current checker limits. Definition support alone does not grant member rename permission.
 
+## Ordinary TypeScript hover
+
+Full mode shows checked declaration and occurrence types for ordinary names, parameters,
+functions, named annotations and supported source class members. It preserves flow-narrowed
+occurrence types and the exact public overload signatures retained by the checker. Private
+member names and `super` use their own semantic facts rather than the result of a surrounding
+call, assignment or brand check. Unresolved analysis supplies no semantic hover.
+
+Unknown annotation names also make their affected declarations and uses unavailable; an
+explicit checked `any` remains displayable. A qualified annotation's final name can show its
+resolved type. Earlier qualifiers require their own exact binding proof. Unused lazy aliases
+are not resolved just for display. Structural/dynamic member access remains outside the
+source class hover domain described by the semantic and member provenance contracts.
+
+Hover uses exact half-open UTF-16 source ranges and the client's preferred Markdown or plain
+text format. Existing GUI, decorator and CLR hover keeps priority. Full-mode CLR member usage
+and ordinary hover share the checked snapshot, including files that mix interop and ordinary
+TypeScript. Interop-only continues to serve SharpTS-specific hover without ordinary results.
+
 ## Shared analysis
 
-Definition, references, lexical rename, and full diagnostics share completed analyses for the
+Hover, definition, references, lexical rename, and full diagnostics share completed analyses for the
 same captured open buffers and project state. File notifications invalidate analyses promptly;
 clients without watching support still get physical dependency/configuration validation on every
 reuse. Creating a missing import, changing a closed file, or changing project membership causes
@@ -164,18 +183,22 @@ The recovery cache retains at most 32 artifacts and 8 MiB within the shared 64 M
 
 Completed analyses also retain [bounded semantic query values](editor-semantic-queries.md):
 checked declaration/occurrence types, visible bindings, accessible receiver members and actual
-call/new candidate decisions. These values prepare the later ordinary hover, completion and
-signature-help handlers. They do not run a second checker or retain its mutable environments.
+call/new candidate decisions. Ordinary hover consumes these values; completion and signature
+help use later feature handlers. They do not retain the checker's mutable environments.
 
 For a local protocol smoke test after a Release build, run:
 
 ```bash
 node scripts/test-analysis-snapshots.mjs
+node scripts/test-semantic-hover.mjs
 ```
 
 The test exercises real stdio navigation, source class member targets, watched closed-file
 changes, dirty overlays, reverse importer creation, rename, cancellation transport and
 interop-only capability isolation.
+The hover smoke runs full/interop-only clients with both markup formats, checking exact
+ordinary ranges, dirty imported types, close-to-disk restoration and retained CLR/decorator
+hover.
 
 The [editor analysis benchmark](../benchmarks/editor-analysis/README.md) records a comparison with
 `df4589b7` on Windows Arm64/.NET 10.0.12 (2026-10-07 UTC). The sequence contains definition,
