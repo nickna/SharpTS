@@ -746,6 +746,7 @@ public partial class ILEmitter
 
     protected override void EmitCompoundAssign(Expr.CompoundAssign ca)
     {
+        if (TryGetClassDefinitionCaptureSlot(ca.Name.Lexeme, out _)) { base.EmitCompoundAssign(ca); return; }
         if (TryEmitExternalCompoundAssign(ca))
             return;
 
@@ -970,6 +971,7 @@ public partial class ILEmitter
 
     protected override void EmitLogicalAssign(Expr.LogicalAssign la)
     {
+        if (TryGetClassDefinitionCaptureSlot(la.Name.Lexeme, out _)) { base.EmitLogicalAssign(la); return; }
         // An unresolvable reference throws before the logical operator can
         // inspect its value.  Letting the generic store path handle this left
         // incompatible stack shapes at the join label (the failed store does
@@ -1937,6 +1939,14 @@ public partial class ILEmitter
     /// </remarks>
     private void EmitStoreIncrementedVariable(string name, bool isTypedDouble, bool resultIsUnboxedDouble)
     {
+        if (TryGetClassDefinitionCaptureSlot(name, out _))
+        {
+            if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            TryEmitStoreClassDefinitionCapture(name);
+            if (resultIsUnboxedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            SetStackUnknown();
+            return;
+        }
         // Per-iteration loop-binding cell (#650): write the new value through the StrongBox so closures
         // that captured this iteration's cell observe it.
         if (_ctx.CellBindingLocals.TryGetValue(name, out var cell))

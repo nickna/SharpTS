@@ -274,6 +274,9 @@ public static class LoopAssignmentAnalyzer
             case Expr.Get get:
                 CollectAssignedPathsFromExpr(get.Object, paths);
                 break;
+            case Expr.PrivateIn presence:
+                CollectAssignedPathsFromExpr(presence.Object, paths);
+                break;
 
             case Expr.GetIndex getIndex:
                 CollectAssignedPathsFromExpr(getIndex.Object, paths);

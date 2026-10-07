@@ -97,3 +97,94 @@ new syntax and unrelated conformance failures remain their existing tasks. The
 inline prototype-call IL failure is a separate verification defect,
 [#1966](https://github.com/nickna/SharpTS/issues/1966); its failure
 is retained rather than used to claim this representation work is repaired.
+
+## Implementation evidence for #1964
+
+Each class-expression evaluation now returns a fresh emitted `$ClassDefinition`
+with its own prototype, constructor back-reference, name and arity. A generated
+factory passes the selected definition into the shared template's constructor
+before instance field initialization. Generic arguments are erased at that
+factory boundary, so instances of one guest definition share its prototype.
+Runtime construction, Reflect construction, `typeof`, and `instanceof` recognize
+these definition values. The interpreter uses definition identity for class
+brands and evaluates instance initializers with their owning environment and
+receiver. Named expressions retain their local body binding.
+
+`RepeatedClassDefinitionTests` covers repeated evaluations in functions, loops,
+closures, modules, async and generator suspension, plus generic arguments,
+initializers, prototype mutation, default arguments and bound construction. The
+ten source controls run in both engines and as serialized, IL-verified programs.
+The module control runs in both engines. A reused runtime emitter test separately
+verifies fresh metadata ownership and saved IL in ordinary and hosted emission;
+this is emission evidence, not a hosted class-factory execution claim.
+
+On Windows ARM64/.NET 10.0.12 and Node v25.5.0, the unchanged
+`constructors-only.ts` now prints `false` in verified CLI standalone output.
+`prototype-separate-values.ts` prints `false`, `false`, `true true`, and
+`true false`, matching Node. Both standalone runs complete within 30 seconds
+with empty stderr and without SharpTS.dll in the output directory. The inline
+`identity.ts` source remains the separate #1966 verifier control.
+
+The affected class-expression/owner/local-class, constructor, generic, computed
+member, namespace and prototype suite passes all 1,181 tests with compiled IL
+verification enabled. The full Release solution build and code-quality gates
+pass (28 duplicate groups, zero errors). The actual AOT/trim/single-file analyzer
+passes the unchanged zero-warning baseline. Definition-owned computed keys,
+capture snapshots and static initialization continue in #1965.
+
+## Implementation evidence for #1966
+
+The unchanged inline `identity.ts` reproduced the reported `BackwardBranch`
+error at offset 709 after #1964. The reflection constructor's argument-padding
+loop jumped forward over its body and then backward into it while the enclosing
+prototype query retained values on the evaluation stack. Moving the loop check
+to the top makes its stack height determinable in one forward scan.
+
+The original source now passes CLI IL verification and prints `false` / `false`
+in standalone output, matching Node, within 30 seconds with empty stderr.
+`InlineConstructorPrototypeTests` verifies all three source controls as saved
+assemblies and executes them in both engines and without SharpTS.dll. Additional
+controls retain left-to-right, exactly-once callee/argument evaluation, omitted
+parameter defaults, and prototype identity for an aliased CLR constructor.
+All 279 affected constructor, class-expression owner, generic-constructor and
+prototype tests pass with compiled verification enabled; the Release core/test
+build passes. The original reference expectation and verifier remain intact.
+
+## Implementation evidence for #1965
+
+Each class-expression definition now owns its ordered computed keys, captured
+bindings, member descriptors, static fields and initialization. Keys are evaluated
+once, before static fields/blocks, and retained across suspension; instances read
+their lexical definition's keys rather than mutable template static fields.
+String and Symbol methods/accessors register in source order on the fresh
+prototype or constructor. Static methods retain the selected definition separately
+from the caller's `this`. Captured bindings retain their original display-class or
+cell storage, so later writes and closures returned by methods remain live.
+Async/generator method state machines retain the instance or static definition,
+and suspended closure emitters share the same environment population path.
+Instance method values use pre-emitted adapters that retain the lexical definition
+separately from their explicit guest receiver. Borrowing a method across class
+evaluations therefore retains its original captures while observing the caller's
+public fields, including after suspension.
+
+`RepeatedClassStateTests` exercises 18 source controls in interpretation,
+in-process compilation, serialized IL verification/execution and standalone
+deployment, plus two module execution modes with serialized module verification.
+The source controls include retained constructors after a second evaluation,
+string/Symbol fields and members, accessors, static captures and borrowed
+receivers, initialization order, abrupt keys, interleaved awaits, inherited keys,
+awaited keys/heritage, live captured writes and closures returned after suspension.
+All 18 match Node v25.5.0. The unchanged `computed-keys.ts` passes verified CLI
+standalone execution within 30 seconds, with empty stderr and no SharpTS.dll,
+printing `false 2` / `5 5 undefined undefined 5`. The unchanged one-definition
+generic computed-key expectation remains in the affected regression selection.
+
+The full Release solution build passes. Quality gates report 27 duplicate groups
+and zero errors; the obsolete suspended-closure duplicate exception was removed
+after sharing emission. The actual AOT/trim/single-file analyzer matches the
+unchanged zero-warning baseline. The affected verification selection has 1,596
+passing tests. A separately recorded async-lock verifier failure also reproduces
+on unchanged `69f2b081`; three other failures in the wider async selection likewise
+reproduce there. These baseline failures are not counted as passes. Hosted
+execution is not part of this evidence. Runtime-valued ordinary-user-class
+heritage remains the separate #1967 task.

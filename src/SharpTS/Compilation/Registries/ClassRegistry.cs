@@ -14,6 +14,9 @@ namespace SharpTS.Compilation.Registries;
 /// </remarks>
 public sealed class ClassRegistry
 {
+    public PrivateMethodValue? GetPrivateMethodValue(string owner, string name) =>
+        _privateElements.TryGet(owner, out var declaration) && declaration.MethodValues.TryGetValue(name, out var value) ? value : null;
+    public PrivateClassElements? GetPrivateElements(string owner) => _privateElements.TryGet(owner, out var declaration) ? declaration : null;
     // Core class builders
     private readonly Dictionary<string, TypeBuilder> _builders;
     private readonly Dictionary<string, string?> _superclass;

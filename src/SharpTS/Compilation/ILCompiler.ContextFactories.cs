@@ -38,7 +38,8 @@ public partial class ILCompiler
     /// </summary>
     private CompilationContext CreateBaseCompilationContext(ILGenerator il, MethodBase? method = null)
     {
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders,
+            NamespaceFieldsForModule(_modules.CurrentPath), NamespaceVarsForModule(_modules.CurrentPath), _types)
         {
             // Closure analysis registries
             ClosureAnalyzer = _closures.Analyzer,
@@ -81,6 +82,8 @@ public partial class ILCompiler
             StaticDirectEvalStatements = _staticDirectEvalStatements,
             StaticIndirectEvalCalls = _staticIndirectEvalCalls,
             TypeMap = _typeMap,
+            CheckedClassNames = _classes.CheckedDeclarationNames,
+            ScopedClassNames = _classes.ScopedNames,
             DeadCode = _deadCodeInfo,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
@@ -89,8 +92,12 @@ public partial class ILCompiler
             ImportedNames = _importedNames,
             TopLevelNumericConstantValues = _topLevelNumericConstantValues,
             ClassExprBuilders = _classExprs.Builders,
+            ClassExprFactories = _classExprs.Factories,
+            ClassExprDefinitionFields = _classExprs.DefinitionFields,
+            RuntimeClassDeclarations = _runtimeClassDeclarations,
             ClassExprStaticMethods = _classExprs.StaticMethods,
-            ClassExprCaptureFields = _classExprs.CaptureFields,
+            ClassExprCaptureSlots = _classExprs.CaptureSlots,
+            ClassExprEnclosingClasses = _classExprs.EnclosingClass,
             DeferredClassDefinitions = _classes.DeferredDefinitions,
             BlockScopedClassBuilders = _classes.BlockScopedBuilders,
             ClassRegistry = GetClassRegistry(),
@@ -164,6 +171,28 @@ public partial class ILCompiler
         ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: true);
         AttachLocalSymbols(ctx);
         return ctx;
+    }
+
+    private void ApplyClassDefinitionStateMachineContext(CompilationContext ctx, MethodBuilder method, bool isInstance)
+    {
+        ApplyPrivateMethodValueContext(ctx, method);
+        if (_classExprs.DefinitionMethods.TryGetValue(method, out var owner))
+        {
+            ctx.CurrentClassExpr = owner.Expression;
+            ctx.CurrentClassBuilder = _classExprs.Builders[owner.Expression];
+            ctx.ClassDefinitionOwnerField = owner.Definition;
+            ctx.GuestThisVariableName = "__this";
+            foreach (var parameter in owner.Expression.TypeParams ?? [])
+                ctx.GenericTypeParameters[parameter.Name.Lexeme] = _types.Object;
+        }
+        else
+        {
+            ctx.CurrentClassExpr = _classExprs.Builders.FirstOrDefault(entry => ReferenceEquals(entry.Value, method.DeclaringType)).Key;
+        }
+        if (ctx.CurrentClassExpr != null)
+            ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;
+        if (ctx.CurrentClassExpr != null && !isInstance)
+            ctx.ClassDefinitionVariableName = "__classDefinition";
     }
 
     /// <summary>
@@ -256,6 +285,8 @@ public partial class ILCompiler
             FunctionNames = parentCtx.FunctionNames,
             FunctionGenericParameters = parentCtx.FunctionGenericParameters,
             TypeMap = parentCtx.TypeMap,
+            CheckedClassNames = parentCtx.CheckedClassNames,
+            ScopedClassNames = parentCtx.ScopedClassNames,
             DeadCode = parentCtx.DeadCode,
             AsyncMethods = null,
             AsyncArrowBuilders = _async.ArrowBuilders,
@@ -269,13 +300,19 @@ public partial class ILCompiler
             EnumToModule = parentCtx.EnumToModule,
             TypeEmitterRegistry = parentCtx.TypeEmitterRegistry,
             ClassExprBuilders = parentCtx.ClassExprBuilders,
-            ClassExprCaptureFields = parentCtx.ClassExprCaptureFields,
+            ClassExprFactories = parentCtx.ClassExprFactories,
+            ClassExprDefinitionFields = parentCtx.ClassExprDefinitionFields,
+            RuntimeClassDeclarations = parentCtx.RuntimeClassDeclarations,
+            ClassExprCaptureSlots = parentCtx.ClassExprCaptureSlots,
+            ClassExprEnclosingClasses = parentCtx.ClassExprEnclosingClasses,
             BlockScopedClassBuilders = parentCtx.BlockScopedClassBuilders,
             DeferredClassDefinitions = parentCtx.DeferredClassDefinitions,
             IsStrictMode = parentCtx.IsStrictMode,
             // ES2022 Private Class Elements support - inherit from parent context
             CurrentClassName = parentCtx.CurrentClassName,
+            EnclosingClassNames = parentCtx.EnclosingClassNames,
             CurrentClassBuilder = parentCtx.CurrentClassBuilder,
+            HasGuestReceiver = parentCtx.HasGuestReceiver,
             // Registry services
             ClassRegistry = parentCtx.ClassRegistry,
             // Entry-point display class for captured top-level variables
@@ -326,6 +363,8 @@ public partial class ILCompiler
         return new CompilationContext(null!, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
         {
             ClassToModule = _modules.ClassToModule,
+            CheckedClassNames = _classes.CheckedDeclarationNames,
+            ScopedClassNames = _classes.ScopedNames,
             FunctionToModule = _modules.FunctionToModule,
             EnumToModule = _modules.EnumToModule,
             IsStrictMode = _isStrictMode

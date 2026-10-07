@@ -31,6 +31,14 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
         set => _privateClass = value;
     }
 
+    internal SharpTSClass? FindPrivateClass(string name)
+    {
+        for (RuntimeEnvironment? scope = this; scope is not null; scope = scope.Enclosing)
+            if (scope._privateClass is { } owner && owner.DeclaresPrivateName(name))
+                return owner;
+        return null;
+    }
+
     public RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? strictMode = null)
         : base(enclosing, strictMode)
     {

@@ -14,6 +14,31 @@ public partial class ILCompiler
     /// See <see cref="CompilationContext.NamespaceVarFields"/> for the rationale (#567).
     /// </summary>
     private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _namespaceVarFields = [];
+    private readonly Dictionary<(string? Module, string Path), FieldBuilder> _namespaceFieldOwners = [];
+
+    private string NamespaceStorageKey(string path) => GetDefinitionContext().GetQualifiedClassName(path);
+
+    private Dictionary<string, FieldBuilder> NamespaceFieldsForModule(string? module)
+    {
+        Dictionary<string, FieldBuilder> fields = [];
+        foreach (var (owner, field) in _namespaceFieldOwners)
+            if (owner.Module is null) fields[owner.Path] = field;
+        foreach (var (owner, field) in _namespaceFieldOwners)
+            if (owner.Module == module) fields[owner.Path] = field;
+        return fields;
+    }
+
+    private Dictionary<string, Dictionary<string, FieldBuilder>> NamespaceVarsForModule(string? module)
+    {
+        Dictionary<string, Dictionary<string, FieldBuilder>> fields = [];
+        foreach (var (owner, field) in _namespaceFieldOwners)
+        {
+            if (owner.Module != module) continue;
+            var storageKey = _namespaceFields.First(kv => ReferenceEquals(kv.Value, field)).Key;
+            if (_namespaceVarFields.TryGetValue(storageKey, out var variables)) fields[owner.Path] = variables;
+        }
+        return fields;
+    }
 
     /// <summary>
     /// The namespace path whose members are currently being defined or emitted, or null when
@@ -57,13 +82,15 @@ public partial class ILCompiler
             : $"{parentPath}.{ns.Name.Lexeme}";
 
         // Create static field for this namespace if it doesn't exist
-        if (!_namespaceFields.ContainsKey(path))
+        string storageKey = NamespaceStorageKey(path);
+        if (!_namespaceFields.ContainsKey(storageKey))
         {
             var field = _programType.DefineField(
-                $"$ns_{path.Replace(".", "_")}",
+                $"$ns_{storageKey.Replace(".", "_")}",
                 _runtime.Namespaces.Type,
                 FieldAttributes.Public | FieldAttributes.Static);
-            _namespaceFields[path] = field;
+            _namespaceFields[storageKey] = field;
+            _namespaceFieldOwners[(_modules.CurrentPath, path)] = field;
         }
 
         // Record the enclosing namespace during the define phase too: DefineFunction routes
@@ -174,6 +201,7 @@ public partial class ILCompiler
     /// </summary>
     private void DefineNamespaceVarField(string nsPath, string varName)
     {
+        nsPath = NamespaceStorageKey(nsPath);
         if (!_namespaceVarFields.TryGetValue(nsPath, out var fields))
         {
             fields = [];
@@ -206,7 +234,7 @@ public partial class ILCompiler
         foreach (var part in nsPath.Split('.'))
         {
             prefix = prefix.Length == 0 ? part : $"{prefix}.{part}";
-            if (_namespaceVarFields.TryGetValue(prefix, out var fields))
+            if (_namespaceVarFields.TryGetValue(NamespaceStorageKey(prefix), out var fields))
             {
                 foreach (var (name, field) in fields)
                     merged[name] = field;
@@ -271,8 +299,9 @@ public partial class ILCompiler
     {
         // Initialize namespace fields ordered by nesting depth (parents first)
         // This ensures parent namespaces exist before children are added
-        foreach (var (nsPath, field) in _namespaceFields.OrderBy(kv => kv.Key.Count(c => c == '.')))
+        foreach (var (owner, field) in _namespaceFieldOwners.OrderBy(kv => kv.Key.Path.Count(c => c == '.')))
         {
+            string nsPath = owner.Path;
             // Get simple name (last part of path)
             string simpleName = nsPath.Contains('.')
                 ? nsPath[(nsPath.LastIndexOf('.') + 1)..]
@@ -288,7 +317,7 @@ public partial class ILCompiler
             if (dotIndex > 0)
             {
                 string parentPath = nsPath[..dotIndex];
-                if (_namespaceFields.TryGetValue(parentPath, out var parentField))
+                if (_namespaceFieldOwners.TryGetValue((owner.Module, parentPath), out var parentField))
                 {
                     il.Emit(OpCodes.Ldsfld, parentField);
                     il.Emit(OpCodes.Ldstr, simpleName);

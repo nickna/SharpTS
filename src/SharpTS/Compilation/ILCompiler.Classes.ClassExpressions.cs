@@ -26,6 +26,9 @@ public partial class ILCompiler
     /// </summary>
     private void DefineClassExpression(Expr.ClassExpr classExpr)
     {
+        if (_classExprs.Builders.ContainsKey(classExpr)) return;
+        if (ResolveClassExpressionParent(classExpr) is { } parent && !ReferenceEquals(parent, classExpr))
+            DefineClassExpression(parent);
         string className = _classExprs.Names[classExpr];
 
         // Create TypeBuilder with appropriate attributes
@@ -44,16 +47,16 @@ public partial class ILCompiler
         var lexicalCaptures = new HashSet<string>(StringComparer.Ordinal);
         foreach (var method in classExpr.Methods)
             lexicalCaptures.UnionWith(_closures.Analyzer.GetCaptures(method));
+        lexicalCaptures.UnionWith(_closures.Analyzer.GetCaptures(classExpr));
+        foreach (var accessor in classExpr.Accessors ?? [])
+            lexicalCaptures.UnionWith(_closures.Analyzer.GetCaptures(accessor));
         if (classExpr.Name != null)
             lexicalCaptures.Remove(classExpr.Name.Lexeme);
-        var captureFields = new Dictionary<string, FieldBuilder>(StringComparer.Ordinal);
-        foreach (var capture in lexicalCaptures)
-        {
-            captureFields[capture] = typeBuilder.DefineField(
-                $"$lex_{capture}", _types.Object,
-                FieldAttributes.Public | FieldAttributes.Static);
-        }
-        _classExprs.CaptureFields[classExpr] = captureFields;
+        if (_classExprs.EnclosingClass.TryGetValue(classExpr, out var lexicalClass)
+            && _classExprs.Names.ContainsValue(lexicalClass))
+            lexicalCaptures.Add(CompilationContext.PrivateOwnerCaptureName);
+        _classExprs.CaptureSlots[classExpr] = lexicalCaptures.OrderBy(name => name, StringComparer.Ordinal)
+            .Select((name, index) => (name, index)).ToDictionary(entry => entry.name, entry => entry.index, StringComparer.Ordinal);
 
         // Track superclass name for inheritance resolution
         string? superclassName = Expr.GetSuperclassLeafName(classExpr.SuperclassExpr);
@@ -83,9 +86,24 @@ public partial class ILCompiler
 
         _classes.GenericParameters.Declare(typeBuilder, classGenericParams ?? []);
 
+        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.ClassDefinitions.InstanceInterface);
+        var definitionField = typeBuilder.DefineField("$definition", _types.Object, FieldAttributes.Assembly);
+        _classExprs.DefinitionFields[classExpr] = definitionField;
+        var definitionGetter = typeBuilder.DefineMethod("$GetClassDefinition",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.Object, Type.EmptyTypes);
+        typeBuilder.DefineMethodOverride(definitionGetter, _runtime.ClassDefinitions.GetDefinition);
+        var definitionIl = definitionGetter.GetILGenerator();
+        definitionIl.Emit(OpCodes.Ldarg_0);
+        definitionIl.Emit(OpCodes.Ldfld, EmitterTypeHelpers.SelfFieldReference(definitionField));
+        definitionIl.Emit(OpCodes.Ret);
+
         // NOW resolve superclass (may use our generic params for type arguments)
         Type? baseType = null;
-        if (superclassName != null)
+        bool runtimeHeritage = classExpr.SuperclassExpr != null && _typeMap.Get(classExpr.SuperclassExpr) is TSTypeInfo.Any
+            && superclassName is not ("Array" or "Promise")
+            && !Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(superclassName ?? "");
+        if (superclassName != null && !runtimeHeritage)
         {
             // Check class declarations first (with module resolution)
             var resolvedSuperName = GetDefinitionContext().ResolveClassName(superclassName);
@@ -182,7 +200,7 @@ public partial class ILCompiler
         // parameter) cannot be widened to / narrowed from the object-typed $IHasFields slots
         // without box/unbox of `T`, which yields unverifiable IL. Like class declarations
         // (ILCompiler.Classes.cs), these fields live in the `_fields` dictionary instead (#291).
-        foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsDeclare))
+        foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsPrivate && !f.IsDeclare && f.ComputedKey == null))
         {
             bool isGenericField = classGenericParams != null &&
                 field.TypeAnnotation != null &&
@@ -193,7 +211,7 @@ public partial class ILCompiler
         }
 
         // Define static fields (use object type for compatibility with existing emission code)
-        foreach (var field in classExpr.Fields.Where(f => f.IsStatic))
+        foreach (var field in classExpr.Fields.Where(f => f.IsStatic && !f.IsPrivate))
         {
             var staticField = typeBuilder.DefineField(
                 field.Name.Lexeme,
@@ -209,6 +227,8 @@ public partial class ILCompiler
 
         // Store the type builder
         _classExprs.Builders[classExpr] = typeBuilder;
+        if (_typeMap.GetClassExprType(classExpr) is { } checkedClass)
+            _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = className;
     }
 
     /// <summary>
@@ -346,14 +366,16 @@ public partial class ILCompiler
         var ctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            ctorParamTypes
+            [.. ctorParamTypes, _runtime.ClassDefinitions.Type]
         );
+        if (HasRuntimeParent(classExpr)) _usesRuntimeParents = true;
         if (constructor == null && superclassName == "Array")
             MarkJsVariadicConstructor(ctorBuilder);
         _classExprs.Constructors[classExpr] = ctorBuilder;
         _classes.Constructors[className] = ctorBuilder;
         RegisterArgumentsCapturingMethod(ctorBuilder, constructor?.Body);
         DefineClassPrototypeConstructor(typeBuilder);
+        DefineClassExpressionFactory(classExpr, typeBuilder, ctorBuilder, ctorParamTypes);
 
         // Define static methods (computed symbol-keyed methods are handled by
         // DefineClassExpressionSymbolMethods below, like the class-declaration path).
@@ -372,9 +394,10 @@ public partial class ILCompiler
                 method.Name.Lexeme,
                 MethodAttributes.Public | MethodAttributes.Static,
                 returnType,
-                paramTypes
+                [_runtime.ClassDefinitions.Type, .. paramTypes]
             );
             _classExprs.StaticMethods[classExpr][method.Name.Lexeme] = methodBuilder;
+            methodBuilder.DefineParameter(1, ParameterAttributes.None, "__classDefinition");
             RegisterArgumentsCapturingMethod(methodBuilder, method.Body);
         }
 
@@ -459,7 +482,16 @@ public partial class ILCompiler
             }
         }
 
-        DefineDeferredComputedMethodKeyRegistrar(classExpr, typeBuilder, classExpr.Fields);
+        var keys = _classes.ComputedMembers.GetMethods(typeBuilder)
+            .Select(entry => (entry.Key, entry.Method.Name.Start))
+            .Concat(_classes.ComputedMembers.GetAccessors(typeBuilder)
+                .Select(entry => (entry.Accessor.ComputedKey!, entry.Accessor.Name.Start)))
+            .Concat(classExpr.Fields.Where(field => field.ComputedKey != null && !field.IsDeclare)
+                .Select(field => (field.ComputedKey!, field.Name.Start)))
+            .OrderBy(entry => entry.Start).Select(entry => entry.Item1).ToArray();
+        _classExprs.Factories[classExpr] = _classExprs.Factories[classExpr] with { Keys = keys };
+        DefinePrivateClassElements(typeBuilder, className, ClassExpressionDeclaration(classExpr),
+            _classes.GenericParameters.Require(typeBuilder).ToArray(), classExpr);
     }
 
     /// <summary>
@@ -484,6 +516,10 @@ public partial class ILCompiler
 
         string className = _classExprs.Names[classExpr];
         var fieldsField = _classes.InstanceFieldsField[className];
+        if (_usesRuntimeParents && !typeBuilder.IsGenericTypeDefinition && !_classes.ErrorSubclasses.Contains(className)
+            && typeBuilder.BaseType is not { Name: "$Array" or "$Promise" }
+            && SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr)))
+            EmitReceiverInitializer(typeBuilder, ClassExpressionDeclaration(classExpr), classExpr);
 
         // Emit the constructor-free prototype path before the .cctor that uses it.
         EmitClassPrototypeConstructor(typeBuilder);
@@ -529,6 +565,7 @@ public partial class ILCompiler
 
         // Emit symbol-keyed computed accessor bodies (#281)
         EmitClassExpressionSymbolAccessors(classExpr, typeBuilder, fieldsField);
+        EmitClassExpressionPrivateMethodBodies(classExpr, typeBuilder);
 
         // Emit $IHasFields interface method bodies (now that method builders are available)
         EmitHasFieldsInterfaceMethodBodies(className, classExpr);
@@ -552,8 +589,15 @@ public partial class ILCompiler
         ctx.CurrentClassBuilder = typeBuilder;
         ctx.EmittingTypeBuilder = typeBuilder;
         ctx.CurrentClassName = className;
-        if (_classExprs.EnclosingClass.TryGetValue(classExpr, out var enclosingClassName))
-            ctx.EnclosingClassNames = [enclosingClassName];
+        List<string> enclosingClasses = [];
+        var lexicalExpression = classExpr;
+        while (_classExprs.EnclosingClass.TryGetValue(lexicalExpression, out var enclosingClassName))
+        {
+            enclosingClasses.Add(enclosingClassName);
+            lexicalExpression = _classExprs.Names.FirstOrDefault(entry => entry.Value == enclosingClassName).Key;
+            if (lexicalExpression is null) break;
+        }
+        ctx.EnclosingClassNames = enclosingClasses;
         ctx.CurrentSuperclassName = _classExprs.Superclass.GetValueOrDefault(classExpr);
         ctx.PropertyBackingFields = _typedInterop.PropertyBackingFields;
         ctx.ClassProperties = _typedInterop.ClassProperties;
@@ -593,15 +637,6 @@ public partial class ILCompiler
         // binding throws ReferenceError at runtime (same omission #300 fixed
         // for class-declaration accessor bodies).
         ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: true);
-        if (_classExprs.CaptureFields.TryGetValue(classExpr, out var captureFields)
-            && captureFields.Count > 0)
-        {
-            ctx.TopLevelStaticVars = ctx.TopLevelStaticVars == null
-                ? new Dictionary<string, FieldBuilder>(captureFields, StringComparer.Ordinal)
-                : new Dictionary<string, FieldBuilder>(ctx.TopLevelStaticVars, StringComparer.Ordinal);
-            foreach (var (name, field) in captureFields)
-                ctx.TopLevelStaticVars[name] = field;
-        }
         return ctx;
     }
 
@@ -610,80 +645,16 @@ public partial class ILCompiler
     /// </summary>
     private void EmitClassExpressionStaticConstructor(Expr.ClassExpr classExpr, TypeBuilder typeBuilder)
     {
-        bool hasStaticFields = classExpr.Fields.Any(f => f.IsStatic && f.Initializer != null);
-        bool hasStaticInitializers = classExpr.StaticInitializers?.Count > 0;
-
-        var cctor = typeBuilder.DefineConstructor(
-            MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
-            CallingConventions.Standard,
-            Type.EmptyTypes
-        );
-
+        var cctor = typeBuilder.DefineTypeInitializer();
         var il = cctor.GetILGenerator();
-        var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null, cctor);
-        ctx.IsStaticConstructorContext = true;
-        var emitter = new ILEmitter(ctx);
-
-        EmitClassPrototypeRegistration(
-            il, typeBuilder, GetClassConstructorLength(classExpr.Methods));
-
-        if (_classes.DeferredDefinitions.TryGet(typeBuilder, out var deferredDefinition))
+        if (_classes.PrivateElements.Require(_classExprs.Names[classExpr]).Storage is { } privateStorage)
         {
-            il.Emit(OpCodes.Ret);
-            il = deferredDefinition.Initializer.GetILGenerator();
-            ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null, deferredDefinition.Initializer);
-            ctx.IsStaticConstructorContext = true;
-            emitter = new ILEmitter(ctx);
+            il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(privateStorage.FieldType));
+            il.Emit(OpCodes.Stsfld, EmitterTypeHelpers.SelfFieldReference(privateStorage));
         }
-
-        // Process StaticInitializers if available (preserves declaration order)
-        if (hasStaticInitializers)
-        {
-            foreach (var initializer in classExpr.StaticInitializers!)
-            {
-                switch (initializer)
-                {
-                    case Stmt.Field field when field.IsStatic && field.ComputedKey != null:
-                        _classes.DeferredDefinitions.TryGetFieldKey(field, out var computedKey);
-                        EmitComputedStaticFieldInitializer(emitter, il, typeBuilder, field, computedKey);
-                        break;
-
-                    case Stmt.Field field when field.IsStatic && field.Initializer != null:
-                        var staticField = _classExprs.StaticFields[classExpr][field.Name.Lexeme];
-                        emitter.EmitExpression(field.Initializer);
-                        if (staticField.FieldType == typeof(object))
-                            emitter.EmitBoxIfNeeded(field.Initializer);
-                        il.Emit(OpCodes.Stsfld, staticField);
-                        break;
-
-                    case Stmt.StaticBlock block:
-                        foreach (var stmt in block.Body)
-                            emitter.EmitStatement(stmt);
-                        break;
-                }
-            }
-        }
-        else
-        {
-            // Fallback for backward compatibility (fields only)
-            foreach (var field in classExpr.Fields.Where(f => f.IsStatic && f.Initializer != null))
-            {
-                var staticField = _classExprs.StaticFields[classExpr][field.Name.Lexeme];
-                emitter.EmitExpression(field.Initializer!);
-                if (staticField.FieldType == typeof(object))
-                    emitter.EmitBoxIfNeeded(field.Initializer!);
-                il.Emit(OpCodes.Stsfld, staticField);
-            }
-        }
-
-        // Register symbol-keyed computed accessors (#281) and methods (#755) in the runtime registry,
-        // keyed by this class's Type so dynamic bracket get / for...of dispatch can find them.
-        EmitSymbolAccessorRegistrations(emitter, il, typeBuilder);
-        EmitSymbolMethodRegistrations(emitter, il, typeBuilder);
-
+        EmitClassPrototypeRegistration(il, typeBuilder, GetClassConstructorLength(classExpr.Methods));
         il.Emit(OpCodes.Ret);
-        if (deferredDefinition != null)
-            _classes.DeferredDefinitions.MarkInitializerEmitted(deferredDefinition);
+        EmitClassDefinitionInitializer(classExpr, typeBuilder);
     }
 
     /// <summary>
@@ -696,6 +667,18 @@ public partial class ILCompiler
         var constructor = classExpr.Methods.FirstOrDefault(m => !m.IsStatic && m.Name.Lexeme == "constructor" && m.Body != null);
 
         var il = ctorBuilder.GetILGenerator();
+        if (HasRuntimeParent(classExpr))
+        {
+            // The definition factory allocates through the bookkeeping constructor
+            // and uses the explicit-receiver adapter for guest initialization.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _types.ObjectDefaultCtor);
+            il.Emit(OpCodes.Ret);
+            return;
+        }
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg, ctorBuilder.GetParameters().Length);
+        il.Emit(OpCodes.Stfld, EmitterTypeHelpers.SelfFieldReference(_classExprs.DefinitionFields[classExpr]));
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField, ctorBuilder);
         ctx.IsInstanceMethod = true;
 
@@ -780,7 +763,17 @@ public partial class ILCompiler
             else if (ResolveClassExprImplicitBaseConstructor(classExpr) is { } baseCtor)
             {
                 foreach (var p in baseCtor.GetParameters())
-                    emitter.EmitOmittedArgument(p.ParameterType);
+                {
+                    if (p.ParameterType == _runtime.ClassDefinitions.Type)
+                    {
+                        il.Emit(OpCodes.Ldarg_0);
+                        il.Emit(OpCodes.Ldfld, EmitterTypeHelpers.SelfFieldReference(_classExprs.DefinitionFields[classExpr]));
+                        il.Emit(OpCodes.Castclass, _runtime.ClassDefinitions.Type);
+                        il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.Parent);
+                        il.Emit(OpCodes.Isinst, _runtime.ClassDefinitions.Type);
+                    }
+                    else emitter.EmitOmittedArgument(p.ParameterType);
+                }
                 il.Emit(OpCodes.Call, baseCtor);
             }
             else
@@ -800,7 +793,7 @@ public partial class ILCompiler
                 ctx.DefineParameter(constructor.Parameters[i].Name.Lexeme, i + 1, paramType);
             }
 
-            var constructorParamTypes = ctorBuilder.GetParameters().Select(p => p.ParameterType).ToArray();
+            var constructorParamTypes = ctorBuilder.GetParameters().SkipLast(1).Select(p => p.ParameterType).ToArray();
             EmitFunctionEnvironmentPrologue(
                 il,
                 ctx,
@@ -841,12 +834,26 @@ public partial class ILCompiler
 
         void EmitInstanceFieldInitializers()
         {
-            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsDeclare && (f.Initializer != null || f.ComputedKey != null)))
+            var privateStorage = EmitPrivateFieldStorage(il, className);
+            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsDeclare && (f.IsPrivate || f.Initializer != null || f.ComputedKey != null)))
             {
+                if (field.IsPrivate)
+                {
+                    EmitPrivateFieldInitializer(il, field, privateStorage!, emitter);
+                    continue;
+                }
                 if (field.ComputedKey != null)
                 {
                     il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field));
+                    var keys = _classExprs.Factories[classExpr].Keys;
+                    int keyIndex = Enumerable.Range(0, keys.Count)
+                        .First(index => ReferenceEquals(keys[index], field.ComputedKey));
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldfld, EmitterTypeHelpers.SelfFieldReference(_classExprs.DefinitionFields[classExpr]));
+                    il.Emit(OpCodes.Castclass, _runtime.ClassDefinitions.Type);
+                    il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.Keys);
+                    il.Emit(OpCodes.Ldc_I4, keyIndex);
+                    il.Emit(OpCodes.Ldelem_Ref);
                     if (field.Initializer != null)
                     {
                         emitter.EmitExpression(field.Initializer);
@@ -945,8 +952,11 @@ public partial class ILCompiler
             return _classExprs.ToDefine.FirstOrDefault(candidate =>
                 _typeMap.GetClassExprType(candidate)?.Core.DeclarationId == parentId);
 
-        // Untyped heritage retains the existing fallback until its runtime value
-        // can be represented as a CLR base; checked declarations never use it.
+        if (classExpr.SuperclassExpr != null && _typeMap.Get(classExpr.SuperclassExpr) is TSTypeInfo.Any)
+            return null;
+
+        // Only checked heritage can select a CLR base. Untyped values are retained
+        // in the guest definition and dispatched through its runtime parent.
         return _classExprs.Superclass.GetValueOrDefault(classExpr) is { } name
             ? _classExprs.VarToClassExpr.GetValueOrDefault(name) : null;
     }
@@ -976,6 +986,7 @@ public partial class ILCompiler
         {
             Expr.Call call => call.Callee is Expr.Super,
             Expr.Binary bin => ContainsSuperCallInExpr(bin.Left) || ContainsSuperCallInExpr(bin.Right),
+            Expr.PrivateIn presence => ContainsSuperCallInExpr(presence.Object),
             Expr.Logical log => ContainsSuperCallInExpr(log.Left) || ContainsSuperCallInExpr(log.Right),
             Expr.Grouping grp => ContainsSuperCallInExpr(grp.Expression),
             _ => false
@@ -1090,11 +1101,20 @@ public partial class ILCompiler
 
         var typeBuilder = _classExprs.Builders[classExpr];
 
+        var loweredMethod = method with { Parameters = [new Stmt.Parameter(
+            new Token(TokenType.IDENTIFIER, "__classDefinition", null, method.Name.Line), "any"), .. method.Parameters] };
+        if (_generatorMethodFunctionDCKeys.TryGetValue(method, out var generatorKey))
+            _generatorMethodFunctionDCKeys[loweredMethod] = generatorKey;
+        if (_asyncGeneratorMethodFunctionDCKeys.TryGetValue(method, out var asyncGeneratorKey))
+            _asyncGeneratorMethodFunctionDCKeys[loweredMethod] = asyncGeneratorKey;
+        if (_asyncMethodFunctionDCKeys.TryGetValue(method, out var asyncKey))
+            _asyncMethodFunctionDCKeys[loweredMethod] = asyncKey;
+
         // Static generator methods route like a free function (no `this`), mirroring the class-
         // declaration static path (#765/#778). Async generator FIRST since it has both flags set.
         if (method.IsAsync && method.IsGenerator)
         {
-            EmitAsyncGeneratorMethodBody(methodBuilder, method, fieldsField: null, isInstanceMethod: false);
+            EmitAsyncGeneratorMethodBody(methodBuilder, loweredMethod, fieldsField: null, isInstanceMethod: false);
             return;
         }
 
@@ -1105,19 +1125,20 @@ public partial class ILCompiler
         // EmitStaticAsyncMethodBody, which re-resolves from the declaration registry.
         if (method.IsAsync)
         {
-            EmitAsyncMethodBody(methodBuilder, method, fieldsField: null, isInstanceMethod: false,
+            EmitAsyncMethodBody(methodBuilder, loweredMethod, fieldsField: null, isInstanceMethod: false,
                 currentClassName: _classExprs.Names[classExpr]);
             return;
         }
 
         if (method.IsGenerator)
         {
-            EmitGeneratorMethodBody(methodBuilder, method, fieldsField: null, isInstanceMethod: false);
+            EmitGeneratorMethodBody(methodBuilder, loweredMethod, fieldsField: null, isInstanceMethod: false);
             return;
         }
 
         var il = methodBuilder.GetILGenerator();
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null, methodBuilder);
+        ctx.ClassDefinitionParameterIndex = 0;
         ctx.IsInstanceMethod = false;
         SetupSyncMethodFunctionDisplayClass(ctx, il, method);
 
@@ -1125,8 +1146,8 @@ public partial class ILCompiler
         var methodParams = methodBuilder.GetParameters();
         for (int i = 0; i < method.Parameters.Count; i++)
         {
-            Type? paramType = i < methodParams.Length ? methodParams[i].ParameterType : null;
-            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i, paramType);
+            Type? paramType = i + 1 < methodParams.Length ? methodParams[i + 1].ParameterType : null;
+            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i + 1, paramType);
         }
 
         var emitter = new ILEmitter(ctx);
@@ -1137,10 +1158,10 @@ public partial class ILCompiler
             emitter,
             method.Parameters,
             method.Body,
-            environmentParamTypes,
-            argumentOffset: 0);
+            environmentParamTypes.Skip(1).ToArray(),
+            argumentOffset: 1);
         InitializeSyncMethodCapturedParameters(
-            ctx, il, method, methodBuilder, argumentOffset: 0);
+            ctx, il, method, methodBuilder, argumentOffset: 1);
 
         if (method.Body != null)
         {
@@ -1185,13 +1206,14 @@ public partial class ILCompiler
             var il = methodBuilder.GetILGenerator();
             var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, accessor.IsStatic ? null : fieldsField, methodBuilder);
             ctx.IsInstanceMethod = !accessor.IsStatic;
+            if (accessor.IsStatic) ctx.ClassDefinitionParameterIndex = 0;
 
             if (accessor.Kind.Type == TokenType.SET && accessor.SetterParam != null)
             {
                 var accessorParams = methodBuilder.GetParameters();
                 Type? paramType = accessorParams.Length > 0 ? accessorParams[0].ParameterType : null;
                 // Instance setter: arg0 is `this`, value at index 1. Static: value at index 0.
-                int paramIndex = accessor.IsStatic ? 0 : 1;
+                int paramIndex = 1;
                 ctx.DefineParameter(accessor.SetterParam.Name.Lexeme, paramIndex, paramType);
             }
 
@@ -1252,7 +1274,8 @@ public partial class ILCompiler
             if (method.IsStatic)
                 attrs |= MethodAttributes.Static;
 
-            var mb = typeBuilder.DefineMethod(uniqueName, attrs, returnType, paramTypes);
+            var mb = typeBuilder.DefineMethod(uniqueName, attrs, returnType,
+                method.IsStatic ? [_runtime.ClassDefinitions.Type, .. paramTypes] : paramTypes);
 
             // Register under the unique name so EmitClassExpression(Static)MethodBody resolves the builder.
             if (method.IsStatic)

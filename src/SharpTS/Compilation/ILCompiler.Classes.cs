@@ -20,6 +20,21 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILCompiler
 {
+    private readonly struct ClassNamespaceScope : IDisposable
+    {
+        private readonly ILCompiler _compiler;
+        private readonly string? _previous;
+
+        public ClassNamespaceScope(ILCompiler compiler, Stmt.Class declaration)
+        {
+            _compiler = compiler;
+            _previous = compiler._currentNamespacePath;
+            compiler._currentNamespacePath = compiler._classes.DeclarationNamespaces.GetValueOrDefault(declaration);
+        }
+
+        public void Dispose() => _compiler._currentNamespacePath = _previous;
+    }
+
     private static void MarkJsVariadicConstructor(ConstructorBuilder constructor)
     {
         var parameter = constructor.DefineParameter(
@@ -31,13 +46,28 @@ public partial class ILCompiler
     private void DefineClass(Stmt.Class classStmt)
     {
         _classes.Declarations.Add(classStmt);
+        if (TryDefineRuntimeClassDeclaration(classStmt)) return;
         var ctx = GetDefinitionContext();
 
         // Get qualified class name (includes module prefix and .NET namespace if set)
         string qualifiedClassName = GetQualifiedClassDeclarationName(classStmt);
 
+        var checkedClass = _typeMap.GetClassType(classStmt);
+        if (_currentNamespacePath is not null)
+            qualifiedClassName = ctx.GetQualifiedClassName(
+                $"$nsclass_{_currentNamespacePath.Replace('.', '_')}_{checkedClass?.Core.DeclarationId}_{classStmt.Name.Lexeme}");
+        _classes.DeclarationNames[classStmt] = qualifiedClassName;
+        _classes.DeclarationNamespaces[classStmt] = _currentNamespacePath;
+        _classes.ScopedNames[(_modules.CurrentPath, _currentNamespacePath, classStmt.Name.Lexeme)] = qualifiedClassName;
+        if (checkedClass is not null)
+        {
+            _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = qualifiedClassName;
+            _typeMapper.RegisterCheckedClassName(checkedClass.Core.DeclarationId, qualifiedClassName);
+            _typeMap.SetClassType(qualifiedClassName, checkedClass);
+        }
+
         // Track simple name -> module mapping for later lookups
-        if (_modules.CurrentPath != null && !_classes.BlockScopedNames.ContainsKey(classStmt))
+        if (_modules.CurrentPath != null && _currentNamespacePath is null && !_classes.BlockScopedNames.ContainsKey(classStmt))
         {
             _modules.ClassToModule[classStmt.Name.Lexeme] = _modules.CurrentPath;
         }
@@ -114,6 +144,9 @@ public partial class ILCompiler
             qualifiedClassName,
             typeAttrs
         );
+        typeBuilder.SetCustomAttribute(
+            _runtime.FunctionAttributes.FunctionNameCtor,
+            CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.FunctionNameCtor, classStmt.Name.Lexeme));
         if (_classes.BlockScopedNames.ContainsKey(classStmt))
             _classes.BlockScopedBuilders[classStmt] = typeBuilder;
 
@@ -205,7 +238,7 @@ public partial class ILCompiler
         }
 
         // Track Error subclass status (direct or transitive)
-        if (classStmt.SuperclassExpr != null && Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!))
+        if (Expr.GetSuperclassLeafName(classStmt.SuperclassExpr) is { } errorParentName && Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(errorParentName))
         {
             _classes.ErrorSubclasses.Add(qualifiedClassName);
         }
@@ -417,7 +450,8 @@ public partial class ILCompiler
         TypeBuilder typeBuilder,
         string className,
         Stmt.Class classStmt,
-        GenericTypeParameterBuilder[]? classGenericParams)
+        GenericTypeParameterBuilder[]? classGenericParams,
+        Expr.ClassExpr? expression = null)
     {
         // Collect private fields (IsPrivate flag indicates #field syntax)
         var instancePrivateFields = classStmt.Fields.Where(f => f.IsPrivate && !f.IsStatic).ToList();
@@ -506,7 +540,8 @@ public partial class ILCompiler
             if (methodName.StartsWith('#'))
                 methodName = methodName[1..];
 
-            var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
+            var paramTypes = (expression == null ? Array.Empty<Type>() : new Type[] { _runtime.ClassDefinitions.Type })
+                .Concat(method.Parameters.Select(_ => typeof(object))).ToArray();
             Type returnType = ResolvePrivateMethodReturnType(method, isStatic: true);
 
             // Use Assembly (internal) visibility so nested async/generator state machines can access this method
@@ -523,6 +558,10 @@ public partial class ILCompiler
             ? DefinePrivateInstanceBridge(typeBuilder, privateStorage, privateMethods) : null;
         _classes.PrivateElements.Declare(className, typeBuilder, privateStorage,
             privateFieldNames, privateStaticFields, privateMethods, privateStaticMethods, instanceBridge);
+        if (privateStaticFields.Count > 0)
+            _classes.PrivateElements.Require(className).StaticPresence = typeBuilder.DefineField(
+                "__installedStaticPrivateFields", typeof(HashSet<string>), FieldAttributes.Assembly | FieldAttributes.Static);
+        DefinePrivateMethodValues(className, typeBuilder, classStmt, expression);
     }
 
     private PrivateInstanceBridge DefinePrivateInstanceBridge(TypeBuilder owner, FieldBuilder storage,

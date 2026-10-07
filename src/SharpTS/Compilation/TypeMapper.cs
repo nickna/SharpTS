@@ -20,6 +20,12 @@ public class TypeMapper
 {
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeProvider _types;
+    private readonly Dictionary<int, string> _checkedClassNames = [];
+
+    internal void RegisterCheckedClassName(int declarationId, string name) => _checkedClassNames[declarationId] = name;
+
+    private Type GetCheckedClassType(ClassMetadataCore core) => GetClassType(
+        _checkedClassNames.GetValueOrDefault(core.DeclarationId, core.Name));
     private Dictionary<string, TypeBuilder>? _classBuilders;
     private UnionTypeGenerator? _unionGenerator;
     public ExternalTypeRegistry ExternalTypeDeclarations { get; } = new();
@@ -149,10 +155,10 @@ public class TypeMapper
         TypeInfo.Array => _types.Object, // Will be TSArray at runtime
         TypeInfo.Function => _types.Object, // Will be delegate at runtime
         TypeInfo.Promise p => MapPromiseType(p), // Promise<T> maps to Task<T>
-        TypeInfo.Class c => GetClassType(c.Name),
+        TypeInfo.Class c => GetCheckedClassType(c.Core),
         TypeInfo.Instance i => i.ClassType switch
         {
-            TypeInfo.Class c => GetClassType(c.Name),
+            TypeInfo.Class c => GetCheckedClassType(c.Core),
             TypeInfo.InstantiatedGeneric => _types.Object,
             _ => _types.Object
         },
@@ -233,7 +239,7 @@ public class TypeMapper
         TypeInfo.Array arr => MapArrayTypeStrict(arr),
         TypeInfo.Function => _types.Delegate, // Functions map to Delegate for typed interop
         TypeInfo.Promise p => MapPromiseTypeStrict(p),
-        TypeInfo.Class c => GetClassType(c.Name),
+        TypeInfo.Class c => GetCheckedClassType(c.Core),
         TypeInfo.Instance i => MapInstanceTypeStrict(i),
         TypeInfo.Record => _types.Object, // Records remain dynamic objects
         TypeInfo.Void => _types.Void,
@@ -253,7 +259,7 @@ public class TypeMapper
         TypeInfo.Symbol => _types.String, // Symbols map to string keys
         // Generic types - attempt to resolve if instantiated
         TypeInfo.TypeParameter => _types.Object,
-        TypeInfo.GenericClass gc => GetClassType(gc.Name),
+        TypeInfo.GenericClass gc => GetCheckedClassType(gc.Core),
         TypeInfo.GenericFunction => _types.Delegate,
         TypeInfo.GenericInterface => _types.Object,
         TypeInfo.InstantiatedGeneric ig => MapInstantiatedGenericStrict(ig),
@@ -268,8 +274,8 @@ public class TypeMapper
 
     private Type MapInstanceTypeStrict(TypeInfo.Instance instance) => instance.ClassType switch
     {
-        TypeInfo.Class c => GetClassType(c.Name),
-        TypeInfo.GenericClass gc => GetClassType(gc.Name),
+        TypeInfo.Class c => GetCheckedClassType(c.Core),
+        TypeInfo.GenericClass gc => GetCheckedClassType(gc.Core),
         TypeInfo.InstantiatedGeneric ig => MapInstantiatedGenericStrict(ig),
         _ => _types.Object
     };
@@ -278,7 +284,7 @@ public class TypeMapper
     {
         // For instantiated generics, try to resolve the base type
         if (ig.GenericDefinition is TypeInfo.GenericClass gc)
-            return GetClassType(gc.Name);
+            return GetCheckedClassType(gc.Core);
         return _types.Object;
     }
 

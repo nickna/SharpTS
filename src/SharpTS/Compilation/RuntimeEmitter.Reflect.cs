@@ -6,6 +6,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly record struct IsConstructorInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedFunctionBindingRuntime FunctionBindings,
         EmittedFunctionValueRuntime FunctionValues,
         EmittedFunctionAttributesRuntime FunctionAttributes,
@@ -1067,6 +1068,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTypeLabel);
+
+        var notDefinition = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
+        il.Emit(OpCodes.Brfalse, notDefinition);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notDefinition);
 
         // $TSFunction → check method's declaring type
         var notTSFunctionLabel = il.DefineLabel();

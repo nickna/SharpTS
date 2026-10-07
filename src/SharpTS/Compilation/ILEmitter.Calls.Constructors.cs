@@ -25,6 +25,29 @@ public partial class ILEmitter
 
         var (namespaceParts, className) = ExtractQualifiedNameFromCallee(n.Callee);
 
+        if (n.Callee is Expr.Variable expressionVariable
+            && _ctx.VarToClassExpr?.ContainsKey(expressionVariable.Name.Lexeme) == true
+            && _resolver.HasVariable(expressionVariable.Name.Lexeme))
+        {
+            EmitExpression(n.Callee);
+            EnsureBoxed();
+            var definition = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, definition);
+            IL.Emit(OpCodes.Ldloc, definition);
+            EmitArgsArrayWithSpread(n.Arguments);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.Value);
+            SetStackUnknown();
+            return;
+        }
+
+        if (n.Callee is Expr.Variable constructorVariable
+            && _ctx.TypeMap?.Get(n.Callee) is SharpTS.TypeSystem.TypeInfo.GenericClass
+            && _resolver.HasVariable(constructorVariable.Name.Lexeme))
+        {
+            EmitCalleeExprConstruction(n);
+            return;
+        }
+
         // A block-scoped class is a runtime lexical binding to a pre-emitted
         // Type token. Construct through the value path so TDZ and shadowing are
         // respected instead of resolving the internal Type globally.
@@ -50,6 +73,7 @@ public partial class ILEmitter
 
         // 4. ILEmitter-specific: resolve class name with namespace imports and imported class aliases
         string resolvedClassName = ResolveClassNameForNew(namespaceParts, className);
+        resolvedClassName = _ctx.ResolveClassName(_ctx.TypeMap?.Get(n.Callee), resolvedClassName);
 
         // 5. ILEmitter-specific: external .NET type construction
         if (_ctx.TypeMapper.ExternalTypes.TryGetValue(className, out var externalType) ||
@@ -633,7 +657,13 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Ldc_I4, i);
-                Type genericArgument = _ctx.TypeMapper.MapTypeInfo(instantiated.TypeArguments[i]);
+                Type genericArgument = instantiated.TypeArguments[i] switch
+                {
+                    SharpTS.TypeSystem.TypeInfo.StringLiteral => _ctx.Types.String,
+                    SharpTS.TypeSystem.TypeInfo.NumberLiteral => _ctx.Types.Double,
+                    SharpTS.TypeSystem.TypeInfo.BooleanLiteral => _ctx.Types.Boolean,
+                    var argument => _ctx.TypeMapper.MapTypeInfo(argument)
+                };
                 // CLR generic arguments cannot be System.Void; erase void/never to object here.
                 if (_ctx.Types.IsVoid(genericArgument))
                     genericArgument = _ctx.Types.Object;
@@ -682,10 +712,14 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldc_I4_0);
         IL.Emit(OpCodes.Stloc, padIndexLocal);
         var padCheckLabel = IL.DefineLabel();
-        var padNextLabel = IL.DefineLabel();
-        IL.Emit(OpCodes.Br, padCheckLabel);
+        var padDoneLabel = IL.DefineLabel();
 
-        IL.MarkLabel(padNextLabel);
+        // The loop body must be reachable in a forward scan even when the
+        // enclosing expression carries values on the evaluation stack (#1966).
+        IL.MarkLabel(padCheckLabel);
+        IL.Emit(OpCodes.Ldloc, padIndexLocal);
+        IL.Emit(OpCodes.Ldloc, arityLocal);
+        IL.Emit(OpCodes.Bge, padDoneLabel);
         IL.Emit(OpCodes.Ldloc, parametersLocal);
         IL.Emit(OpCodes.Ldloc, padIndexLocal);
         IL.Emit(OpCodes.Ldelem_Ref);
@@ -705,10 +739,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Add);
         IL.Emit(OpCodes.Stloc, padIndexLocal);
 
-        IL.MarkLabel(padCheckLabel);
-        IL.Emit(OpCodes.Ldloc, padIndexLocal);
-        IL.Emit(OpCodes.Ldloc, arityLocal);
-        IL.Emit(OpCodes.Blt, padNextLabel);
+        IL.Emit(OpCodes.Br, padCheckLabel);
+        IL.MarkLabel(padDoneLabel);
 
         for (int i = 0; i < argTemps.Count; i++)
         {

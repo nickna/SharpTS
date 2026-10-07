@@ -2030,7 +2030,7 @@ public partial class Interpreter
                     throw new InterpreterException(
                         $"Class '{classStmt.Name.Lexeme}' cannot extend built-in '{builtInCtor.Name}': subclassing this built-in is not supported yet.");
                 }
-                throw new InterpreterException("Superclass must be a class.");
+                throw new ThrowException(new SharpTSTypeError("Superclass must be a class constructor."));
             }
         }
 
@@ -2081,7 +2081,7 @@ public partial class Interpreter
                             : null;
                         staticPrivateFields[field.Name.Lexeme] = fieldValue;
                     }
-                    // else: will be evaluated via StaticInitializers with proper 'this' binding
+                    else staticPrivateFields[field.Name.Lexeme] = SharpTSUndefined.Instance;
                 }
                 else
                 {
@@ -2328,6 +2328,10 @@ public partial class Interpreter
                 staticSetters.Count > 0 ? staticSetters : null);
 
         klass.BindPrivateMemberOwners();
+        klass.InitializerEnvironment = _environment;
+        klass.OrderedInstanceFields = classStmt.Fields.Where(field => !field.IsStatic)
+            .SelectMany(field => (field.IsPrivate ? instancePrivateFields : instanceFields)
+                .Where(captured => captured.Name == field.Name)).ToList();
 
         if (symbolAccessors != null)
         {
@@ -2350,7 +2354,7 @@ public partial class Interpreter
         {
             // Create temporary environment with 'this' bound to the class
             // Also make the class name available so code like Foo.x works
-            var staticEnv = new RuntimeEnvironment(_environment);
+            var staticEnv = new RuntimeEnvironment(_environment, strictMode: true) { PrivateClass = klass };
             staticEnv.Define("this", klass);
             staticEnv.Define(classStmt.Name.Lexeme, klass);
 
@@ -2368,7 +2372,7 @@ public partial class Interpreter
                                 ? Evaluate(field.Initializer)
                                 : field.ComputedKey != null ? SharpTSUndefined.Instance : null;
                             if (field.IsPrivate)
-                                klass.SetStaticPrivateField(field.Name.Lexeme, fieldValue);
+                                klass.InstallStaticPrivateField(field.Name.Lexeme, fieldValue);
                             else if (field.ComputedKey != null && computedMemberKeys[field.ComputedKey] is SharpTSSymbol symbol)
                                 klass.SetStaticBySymbol(symbol, fieldValue);
                             else

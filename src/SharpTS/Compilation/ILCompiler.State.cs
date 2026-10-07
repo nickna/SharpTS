@@ -23,6 +23,10 @@ public partial class ILCompiler
         public HashSet<Stmt.Class> Declarations { get; } = new(ReferenceEqualityComparer.Instance);
         public HashSet<Stmt.Class> EmittedMethodBodies { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, TypeBuilder> Builders { get; } = [];
+        public Dictionary<Stmt.Class, string> DeclarationNames { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Stmt.Class, string?> DeclarationNamespaces { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<int, string> CheckedDeclarationNames { get; } = [];
+        public Dictionary<(string? Module, string? Namespace, string Name), string> ScopedNames { get; } = [];
         public Dictionary<Stmt.Class, string> BlockScopedNames { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Stmt.Class, TypeBuilder> BlockScopedBuilders { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, string?> Superclass { get; } = [];
@@ -411,9 +415,12 @@ public partial class ILCompiler
         public Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> Getters { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> Setters { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, ConstructorBuilder> Constructors { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Expr.ClassExpr, FieldBuilder> DefinitionFields { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Expr.ClassExpr, ClassExpressionFactory> Factories { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, string?> Superclass { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, string> EnclosingClass { get; } = new(ReferenceEqualityComparer.Instance);
-        public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>> CaptureFields { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Expr.ClassExpr, Dictionary<string, int>> CaptureSlots { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<MethodBuilder, (Expr.ClassExpr Expression, FieldBuilder Definition)> DefinitionMethods { get; } = new(ReferenceEqualityComparer.Instance);
     }
 
     /// <summary>

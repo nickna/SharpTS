@@ -12,7 +12,7 @@ public partial class ILCompiler
             return;
 
         _classes.PrototypeConstructors[typeBuilder] = typeBuilder.DefineConstructor(
-            MethodAttributes.Family,
+            MethodAttributes.FamORAssem,
             CallingConventions.Standard,
             [_runtime.ClassPrototypes.MarkerType]);
     }
@@ -270,11 +270,19 @@ public partial class ILCompiler
 
                 EmitPrototypeDataDescriptor(methodName, () =>
                 {
-                    il.Emit(OpCodes.Ldloc, prototypeLocal);
-                    il.Emit(OpCodes.Ldtoken, methodBuilder);
-                    il.Emit(OpCodes.Ldtoken, selfType);
-                    il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
-                    il.Emit(OpCodes.Castclass, _types.MethodInfo);
+                    if (DefineDeclarationReceiverMethod(typeBuilder, methodBuilder) is { } adapter)
+                    {
+                        il.Emit(OpCodes.Newobj, adapter.Constructor);
+                        EmitMethodInfoLiteral(il, adapter.Method, adapter.Type);
+                    }
+                    else
+                    {
+                        il.Emit(OpCodes.Ldloc, prototypeLocal);
+                        il.Emit(OpCodes.Ldtoken, methodBuilder);
+                        il.Emit(OpCodes.Ldtoken, selfType);
+                        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
+                        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+                    }
                     il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
                 });
             }
@@ -354,11 +362,19 @@ public partial class ILCompiler
 
         void EmitStaticFunction(MethodBuilder methodBuilder)
         {
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldtoken, methodBuilder);
-            il.Emit(OpCodes.Ldtoken, selfType);
-            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            if (DefineDeclarationReceiverMethod(typeBuilder, methodBuilder) is { } adapter)
+            {
+                il.Emit(OpCodes.Newobj, adapter.Constructor);
+                EmitMethodInfoLiteral(il, adapter.Method, adapter.Type);
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldtoken, methodBuilder);
+                il.Emit(OpCodes.Ldtoken, selfType);
+                il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
+                il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            }
             il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
         }
     }

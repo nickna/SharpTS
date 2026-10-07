@@ -2226,6 +2226,7 @@ public partial class Interpreter : IDisposable
             // `export const x = …` now parses as Stmt.Const (was Stmt.Var before #428).
             Stmt.Const c => c.Name.Lexeme,
             Stmt.Enum e => e.Name.Lexeme,
+            Stmt.Namespace n => n.Name.Lexeme,
             _ => throw new InterpreterException($"Cannot get name of declaration type {decl.GetType().Name}")
         };
     }
@@ -2244,6 +2245,7 @@ public partial class Interpreter : IDisposable
             // `export const x = …` now parses as Stmt.Const (was Stmt.Var before #428).
             Stmt.Const c => c.Name,
             Stmt.Enum e => e.Name,
+            Stmt.Namespace n => n.Name,
             _ => throw new InterpreterException($"Cannot get value of declaration type {decl.GetType().Name}")
         };
         return _environment.Get(token).ToObject();

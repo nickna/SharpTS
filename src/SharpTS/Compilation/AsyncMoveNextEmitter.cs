@@ -24,6 +24,7 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
     protected override TypeProvider Types => _types;
     protected override IVariableResolver Resolver => _resolver!;
     protected override FieldBuilder? GetThisField() => _builder.ThisField;
+    protected override FieldBuilder? GetFunctionDCField() => _builder.FunctionDCField;
 
     #region IEmitterContext Implementation
 

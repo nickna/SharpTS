@@ -65,6 +65,7 @@ public partial class RuntimeEmitter
     }
 
     private readonly record struct GetPropertyInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedAbortRuntime? Abort,
         FieldBuilder ArgumentsLengthField,
         TypeBuilder ArgumentsType,
@@ -86,6 +87,7 @@ public partial class RuntimeEmitter
         TypeBuilder FunctionApplyWrapperType,
         TypeBuilder FunctionBindWrapperType,
         TypeBuilder FunctionCallWrapperType,
+        EmittedFunctionAttributesRuntime FunctionAttributes,
         FieldBuilder FunctionPrototypeField,
         MethodBuilder FunctionPrototypePopulateMethod,
         MethodBuilder GetFunctionMethod,
@@ -1370,6 +1372,35 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGlobalThisLabel);
 
+        var notDefinitionValue = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, notDefinitionValue);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ClassDefinitions.ReadProperty);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notDefinitionValue);
+        il.Emit(OpCodes.Pop);
+
+        var notDefinitionConstructor = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "constructor");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notDefinitionConstructor);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.InstanceInterface);
+        il.Emit(OpCodes.Dup);
+        var noDefinitionReceiver = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, noDefinitionReceiver);
+        il.Emit(OpCodes.Callvirt, inputs.ClassDefinitions.GetDefinition);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, noDefinitionReceiver);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noDefinitionReceiver);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(notDefinitionConstructor);
+
         // __proto__ accessor (ECMA-262 Annex B.2.2.1): obj.__proto__ delegates
         // to Object.getPrototypeOf(obj). All object types support this — the
         // accessor lives on Object.prototype, but intercepting here avoids
@@ -2440,6 +2471,24 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "BigInt");
             il.Emit(OpCodes.Ret);
             il.MarkLabel(genericTypeNameLabel);
+            var reflectedTypeNameLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldtoken, inputs.FunctionAttributes.FunctionNameType);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsDefined", _types.Type, _types.Boolean));
+            il.Emit(OpCodes.Brfalse, reflectedTypeNameLabel);
+            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldtoken, inputs.FunctionAttributes.FunctionNameType);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetCustomAttributes", _types.Type, _types.Boolean));
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Castclass, inputs.FunctionAttributes.FunctionNameType);
+            il.Emit(OpCodes.Ldfld, inputs.FunctionAttributes.FunctionNameValueField);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(reflectedTypeNameLabel);
             il.Emit(OpCodes.Ldloc, typeLocal);
             il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
             il.Emit(OpCodes.Ret);

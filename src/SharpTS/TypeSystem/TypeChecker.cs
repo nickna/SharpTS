@@ -3055,6 +3055,7 @@ public partial class TypeChecker
         Expr.ImportMeta im => im.Keyword.Line,
         Expr.Set s => s.Name.Line,
         Expr.Get g => g.Name.Line,
+        Expr.PrivateIn presence => presence.Name.Line,
         Expr.Assign a => a.Name.Line,
         Expr.Binary b => b.Operator.Line,
         Expr.Logical l => l.Operator.Line,

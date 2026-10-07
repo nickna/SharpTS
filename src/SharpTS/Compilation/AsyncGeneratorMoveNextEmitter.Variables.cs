@@ -14,4 +14,7 @@ public partial class AsyncGeneratorMoveNextEmitter
     // The block-scope-rename + function-DC variable overrides that consume this live in the shared
     // IteratorMoveNextEmitter base (#1124).
     protected override IReadOnlyDictionary<object, string> BlockScopeRenames => _analysis.BlockScopeRenames ?? NoRenames;
+
+    protected override string ResolveCaptureSourceName(Expr.ArrowFunction af, string capturedVar) =>
+        PivotCaptureSource(_analysis.BlockScopeCaptureRenames, af, capturedVar);
 }

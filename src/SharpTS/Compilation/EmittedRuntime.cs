@@ -146,6 +146,7 @@ public class EmittedRuntime
 
     /// <summary>Required user-class prototype declarations and registration for one compilation.</summary>
     public EmittedClassPrototypeRuntime ClassPrototypes { get; } = new();
+    public EmittedClassDefinitionRuntime ClassDefinitions { get; } = new();
 
 
     /// <summary>Required public Object descriptor operations for this compilation.</summary>

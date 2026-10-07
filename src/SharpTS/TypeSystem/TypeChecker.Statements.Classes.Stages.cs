@@ -89,7 +89,7 @@ public partial class TypeChecker
             _environment.DefineType(classStmt.Name.Lexeme, genericClassType);
             // For body check, freeze the mutable class (methods/fields have TypeParameter types)
             classTypeForBody = mutableClass.Freeze();
-            _typeMap.SetClassType(classStmt.Name.Lexeme, classTypeForBody);
+            _typeMap.SetClassType(classStmt, classTypeForBody);
         }
         else
         {
@@ -97,7 +97,7 @@ public partial class TypeChecker
             TypeInfo.Class classType = mutableClass.Freeze();
             _environment.Define(classStmt.Name.Lexeme, classType);
             _environment.DefineType(classStmt.Name.Lexeme, classType);
-            _typeMap.SetClassType(classStmt.Name.Lexeme, classType);
+            _typeMap.SetClassType(classStmt, classType);
             classTypeForBody = classType;
         }
         return classTypeForBody;
@@ -282,34 +282,44 @@ public partial class TypeChecker
         TypeInfo.MutableClass mutableClass)
     {
         bool anyInferredFieldTypeResolved = false;
-
-        // Second pass: check static property initializers at class scope
-        foreach (var field in classStmt.Fields)
+        var previousClass = _currentClass;
+        _privateInEnclosingClasses.Push(previousClass);
+        _currentClass = classTypeForBody;
+        try
         {
-            if (field.IsStatic && field.Initializer != null)
+
+            // Static private names are visible before their fields are installed.
+            foreach (var field in classStmt.Fields)
             {
-                TypeInfo initType = CheckExpr(field.Initializer);
-                // For ES2022 private static fields, look in StaticPrivateFieldTypes
-                TypeInfo staticFieldDeclaredType = field.IsPrivate
-                    ? classTypeForBody.StaticPrivateFieldTypes[GetFieldMemberName(field)]
-                    : classTypeForBody.StaticProperties[GetFieldMemberName(field)];
-                if (field.TypeAnnotation is null)
+                if (field.IsStatic && field.Initializer != null)
                 {
-                    TypeInfo inferredFieldType = WidenLiteralType(initType);
-                    if (field.IsPrivate)
-                        mutableClass.StaticPrivateFields[GetFieldMemberName(field)] = inferredFieldType;
-                    else
-                        mutableClass.StaticProperties[GetFieldMemberName(field)] = inferredFieldType;
-                    anyInferredFieldTypeResolved = true;
-                    continue;
-                }
-                if (!IsCompatible(staticFieldDeclaredType, initType))
-                {
-                    throw new TypeCheckException($" Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.", tsCode: "TS2322");
+                    TypeInfo initType = CheckExpr(field.Initializer);
+                    TypeInfo staticFieldDeclaredType = field.IsPrivate
+                        ? classTypeForBody.StaticPrivateFieldTypes[GetFieldMemberName(field)]
+                        : classTypeForBody.StaticProperties[GetFieldMemberName(field)];
+                    if (field.TypeAnnotation is null)
+                    {
+                        TypeInfo inferredFieldType = WidenLiteralType(initType);
+                        if (field.IsPrivate)
+                            mutableClass.StaticPrivateFields[GetFieldMemberName(field)] = inferredFieldType;
+                        else
+                            mutableClass.StaticProperties[GetFieldMemberName(field)] = inferredFieldType;
+                        anyInferredFieldTypeResolved = true;
+                        continue;
+                    }
+                    if (!IsCompatible(staticFieldDeclaredType, initType))
+                    {
+                        throw new TypeCheckException($" Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.", tsCode: "TS2322");
+                    }
                 }
             }
+            return anyInferredFieldTypeResolved;
         }
-        return anyInferredFieldTypeResolved;
+        finally
+        {
+            _privateInEnclosingClasses.Pop();
+            _currentClass = previousClass;
+        }
     }
 
     // Checks initializers at declaration scope before static blocks, preserving diagnostic order.
@@ -392,14 +402,14 @@ public partial class TypeChecker
                 var frozen = mutableClass.FreezeGeneric(classTypeParams);
                 _environment.Define(classStmt.Name.Lexeme, frozen);
                 _environment.DefineType(classStmt.Name.Lexeme, frozen);
-                _typeMap.SetClassType(classStmt.Name.Lexeme, mutableClass.Freeze());
+                _typeMap.SetClassType(classStmt, mutableClass.Freeze());
             }
             else
             {
                 var refrozen = mutableClass.Freeze();
                 _environment.Define(classStmt.Name.Lexeme, refrozen);
                 _environment.DefineType(classStmt.Name.Lexeme, refrozen);
-                _typeMap.SetClassType(classStmt.Name.Lexeme, refrozen);
+                _typeMap.SetClassType(classStmt, refrozen);
             }
             // Structural compatibility results cache on CacheKey() (carries the stable DeclarationId),
             // so any comparison made against the placeholder during the body pass must not be reused.

@@ -18,6 +18,8 @@ public partial class ILEmitter
 {
     protected override void EmitGet(Expr.Get g)
     {
+        if (TryEmitGuestThisGet(g)) return;
+        if (TryEmitEventEmitterFacadeGet(g)) return;
         if (TryEmitStableRecordDestructureGet(g))
             return;
 
@@ -218,7 +220,7 @@ public partial class ILEmitter
 
         // Handle static member access via 'this' in static context (static blocks, static methods)
         // In static blocks, 'this' refers to the class constructor, so this.property accesses static members
-        if (g.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.CurrentClassBuilder != null)
+        if (g.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.ClassDefinitionParameterIndex == null && _ctx.CurrentClassBuilder != null)
         {
             // Use cached CurrentClassName instead of linear search
             string? currentClassName = _ctx.CurrentClassName;
@@ -237,9 +239,9 @@ public partial class ILEmitter
             return;
 
         // Handle static member access via class name
-        if (g.Object is Expr.Variable classVar)
+        if (g.Object is Expr.Variable classVar && !_resolver.HasVariable(classVar.Name.Lexeme))
         {
-            string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
+            string resolvedClassName = _ctx.ResolveClassName(_ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme);
             if (_ctx.Classes.TryGetValue(resolvedClassName, out var classBuilder))
             {
                 // Try static getter first (for auto-accessors and explicit static accessors)
@@ -315,18 +317,7 @@ public partial class ILEmitter
             }
         }
 
-        // Handle static member access via class expression variable
-        if (g.Object is Expr.Variable classExprVar &&
-            _ctx.VarToClassExpr != null &&
-            _ctx.VarToClassExpr.TryGetValue(classExprVar.Name.Lexeme, out var classExpr) &&
-            _ctx.ClassExprStaticFields != null &&
-            _ctx.ClassExprStaticFields.TryGetValue(classExpr, out var exprStaticFields) &&
-            exprStaticFields.TryGetValue(g.Name.Lexeme, out var exprStaticField))
-        {
-            IL.Emit(OpCodes.Ldsfld, exprStaticField);
-            SetStackUnknown();
-            return;
-        }
+
 
         // Handle static property access on external .NET types (@DotNetType)
         if (g.Object is Expr.Variable extVar && _ctx.TypeMapper.ExternalTypes.TryGetValue(extVar.Name.Lexeme, out var externalType))
@@ -969,6 +960,7 @@ public partial class ILEmitter
 
     protected override void EmitSet(Expr.Set s)
     {
+        if (TryEmitGuestThisSet(s)) return;
         // CommonJS: `module.exports = X` writes → stsfld $exports
         if (TryEmitCjsSet(s)) return;
 
@@ -1053,7 +1045,7 @@ public partial class ILEmitter
         }
 
         // Handle static property assignment via 'this' in static context (static blocks, static methods)
-        if (s.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.CurrentClassBuilder != null)
+        if (s.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.ClassDefinitionParameterIndex == null && _ctx.CurrentClassBuilder != null)
         {
             // First check for class expressions
             if (_ctx.CurrentClassExpr != null &&
@@ -1084,9 +1076,9 @@ public partial class ILEmitter
         // Handle static property assignment via class name: delegate to EmitStaticMemberSet
         // which handles setters (auto-accessor + explicit), regular static fields, and private
         // static fields with correct signature-driven coercion + return-value handling.
-        if (s.Object is Expr.Variable classVar)
+        if (s.Object is Expr.Variable classVar && !_resolver.HasVariable(classVar.Name.Lexeme))
         {
-            string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
+            string resolvedClassName = _ctx.ResolveClassName(_ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme);
             if (_ctx.Classes.TryGetValue(resolvedClassName, out var classBuilder))
             {
                 if (EmitStaticMemberSet(resolvedClassName, classBuilder, s.Name.Lexeme, s.Value))
@@ -2500,7 +2492,7 @@ public partial class ILEmitter
             return true;
         }
 
-        string className = _ctx.ResolveClassName(simpleClassName);
+        string className = _ctx.ResolveClassName(receiverType, simpleClassName);
 
         // Convert TypeScript camelCase property name to .NET PascalCase for lookup
         string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);
@@ -2587,7 +2579,7 @@ public partial class ILEmitter
             return true;
         }
 
-        string className = _ctx.ResolveClassName(simpleClassName);
+        string className = _ctx.ResolveClassName(receiverType, simpleClassName);
 
         // Convert TypeScript camelCase property name to .NET PascalCase for lookup
         string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);

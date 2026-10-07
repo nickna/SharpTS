@@ -91,6 +91,7 @@ public class EmitterSyncTests
             "get_Resolver",         // Abstract: provides IVariableResolver
             "GetThisField",         // Abstract: provides hoisted 'this' field
             "GetHoistedVariableField", // Hoisted variable fields on state machine
+            "GetFunctionDCField",   // #1965: shared arrow emission loads captured-and-mutated locals from the async state machine's function display
             "ResolveCaptureSourceName", // #1517: typed Promise delegates honor block-shadow capture pivots
             "SharpTS.Compilation.Emitters.IEmitterContext.get_IL", // IEmitterContext impl
             "SharpTS.Compilation.Emitters.IEmitterContext.SetStackUnknown", // IEmitterContext impl
@@ -194,6 +195,7 @@ public class EmitterSyncTests
             "get_Resolver",
             "GetThisField",
             "GetHoistedVariableField",
+            "ResolveCaptureSourceName", // #1965: source captured block shadows from their renamed async-generator storage
             // --- Genuinely different behavior ---
             // (break/continue/loop-nav/EmitBranchToLabel are inherited from StateMachineExitRoutingEmitter.)
             "EmitReturn",           // Async generator return: store in CurrentField + state -2

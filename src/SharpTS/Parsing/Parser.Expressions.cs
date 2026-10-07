@@ -287,7 +287,14 @@ public partial class Parser
 
     private Expr Comparison()
     {
-        Expr expr = Shift();
+        Expr expr;
+        if (Match(TokenType.PRIVATE_IDENTIFIER))
+        {
+            Token name = Previous();
+            Consume(TokenType.IN, "Private identifier must be followed by 'in'.");
+            expr = new Expr.PrivateIn(name, Shift());
+        }
+        else expr = Shift();
 
         // In TSX, adjacent JSX roots are not a less-than comparison. tsc commits to both
         // elements, reports TS2657 on the first root, and retains both ASTs so their normal

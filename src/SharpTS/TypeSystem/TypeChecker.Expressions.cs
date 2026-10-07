@@ -2574,7 +2574,12 @@ public partial class TypeChecker
                 {
                     var method = implementations[0];
                     var funcType = BuildMethodFuncType(method);
-                    if (method.IsStatic)
+                    if (method.IsPrivate)
+                    {
+                        if (method.IsStatic) mutableClass.StaticPrivateMethods[methodName] = funcType;
+                        else mutableClass.PrivateMethods[methodName] = funcType;
+                    }
+                    else if (method.IsStatic)
                         mutableClass.StaticMethods[methodName] = funcType;
                     else
                         mutableClass.Methods[methodName] = funcType;
@@ -2593,7 +2598,12 @@ public partial class TypeChecker
                 TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
                     ?? TypeInfo.Any.Shared;
 
-                if (field.IsStatic)
+                if (field.IsPrivate)
+                {
+                    if (field.IsStatic) mutableClass.StaticPrivateFields[fieldName] = fieldType;
+                    else mutableClass.PrivateFields[fieldName] = fieldType;
+                }
+                else if (field.IsStatic)
                     mutableClass.StaticProperties[fieldName] = fieldType;
                 else
                     mutableClass.FieldTypes[fieldName] = fieldType;
@@ -2694,6 +2704,8 @@ public partial class TypeChecker
 
         // Check method bodies
         TypeEnvironment classEnv = new(_environment);
+        if (classExpr.Name is { } innerName)
+            classEnv.Define(innerName.Lexeme, classExprResultType);
         if (classTypeParams != null)
         {
             for (int i = 0; i < classTypeParams.Count; i++)
@@ -2715,6 +2727,7 @@ public partial class TypeChecker
         TypeEnvironment prevEnv = _environment;
         TypeInfo.Class? prevClass = _currentClass;
         _environment = classEnv;
+        _privateInEnclosingClasses.Push(prevClass);
         _currentClass = classTypeForBody is TypeInfo.Class c ? c : mutableClass.Freeze();
 
         // Set when a method's inferred (un-annotated) return type is resolved during the body
@@ -2729,7 +2742,11 @@ public partial class TypeChecker
             {
                 TypeEnvironment methodEnv;
                 if (method.IsStatic)
+                {
                     methodEnv = new TypeEnvironment(prevEnv);
+                    if (classExpr.Name is { } staticInnerName)
+                        methodEnv.Define(staticInnerName.Lexeme, classExprResultType);
+                }
                 else
                     methodEnv = new TypeEnvironment(_environment);
 
@@ -2754,7 +2771,11 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    declaredMethodType = method.IsStatic
+                    declaredMethodType = method.IsPrivate
+                        ? method.IsStatic
+                            ? classTypeForBody.StaticPrivateMethodTypes[method.Name.Lexeme]
+                            : classTypeForBody.PrivateMethodTypes[method.Name.Lexeme]
+                        : method.IsStatic
                         ? classTypeForBody.StaticMethods[method.Name.Lexeme]
                         : classTypeForBody.Methods[method.Name.Lexeme];
                 }
@@ -2959,7 +2980,11 @@ public partial class TypeChecker
             foreach (var field in classExpr.Fields.Where(f => f.Initializer != null))
             {
                 TypeInfo initType = CheckExpr(field.Initializer!);
-                TypeInfo fieldDeclaredType = field.IsStatic
+                TypeInfo fieldDeclaredType = field.IsPrivate
+                    ? field.IsStatic
+                        ? classTypeForBody.StaticPrivateFieldTypes[field.Name.Lexeme]
+                        : classTypeForBody.PrivateFieldTypes[field.Name.Lexeme]
+                    : field.IsStatic
                     ? classTypeForBody.StaticProperties[field.Name.Lexeme]
                     : classTypeForBody.FieldTypes[field.Name.Lexeme];
 
@@ -2970,6 +2995,7 @@ public partial class TypeChecker
         finally
         {
             _environment = prevEnv;
+            _privateInEnclosingClasses.Pop();
             _currentClass = prevClass;
         }
 

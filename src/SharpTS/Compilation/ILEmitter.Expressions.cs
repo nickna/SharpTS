@@ -47,6 +47,8 @@ public partial class ILEmitter
 
         if (TryEmitDefaultParameterTdz(name))
             return;
+        if (TryEmitClassDefinitionSelf(name)) return;
+        if (TryEmitClassDefinitionCapture(name)) return;
 
         if (_ctx.LexicalInitializerTdzName == name)
         {
@@ -242,7 +244,7 @@ public partial class ILEmitter
         }
 
         // Check if it's a class - load the Type object
-        if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(name), out var classType))
+        if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(_ctx.TypeMap?.Get(v), name), out var classType))
         {
             IL.Emit(OpCodes.Ldtoken, classType);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
@@ -402,6 +404,16 @@ public partial class ILEmitter
         // emits Box+Dup and leaves a dangling value on the stack, which propagates through the
         // rest of the module body and ultimately trips PathStackDepth at the final ret.
         if (TryEmitCjsAssign(a)) return;
+
+        if (TryGetClassDefinitionCaptureSlot(a.Name.Lexeme, out _))
+        {
+            EmitExpression(a.Value);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Dup);
+            TryEmitStoreClassDefinitionCapture(a.Name.Lexeme);
+            SetStackUnknown();
+            return;
+        }
 
         // Promoted string-accumulator append (#857): `s = s + E` where `s` is a StringBuilder slot.
         // Emit `sb.Append(E)` instead of evaluating `s + E` (String.Concat) and storing — turning the
@@ -844,6 +856,19 @@ public partial class ILEmitter
 
     protected override void EmitThis()
     {
+        if (TryEmitGuestThis()) return;
+        if (_ctx.ClassDefinitionThisParameterIndex is { } parameter)
+        {
+            IL.Emit(OpCodes.Ldarg, parameter);
+            SetStackUnknown();
+            return;
+        }
+        if (_ctx.ClassDefinitionParameterIndex != null)
+        {
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.FunctionValues.CurrentThisField);
+            SetStackUnknown();
+            return;
+        }
         _resolver.LoadThis();
         SetStackUnknown();
     }
@@ -1129,45 +1154,7 @@ public partial class ILEmitter
     // hoist-aware $RegExp emission now lives in the shared base so regex literals
     // compile identically in plain functions, arrows, and all state-machine bodies.
 
-    protected override void EmitClassExpression(Expr.ClassExpr ce)
-    {
-        // Class expressions evaluate to the Type object at runtime.
-        // The type has been pre-defined during collection phase.
-        if (_ctx.ClassExprBuilders != null && _ctx.ClassExprBuilders.TryGetValue(ce, out var typeBuilder))
-        {
-            EmitClassHeritageExpression(ce.SuperclassExpr, ce.Name?.Lexeme);
-
-            if (_ctx.ClassExprCaptureFields?.TryGetValue(ce, out var captureFields) == true)
-            {
-                foreach (var (name, field) in captureFields)
-                {
-                    EmitVariable(new Expr.Variable(
-                        new Token(TokenType.IDENTIFIER, name, null, 0)));
-                    EnsureBoxed();
-                    IL.Emit(OpCodes.Stsfld, field);
-                }
-            }
-
-            // Class-expression evaluation always creates its constructor prototype;
-            // static elements and computed keys share the same emitted .cctor.
-            IL.Emit(OpCodes.Ldtoken, typeBuilder);
-            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ClassInitialization.RunDefinition);
-            if (_ctx.DeferredClassDefinitions?.TryGet(ce, out var deferred) == true)
-                EmitDeferredComputedKeys(deferred.Registrar, deferred.Keys);
-
-            // Load the Type object using ldtoken + GetTypeFromHandle
-            IL.Emit(OpCodes.Ldtoken, typeBuilder);
-            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-            SetStackUnknown();
-        }
-        else
-        {
-            // Fallback: push null (should not happen if collection worked)
-            IL.Emit(OpCodes.Ldnull);
-            SetStackUnknown();
-        }
-    }
+    protected override void EmitClassExpression(Expr.ClassExpr ce) => EmitGuestClassDefinition(ce);
 
     protected override void EmitDelete(Expr.Delete del)
     {

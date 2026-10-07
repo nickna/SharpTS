@@ -22,6 +22,17 @@ public class SuperConstructorHandler : ICallHandler
             return false;
 
         var ctx = emitter.Context;
+        if (ctx.HasGuestReceiver && ctx.ClassDefinitionParameterIndex is { } definitionParameter)
+        {
+            emitter.IL.Emit(OpCodes.Ldarg, definitionParameter);
+            emitter.IL.Emit(OpCodes.Call, ctx.Runtime!.ClassDefinitions.GetParent);
+            emitter.IL.Emit(OpCodes.Ldarg_0);
+            emitter.EmitArgsArrayWithSpread(call.Arguments);
+            emitter.IL.Emit(OpCodes.Call, ctx.Runtime.ClassDefinitions.InitializeReceiver);
+            emitter.IL.Emit(OpCodes.Ldarg_0);
+            emitter.SetStackUnknown();
+            return true;
+        }
 
         // The emitted base is chosen from checked declaration identity. Prefer its
         // expression-owned constructor before any same-named lexical declaration.
@@ -41,7 +52,7 @@ public class SuperConstructorHandler : ICallHandler
 
         // Try class declaration constructors first
         var parentCtor = ctx.CurrentSuperclassName != null
-            ? ctx.ClassRegistry?.GetConstructor(ctx.CurrentSuperclassName)
+            ? ctx.ClassRegistry?.GetConstructorByQualifiedName(ctx.ResolveClassName(ctx.CurrentSuperclassName))
             : null;
         if (parentCtor != null)
         {
@@ -279,6 +290,17 @@ public class SuperConstructorHandler : ICallHandler
         // evaluating and discarding surplus values safely, it publishes the
         // exact caller list when the base constructor binds `arguments`.
         emitter.EmitStaticCallArguments(arguments, parentCtor);
+        if (ctx.CurrentClassExpr is { } expression
+            && ctx.ClassExprDefinitionFields?.TryGetValue(expression, out var definitionField) == true
+            && parentCtor.GetParameters().LastOrDefault()?.ParameterType == ctx.Runtime!.ClassDefinitions.Type)
+        {
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, EmitterTypeHelpers.SelfFieldReference(definitionField));
+            il.Emit(OpCodes.Castclass, ctx.Runtime.ClassDefinitions.Type);
+            il.Emit(OpCodes.Ldfld, ctx.Runtime.ClassDefinitions.Parent);
+            il.Emit(OpCodes.Isinst, ctx.Runtime.ClassDefinitions.Type);
+        }
 
         System.Reflection.ConstructorInfo ctorToCall = parentCtor;
         Type? baseType = ctx.CurrentClassBuilder?.BaseType;

@@ -59,6 +59,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     private readonly Stmt.Function _declaration;
     private readonly RuntimeEnvironment _closure;
     private readonly int _arity;
+    internal bool IsPrivateMethod => _declaration.IsPrivate;
     internal SharpTSClass? PrivateOwner { get; set; }
     // `this` value stored on the function itself (from BindThis) rather than in an
     // extra closure scope — otherwise the resolver's scope-distance count wouldn't
@@ -81,7 +82,9 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         _closure = closure;
         _boundThis = boundThis;
         _hasBoundThis = hasBoundThis;
-        _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+        _arity = declaration.IsPrivate
+            ? declaration.Parameters.TakeWhile(p => p.DefaultValue == null && !p.IsRest).Count()
+            : declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
         InitializeIntrinsicProperties(declaration.Name.Lexeme);
     }
 
@@ -217,7 +220,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     public int Arity() => _arity;
 
     internal bool IsStrict
-        => _closure.IsStrictMode
+        => _declaration.IsPrivate || _closure.IsStrictMode
             || (_declaration.Body is not null
                 && Parsing.DirectivePrologue.HasUseStrict(_declaration.Body));
 

@@ -30,6 +30,8 @@ public partial class ILCompiler
     {
         foreach (var classStmt in CollectClassDeclarations(statements))
         {
+            if (_runtimeClassDeclarations.ContainsKey(classStmt)) continue;
+            using var namespaceScope = new ClassNamespaceScope(this, classStmt);
             if (classStmt.IsDeclare)
                 continue;
 
@@ -50,6 +52,7 @@ public partial class ILCompiler
     /// </summary>
     private void DefineClassMethodsOnly(Stmt.Class classStmt)
     {
+        using var namespaceScope = new ClassNamespaceScope(this, classStmt);
         // Skip @DotNetType external type classes - they don't have TypeBuilders
         if (classStmt.IsDeclare)
             return;
@@ -84,7 +87,7 @@ public partial class ILCompiler
             if (constructor != null)
             {
                 ctorParamTypes = ParameterTypeResolver.ResolveConstructorParameters(
-                    classStmt.Name.Lexeme, constructor.Parameters, _typeMapper, _typeMap);
+                    qualifiedClassName, constructor.Parameters, _typeMapper, _typeMap);
             }
             else if (classStmt.SuperclassExpr != null)
             {
@@ -172,7 +175,7 @@ public partial class ILCompiler
 
             // Use typed parameters from TypeMap
             var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
-                classStmt.Name.Lexeme, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
+                qualifiedClassName, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
             // Set return type based on method kind
             // Must check async generator FIRST since it has both IsAsync and IsGenerator true
             var returnType = (method.IsAsync && method.IsGenerator) ? _types.IAsyncEnumerableOfObject :
@@ -201,7 +204,7 @@ public partial class ILCompiler
 
             // Use typed parameters from TypeMap
             var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
-                classStmt.Name.Lexeme, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
+                qualifiedClassName, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
 
             MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.Virtual;
             if (method.IsAbstract)
@@ -546,6 +549,7 @@ public partial class ILCompiler
 
     private void EmitClassMethods(Stmt.Class classStmt)
     {
+        using var namespaceScope = new ClassNamespaceScope(this, classStmt);
         if (!_classes.EmittedMethodBodies.Add(classStmt))
             return;
 
@@ -585,6 +589,9 @@ public partial class ILCompiler
 
         // Emit constructor
         EmitConstructor(typeBuilder, classStmt, fieldsField);
+        if (_usesRuntimeParents && !typeBuilder.IsGenericTypeDefinition && typeBuilder.BaseType is not { Name: "$Array" or "$Promise" }
+            && !_classes.ErrorSubclasses.Contains(qualifiedClassName) && SupportsReceiverInitialization(classStmt))
+            EmitReceiverInitializer(typeBuilder, classStmt);
 
         // Emit the compiler-only constructor used to create Constructor.prototype
         // without running JavaScript constructor bodies or field initializers.
@@ -777,6 +784,7 @@ public partial class ILCompiler
                 throw new InvalidOperationException($"Private method '{qualifiedClassName}.{methodName}' has not been declared.");
             EmitPrivateMethodBody(typeBuilder, methodBuilder, method, fieldsField, qualifiedClassName, method.IsStatic);
         }
+        EmitPrivateMethodValueBodies(qualifiedClassName);
         _classes.PrivateElements.MarkBodiesEmitted(qualifiedClassName);
     }
 

@@ -94,3 +94,68 @@ Stop after the specified grammar, declared-name lookup and brand cases pass.
 Private-method values remain #1961; repeated class-evaluation identity and
 computed-key behavior remain #1906. General parser compatibility, broader class
 features and unrelated conformance changes do not enter this successor.
+
+## Implementation verification (#1962)
+
+The implementation adds the relational AST node, lexical checked-owner lookup,
+right-operand traversal and presence queries in both engines. Nested class
+expressions retain their enclosing evaluation owner; derived instances use the
+declaring template's brand, and generic static probes use the exact guest owner.
+Instance fields install in source order after their initializer completes, while
+the method brand is available before those initializers run.
+
+Validation on Windows ARM64, 2026-10-06:
+
+| Check | Recorded result |
+| --- | --- |
+| Release build of `SharpTS.Tests` | Succeeded, zero errors; existing NU1902 package advisory |
+| `PrivateInTests`, `PrivateInParserTests`, `AstDispatchTests` | 95 passed, zero failed |
+| Private/generic/class-expression/arrow/repeated-class selection | 2,043 passed, zero failed, after the #1965 capture follow-up |
+| Runtime reference fixtures | All 14 matched Node v25.5.0 stdout, exit 0 and empty stderr |
+| Code-quality gate | Passed: 27 duplicate groups, zero errors |
+| Actual AOT/trim/single-file analyzer restore and rebuild | Passed: unchanged zero-warning baseline |
+| Pinned TypeScript checker smoke gate | Passed: all 32 corpus cases, clean TypeScript 6.0.3 checkout |
+
+The shared runtime tests execute both engines, serialize and verify emitted IL,
+and execute the resulting assembly. Thirteen fixtures also execute without a
+deployed `SharpTS.dll`; the proxy fixture uses the deployed runtime. Module-owner
+controls run in both engines and verify the compiled multi-file assembly. The
+default execution deadline is 30 seconds. Runtime reference sources were emitted
+with TypeScript 7.0.2 (`--target ES2022 --skipLibCheck --noImplicitAny false`);
+the final flag permits the timing fixtures' unannotated private fields without
+changing their runtime source. Node's native type stripper was not used as the
+reference parser for the generator fixtures.
+
+Two added static-write controls reject assignment before a private field's
+initializer has completed, leave its brand absent, and evaluate the RHS once.
+They also cover an abrupt RHS and successful assignment after installation for
+a generic named owner and repeated class expressions. The preserved pre-fix
+compiler (`28DF7ED461F26E6AEE0B34B29FA287925CC2C4D1FC9DB30298A13D5768E621E3`)
+failed these semantic controls in both engines even though its emitted IL
+verified. The candidate matches Node; the two reference emissions additionally
+set `--useUnknownInCatchVariables false` for the caught-error message assertion.
+
+The pinned Test262 comparison selected all 19 `class-fields-private-in` files at
+revision `d5e73fc8d2c663554fb72e2380a8c2bc1a318a33`. In each engine the unchanged,
+preserved `c782c870` binary reported 11 parse errors and eight deferred negative
+cases; the candidate reported eight passes, three parse errors and the same
+eight deferred negatives. All worker processes exited 0 with empty stderr and
+no runtime failures or timeouts. Two remaining errors require private accessor
+declaration parsing; the third uses `function await()` as an ordinary identifier.
+The deferred negative cases are not credited as validated semantics; local
+parser/checker negative tests provide the separate negative coverage.
+
+Evidence is retained under `artifacts/issue1962-lexical-*`,
+`artifacts/issue1962-static-write/` (focused TRX, reference and pre-fix outputs),
+`artifacts/issue1965-shadow-capture/broader-tests.log`,
+`artifacts/validation/code-quality-final.log` and `artifacts/validation/issue1962/`.
+The latter includes exact commands, binary hashes and every Test262 classification.
+The final candidate rerun preserves the same eight passes, three parse errors and
+eight deferred negatives in each engine. A separate 28-process CLI matrix checks
+the three retained positives against Node, interpretation, verified standalone
+emission, and hosted initialization with default declarations and `--noLib`.
+Hosted execution uses the public factory and `InitializeAsync`, with a 30-second
+process deadline; it is separate from ordinary entry-point execution. These
+checks do not claim native AOT publication. The consolidated PR records the
+full-suite results separately. The checker gate uses the clean pinned TypeScript
+6.0.3 corpus and its committed diagnostics without live `tsc` or npm.

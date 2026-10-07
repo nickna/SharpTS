@@ -1252,7 +1252,7 @@ public partial class Interpreter
             SharpTSClass? current = instance.GetClass();
             while (current != null)
             {
-                if (current.Name == targetClass.Name) return true;
+                if (ReferenceEquals(current, targetClass)) return true;
                 current = current.Superclass;
             }
             return false;
@@ -1266,7 +1266,7 @@ public partial class Interpreter
             SharpTSClass? current = subclassArray.Klass;
             while (current != null)
             {
-                if (current.Name == targetClass.Name) return true;
+                if (ReferenceEquals(current, targetClass)) return true;
                 current = current.Superclass;
             }
             return false;
@@ -1280,7 +1280,7 @@ public partial class Interpreter
             SharpTSClass? current = subclassPromise.Klass;
             while (current != null)
             {
-                if (current.Name == targetClass.Name) return true;
+                if (ReferenceEquals(current, targetClass)) return true;
                 current = current.Superclass;
             }
             return false;

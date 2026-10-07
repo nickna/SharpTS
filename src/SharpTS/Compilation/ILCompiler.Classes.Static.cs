@@ -71,6 +71,11 @@ public partial class ILCompiler
         }
 
         var emitter = new ILEmitter(ctx);
+        if (privateElements.StaticPresence is { } presence)
+        {
+            il.Emit(OpCodes.Newobj, typeof(HashSet<string>).GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Stsfld, presence);
+        }
 
         // A compact class uses weak side storage; initialize its table before
         // user-observable static initialization can construct or mutate an instance.
@@ -169,6 +174,8 @@ public partial class ILCompiler
                                 il.Emit(OpCodes.Stsfld, staticField);
                             }
                         }
+                        if (field.IsPrivate)
+                            EmitStaticPrivatePresence(il, privateElements, field.Name.Lexeme.TrimStart('#'));
                         break;
 
                     case Stmt.StaticBlock block:
@@ -197,6 +204,7 @@ public partial class ILCompiler
                     emitter.EmitExpression(field.Initializer!);
                     emitter.EmitBoxIfNeeded(field.Initializer!);
                     il.Emit(OpCodes.Stsfld, staticPrivateField);
+                    EmitStaticPrivatePresence(il, privateElements, fieldName);
                 }
             }
 
@@ -230,6 +238,14 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ret);
         if (deferredDefinition != null)
             _classes.DeferredDefinitions.MarkInitializerEmitted(deferredDefinition);
+    }
+
+    private void EmitStaticPrivatePresence(ILGenerator il, PrivateClassElements elements, string name)
+    {
+        il.Emit(OpCodes.Ldsfld, EmitterTypeHelpers.SelfFieldReference(elements.StaticPresence!));
+        il.Emit(OpCodes.Ldstr, name);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(HashSet<string>), "Add", typeof(string)));
+        il.Emit(OpCodes.Pop);
     }
 
     /// <summary>

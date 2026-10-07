@@ -41,6 +41,7 @@ public abstract class AstVisitorBase
             case Expr.Get e: VisitGet(e); break;
             case Expr.Set e: VisitSet(e); break;
             case Expr.GetPrivate e: VisitGetPrivate(e); break;
+            case Expr.PrivateIn e: VisitPrivateIn(e); break;
             case Expr.SetPrivate e: VisitSetPrivate(e); break;
             case Expr.CallPrivate e: VisitCallPrivate(e); break;
             case Expr.This e: VisitThis(e); break;
@@ -232,6 +233,8 @@ public abstract class AstVisitorBase
     {
         Visit(expr.Object);
     }
+
+    protected virtual void VisitPrivateIn(Expr.PrivateIn expr) => Visit(expr.Object);
 
     protected virtual void VisitSetPrivate(Expr.SetPrivate expr)
     {

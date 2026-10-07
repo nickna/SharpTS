@@ -1,6 +1,7 @@
 using SharpTS.Execution;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.TypeSystem;
 using System.Collections.Frozen;
 using System.Runtime.CompilerServices;
@@ -43,6 +44,8 @@ public class SharpTSClass(
     public string Name { get; } = name;
     public SharpTSClass? Superclass { get; } = superclass;
     public bool IsAbstract { get; } = isAbstract;
+    internal RuntimeEnvironment? InitializerEnvironment { get; set; }
+    internal IReadOnlyList<Stmt.Field>? OrderedInstanceFields { get; set; }
     private readonly FrozenDictionary<string, ISharpTSCallable> _methods = methods.ToFrozenDictionary();
     private readonly FrozenDictionary<string, ISharpTSCallable> _staticMethods = staticMethods.ToFrozenDictionary();
     private readonly Dictionary<string, object?> _staticProperties = staticProperties;
@@ -82,6 +85,7 @@ public class SharpTSClass(
     private readonly List<Stmt.Field> _instancePrivateFields = instancePrivateFields ?? [];
     private readonly FrozenDictionary<string, ISharpTSCallable> _privateMethods = privateMethods?.ToFrozenDictionary() ?? FrozenDictionary<string, ISharpTSCallable>.Empty;
     private readonly Dictionary<string, object?> _staticPrivateFields = staticPrivateFields ?? [];
+    private readonly HashSet<string> _installedStaticPrivateFields = new(StringComparer.Ordinal);
     private readonly FrozenDictionary<string, ISharpTSCallable> _staticPrivateMethods = staticPrivateMethods?.ToFrozenDictionary() ?? FrozenDictionary<string, ISharpTSCallable>.Empty;
 
     // Auto-accessor backing storage (TypeScript 4.9+)
@@ -104,10 +108,7 @@ public class SharpTSClass(
 
         // Initialize instance fields with their initializers (before constructor runs)
         // Superclass fields are initialized first via inheritance chain
-        InitializeInstanceFields(interpreter, instance);
-
-        // Initialize ES2022 private fields (not inherited, each class has its own storage)
-        InitializePrivateFields(interpreter, instance);
+        InitializeOrderedFields(interpreter, instance);
 
         // Initialize auto-accessor backing storage (before constructor runs)
         InitializeAutoAccessors(interpreter, instance);
@@ -183,13 +184,13 @@ public class SharpTSClass(
         foreach (var field in _instanceFields)
         {
             object? value = field.Initializer != null
-                ? interpreter.Evaluate(field.Initializer)
+                ? interpreter.EvaluateClassInitializer(this, instance, field.Initializer)
                 : field.ComputedKey != null ? SharpTSUndefined.Instance : null;
 
             // Check if this is a computed property name
             if (field.ComputedKey != null)
             {
-                object? key = interpreter.Evaluate(field.ComputedKey);
+                object? key = interpreter.EvaluateClassInitializer(this, instance, field.ComputedKey);
                 if (key is SharpTSSymbol symbol)
                 {
                     // Symbol key - store in symbol fields
@@ -207,6 +208,27 @@ public class SharpTSClass(
                 // Regular field
                 instance.SetRawField(field.Name.Lexeme, value);
             }
+        }
+    }
+
+    private void InitializeOrderedFields(Interpreter interpreter, SharpTSInstance instance)
+    {
+        Superclass?.InitializeOrderedFields(interpreter, instance);
+        var privateFields = new Dictionary<string, object?>();
+        _privateFieldStorage.Add(instance, privateFields);
+        foreach (var field in OrderedInstanceFields ?? _instanceFields.Concat(_instancePrivateFields).ToList())
+        {
+            object? value = field.Initializer != null
+                ? interpreter.EvaluateClassInitializer(this, instance, field.Initializer)
+                : field.ComputedKey != null || field.IsPrivate ? SharpTSUndefined.Instance : null;
+            if (field.IsPrivate) privateFields[field.Name.Lexeme] = value;
+            else if (field.ComputedKey != null)
+            {
+                var key = interpreter.EvaluateClassInitializer(this, instance, field.ComputedKey);
+                if (key is SharpTSSymbol symbol) instance.SetBySymbol(symbol, value);
+                else instance.SetRawField(key?.ToString() ?? "undefined", value);
+            }
+            else instance.SetRawField(field.Name.Lexeme, value);
         }
     }
 
@@ -501,6 +523,16 @@ public class SharpTSClass(
 
     internal bool HasPrivateBrand(object receiver) => _privateFieldStorage.TryGetValue(receiver, out _);
 
+    internal bool DeclaresPrivateName(string name)
+        => _instancePrivateFields.Any(field => field.Name.Lexeme == name)
+            || _privateMethods.ContainsKey(name) || _staticPrivateFields.ContainsKey(name)
+            || _staticPrivateMethods.ContainsKey(name);
+
+    internal bool HasInstalledPrivateField(object receiver, string name)
+        => _privateFieldStorage.TryGetValue(receiver, out var fields) && fields.ContainsKey(name);
+
+    internal bool HasInstalledStaticPrivateField(string name) => _installedStaticPrivateFields.Contains(name);
+
     /// <summary>
     /// Initializes private fields for an instance. Each class in the hierarchy
     /// has its own private field storage - private fields are NOT inherited.
@@ -512,16 +544,15 @@ public class SharpTSClass(
         Superclass?.InitializePrivateFields(interpreter, instance);
 
         var fields = new Dictionary<string, object?>();
+        _privateFieldStorage.Add(instance, fields);
         foreach (var field in _instancePrivateFields)
         {
             object? value = field.Initializer != null
-                ? interpreter.Evaluate(field.Initializer)
+                ? interpreter.EvaluateClassInitializer(this, instance, field.Initializer)
                 : null;
             fields[field.Name.Lexeme] = value;
         }
 
-        // Add to ConditionalWeakTable - GC-friendly storage
-        _privateFieldStorage.Add(instance, fields);
     }
 
     /// <summary>
@@ -582,7 +613,15 @@ public class SharpTSClass(
     /// </summary>
     public void SetStaticPrivateField(string name, object? value)
     {
+        if (!_installedStaticPrivateFields.Contains(name))
+            throw new ThrowException(new SharpTSTypeError($"Cannot access private member {name} before initialization"));
         _staticPrivateFields[name] = value;
+    }
+
+    internal void InstallStaticPrivateField(string name, object? value)
+    {
+        _staticPrivateFields[name] = value;
+        _installedStaticPrivateFields.Add(name);
     }
 
     /// <summary>
@@ -622,7 +661,7 @@ public class SharpTSClass(
         foreach (var autoAccessor in _instanceAutoAccessors)
         {
             object? value = autoAccessor.Initializer != null
-                ? interpreter.Evaluate(autoAccessor.Initializer)
+                ? interpreter.EvaluateClassInitializer(this, instance, autoAccessor.Initializer)
                 : null;
             storage[autoAccessor.Name.Lexeme] = value;
         }

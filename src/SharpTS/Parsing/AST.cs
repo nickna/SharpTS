@@ -115,6 +115,8 @@ public abstract record Expr
     public record Set(Expr Object, Token Name, Expr Value) : Expr;
     /// <summary>Private field access: obj.#field</summary>
     public record GetPrivate(Expr Object, Token Name) : Expr;
+    /// <summary>Lexical private-name presence check: #name in object.</summary>
+    public record PrivateIn(Token Name, Expr Object) : Expr;
     /// <summary>Private field assignment: obj.#field = value</summary>
     public record SetPrivate(Expr Object, Token Name, Expr Value) : Expr;
     /// <summary>Private method call: obj.#method(args)</summary>

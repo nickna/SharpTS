@@ -442,6 +442,9 @@ public partial class TypeChecker
         if (!_strictNullChecks && actual is TypeInfo.Null or TypeInfo.Undefined)
             return expected is not TypeInfo.Never;
 
+        if (expected is TypeInfo.GenericClass targetClass && actual is TypeInfo.GenericClass sourceClass)
+            return GenericConstructorsRelated(targetClass, sourceClass);
+
         // Namespace/module types (typeof someNamespace / typeof import(...)) have no dedicated
         // relation anywhere below, so two structurally-identical namespaces — even the exact same
         // one referenced twice, e.g. `true ? af : null` vs `true ? null : af` — fell through to the

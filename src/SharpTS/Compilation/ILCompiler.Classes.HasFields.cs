@@ -1004,14 +1004,29 @@ public partial class ILCompiler
         var skipLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Call, _runtime.ClassPrototypes.Get);
+        il.Emit(OpCodes.Call, _runtime.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Stloc, prototypeLocal);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, prototypeLocal);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brtrue, skipLabel);
+        var noDescriptor = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _runtime.ClassDefinitions.InstanceInterface);
+        il.Emit(OpCodes.Brfalse, noDescriptor);
+        var inherited = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, prototypeLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _runtime.ClassDefinitions.ReadPrototypeProperty);
+        il.Emit(OpCodes.Stloc, inherited);
+        il.Emit(OpCodes.Ldloc, inherited);
+        il.Emit(OpCodes.Isinst, _runtime.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Brtrue, noDescriptor);
+        il.Emit(OpCodes.Ldloc, inherited);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noDescriptor);
         il.Emit(OpCodes.Ldloc, prototypeLocal);
         il.Emit(OpCodes.Isinst, _runtime.ObjectFields.Interface);
         il.Emit(OpCodes.Brfalse, skipLabel);

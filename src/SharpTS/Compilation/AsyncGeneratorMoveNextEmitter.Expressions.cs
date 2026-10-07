@@ -337,87 +337,9 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     private void EmitCapturingArrowFunction(Expr.ArrowFunction af, MethodBuilder method, TypeBuilder displayClass)
     {
-        if (_ctx!.DisplayClassConstructors == null || !_ctx.DisplayClassConstructors.TryGetValue(af, out var displayCtor))
-        {
-            _il.Emit(OpCodes.Ldnull);
-            SetStackUnknown();
-            return;
-        }
-
-        _il.Emit(OpCodes.Newobj, displayCtor);
-
-        // Thread the entry-point display class into the arrow's $entryPointDC field so it reads
-        // captured TOP-LEVEL variables through shared storage (the async-generator analog of #732).
-        if (_ctx.ArrowEntryPointDCFields?.TryGetValue(af, out var entryPointDCField) == true &&
-            _ctx.EntryPointDisplayClassStaticField != null)
-        {
-            _il.Emit(OpCodes.Dup);
-            _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
-            _il.Emit(OpCodes.Stfld, entryPointDCField);
-        }
-
-        // Thread the state machine's function display class into the arrow's $functionDC field so a
-        // write to a captured-and-mutated generator local reaches shared storage instead of a by-value
-        // snapshot — the case the compile-time guard previously rejected (#725).
-        if (_ctx.ArrowFunctionDCFields?.TryGetValue(af, out var functionDCField) == true &&
-            _builder.FunctionDCField != null)
-        {
-            _il.Emit(OpCodes.Dup);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, _builder.FunctionDCField);
-            _il.Emit(OpCodes.Stfld, functionDCField);
-        }
-
-        if (_ctx.DisplayClassFields == null || !_ctx.DisplayClassFields.TryGetValue(af, out var fieldMap))
-        {
-            Types.EmitLoadMethodInfoViaHandle(_il, method);
-            _il.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
-            SetStackUnknown();
-            return;
-        }
-
-        // Populate captured fields
-        foreach (var (capturedVar, field) in fieldMap)
-        {
-            _il.Emit(OpCodes.Dup);
-
-            // Per-iteration cell capture (#650): snapshot the StrongBox REFERENCE.
-            if (_ctx.CellBindingLocals.TryGetValue(capturedVar, out var cellLocal))
-            {
-                _il.Emit(OpCodes.Ldloc, cellLocal);
-                _il.Emit(OpCodes.Stfld, field);
-                continue;
-            }
-
-            // #767: pivot a captured nested-block shadow to its renamed storage (identity otherwise).
-            var sourceVar = PivotCaptureSource(_analysis.BlockScopeCaptureRenames, af, capturedVar);
-
-            var hoistedField = _builder.GetVariableField(sourceVar);
-            if (hoistedField != null)
-            {
-                _il.Emit(OpCodes.Ldarg_0);
-                _il.Emit(OpCodes.Ldfld, hoistedField);
-            }
-            else if (capturedVar == "this" && _builder.ThisField != null)
-            {
-                _il.Emit(OpCodes.Ldarg_0);
-                _il.Emit(OpCodes.Ldfld, _builder.ThisField);
-            }
-            else if (_ctx.Locals.TryGetLocal(sourceVar, out var local))
-            {
-                _il.Emit(OpCodes.Ldloc, local);
-            }
-            else if (!TryEmitGlobalVariable(sourceVar))
-            {
-                _il.Emit(OpCodes.Ldnull);
-            }
-
-            _il.Emit(OpCodes.Stfld, field);
-        }
-
-        Types.EmitLoadMethodInfoViaHandle(_il, method);
-        _il.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
-        SetStackUnknown();
+        if (_ctx!.DisplayClassConstructors.TryGetValue(af, out var constructor))
+            EmitCapturingArrowViaHooks(af, method, constructor);
+        else EmitNullConstant();
     }
 
     private void EmitNonCapturingArrowFunction(MethodBuilder method)

@@ -706,6 +706,11 @@ internal sealed class GeneratorArrowLifter
                 var o = RewriteExpr(g.Object);
                 return ReferenceEquals(o, g.Object) ? g : new Expr.Get(o, g.Name, g.Optional);
             }
+            case Expr.PrivateIn probe:
+            {
+                var o = RewriteExpr(probe.Object);
+                return ReferenceEquals(o, probe.Object) ? probe : probe with { Object = o };
+            }
             case Expr.GetPrivate gp:
             {
                 var o = RewriteExpr(gp.Object);

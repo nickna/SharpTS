@@ -541,6 +541,9 @@ public partial class ILCompiler
                         _currentEnclosingFunctionName = GetDefinitionContext().GetQualifiedFunctionName(f.Name.Lexeme);
                         _currentEnclosingFunctionStmt = f;
                     }
+                    // Generator methods own invocation storage even inside a class factory.
+                    if (isClassMember && f.IsGenerator)
+                        _currentEnclosingFunctionStmt = f;
                     _currentEnclosingCallable = f;
                     _currentCollectStrict = previousStrict
                         || _currentCollectClassName != null
@@ -1053,6 +1056,9 @@ public partial class ILCompiler
             case Expr.GetPrivate gp:
                 CollectArrowsFromExpr(gp.Object);
                 break;
+            case Expr.PrivateIn presence:
+                CollectArrowsFromExpr(presence.Object);
+                break;
             case Expr.SetPrivate sp2:
                 CollectArrowsFromExpr(sp2.Object);
                 CollectArrowsFromExpr(sp2.Value);
@@ -1511,6 +1517,7 @@ public partial class ILCompiler
         ctx.CurrentClassName = _async.ArrowEnclosingClassNames.TryGetValue(arrow, out var enclosingClassName)
             ? enclosingClassName
             : null;
+        ctx.HasGuestReceiver = _guestReceiverArrows.Contains(arrow);
         if (ctx.CurrentClassName != null)
             ctx.CurrentClassBuilder = _classes.Builders.GetValueOrDefault(ctx.CurrentClassName);
         ctx.CurrentSuperclassIsAnonymousEmptyClass = _arrowsInAnonymousEmptyDerivedClass.Contains(arrow);

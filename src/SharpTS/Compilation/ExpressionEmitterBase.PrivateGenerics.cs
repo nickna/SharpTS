@@ -59,9 +59,7 @@ public abstract partial class ExpressionEmitterBase
     {
         EmitExpression(expression);
         EnsureBoxed();
-        var local = IL.DeclareLocal(typeof(object));
-        IL.Emit(OpCodes.Stloc, local);
-        return local;
+        return _helpers.SpillStoreObject();
     }
 
     protected bool TryEmitGenericPrivateCall(Expr.CallPrivate call, Func<Expr, LocalBuilder>? spill = null)

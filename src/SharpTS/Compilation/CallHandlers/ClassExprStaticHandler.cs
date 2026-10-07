@@ -22,12 +22,21 @@ public class ClassExprStaticHandler : ICallHandler
             !ctx.VarToClassExpr.TryGetValue(classExprVar.Name.Lexeme, out var classExpr) ||
             ctx.ClassExprStaticMethods == null ||
             !ctx.ClassExprStaticMethods.TryGetValue(classExpr, out var exprStaticMethods) ||
-            !exprStaticMethods.TryGetValue(classExprGet.Name.Lexeme, out var exprStaticMethod))
+            !exprStaticMethods.ContainsKey(classExprGet.Name.Lexeme)
+            || emitter.ArgsContainSuspension(call.Arguments))
             return false;
 
         var il = emitter.IL;
-        emitter.EmitStaticCallArguments(call.Arguments, exprStaticMethod);
-        il.Emit(OpCodes.Call, exprStaticMethod);
+        emitter.EmitExpression(classExprGet.Object);
+        emitter.EnsureBoxed();
+        var receiver = il.DeclareLocal(ctx.Types.Object);
+        il.Emit(OpCodes.Stloc, receiver);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, classExprGet.Name.Lexeme);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRead.Property);
+        emitter.EmitArgsArrayWithSpread(call.Arguments);
+        il.Emit(OpCodes.Call, ctx.Runtime.Invocation.Method);
         emitter.SetStackUnknown();
         return true;
     }

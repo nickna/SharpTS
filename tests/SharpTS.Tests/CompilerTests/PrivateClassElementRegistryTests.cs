@@ -9,6 +9,41 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class PrivateClassElementRegistryTests
 {
     [Fact]
+    public void MethodValueRejectsForeignCacheAndRequiresAllBodies()
+    {
+        var module = new PersistedAssemblyBuilder(new AssemblyName(Guid.NewGuid().ToString("N")), typeof(object).Assembly).DefineDynamicModule("Main");
+        var owner = module.DefineType("Box", TypeAttributes.Public);
+        var adapter = module.DefineType("Value", TypeAttributes.Public);
+        var foreign = module.DefineType("Foreign", TypeAttributes.Public);
+        var original = owner.DefineMethod("read", MethodAttributes.Public, typeof(object), Type.EmptyTypes);
+        var storage = owner.DefineField("brand", typeof(object), FieldAttributes.Static);
+        var registry = new PrivateClassElementRegistry();
+        registry.Declare("Box", owner, storage, [], new Dictionary<string, FieldBuilder>(),
+            new Dictionary<string, MethodBuilder> { ["read"] = original }, new Dictionary<string, MethodBuilder>());
+        var source = new SharpTS.Parsing.Stmt.Function(new SharpTS.Parsing.Token(SharpTS.Parsing.TokenType.IDENTIFIER, "#read", null, 0),
+            null, null, [], [], null, IsPrivate: true);
+        var method = adapter.DefineMethod("Invoke", MethodAttributes.Public, typeof(object), [typeof(object)]);
+        var constructor = adapter.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var initializer = adapter.DefineTypeInitializer();
+        var cache = adapter.DefineField("Value", typeof(object), FieldAttributes.Static);
+        var value = new PrivateMethodValue(adapter, constructor, method, cache, initializer, source);
+        Assert.Throws<InvalidOperationException>(() => registry.DeclareMethodValue("Box", "read",
+            value with { Cache = foreign.DefineField("Value", typeof(object), FieldAttributes.Static) }));
+        registry.DeclareMethodValue("Box", "read", value);
+        Assert.Throws<NotSupportedException>(() => ((IDictionary<string, PrivateMethodValue>)registry.Require("Box").MethodValues).Clear());
+        Assert.Throws<InvalidOperationException>(() => registry.MarkBodiesEmitted("Box"));
+        original.GetILGenerator().Emit(OpCodes.Ldnull); original.GetILGenerator().Emit(OpCodes.Ret);
+        method.GetILGenerator().Emit(OpCodes.Ldnull); method.GetILGenerator().Emit(OpCodes.Ret);
+        constructor.GetILGenerator().Emit(OpCodes.Ret);
+        Assert.Throws<InvalidOperationException>(() => registry.MarkBodiesEmitted("Box"));
+        initializer.GetILGenerator().Emit(OpCodes.Ret);
+        registry.MarkBodiesEmitted("Box");
+        Assert.Throws<InvalidOperationException>(() => registry.DeclareMethodValue("Box", "read", value));
+        registry.CompleteEmission();
+        Assert.Throws<InvalidOperationException>(() => registry.DeclareMethodValue("Box", "read", value));
+    }
+
+    [Fact]
     public void GenericBridgeRejectsForeignOwnerAndRequiresItsStorageBody()
     {
         var module = new PersistedAssemblyBuilder(new AssemblyName(Guid.NewGuid().ToString("N")), typeof(object).Assembly)

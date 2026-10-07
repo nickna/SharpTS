@@ -185,6 +185,8 @@ public partial class ILCompiler
     {
         // Analyze async generator function to determine yield/await points and hoisted variables
         var analysis = _asyncGenerators.Analyzer.Analyze(method);
+        if (isInstanceMethod && (_classExprs.DefinitionMethods.ContainsKey(methodBuilder) || _classExprs.Builders.Values.Any(builder => ReferenceEquals(builder, methodBuilder.DeclaringType))))
+            analysis = analysis with { UsesThis = true };
 
         // Build state machine type. A static async generator method (#778) has no `this`/instance fields,
         // so it is set up like a free function (isInstanceMethod: false, static stub). Use the
@@ -195,7 +197,8 @@ public partial class ILCompiler
             $"{methodBuilder.DeclaringType!.Name}_{methodBuilder.Name}",
             analysis,
             isInstanceMethod: isInstanceMethod,
-            runtime: _runtime
+            runtime: _runtime,
+            hasDynamicThis: !isInstanceMethod && _classExprs.Builders.Values.Any(builder => ReferenceEquals(builder, methodBuilder.DeclaringType))
         );
         RegisterStateMachine(
             methodBuilder,
@@ -238,6 +241,7 @@ public partial class ILCompiler
         // generator threads its QUALIFIED class name so nested private member access resolves — #720).
         ctx.CurrentClassName = currentClassName ?? methodBuilder.DeclaringType?.Name;
         ctx.CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder;
+        ApplyClassDefinitionStateMachineContext(ctx, methodBuilder, isInstanceMethod);
         // Entry-point display class for captured top-level variables
         ApplyCapturedTopLevelVariableAccess(ctx);
         // Per-arrow $entryPointDC field map so a capturing arrow nested in this instance async

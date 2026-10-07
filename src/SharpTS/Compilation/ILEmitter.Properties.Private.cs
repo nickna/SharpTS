@@ -13,6 +13,10 @@ public partial class ILEmitter
     /// </summary>
     protected override void EmitGetPrivate(Expr.GetPrivate gp)
     {
+        if (TryEmitPrivateMethodValue(gp)) return;
+        if (TryEmitDefinitionPrivateField(gp.Object, gp.Name)) return;
+        if (TryEmitGuestStaticPrivateField(gp.Object, gp.Name)) return;
+        if (TryEmitGuestInstancePrivateField(gp.Object, gp.Name)) return;
         if (TryEmitGenericPrivateGet(gp))
             return;
         // Get the field name without the # prefix
@@ -111,6 +115,9 @@ public partial class ILEmitter
     /// </summary>
     protected override void EmitSetPrivate(Expr.SetPrivate sp)
     {
+        if (TryEmitDefinitionPrivateField(sp.Object, sp.Name, sp.Value)) return;
+        if (TryEmitGuestStaticPrivateField(sp.Object, sp.Name, sp.Value)) return;
+        if (TryEmitGuestInstancePrivateField(sp.Object, sp.Name, sp.Value)) return;
         if (TryEmitGenericPrivateSet(sp))
             return;
         // Get the field name without the # prefix
@@ -225,6 +232,7 @@ public partial class ILEmitter
     /// </summary>
     protected override void EmitCallPrivate(Expr.CallPrivate cp)
     {
+        if (TryEmitDefinitionPrivateCall(cp)) return;
         if (TryEmitGenericPrivateCall(cp))
             return;
         // Get the method name without the # prefix

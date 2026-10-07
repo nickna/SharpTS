@@ -30,6 +30,8 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitCall(Expr.Call c)
     {
+        if (TryEmitGuestSuperCall(c)) return;
+        if (TryEmitGuestThisCall(c)) return;
         if (TryEmitNumericRestCompanionCall(c)) return;
         if (TryEmitStaticIndirectEvalGlobal(c))
             return;
@@ -1312,6 +1314,7 @@ public abstract partial class ExpressionEmitterBase
         Expr.CallPrivate cp => ExprContainsSuspension(cp.Object) || AnyContainsSuspension(cp.Arguments),
         Expr.Get get => ExprContainsSuspension(get.Object),
         Expr.GetPrivate gp => ExprContainsSuspension(gp.Object),
+        Expr.PrivateIn presence => ExprContainsSuspension(presence.Object),
         Expr.Set s => ExprContainsSuspension(s.Object) || ExprContainsSuspension(s.Value),
         Expr.SetPrivate sp => ExprContainsSuspension(sp.Object) || ExprContainsSuspension(sp.Value),
         Expr.GetIndex gi => ExprContainsSuspension(gi.Object) || ExprContainsSuspension(gi.Index),
@@ -2174,9 +2177,10 @@ public abstract partial class ExpressionEmitterBase
         {
             var (parts, name) = ExtractQualifiedNameFromCallee(construction.Callee);
             if (name.Length > 0)
-                return ResolveClassNameForNew(parts, name);
+                return Ctx.ResolveClassName(Ctx.TypeMap?.Get(construction.Callee),
+                    ResolveClassNameForNew(parts, name));
         }
-        return Ctx.ResolveClassName(simpleClassName);
+        return Ctx.ResolveClassName(Ctx.TypeMap?.Get(receiver), simpleClassName);
     }
 
     protected bool TryEmitDirectMethodCall(Expr receiver, string methodName, List<Expr> arguments)

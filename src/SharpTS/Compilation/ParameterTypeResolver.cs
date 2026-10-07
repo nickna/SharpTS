@@ -185,6 +185,8 @@ public static class ParameterTypeResolver
     /// </remarks>
     private static Type CoerceParamSlotType(Type mapped, TSTypeInfo source, TypeMapper typeMapper)
     {
+        if (mapped == typeof(Delegate) || mapped.IsSubclassOf(typeof(Delegate)))
+            return typeof(object);
         if (typeMapper.IsDynamicRuntimeType(mapped))
             return typeof(object);
         if (Nullable.GetUnderlyingType(mapped) != null)

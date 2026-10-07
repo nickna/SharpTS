@@ -199,6 +199,9 @@ public partial class Parser
 
     private Stmt FinishTraditionalFor(Stmt? initializer)
     {
+        if (initializer is not null)
+            new PrivateInForInitializerValidator().Visit(initializer);
+
         Expr? condition = null;
         if (!Check(TokenType.SEMICOLON))
         {

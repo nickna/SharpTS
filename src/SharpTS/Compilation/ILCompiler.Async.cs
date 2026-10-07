@@ -1035,6 +1035,9 @@ public partial class ILCompiler
             case Expr.Get g:
                 AnalyzeArrowExprForAwaits(g.Object, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
+            case Expr.PrivateIn presence:
+                AnalyzeArrowExprForAwaits(presence.Object, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
             case Expr.Set s:
                 AnalyzeArrowExprForAwaits(s.Object, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 AnalyzeArrowExprForAwaits(s.Value, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
@@ -1579,6 +1582,8 @@ public partial class ILCompiler
     {
         // Analyze async function to determine await points and hoisted variables
         var analysis = _async.Analyzer.Analyze(method);
+        if (isInstanceMethod && (_classExprs.DefinitionMethods.ContainsKey(methodBuilder) || _classExprs.Builders.Values.Any(builder => ReferenceEquals(builder, methodBuilder.DeclaringType))))
+            analysis = analysis with { UsesThis = true };
 
         // Check if method has @lock decorator
         bool hasLock = HasLockDecorator(method);
@@ -1594,7 +1599,8 @@ public partial class ILCompiler
             isInstanceMethod: isInstanceMethod,
             hasAsyncArrows: hasAsyncArrows,
             hasLock: hasLock,
-            hoistedParameterTypes: GetStableAsyncParameterFieldTypes(method)
+            hoistedParameterTypes: GetStableAsyncParameterFieldTypes(method),
+            hasDynamicThis: !isInstanceMethod && _classExprs.Builders.Values.Any(builder => ReferenceEquals(builder, methodBuilder.DeclaringType))
         );
         RegisterStateMachine(
             methodBuilder,
@@ -1657,6 +1663,7 @@ public partial class ILCompiler
         // nested private member access inside the async body resolves under module compilation.
         ctx.CurrentClassName = currentClassName ?? methodBuilder.DeclaringType?.Name;
         ctx.CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder;
+        ApplyClassDefinitionStateMachineContext(ctx, methodBuilder, isInstanceMethod);
         // Entry-point display class for captured top-level variables
         ApplyCapturedTopLevelVariableAccess(ctx);
         ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
@@ -1844,6 +1851,7 @@ public partial class ILCompiler
             // ES2022 Private Class Elements support
             ctx.CurrentClassName = enclosingClassName;
             ctx.CurrentClassBuilder = enclosingClassBuilder;
+            ctx.HasGuestReceiver = _guestReceiverArrows.Contains(arrow);
             ApplyCapturedTopLevelVariableAccess(ctx);
             // #1222: lets the shadow-capture check distinguish a #1201-lifted binding
             // (home = entry-DC field, must stay live) from a block-scoped shadow

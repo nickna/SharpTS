@@ -9,6 +9,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly record struct TypeOfInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedArrayOperationsRuntime ArrayOperations,
         TypeBuilder BoundAnyFunctionType,
         TypeBuilder BoundTSFunctionType,
@@ -26,6 +27,8 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct InstanceOfInputs(
+        EmittedClassDefinitionRuntime ClassDefinitions,
+        EmittedClassPrototypeRuntime ClassPrototypes,
         EmittedAbortRuntime? Abort,
         EmittedBoxedPrimitiveRuntime BoxedPrimitives,
         MethodBuilder GetFunctionMethod,
@@ -553,6 +556,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, functionLabel);
 
         // System.Type => "function"
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
+        il.Emit(OpCodes.Brtrue, functionLabel);
         // Compiled class references (e.g. `const f = Foo` where Foo is a class) are
         // emitted as Ldtoken + GetTypeFromHandle, which yields a System.Type. Node/JS
         // spec says classes are functions, so `typeof Foo === 'function'` must hold.
@@ -687,6 +693,31 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notDictRhsLabel);
 
+        var notDefinition = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
+        il.Emit(OpCodes.Brfalse, notDefinition);
+        var definitionPrototype = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, inputs.ClassDefinitions.Type);
+        il.Emit(OpCodes.Ldfld, inputs.ClassDefinitions.Prototype);
+        il.Emit(OpCodes.Stloc, definitionPrototype);
+        var candidate = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, candidate);
+        var walk = il.DefineLabel();
+        il.MarkLabel(walk);
+        il.Emit(OpCodes.Ldloc, candidate);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, candidate);
+        il.Emit(OpCodes.Ldloc, candidate);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+        il.Emit(OpCodes.Ldloc, candidate);
+        il.Emit(OpCodes.Ldloc, definitionPrototype);
+        il.Emit(OpCodes.Beq, trueLabel);
+        il.Emit(OpCodes.Br, walk);
+        il.MarkLabel(notDefinition);
+
         // Per JS spec, `instance instanceof F` where F is a user function walks
         // instance's prototype chain looking for F.prototype. Compiled mode's
         // legacy InstanceOf used .NET IsAssignableFrom, which is type-system
@@ -760,6 +791,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.Type);
         il.Emit(OpCodes.Stloc, classTypeLocal);
+
+        // A guest class-definition receiver can inherit a selected user template
+        // without CLR assignability. Consult its ordinary prototype chain first.
+        var staticReceiver = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.InstanceInterface);
+        il.Emit(OpCodes.Brfalse, staticReceiver);
+        var selectedPrototype = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, classTypeLocal);
+        il.Emit(OpCodes.Call, inputs.ClassPrototypes.Get); il.Emit(OpCodes.Stloc, selectedPrototype);
+        var selectedCandidate = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Stloc, selectedCandidate);
+        var selectedWalk = il.DefineLabel();
+        il.MarkLabel(selectedWalk);
+        il.Emit(OpCodes.Ldloc, selectedCandidate); il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, selectedCandidate);
+        il.Emit(OpCodes.Ldloc, selectedCandidate); il.Emit(OpCodes.Brfalse, staticReceiver);
+        il.Emit(OpCodes.Ldloc, selectedCandidate); il.Emit(OpCodes.Ldloc, selectedPrototype); il.Emit(OpCodes.Beq, trueLabel);
+        il.Emit(OpCodes.Br, selectedWalk);
+        il.MarkLabel(staticReceiver);
 
         // `x instanceof Object` — the bare `Object` identifier resolves to the
         // System.Object Type token (see RuntimeEmitter.GlobalThis.cs), so apply

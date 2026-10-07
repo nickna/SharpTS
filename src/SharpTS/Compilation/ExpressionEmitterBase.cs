@@ -257,6 +257,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             case Expr.GetPrivate gp:
                 EmitGetPrivate(gp);
                 break;
+            case Expr.PrivateIn presence:
+                EmitPrivateIn(presence);
+                break;
             case Expr.SetPrivate sp:
                 EmitSetPrivate(sp);
                 break;
@@ -771,6 +774,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitThis()
     {
+        if (TryEmitGuestThis()) return;
         var thisField = GetThisField();
         if (thisField != null)
         {
@@ -820,6 +824,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitVariable(Expr.Variable v)
     {
+        if (TryEmitClassDefinitionSelf(v.Name.Lexeme)) return;
+        if (TryEmitClassDefinitionCapture(v.Name.Lexeme)) return;
         string name = v.Name.Lexeme;
 
         if (TryEmitEnumInitializerMember(name))
@@ -899,6 +905,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
         IL.Emit(OpCodes.Dup);
 
+        if (TryEmitStoreClassDefinitionCapture(name)) { SetStackUnknown(); return; }
         if (TryEmitGlobalStore(name)) return;
 
         Resolver.TryStoreVariable(name);
@@ -953,6 +960,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     protected virtual void EmitSet(Expr.Set s)
     {
+        if (TryEmitGuestThisSet(s)) return;
         // CommonJS: `module.exports = X` → stsfld $exports.
         if (TryEmitCjsSet(s)) return;
 
@@ -975,9 +983,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         // Handle static field assignment: Class.field = value
         if (s.Object is Expr.Variable classVar &&
-            Ctx.Classes.TryGetValue(Ctx.ResolveClassName(classVar.Name.Lexeme), out var staticSetClassBuilder))
+            Ctx.Classes.TryGetValue(Ctx.ResolveClassName(Ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme), out var staticSetClassBuilder))
         {
-            string resolvedClassName = Ctx.ResolveClassName(classVar.Name.Lexeme);
+            string resolvedClassName = Ctx.ResolveClassName(Ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme);
             if (Ctx.ClassRegistry!.TryGetOwnCallableStaticField(resolvedClassName, s.Name.Lexeme, staticSetClassBuilder, out var staticField))
             {
                 EmitExpression(s.Value);
@@ -1017,6 +1025,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitGetPrivate(Expr.GetPrivate gp)
     {
+        if (TryEmitPrivateMethodValue(gp)) return;
+        if (TryEmitDefinitionPrivateField(gp.Object, gp.Name)) return;
+        if (TryEmitGuestStaticPrivateField(gp.Object, gp.Name)) return;
+        if (TryEmitGuestInstancePrivateField(gp.Object, gp.Name)) return;
         if (TryEmitGenericPrivateGet(gp))
             return;
         string fieldName = gp.Name.Lexeme;
@@ -1085,6 +1097,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitSetPrivate(Expr.SetPrivate sp)
     {
+        if (TryEmitDefinitionPrivateField(sp.Object, sp.Name, sp.Value)) return;
+        if (TryEmitGuestStaticPrivateField(sp.Object, sp.Name, sp.Value)) return;
+        if (TryEmitGuestInstancePrivateField(sp.Object, sp.Name, sp.Value)) return;
         if (TryEmitGenericPrivateSet(sp))
             return;
         string fieldName = sp.Name.Lexeme;
@@ -1165,6 +1180,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitCallPrivate(Expr.CallPrivate cp)
     {
+        if (TryEmitDefinitionPrivateCall(cp)) return;
         if (TryEmitGenericPrivateCall(cp))
             return;
         string methodName = cp.Name.Lexeme;
@@ -1653,6 +1669,15 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitUserClassNew(List<string> namespaceParts, string className, Expr.New n)
     {
+        if (n.Callee is Expr.Variable variable && Ctx.VarToClassExpr?.ContainsKey(variable.Name.Lexeme) == true)
+        {
+            EmitExpression(n.Callee);
+            EnsureBoxed();
+            EmitArgsArrayWithSpread(n.Arguments);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.DynamicConstruction.Value);
+            SetStackUnknown();
+            return;
+        }
         string resolvedClassName = ResolveClassNameForNew(namespaceParts, className);
 
         // Check class expression constructors (e.g., const C = class { }; new C())
@@ -1928,7 +1953,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         && names.TryGetValue(capturedVar, out var storage)
             ? storage : capturedVar;
 
-    private void EmitCapturingArrowViaHooks(Expr.ArrowFunction af, MethodBuilder method, ConstructorBuilder displayCtor)
+    protected void EmitCapturingArrowViaHooks(Expr.ArrowFunction af, MethodBuilder method, ConstructorBuilder displayCtor)
     {
         EmitCapturingArrowDisplayViaHooks(af, displayCtor);
         Types.EmitLoadMethodInfoViaHandle(IL, method);
@@ -1962,13 +1987,19 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // than a by-value snapshot — the write case that was previously rejected (#674). The arrow's
         // own snapshot fields (populated below) deliberately omit these vars (see the function-DC
         // skip in CollectAndDefineArrowFunctions), so the two paths don't both materialize them.
-        if (Ctx.ArrowFunctionDCFields?.TryGetValue(af, out var arrowFunctionDCField) == true &&
-            GetFunctionDCField() is FieldBuilder stateMachineFunctionDC)
+        if (Ctx.ArrowFunctionDCFields?.TryGetValue(af, out var arrowFunctionDCField) == true)
         {
             IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Ldarg_0);
-            IL.Emit(OpCodes.Ldfld, stateMachineFunctionDC);
-            IL.Emit(OpCodes.Stfld, arrowFunctionDCField);
+            if (GetFunctionDCField() is FieldBuilder stateMachineFunctionDC &&
+                stateMachineFunctionDC.FieldType == arrowFunctionDCField.FieldType)
+            {
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, stateMachineFunctionDC);
+                IL.Emit(OpCodes.Stfld, arrowFunctionDCField);
+            }
+            else if (TryEmitClassDefinitionEnvironment(arrowFunctionDCField.FieldType))
+                IL.Emit(OpCodes.Stfld, arrowFunctionDCField);
+            else IL.Emit(OpCodes.Pop);
         }
 
         if (Ctx.DisplayClassFields?.TryGetValue(af, out var fieldMap) == true)
@@ -1994,6 +2025,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 // stub never populates, so resolving it via the map would snapshot null
                 // (NRE when the arrow dereferences `this`). The real receiver lives in the
                 // builder's dedicated ThisField (set by the instance-method stub).
+                else if (capturedVar == "this" && TryEmitGuestThis()) { }
                 else if (capturedVar == "this" && GetThisField() is FieldBuilder thisField)
                 {
                     IL.Emit(OpCodes.Ldarg_0);
@@ -2008,7 +2040,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 {
                     IL.Emit(OpCodes.Ldloc, local);
                 }
-                else if (!TryEmitGlobalVariable(sourceVar))
+                else if (!TryEmitClassDefinitionCapture(sourceVar) && !TryEmitGlobalVariable(sourceVar))
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
@@ -2381,9 +2413,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected virtual bool TryEmitStaticFieldAccess(Expr.Get g)
     {
         if (g.Object is Expr.Variable classVar &&
-            Ctx.Classes.TryGetValue(Ctx.ResolveClassName(classVar.Name.Lexeme), out var staticFieldClassBuilder))
+            Ctx.Classes.TryGetValue(Ctx.ResolveClassName(Ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme), out var staticFieldClassBuilder))
         {
-            string resolvedClassName = Ctx.ResolveClassName(classVar.Name.Lexeme);
+            string resolvedClassName = Ctx.ResolveClassName(Ctx.TypeMap?.Get(classVar), classVar.Name.Lexeme);
             if (Ctx.ClassRegistry!.TryGetCallableStaticField(resolvedClassName, g.Name.Lexeme, staticFieldClassBuilder, out var staticField))
             {
                 EmitStaticFieldLoadWithShadow(resolvedClassName, staticFieldClassBuilder, g.Name.Lexeme, staticField!);
@@ -2401,6 +2433,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected bool TryEmitStaticClassMethodValue(Expr.Get g)
     {
+        if (Ctx.ClassDefinitionParameterIndex != null || Ctx.ClassDefinitionVariableName != null) return false;
         if (g.Object is not Expr.This || Ctx.IsInstanceMethod || Ctx.CurrentClassBuilder == null)
             return false;
 
@@ -2530,7 +2563,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         IL.Emit(OpCodes.Pop);
     }
 
-    private void EmitClassHeritageValue(Expr heritage, string? innerClassName)
+    protected void EmitClassHeritageValue(Expr heritage, string? innerClassName)
     {
         switch (heritage)
         {
@@ -2889,6 +2922,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     protected virtual void EmitGet(Expr.Get g)
     {
+        if (TryEmitGuestThisGet(g)) return;
         if (StringEmitter.TryEmitPrimitiveStringLengthGet(this, g))
             return;
 

@@ -2073,7 +2073,7 @@ public partial class Interpreter
                     throw new InterpreterException(
                         $"Class expression cannot extend built-in '{builtInCtor.Name}': subclassing this built-in is not supported yet.");
                 }
-                throw new InterpreterException("Superclass must be a class.");
+                throw new ThrowException(new SharpTSTypeError("Superclass must be a class constructor."));
             }
         }
 
@@ -2099,6 +2099,10 @@ public partial class Interpreter
             Dictionary<string, ISharpTSCallable> staticMethods = [];
             Dictionary<string, object?> staticProperties = [];
             List<Stmt.Field> instanceFields = [];
+            List<Stmt.Field> instancePrivateFields = [];
+            Dictionary<string, ISharpTSCallable> privateMethods = [];
+            Dictionary<string, ISharpTSCallable> staticPrivateMethods = [];
+            Dictionary<string, object?> staticPrivateFields = [];
 
             // Check if we have static initializers for proper ordering
             bool hasStaticInitializers = classExpr.StaticInitializers != null && classExpr.StaticInitializers.Count > 0;
@@ -2115,7 +2119,13 @@ public partial class Interpreter
 
             foreach (Stmt.Field field in classExpr.Fields)
             {
-                if (field.IsStatic)
+                if (field.IsPrivate)
+                {
+                    if (!field.IsStatic) instancePrivateFields.Add(field);
+                    else staticPrivateFields[field.Name.Lexeme] = !hasStaticInitializers && field.Initializer != null
+                        ? Evaluate(field.Initializer) : SharpTSUndefined.Instance;
+                }
+                else if (field.IsStatic)
                 {
                     if (!hasStaticInitializers)
                     {
@@ -2166,7 +2176,9 @@ public partial class Interpreter
                     continue;
                 }
 
-                if (method.IsStatic)
+                if (method.IsPrivate)
+                    (method.IsStatic ? staticPrivateMethods : privateMethods)[method.Name.Lexeme] = func;
+                else if (method.IsStatic)
                 {
                     staticMethods[method.Name.Lexeme] = func;
                 }
@@ -2237,7 +2249,7 @@ public partial class Interpreter
                     classExpr.IsAbstract,
                     instanceFields,
                     staticGetters: staticGetters.Count > 0 ? staticGetters : null,
-                    staticSetters: staticSetters.Count > 0 ? staticSetters : null)
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null, instancePrivateFields: instancePrivateFields, privateMethods: privateMethods, staticPrivateFields: staticPrivateFields, staticPrivateMethods: staticPrivateMethods)
                 : superclass is SharpTSArrayClass arraySuper
                 ? new SharpTSArrayClass(
                     className,
@@ -2250,7 +2262,7 @@ public partial class Interpreter
                     classExpr.IsAbstract,
                     instanceFields,
                     staticGetters: staticGetters.Count > 0 ? staticGetters : null,
-                    staticSetters: staticSetters.Count > 0 ? staticSetters : null)
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null, instancePrivateFields: instancePrivateFields, privateMethods: privateMethods, staticPrivateFields: staticPrivateFields, staticPrivateMethods: staticPrivateMethods)
                 : superclass is SharpTSPromiseClass promiseSuper
                 ? new SharpTSPromiseClass(
                     className,
@@ -2263,7 +2275,7 @@ public partial class Interpreter
                     classExpr.IsAbstract,
                     instanceFields,
                     staticGetters: staticGetters.Count > 0 ? staticGetters : null,
-                    staticSetters: staticSetters.Count > 0 ? staticSetters : null)
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null, instancePrivateFields: instancePrivateFields, privateMethods: privateMethods, staticPrivateFields: staticPrivateFields, staticPrivateMethods: staticPrivateMethods)
                 : new SharpTSClass(
                     className,
                     (SharpTSClass?)superclass,
@@ -2275,9 +2287,13 @@ public partial class Interpreter
                     classExpr.IsAbstract,
                     instanceFields,
                     staticGetters: staticGetters.Count > 0 ? staticGetters : null,
-                    staticSetters: staticSetters.Count > 0 ? staticSetters : null);
+                    staticSetters: staticSetters.Count > 0 ? staticSetters : null, instancePrivateFields: instancePrivateFields, privateMethods: privateMethods, staticPrivateFields: staticPrivateFields, staticPrivateMethods: staticPrivateMethods);
 
             klass.BindPrivateMemberOwners();
+            klass.InitializerEnvironment = classEnv;
+            klass.OrderedInstanceFields = classExpr.Fields.Where(field => !field.IsStatic)
+                .SelectMany(field => (field.IsPrivate ? instancePrivateFields : instanceFields)
+                    .Where(captured => captured.Name == field.Name)).ToList();
 
             if (symbolAccessors != null)
             {
@@ -2300,7 +2316,7 @@ public partial class Interpreter
             {
                 // Create temporary environment with 'this' bound to the class
                 // Also make the class name available so code like Foo.x works
-                var staticEnv = new RuntimeEnvironment(_environment);
+                var staticEnv = new RuntimeEnvironment(_environment, strictMode: true) { PrivateClass = klass };
                 staticEnv.Define("this", klass);
                 if (classExpr.Name != null)
                 {
@@ -2317,7 +2333,8 @@ public partial class Interpreter
                                 object? fieldValue = field.Initializer != null
                                     ? Evaluate(field.Initializer)
                                     : field.ComputedKey != null ? SharpTSUndefined.Instance : null;
-                                if (field.ComputedKey != null && computedMemberKeys[field.ComputedKey] is SharpTSSymbol symbol)
+                                if (field.IsPrivate) klass.InstallStaticPrivateField(field.Name.Lexeme, fieldValue);
+                                else if (field.ComputedKey != null && computedMemberKeys[field.ComputedKey] is SharpTSSymbol symbol)
                                     klass.SetStaticBySymbol(symbol, fieldValue);
                                 else
                                     klass.SetStaticProperty(field.ComputedKey != null

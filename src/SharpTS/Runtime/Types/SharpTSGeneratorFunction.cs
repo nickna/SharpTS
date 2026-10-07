@@ -42,7 +42,8 @@ public class SharpTSGeneratorFunction : ISharpTSCallable, IReceiverBindable
         _thisBound = thisBound;
         _boundThis = boundThis;
         _boundSuper = boundSuper;
-        _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+        _arity = declaration.IsPrivate ? declaration.Parameters.TakeWhile(p => p.DefaultValue == null && !p.IsRest).Count()
+            : declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
     }
 
     public int Arity() => _arity;
@@ -53,7 +54,11 @@ public class SharpTSGeneratorFunction : ISharpTSCallable, IReceiverBindable
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
         // Create environment and bind parameters (like a regular function)
-        RuntimeEnvironment environment = new(_closure) { PrivateClass = PrivateOwner };
+        RuntimeEnvironment environment = new(_closure, strictMode: _declaration.IsPrivate ? true : null) { PrivateClass = PrivateOwner };
+        if (_declaration.IsPrivate)
+        {
+            environment.Define("this", _thisBound ? _boundThis : SharpTSUndefined.Instance);
+        }
         // #775: a generator expression / object generator method binds its own dynamic `this`. The bound
         // receiver (or globalThis for a plain call) is defined in the generator's OWN body environment —
         // NOT a new parent scope inserted above the closure — so a captured enclosing-function local keeps

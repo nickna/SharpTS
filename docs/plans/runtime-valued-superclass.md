@@ -35,6 +35,42 @@ in-process harness. No behavior repair is claimed by this investigation.
 The finite implementation successor is
 [#1967](https://github.com/nickna/SharpTS/issues/1967), dependent on #1964.
 
+## Implementation successor (#1967)
+
+The original failing outputs above remain investigation evidence. The bounded
+repair retains each evaluated parent in #1964's guest class definition and uses
+explicit-receiver entries on emitted user templates for initialization and
+ordinary methods. The child constructor and instance prototype link to the
+selected guest parent; inherited instance/static lookup and `instanceof` follow
+those links. A runtime child allocates one receiver and initializes its parent on
+that receiver. Checked known-parent declarations keep their CLR inheritance path.
+
+Runtime validation requires an emitted ordinary-user-class entry before static
+initialization. The adapter boundary excludes generic, private, computed,
+accessor, suspended-method, destructured/parameter-property and constructor-return
+replacement shapes; their existing known-parent paths are retained. Arbitrary
+host/CLR parents, exotic constructors and proxy construction are not added.
+Constructor defaults, rest arguments and the caller's `arguments` list are
+preserved for the supported ordinary path.
+
+On 2026-10-06, `RuntimeSuperclassTests`' 13 cases pass: the three investigation
+fixtures, alternating Left/Right selections with real pending suspension at both
+an expression and local declaration, forwarding, original receiver/`super`
+behavior, expression-parent identity, defaults/rest/arguments/static receiver,
+and invalid/rejected heritage before static initialization. Runtime execution and
+serialized IL verification are asserted separately. The fixtures also pass CLI
+standalone and hosted execution with both default declarations and `--noLib`;
+these deployment builds use `--verify` and omit a `SharpTS.dll` payload. For the
+deployment controls only, the already-called `main` runner is renamed to avoid
+the EXE/hosted automatic entry-point convention calling it twice.
+
+The focused Release run passes 169 tests across runtime superclass, arguments,
+async local declarations, expression owner identity, repeated class state and
+namespace class ownership. This includes the retained known-parent controls and
+generic/computed identity controls. The Release test-project build succeeds with
+the existing NU1902 package warning. Consolidated quality/AOT gates are recorded
+with the issues 1961–1968 PR; this section does not claim Native AOT publication.
+
 ## Representation decision
 
 **Store and use the evaluated superclass in the guest class definition, using

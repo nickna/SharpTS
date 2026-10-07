@@ -91,6 +91,7 @@ public sealed class RuntimeFeatureDetector
             UsesReflect = false,
             UsesIteratorHelpers = false,
             UsesPromise = false,
+            UsesUserClasses = false,
             UsesDate = false,
             UsesRegExp = false,
             UsesBuffer = false,
@@ -766,6 +767,7 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Stmt.Class cls:
+                _set.UsesUserClasses = true;
                 foreach (var expression in ClassDefinitionExpressions.Enumerate(cls))
                     VisitExpr(expression);
                 foreach (var m in cls.Methods)
@@ -1589,6 +1591,9 @@ public sealed class RuntimeFeatureDetector
             case Expr.GetPrivate gp:
                 VisitExpr(gp.Object);
                 break;
+            case Expr.PrivateIn presence:
+                VisitExpr(presence.Object);
+                break;
             case Expr.SetPrivate sp:
                 VisitExpr(sp.Object);
                 VisitExpr(sp.Value);
@@ -1697,6 +1702,7 @@ public sealed class RuntimeFeatureDetector
                 VisitExpr(nn.Expression);
                 break;
             case Expr.ClassExpr ce:
+                _set.UsesUserClasses = true;
                 foreach (var expression in ClassDefinitionExpressions.Enumerate(ce))
                     VisitExpr(expression);
                 foreach (var m in ce.Methods)

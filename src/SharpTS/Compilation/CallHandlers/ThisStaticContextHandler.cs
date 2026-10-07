@@ -21,7 +21,7 @@ public class ThisStaticContextHandler : ICallHandler
         var ctx = emitter.Context;
 
         // Only applies in static context
-        if (ctx.IsInstanceMethod || ctx.CurrentClassBuilder == null)
+        if (ctx.IsInstanceMethod || ctx.ClassDefinitionParameterIndex != null || ctx.ClassDefinitionVariableName != null || ctx.CurrentClassBuilder == null)
             return false;
 
         string? currentClassName = ctx.CurrentClassName;

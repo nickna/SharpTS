@@ -14,6 +14,10 @@ namespace SharpTS.TypeSystem;
 public class TypeMap
 {
     private readonly Dictionary<Expr, TypeInfo> _types = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Token, TypeInfo.Class> _privateInOwners = new(ReferenceEqualityComparer.Instance);
+
+    internal void SetPrivateInOwner(Token name, TypeInfo.Class owner) => _privateInOwners[name] = owner;
+    internal TypeInfo.Class? GetPrivateInOwner(Token name) => _privateInOwners.GetValueOrDefault(name);
     private readonly Dictionary<string, TypeInfo.Class> _classTypes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo.Function> _functionTypes = new(StringComparer.Ordinal);
     private readonly Dictionary<Expr.ClassExpr, TypeInfo.Class> _classExprTypes = new(ReferenceEqualityComparer.Instance);
@@ -55,6 +59,16 @@ public class TypeMap
     /// Registers a class type by name for later lookup during compilation.
     /// </summary>
     public void SetClassType(string className, TypeInfo.Class classType) => _classTypes[className] = classType;
+
+    private readonly Dictionary<Stmt.Class, TypeInfo.Class> _classDeclarations = new(ReferenceEqualityComparer.Instance);
+
+    public void SetClassType(Stmt.Class declaration, TypeInfo.Class classType)
+    {
+        _classDeclarations[declaration] = classType;
+        SetClassType(declaration.Name.Lexeme, classType);
+    }
+
+    public TypeInfo.Class? GetClassType(Stmt.Class declaration) => _classDeclarations.GetValueOrDefault(declaration);
 
     /// <summary>
     /// Gets the class type by name, or null if not found.

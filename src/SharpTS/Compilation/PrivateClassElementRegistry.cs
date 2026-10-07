@@ -53,9 +53,32 @@ public sealed class PrivateClassElementRegistry
         EnsureMutable();
         var declaration = Require(name);
         if (declaration.Methods.Values.Concat(declaration.StaticMethods.Values).Any(method => method.GetILGenerator().ILOffset == 0)
+            || declaration.MethodValues.Values.Any(value => value.Method.GetILGenerator().ILOffset == 0
+                || value.Constructor.GetILGenerator().ILOffset == 0 || value.Initializer?.GetILGenerator().ILOffset == 0)
             || (declaration.InstanceBridge is { } bridge && bridge.StorageImplementation.GetILGenerator().ILOffset == 0)
             || !_emitted.Add(_names[name]))
             throw new InvalidOperationException("Private class method bodies are empty or already emitted.");
+    }
+
+    internal void DeclareMethodValue(string owner, string name, PrivateMethodValue value)
+    {
+        EnsureMutable();
+        var declaration = Require(owner);
+        var methods = value.Source.IsStatic ? declaration.StaticMethods : declaration.Methods;
+        if (_emitted.Contains(_names[owner]) || !value.Source.IsPrivate || !methods.ContainsKey(name)
+            || value.Type.Module != _names[owner].Module || value.Type.IsGenericType || value.Method.IsGenericMethod
+            || value.Method.DeclaringType != value.Type
+            || value.Method.IsStatic || value.Constructor.DeclaringType != value.Type
+            || value.Method.GetParameters().FirstOrDefault()?.ParameterType != typeof(object)
+            || value.Method.GetParameters().Length != value.Source.Parameters.Count + 1
+            || value.Constructor.GetParameters().Length != (value.Definition == null ? 0 : 1)
+            || (value.Definition != null && value.Constructor.GetParameters()[0].ParameterType != value.Definition.FieldType)
+            || (value.Cache != null) != (value.Initializer != null)
+            || (value.Cache != null && (value.Cache.DeclaringType != value.Type || !value.Cache.IsStatic))
+            || (value.Initializer != null && (value.Initializer.DeclaringType != value.Type || !value.Initializer.IsStatic))
+            || (value.Cache == null && (value.Definition?.DeclaringType != value.Type || value.Definition.IsStatic))
+            || !declaration.MutableMethodValues.TryAdd(name, value))
+            throw new InvalidOperationException("Invalid or duplicate private method value declaration.");
     }
 
     internal void CompleteEmission()
@@ -76,8 +99,11 @@ public sealed class PrivateClassElementRegistry
 /// <summary>Immutable declaration views; field order and builder identity are preserved.</summary>
 public sealed class PrivateClassElements
 {
+    internal Dictionary<string, PrivateMethodValue> MutableMethodValues { get; } = new(StringComparer.Ordinal);
+    public IReadOnlyDictionary<string, PrivateMethodValue> MethodValues { get; }
     public PrivateInstanceBridge? InstanceBridge { get; }
     public FieldBuilder? Storage { get; }
+    public FieldBuilder? StaticPresence { get; internal set; }
     public IReadOnlyList<string> FieldNames { get; }
     public IReadOnlyDictionary<string, FieldBuilder> StaticFields { get; }
     public IReadOnlyDictionary<string, MethodBuilder> Methods { get; }
@@ -87,6 +113,7 @@ public sealed class PrivateClassElements
         IReadOnlyDictionary<string, FieldBuilder> staticFields, IReadOnlyDictionary<string, MethodBuilder> methods,
         IReadOnlyDictionary<string, MethodBuilder> staticMethods, PrivateInstanceBridge? instanceBridge)
     {
+        MethodValues = new ReadOnlyDictionary<string, PrivateMethodValue>(MutableMethodValues);
         InstanceBridge = instanceBridge;
         Storage = storage;
         FieldNames = Array.AsReadOnly(fieldNames.ToArray());
@@ -95,6 +122,10 @@ public sealed class PrivateClassElements
         StaticMethods = new ReadOnlyDictionary<string, MethodBuilder>(new Dictionary<string, MethodBuilder>(staticMethods, StringComparer.Ordinal));
     }
 }
+
+public sealed record PrivateMethodValue(TypeBuilder Type, ConstructorBuilder Constructor,
+    MethodBuilder Method, FieldBuilder? Cache, ConstructorBuilder? Initializer, SharpTS.Parsing.Stmt.Function Source,
+    FieldBuilder? Definition = null);
 
 /// <summary>Non-generic dispatch surface for a generic class's private instance elements.</summary>
 public sealed class PrivateInstanceBridge
