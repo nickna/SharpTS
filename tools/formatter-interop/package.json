@@ -1,0 +1,8 @@
+{
+  "name": "sharpts-formatter-interop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Optional, pinned development tools for the SharpTS formatter interoperability smoke test",
+  "engines": { "node": ">=22" },
+  "devDependencies": { "prettier": "3.9.9" }
+}

@@ -5,6 +5,11 @@ diagnostics, hover, completion, signature help, and quick fixes in every mode. I
 provides document symbols, definition, references, and completeness-gated rename for standalone
 editors.
 
+Formatting is supplied by the editor and an external formatter. Neither language-feature mode
+advertises document, range or on-type formatting. See [Formatting TypeScript and TSX](formatting.md)
+for the pinned Prettier workflow, format-on-save recipes and formatter ownership when another
+TypeScript server is active.
+
 ## Install and launch
 
 Install the separately packaged tool:

@@ -1,0 +1,56 @@
+[
+  {
+    "name": "namespaces-generics-private-directives-syntax",
+    "path": "cases/syntax-private.ts",
+    "decoratorMode": "Stage3",
+    "execute": false
+  },
+  {
+    "name": "namespaces-generics-private-directives-runtime",
+    "path": "cases/runtime-private.ts",
+    "decoratorMode": "Stage3",
+    "execute": true,
+    "expectedOutput": "42\ntrue\nfalse\ndirective 🧭\n"
+  },
+  {
+    "name": "dotnet-imports-and-real-reference",
+    "path": "cases/dotnet-imports.ts",
+    "decoratorMode": "Stage3",
+    "execute": true,
+    "expectedOutput": "dotnet:reference\nformatter 42\n"
+  },
+  {
+    "name": "stage3-class-decorator",
+    "path": "cases/stage3-decorators.ts",
+    "decoratorMode": "Stage3",
+    "execute": true,
+    "expectedOutput": "class:Decorated\nstage3\n"
+  },
+  {
+    "name": "legacy-dotnettype-ambient-mapping",
+    "path": "cases/dotnettype-legacy.ts",
+    "decoratorMode": "Legacy",
+    "execute": true,
+    "expectedOutput": "dotnettype\n"
+  },
+  {
+    "name": "legacy-class-method-parameter-decorators",
+    "path": "cases/legacy-decorators.ts",
+    "decoratorMode": "Legacy",
+    "execute": true,
+    "expectedOutput": "parameter:0:greet\nmethod:greet\nclass:legacy\nHello, formatter\n"
+  },
+  {
+    "name": "tsx-pragmas-text-and-expressions",
+    "path": "cases/jsx.tsx",
+    "decoratorMode": "Stage3",
+    "execute": true,
+    "expectedOutput": "<p title=\"it's &amp; that\">don't stop — 🧭 &lt;tags&gt;</p>\n<p>value:7</p>\n"
+  },
+  {
+    "name": "declaration-signatures-and-generic-namespace",
+    "path": "cases/declarations.d.ts",
+    "decoratorMode": "Stage3",
+    "execute": false
+  }
+]
