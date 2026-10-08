@@ -5,7 +5,7 @@ using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 
 namespace SharpTS.LanguageServer.Services;
 
-/// <summary>Produces renames only when the complete affected project graph is known.</summary>
+/// <summary>Produces lexical binding renames only when the complete affected project graph is known.</summary>
 public sealed class RenameService
 {
     private readonly ReferenceService _references;

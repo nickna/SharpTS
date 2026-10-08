@@ -566,6 +566,12 @@ public sealed class FrozenEditorSemanticIndex
     public EditorInvocationFact? FindInvocation(SourceDocument document, int offset) => document.EditorSyntax?.FindInvocation(offset) is { } syntax
         ? GetInvocation(document, syntax.Owner) : null;
 
+    /// <summary>Whether ordinary checking entered this exact source-owned body.</summary>
+    public bool HasEnteredSourceBody(SourceDocument document, object owner, SourceSpan span) =>
+        !span.IsHidden && !span.IsEmpty &&
+        _enteredBodies.TryGetValue(new(document, owner), out var entered) &&
+        entered.Any(checkedSpan => checkedSpan.Contains(span));
+
     public IReadOnlyList<EditorVisibleBinding> GetVisibleBindings(SourceDocument document, int offset)
     {
         var scope = Scopes.Where(scope => ReferenceEquals(scope.Document, document) && scope.Span is { } span &&

@@ -177,6 +177,17 @@ If a configured component's exact resolver-cache lookup misses a Windows URI dri
 the builder selects only one equivalent already-loaded physical source module. Virtual module
 names keep their existing identity rules; multiple physical candidates make discovery incomplete.
 
+Full-mode `PrivateRenameService` uses a separate snapshot-local private-domain proof. The frozen
+member index audits every original private token in one authoritative class span and requires
+exact checker-owned declarations/occurrences plus entered-body evidence from the editor index.
+Unresolved tokens, unvisited bodies, nested class environments, unsupported declaration groups
+and target-document parse errors refuse the complete operation. Workspace discovery completeness
+is independent of this single-file proof. The handler requires negotiated versioned document
+changes and an exact open capture, returns the entire private token/placeholder during prepare,
+and publishes one versioned document edit only after source/dependency/metadata validation.
+The general member/reference rename gate stays false; no parser/checker language expansion or
+spelling-based occurrence search is added.
+
 `WithEditorMetadata` additionally captures actual declaration/occurrence types, source-linked
 checker scopes, receiver member projections and invocation candidates/selections. Publication
 in `FrozenEditorSemanticIndex` replaces raw types with bounded TypeScript presentations and

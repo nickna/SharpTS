@@ -70,8 +70,29 @@ implementors and spelling do not establish a class-member reference.
 Every new member identity currently denies rename. A parameter-property's
 constructor-local lexical binding also denies rename because editing that facet
 alone would miss property uses. Ordinary lexical bindings retain their existing
-complete-graph rename behavior. Later private rename support must prove its
-specific local domain; this index does not grant that permission.
+complete-graph rename behavior. The separate private-domain query grants authority only after
+its complete local audit; ordinary member reference results never grant that permission.
+
+`FrozenMemberIndex.GetPrivateRenameDomain` audits the selected class's exact original private
+tokens against resolved canonical identities and its entered source body. Same-spelled private
+names in unrelated classes stay separate. Unvisited/recovered/unresolved source, nested class
+owners/subtrees and unsupported declaration shapes refuse the whole domain. The query supplies
+only exact selected tokens and the proven owner's private declarations for collision checks;
+it performs no checker lookup or spelling-based occurrence search. Private compound/logical
+assignment and prefix/postfix updates currently fail ordinary parsing and remain refusal cases.
+
+The LSP private operation requires a known captured version and negotiated versioned document
+changes. Prepare covers the whole `#old` token with that placeholder; rename accepts bare or
+prefixed names and emits one `#`. The local domain is independent of workspace discovery, while
+source/dependency/metadata currentness still guards publication.
+
+`PrivateRenameDomainTests` and `PrivateRenameHandlerTests` add 67 cases for whole-token ownership,
+authoritative body entry, legal keyword/BMP names, unsupported domains, negotiated edits, exact
+captured versions and source/configuration/metadata races. Applied field/method/static renames
+reparse and rebind, preserving execution in both interpreter and compiled modes. All 3,542
+affected Release tests passed. `scripts/test-private-rename.mjs` verifies seven real stdio client
+configurations, LF/CRLF edits, fresh diagnostics after application, workspace-independent local
+proof, cancellation peers and retained lexical rename with versioned-edit support on/off/missing.
 
 `MemberIndexTests`, `SourceMemberDeclarationTests`, `SourceMemberOccurrenceTests`
 and `MemberAnalysisTests` verify identities, operation evidence, source ownership,

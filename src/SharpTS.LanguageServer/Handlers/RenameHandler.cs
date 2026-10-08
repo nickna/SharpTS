@@ -6,22 +6,26 @@ using SharpTS.LanguageServer.Services;
 namespace SharpTS.LanguageServer.Handlers;
 
 /// <summary>
-/// Serves semantic rename only for complete configured-workspace symbol domains.
+/// Serves complete lexical workspace renames and separately proven, versioned private domains.
 /// </summary>
 public sealed class RenameHandler : RenameHandlerBase
 {
     private readonly DocumentStore _store;
     private readonly RenameService _rename;
     private readonly NavigationWorkspaceContext _workspace;
+    private readonly PrivateRenameService? _privateRename;
+    private bool _supportsVersionedEdits;
 
     public RenameHandler(
         DocumentStore store,
         RenameService rename,
-        NavigationWorkspaceContext workspace)
+        NavigationWorkspaceContext workspace,
+        PrivateRenameService? privateRename = null)
     {
         _store = store;
         _rename = rename;
         _workspace = workspace;
+        _privateRename = privateRename;
     }
 
     public override async Task<WorkspaceEdit?> Handle(
@@ -34,6 +38,15 @@ public sealed class RenameHandler : RenameHandlerBase
 
         ct.ThrowIfCancellationRequested();
         long workspaceVersion = _workspace.Version;
+        if (_supportsVersionedEdits && _privateRename is not null)
+        {
+            var privateResult = await _privateRename.RenameAsync(snapshot, request.Position, request.NewName, ct)
+                .ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (privateResult.IsPrivateContext)
+                return _store.IsCurrent(uri, snapshot.Document.Version, snapshot.WorkspaceVersion) &&
+                    _workspace.Version == workspaceVersion && privateResult.IsCurrent(ct) ? privateResult.Value : null;
+        }
         var result = await _rename.RenameAsync(snapshot, request.Position, request.NewName,
             _workspace.SnapshotRoots(), ct);
         ct.ThrowIfCancellationRequested();
@@ -44,7 +57,14 @@ public sealed class RenameHandler : RenameHandlerBase
     protected override RenameRegistrationOptions CreateRegistrationOptions(
         RenameCapability capability,
         ClientCapabilities clientCapabilities)
-        => CreateRenameRegistrationOptions();
+    {
+        _supportsVersionedEdits = SupportsVersionedEdits(clientCapabilities);
+        return CreateRenameRegistrationOptions();
+    }
+
+    internal static bool SupportsVersionedEdits(ClientCapabilities? clientCapabilities) =>
+        clientCapabilities?.Workspace?.WorkspaceEdit is
+            { IsSupported: true, Value: { DocumentChanges: true } };
 
     internal static RenameRegistrationOptions CreateRenameRegistrationOptions() =>
         new()
@@ -64,15 +84,19 @@ public sealed class PrepareRenameHandler : PrepareRenameHandlerBase
     private readonly DocumentStore _store;
     private readonly RenameService _rename;
     private readonly NavigationWorkspaceContext _workspace;
+    private readonly PrivateRenameService? _privateRename;
+    private bool _supportsVersionedEdits;
 
     public PrepareRenameHandler(
         DocumentStore store,
         RenameService rename,
-        NavigationWorkspaceContext workspace)
+        NavigationWorkspaceContext workspace,
+        PrivateRenameService? privateRename = null)
     {
         _store = store;
         _rename = rename;
         _workspace = workspace;
+        _privateRename = privateRename;
     }
 
     public override async Task<RangeOrPlaceholderRange?> Handle(
@@ -85,6 +109,14 @@ public sealed class PrepareRenameHandler : PrepareRenameHandlerBase
 
         ct.ThrowIfCancellationRequested();
         long workspaceVersion = _workspace.Version;
+        if (_supportsVersionedEdits && _privateRename is not null)
+        {
+            var privateResult = await _privateRename.PrepareAsync(snapshot, request.Position, ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (privateResult.IsPrivateContext)
+                return _store.IsCurrent(uri, snapshot.Document.Version, snapshot.WorkspaceVersion) &&
+                    _workspace.Version == workspaceVersion && privateResult.IsCurrent(ct) ? privateResult.Value : null;
+        }
         var result = await _rename.PrepareAsync(snapshot, request.Position, _workspace.SnapshotRoots(), ct);
         ct.ThrowIfCancellationRequested();
         if (!_store.IsCurrent(uri, snapshot.Document.Version, snapshot.WorkspaceVersion) ||
@@ -95,5 +127,8 @@ public sealed class PrepareRenameHandler : PrepareRenameHandlerBase
     protected override RenameRegistrationOptions CreateRegistrationOptions(
         RenameCapability capability,
         ClientCapabilities clientCapabilities)
-        => RenameHandler.CreateRenameRegistrationOptions();
+    {
+        _supportsVersionedEdits = RenameHandler.SupportsVersionedEdits(clientCapabilities);
+        return RenameHandler.CreateRenameRegistrationOptions();
+    }
 }

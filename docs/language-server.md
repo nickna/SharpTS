@@ -317,12 +317,47 @@ project memory. The benchmark report includes allocations, percentiles, and meas
 
 ## Rename safety
 
-Full mode produces a rename edit only when the server has loaded every configured project root and
-project reference needed for the selected semantic binding. It deliberately refuses rename for an
-incomplete graph rather than returning a partial cross-file edit. General object/class
-property-member rename is not currently offered.
+Full mode produces a lexical rename edit only when the server has loaded every configured
+project root and project reference needed for the selected semantic binding. Incomplete graphs
+refuse cross-file rename. Public, protected, TypeScript `private` string-keyed and structural
+member rename remains unavailable.
 
 Constructor parameter-properties, such as `constructor(public value: number)`, also refuse rename
 from their declaration or constructor-local uses: those edits would need to coordinate the
 property name and its uses. Ordinary constructor parameters retain lexical rename support when
 the configured graph is complete.
+
+ECMAScript `#private` rename has a separate one-document proof. The selected class declaration or
+expression must have a complete checked private domain: every private token inside that exact
+source owner must have authoritative original syntax and the same lexical class owner. Supported
+operations include instance/static fields and methods, reads, plain writes, calls, closures and
+`#name in candidate`. A class inside an ordinary function can qualify. An owner nested in another
+class private environment or containing any nested class is refused.
+
+Private rename needs a known open-document version and client support for
+`workspace.workspaceEdit.documentChanges`. Prepare returns the whole `#old` range and placeholder;
+rename accepts `new` or `#new`, validates the private identifier and collisions, and emits exactly
+`#new` in versioned document changes. `#constructor`, malformed names and collisions with another
+private instance/static declaration are refused. Private keyword spellings such as `#new` and
+`#class` are legal when the parser accepts them. Existing lexical edits keep their client behavior.
+
+The private domain does not require complete workspace discovery, so an unrelated broken project
+does not block it. Unresolved private occurrences, unvisited source bodies, any target-document
+parse error and recovered source refuse the entire operation. The current parser rejects private
+compound/logical assignment and prefix/postfix updates; those buffers remain refused. Private
+accessor/auto-accessor declarations, multiple-declaration private method groups and nested private
+environments are outside this delivery. Final document, dependency and metadata validation can
+discard the whole edit if the captured state changes.
+
+Private-domain and handler verification adds 67 cases, including applied before/after behavior in
+both runtimes; the broader affected Release suite passed 3,542 tests. Reproduce the focused and
+real-protocol checks after building the Release server:
+
+```powershell
+dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj -c Release --filter "FullyQualifiedName~PrivateRename"
+node scripts/test-private-rename.mjs
+```
+
+The stdio check uses seven full/interop-only client configurations and verifies whole UTF-16
+tokens, captured document versions, LF/CRLF, applied fresh diagnostics, explicit refusals and
+ordinary lexical rename with versioned-edit support present, false or omitted.

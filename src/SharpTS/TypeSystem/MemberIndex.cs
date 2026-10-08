@@ -322,7 +322,7 @@ public sealed record FrozenMemberOccurrence(SourceDocument Document, Token Name,
     IReadOnlyDictionary<MemberOperation, FrozenMemberResolution> Selections, object? Owner = null);
 
 /// <summary>Query-only generation copy with no checker, resolver or callback references.</summary>
-public sealed class FrozenMemberIndex
+public sealed partial class FrozenMemberIndex
 {
     private readonly FrozenDictionary<Token, FrozenMemberOccurrence> _tokens;
     private readonly FrozenDictionary<int, SourceClassInfo> _classes;
