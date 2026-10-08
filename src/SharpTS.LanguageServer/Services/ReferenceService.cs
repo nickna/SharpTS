@@ -19,7 +19,7 @@ internal sealed record NavigationReferenceResult(
 }
 
 /// <summary>Finds every checker-bound occurrence of the selected semantic symbol.</summary>
-public sealed class ReferenceService : IDisposable
+public sealed partial class ReferenceService : IDisposable
 {
     private readonly SemanticAnalysisService _analysis;
     private readonly bool _ownsAnalysis;
@@ -95,8 +95,8 @@ public sealed class ReferenceService : IDisposable
             selectedSymbols = expandedSymbols.ToArray();
         }
         if (selectedSymbols.Count == 0)
-            return new NavigationReferenceResult([], model.Scope.ConfigPath is null ? [] : [model.Scope.ConfigPath],
-                model.Scope.IsComplete, validations);
+            return await FindMemberReferencesAsync(seed, position, offset, includeDeclaration, workspaceRoots,
+                buildWorkspace, cancellationToken).ConfigureAwait(false);
 
         bool isRenameEligible = selectedSymbols.All(symbol =>
             symbol.RenameEligibility == BindingRenameEligibility.AllowedLexical);

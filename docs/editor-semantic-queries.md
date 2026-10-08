@@ -32,8 +32,10 @@ these vetoes, never a replacement scope or inferred type.
 | Selected invocation | Actual successful checker overload/instantiation decision | Argument/inference errors, holes, recovery, incomplete candidate sets and aggregate callable unions cannot prove a single winner. |
 
 Known source transformations have explicit original-owner bridges for contextual callbacks and
-fresh object literals. Source identity is never recovered by matching a name, type, return type
-or source range. Implicit constructors are marked as implicit and point to the exact source
+fresh object literals. Within a checked graph, source identity is never recovered by matching a
+name, type, return type or source range. Workspace navigation separately joins proven canonical
+declarations across fresh graphs by full path/span and member facet. Implicit constructors are
+marked as implicit and point to the exact source
 class, rather than claiming a constructor declaration exists.
 
 The query layer does not perform another inference pass or evaluate a type merely for display.

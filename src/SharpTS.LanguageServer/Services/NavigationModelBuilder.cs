@@ -221,6 +221,30 @@ internal static class NavigationModelBuilder
             }
 
             ParsedModule? entry = resolver.GetCachedModule(absolutePath);
+            if (entry is null)
+            {
+                // URI captures can spell a Windows drive differently from discovered roots.
+                // Select only an already-loaded, unambiguous physical source document; resolver
+                // virtual identities and nominal module objects must remain distinct.
+                StringComparer pathComparer = OperatingSystem.IsWindows()
+                    ? StringComparer.OrdinalIgnoreCase
+                    : StringComparer.Ordinal;
+                foreach (ParsedModule candidate in resolver.GetModulesInOrder(
+                             declarationRoots.Concat(loadedRoots)))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (candidate.Document is not { IsVirtual: false } candidateDocument ||
+                        !Path.IsPathFullyQualified(candidateDocument.Path) ||
+                        !pathComparer.Equals(Path.GetFullPath(candidateDocument.Path), absolutePath))
+                    {
+                        continue;
+                    }
+
+                    if (entry is not null && !ReferenceEquals(entry, candidate))
+                        return new ProjectBuildResult(null, IsComplete: false);
+                    entry = candidate;
+                }
+            }
             bool isMember = entry is not null;
             if (entry is null && requireMembership)
                 return new ProjectBuildResult(null, allRootsLoaded);

@@ -48,7 +48,24 @@ Full-mode go-to-definition consumes these proven origins after lexical binding s
 It returns each canonical group's exact source declaration-name locations, deduplicated and
 ordered by path and span. Targets use their own captured source document, including dirty
 dependencies. Unrelated graph incompleteness does not erase a proven target; stale results
-are discarded. Reference discovery is a separate consumer of the same frozen identities.
+are discarded.
+
+Full-mode references select lexical bindings first, then require one proven member identity.
+They join separately checked projects using canonical declaration path/full name spans plus
+member name, kind and instance/static/private facet. Checker IDs and AST references are local
+to their own generation. Fresh canonical groups supply only their resolved frozen occurrences;
+locations use each target document's own line index and deduplicate full spans.
+
+The initialized workspace's configured discovery graph must be complete before any new member
+reference locations are collected. Missing roots/configurations/project references return an
+empty member result without leaking selected-document uses. Output stays within initialized
+roots. Dirty overlays, closed reverse importers and project references share the same checked
+workspace inputs and final validation.
+
+A complete graph is distinct from complete semantic evidence for every possible use. A project
+whose checker never registered the selected member contributes no invented occurrences; the
+frozen index retains unavailable evidence independently. Structural compatibility, runtime
+implementors and spelling do not establish a class-member reference.
 
 Every new member identity currently denies rename. A parameter-property's
 constructor-local lexical binding also denies rename because editing that facet
@@ -61,6 +78,17 @@ and `MemberAnalysisTests` verify identities, operation evidence, source ownershi
 refusals and snapshot lifetime. The member definition service, snapshot and handler tests
 verify final locations, lexical precedence, capture reuse and cancellation/currentness.
 `RenameServiceTests` independently protects the parameter-property gate.
+
+The #1980 extension adds 42 service/handler cases and passed 3,475 affected tests. Real stdio
+verification covers two configured projects, a project reference, a closed reverse importer,
+exact UTF-16/CRLF ranges, dirty owner versions and close restoration, incomplete discovery,
+member rename refusal and cancellation. Shared-analysis/navigation and signature-help stdio
+regressions also passed. Imported generic/path-alias fixtures caught and verify a Windows
+drive-letter casing fix in configured component selection, without weakening their assertions.
+
+The optional [member-reference benchmark](../benchmarks/member-references/README.md) records
+cold/warm service latency, allocations, result payload sizes, cache estimates and checker counts
+for one-source and 25-source/four-configuration fixtures. Both retain zero warm whole-graph checks.
 
 The optional [member provenance benchmark](../benchmarks/member-provenance/README.md)
 compares ordinary and enabled checking against the preceding commit, including

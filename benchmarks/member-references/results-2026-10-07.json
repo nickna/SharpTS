@@ -1,0 +1,83 @@
+{
+  "implementation": "1225760c+working-tree",
+  "timestampUtc": "2026-10-08T04:02:40.1281814Z",
+  "runtime": ".NET 10.0.12",
+  "os": "Microsoft Windows 10.0.26220",
+  "architecture": "Arm64",
+  "coldSamples": 11,
+  "warmSamples": 31,
+  "methodology": "Member references including declarations across initialized configured roots. Empty service cache per cold sample; unchanged capture/shared cache for warm samples. Three prewarm queries; JIT/OS file caches warm. noLib/types=[] fixtures, no CLR metadata provider or stdio. Full currentness validation included. Process-wide allocations across asynchronous workers; source-relative result fingerprints. Cache bytes are estimates, not retained heap or a process limit.",
+  "reports": [
+    {
+      "name": "small",
+      "SourceFiles": 1,
+      "Projects": 1,
+      "expectedReferencesIncludingDeclaration": 3,
+      "cold": {
+        "medianMilliseconds": 12.9707,
+        "p90Milliseconds": 13.8676,
+        "medianAllocatedBytes": 543992,
+        "checksPerQuery": [
+          1
+        ],
+        "resultFingerprint": "6E6B28DECF72868274794B49A7E3D450012DF0C942281AD77992929B706D3D0D",
+        "relativeLocationPayloadBytes": 220
+      },
+      "warm": {
+        "medianMilliseconds": 1.4418,
+        "p90Milliseconds": 1.5067,
+        "medianAllocatedBytes": 52784,
+        "checksPerQuery": [
+          0
+        ],
+        "resultFingerprint": "6E6B28DECF72868274794B49A7E3D450012DF0C942281AD77992929B706D3D0D",
+        "relativeLocationPayloadBytes": 220
+      },
+      "retainedSnapshots": 2,
+      "estimatedRetainedBytes": 26772
+    },
+    {
+      "name": "multi-project",
+      "SourceFiles": 25,
+      "Projects": 4,
+      "expectedReferencesIncludingDeclaration": 25,
+      "cold": {
+        "medianMilliseconds": 258.6224,
+        "p90Milliseconds": 269.0443,
+        "medianAllocatedBytes": 63770128,
+        "checksPerQuery": [
+          3
+        ],
+        "resultFingerprint": "1898CA65D458FFCE736229AF4AAAA723F5EC65CB489A964A72D7EADD548641ED",
+        "relativeLocationPayloadBytes": 2278
+      },
+      "warm": {
+        "medianMilliseconds": 8.5221,
+        "p90Milliseconds": 9.5988,
+        "medianAllocatedBytes": 1660496,
+        "checksPerQuery": [
+          0
+        ],
+        "resultFingerprint": "1898CA65D458FFCE736229AF4AAAA723F5EC65CB489A964A72D7EADD548641ED",
+        "relativeLocationPayloadBytes": 2278
+      },
+      "retainedSnapshots": 2,
+      "estimatedRetainedBytes": 6891530
+    }
+  ],
+  "sourceFiles": [
+    {
+      "sha256": "21067A6CF9DFDFF9DC6E2AD64012624518C632C41B9B7D287FCE72592698A001",
+      "path": "src/SharpTS.LanguageServer/Services/ReferenceService.cs"
+    },
+    {
+      "sha256": "52838CB6BFBBBD74062255DF984998339E6A12E27FA19CB1B8F2595380854A85",
+      "path": "src/SharpTS.LanguageServer/Services/ReferenceService.Members.cs"
+    },
+    {
+      "sha256": "1FF444A95BB080858510E814C7365155ED3A8F8A7D728968D162DB6ECA7D2016",
+      "path": "src/SharpTS.LanguageServer/Services/NavigationModelBuilder.cs"
+    }
+  ],
+  "verificationOutsideMeasurement": "Result fingerprinting and payload serialization follow the timed/allocation window. Captures use DocumentStore."
+}

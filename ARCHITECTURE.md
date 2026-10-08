@@ -167,6 +167,16 @@ declaration names through each target document's own line index, deduplicates fu
 locations and orders results deterministically. Known definitions do not require an exhaustive
 workspace graph. The existing request guard and analysis validation still refuse stale results.
 
+Full-mode member references use the same lexical-first selection, then join fresh frozen member
+groups across configured projects using normalized declaration paths/full name spans and exact
+member facets. They require complete initialized workspace discovery before collecting any new
+member locations, project each through its own captured source and deduplicate full spans. Graph
+completion does not prove unsupported or unvisited member uses. Generation-local IDs remain
+within one snapshot, and member reference results never grant general rename eligibility.
+If a configured component's exact resolver-cache lookup misses a Windows URI drive spelling,
+the builder selects only one equivalent already-loaded physical source module. Virtual module
+names keep their existing identity rules; multiple physical candidates make discovery incomplete.
+
 `WithEditorMetadata` additionally captures actual declaration/occurrence types, source-linked
 checker scopes, receiver member projections and invocation candidates/selections. Publication
 in `FrozenEditorSemanticIndex` replaces raw types with bounded TypeScript presentations and

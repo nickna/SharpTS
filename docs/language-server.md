@@ -142,6 +142,30 @@ CLR/builtin members supply no new class-member target. The
 [member provenance contract](editor-member-provenance.md) lists the exact supported operations
 and current checker limits. Definition support alone does not grant member rename permission.
 
+## Source class member references
+
+Full mode also finds proven uses of a selected source class member across configured projects
+inside the initialized workspace roots. Lexical/type/namespace bindings keep priority, including
+constructor-local parameter-property bindings. Inherited accesses belong to their base member;
+overrides and unrelated classes keep separate identities. Overload/accessor declaration groups
+honor `includeDeclaration`, and results use each target's own dirty or disk-backed source ranges.
+
+Member discovery requires initialized roots and a complete configured discovery graph. A missing
+root, unreadable configuration or unavailable project reference returns no new member result,
+including otherwise known uses in the selected document. Canonical declaration path and full name
+span connect independently checked projects; generation-local checker IDs are never compared.
+
+Graph completeness establishes which configured projects were discovered. It does not make the
+supported class-member proof domain exhaustive: structural/interface-typed accesses, unsupported
+checker branches and unvisited source supply no guessed references. A complete reference result
+does not authorize public/protected/TypeScript-private or parameter-property rename.
+
+The [member-reference benchmark](../benchmarks/member-references/README.md) records cache-cold /
+warm medians of 12.97 / 1.44 ms for one source and 258.62 / 8.52 ms for 25 sources across four
+configurations. Whole-graph checker calls were 1 / 0 and 3 / 0 respectively. These service-only
+Windows ARM64 measurements include input validation and exclude transport, editor UI and CLR
+metadata; cache-byte estimates are reported separately from managed-heap measurements.
+
 ## Ordinary TypeScript hover
 
 Full mode shows checked declaration and occurrence types for ordinary names, parameters,
@@ -257,6 +281,7 @@ node scripts/test-analysis-snapshots.mjs
 node scripts/test-semantic-hover.mjs
 node scripts/test-semantic-completion.mjs
 node scripts/test-semantic-signatures.mjs
+node scripts/test-member-references.mjs
 ```
 
 The test exercises real stdio navigation, source class member targets, watched closed-file
@@ -271,6 +296,8 @@ completion.
 The signature smoke checks full/interop-only clients, label/parameter capability negotiation,
 unfinished and nested calls, public candidates versus selected signatures, dirty dependency
 restoration, and request cancellation with a surviving fresh request.
+The member-reference smoke covers independently configured projects, closed reverse importers,
+dirty source ranges, completeness refusal, rename denial and cancellation/currentness.
 
 The [editor analysis benchmark](../benchmarks/editor-analysis/README.md) records a comparison with
 `df4589b7` on Windows Arm64/.NET 10.0.12 (2026-10-07 UTC). The sequence contains definition,
