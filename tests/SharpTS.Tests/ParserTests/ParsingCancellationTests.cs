@@ -1,3 +1,4 @@
+using System.Reflection;
 using SharpTS.Parsing;
 using Xunit;
 
@@ -70,71 +71,105 @@ public sealed class ParsingCancellationTests
     }
 
     [Fact]
-    public async Task LexerCanCancelInsideOneLongToken()
+    public void LexerSampledCancellationEscapesFromInsideOneToken()
     {
-        // The directive is public evidence that scanning has begun. The following
-        // comment is one lexical item, so cancellation must also work within it.
-        string source = "/// <reference path=\"progress.ts\" />\n/*" +
-            new string('x', 8_000_000) + "*/";
+        // Call the actual token scanner directly to exclude public entry/exit checks.
+        // Skipping its first sampled poll makes the canceled-token exception occur
+        // strictly inside this one comment, without depending on thread scheduling.
+        string source = "/*" + new string('x', 1024) + "*/";
         using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
         var lexer = new Lexer(source).WithCancellation(cancellation.Token);
-        var work = StartDedicatedAsync(lexer.ScanTokens);
+        SetCheckpointCounter(lexer, 1);
+        var scanToken = typeof(Lexer).GetMethod("ScanToken", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .CreateDelegate<Action>(lexer);
 
-        await AssertInFlightCancellationAsync(work, () => lexer.TripleSlashDirectives.Count > 0,
-            cancellation);
+        var exception = Assert.Throws<OperationCanceledException>(scanToken);
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        int offset = GetCursor(lexer);
+        Assert.InRange(offset, 3, source.Length - 3);
     }
 
     [Theory]
     [InlineData("function")]
     [InlineData("class")]
     [InlineData("class-expression")]
-    [InlineData("jsx")]
-    public async Task NestedParsingPreservesInFlightCancellation(string context)
+    public void NestedParsingPreservesSampledInternalCancellation(string context)
     {
-        // A completed inner declaration provides public progress before a large
-        // arrow return type. Cancellation crosses nested block/class/JSX recovery
-        // and speculative expression parsing without becoming a syntax result.
-        string body = "let progress = 0; const fn = (value: number): [" +
-            string.Join(",", Enumerable.Repeat("number", 60_000)) + "] => value;";
+        // Enter the real declaration parser directly, bypassing public pre-cancel
+        // checks. Its first sampled poll is skipped; a completed inner declaration
+        // and a cursor inside the tuple prove cancellation crosses nested parsing
+        // and speculative expression recovery instead of becoming a syntax result.
+        string body = NestedBody();
         string source = context switch
         {
             "function" => "function outer() {" + body + "}",
             "class" => "class Container { method() {" + body + "} }",
             "class-expression" => "const Container = class { method() {" + body + "} };",
-            "jsx" => "const view = <div>{(() => {" + body + "})()}</div>;",
             _ => throw new ArgumentOutOfRangeException(nameof(context)),
         };
-        var tokens = new Lexer(source) { JsxTolerant = context == "jsx" }.ScanTokens();
+        var tokens = new Lexer(source).ScanTokens();
         using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
         var parser = new Parser(tokens).WithCancellation(cancellation.Token);
-        if (context == "jsx")
-            parser.WithJsx(source, JsxParseOptions.Default);
-        var work = StartDedicatedAsync(parser.Parse);
+        SetCheckpointCounter(parser, 1);
+        var declaration = typeof(Parser).GetMethod("Declaration", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .CreateDelegate<Func<Stmt>>(parser);
 
-        await AssertInFlightCancellationAsync(work, () => parser.Spans.Count > 0, cancellation);
+        var exception = Assert.Throws<OperationCanceledException>(() => declaration());
+
+        AssertNestedCancellation(exception, cancellation.Token, parser, tokens, source);
     }
 
-    private static Task<T> StartDedicatedAsync<T>(Func<T> action) =>
-        Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.LongRunning,
-            TaskScheduler.Default);
-
-    private static async Task AssertInFlightCancellationAsync<T>(Task<T> work, Func<bool> hasProgress,
-        CancellationTokenSource cancellation)
+    [Fact]
+    public void JsxAttributeExpressionPreservesSampledInternalCancellation()
     {
-        bool observed = SpinWait.SpinUntil(() => hasProgress() || work.IsCompleted,
-            TimeSpan.FromSeconds(5));
-        bool progressed = hasProgress();
-        bool wasRunning = !work.IsCompleted;
-        // Always cancel before asserting, so a failed progress assertion cannot
-        // leave background parsing alive for the rest of the test process.
-        await cancellation.CancelAsync();
-        var exception = await Assert.ThrowsAsync<OperationCanceledException>(async () =>
-        {
-            await work.WaitAsync(TimeSpan.FromSeconds(5));
-        });
+        string source = "const view = <div value={function () {" + NestedBody() + "}} />;";
+        var tokens = new Lexer(source) { JsxTolerant = true }.ScanTokens();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var parser = new Parser(tokens).WithCancellation(cancellation.Token)
+            .WithJsx(source, JsxParseOptions.Default);
 
-        Assert.True(observed && progressed, "The operation did not report parsing progress.");
-        Assert.True(wasRunning, "The source finished before in-flight cancellation was exercised.");
-        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        // Enter the actual attribute-value parser after the exact written '='.
+        // This bypasses opening-tag diagnostic preflight, which independently polls
+        // across the entire attribute before nested expressions are parsed. The
+        // proof here covers attribute/function/arrow/block propagation, not JSX text.
+        int equalsOffset = source.IndexOf("value={", StringComparison.Ordinal) + "value".Length;
+        int equalsIndex = tokens.FindIndex(token => token.Type == TokenType.EQUAL && token.Start == equalsOffset);
+        Assert.True(equalsIndex >= 0, "The written attribute '=' must exist in the token stream.");
+        typeof(Parser).GetField("_current", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(parser, equalsIndex + 1);
+        SetCheckpointCounter(parser, 1);
+        var parseAttribute = typeof(Parser).GetMethod("ParseJsxAttributeValue", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .CreateDelegate<ParseJsxAttribute>(parser);
+
+        var exception = Assert.Throws<OperationCanceledException>(() => parseAttribute(out _));
+
+        AssertNestedCancellation(exception, cancellation.Token, parser, tokens, source);
     }
+
+    private delegate Expr ParseJsxAttribute(out int? recoveryEndOffset);
+
+    private static string NestedBody() => "let progress = 0; const fn = (value: number): [" +
+        string.Join(",", Enumerable.Repeat("number", 1024)) + "] => value;";
+
+    private static void AssertNestedCancellation(OperationCanceledException exception,
+        CancellationToken cancellationToken, Parser parser, IReadOnlyList<Token> tokens, string source)
+    {
+        Assert.Equal(cancellationToken, exception.CancellationToken);
+        int offset = tokens[GetCursor(parser)].Start;
+        Assert.InRange(offset, source.IndexOf('[', StringComparison.Ordinal) + 1,
+            source.IndexOf(']', StringComparison.Ordinal) - 1);
+        Assert.True(parser.Spans.Count > 0, "An inner declaration must finish before the sampled poll.");
+    }
+
+    private static void SetCheckpointCounter(object scanner, int value) =>
+        scanner.GetType().GetField("_cancellationCheckpoints", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(scanner, value);
+
+    private static int GetCursor(object scanner) =>
+        (int)scanner.GetType().GetField("_current", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(scanner)!;
 }
