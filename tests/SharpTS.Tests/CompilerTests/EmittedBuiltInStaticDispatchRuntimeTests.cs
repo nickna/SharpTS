@@ -61,11 +61,12 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
         var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
         var owners = new HashSet<EmittedBuiltInStaticDispatchRuntime>();
         var handles = new HashSet<MethodBuilder>();
-        foreach (int mask in new[] { 0, 1, 2, 4, 3, 5, 6, 7, 0 })
+        foreach (int mask in new[] { 0, 1, 2, 4, 8, 3, 5, 6, 7, 15, 0 })
         {
             var builder = NewAssembly();
             var source = "const n=1;" + ((mask & 1) != 0 ? "BigInt(1);" : "")
-                + ((mask & 2) != 0 ? "Promise.resolve(1);" : "") + ((mask & 4) != 0 ? "Date.now();" : "");
+                + ((mask & 2) != 0 ? "Promise.resolve(1);" : "") + ((mask & 4) != 0 ? "Date.now();" : "")
+                + ((mask & 8) != 0 ? "const M=Map;" : "");
             var features = new RuntimeFeatureDetector().Detect(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
             var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             var owner = runtime.BuiltInStatics;
@@ -101,6 +102,14 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
                 }
             }
             Check(typeof(IList<object>), "isArray", runtime.ArrayOperations.IsArray, 1);
+            Assert.Equal((mask & 8) != 0, runtime.Map is not null);
+            if (runtime.Map is { } map)
+                Check(typeof(Dictionary<object, object>), "groupBy", map.GroupBy, 2);
+            else
+            {
+                Assert.Null(lookup.Invoke(null, [typeof(Dictionary<object, object>), "groupBy"]));
+                Assert.Null(type.GetMethod("MapGroupBy"));
+            }
             Check(typeof(double), "isNaN", runtime.Numbers.IsNaN, 1);
             Check(typeof(double), "isFinite", runtime.Numbers.IsFinite, 1);
             Check(typeof(double), "isInteger", runtime.Numbers.IsInteger, 1);
@@ -169,7 +178,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
         var state = Owner(typeof(EmittedObjectStateRuntime), "Freeze", "Seal", "PreventExtensions", "IsExtensible", "IsFrozen", "IsSealed");
         var prototypes = Owner(typeof(EmittedObjectPrototypeRuntime), "GetPrototypeOf", "SetPrototypeOf", "CreateValueForm");
         var descriptors = Owner(typeof(EmittedObjectDescriptorRuntime), "DefineProperty", "DefineProperties", "GetOwnPropertyDescriptor", "GetOwnPropertyDescriptors");
-        object? bigInt = null, promise = null, date = null;
+        object? bigInt = null, promise = null, date = null, map = null;
         if (optional)
         {
             bigInt = Owner(typeof(EmittedBigIntImplementation), "AsIntN", "AsUintN");
@@ -177,14 +186,16 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             typeof(EmittedPromiseRuntime).GetProperty("Type")!.SetValue(promise, typeof(decimal));
             date = Owner(typeof(EmittedDateImplementation), "Now", "StaticUTC", "StaticParse");
             typeof(EmittedDateImplementation).GetProperty("Type")!.SetValue(date, type);
+            map = Owner(typeof(EmittedMapRuntime), "GroupBy");
         }
         var inputsType = typeof(RuntimeEmitter).GetNestedType("BuiltInStaticDispatchInputs", BindingFlags.NonPublic)!;
         var input = Assert.Single(inputsType.GetConstructors()).Invoke([
             typeof(EmittedBuiltInStaticDispatchRuntimeTests).GetMethod(nameof(DescribeSuppliedMethod))!, Stub("ArrayCheck"), numbers,
             Stub("CharCode"), Stub("CodePoint"), Stub("Raw"), keys, operations, state, prototypes, descriptors, Stub("Own"),
-            typeof(Uri), Stub("SymbolFor"), Stub("SymbolKeyFor"), bigInt, promise, typeof(Version), Stub("ErrorCheck"), date]);
+            typeof(Uri), Stub("SymbolFor"), Stub("SymbolKeyFor"), bigInt, promise, typeof(Version), Stub("ErrorCheck"), date, map]);
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
-        typeof(RuntimeEmitter).GetField("_features", Members)!.SetValue(emitter, new RuntimeFeatureSet { UsesPromise = !optional });
+        typeof(RuntimeEmitter).GetField("_features", Members)!.SetValue(emitter,
+            new RuntimeFeatureSet { UsesPromise = !optional, UsesMap = !optional });
         var owner = new EmittedRuntime().BuiltInStatics;
         typeof(RuntimeEmitter).GetMethod("DefineLookupBuiltInStaticMember", Members)!.Invoke(emitter, [type, owner]);
         typeof(RuntimeEmitter).GetMethod("EmitLookupBuiltInStaticMemberBody", Members)!.Invoke(emitter, [owner, input]);
@@ -203,12 +214,14 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             Assert.Equal("EmittedPromiseRuntime_ResolveStatic:resolve:1", Lookup(typeof(Task<object>), "resolve"));
             Assert.Equal("EmittedPromiseRuntime_ResolveStatic:resolve:1", Lookup(typeof(decimal), "resolve"));
             Assert.Equal("EmittedDateImplementation_StaticUTC:UTC:7", Lookup(loaded.GetType("Scoped")!, "UTC"));
+            Assert.Equal("EmittedMapRuntime_GroupBy:groupBy:2", Lookup(typeof(Dictionary<object, object>), "groupBy"));
         }
         else
         {
             Assert.Null(Lookup(typeof(System.Numerics.BigInteger), "asIntN"));
             Assert.Null(Lookup(typeof(Task<object>), "resolve"));
             Assert.Null(Lookup(loaded.GetType("Scoped")!, "UTC"));
+            Assert.Null(Lookup(typeof(Dictionary<object, object>), "groupBy"));
         }
     }
 

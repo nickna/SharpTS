@@ -8,6 +8,42 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class GroupByTests
 {
+    public const string MapConstructorAliasSource = "const M:any=Map;const groups=M.groupBy([1,2,3],(x:number)=>x%2);console.log(groups.get(0).join(\",\"));\n";
+
+    public static IEnumerable<object[]> MapAliasPrograms =>
+    [
+        ["constructor_alias", MapConstructorAliasSource],
+        ["direct", "interface MapConstructor{groupBy(items:any,callback:any):any;}const groups=Map.groupBy([1,2,3],(x:number)=>x%2);console.log(groups.get(0).join(\",\"));\n"],
+        ["detached", "interface MapConstructor{groupBy(items:any,callback:any):any;}const groupBy=Map.groupBy;const groups=groupBy([1,2,3],(x:number)=>x%2);console.log(groups.get(0).join(\",\"));\n"],
+    ];
+
+    [Theory, ModeData]
+    public void MapGroupBy_ConstructorAlias_PreservesIssue1928Output(ExecutionMode mode)
+    {
+        Assert.Equal("2\n", TestHarness.Run(MapConstructorAliasSource, mode));
+    }
+
+    [Theory, ModeData]
+    public void MapGroupBy_DirectAndDetachedControls(ExecutionMode mode)
+    {
+        foreach (var program in MapAliasPrograms.Skip(1))
+            Assert.Equal("2\n", TestHarness.Run((string)program[1], mode));
+    }
+
+    [Theory, ModeData]
+    public void MapGroupBy_AliasAndComputedLookup_PreserveFunctionIdentity(ExecutionMode mode)
+    {
+        var source = """
+            const M: any = Map;
+            const name = "groupBy";
+            const groupBy = M[name];
+            console.log(groupBy === Map.groupBy, groupBy === M.groupBy);
+            console.log(groupBy.name, groupBy.length);
+            console.log(groupBy([1,2,3], (x: number) => x%2).get(0).join(","));
+            """;
+        Assert.Equal("true true\ngroupBy 2\n2\n", TestHarness.Run(source, mode));
+    }
+
     [Theory, ModeData]
     public void ObjectGroupBy_BasicGrouping(ExecutionMode mode)
     {
