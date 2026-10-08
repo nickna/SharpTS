@@ -17,7 +17,7 @@ $runDirectory = Join-Path $resultsRoot (Get-Date -Format 'yyyyMMddTHHmmss')
 $runDirectory += '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
 New-Item -ItemType Directory -Path $runDirectory -Force | Out-Null
 $indexPath = Join-Path $runDirectory 'index.json'
-$nodeCommand = (Get-Command $NodeExecutable -CommandType Application -ErrorAction Stop).Source
+$nodeCommand = (Get-Command $NodeExecutable -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 $pinnedNode = (Get-Content -LiteralPath (Join-Path $repositoryRoot '.node-version') -Raw).Trim()
 $sdkPolicy = Get-Content -LiteralPath (Join-Path $repositoryRoot 'global.json') -Raw | ConvertFrom-Json
 $commands = [Collections.Generic.List[object]]::new()
