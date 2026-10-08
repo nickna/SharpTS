@@ -16,7 +16,8 @@ public sealed record EditorSourceSlot(SourceDocument? Document, object Owner, To
 // Drafts are checker-build inputs. Frozen query DTOs below contain presentation values only.
 public sealed record EditorInvocationCandidate(int Ordinal, TypeInfo OriginalSignature,
     TypeInfo? InstantiatedSignature = null, IReadOnlyList<TypeInfo.TypeParameter>? TypeParameters = null,
-    EditorSourceSlot? Origin = null, TypeInfo? ConstructedType = null, bool IsImplicit = false);
+    EditorSourceSlot? Origin = null, TypeInfo? ConstructedType = null, bool IsImplicit = false,
+    bool IsInstantiationProven = true);
 
 public sealed record EditorReceiverCandidate(string Name, TypeInfo? Type,
     EditorMemberKind Kind = EditorMemberKind.Property, AccessModifier Access = AccessModifier.Public,

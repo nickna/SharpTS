@@ -3,7 +3,7 @@
 `sharpts-lsp` is a standard language server over stdio. It provides SharpTS-specific .NET interop
 diagnostics, hover, completion, signature help, and quick fixes in every mode. Its full mode also
 provides document symbols, definition, references, and completeness-gated rename for standalone
-editors, plus semantic hover and lexical/member completion for ordinary TypeScript symbols.
+editors, plus semantic hover, lexical/member completion and signature help for ordinary TypeScript.
 
 Formatting is supplied by the editor and an external formatter. Neither language-feature mode
 advertises document, range or on-type formatting. See [Formatting TypeScript and TSX](formatting.md)
@@ -187,9 +187,41 @@ Some annotated source-class function returns currently check a call as `any` des
 function's declared return type; such receivers supply no members. Inferred class returns and
 checked structural returns can supply their proven members.
 
+## Ordinary TypeScript signature help
+
+Full mode shows captured public function, method and constructor candidates for the innermost
+supported call or `new` argument list. Callable aliases/interfaces and generic instantiations
+participate where the checker proves their signatures. Unknown annotation fallbacks cannot
+become fabricated `any` parameters; legitimate checked `any` remains displayable. Existing
+decorator signature help keeps priority in both modes.
+
+The parser's real delimiters and top-level commas determine the active argument, including
+nested expressions, templates, generic arguments and multiline calls. Each signature maps
+extra rest arguments to its rest parameter. The client receives parameter label offsets and
+per-signature active parameters only when it supports them. Truncated signatures have no
+guessed active parameter. The existing `(` and `,` triggers are retained.
+
+Unfinished `f(`, trailing argument gaps and `new C(` use the shared fresh cursor-analysis path.
+Recovered or erroneous calls can show proven candidates without claiming an overload winner.
+If an explicit type argument is unresolved, an available formal signature can remain visible
+without presenting an unproved instantiation. Instantiated signatures borrow parameter names
+only from their exact original signature when their parameter counts match.
+`activeSignature` is present only for an exact complete checker selection; a client's default
+first signature is presentation rather than a semantic decision. Runtime constructors whose
+checker validates only their implementation retain public candidates without a public winner.
+
+Completed literal arguments can show the enclosing signature. Comments, raw JSX text,
+unrelated callback bodies, malformed literals and expressions without a real argument-list
+delimiter supply no result. New CLR call help is limited to the checker's available candidates;
+this feature does not add a reflected overload resolver or execute calls.
+An unfinished grouping expression such as `f((1` is outside the parser's current recovery
+domain and supplies no signature help.
+If an enclosing call fails before the checker visits its arguments, an inner call has no
+signature facts and supplies no result, even when cursor recovery can parse it.
+
 ## Shared analysis
 
-Hover, completion, definition, references, lexical rename, and full diagnostics share completed analyses for the
+Hover, completion, signature help, definition, references, lexical rename, and full diagnostics share completed analyses for the
 same captured open buffers and project state. File notifications invalidate analyses promptly;
 clients without watching support still get physical dependency/configuration validation on every
 reuse. Creating a missing import, changing a closed file, or changing project membership causes
@@ -215,8 +247,8 @@ locations or semantic results on their own.
 
 Completed analyses also retain [bounded semantic query values](editor-semantic-queries.md):
 checked declaration/occurrence types, visible bindings, accessible receiver members and actual
-call/new candidate decisions. Ordinary hover and completion consume these values; signature
-help uses a later feature handler. They do not retain the checker's mutable environments.
+call/new candidate decisions. Ordinary hover, completion and signature help consume these
+values. They do not retain the checker's mutable environments.
 
 For a local protocol smoke test after a Release build, run:
 
@@ -224,6 +256,7 @@ For a local protocol smoke test after a Release build, run:
 node scripts/test-analysis-snapshots.mjs
 node scripts/test-semantic-hover.mjs
 node scripts/test-semantic-completion.mjs
+node scripts/test-semantic-signatures.mjs
 ```
 
 The test exercises real stdio navigation, source class member targets, watched closed-file
@@ -235,6 +268,9 @@ hover.
 The completion smoke checks full/interop-only triggers, ordinary and unfinished buffers,
 applied CRLF/UTF-16 edits, restricted item kinds, dirty dependencies and retained decorator
 completion.
+The signature smoke checks full/interop-only clients, label/parameter capability negotiation,
+unfinished and nested calls, public candidates versus selected signatures, dirty dependency
+restoration, and request cancellation with a surviving fresh request.
 
 The [editor analysis benchmark](../benchmarks/editor-analysis/README.md) records a comparison with
 `df4589b7` on Windows Arm64/.NET 10.0.12 (2026-10-07 UTC). The sequence contains definition,

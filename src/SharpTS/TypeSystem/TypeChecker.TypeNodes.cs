@@ -22,8 +22,12 @@ public partial class TypeChecker
     /// </summary>
     internal TypeInfo? TryToTypeInfo(TypeNode node)
     {
-        if (!IsEditorSourceType(node)) return TryToTypeInfoCore(node);
-        return ResolveEditorTypeUse(node, () => TryToTypeInfoCore(node));
+        if (!EditorFacts.IsEnabled) return TryToTypeInfoCore(node);
+        long version = _editorUnprovenTypeVersion;
+        TypeInfo? result = IsEditorSourceType(node)
+            ? ResolveEditorTypeUse(node, () => TryToTypeInfoCore(node)) : TryToTypeInfoCore(node);
+        RecordEditorResolvedSignature(result, version);
+        return result;
     }
 
     private TypeInfo? TryToTypeInfoCore(TypeNode node)
@@ -228,10 +232,12 @@ public partial class TypeChecker
             // the string path's "{ new <T>(…) => R }" rendering resolved via ResolveSignature.
             case GenericConstructorTypeNode genericCtor:
             {
+                long version = _editorUnprovenTypeVersion;
                 if (TryResolveGenericSignature(genericCtor.TypeParameters, genericCtor.Body) is not ({ } typeParams, { } func))
                     return null;
                 var signature = new TypeInfo.ConstructorSignature(
                     typeParams, func.ParamTypes, func.ReturnType, func.RequiredParams, func.HasRestParam, func.ParamNames);
+                RecordEditorResolvedSignature(signature, version);
                 return new TypeInfo.Record(
                     FrozenDictionary<string, TypeInfo>.Empty,
                     ConstructorSignatures: [signature]);
@@ -269,6 +275,7 @@ public partial class TypeChecker
             // the same shape the string path produces for its "{ new (…) => R }" rendering.
             case ConstructorTypeNode ctor:
             {
+                long version = _editorUnprovenTypeVersion;
                 // A `this: X` pseudo-parameter resolves (bad names fail identically) but is not
                 // carried: ConstructorSignature has no this-type slot, and the string path's
                 // ConvertConstructSignatures drops it the same way.
@@ -278,6 +285,7 @@ public partial class TypeChecker
                     return null;
                 if (TryToTypeInfo(ctor.ReturnType) is not { } returnType) return null;
                 var signature = new TypeInfo.ConstructorSignature(null, paramTypes, returnType, requiredParams, hasRestParam);
+                RecordEditorResolvedSignature(signature, version);
                 return new TypeInfo.Record(
                     FrozenDictionary<string, TypeInfo>.Empty,
                     ConstructorSignatures: [signature]);
@@ -369,13 +377,15 @@ public partial class TypeChecker
             // Generic overloads carry their type parameters (resolved through the shared scope);
             // non-generic signatures bind a null tps.
             if (ResolveSignatureNode(signature) is not (var tps, { } f)) return null;
-            (recCallSigs ??= []).Add(new TypeInfo.CallSignature(tps, f.ParamTypes, f.ReturnType, f.RequiredParams, f.HasRestParam, f.ParamNames));
+            (recCallSigs ??= []).Add(CopyEditorSignatureMetadata(f,
+                new TypeInfo.CallSignature(tps, f.ParamTypes, f.ReturnType, f.RequiredParams, f.HasRestParam, f.ParamNames)));
         }
         List<TypeInfo.ConstructorSignature>? recCtorSigs = null;
         foreach (var signature in constructSignatures)
         {
             if (ResolveSignatureNode(signature) is not (var tps, { } f)) return null;
-            (recCtorSigs ??= []).Add(new TypeInfo.ConstructorSignature(tps, f.ParamTypes, f.ReturnType, f.RequiredParams, f.HasRestParam, f.ParamNames));
+            (recCtorSigs ??= []).Add(CopyEditorSignatureMetadata(f,
+                new TypeInfo.ConstructorSignature(tps, f.ParamTypes, f.ReturnType, f.RequiredParams, f.HasRestParam, f.ParamNames)));
         }
 
         return new TypeInfo.Record(
@@ -474,6 +484,7 @@ public partial class TypeChecker
     private (List<TypeInfo.TypeParameter> TypeParams, TypeInfo.Function Func)? TryResolveGenericSignature(
         List<TypeParam> typeParameters, FunctionTypeNode body)
     {
+        long version = _editorUnprovenTypeVersion;
         var typeParamEnv = new TypeEnvironment(_environment);
 
         // First pass: declare every name unconstrained.
@@ -502,7 +513,9 @@ public partial class TypeChecker
             bodyType = TryToTypeInfo(body);
         }
 
-        return bodyType is TypeInfo.Function func ? (typeParams, func) : null;
+        if (bodyType is not TypeInfo.Function func) return null;
+        RecordEditorResolvedSignature(func, version);
+        return (typeParams, func);
     }
 
     /// <summary>
@@ -731,6 +744,22 @@ public partial class TypeChecker
     /// otherwise. The node list, when non-null, is index-aligned with the string list.
     /// Callers only invoke inside count-guarded branches, so the string list is never null.
     /// </summary>
-    private TypeInfo ResolveTypeArg(List<string>? typeArgs, List<TypeNode?>? typeArgNodes, int i) =>
-        ResolveAnnotation(typeArgs![i], typeArgNodes is { } nodes && i < nodes.Count ? nodes[i] : null)!;
+    private TypeInfo ResolveTypeArg(List<string>? typeArgs, List<TypeNode?>? typeArgNodes, int i)
+    {
+        if (!EditorFacts.IsEnabled)
+            return ResolveAnnotation(typeArgs![i], typeArgNodes is { } plainNodes && i < plainNodes.Count ? plainNodes[i] : null)!;
+        long version = _editorUnprovenTypeVersion;
+        bool completed = false;
+        try
+        {
+            TypeInfo result = ResolveAnnotation(typeArgs![i], typeArgNodes is { } nodes && i < nodes.Count ? nodes[i] : null)!;
+            completed = true;
+            return result;
+        }
+        finally
+        {
+            _editorInvocationAttempt?.RecordTypeArgumentProof(typeArgs,
+                completed && version == _editorUnprovenTypeVersion);
+        }
+    }
 }

@@ -62,7 +62,7 @@ public partial class TypeChecker
     private TypeInfo Substitute(TypeInfo type, Dictionary<string, TypeInfo> substitutions, bool evalConditionals)
     {
         TypeInfo Sub(TypeInfo t) => Substitute(t, substitutions, evalConditionals);
-        return type switch
+        TypeInfo result = type switch
         {
             TypeInfo.TypeParameter tp =>
                 substitutions.TryGetValue(tp.Name, out var sub) ? sub : type,
@@ -168,6 +168,8 @@ public partial class TypeChecker
             // Primitives, Any, Void, Never, Unknown, Null pass through unchanged
             _ => type
         };
+        if (EditorFacts.IsEnabled) CopyEditorSignatureMetadata(type, result);
+        return result;
     }
 
     /// <summary>
@@ -195,7 +197,7 @@ public partial class TypeChecker
     /// dropped construct/call signatures and index types, leaving <c>T extends new (...) =&gt; infer
     /// U</c> with an empty object on both sides so U never bound (#316).
     /// </summary>
-    private static TypeInfo.Record SubstituteRecordMembers(TypeInfo.Record rec, Func<TypeInfo, TypeInfo> sub) =>
+    private TypeInfo.Record SubstituteRecordMembers(TypeInfo.Record rec, Func<TypeInfo, TypeInfo> sub) =>
         new(
             rec.Fields.ToDictionary(kvp => kvp.Key, kvp => sub(kvp.Value)).ToFrozenDictionary(),
             rec.StringIndexType is { } sit ? sub(sit) : null,
@@ -204,16 +206,16 @@ public partial class TypeChecker
             rec.OptionalFields,
             rec.IsReadonly,
             rec.GetterOnlyFields,
-            rec.CallSignatures?.Select(cs => cs with
+            rec.CallSignatures?.Select(cs => CopyEditorSignatureMetadata(cs, cs with
             {
                 ParamTypes = cs.ParamTypes.Select(sub).ToList(),
                 ReturnType = sub(cs.ReturnType)
-            }).ToList(),
-            rec.ConstructorSignatures?.Select(cs => cs with
+            })).ToList(),
+            rec.ConstructorSignatures?.Select(cs => CopyEditorSignatureMetadata(cs, cs with
             {
                 ParamTypes = cs.ParamTypes.Select(sub).ToList(),
                 ReturnType = sub(cs.ReturnType)
-            }).ToList(),
+            })).ToList(),
             rec.MethodMembers);
 
     /// <summary>

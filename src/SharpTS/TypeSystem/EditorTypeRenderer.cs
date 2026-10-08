@@ -25,10 +25,12 @@ public static class EditorTypeRenderer
         bool isConstructor = false, TypeInfo? constructedType = null,
         IReadOnlyList<TypeInfo.TypeParameter>? typeParameters = null, EditorRenderLimits? limits = null,
         IReadOnlyDictionary<string, TypeInfo>? substitutions = null,
-        IReadOnlyDictionary<TypeInfo, EditorCallableSurface>? callableSurfaces = null)
+        IReadOnlyDictionary<TypeInfo, EditorCallableSurface>? callableSurfaces = null,
+        IReadOnlyList<string>? parameterNames = null)
     {
         var writer = new Writer(limits ?? new(), substitutions, callableSurfaces);
-        return writer.Signature(signature, 0, isConstructor, constructedType, typeParameters, arrow: false);
+        return writer.Signature(signature, 0, isConstructor, constructedType, typeParameters, arrow: false,
+            parameterNames: parameterNames);
     }
 
     private sealed class Writer
@@ -323,7 +325,8 @@ public static class EditorTypeRenderer
         }
 
         public EditorSignaturePresentation Signature(TypeInfo? signature, int depth, bool constructor,
-            TypeInfo? constructed, IReadOnlyList<TypeInfo.TypeParameter>? sharedParameters, bool arrow)
+            TypeInfo? constructed, IReadOnlyList<TypeInfo.TypeParameter>? sharedParameters, bool arrow,
+            IReadOnlyList<string>? parameterNames = null)
         {
             int start = _text.Length, unavailable = _unavailable, truncated = _truncated;
             var shape = signature switch
@@ -339,6 +342,11 @@ public static class EditorTypeRenderer
                 if (shape is null) Unavailable(); else Ellipsis();
                 return new(_text.ToString(start, _text.Length - start), [], new("unavailable", false, false), 0, false, false, _truncated != truncated);
             }
+            // Instantiation may omit names while preserving the exact original parameter slots.
+            // Presentation can borrow those names only when every slot still aligns; existing
+            // names (including partially named signatures) remain authoritative.
+            IReadOnlyList<string>? names = shape.Names is { Count: > 0 } ? shape.Names :
+                parameterNames?.Count == shape.Parameters.Count ? parameterNames : null;
             var addedShadows = new List<string>();
             bool cappedTypeParameters = shape.TypeParameters?.Count > _limits.MaxCandidates;
             if (cappedTypeParameters) { _truncated++; _suppressSubstitutions++; }
@@ -356,7 +364,7 @@ public static class EditorTypeRenderer
                 if (index != 0) Text(", ");
                 int parameterStart = _text.Length;
                 bool rest = shape.Rest && index == shape.Parameters.Count - 1, optional = !rest && index >= shape.Minimum;
-                string name = shape.Names is not null && index < shape.Names.Count && !string.IsNullOrWhiteSpace(shape.Names[index]) ? shape.Names[index] : $"arg{index}";
+                string name = names is not null && index < names.Count && !string.IsNullOrWhiteSpace(names[index]) ? names[index] : $"arg{index}";
                 if (rest) Text("..."); Name(name); if (optional) Text("?"); Text(": ");
                 int typeStart = _text.Length, typeUnavailable = _unavailable, typeTruncated = _truncated;
                 Type(shape.Parameters[index], depth + 1);

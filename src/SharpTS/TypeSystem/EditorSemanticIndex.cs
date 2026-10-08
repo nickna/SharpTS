@@ -20,6 +20,7 @@ public sealed class EditorSemanticIndex
     private readonly Dictionary<OwnerKey, List<SourceSpan>> _enteredBodies = new(OwnerComparer.Instance);
     private readonly Dictionary<TypeInfo, int> _signatureIds = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<TypeInfo, EditorCallableSurface> _callableSurfaces = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<TypeInfo, bool> _signatureProofs = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<OwnerKey, Dictionary<EditorAnnotationSlot, bool>> _annotationProofs = new(OwnerComparer.Instance);
     private int _nextScope = 1;
 
@@ -33,6 +34,7 @@ public sealed class EditorSemanticIndex
         if (!IsEnabled) return;
         _occurrences.Clear(); _typeUses.Clear(); _declarations.Clear(); _receivers.Clear(); _invocations.Clear();
         _callableSurfaces.Clear();
+        _signatureProofs.Clear();
         _annotationProofs.Clear();
         _scopes.Clear(); _scopesById.Clear(); _enteredBodies.Clear(); _signatureIds.Clear(); _nextScope = 1;
         Generation = Interlocked.Increment(ref _nextGeneration);
@@ -106,6 +108,20 @@ public sealed class EditorSemanticIndex
         var key = new OwnerKey(document, owner);
         if (!_annotationProofs.TryGetValue(key, out var slots)) _annotationProofs.Add(key, slots = []);
         slots[slot] = isProven;
+    }
+
+    // Immutable signature references may be reused by aliases and later checking passes.
+    // A fallback already embedded in that exact object cannot become proved on a cache hit.
+    internal void RecordSignatureProof(TypeInfo signature, bool isProven)
+    {
+        if (!IsEnabled) return;
+        _signatureProofs[signature] = isProven && _signatureProofs.GetValueOrDefault(signature, true);
+    }
+
+    internal void CopySignatureProof(TypeInfo original, TypeInfo replacement)
+    {
+        if (IsEnabled && _signatureProofs.TryGetValue(original, out bool proven))
+            RecordSignatureProof(replacement, proven);
     }
 
     public void RecordDeclaration(SourceDocument? document, object owner, Token name, BindingSymbol? symbol,
@@ -265,12 +281,37 @@ public sealed class EditorSemanticIndex
             return unproven;
         }
         var unprovenBindings = new HashSet<BindingSymbol>(ReferenceEqualityComparer.Instance);
+        var unprovenCalleeBindings = new HashSet<BindingSymbol>(ReferenceEqualityComparer.Instance);
         foreach (var (key, drafts) in _declarations)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (UnprovenOwner(key))
                 foreach (var draft in drafts)
-                    if (draft.Symbol is { } symbol) unprovenBindings.Add(symbol);
+                    if (draft.Symbol is { } symbol)
+                    {
+                        unprovenBindings.Add(symbol);
+                        // Public overloads have independent source-owner proofs below. A bad
+                        // overload must not erase another public candidate on the same binding.
+                        if (key.Owner is not Stmt.Function) unprovenCalleeBindings.Add(symbol);
+                    }
+        }
+        bool UnprovenCallee(SourceDocument? document, Expr expression, int depth = 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (depth >= 32) return true;
+            var key = new OwnerKey(document, expression);
+            if (UnprovenOwner(key) || _occurrences.TryGetValue(key, out var occurrence) &&
+                (occurrence.Availability == EditorFactAvailability.Unavailable ||
+                 occurrence.Binding is { } binding && unprovenCalleeBindings.Contains(binding))) return true;
+            return expression switch
+            {
+                Expr.Grouping grouping => UnprovenCallee(document, grouping.Expression, depth + 1),
+                Expr.NonNullAssertion assertion => UnprovenCallee(document, assertion.Expression, depth + 1),
+                Expr.Get member => UnprovenCallee(document, member.Object, depth + 1),
+                Expr.GetPrivate member => UnprovenCallee(document, member.Object, depth + 1),
+                Expr.GetIndex member => UnprovenCallee(document, member.Object, depth + 1),
+                _ => false,
+            };
         }
         var bindings = new Dictionary<BindingSymbol, EditorBindingIdentity>(ReferenceEqualityComparer.Instance);
         EditorBindingIdentity? Binding(BindingSymbol? symbol)
@@ -354,22 +395,54 @@ public sealed class EditorSemanticIndex
         foreach (var (key, draft) in _invocations)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            bool complete = draft.Complete;
+            Expr? callee = key.Owner switch
+            {
+                Expr.Call call => call.Callee,
+                Expr.New creation => creation.Callee,
+                Expr.CallPrivate call => call.Object,
+                _ => null,
+            };
+            bool calleeProven = callee is null || !UnprovenCallee(key.Document, callee);
+            bool Proven(TypeInfo signature) => _signatureProofs.GetValueOrDefault(signature, true);
+            static IReadOnlyList<string>? ParameterNames(TypeInfo signature) => signature switch
+            {
+                TypeInfo.Function function => function.ParamNames,
+                TypeInfo.GenericFunction function => function.ParamNames,
+                TypeInfo.CallSignature signatureType => signatureType.ParamNames,
+                TypeInfo.ConstructorSignature signatureType => signatureType.ParamNames,
+                _ => null,
+            };
             var candidates = draft.Candidates.Select(candidate =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                bool proven = calleeProven && Proven(candidate.OriginalSignature) &&
+                    (candidate.Origin is not { } origin || !UnprovenOwner(new(origin.Document, origin.Owner)));
+                bool instantiatedProven = proven && candidate.IsInstantiationProven &&
+                    (candidate.InstantiatedSignature is null || Proven(candidate.InstantiatedSignature));
+                if (!proven || !instantiatedProven) complete = false;
                 return new EditorInvocationSignature(candidate.Ordinal,
-                _signatureIds[candidate.OriginalSignature], EditorTypeRenderer.RenderSignature(candidate.OriginalSignature,
+                _signatureIds[candidate.OriginalSignature], EditorTypeRenderer.RenderSignature(proven ? candidate.OriginalSignature : null,
                     draft.Kind == EditorInvocationKind.New, candidate.ConstructedType, candidate.TypeParameters,
                     callableSurfaces: _callableSurfaces),
-                candidate.InstantiatedSignature is null ? null : EditorTypeRenderer.RenderSignature(candidate.InstantiatedSignature,
-                    draft.Kind == EditorInvocationKind.New, callableSurfaces: _callableSurfaces), candidate.Origin,
+                candidate.InstantiatedSignature is null ? null : EditorTypeRenderer.RenderSignature(instantiatedProven ? candidate.InstantiatedSignature : null,
+                    draft.Kind == EditorInvocationKind.New, callableSurfaces: _callableSurfaces,
+                    parameterNames: ParameterNames(candidate.OriginalSignature)), candidate.Origin,
                 candidate.ConstructedType is null ? null : Type(candidate.ConstructedType), candidate.IsImplicit);
             }).ToImmutableArray();
-            invocations.Add(new(key.Document!, (Expr)key.Owner, draft.Kind, candidates, draft.SelectedOrdinal,
-                draft.SelectedSignature is null ? null : EditorTypeRenderer.RenderSignature(draft.SelectedSignature,
+            bool selected = complete && !draft.Recovered && !draft.Holes && draft.Status == EditorInvocationStatus.Selected &&
+                draft.SelectedSignature is { } selectedSignature && Proven(selectedSignature) &&
+                candidates.Any(candidate => candidate.Ordinal == draft.SelectedOrdinal && candidate.Declared.IsAvailable &&
+                    candidate.Instantiated?.IsAvailable != false);
+            invocations.Add(new(key.Document!, (Expr)key.Owner, draft.Kind, candidates, selected ? draft.SelectedOrdinal : null,
+                !selected ? null : EditorTypeRenderer.RenderSignature(draft.SelectedSignature,
                     draft.Kind == EditorInvocationKind.New, draft.Kind == EditorInvocationKind.New ? draft.Result : null,
-                    callableSurfaces: _callableSurfaces), draft.Result is null ? null : Type(draft.Result),
-                draft.Status, draft.Complete, draft.Recovered, draft.Holes));
+                    callableSurfaces: _callableSurfaces,
+                    parameterNames: draft.Candidates.FirstOrDefault(candidate => candidate.Ordinal == draft.SelectedOrdinal) is { } selectedCandidate
+                        ? ParameterNames(selectedCandidate.OriginalSignature) : null), draft.Result is null ? null : Type(draft.Result),
+                selected ? EditorInvocationStatus.Selected : candidates.Any(candidate => candidate.Declared.IsAvailable)
+                    ? EditorInvocationStatus.CandidatesOnly : EditorInvocationStatus.Unavailable,
+                complete, draft.Recovered, draft.Holes));
         }
         var bodies = _enteredBodies.ToDictionary(pair => pair.Key,
             pair => (IReadOnlyList<SourceSpan>)pair.Value.ToImmutableArray(), OwnerComparer.Instance);

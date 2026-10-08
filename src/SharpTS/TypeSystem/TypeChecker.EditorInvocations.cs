@@ -99,6 +99,7 @@ public partial class TypeChecker
         private readonly List<EditorInvocationCandidate> _candidates = [];
         private Dictionary<TypeInfo, int>? _instantiations;
         private bool _complete = true;
+        private bool _typeArgumentsProven = true;
         private bool _succeeded;
         private int? _selectedOrdinal;
         private TypeInfo? _selectedSignature;
@@ -110,13 +111,34 @@ public partial class TypeChecker
             _checker = checker; _previous = previous; _document = document; _owner = owner;
             _kind = kind; _recovered = recovered; _holes = holes;
             if (document is not null)
+            {
                 checker.EditorFacts.BeginInvocation(document, owner, kind, recovered, holes);
+                checker.EditorFacts.RecordAnnotationProof(document, owner, EditorAnnotationSlot.Type, true);
+            }
         }
 
         public bool CanPublish => _document is not null;
         public TypeInfo? ConstructedType { get; private set; }
 
         public void SetConstructedType(TypeInfo type) => ConstructedType = type;
+
+        public void RecordTypeArgumentProof(List<string>? arguments, bool isProven)
+        {
+            if (!CanPublish || isProven) return;
+            // ResolveTypeArg is also used for heritage and nested checks. Only the exact
+            // explicit argument list owned by this invocation can veto its substitution.
+            List<string>? sourceArguments = _owner switch
+            {
+                Expr.Call call => call.TypeArgs,
+                Expr.New creation => creation.TypeArgs,
+                _ => null,
+            };
+            if (sourceArguments is not null && ReferenceEquals(sourceArguments, arguments))
+            {
+                _typeArgumentsProven = false;
+                _checker.EditorFacts.RecordAnnotationProof(_document, _owner, EditorAnnotationSlot.Type, false);
+            }
+        }
 
         public void SetCallCandidates(TypeInfo callee, bool optional)
         {
@@ -265,7 +287,12 @@ public partial class TypeChecker
             if (!CanPublish) return;
             int ordinal = FindOriginal(original);
             if (ordinal < 0) return;
-            _candidates[ordinal] = _candidates[ordinal] with { InstantiatedSignature = instantiated };
+            _checker.CopyEditorSignatureMetadata(original, instantiated);
+            _candidates[ordinal] = _candidates[ordinal] with
+            {
+                InstantiatedSignature = instantiated,
+                IsInstantiationProven = _typeArgumentsProven,
+            };
             (_instantiations ??= new(ReferenceEqualityComparer.Instance))[instantiated] = ordinal;
         }
 
@@ -290,12 +317,16 @@ public partial class TypeChecker
         {
             _checker._editorInvocationAttempt = _previous;
             if (!CanPublish) return;
-            bool selected = _succeeded && _selectedOrdinal is not null && !_recovered && !_holes && _complete;
+            if (!_typeArgumentsProven)
+                for (int i = 0; i < _candidates.Count; i++)
+                    _candidates[i] = _candidates[i] with { IsInstantiationProven = false };
+            bool complete = _complete && _typeArgumentsProven;
+            bool selected = _succeeded && _selectedOrdinal is not null && !_recovered && !_holes && complete;
             _checker.EditorFacts.RecordInvocation(_document, _owner, _kind, _candidates,
                 selected ? _selectedOrdinal : null, selected ? _selectedSignature : null,
                 selected ? EditorInvocationStatus.Selected :
                     _candidates.Count == 0 ? EditorInvocationStatus.Unavailable : EditorInvocationStatus.CandidatesOnly,
-                _succeeded ? _result : null, _complete, _recovered, _holes);
+                _succeeded ? _result : null, complete, _recovered, _holes);
         }
     }
 }

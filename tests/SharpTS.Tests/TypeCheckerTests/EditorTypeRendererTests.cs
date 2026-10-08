@@ -36,6 +36,72 @@ public sealed class EditorTypeRendererTests
         Assert.Equal(2, signature.Parameters.Count);
     }
 
+    [Theory]
+    [InlineData("function")]
+    [InlineData("empty-names")]
+    [InlineData("generic")]
+    [InlineData("call")]
+    [InlineData("constructor")]
+    public void ExactOriginalParameterNamesCanPresentUnnamedInstantiatedSlots(string kind)
+    {
+        TypeInfo signature = kind switch
+        {
+            "generic" => new TypeInfo.GenericFunction([], [TypeInfo.Primitive.Number], TypeInfo.Primitive.Number),
+            "call" => new TypeInfo.CallSignature(null, [TypeInfo.Primitive.Number], TypeInfo.Primitive.Number),
+            "constructor" => new TypeInfo.ConstructorSignature(null, [TypeInfo.Primitive.Number], TypeInfo.Object.Shared),
+            "empty-names" => new TypeInfo.Function([TypeInfo.Primitive.Number], TypeInfo.Primitive.Number, ParamNames: []),
+            _ => new TypeInfo.Function([TypeInfo.Primitive.Number], TypeInfo.Primitive.Number),
+        };
+        Assert.Contains("arg0: number", EditorTypeRenderer.RenderSignature(signature).Label, StringComparison.Ordinal);
+        var presented = EditorTypeRenderer.RenderSignature(signature, parameterNames: ["value"]);
+        Assert.Contains("value: number", presented.Label, StringComparison.Ordinal);
+        var parameter = Assert.Single(presented.Parameters);
+        Assert.Equal("value", parameter.Name);
+        Assert.Equal("value: number", presented.Label[parameter.LabelRange.Start..parameter.LabelRange.End]);
+        // The opt-in presentation must not mutate the compiler signature or future defaults.
+        Assert.Contains("arg0: number", EditorTypeRenderer.RenderSignature(signature).Label, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(3)]
+    public void MismatchedOriginalNameCountCannotGuessAnInstantiatedSlotMapping(int count)
+    {
+        var signature = new TypeInfo.Function([TypeInfo.Primitive.Number, TypeInfo.String.Shared], TypeInfo.Void.Shared);
+        string[] names = Enumerable.Range(0, count).Select(index => "source" + index).ToArray();
+        var presented = EditorTypeRenderer.RenderSignature(signature, parameterNames: names);
+        Assert.Equal("(arg0: number, arg1: string): void", presented.Label);
+    }
+
+    [Fact]
+    public void ExistingTargetNamesRemainAuthoritativeIncludingPartiallyNamedSignatures()
+    {
+        var signature = new TypeInfo.Function([TypeInfo.Primitive.Number, TypeInfo.String.Shared],
+            TypeInfo.Void.Shared, ParamNames: ["own"]);
+        var presented = EditorTypeRenderer.RenderSignature(signature, parameterNames: ["sourceFirst", "sourceSecond"]);
+        Assert.Equal("(own: number, arg1: string): void", presented.Label);
+    }
+
+    [Fact]
+    public void BorrowedNamesPreserveExactUtf16ParameterRangesAndCharacterBudgets()
+    {
+        var signature = new TypeInfo.Function([new TypeInfo.StringLiteral("😀"), TypeInfo.Primitive.Number],
+            TypeInfo.Void.Shared);
+        var presented = EditorTypeRenderer.RenderSignature(signature, parameterNames: ["emoji", "count"]);
+        Assert.Equal("(emoji: \"😀\", count: number): void", presented.Label);
+        Assert.Equal("emoji: \"😀\"", presented.Label[presented.Parameters[0].LabelRange.Start..presented.Parameters[0].LabelRange.End]);
+        Assert.Equal("count: number", presented.Label[presented.Parameters[1].LabelRange.Start..presented.Parameters[1].LabelRange.End]);
+        Assert.Equal(presented.Label.IndexOf("count: number", StringComparison.Ordinal), presented.Parameters[1].LabelRange.Start);
+
+        var bounded = EditorTypeRenderer.RenderSignature(signature, limits: new(MaxCharacters: 16),
+            parameterNames: [new string('x', 14) + "😀", "count"]);
+        Assert.True(bounded.IsTruncated);
+        Assert.True(bounded.Label.Length <= 16);
+        Assert.False(char.IsHighSurrogate(bounded.Label[^1]));
+        Assert.All(bounded.Parameters, parameter => Assert.InRange(parameter.LabelRange.End, 0, bounded.Label.Length));
+    }
+
     [Fact]
     public void SubstitutionIsPureAndMethodTypeParametersShadowClassMappings()
     {

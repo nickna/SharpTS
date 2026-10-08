@@ -90,8 +90,8 @@ it does not remove that name and expose a potentially shadowed outer binding.
 
 The shared cache includes the query index's estimated payload. This estimate approximates
 collection/object overhead and is separate from measured retained heap; it is not a process
-memory limit. Full-mode hover and completion consume these values; signature help uses a later
-feature handler. Capture itself does not change advertised capabilities.
+memory limit. Full-mode hover, completion and signature help consume these values. Capture
+itself does not change advertised capabilities.
 
 ## Completion consumption
 
@@ -112,7 +112,39 @@ Unused lazy aliases therefore supply no typed completion item. Existing checker 
 also remain authoritative: an annotated source-class function can currently yield checked
 `any` at its call site despite its declared signature, so that receiver has no member results.
 
+## Signature-help consumption
+
+`SemanticSignatureHelpService` joins the innermost parser invocation to its exact frozen
+invocation owner. It projects available public candidates in original ordinal order, with
+checked instantiations when available. Unresolved callable annotations are tracked at existing
+type/signature construction decisions by reference identity, including anonymous functions,
+returned callable types, alias cache reuse and existing substitution paths. Publication
+refuses those candidates and clears a selected signature if its proof is unavailable.
+Explicit invocation type arguments retain their own resolution proof; an invalid use cannot
+taint a shared original signature. A proven formal signature can be displayed when its
+instantiation is unavailable. Instantiated parameter names come only from the exact original
+signature and a matching parameter count, without mutating the compiler's type objects.
+Proof covers captured callable owners and signature-owned annotations. Shared outer generic
+interface constraint/default metadata is not separately tracked, so this is not a claim of
+complete generic-constraint provenance.
+
+Argument indices count only the parser's recorded top-level commas. Each rendered signature
+maps rest arguments and supplies exact UTF-16 parameter label slices. Recovered/hole-bearing,
+incomplete and candidates-only facts never establish selection. A top-level active parameter
+can follow the first visible signature for protocol presentation while `activeSignature`
+remains absent. Signature help does not run another overload resolver or infer selection from
+parameter counts, labels or return types. Unfinished argument lists use the checked cursor
+bridge; a cached parse-only artifact is never checked again.
+An inner invocation that the checker never visits because an enclosing call fails early
+remains unavailable; the service does not substitute the outer call's signatures.
+
 ## Verification and measured cost
+
+The #1979 signature-help extension adds 115 cases and passed 3,433 affected tests, the
+TypeScript smoke profile (32 corpus cases/17 harness tests) and 9 targeted Test262 cases.
+Four real stdio clients passed full/interop-only isolation, optional capability negotiation,
+unfinished/nested argument lists, exact UTF-16 label slices, dirty dependency/close behavior
+and cancellation. Completion, hover and shared-analysis stdio regressions also passed.
 
 The #1978 completion extension adds 99 focused cases and passed 3,318 affected tests, the
 TypeScript smoke profile (32 corpus cases/17 harness tests) and 9 targeted Test262 cases.

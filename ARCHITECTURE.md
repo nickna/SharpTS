@@ -187,6 +187,15 @@ keeps precedence; full-mode CLR usage shares the checked analysis, while interop
 request ordinary semantic analysis. The handler negotiates Markdown/plain text and revalidates
 the captured state before returning its exact UTF-16 source range.
 
+Full-mode `SemanticSignatureHelpService` joins parser-owned argument lists to frozen invocation
+facts from the same checked graph. Exact signature construction, source owners, explicit type
+arguments and callee/receiver annotation proof determine candidate eligibility. Existing signature
+substitution carries that proof by reference; unresolved fallbacks cannot create displayed `any`
+parameters. The consumer preserves public candidate order and only publishes a complete checker
+selection. Parser commas and bounded signature ranges supply active parameters and negotiated
+UTF-16 label offsets. Unfinished calls use the shared fresh cursor graph; unvisited inner calls
+remain unavailable. Decorator help retains priority in both modes.
+
 `Parser.ParseForEditor` clones the source capture for bounded cursor-local missing member names
 and unfinished call/new lists, including a hidden name after `super.`. A repair gap must contain
 the caret between consumed source and the next real token. Comma-run lookahead stops beyond the

@@ -738,6 +738,7 @@ public partial class TypeChecker
             callSignatures = [];
             foreach (var sig in interfaceStmt.CallSignatures)
             {
+                long signatureVersion = _editorUnprovenTypeVersion;
                 // The signature's own type parameters must be in scope while its parameter and
                 // return types resolve — otherwise `<T>(x: T): T[]` silently collapses T to any
                 // and the signature relates vacuously.
@@ -749,7 +750,9 @@ public partial class TypeChecker
                     int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && p.DefaultValue == null).Count();
                     bool hasRestParam = sig.Parameters.Any(p => p.IsRest);
                     var paramNames = sig.Parameters.Select(p => p.Name.Lexeme).ToList();
-                    callSignatures.Add(new TypeInfo.CallSignature(sigTypeParams, paramTypes, returnType, requiredParams, hasRestParam, paramNames));
+                    var signature = new TypeInfo.CallSignature(sigTypeParams, paramTypes, returnType, requiredParams, hasRestParam, paramNames);
+                    RecordEditorResolvedSignature(signature, signatureVersion);
+                    callSignatures.Add(signature);
                 }
             }
         }
@@ -761,6 +764,7 @@ public partial class TypeChecker
             constructorSignatures = [];
             foreach (var sig in interfaceStmt.ConstructorSignatures)
             {
+                long signatureVersion = _editorUnprovenTypeVersion;
                 // Same scoping rule as call signatures above.
                 var sigEnv = ScopedSignatureTypeParamEnv(interfaceTypeEnv, sig.TypeParams, out var sigTypeParams);
                 using (new EnvironmentScope(this, sigEnv))
@@ -770,7 +774,9 @@ public partial class TypeChecker
                     int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && p.DefaultValue == null).Count();
                     bool hasRestParam = sig.Parameters.Any(p => p.IsRest);
                     var paramNames = sig.Parameters.Select(p => p.Name.Lexeme).ToList();
-                    constructorSignatures.Add(new TypeInfo.ConstructorSignature(sigTypeParams, paramTypes, returnType, requiredParams, hasRestParam, paramNames));
+                    var signature = new TypeInfo.ConstructorSignature(sigTypeParams, paramTypes, returnType, requiredParams, hasRestParam, paramNames);
+                    RecordEditorResolvedSignature(signature, signatureVersion);
+                    constructorSignatures.Add(signature);
                 }
             }
         }
@@ -987,12 +993,12 @@ public partial class TypeChecker
                 ? subs
                 : subs.Where(pair => signature.TypeParams.All(parameter => parameter.Name != pair.Key))
                     .ToDictionary(StringComparer.Ordinal);
-            return signature with
+            return CopyEditorSignatureMetadata(signature, signature with
             {
                 ParamTypes = signature.ParamTypes
                     .Select(type => SubstitutePreservingSignatures(type, signatureSubs)).ToList(),
                 ReturnType = SubstitutePreservingSignatures(signature.ReturnType, signatureSubs),
-            };
+            });
         }).ToList();
         List<TypeInfo.ConstructorSignature>? constructorSignatures = gi.ConstructorSignatures?.Select(signature =>
         {
@@ -1000,12 +1006,12 @@ public partial class TypeChecker
                 ? subs
                 : subs.Where(pair => signature.TypeParams.All(parameter => parameter.Name != pair.Key))
                     .ToDictionary(StringComparer.Ordinal);
-            return signature with
+            return CopyEditorSignatureMetadata(signature, signature with
             {
                 ParamTypes = signature.ParamTypes
                     .Select(type => SubstitutePreservingSignatures(type, signatureSubs)).ToList(),
                 ReturnType = SubstitutePreservingSignatures(signature.ReturnType, signatureSubs),
-            };
+            });
         }).ToList();
         return new TypeInfo.Interface(
             $"{gi.Name}<{string.Join(", ", ig.TypeArguments)}>",

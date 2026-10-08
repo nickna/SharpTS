@@ -1998,6 +1998,7 @@ public partial class TypeChecker
             : new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
         RecordEditorExpressionType(arrow, completedType);
         if (arrow.Name is { } sourceName) RegisterEditorSignature(completedType, arrow, sourceName);
+        else RegisterEditorAnonymousSignature(completedType, arrow);
         return completedType;
     }
 

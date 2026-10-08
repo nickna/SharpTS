@@ -349,6 +349,31 @@ public partial class TypeChecker
     private EditorSourceSlot? GetEditorSignatureSource(TypeInfo signature) =>
         _editorSignatureSources?.GetValueOrDefault(signature);
 
+    private void RecordEditorResolvedSignature(TypeInfo? signature, long beforeResolution)
+    {
+        if (EditorFacts.IsEnabled && signature is TypeInfo.Function or TypeInfo.GenericFunction or
+            TypeInfo.CallSignature or TypeInfo.ConstructorSignature)
+            EditorFacts.RecordSignatureProof(signature, beforeResolution == _editorUnprovenTypeVersion);
+    }
+
+    // Only carries metadata between the exact old/new signatures at an existing checker
+    // substitution. Public families are deliberately not copied onto instantiated signatures.
+    private T CopyEditorSignatureMetadata<T>(TypeInfo original, T replacement) where T : TypeInfo
+    {
+        if (!EditorFacts.IsEnabled || ReferenceEquals(original, replacement)) return replacement;
+        EditorFacts.CopySignatureProof(original, replacement);
+        if (GetEditorSignatureSource(original) is { } source)
+            (_editorSignatureSources ??= new(ReferenceEqualityComparer.Instance))[replacement] = source;
+        return replacement;
+    }
+
+    private void RegisterEditorAnonymousSignature(TypeInfo signature, Expr.ArrowFunction owner)
+    {
+        if (!EditorFacts.IsEnabled || CurrentSourceDocument is not { EditorSyntax: { } syntax } document ||
+            !syntax.GetRecords(owner).Any(record => record.IsAuthoritative && record.Kind == EditorSyntaxKind.Expression)) return;
+        (_editorSignatureSources ??= new(ReferenceEqualityComparer.Instance))[signature] = new(document, owner);
+    }
+
     private IReadOnlyList<TypeInfo>? GetEditorPublicSignatures(TypeInfo signature) =>
         _editorPublicSignatures?.GetValueOrDefault(signature)?.Signatures;
 

@@ -492,7 +492,8 @@ public partial class TypeChecker
         var substitutedParams = generic.ParamTypes.Select(p => SubstitutePreservingSignatures(p, substitutions)).ToList();
         var substitutedReturn = SubstitutePreservingSignatures(generic.ReturnType, substitutions);
 
-        return new TypeInfo.Function(substitutedParams, substitutedReturn, generic.RequiredParams, generic.HasRestParam);
+        return CopyEditorSignatureMetadata(generic,
+            new TypeInfo.Function(substitutedParams, substitutedReturn, generic.RequiredParams, generic.HasRestParam));
     }
 
     /// <summary>

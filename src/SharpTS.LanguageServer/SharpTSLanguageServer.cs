@@ -67,6 +67,7 @@ public static class SharpTSLanguageServer
                     {
                         services.AddSingleton<SemanticHoverService>();
                         services.AddSingleton<SemanticCompletionService>();
+                        services.AddSingleton<SemanticSignatureHelpService>();
                     }
                     if (metadataProvider is not null) services.AddSingleton(metadataProvider);
                 })
