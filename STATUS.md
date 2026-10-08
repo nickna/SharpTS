@@ -114,12 +114,21 @@ See [.NET types](docs/dotnet-types.md), [.NET integration](docs/dotnet-integrati
 | TypeScript-source PDBs | ✅ | Portable PDBs with source documents, sequence points, locals/scopes, and async metadata. |
 | Interpreter debug adapter | ✅ | Standalone DAP tool with cooperative breakpoints, stepping, inspection, exceptions, and worker threads. |
 | VS Code extension | ✅ | Diagnostics, interop IntelliSense, and separate interpreted and compiled debug commands. |
-| Standalone language server | ✅ | Diagnostics, navigation, references, safe rename domains, completion, hover, signatures, and quick fixes. |
-| General property/member rename | Deferred | Refused when workspace completeness cannot make the edit safe. |
+| Standalone language server | ✅ | Full-mode checked hover, lexical/member completion, call/new signatures, source definitions/references, lexical rename and a bounded ECMAScript `#private` rename domain; interop features in both modes. |
+| General property/member rename | Deferred | Public/protected/TypeScript-private, structural and parameter-property rename remains unavailable, including in complete workspaces. |
+| Editor formatting | ✅ | External pinned Prettier 3.9.9; SharpTS advertises no formatting provider. Real TS/TSX save checks are recorded. |
+| Editor contract validation | ✅ | Six real-stdio suites, formatter evidence and exact installed-tool checks share an Ubuntu/Windows CI aggregate. Shipping VS Code activation, native Neovim full/two-server editing and native Helix full-mode editing have separate recorded evidence. |
 
 See the [GUI overview](docs/gui/README.md), [language server guide](docs/language-server.md), and the
 [interpreted](docs/debugging-interpreter.md) and [compiled](docs/debugging-typescript.md) debugging
 guides.
+
+For a sole TypeScript server, use `sharpts-lsp --language-features full --diagnostics all`.
+For coexistence, use `interop-only --diagnostics sharpts-only`. CLI defaults remain independently
+`full` features and `sharpts-only` diagnostics; diagnostics can change live, while feature mode is
+fixed at initialization. The [verified editor matrix](docs/language-server.md#verified-editor-arrangements)
+records the actual clients, pinned adapter and capability limits. These supported domains do not
+claim TypeScript language-service parity.
 
 ## 7. Conformance baselines
 
@@ -163,7 +172,7 @@ not freeze historical benchmark magnitudes.
   later than `tsc` reports it.
 - A compiled dynamic-index miss on a plain object can produce `null` rather than `undefined`.
 - Compiled indirect `eval` cannot access compiled local variables.
-- The `Function` constructor is absent.
+- General source construction through `Function` is unsupported; only the bounded forms documented above work.
 - Compiled .NET interop propagates raw CLR exceptions rather than applying the interpreter's
   JavaScript error-name mapping.
 - `AsyncLocalStorage.run`/`exit` do not yet forward optional trailing arguments through the

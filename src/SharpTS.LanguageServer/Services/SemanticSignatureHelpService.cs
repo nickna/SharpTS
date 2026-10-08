@@ -151,7 +151,7 @@ public sealed class SemanticSignatureHelpService(SemanticAnalysisService analysi
                 bool call = token.Type == TokenType.LEFT_PAREN && previous is not null &&
                     (previous.Type is TokenType.IDENTIFIER or TokenType.RIGHT_PAREN or
                     TokenType.RIGHT_BRACKET or TokenType.GREATER or TokenType.GREATER_GREATER or TokenType.GREATER_GREATER_GREATER or
-                    TokenType.PRIVATE_IDENTIFIER or TokenType.QUESTION_DOT || IsContextualIdentifier(previous.Type));
+                    TokenType.PRIVATE_IDENTIFIER or TokenType.QUESTION_DOT || EditorTokenFacts.IsContextualIdentifier(previous.Type));
                 opens.Push(new(token.Type, token.Start, call));
             }
             else if (token.Type is TokenType.RIGHT_PAREN or TokenType.RIGHT_BRACKET or TokenType.RIGHT_BRACE)
@@ -187,15 +187,6 @@ public sealed class SemanticSignatureHelpService(SemanticAnalysisService analysi
     private static bool Matches(TokenType open, TokenType close) => (open, close) is
         (TokenType.LEFT_PAREN, TokenType.RIGHT_PAREN) or (TokenType.LEFT_BRACKET, TokenType.RIGHT_BRACKET) or
         (TokenType.LEFT_BRACE, TokenType.RIGHT_BRACE);
-
-    private static bool IsContextualIdentifier(TokenType type) => type is
-        TokenType.TYPE or TokenType.MODULE or TokenType.NAMESPACE or TokenType.ASYNC or TokenType.DECLARE or
-        TokenType.ABSTRACT or TokenType.READONLY or TokenType.OVERRIDE or TokenType.GLOBAL or TokenType.OF or
-        TokenType.FROM or TokenType.SATISFIES or TokenType.ACCESSOR or TokenType.OUT or TokenType.UNIQUE or
-        TokenType.UNKNOWN or TokenType.NEVER or TokenType.INFER or TokenType.KEYOF or TokenType.ASSERTS or
-        TokenType.IS or TokenType.TYPE_STRING or TokenType.TYPE_NUMBER or TokenType.TYPE_BOOLEAN or
-        TokenType.TYPE_SYMBOL or TokenType.TYPE_BIGINT or TokenType.GET or TokenType.SET or TokenType.UNDEFINED or
-        TokenType.CONSTRUCTOR or TokenType.SYMBOL or TokenType.BIGINT;
 
     private static bool IsCodePosition(string text, IReadOnlyList<Token> tokens, int offset,
         CancellationToken cancellationToken, bool allowLiteral = false)

@@ -57,8 +57,11 @@ static `super` member lookup and function/record `new` fallbacks without a check
 decision. Instance `super` candidates follow the checker's method-only domain. Source navigation
 still requires the narrower [member provenance contract](editor-member-provenance.md).
 
-Some generic class paths retain unannotated instance fields as checked `any`; the query layer
-preserves those results. A generic method annotation that the checker cannot resolve remains
+Unannotated instance fields retain the checker's declared `any` type, including ordinary classes
+and class expressions. Checking a numeric initializer does not publish an inferred instance-field
+type; an explicit field annotation provides that precision. Static declaration fields have a
+separate inference path. The query layer preserves these actual checked results. A generic
+method annotation that the checker cannot resolve remains
 unavailable for editor presentation. Runtime constructor checking can replace
 a public overload set with its implementation function. Editor capture keeps the exact original
 public candidates separately, but that implementation-only validation cannot prove selection

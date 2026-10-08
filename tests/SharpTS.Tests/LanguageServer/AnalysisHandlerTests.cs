@@ -10,6 +10,15 @@ using Xunit;
 
 namespace SharpTS.Tests.LanguageServer;
 
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class EditorAnalysisGateCollection
+{
+    public const string Name = "Editor analysis checker gates";
+}
+
+// These tests deliberately block a checker worker. Keep their release continuations
+// independent of the aggressive runner's queue of unrelated synchronous collections.
+[Collection(EditorAnalysisGateCollection.Name)]
 public sealed class AnalysisHandlerTests
 {
     [Fact]

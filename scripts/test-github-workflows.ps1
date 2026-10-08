@@ -79,7 +79,7 @@ foreach ($requiredText in @(
         $errors.Add("ci.yml is missing change-routing contract text: $requiredText")
     }
 }
-foreach ($jobName in @('build', 'standalone', 'typescript-conformance', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
+foreach ($jobName in @('build', 'standalone', 'typescript-conformance', 'editor-contract', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
     $job = Get-WorkflowJob $ci $jobName 'ci.yml'
     if (-not $job.Contains('needs: workflow-policy', [StringComparison]::Ordinal) -or
         -not $job.Contains("if: needs.workflow-policy.outputs.mode == 'full'", [StringComparison]::Ordinal)) {
@@ -126,6 +126,21 @@ foreach ($requiredText in @('./scripts/test-typescript-conformance.ps1', 'if: al
     if (-not $typeScriptJob.Contains($requiredText, [StringComparison]::Ordinal)) {
         $errors.Add("ci.yml TypeScript gate is missing execution/artifact budget contract: $requiredText")
     }
+}
+$editorJob = Get-WorkflowJob $ci 'editor-contract' 'ci.yml'
+foreach ($requiredText in @('os: [ubuntu-24.04, windows-2025]', 'timeout-minutes: 30',
+    'global-json-file: global.json', 'node-version-file: .node-version',
+    'cache-dependency-path: tools/formatter-interop/package-lock.json',
+    'npm ci --prefix tools/formatter-interop --ignore-scripts',
+    './scripts/test-editor-contract.ps1 -NoRestore -NoFormatterInstall',
+    'timeout-minutes: 25', 'if: always()', 'artifacts/editor-contract/', 'retention-days: 7')) {
+    if (-not $editorJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("ci.yml editor contract is missing pinned execution/evidence contract: $requiredText")
+    }
+}
+if ($ciGateJob -notmatch '(?m)^    needs: \[[^\r\n]*\beditor-contract\b' -or
+    $ciGateJob -notmatch '(?m)^          \$heavy = @\([^\r\n]*''editor-contract''') {
+    $errors.Add('ci.yml Gate must require editor-contract in the full route and skip it in lightweight routes.')
 }
 foreach ($requiredText in @('CHANGE_MODE:', "'csharp-trivia-only'", "'docs-only'", "'lightweight-validation'")) {
     if (-not $ciGateJob.Contains($requiredText, [StringComparison]::Ordinal)) {

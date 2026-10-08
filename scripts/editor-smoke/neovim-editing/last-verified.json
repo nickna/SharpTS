@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-10-08T05:01:55.924Z",
+  "platform": "win32/arm64",
+  "sourceCommit": "a20b07d7259043dd06a33fae34a507b443c847d8",
+  "sourceDirty": true,
+  "serverSha256": "9dc0e3c3b4d401e833735179ee84185c460b9f2dcb2ae187f71f8e808627a40b",
+  "coreSha256": "a2ee2949aace31ab14706d2bf2352125ed94d9fed085cb76ec7b55d95909e45b",
+  "node": "v25.5.0",
+  "dotnet": "10.0.401",
+  "editor": "NVIM v0.12.5",
+  "prettier": "3.9.9",
+  "typescriptAdapter": "6.0.1",
+  "typescript": "6.0.3",
+  "harnessSha256": "10c62a8db3154401a1c0c64ffac3876767f440bf7797a688ce7cfcf6858a61d7",
+  "runnerSha256": "493a7eac9c3534c46926a61b33982e6b94a6a2587227b358e9df2ec384523021",
+  "adapterLockSha256": "c62d961f3693d9b9e647f545ddb7632f819ebdee87ccaa3ac133b7ee532368c8",
+  "formattingRecipeSha256": "c384991e15fe5f8320b1607d73656f8ae103fa5095cd7d4abc4eccdbaf252c72",
+  "completed": true,
+  "rawEvidence": "artifacts/editor-editing/neovim/run-m3aV2X/summary.json",
+  "modes": [
+    {
+      "mode": "full",
+      "completed": true,
+      "cases": [
+        "full-native-hover-definition-references",
+        "unfinished-receiver-completion-applied-by-native-client",
+        "unfinished-call-signatures-without-a-false-winner",
+        "native-lexical-workspace-edit-and-fresh-hover",
+        "dirty-dependency-diagnostics-target-ranges-and-close",
+        "ts-and-tsx-one-save-formatter-with-fresh-language-requests",
+        "native-default-capabilities-refuse-private-edits",
+        "explicit-versioned-capability-applies-private-domain-natively"
+      ],
+      "defaultPrivateRename": "refused: documentChanges is absent from native capabilities",
+      "versionedPrivateRename": {
+        "applied": true,
+        "version": 0
+      }
+    },
+    {
+      "mode": "coexistence",
+      "completed": true,
+      "cases": [
+        "two-real-servers-have-one-ordinary-navigation-owner",
+        "ordinary-diagnostics-have-only-the-typescript-owner",
+        "unique-clr-response-reaches-native-merged-hover",
+        "coexistence-ts-tsx-formatting-stays-editor-owned"
+      ],
+      "typescriptBackend": {
+        "source": "user-setting",
+        "version": "6.0.3"
+      },
+      "ordinaryNavigationOwner": "typescript",
+      "ordinaryDiagnosticsOwner": "typescript",
+      "clrHoverOwner": "sharpts",
+      "formattingOwner": "one external Prettier BufWritePre hook; no LSP formatting call"
+    }
+  ]
+}

@@ -214,7 +214,30 @@ help use the first server advertising the feature: this order prioritizes ordina
 results. Put `sharpts` first if you prefer SharpTS-specific hover/signature results; ordinary results
 for those requests may then be unavailable. Server ordering does not merge these two providers.
 
-## Recorded editor smoke
+## Recorded shipping and native editing smoke
+
+The October 7, 2026 Windows ARM64-host editing checks use the current Release server from source
+`a20b07d7` and pinned Prettier 3.9.9. VS Code and Neovim use Node.js 25.5.0; the Helix run uses
+repository-pinned Node.js 22.23.2 ARM64 with the x64 editor build:
+
+| Client | Mode and diagnostics | Actual client verification |
+| --- | --- | --- |
+| VS Code 1.134.0 with installed SharpTS VSIX 0.2.0 and prettier-vscode 12.4.0 | Shipping `interop-only --diagnostics sharpts-only` defaults | Built-in TypeScript navigation remains active; real shipping extension activation supplies CLR decorator/member hover before and after two dirty saves. Extension logs identify the pinned local formatter. [Smoke and evidence](../scripts/editor-smoke/vscode-shipping/README.md). |
+| Neovim 0.12.5, SharpTS alone | `full --diagnostics all` | Native hover/navigation, applied completion and lexical/versioned private edits, unfinished signatures, dirty-dependency diagnostics and close restoration; actual `.ts`/`.tsx` saves use the Lua hook above and fresh post-save requests. [Native editing smoke](../scripts/editor-smoke/neovim-editing/README.md). |
+| Neovim 0.12.5 with real TypeScript adapter 6.0.1 / TypeScript 6.0.3 | SharpTS `interop-only --diagnostics sharpts-only` | Ordinary navigation/diagnostics belong to TypeScript; CLR content reaches Neovim's native merged hover. One external save hook formats both extensions while both servers remain attached. [Exact tool lock](../tools/editor-interop/package-lock.json), [compact evidence](../scripts/editor-smoke/neovim-editing/last-verified.json). |
+| Helix 25.07.1 (`a05c151b`), SharpTS alone | `full --diagnostics all` | Actual native completion insertion, lexical/private edit application, unfinished signatures, navigation and dirty diagnostics. `.ts`, `.tsx` and dependency saves match Prettier bytes with fresh hovers before and after formatting. [Native smoke](../scripts/editor-smoke/helix-editing/README.md), [recorded result](../artifacts/editor-contract/helix/run-ZAkEIw/result.json). |
+
+These tests exercise actual native edit application and the shipping VSIX. They do not claim every
+editor/plugin combination. Neovim's recorded default capabilities refuse private rename; a separate
+explicit `documentChanges` opt-in proves native application of the versioned edit. SharpTS never
+advertises formatting in either mode. The TypeScript adapter does advertise formatting, but the
+documented coexistence setup selects only the external Prettier save hook.
+
+The aggregate `pwsh ./scripts/test-editor-contract.ps1` runs the formatter compatibility evidence,
+six real-stdio feature suites and isolated installed-tool checks. The same aggregate gates Ubuntu
+and Windows CI; optional native editor runs retain their own versioned evidence.
+
+## Earlier formatter-only smoke
 
 On October 6, 2026, the following checks passed on Windows ARM64 with Node.js 25.5.0, Prettier
 3.9.9 and a Release build of `SharpTS.LanguageServer`:

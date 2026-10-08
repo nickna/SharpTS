@@ -18,13 +18,15 @@ Install the separately packaged tool:
 dotnet tool install --global SharpTS.LanguageServer
 ```
 
-The default is appropriate for an editor where SharpTS is the only TypeScript language server:
+When SharpTS is the only TypeScript language server, enable both ordinary editor features and
+full parser/type-checker diagnostics explicitly:
 
 ```bash
-sharpts-lsp
+sharpts-lsp --language-features full --diagnostics all
 ```
 
-The equivalent explicit launch is:
+The CLI defaults are independently `full` language features and `sharpts-only` diagnostics.
+Launching without flags is equivalent to:
 
 ```bash
 sharpts-lsp --language-features full --diagnostics sharpts-only
@@ -32,16 +34,16 @@ sharpts-lsp --language-features full --diagnostics sharpts-only
 
 Configure any LSP client with:
 
-- command: `sharpts-lsp`
+- command: `sharpts-lsp --language-features full --diagnostics all` for sole-server editing
 - file types: TypeScript and TSX
 - transport: stdio
 - project root: the nearest `tsconfig.json`, `sharpts.json`, or workspace root
 
-For example, Neovim 0.11 can register it as:
+For example, Neovim 0.11+ can register it as:
 
 ```lua
 vim.lsp.config.sharpts = {
-  cmd = { "sharpts-lsp", "--language-features", "full" },
+  cmd = { "sharpts-lsp", "--language-features", "full", "--diagnostics", "all" },
   filetypes = { "typescript", "typescriptreact" },
   root_markers = { "tsconfig.json", "sharpts.json", ".git" },
 }
@@ -53,7 +55,7 @@ Helix can launch the same server with:
 ```toml
 [language-server.sharpts]
 command = "sharpts-lsp"
-args = ["--language-features", "full"]
+args = ["--language-features", "full", "--diagnostics", "all"]
 ```
 
 Then add `sharpts` to the `language-servers` list for the `typescript` and `tsx` language entries.
@@ -66,7 +68,7 @@ VS Code's SharpTS extension starts the bundled server in `interop-only` mode bec
 built-in `tsserver` already owns ordinary TypeScript navigation:
 
 ```bash
-sharpts-lsp --language-features interop-only
+sharpts-lsp --language-features interop-only --diagnostics sharpts-only
 ```
 
 This mode still advertises the features unique to SharpTS:
@@ -100,6 +102,35 @@ Clients may change this live with `workspace/didChangeConfiguration`:
 ```
 
 VS Code exposes the same value as `sharpts.diagnostics`.
+Diagnostics selection is independent of language-feature mode and can change live. Language-feature
+mode is fixed at initialization. For example, `interop-only --diagnostics all` requests full
+SharpTS diagnostics while retaining interop-only editor providers; it can duplicate another
+TypeScript server's diagnostics.
+
+## Verified editor arrangements
+
+The reproducible editor smokes use explicit presets and record versions, capabilities, source,
+server hashes and logs. They exercise the actual clients and shipping extension:
+
+| Client and arrangement | SharpTS preset | Verified behavior and trace |
+| --- | --- | --- |
+| VS Code 1.134.0, installed SharpTS VSIX 0.2.0, built-in TypeScript extension 10.0.0 with TypeScript 6.0.3 | `interop-only --diagnostics sharpts-only` (shipping defaults) | Actual extension activation; ordinary imported definition; CLR decorator/member hover before and after two dirty saves; Prettier extension 12.4.0 loading local Prettier 3.9.9. [Shipping smoke](../scripts/editor-smoke/vscode-shipping/README.md), [compact evidence](../scripts/editor-smoke/vscode-shipping/last-verified.json). |
+| Neovim 0.12.5, SharpTS alone | `full --diagnostics all` | Eight native-client scenarios: hover UI, exact UTF-16 member navigation, applied completion/lexical/private edits, unfinished signatures, dirty dependency diagnostics and close restoration, TS/TSX saves. [Native smoke](../scripts/editor-smoke/neovim-editing/README.md), [compact evidence](../scripts/editor-smoke/neovim-editing/last-verified.json). |
+| Neovim 0.12.5, TypeScript adapter 6.0.1 with TypeScript 6.0.3 plus SharpTS | `interop-only --diagnostics sharpts-only` | One ordinary navigation/diagnostic owner, unique CLR content in native merged hover, and one external formatter. The adapter and backend are [exactly locked](../tools/editor-interop/package-lock.json); the real backend version notification is checked. [Final raw run](../artifacts/editor-editing/neovim/run-m3aV2X/summary.json). |
+| Helix 25.07.1 (`a05c151b`), SharpTS alone | `full --diagnostics all` | Native completion insertion, lexical and versioned private edit application, unfinished signature help, definitions/references, dirty ordinary diagnostics and final clean results. `.ts`, `.tsx` and dependency saves match pinned Prettier with fresh before/after hovers. [Native smoke](../scripts/editor-smoke/helix-editing/README.md), [recorded result](../artifacts/editor-contract/helix/run-ZAkEIw/result.json). |
+
+These recorded executions use a Windows ARM64 host and source base `a20b07d7` plus the #1981
+working-tree changes. All three final runs use the same server binary, including the shared
+token-helper refactor; each compact report records its hash. Helix is the x64
+editor build, and its formatter uses the repository-pinned Node 22.23.2 ARM64. Native default Neovim
+capabilities omit `documentChanges`, so private rename is refused. A separate explicit capability
+opt-in verifies versioned edit application; existing lexical rename works with either capability
+setting. General property rename and TypeScript language-service parity are not claimed.
+
+Neovim's native hover merges responses in the tested version. Helix's first-provider hover and
+signature routing has different behavior; see the [formatting/coexistence recipe](formatting.md#helix)
+before attaching two providers. The earlier formatter-only VS Code smoke used a test hover bridge;
+the shipping smoke above proves the installed extension's real activation and registrations.
 
 ## Project and .NET references
 
@@ -107,9 +138,9 @@ The server discovers workspace `tsconfig.json` files and their in-workspace proj
 Use these launch options for CLR metadata:
 
 ```bash
-sharpts-lsp --project ./MyApp.csproj
-sharpts-lsp -r ./lib/MyInterop.dll -r ./lib/Another.dll
-sharpts-lsp --sdk-path /path/to/reference/assemblies
+sharpts-lsp --language-features full --diagnostics all --project ./MyApp.csproj
+sharpts-lsp --language-features full --diagnostics all -r ./lib/MyInterop.dll -r ./lib/Another.dll
+sharpts-lsp --language-features full --diagnostics all --sdk-path /path/to/reference/assemblies
 ```
 
 A `sharpts.json` reference manifest found from the workspace root is also honored. Referenced
@@ -282,6 +313,7 @@ node scripts/test-semantic-hover.mjs
 node scripts/test-semantic-completion.mjs
 node scripts/test-semantic-signatures.mjs
 node scripts/test-member-references.mjs
+node scripts/test-private-rename.mjs
 ```
 
 The test exercises real stdio navigation, source class member targets, watched closed-file
@@ -298,6 +330,19 @@ unfinished and nested calls, public candidates versus selected signatures, dirty
 restoration, and request cancellation with a surviving fresh request.
 The member-reference smoke covers independently configured projects, closed reverse importers,
 dirty source ranges, completeness refusal, rename denial and cancellation/currentness.
+
+For the aggregate protocol, formatter and packaged-tool check, use:
+
+```powershell
+pwsh ./scripts/test-editor-contract.ps1
+```
+
+The `editor-contract` CI job runs this same aggregate on Ubuntu and Windows. It records a unique
+artifact index and logs, runs the six protocol suites above, formats/checks representative inputs,
+then packs and installs the exact local language-server package into an isolated tool path and
+checks its installed shim in both modes. These deterministic checks gate CI. Native editor runs
+and controlled [editor-workflow measurements](../benchmarks/editor-workflow/README.md) are separate;
+no wall-clock performance threshold gates shared CI hosts.
 
 The [editor analysis benchmark](../benchmarks/editor-analysis/README.md) records a comparison with
 `df4589b7` on Windows Arm64/.NET 10.0.12 (2026-10-07 UTC). The sequence contains definition,
