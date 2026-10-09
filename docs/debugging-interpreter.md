@@ -35,6 +35,12 @@ deliberately separate because they execute different runtimes and may expose dif
 
 ## Standalone DAP tool
 
+The first public `SharpTS.DebugAdapter` NuGet upload remains a
+[release gate](plans/interpreter-dap.md#remaining-release-gates-2026-10-08). To validate a source
+checkout before publication, build Release and run `pwsh ./scripts/test-debug-adapter-package.ps1`.
+It packs the current build, installs that exact version from an isolated local feed, verifies the
+installed DLL hash and reported version, and records the usable tool path in its result JSON.
+
 Install the client-independent adapter as a .NET tool:
 
 ```bash
@@ -68,12 +74,18 @@ Scopes are grouped as arguments, locals, closure, module, and globals where thos
 exist. Arrays, objects, class instances, maps, sets, and errors expand without invoking getters,
 proxy traps, user conversion methods, or arbitrary `ToString` implementations. Property names are
 ordered deterministically and the `variables` request honors paging.
+Named and indexed children are filtered before applying `start` and `count`. An omitted or zero
+`count` requests all remaining children; requests exceeding 1,000 rows fail with a paging hint
+instead of silently hiding values. Request smaller pages for larger collections or scopes.
 
 Watch and REPL evaluation are read-only. Assignments, updates, deletion, calls, construction,
-dynamic import, `await`, `yield`, and function/class creation are rejected. Evaluation is performed
+dynamic import, `await`, `yield`, spread, and function/class creation are rejected. Evaluation is performed
 on the interpreter thread with a 250 ms budget and has no filesystem or network privilege beyond
-what a permitted property read already references. Hover uses the stricter subset and does not read
-properties or indices.
+what a permitted property read already references. Hover accepts identifiers, literals, `this`,
+grouping, type assertions, logical/conditional expressions, and inert `typeof` and `void`
+operations. It rejects property/index reads, arithmetic, templates, and collection construction
+because implicit conversion or iteration can execute guest code. Watch and REPL property reads and
+conversions can invoke guest getters or conversion hooks; use hover when execution must remain inert.
 
 ## Exceptions, async code, and concurrency
 
@@ -124,7 +136,13 @@ ownership bound. Output is emitted only through DAP `output` events, leaving pro
 
 ## Extension Development Host acceptance
 
-The protocol tests cannot validate VS Code presentation. Before releasing the extension, use the
+Run the repeatable [VS Code debugger smoke](../scripts/editor-smoke/vscode-debugger/README.md) to
+exercise the actual extension command, saved launch configuration, inspection, stepping, exceptions,
+workers, and shutdown in both a development host and a clean installed VSIX. The harness records
+editor and extension versions, binary hashes, DAP transcripts, and separate results for each mode.
+It uses VS Code debug APIs and observes the shipping adapter; it does not replace that adapter.
+
+Protocol and extension-host tests cannot validate visual presentation. Before releasing the extension, use the
 tracked [`InterpreterDebuggerAcceptance`](../tests/fixtures/InterpreterDebuggerAcceptance) fixture
 to exercise the development extension and the production VSIX.
 

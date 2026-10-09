@@ -74,7 +74,7 @@ internal sealed class DapProtocolConnection(Stream input, Stream output) : IAsyn
         {
             seq = NextSequence(),
             type = "response",
-            requestSeq = request.Sequence,
+            request_seq = request.Sequence,
             success,
             command = request.Command,
             message,

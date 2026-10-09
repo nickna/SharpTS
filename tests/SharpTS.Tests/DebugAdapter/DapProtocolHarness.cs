@@ -12,9 +12,11 @@ internal sealed class DapProtocolHarness : IAsyncDisposable
     private readonly Process _process;
     private readonly Stream _input;
     private readonly Stream _output;
+    private readonly Task<string> _standardError;
     private readonly ConcurrentQueue<JsonElement> _events = new();
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private int _sequence;
+    private bool _disconnected;
 
     public DapProtocolHarness()
     {
@@ -31,6 +33,7 @@ internal sealed class DapProtocolHarness : IAsyncDisposable
         }) ?? throw new InvalidOperationException("Could not start sharpts-dap.");
         _input = _process.StandardInput.BaseStream;
         _output = _process.StandardOutput.BaseStream;
+        _standardError = _process.StandardError.ReadToEndAsync();
     }
 
     public int ProcessId => _process.Id;
@@ -72,10 +75,18 @@ internal sealed class DapProtocolHarness : IAsyncDisposable
                 _events.Enqueue(message);
                 continue;
             }
-            if (message.GetProperty("requestSeq").GetInt32() != sequence)
+            if (message.GetProperty("request_seq").GetInt32() != sequence)
                 throw new InvalidOperationException("Harness observed an out-of-order response.");
+            if (command == "disconnect" && message.GetProperty("success").GetBoolean())
+                _disconnected = true;
             return message;
         }
+    }
+
+    public async Task<int> WaitForExitAsync(TimeSpan? timeout = null)
+    {
+        await _process.WaitForExitAsync().WaitAsync(timeout ?? TimeSpan.FromSeconds(5));
+        return _process.ExitCode;
     }
 
     public async Task<JsonElement> WaitForEventAsync(
@@ -128,7 +139,7 @@ internal sealed class DapProtocolHarness : IAsyncDisposable
             int read = await _output.ReadAsync(single, cancellationToken);
             if (read == 0)
             {
-                string error = await _process.StandardError.ReadToEndAsync(cancellationToken);
+                string error = await _standardError.WaitAsync(cancellationToken);
                 throw new EndOfStreamException($"sharpts-dap stdout closed. stderr: {error}");
             }
             byte value = single[0];
@@ -155,11 +166,14 @@ internal sealed class DapProtocolHarness : IAsyncDisposable
         {
             if (!_process.HasExited)
             {
-                JsonElement response = await RequestAsync("disconnect", new { terminateDebuggee = true },
-                    TimeSpan.FromSeconds(5));
-                _ = response;
+                if (!_disconnected)
+                {
+                    JsonElement response = await RequestAsync("disconnect", new { terminateDebuggee = true },
+                        TimeSpan.FromSeconds(5));
+                    _ = response;
+                }
                 _input.Close();
-                await _process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                await WaitForExitAsync();
             }
         }
         catch

@@ -104,6 +104,10 @@ execution. Explicit property/index reads may invoke a guest getter or proxy and 
 allowed only for watch/REPL, not hover. Evaluation runs on the paused interpreter thread with a
 250 ms cooperative timeout and cancellation. Guest throws become failed DAP responses and never
 escape into the adapter state machine. `setVariable` and `setExpression` are not advertised.
+Hover also rejects implicit conversion, templates, and collection construction; spread is rejected
+in every evaluation context. Value previews never call overridable conversion methods. Variable
+filters apply before paging; omitted/zero counts mean all remaining rows, with an explicit error
+and paging hint when a request exceeds the 1,000-row response bound.
 
 ## Exceptions, async work, modules, and shutdown
 
@@ -161,3 +165,27 @@ with its intended first-release package before a tag can pass preflight, and the
 checklist still requires an interactive Extension Development Host. The worker-interpreter
 limitation was resolved by #1404. Cooperative suspension still cannot preempt a blocking
 managed/native call; partial-stop events report that limitation accurately.
+
+## Remaining release gates (2026-10-08)
+
+The current Windows ARM64 acceptance run passed 51 debugger tests, including the latency gates and
+natural disconnect exit with stdin left open. The hermetic core suite passed 25,218 tests with
+three skips. Both the development extension and installed VSIX passed ten real VS Code adapter
+sessions, with every adapter exiting zero. The exact local NuGet candidate installed and ran
+successfully; its compressed payload is 135,453 bytes larger than the CLI, below the 5 MiB bound.
+[Verification fingerprints and evidence paths](../../scripts/editor-smoke/vscode-debugger/last-verified.json)
+identify the tested binaries and retain the scope of these assertions.
+
+Commit `d944f489303925b78598ba5ea16259ab59aa3d0c` is integrated into `main`; its former local-only
+status is obsolete. Subsequent [CI run 37869060276](https://github.com/nickna/SharpTS/actions/runs/37869060276)
+passed Windows/Linux builds, package checks, TypeScript conformance, and the macOS adapter smoke.
+
+The [development and installed-VSIX debugger harness](../../scripts/editor-smoke/vscode-debugger/README.md)
+provides repeatable editor integration evidence. Its API assertions supplement the visual checklist;
+they do not prove how breakpoint glyphs, scope trees, watches, or exception panels render.
+
+The public NuGet flat-container index for `sharpts.debugadapter` returned HTTP 404 on 2026-10-08,
+and no local publication key was available. Publishing the intended first release remains a release
+owner action. Keep #1405 and #1400 open until that package is public and the complete visual checklist
+passes in both development and packaged profiles. Do not bypass the existing NuGet preflight or
+mark the epic complete on the strength of protocol/API tests alone.

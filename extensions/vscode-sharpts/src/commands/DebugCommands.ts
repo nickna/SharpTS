@@ -2,7 +2,7 @@
  * "SharpTS: Debug Compiled Current File" — compiles the active TypeScript file with debug symbols and
  * launches it under the installed .NET debug adapter.
  *
- * SharpTS deliberately ships no debug adapter of its own. A compiled program is an ordinary .NET
+ * Compiled debugging uses the C# extension's adapter. A compiled program is an ordinary .NET
  * assembly, and `--debug` gives it a portable PDB whose documents and sequence points refer to the
  * original `.ts` files, so the `coreclr` adapter from the C# extension can bind breakpoints in
  * TypeScript without any SharpTS-specific protocol.

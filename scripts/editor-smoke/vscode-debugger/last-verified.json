@@ -1,0 +1,57 @@
+{
+  "verifiedLocalDate": "2026-10-08",
+  "status": "passed",
+  "sourceBase": "f10a2d4785379c2beb88bbceabfdeb83ea7108e0",
+  "sourceNote": "Includes the epic #1400 acceptance working-tree changes; binary fingerprints identify the actual tested payloads.",
+  "platform": "win32-arm64",
+  "editor": "VS Code 1.134.0",
+  "shippingExtension": "SharpTS 0.2.0",
+  "dotnetSdk": "10.0.401",
+  "modes": ["development", "vsix"],
+  "sessionsPerMode": 10,
+  "observationsPerMode": 22,
+  "inSessionErrors": 0,
+  "adapterExitCodes": [0],
+  "expectedShutdownDiagnosticsPerMode": 10,
+  "expectedShutdownDiagnosticNote": "VS Code reports stdout EOF as read error after exited, terminated and successful disconnect; full lifecycle context is retained in the transcripts.",
+  "adapterFactoriesRegisteredByHarness": 0,
+  "adaptersSpawnedByHarness": 0,
+  "vsixSha256": "c8d66cabb9e4b09faea6924e8472371e9e09bff5153f86adfe63d2b0574aba6d",
+  "languageServerSha256": "fac37862fb7126519a360ab930a475719cade63a07f86e84e9c73af1db5a1324",
+  "coreSha256": "24916942fd356501fbc200b7124704940430461139d49a192887666a7800e983",
+  "adapterSha256": "0fd05f2821f99e63f3de4559ca827bf0553013dc1fc4808c9a79b2747c31087b",
+  "rawEditorEvidence": "artifacts/editor-debugger/vscode/run-ZO0ygj/result.json",
+  "debuggerSuite": {
+    "passed": 51,
+    "failed": 0,
+    "includesLatencyGate": true,
+    "includesNaturalDisconnectExitWithStdinOpen": true,
+    "evidence": "artifacts/epic-1400/debugger-final/debugger-final.trx"
+  },
+  "hermeticCoreSuite": {
+    "passed": 25218,
+    "skipped": 3,
+    "failed": 0,
+    "evidence": "artifacts/epic-1400/core/core/core.trx",
+    "note": "Run after inspection/evaluation changes; subsequent transport-only changes were covered by the final debugger suite and editor runs."
+  },
+  "extensionUnitTestsPassed": 2,
+  "workflowPolicyChecksPassed": 9,
+  "nugetReleaseMockChecksPassed": 10,
+  "codeQuality": "passed; 27 existing duplicate groups, zero errors",
+  "package": {
+    "version": "1.0.13-alpha.0.340",
+    "localOnlyExactVersionInstall": "passed",
+    "sha256": "84f5f7155de151a87f039507f4ee62b4096b4f721c9173255f9a2794e6edd008",
+    "adapterBytes": 7873874,
+    "cliBytes": 7738421,
+    "growthBytes": 135453,
+    "growthLimitBytes": 5242880,
+    "evidence": "artifacts/epic-1400/package-final/run-2cc3af1a6f2341fc879cef5860723af3/result.json"
+  },
+  "remainingReleaseGates": [
+    "First public SharpTS.DebugAdapter NuGet publication by the release owner",
+    "Visual GUI checklist in both development and installed-VSIX profiles"
+  ],
+  "presentationEvidence": "Extension-host APIs and real DAP traffic; no visual UI assertions"
+}
