@@ -16,6 +16,7 @@ public partial class Parser
 
     private Stmt ClassDeclaration(bool isAbstract, List<Decorator>? classDecorators = null, bool isDeclare = false)
     {
+        int headerStart = _current > 0 ? _tokens[_current - 1].Start : CurrentSourceStart();
         isDeclare |= _isDeclarationFile;
 
         Token name = Consume(TokenType.IDENTIFIER, "Expect class name.");
@@ -48,7 +49,7 @@ public partial class Parser
             } while (Match(TokenType.COMMA));
         }
 
-        Consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
+        Token bodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
         if (isDeclare) _ambientClassDepth++;
 
         List<Stmt.Function> methods = [];
@@ -140,9 +141,10 @@ public partial class Parser
                     throw new Exception($"Parse Error at line {Previous().Line}: Static blocks cannot have decorators.");
                 }
 
-                Consume(TokenType.LEFT_BRACE, "Expect '{' after 'static'.");
+                Token staticBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' after 'static'.");
                 List<Stmt> blockBody = Block();
                 var staticBlock = new Stmt.StaticBlock(blockBody);
+                RecordEditorRange(staticBlock, new SourceSpan(staticBodyOpen.Start, ConsumedSourceEnd), EditorSyntaxKind.Block, EditorSyntaxRole.Body);
                 staticInitializers.Add(staticBlock);
                 continue;
             }
@@ -191,7 +193,7 @@ public partial class Parser
 
                 ConsumeSemicolon("Expect ';' after auto-accessor declaration.");
 
-                autoAccessors.Add(new Stmt.AutoAccessor(
+                var autoAccessor = new Stmt.AutoAccessor(
                     accessorName,
                     typeAnnotation,
                     initializer,
@@ -201,7 +203,9 @@ public partial class Parser
                     isOverride,
                     memberDecorators,
                     typeAnnotationNode
-                ));
+                );
+                RecordWrittenMember(autoAccessor, accessorName);
+                autoAccessors.Add(autoAccessor);
                 continue;
             }
 
@@ -220,7 +224,7 @@ public partial class Parser
 
                 Token kind = Advance(); // consume 'get' or 'set'
                 (Token accessorName, Expr? accessorComputedKey) = ParseAccessorName();
-                Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
+                Token accessorParametersOpen = Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
 
                 Stmt.Parameter? setterParam = null;
                 if (kind.Type == TokenType.SET)
@@ -235,9 +239,10 @@ public partial class Parser
                         paramTypeNode = TakeTypeNode();
                     }
                     setterParam = new Stmt.Parameter(paramName, paramType, null, TypeAnnotationNode: paramTypeNode);
+                    RecordEditorRange(setterParam, new SourceSpan(paramName.Start, ConsumedSourceEnd), EditorSyntaxKind.Name, EditorSyntaxRole.Parameter);
                 }
 
-                Consume(TokenType.RIGHT_PAREN, "Expect ')' after accessor parameters.");
+                Token accessorParametersClose = Consume(TokenType.RIGHT_PAREN, "Expect ')' after accessor parameters.");
 
                 string? returnType = null;
                 TypeNode? returnTypeNode = null;
@@ -248,6 +253,7 @@ public partial class Parser
                 }
 
                 List<Stmt> body;
+                SourceSpan? accessorBodySpan = null;
                 if (isMemberAbstract || isDeclare)
                 {
                     // Abstract/ambient accessor: no body. Declaration files commonly
@@ -260,11 +266,16 @@ public partial class Parser
                 }
                 else
                 {
-                    Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
+                    Token accessorBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
                     body = Block();
+                    accessorBodySpan = new SourceSpan(accessorBodyOpen.Start, ConsumedSourceEnd);
                 }
 
-                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, isMemberAbstract, isOverride, memberDecorators, isStatic, accessorComputedKey, returnTypeNode));
+                var accessor = new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, isMemberAbstract, isOverride, memberDecorators, isStatic, accessorComputedKey, returnTypeNode);
+                RecordWrittenMember(accessor, accessorName);
+                RecordAccessorSyntax(accessor, kind, accessorParametersOpen, accessorParametersClose, accessorBodySpan);
+                if (setterParam is not null) RecordEditorName(setterParam.Name, setterParam, EditorSyntaxRole.DeclarationName);
+                accessors.Add(accessor);
             }
             // Check for private field: #name...
             else if (Peek().Type == TokenType.PRIVATE_IDENTIFIER)
@@ -288,20 +299,25 @@ public partial class Parser
                 {
                     // Private method: #name() { }
                     List<TypeParam>? typeParams2 = ParseTypeParameters();
-                    Consume(TokenType.LEFT_PAREN, "Expect '(' after private method name.");
+                    Token parametersOpen = Consume(TokenType.LEFT_PAREN, "Expect '(' after private method name.");
                     List<Stmt.Parameter> parameters = ParseMethodParameters();
-                    Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+                    Token parametersClose = Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
 
                     string? returnType = null;
+                    TypeNode? returnTypeNode = null;
                     if (Match(TokenType.COLON))
                     {
                         returnType = ParseTypeAnnotation();
+                        returnTypeNode = EditorSyntaxEnabled ? TakeTypeNode() : null;
                     }
 
-                    Consume(TokenType.LEFT_BRACE, "Expect '{' before private method body.");
+                    Token methodBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before private method body.");
                     List<Stmt> body = Block();
 
                     var func = new Stmt.Function(fieldName, typeParams2, null, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: false, IsAsync: isMemberAsync, IsGenerator: isMemberGenerator, Decorators: null, IsPrivate: true);
+                    AttachEditorSyntax(func, returnTypeNode);
+                    RecordFunctionSyntax(func, fieldName.Start, parametersOpen, parametersClose,
+                        methodBodyOpen.Start, new SourceSpan(methodBodyOpen.Start, ConsumedSourceEnd));
                     methods.Add(func);
                 }
                 else
@@ -314,9 +330,11 @@ public partial class Parser
 
                     // Private field: #name: type or #name = value
                     string? typeAnnotation = null;
+                    TypeNode? typeAnnotationNode = null;
                     if (Match(TokenType.COLON))
                     {
                         typeAnnotation = ParseTypeAnnotation();
+                        typeAnnotationNode = EditorSyntaxEnabled ? TakeTypeNode() : null;
                     }
                     Expr? initializer = null;
                     if (Match(TokenType.EQUAL))
@@ -329,6 +347,8 @@ public partial class Parser
                     else
                         ConsumeSemicolon("Expect ';' after private field declaration.");
                     var privateField = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, AccessModifier.Public, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, Decorators: null, IsPrivate: true);
+                    AttachEditorSyntax(privateField, typeAnnotationNode);
+                    RecordWrittenMember(privateField, fieldName);
                     fields.Add(privateField);
                     if (isStatic)
                     {
@@ -415,6 +435,7 @@ public partial class Parser
                 else
                     ConsumeSemicolon("Expect ';' after field declaration.");
                 var field = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, memberDecorators, IsPrivate: false, IsDeclare: isMemberDeclare, TypeAnnotationNode: typeAnnotationNode, IsLiteralName: isLiteralName);
+                RecordWrittenMember(field, field.Name);
                 fields.Add(field);
                 if (isStatic)
                 {
@@ -446,15 +467,17 @@ public partial class Parser
                     // Parse abstract method: signature only, no body
                     Token methodName = Consume(TokenType.IDENTIFIER, "Expect method name.");
                     List<TypeParam>? typeParams2 = ParseTypeParameters();
-                    Consume(TokenType.LEFT_PAREN, "Expect '(' after method name.");
+                    Token parametersOpen = Consume(TokenType.LEFT_PAREN, "Expect '(' after method name.");
 
                     // Check for 'this' parameter in abstract method
                     string? thisType = null;
+                    TypeNode? thisTypeNode = null;
                     if (Check(TokenType.THIS))
                     {
                         Advance(); // consume 'this'
                         Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
                         thisType = ParseTypeAnnotation();
+                        thisTypeNode = EditorSyntaxEnabled ? TakeTypeNode() : null;
                         if (Check(TokenType.COMMA))
                         {
                             Advance(); // consume ','
@@ -462,17 +485,22 @@ public partial class Parser
                     }
 
                     List<Stmt.Parameter> parameters = ParseMethodParameters();
-                    Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+                    Token parametersClose = Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
 
                     string? returnType = null;
+                    TypeNode? returnTypeNode = null;
                     if (Match(TokenType.COLON))
                     {
                         returnType = ParseTypeAnnotation();
+                        returnTypeNode = EditorSyntaxEnabled ? TakeTypeNode() : null;
                     }
 
                     ConsumeSemicolon("Expect ';' after abstract method declaration.");
 
                     var func = new Stmt.Function(methodName, typeParams2, thisType, parameters, null, returnType, isStatic, access, IsAbstract: true, IsOverride: isOverride, IsAsync: isMemberAsync, IsGenerator: isMemberGenerator, Decorators: memberDecorators);
+                    AttachEditorSyntax(func, thisTypeNode);
+                    AttachEditorSyntax(func, returnTypeNode);
+                    RecordFunctionSyntax(func, methodName.Start, parametersOpen, parametersClose, ConsumedSourceEnd, null);
                     methods.Add(func);
                 }
                 else
@@ -487,7 +515,9 @@ public partial class Parser
                     if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
                     var func = (Stmt.Function)FunctionDeclaration(
                         kind, isMemberAsync, isMemberGenerator, isDeclare: isDeclare);
+                    var originalFunction = func;
                     func = func with { IsStatic = isStatic, Access = access, IsOverride = isOverride, Decorators = memberDecorators };
+                    CopyEditorSyntax(originalFunction, func);
                     methods.Add(func);
 
                     // Synthesize fields from constructor parameter properties
@@ -519,6 +549,10 @@ public partial class Parser
                 }
             }
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 RecordError(ex.Message);
@@ -529,7 +563,9 @@ public partial class Parser
 
         if (isDeclare) _ambientClassDepth--;
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
-        return new Stmt.Class(name, typeParams, superclassExpr, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, autoAccessors.Count > 0 ? autoAccessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare, staticInitializers.Count > 0 ? staticInitializers : null, indexSignatures.Count > 0 ? indexSignatures : null, superclassTypeArgNodes, interfaceTypeArgNodes);
+        var declaration = new Stmt.Class(name, typeParams, superclassExpr, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, autoAccessors.Count > 0 ? autoAccessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare, staticInitializers.Count > 0 ? staticInitializers : null, indexSignatures.Count > 0 ? indexSignatures : null, superclassTypeArgNodes, interfaceTypeArgNodes);
+        RecordClassSyntax(declaration, name, headerStart, bodyOpen.Start, ConsumedSourceEnd);
+        return declaration;
     }
 
     /// <summary>
@@ -559,7 +595,9 @@ public partial class Parser
             var func = (Stmt.Function)FunctionDeclaration(
                 "method", isMemberAsync, isMemberGenerator, isDeclare: isDeclare,
                 computedMethod: (syntheticName, computedKey));
+            var originalFunction = func;
             func = func with { IsStatic = isStatic, Access = access, IsOverride = isOverride, Decorators = memberDecorators };
+            CopyEditorSyntax(originalFunction, func);
             methods.Add(func);
             return;
         }
@@ -573,9 +611,11 @@ public partial class Parser
         // Type annotation is optional (ES class fields), matching the identifier-keyed field path:
         // `[Symbol.iterator] = 0;` / `[Symbol.iterator];` are both valid without a `: type`.
         string? typeAnnotation = null;
+        TypeNode? typeAnnotationNode = null;
         if (Match(TokenType.COLON))
         {
             typeAnnotation = ParseTypeAnnotation();
+            typeAnnotationNode = EditorSyntaxEnabled ? TakeTypeNode() : null;
         }
         Expr? initializer = null;
         if (Match(TokenType.EQUAL))
@@ -588,6 +628,7 @@ public partial class Parser
         else
             ConsumeSemicolon("Expect ';' after computed property field declaration.");
         var field = new Stmt.Field(syntheticName, typeAnnotation, initializer, isStatic, access, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, memberDecorators, IsPrivate: false, IsDeclare: isDeclare, ComputedKey: computedKey);
+        AttachEditorSyntax(field, typeAnnotationNode);
         fields.Add(field);
         if (isStatic)
         {
@@ -671,6 +712,7 @@ public partial class Parser
     /// </summary>
     private Expr ClassExpression()
     {
+        int headerStart = _current > 0 ? _tokens[_current - 1].Start : CurrentSourceStart();
         // Optional class name (visible inside class body for self-reference)
         Token? name = null;
         if (Check(TokenType.IDENTIFIER))
@@ -707,7 +749,7 @@ public partial class Parser
             } while (Match(TokenType.COMMA));
         }
 
-        Consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
+        Token bodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
 
         List<Stmt.Function> methods = [];
         List<Stmt.Field> fields = [];
@@ -749,9 +791,10 @@ public partial class Parser
                     throw new Exception($"Parse Error at line {Previous().Line}: Static blocks cannot have access modifiers or other keywords.");
                 }
 
-                Consume(TokenType.LEFT_BRACE, "Expect '{' after 'static'.");
+                Token staticBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' after 'static'.");
                 List<Stmt> blockBody = Block();
                 var staticBlock = new Stmt.StaticBlock(blockBody);
+                RecordEditorRange(staticBlock, new SourceSpan(staticBodyOpen.Start, ConsumedSourceEnd), EditorSyntaxKind.Block, EditorSyntaxRole.Body);
                 staticInitializers.Add(staticBlock);
                 continue;
             }
@@ -794,7 +837,7 @@ public partial class Parser
 
                 ConsumeSemicolon("Expect ';' after auto-accessor declaration.");
 
-                autoAccessors.Add(new Stmt.AutoAccessor(
+                var autoAccessor = new Stmt.AutoAccessor(
                     accessorName,
                     typeAnnotation,
                     initializer,
@@ -804,7 +847,9 @@ public partial class Parser
                     IsOverride: false,  // Class expressions don't support override
                     Decorators: null,   // Class expressions don't support decorators on members
                     TypeAnnotationNode: typeAnnotationNode
-                ));
+                );
+                RecordWrittenMember(autoAccessor, accessorName);
+                autoAccessors.Add(autoAccessor);
                 continue;
             }
 
@@ -823,7 +868,7 @@ public partial class Parser
 
                 Token kind = Advance(); // consume 'get' or 'set'
                 (Token accessorName, Expr? accessorComputedKey) = ParseAccessorName();
-                Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
+                Token accessorParametersOpen = Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
 
                 Stmt.Parameter? setterParam = null;
                 if (kind.Type == TokenType.SET)
@@ -837,9 +882,10 @@ public partial class Parser
                         paramTypeNode = TakeTypeNode();
                     }
                     setterParam = new Stmt.Parameter(paramName, paramType, null, TypeAnnotationNode: paramTypeNode);
+                    RecordEditorRange(setterParam, new SourceSpan(paramName.Start, ConsumedSourceEnd), EditorSyntaxKind.Name, EditorSyntaxRole.Parameter);
                 }
 
-                Consume(TokenType.RIGHT_PAREN, "Expect ')' after accessor parameters.");
+                Token accessorParametersClose = Consume(TokenType.RIGHT_PAREN, "Expect ')' after accessor parameters.");
 
                 string? returnType = null;
                 TypeNode? returnTypeNode = null;
@@ -849,10 +895,15 @@ public partial class Parser
                     returnTypeNode = TakeTypeNode();
                 }
 
-                Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
+                Token accessorBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
                 List<Stmt> body = Block();
 
-                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, IsStatic: isStatic, ComputedKey: accessorComputedKey, ReturnTypeNode: returnTypeNode));
+                var accessor = new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, IsStatic: isStatic, ComputedKey: accessorComputedKey, ReturnTypeNode: returnTypeNode);
+                RecordWrittenMember(accessor, accessorName);
+                RecordAccessorSyntax(accessor, kind, accessorParametersOpen, accessorParametersClose,
+                    new SourceSpan(accessorBodyOpen.Start, ConsumedSourceEnd));
+                if (setterParam is not null) RecordEditorName(setterParam.Name, setterParam, EditorSyntaxRole.DeclarationName);
+                accessors.Add(accessor);
             }
             // Check for private field/method: #name...
             else if (Peek().Type == TokenType.PRIVATE_IDENTIFIER)
@@ -876,20 +927,25 @@ public partial class Parser
                 {
                     // Private method: #name() { }
                     List<TypeParam>? typeParams2 = ParseTypeParameters();
-                    Consume(TokenType.LEFT_PAREN, "Expect '(' after private method name.");
+                    Token parametersOpen = Consume(TokenType.LEFT_PAREN, "Expect '(' after private method name.");
                     List<Stmt.Parameter> parameters = ParseMethodParameters();
-                    Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+                    Token parametersClose = Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
 
                     string? returnType = null;
+                    TypeNode? returnTypeNode = null;
                     if (Match(TokenType.COLON))
                     {
                         returnType = ParseTypeAnnotation();
+                        returnTypeNode = EditorSyntaxEnabled ? TakeTypeNode() : null;
                     }
 
-                    Consume(TokenType.LEFT_BRACE, "Expect '{' before private method body.");
+                    Token methodBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before private method body.");
                     List<Stmt> body = Block();
 
                     var func = new Stmt.Function(fieldName, typeParams2, null, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: false, IsAsync: isMemberAsync, IsGenerator: isMemberGenerator, Decorators: null, IsPrivate: true);
+                    AttachEditorSyntax(func, returnTypeNode);
+                    RecordFunctionSyntax(func, fieldName.Start, parametersOpen, parametersClose,
+                        methodBodyOpen.Start, new SourceSpan(methodBodyOpen.Start, ConsumedSourceEnd));
                     methods.Add(func);
                 }
                 else
@@ -902,9 +958,11 @@ public partial class Parser
 
                     // Private field: #name: type or #name = value
                     string? typeAnnotation = null;
+                    TypeNode? typeAnnotationNode = null;
                     if (Match(TokenType.COLON))
                     {
                         typeAnnotation = ParseTypeAnnotation();
+                        typeAnnotationNode = EditorSyntaxEnabled ? TakeTypeNode() : null;
                     }
                     Expr? initializer = null;
                     if (Match(TokenType.EQUAL))
@@ -914,6 +972,8 @@ public partial class Parser
 
                     ConsumeSemicolon("Expect ';' after private field declaration.");
                     var privateField = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, AccessModifier.Public, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, Decorators: null, IsPrivate: true);
+                    AttachEditorSyntax(privateField, typeAnnotationNode);
+                    RecordWrittenMember(privateField, fieldName);
                     fields.Add(privateField);
                     if (isStatic)
                     {
@@ -938,9 +998,11 @@ public partial class Parser
                 }
 
                 string? typeAnnotation = null;
+                TypeNode? typeAnnotationNode = null;
                 if (Match(TokenType.COLON))
                 {
                     typeAnnotation = ParseTypeAnnotation();
+                    typeAnnotationNode = EditorSyntaxEnabled ? TakeTypeNode() : null;
                 }
 
                 Expr? initializer = null;
@@ -962,6 +1024,8 @@ public partial class Parser
 
                 ConsumeSemicolon("Expect ';' after field declaration.");
                 var field = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, Decorators: null, IsPrivate: false, IsDeclare: isMemberDeclare);
+                AttachEditorSyntax(field, typeAnnotationNode);
+                RecordWrittenMember(field, field.Name);
                 fields.Add(field);
                 if (isStatic)
                 {
@@ -994,7 +1058,9 @@ public partial class Parser
                 string kind = "method";
                 if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
                 var func = (Stmt.Function)FunctionDeclaration(kind, isMemberAsync, isMemberGenerator);
+                var originalFunction = func;
                 func = func with { IsStatic = isStatic, Access = access };
+                CopyEditorSyntax(originalFunction, func);
                 methods.Add(func);
 
                 // Synthesize fields from constructor parameter properties
@@ -1022,6 +1088,10 @@ public partial class Parser
                 }
             }
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 RecordError(ex.Message);
@@ -1032,7 +1102,7 @@ public partial class Parser
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
 
-        return new Expr.ClassExpr(
+        var expression = new Expr.ClassExpr(
             name,
             typeParams,
             superclassExpr,
@@ -1048,5 +1118,33 @@ public partial class Parser
             superclassTypeArgNodes,
             interfaceTypeArgNodes
         );
+        RecordClassSyntax(expression, name, headerStart, bodyOpen.Start, ConsumedSourceEnd);
+        return expression;
+    }
+
+    private void RecordAccessorSyntax(Stmt.Accessor accessor, Token kind, Token open, Token close, SourceSpan? body)
+    {
+        if (!EditorSyntaxEnabled) return;
+        RecordEditorRange(accessor, new SourceSpan(kind.Start, ConsumedSourceEnd), EditorSyntaxKind.Function);
+        RecordEditorRange(accessor, new SourceSpan(kind.Start, body?.Start ?? ConsumedSourceEnd), EditorSyntaxKind.Function, EditorSyntaxRole.Header);
+        RecordEditorRange(accessor, new SourceSpan(open.Start, close.End), EditorSyntaxKind.ParameterList);
+        if (body is { } bodySpan) RecordEditorRange(accessor, bodySpan, EditorSyntaxKind.Function, EditorSyntaxRole.Body);
+    }
+
+    private void RecordClassSyntax(object owner, Token? name, int start, int bodyStart, int end)
+    {
+        if (!EditorSyntaxEnabled) return;
+        if (name is not null) RecordEditorName(name, owner, EditorSyntaxRole.DeclarationName);
+        RecordEditorRange(owner, new SourceSpan(start, end), EditorSyntaxKind.Class);
+        RecordEditorRange(owner, new SourceSpan(start, bodyStart), EditorSyntaxKind.Class, EditorSyntaxRole.Header);
+        RecordEditorRange(owner, new SourceSpan(bodyStart, end), EditorSyntaxKind.Class, EditorSyntaxRole.Body);
+    }
+
+    private void RecordWrittenMember(object owner, Token name)
+    {
+        if (!EditorSyntaxEnabled) return;
+        if (owner is Stmt.Accessor { ComputedKey: not null } or Stmt.Field { ComputedKey: not null }) return;
+        RecordEditorName(name, owner, name.Type == TokenType.PRIVATE_IDENTIFIER ? EditorSyntaxRole.PrivateName :
+            name.Type is TokenType.STRING or TokenType.NUMBER ? EditorSyntaxRole.LiteralKey : EditorSyntaxRole.MemberName);
     }
 }

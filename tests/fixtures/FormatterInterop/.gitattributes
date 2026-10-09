@@ -1,0 +1,3 @@
+cases/*.ts text eol=lf
+cases/*.tsx text eol=lf
+cases/legacy-decorators.ts text eol=crlf

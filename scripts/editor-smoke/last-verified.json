@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "verifiedUtc": "2026-10-08T05:22:07Z",
+  "source": {
+    "commit": "a20b07d7259043dd06a33fae34a507b443c847d8",
+    "workingTreeChangesIncluded": true,
+    "configuration": "Release"
+  },
+  "toolchain": {
+    "platform": "Windows 10.0.26220 ARM64",
+    "dotnetSdk": "10.0.401",
+    "sdkPolicy": "global.json: 10.0.400, latestFeature, no prerelease",
+    "node": "22.23.2",
+    "nodePolicy": ".node-version",
+    "nodeAcquisition": {
+      "source": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-win-arm64.zip",
+      "checksumSource": "https://nodejs.org/dist/v22.23.2/SHASUMS256.txt",
+      "sha256": "fec025a6da31757e3b6af84c5a1628e9d38442ca99a2161091d78f2fcfa35ef3",
+      "installation": "Isolated under artifacts/editor-tools; no global installation"
+    }
+  },
+  "binaries": [
+    {
+      "path": "src/SharpTS.LanguageServer/bin/Release/net10.0/SharpTS.LanguageServer.dll",
+      "sha256": "9dc0e3c3b4d401e833735179ee84185c460b9f2dcb2ae187f71f8e808627a40b"
+    },
+    {
+      "path": "src/SharpTS.LanguageServer/bin/Release/net10.0/SharpTS.dll",
+      "sha256": "a2ee2949aace31ab14706d2bf2352125ed94d9fed085cb76ec7b55d95909e45b"
+    },
+    {
+      "path": "tests/fixtures/FormatterInterop/bin/Release/net10.0/SharpTS.FormatterInteropEvidence.dll",
+      "sha256": "9a1e32d7b02685de0b34219d39e371d08281123aab6e36ebbd7070a9f4c49f00"
+    },
+    {
+      "path": "tests/fixtures/FormatterInterop/bin/Release/net10.0/SharpTS.dll",
+      "sha256": "a2ee2949aace31ab14706d2bf2352125ed94d9fed085cb76ec7b55d95909e45b"
+    }
+  ],
+  "aggregate": {
+    "status": "passed",
+    "command": "pwsh -NoProfile -NonInteractive -File scripts/test-editor-contract.ps1 -NoBuild -NoRestore -NoFormatterInstall -NodeExecutable artifacts/editor-tools/node-22.23.2/node-v22.23.2-win-arm64/node.exe",
+    "evidence": "artifacts/editor-contract/20261007T215921-0682873b/index.json",
+    "suitesPassed": 8,
+    "suites": [
+      "analysis-snapshots",
+      "semantic-hover",
+      "semantic-completion",
+      "semantic-signatures",
+      "member-references",
+      "private-rename",
+      "formatter-interop",
+      "packaged-tool"
+    ],
+    "featureModes": ["full", "interop-only"],
+    "packagedTool": {
+      "version": "0.0.0-editor-contract",
+      "package": "artifacts/editor-contract/20261007T215921-0682873b/packaged/feed/SharpTS.LanguageServer.0.0.0-editor-contract.nupkg",
+      "sha256": "9b9233cd81cb7c6e03745623c094ee5a2266bb0feb770c0ae6ace7163efe235b",
+      "execution": "Actual isolated sharpts-lsp executable shim; local-only NuGet feed",
+      "cleanup": "Tool installation, package cache, CLI home and HTTP cache removed"
+    }
+  },
+  "focusedTests": [
+    {
+      "status": "passed",
+      "passed": 157,
+      "filter": "FullyQualifiedName~AnalysisHandlerTests|FullyQualifiedName~SemanticCompletionServiceTests|FullyQualifiedName~SemanticSignatureHelpServiceTests|FullyQualifiedName~SemanticCompletionHandlerTests|FullyQualifiedName~SemanticSignatureHelpHandlerTests",
+      "evidence": "artifacts/editor-release-checks/final-focused/editor-final-focused.trx"
+    },
+    {
+      "status": "passed",
+      "passed": 21,
+      "filter": "FullyQualifiedName~AnalysisHandlerTests",
+      "evidence": "artifacts/editor-release-checks/final-focused/analysis-handler-isolation.trx",
+      "note": "Final test-only rebuild uses an isolated xUnit collection; assertions and deadlines retained"
+    }
+  ],
+  "releaseChecks": {
+    "status": "passed",
+    "evidence": "artifacts/editor-release-checks/4ae3e2e514c24b1a889fcb9b2f2c15aa/index.json",
+    "commands": [
+      "pwsh -NoProfile -NonInteractive -File scripts/test-code-quality.ps1",
+      "pwsh -NoProfile -NonInteractive -File scripts/test-nuget-release.ps1",
+      "pwsh -NoProfile -NonInteractive -File scripts/test-gui-version.ps1",
+      "dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter \"Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm\"",
+      "dotnet publish src/SharpTS/SharpTS.csproj --no-build --no-restore --configuration Release --nologo --verbosity minimal",
+      "dotnet pack src/SharpTS.Sdk/SharpTS.Sdk.csproj --no-build --no-restore --configuration Release --output artifacts/editor-release-checks/4ae3e2e514c24b1a889fcb9b2f2c15aa/sdk-feed -p:MinVerVersionOverride=0.0.0-sdk-smoke",
+      "pwsh -NoProfile -NonInteractive -File scripts/test-packaged-sdk.ps1 -PackagePath artifacts/editor-release-checks/4ae3e2e514c24b1a889fcb9b2f2c15aa/sdk-feed/SharpTS.Sdk.0.0.0-sdk-smoke.nupkg -PackageVersion 0.0.0-sdk-smoke"
+    ],
+    "codeQuality": "Final run passed: 27 duplicate groups, 0 errors. Initial DUP001 failure remains recorded and superseded by the shared contextual-identifier helper fix",
+    "nugetReleasePassed": 10,
+    "guiConformancePassed": 134,
+    "sdkConsumer": {
+      "version": "0.0.0-sdk-smoke",
+      "sha256": "e27af902d0bfcebc28a94d3b1a5d2281302f1f6d44999fbf75f02c6864a71f91",
+      "result": "Isolated local-package consumer build, rebuild, clean, publish and sdk-smoke-ok execution passed"
+    }
+  },
+  "workflowPolicy": {
+    "status": "passed",
+    "command": "pwsh -NoProfile -NonInteractive -File scripts/test-github-workflows.ps1",
+    "workflowsValidated": 9
+  },
+  "fullCoreTests": {
+    "status": "passed",
+    "passed": 25210,
+    "skipped": 3,
+    "failed": 0,
+    "filter": "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests.",
+    "evidence": "artifacts/tests/1981-core-ci-final.trx",
+    "note": "Final run after isolating deliberately blocking checker-gate tests from unrelated aggressive xUnit collections; assertions and deadlines retained"
+  },
+  "actualEditors": {
+    "vscode": "scripts/editor-smoke/vscode-shipping/last-verified.json",
+    "neovim": "scripts/editor-smoke/neovim-editing/last-verified.json",
+    "helix": "scripts/editor-smoke/helix-editing/last-verified.json"
+  },
+  "workflowMeasurements": "benchmarks/editor-workflow/results-windows-arm64.json",
+  "pending": {
+    "remoteCiMatrix": "Pending GitHub execution of editor-contract on ubuntu-24.04 and windows-2025"
+  },
+  "artifactPolicy": "Raw run artifacts are ignored local files. The CI editor-contract job uploads logs and evidence on success or failure for 7 days. This tracked index contains repository-relative pointers and hashes, not the raw artifacts"
+}

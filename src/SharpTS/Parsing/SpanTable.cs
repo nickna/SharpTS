@@ -19,8 +19,19 @@ namespace SharpTS.Parsing;
 public sealed class SpanTable
 {
     private readonly Dictionary<object, SourceSpan> _spans = new(ReferenceEqualityComparer.Instance);
+    // Installed only during an opt-in parse and detached before publication. Existing parser
+    // lowerings already call CopySpan; the callback carries their syntax views along with it.
+    internal Action<object, object>? Copied { get; set; }
 
     public int Count => _spans.Count;
+
+    // Editor capture adds expression/type spans while speculating. Only the final AST is published;
+    // prune the corresponding side table too, so discarded objects cannot outlive the collector.
+    internal void RetainReachable(IReadOnlySet<object> reachable)
+    {
+        foreach (object node in _spans.Keys.Where(node => !reachable.Contains(node)).ToArray())
+            _spans.Remove(node);
+    }
 
     /// <summary>
     /// Associates <paramref name="node"/> with <paramref name="span"/>. The first span recorded for
@@ -54,6 +65,7 @@ public sealed class SpanTable
     public void CopySpan(object original, object replacement)
     {
         if (ReferenceEquals(original, replacement)) return;
+        Copied?.Invoke(original, replacement);
         if (_spans.TryGetValue(original, out var span))
             Record(replacement, span);
     }
@@ -69,7 +81,10 @@ public sealed class SpanTable
         foreach (var replacement in replacements)
         {
             if (!ReferenceEquals(original, replacement))
+            {
+                Copied?.Invoke(original, replacement);
                 Record(replacement, span);
+            }
         }
     }
 

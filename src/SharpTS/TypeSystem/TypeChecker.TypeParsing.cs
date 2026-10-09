@@ -31,9 +31,9 @@ public partial class TypeChecker
     {
         if (IsBareTypeName(typeName))
             return ResolveTypeName(typeName);
-        return Parser.TryParseTypeFragment(typeName) is { } node
-            ? TryToTypeInfo(node) ?? TypeInfo.Any.Shared
-            : TypeInfo.Any.Shared;
+        return Parser.TryParseTypeFragment(typeName, _cancellationToken) is { } node
+            ? TryToTypeInfo(node) ?? UnprovenEditorTypeFallback()
+            : UnprovenEditorTypeFallback();
     }
 
     /// <summary>
@@ -125,6 +125,8 @@ public partial class TypeChecker
             _expandedTypeAliasCache ??= new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
             if (_expandedTypeAliasCache.TryGetValue(aliasCacheKey, out var cached))
             {
+                if (EditorFacts.IsEnabled && _editorAliasResolutionProof?.GetValueOrDefault(aliasCacheKey) != true)
+                    MarkEditorUnprovenTypeName();
                 return cached;
             }
 
@@ -147,8 +149,9 @@ public partial class TypeChecker
 
                 // Node-first: resolve the stored definition node; the definition string is the
                 // fallback for any construct the node path can't yet resolve.
+                long editorProofVersion = _editorUnprovenTypeVersion;
                 var expanded = aliasEntry.DefinitionNode is { } definitionNode
-                    ? TryToTypeInfo(definitionNode) ?? ToTypeInfo(aliasEntry.Definition)
+                    ? ResolveEditorAliasDefinition(definitionNode) ?? ToTypeInfo(aliasEntry.Definition)
                     : ToTypeInfo(aliasEntry.Definition);
 
                 // Validate: direct self-reference without indirection is illegal
@@ -160,6 +163,8 @@ public partial class TypeChecker
 
                 // Cache the expanded type for future use
                 _expandedTypeAliasCache[aliasCacheKey] = expanded;
+                if (EditorFacts.IsEnabled)
+                    (_editorAliasResolutionProof ??= new(StringComparer.Ordinal))[aliasCacheKey] = editorProofVersion == _editorUnprovenTypeVersion;
 
                 return expanded;
             }
@@ -178,11 +183,13 @@ public partial class TypeChecker
             string[] parts = typeName.Split('.');
             TypeInfo? current = _environment.GetNamespace(parts[0])
                 ?? _environment.GetTypeBinding(parts[0]);
-            for (int i = 1; current is TypeInfo.Namespace ns && i < parts.Length; i++)
-                current = ns.Types.GetValueOrDefault(parts[i]);
+            int part = 1;
+            for (; current is TypeInfo.Namespace ns && part < parts.Length; part++)
+                current = ns.Types.GetValueOrDefault(parts[part]);
 
             if (current is not null)
             {
+                if (part < parts.Length) MarkEditorUnprovenTypeName();
                 return current switch
                 {
                     TypeInfo.Class cls => new TypeInfo.Instance(cls),
@@ -284,6 +291,7 @@ public partial class TypeChecker
             return enumType;
         }
 
+        if (typeName != "any") MarkEditorUnprovenTypeName();
         return TypeInfo.Any.Shared;
     }
 

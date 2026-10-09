@@ -30,16 +30,88 @@ public sealed class MemberHoverService
     public MemberHoverService(Func<string, Type?>? resolve = null)
         => _resolve = resolve ?? DotNetTypeRegistry.Resolve;
 
-    public Hover? Hover(string text, int line, int character)
+    public Hover? Hover(string text, int line, int character, CancellationToken cancellationToken = default)
     {
-        var tokens = new Lexer(text).ScanTokens();
-        var parsed = new Parser(tokens, DecoratorMode.Stage3).Parse();
-        if (!parsed.IsSuccess) return null;
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!MayHaveBindings(text)) return null;
+        var statements = ParseInterop(text, cancellationToken);
+        if (statements is null) return null;
         var pos = new PositionMap(text);
 
-        var bindings = CollectBindings(parsed.Statements);
-        return DeclarationHover(parsed.Statements, pos, line, character)
-            ?? UsageHover(parsed.Statements, pos, line, character, bindings);
+        var bindings = CollectBindings(statements);
+        return DeclarationHover(statements, pos, line, character)
+            ?? (bindings.Count == 0 ? null : UsageHover(statements, pos, line, character, bindings, cancellationToken));
+    }
+
+    /// <summary>The existing CLR declaration priority needs parsing, but no semantic check.</summary>
+    internal Hover? DeclarationHover(string text, int line, int character, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!text.Contains("DotNetType", StringComparison.Ordinal)) return null;
+        var statements = ParseInterop(text, cancellationToken);
+        return statements is null ? null : DeclarationHover(statements, new PositionMap(text), line, character);
+    }
+
+    private static List<Stmt>? ParseInterop(string text, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tokens = new Lexer(text).WithCancellation(cancellationToken).ScanTokens();
+            var parsed = new Parser(tokens, DecoratorMode.Stage3).WithCancellation(cancellationToken).Parse();
+            return parsed.IsSuccess ? parsed.Statements : null;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { return null; }
+    }
+
+    /// <summary>Full-mode usage hover reuses the captured AST and a final successful receiver.</summary>
+    internal Hover? Hover(CheckedNavigationModel model, int offset, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (model.Document.EditorSyntax?.FindMember(offset) is not { IsRecovered: false, IsIndex: false } member ||
+            !member.Name.Span.Contains(offset)) return null;
+        var occurrence = model.EditorFacts.GetOccurrence(model.Document, member.Receiver);
+        if (occurrence is not { Availability: EditorFactAvailability.Available, Type.IsAvailable: true }) return null;
+        TypeInfo? type = model.Snapshot.GetType(member.Receiver);
+        Type? clr = null;
+        if (type is TypeInfo.ExternalDotNetType external)
+            clr = ResolveExternal(external, new Dictionary<string, Type>());
+        else if (type is not null && DotNetTypeSynthesizer.TryGetClrType(type, out var imported))
+            clr = imported;
+        else if (type is TypeInfo.Class @class && DotNetTypeSynthesizer.TryGetClrType(new TypeInfo.Instance(@class), out var staticImported))
+            clr = staticImported;
+        else if (SourceClassId(type) is var classId && classId != 0 &&
+            model.Members.GetClassInfo(classId)?.Owner is Stmt.Class declaration)
+            clr = DotNetTypeOf(declaration);
+        if (clr is null) return null;
+        cancellationToken.ThrowIfCancellationRequested();
+        var hover = Render(RenderMember(clr, member.Name.Lexeme));
+        if (hover is null) return null;
+        var (startLine, startColumn) = model.Document.Lines.ToPosition(member.Name.Start);
+        var (endLine, endColumn) = model.Document.Lines.ToPosition(member.Name.End);
+        return new Hover
+        {
+            Contents = hover.Contents,
+            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(
+                startLine - 1, startColumn - 1, endLine - 1, endColumn - 1),
+        };
+    }
+
+    private static bool MayHaveBindings(string text) => text.Contains("DotNetType", StringComparison.Ordinal) ||
+        text.Contains("dotnet:", StringComparison.Ordinal);
+
+    private static int SourceClassId(TypeInfo? type)
+    {
+        for (int depth = 0; depth < 32; depth++)
+            switch (type)
+            {
+                case TypeInfo.Instance instance: type = instance.ResolvedClassType; break;
+                case TypeInfo.InstantiatedGeneric instantiated: type = instantiated.GenericDefinition; break;
+                case TypeInfo.Class @class: return @class.Core.DeclarationId;
+                case TypeInfo.GenericClass generic: return generic.Core.DeclarationId;
+                default: return 0;
+            }
+        return 0;
     }
 
     // TS class name -> CLR type, for every @DotNetType declaration and dotnet: import
@@ -68,6 +140,7 @@ public sealed class MemberHoverService
                         map[spec.LocalName?.Lexeme ?? spec.Imported.Lexeme] = type;
                         map.TryAdd(type.Name, type);
                     }
+                    catch (OperationCanceledException) { throw; }
                     catch
                     {
                         // Unresolvable import — no hover; InteropAnalyzer reports the diagnostic.
@@ -98,7 +171,8 @@ public sealed class MemberHoverService
     }
 
     // --- Usage: cursor on a member-access name; resolve the receiver via the TypeMap ---
-    private Hover? UsageHover(List<Stmt> statements, PositionMap pos, int line, int ch, IReadOnlyDictionary<string, Type> bindings)
+    private Hover? UsageHover(List<Stmt> statements, PositionMap pos, int line, int ch, IReadOnlyDictionary<string, Type> bindings,
+        CancellationToken cancellationToken)
     {
         var finder = new GetFinder(pos, line, ch);
         foreach (var stmt in statements) finder.Visit(stmt);
@@ -107,10 +181,11 @@ public sealed class MemberHoverService
         TypeMap typeMap;
         try
         {
-            var checker = new TypeChecker();
+            var checker = new TypeChecker().WithCancellation(cancellationToken);
             checker.SetDecoratorMode(DecoratorMode.Stage3);
             typeMap = checker.CheckWithRecovery(statements).TypeMap;
         }
+        catch (OperationCanceledException) { throw; }
         catch
         {
             return null; // a half-typed buffer shouldn't surface hover errors

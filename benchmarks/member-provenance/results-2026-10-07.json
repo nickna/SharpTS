@@ -1,0 +1,137 @@
+{
+  "baselineCommit": "f620d279",
+  "current": "Uncommitted #1392 implementation on f620d279, including final source-owner aliases and Presence hardening.",
+  "baselineTimestampUtc": "2026-10-07T06:44:50.8383116Z",
+  "currentTimestampUtc": "2026-10-07T06:45:26.5769172Z",
+  "environment": {
+    "sdk": "10.0.401",
+    "runtime": ".NET 10.0.12",
+    "os": "Microsoft Windows 10.0.26220",
+    "architecture": "Arm64",
+    "processorCount": 12,
+    "tieredCompilation": "0"
+  },
+  "samples": 31,
+  "warmupsPerVariant": 30,
+  "methodology": "Fresh pure-VFS editor-enabled parsed module graph for each check; parse/resolution/setup excluded. Timed: checker construction, CheckModules, lexical/member freeze and diagnostics copy. 30 warmups, 31 full-GC-isolated batches. Fingerprints outside timing: diagnostics, public structural expression/class types (nominal class IDs normalized to per-graph ordinals, retaining identity partitions), lexical declaration/use identity partitions. Retention: full-GC live heap delta from an already parsed graph to a checked publication with checker released. Baseline archived without instrumentation; no disk I/O in timed checks.",
+  "replay": "./benchmarks/member-provenance/run.ps1 -PackageCache <existing NuGet cache>",
+  "interpretation": [
+    "No ordinary median regression exceeds 10%; this single-machine run shows allocations grow below 0.24%.",
+    "Opt-in provenance adds cold checker allocation churn: +170216B small and +8880176B multi-module; retained publication grows only +11904B and +583904B respectively.",
+    "Index estimates of 4896B/247104B are approximate and smaller than measured retained deltas; the snapshot budget is estimated memory, not a strict heap cap.",
+    "Required enabled cold-check cost is +0.1863ms/+18.3045ms. Reused snapshots avoid repeated checks; final #1981 must measure end-to-end interactive latency.",
+    "Code inspection attributes added work to repeated declaration grouping, lookup proof scopes/candidate combination, owner fact maps and freezing/copies/sorts; no measured phase attribution or profiler was used."
+  ],
+  "fixtures": [
+    {
+      "name": "small",
+      "sourceFiles": 1,
+      "sourceUtf16Bytes": 1086,
+      "typedExpressions": 43,
+      "sourceTokens": 141,
+      "diagnosticCount": 0,
+      "repetitionsPerSample": 12,
+      "timedChecksPerVariant": 372,
+      "fingerprints": {
+        "diagnostics": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+        "types": "6B7A442668A8AF3E2BC50FA6FDFF79AA55AAB7D9936303296E32D0E093E5A588",
+        "lexical": "ADD150DA6C0F972C1E46D4DE896564EEA26FABE1ACB2724EA0E9ADD8523FFC90"
+      },
+      "allVariantFingerprintsMatch": true,
+      "variants": {
+        "baseline": {
+          "medianMilliseconds": 0.13275,
+          "p90Milliseconds": 0.15345,
+          "medianAllocatedBytes": 112281,
+          "retainedPublishedHeapDeltaBytes": 19800,
+          "memberSymbols": 0,
+          "memberOccurrences": 0,
+          "memberEstimatedBytes": 0
+        },
+        "currentCaptureOff": {
+          "medianMilliseconds": 0.13614166666666666,
+          "p90Milliseconds": 0.15180000000000002,
+          "medianAllocatedBytes": 112513,
+          "retainedPublishedHeapDeltaBytes": 19864,
+          "memberSymbols": 0,
+          "memberOccurrences": 0,
+          "memberEstimatedBytes": 0
+        },
+        "currentCaptureOn": {
+          "medianMilliseconds": 0.32240833333333335,
+          "p90Milliseconds": 0.37643333333333334,
+          "medianAllocatedBytes": 282729,
+          "retainedPublishedHeapDeltaBytes": 31768,
+          "memberSymbols": 6,
+          "memberOccurrences": 19,
+          "memberEstimatedBytes": 4896
+        }
+      },
+      "comparison": {
+        "ordinaryMedianPercent": 2.554927809165086,
+        "ordinaryAllocationPercent": 0.2066244511538029,
+        "enabledTimeMultiplier": 2.3681826528738448,
+        "enabledExtraMilliseconds": 0.1862666666666667,
+        "enabledAllocationMultiplier": 2.5128562921617945,
+        "enabledExtraAllocatedBytes": 170216,
+        "enabledExtraRetainedBytes": 11904,
+        "enabledRetainedMultiplier": 1.5992750704792589
+      }
+    },
+    {
+      "name": "25-module-inheritance-generics",
+      "sourceFiles": 25,
+      "sourceUtf16Bytes": 54508,
+      "typedExpressions": 2091,
+      "sourceTokens": 7393,
+      "diagnosticCount": 0,
+      "repetitionsPerSample": 2,
+      "timedChecksPerVariant": 62,
+      "fingerprints": {
+        "diagnostics": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+        "types": "0CFA3D40060B6F578C57BEB7EEA267A6102D09C8F22275158E4DF903A41D06DF",
+        "lexical": "408E378035EEDD8C8FF24D4999337F42418B84D17F5C431CDC2EF4E8F4BDB95A"
+      },
+      "allVariantFingerprintsMatch": true,
+      "variants": {
+        "baseline": {
+          "medianMilliseconds": 87.01075,
+          "p90Milliseconds": 111.64775,
+          "medianAllocatedBytes": 6470792,
+          "retainedPublishedHeapDeltaBytes": 827176,
+          "memberSymbols": 0,
+          "memberOccurrences": 0,
+          "memberEstimatedBytes": 0
+        },
+        "currentCaptureOff": {
+          "medianMilliseconds": 83.49375,
+          "p90Milliseconds": 86.6228,
+          "medianAllocatedBytes": 6485696,
+          "retainedPublishedHeapDeltaBytes": 830376,
+          "memberSymbols": 0,
+          "memberOccurrences": 0,
+          "memberEstimatedBytes": 0
+        },
+        "currentCaptureOn": {
+          "medianMilliseconds": 101.7982,
+          "p90Milliseconds": 105.9067,
+          "medianAllocatedBytes": 15365872,
+          "retainedPublishedHeapDeltaBytes": 1414280,
+          "memberSymbols": 300,
+          "memberOccurrences": 923,
+          "memberEstimatedBytes": 247104
+        }
+      },
+      "comparison": {
+        "ordinaryMedianPercent": -4.042029289484339,
+        "ordinaryAllocationPercent": 0.23032729223873005,
+        "enabledTimeMultiplier": 1.2192313795942809,
+        "enabledExtraMilliseconds": 18.30444999999999,
+        "enabledAllocationMultiplier": 2.369193992441212,
+        "enabledExtraAllocatedBytes": 8880176,
+        "enabledExtraRetainedBytes": 583904,
+        "enabledRetainedMultiplier": 1.7031802460572079
+      }
+    }
+  ]
+}

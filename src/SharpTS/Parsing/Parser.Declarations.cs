@@ -17,7 +17,46 @@ public partial class Parser
         int first = _current;
         Stmt declaration = DeclarationCore();
         RecordSpanFrom(declaration, first);
+        if (EditorSyntaxEnabled) RecordDeclarationNames(declaration);
         return declaration;
+    }
+
+    private void RecordDeclarationNames(Stmt declaration)
+    {
+        switch (declaration)
+        {
+            case Stmt.Var variable: RecordEditorName(variable.Name, variable, EditorSyntaxRole.DeclarationName); break;
+            case Stmt.Const constant: RecordEditorName(constant.Name, constant, EditorSyntaxRole.DeclarationName); break;
+            case Stmt.Function function: RecordEditorName(function.Name, function, function.IsPrivate ? EditorSyntaxRole.PrivateName : EditorSyntaxRole.DeclarationName); break;
+            case Stmt.Class @class: RecordEditorName(@class.Name, @class, EditorSyntaxRole.DeclarationName); break;
+            case Stmt.TypeAlias alias: RecordEditorName(alias.Name, alias, EditorSyntaxRole.DeclarationName); break;
+            case Stmt.Interface contract:
+                RecordEditorName(contract.Name, contract, EditorSyntaxRole.DeclarationName);
+                foreach (var member in contract.Members) RecordWrittenMember(member, member.Name);
+                break;
+            case Stmt.Enum @enum:
+                RecordEditorName(@enum.Name, @enum, EditorSyntaxRole.DeclarationName);
+                foreach (var member in @enum.Members) RecordWrittenMember(member, member.Name);
+                break;
+            case Stmt.Namespace ns:
+                RecordEditorName(ns.Name, ns, EditorSyntaxRole.DeclarationName);
+                break;
+            case Stmt.ImportAlias alias: RecordEditorName(alias.AliasName, alias, EditorSyntaxRole.DeclarationName); break;
+            case Stmt.ImportRequire require: RecordEditorName(require.AliasName, require, EditorSyntaxRole.DeclarationName); break;
+            case Stmt.Import import:
+                if (import.DefaultImport is { } defaultName) RecordEditorName(defaultName, import, EditorSyntaxRole.DeclarationName);
+                if (import.NamespaceImport is { } namespaceName) RecordEditorName(namespaceName, import, EditorSyntaxRole.DeclarationName);
+                foreach (var specifier in import.NamedImports ?? [])
+                {
+                    RecordEditorName(specifier.Imported, specifier, EditorSyntaxRole.Name);
+                    RecordEditorName(specifier.LocalName ?? specifier.Imported, specifier, EditorSyntaxRole.DeclarationName);
+                }
+                break;
+            case Stmt.Export { Declaration: { } exported }: RecordDeclarationNames(exported); break;
+            case Stmt.Sequence sequence:
+                foreach (var part in sequence.Statements) RecordDeclarationNames(part);
+                break;
+        }
     }
 
     private Stmt DeclarationCore()
@@ -517,6 +556,10 @@ public partial class Parser
 
             return new Stmt.CallSignature(sigTypeParams, parameters, returnType, returnTypeNode);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch
         {
             _current = saved;
@@ -555,6 +598,10 @@ public partial class Parser
             ConsumeInterfaceMemberSeparator();
 
             return new Stmt.ConstructorSignature(sigTypeParams, parameters, returnType, returnTypeNode);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {

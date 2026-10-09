@@ -25,6 +25,7 @@ public partial class TypeChecker
     private void CheckSwitch(Stmt.Switch switchStmt)
     {
         CheckExpr(switchStmt.Subject);
+        using var editorScope = EnterEditorLexicalScope(switchStmt);
 
         Expr.Variable? discriminatedVariable = null;
         Token? discriminantProperty = null;
@@ -97,9 +98,10 @@ public partial class TypeChecker
     private void CheckTryCatch(Stmt.TryCatch tryCatch)
     {
         // Check try block
-        foreach (var stmt in tryCatch.TryBlock)
         {
-            CheckStmt(stmt);
+            using var editorScope = EnterEditorLexicalScope(tryCatch, keyword: TokenType.TRY);
+            foreach (var stmt in tryCatch.TryBlock)
+                CheckStmt(stmt);
         }
 
         // TS1196: a catch-binding annotation must be exactly 'any' or 'unknown'.
@@ -117,6 +119,7 @@ public partial class TypeChecker
         // Check catch block with its parameter in scope
         if (tryCatch.CatchBlock != null && tryCatch.CatchParam != null)
         {
+            using var editorScope = EnterEditorLexicalScope(tryCatch, keyword: TokenType.CATCH);
             TypeEnvironment catchEnv = new(_environment);
             DeclareValue(
                 catchEnv,
@@ -144,6 +147,7 @@ public partial class TypeChecker
         // Check finally block
         if (tryCatch.FinallyBlock != null)
         {
+            using var editorScope = EnterEditorLexicalScope(tryCatch, keyword: TokenType.FINALLY);
             foreach (var stmt in tryCatch.FinallyBlock)
             {
                 CheckStmt(stmt);

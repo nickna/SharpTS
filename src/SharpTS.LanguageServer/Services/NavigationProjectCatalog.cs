@@ -1,3 +1,4 @@
+using SharpTS.IO;
 using SharpTS.Configuration;
 
 namespace SharpTS.LanguageServer.Services;
@@ -43,6 +44,7 @@ internal sealed record NavigationProjectCatalog(
 
         while (pending.TryDequeue(out string? configPath))
         {
+            CompilerFileSystem.ThrowIfCancellationRequested();
             string full = Path.GetFullPath(configPath);
             if (!visited.Add(full))
                 continue;
@@ -53,6 +55,10 @@ internal sealed record NavigationProjectCatalog(
             {
                 project = TsConfigLoader.Load(full);
                 projects.Add(project);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {
@@ -85,10 +91,11 @@ internal sealed record NavigationProjectCatalog(
 
         while (pending.TryDequeue(out string? directory))
         {
+            CompilerFileSystem.ThrowIfCancellationRequested();
             string fullDirectory = Path.GetFullPath(directory);
             if (!visitedDirectories.Add(fullDirectory))
                 continue;
-            if (!Directory.Exists(fullDirectory))
+            if (!CompilerFileSystem.DirectoryExists(fullDirectory))
             {
                 isComplete = false;
                 continue;
@@ -96,7 +103,7 @@ internal sealed record NavigationProjectCatalog(
 
             try
             {
-                foreach (string config in Directory.EnumerateFiles(
+                foreach (string config in CompilerFileSystem.EnumerateFiles(
                              fullDirectory,
                              TsConfigLoader.FileName,
                              SearchOption.TopDirectoryOnly))
@@ -104,14 +111,14 @@ internal sealed record NavigationProjectCatalog(
                     paths.Add(Path.GetFullPath(config));
                 }
 
-                foreach (string child in Directory.EnumerateDirectories(
+                foreach (string child in CompilerFileSystem.EnumerateDirectories(
                              fullDirectory,
                              "*",
                              SearchOption.TopDirectoryOnly))
                 {
                     if (SkippedDirectoryNames.Contains(Path.GetFileName(child)))
                         continue;
-                    if ((File.GetAttributes(child) & FileAttributes.ReparsePoint) != 0)
+                    if ((CompilerFileSystem.GetAttributes(child) & FileAttributes.ReparsePoint) != 0)
                         continue;
                     pending.Enqueue(child);
                 }

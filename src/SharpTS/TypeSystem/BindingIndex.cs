@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+using System.Collections.Immutable;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -10,6 +12,13 @@ public enum BindingNamespace
     Value,
     Type,
     Label,
+}
+
+/// <summary>Whether edits for this lexical binding are independently safe.</summary>
+public enum BindingRenameEligibility
+{
+    AllowedLexical,
+    ParameterPropertyRequiresCoordinatedEdits,
 }
 
 /// <summary>
@@ -54,6 +63,13 @@ public sealed class BindingSymbol
     public string Name { get; }
     public BindingNamespace Namespace { get; }
     public IReadOnlyList<BindingDeclaration> Declarations => _declarations;
+    public BindingRenameEligibility RenameEligibility { get; private set; }
+
+    internal void DenyRename(BindingRenameEligibility reason)
+    {
+        if (reason != BindingRenameEligibility.AllowedLexical)
+            RenameEligibility = reason;
+    }
 
     internal void AddDeclaration(SourceDocument? document, Token name)
     {
@@ -86,6 +102,61 @@ public sealed class BindingIndex
         new(ReferenceEqualityComparer.Instance);
     private int _nextId = 1;
     private int _generation;
+
+    /// <summary>
+    /// Copies the completed binding graph into a query-only index. Subsequent checking, clearing,
+    /// or declaration merging in this index cannot change the published copy.
+    /// </summary>
+    /// <remarks>
+    /// Call only after checking finishes. Source documents and tokens retain their identity so
+    /// all queries use the same source capture as the checked AST.
+    /// </remarks>
+    public FrozenBindingIndex Freeze()
+    {
+        var symbols = new Dictionary<BindingSymbol, FrozenBindingSymbol>(
+            ReferenceEqualityComparer.Instance);
+        foreach (BindingSymbol symbol in _tokens.Values.SelectMany(facets => facets.Values)
+                     .Concat(_occurrences.Keys))
+        {
+            if (!symbols.ContainsKey(symbol))
+            {
+                symbols.Add(symbol, new FrozenBindingSymbol(
+                    symbol.Id,
+                    symbol.Name,
+                    symbol.Namespace,
+                    symbol.Declarations,
+                    symbol.RenameEligibility));
+            }
+        }
+
+        var tokens = new List<FrozenBindingIndex.BoundToken>();
+        foreach (var (token, facets) in _tokens)
+        {
+            if (!_documents.TryGetValue(token, out SourceDocument? document))
+                continue;
+
+            tokens.Add(new FrozenBindingIndex.BoundToken(
+                token,
+                document,
+                facets.ToFrozenDictionary(pair => pair.Key, pair => symbols[pair.Value])));
+        }
+
+        var occurrences = new Dictionary<FrozenBindingSymbol, ImmutableArray<BindingOccurrence>>(
+            ReferenceEqualityComparer.Instance);
+        foreach (var (symbol, symbolOccurrences) in _occurrences)
+        {
+            occurrences.Add(symbols[symbol], symbolOccurrences.Select(pair =>
+                new BindingOccurrence(
+                    pair.Value,
+                    pair.Key,
+                    symbol.Declarations.Any(declaration =>
+                        ReferenceEquals(declaration.Document, pair.Value) &&
+                        ReferenceEquals(declaration.Name, pair.Key))))
+                .ToImmutableArray());
+        }
+
+        return new FrozenBindingIndex(tokens, occurrences);
+    }
 
     internal void Clear()
     {
@@ -310,4 +381,145 @@ public sealed class BindingIndex
         public bool IsDeclarationInEveryFacet { get; set; } =
             isDeclarationInEveryFacet;
     }
+}
+
+/// <summary>
+/// An immutable symbol identity belonging to one completed binding snapshot.
+/// </summary>
+public sealed class FrozenBindingSymbol
+{
+    internal FrozenBindingSymbol(
+        int id,
+        string name,
+        BindingNamespace bindingNamespace,
+        IReadOnlyList<BindingDeclaration> declarations,
+        BindingRenameEligibility renameEligibility)
+    {
+        Id = id;
+        Name = name;
+        Namespace = bindingNamespace;
+        Declarations = declarations.ToImmutableArray();
+        RenameEligibility = renameEligibility;
+    }
+
+    public int Id { get; }
+    public string Name { get; }
+    public BindingNamespace Namespace { get; }
+    public IReadOnlyList<BindingDeclaration> Declarations { get; }
+    public BindingRenameEligibility RenameEligibility { get; }
+}
+
+/// <summary>
+/// A completed copy of checker bindings with no checking or mutation API.
+/// </summary>
+public sealed class FrozenBindingIndex
+{
+    private readonly ImmutableArray<BoundToken> _tokens;
+    private readonly FrozenDictionary<FrozenBindingSymbol, ImmutableArray<BindingOccurrence>>
+        _occurrences;
+
+    internal FrozenBindingIndex(
+        IEnumerable<BoundToken> tokens,
+        Dictionary<FrozenBindingSymbol, ImmutableArray<BindingOccurrence>> occurrences)
+    {
+        _tokens = tokens.ToImmutableArray();
+        _occurrences = occurrences.ToFrozenDictionary(ReferenceEqualityComparer.Instance);
+    }
+
+    /// <summary>Returns the selected namespace's narrowest bound declarations.</summary>
+    public IReadOnlyList<BindingDeclaration> FindDefinitions(
+        SourceDocument document,
+        int offset,
+        BindingNamespace bindingNamespace = BindingNamespace.Value)
+    {
+        FrozenBindingSymbol? best = null;
+        int bestLength = int.MaxValue;
+        foreach (BoundToken entry in _tokens)
+        {
+            if (!ReferenceEquals(entry.Document, document) ||
+                !entry.Token.Span.Contains(offset) ||
+                !entry.Facets.TryGetValue(bindingNamespace, out FrozenBindingSymbol? symbol))
+            {
+                continue;
+            }
+
+            if (entry.Token.Span.Length < bestLength)
+            {
+                best = symbol;
+                bestLength = entry.Token.Span.Length;
+            }
+        }
+        return best?.Declarations ?? [];
+    }
+
+    /// <summary>Returns all value/type facets bound to the narrowest selected token.</summary>
+    public IReadOnlyList<FrozenBindingSymbol> FindSymbols(SourceDocument document, int offset)
+    {
+        var symbols = new HashSet<FrozenBindingSymbol>(ReferenceEqualityComparer.Instance);
+        int bestLength = int.MaxValue;
+        foreach (BoundToken entry in _tokens)
+        {
+            if (!ReferenceEquals(entry.Document, document) || !entry.Token.Span.Contains(offset))
+                continue;
+
+            if (entry.Token.Span.Length < bestLength)
+            {
+                symbols.Clear();
+                bestLength = entry.Token.Span.Length;
+            }
+            if (entry.Token.Span.Length == bestLength)
+                symbols.UnionWith(entry.Facets.Values);
+        }
+        return symbols.ToImmutableArray();
+    }
+
+    /// <summary>Returns the union of bound occurrences at a source offset.</summary>
+    public IReadOnlyList<BindingOccurrence> FindReferences(
+        SourceDocument document,
+        int offset,
+        bool includeDeclarations) =>
+        FindReferences(FindSymbols(document, offset), includeDeclarations);
+
+    /// <summary>
+    /// Returns occurrences for explicit identities from this snapshot. Identities from a different
+    /// snapshot are ignored even if their names and numeric IDs match.
+    /// </summary>
+    public IReadOnlyList<BindingOccurrence> FindReferences(
+        IReadOnlyList<FrozenBindingSymbol> symbols,
+        bool includeDeclarations)
+    {
+        var occurrences = new Dictionary<Token, BindingOccurrence>(ReferenceEqualityComparer.Instance);
+        foreach (FrozenBindingSymbol symbol in symbols)
+        {
+            if (!_occurrences.TryGetValue(symbol, out ImmutableArray<BindingOccurrence> bound))
+                continue;
+
+            foreach (BindingOccurrence occurrence in bound)
+            {
+                if (occurrences.TryGetValue(occurrence.Name, out BindingOccurrence? existing))
+                {
+                    // A shared token is a declaration only when every selected facet declares it.
+                    occurrences[occurrence.Name] = existing with
+                    {
+                        IsDeclaration = existing.IsDeclaration && occurrence.IsDeclaration,
+                    };
+                }
+                else
+                {
+                    occurrences.Add(occurrence.Name, occurrence);
+                }
+            }
+        }
+
+        return occurrences.Values
+            .Where(occurrence => includeDeclarations || !occurrence.IsDeclaration)
+            .OrderBy(occurrence => occurrence.Document.Path, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(occurrence => occurrence.Name.Start)
+            .ToImmutableArray();
+    }
+
+    internal sealed record BoundToken(
+        Token Token,
+        SourceDocument Document,
+        FrozenDictionary<BindingNamespace, FrozenBindingSymbol> Facets);
 }

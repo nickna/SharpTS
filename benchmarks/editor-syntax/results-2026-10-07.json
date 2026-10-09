@@ -1,0 +1,151 @@
+{
+  "baseline": {
+    "implementation": "2a613147",
+    "timestampUtc": "2026-10-07T05:58:47.223149Z",
+    "runtime": ".NET 10.0.12",
+    "os": "Microsoft Windows 10.0.26220",
+    "architecture": "Arm64",
+    "processorCount": 12,
+    "tieredCompilation": "0",
+    "samples": 31,
+    "methodology": "Synchronous lexer + SourceDocument/line index + parser/normal lowerings per identical source sequence. JIT warmed; 31 batches; per-sequence latency/allocation divided by repetitions. No resolver, checker, I/O or cursor repair. Full public AST property graph fingerprint (tokens, type nodes, values and flags) computed outside timing, with no fields excluded. Retained heap is noisy full-GC live delta with final documents and AST roots alive; index estimate excludes base text/tokens/AST. Baseline archived without source instrumentation.",
+    "reports": [
+      {
+        "fixture": "small",
+        "editorCapture": false,
+        "sourceFiles": 1,
+        "sourceUtf16Bytes": 1670,
+        "repetitionsPerSample": 40,
+        "medianMilliseconds": 0.051785000000000005,
+        "p90Milliseconds": 0.061645000000000005,
+        "medianAllocatedBytes": 145737,
+        "retainedHeapDeltaBytes": 23000,
+        "spanCount": 21,
+        "syntaxRecords": 0,
+        "syntaxEstimatedBytes": 0,
+        "resultFingerprint": "674AA8C36512C0A2F118B2A4B54011FD0EFD369C39D4FFFB5CE09C53FF47F91D"
+      },
+      {
+        "fixture": "25-module",
+        "editorCapture": false,
+        "sourceFiles": 25,
+        "sourceUtf16Bytes": 43998,
+        "repetitionsPerSample": 3,
+        "medianMilliseconds": 1.8362999999999998,
+        "p90Milliseconds": 2.0738,
+        "medianAllocatedBytes": 3677061,
+        "retainedHeapDeltaBytes": 585560,
+        "spanCount": 549,
+        "syntaxRecords": 0,
+        "syntaxEstimatedBytes": 0,
+        "resultFingerprint": "CDE4BF603096B605C51C81F06DBC955DDE9FA2AA24E9E91072C335F9C0C5B62C"
+      }
+    ]
+  },
+  "current": {
+    "implementation": "editor-syntax-current",
+    "timestampUtc": "2026-10-07T05:58:50.9047042Z",
+    "runtime": ".NET 10.0.12",
+    "os": "Microsoft Windows 10.0.26220",
+    "architecture": "Arm64",
+    "processorCount": 12,
+    "tieredCompilation": "0",
+    "samples": 31,
+    "methodology": "Synchronous lexer + SourceDocument/line index + parser/normal lowerings per identical source sequence. JIT warmed; 31 batches; per-sequence latency/allocation divided by repetitions. No resolver, checker, I/O or cursor repair. Full public AST property graph fingerprint (tokens, type nodes, values and flags) computed outside timing, with no fields excluded. Retained heap is noisy full-GC live delta with final documents and AST roots alive; index estimate excludes base text/tokens/AST. Baseline archived without source instrumentation.",
+    "reports": [
+      {
+        "fixture": "small",
+        "editorCapture": false,
+        "sourceFiles": 1,
+        "sourceUtf16Bytes": 1670,
+        "repetitionsPerSample": 40,
+        "medianMilliseconds": 0.053095,
+        "p90Milliseconds": 0.05888,
+        "medianAllocatedBytes": 146185,
+        "retainedHeapDeltaBytes": 23016,
+        "spanCount": 21,
+        "syntaxRecords": 0,
+        "syntaxEstimatedBytes": 0,
+        "resultFingerprint": "674AA8C36512C0A2F118B2A4B54011FD0EFD369C39D4FFFB5CE09C53FF47F91D"
+      },
+      {
+        "fixture": "small",
+        "editorCapture": true,
+        "sourceFiles": 1,
+        "sourceUtf16Bytes": 1670,
+        "repetitionsPerSample": 40,
+        "medianMilliseconds": 0.243335,
+        "p90Milliseconds": 0.25878,
+        "medianAllocatedBytes": 357521,
+        "retainedHeapDeltaBytes": 73368,
+        "spanCount": 111,
+        "syntaxRecords": 277,
+        "syntaxEstimatedBytes": 26816,
+        "resultFingerprint": "674AA8C36512C0A2F118B2A4B54011FD0EFD369C39D4FFFB5CE09C53FF47F91D"
+      },
+      {
+        "fixture": "25-module",
+        "editorCapture": false,
+        "sourceFiles": 25,
+        "sourceUtf16Bytes": 43998,
+        "repetitionsPerSample": 3,
+        "medianMilliseconds": 1.9499666666666666,
+        "p90Milliseconds": 2.206566666666667,
+        "medianAllocatedBytes": 3688261,
+        "retainedHeapDeltaBytes": 585960,
+        "spanCount": 549,
+        "syntaxRecords": 0,
+        "syntaxEstimatedBytes": 0,
+        "resultFingerprint": "CDE4BF603096B605C51C81F06DBC955DDE9FA2AA24E9E91072C335F9C0C5B62C"
+      },
+      {
+        "fixture": "25-module",
+        "editorCapture": true,
+        "sourceFiles": 25,
+        "sourceUtf16Bytes": 43998,
+        "repetitionsPerSample": 3,
+        "medianMilliseconds": 9.613166666666666,
+        "p90Milliseconds": 10.242266666666668,
+        "medianAllocatedBytes": 8996453,
+        "retainedHeapDeltaBytes": 1740368,
+        "spanCount": 2799,
+        "syntaxRecords": 6973,
+        "syntaxEstimatedBytes": 675008,
+        "resultFingerprint": "CDE4BF603096B605C51C81F06DBC955DDE9FA2AA24E9E91072C335F9C0C5B62C"
+      }
+    ]
+  },
+  "comparisons": [
+    {
+      "fixture": "small",
+      "ordinaryVsBaselineTimePercent": 2.5296900646905485,
+      "ordinaryVsBaselineAllocatedPercent": 0.30740306167960085,
+      "enabledVsOrdinaryTimeMultiplier": 4.583011583011583,
+      "enabledVsOrdinaryAllocatedMultiplier": 2.445675000855081,
+      "enabledAdditionalAllocatedBytes": 211336,
+      "enabledVsOrdinaryRetainedMultiplier": 3.1876955161626697,
+      "enabledAdditionalRetainedBytes": 50352,
+      "enabledAdditionalMilliseconds": 0.19024,
+      "enabledAdditionalAllocatedBytesPerRecord": 762.9458483754513
+    },
+    {
+      "fixture": "25-module",
+      "ordinaryVsBaselineTimePercent": 6.1899834812757515,
+      "ordinaryVsBaselineAllocatedPercent": 0.3045910851084521,
+      "enabledVsOrdinaryTimeMultiplier": 4.929913331851827,
+      "enabledVsOrdinaryAllocatedMultiplier": 2.4392126804475063,
+      "enabledAdditionalAllocatedBytes": 5308192,
+      "enabledVsOrdinaryRetainedMultiplier": 2.9701140009556966,
+      "enabledAdditionalRetainedBytes": 1154408,
+      "enabledAdditionalMilliseconds": 7.6632,
+      "enabledAdditionalAllocatedBytesPerRecord": 761.2493905062383
+    }
+  ],
+  "investigation": [
+    "Ordinary parsing stays below the 10% investigation threshold on both fixtures; allocations increase about 0.31%.",
+    "Enabled capture has a measured 4.58x/4.93x parse-pipeline latency and 2.45x/2.44x allocations relative to current ordinary parsing; absolute additional latency is 0.19024ms/7.6632ms.",
+    "Code inspection attributes enabled-only work to provenance collection/deduplication, final AST/type/attachment reachability, span pruning, immutable array copies/sorts and frozen reference-keyed node indexes. This is attribution by inspection, not measured phase profiling.",
+    "Extra allocated bytes per syntax record remain approximately constant across the fixtures (763B/761B), consistent with bounded linear data growth rather than a new allocation scaling problem.",
+    "Retained heap covers complete final documents and AST roots; the editor index estimate covers index structures only. Full-GC heap deltas are noisy. Editor metadata is captured on a cold parse and reused by checked snapshots; end-to-end interactive budgets will be evaluated by #1981."
+  ]
+}

@@ -35,7 +35,10 @@ public partial class Parser
     {
         int line = 1;
         for (int i = 0; i < offset && i < _source!.Length; i++)
+        {
+            CheckCancellation();
             if (_source[i] == '\n') line++;
+        }
         return line;
     }
 
@@ -49,6 +52,7 @@ public partial class Parser
     {
         for (int i = _current; i < _tokens.Count; i++)
         {
+            CheckCancellation();
             Token t = _tokens[i];
             if (t.Start < 0) continue;              // parser-synthesized (e.g. '>>' splits)
             if (t.Start > offset) break;            // stream disagrees — corrupted
@@ -93,12 +97,14 @@ public partial class Parser
 
     private void SpliceRelexedTokens(int offset)
     {
-        var relexed = Lexer.Relex(_source!, offset, LineAtOffset(offset), _templateInterpolationDepth);
+        var relexed = Lexer.Relex(_source!, offset, LineAtOffset(offset), _templateInterpolationDepth,
+            _cancellationToken);
 
         int spliceEnd = _tokens.Count;   // exclusive end of the replaced range
         int insertCount = relexed.Count; // fresh tokens to insert (default: all, incl. EOF)
         for (int n = 0; n < relexed.Count; n++)
         {
+            CheckCancellation();
             var (token, neutralAfter) = relexed[n];
             if (!neutralAfter || token.Type == TokenType.EOF) continue;
             int match = FindExactToken(token);
@@ -118,6 +124,7 @@ public partial class Parser
     {
         for (int i = _current; i < _tokens.Count; i++)
         {
+            CheckCancellation();
             Token t = _tokens[i];
             if (t.Start < 0) continue;
             if (t.Start > fresh.Start) return -1;
@@ -178,6 +185,24 @@ public partial class Parser
     /// '&gt;' so an enclosing children loop can resume source-driven text scanning.
     /// </summary>
     private (Expr Expr, int EndOffset) ParseJsxElementCore()
+    {
+        int start = CurrentSourceStart();
+        int errors = EditorSyntaxEnabled ? _diagnostics.ErrorCount : 0;
+        var result = ParseJsxElementCoreImpl();
+        if (EditorSyntaxEnabled)
+        {
+            var span = new SourceSpan(start, result.EndOffset);
+            _spans.Record(result.Expr, span);
+            bool recovered = _diagnostics.ErrorCount != errors;
+            RecordEditorRange(result.Expr, span, EditorSyntaxKind.JsxElement,
+                origin: recovered ? EditorSyntaxOrigin.Recovered : EditorSyntaxOrigin.Written);
+            if (recovered)
+                (_editorRecoveredExpressions ??= new(ReferenceEqualityComparer.Instance)).Add(result.Expr);
+        }
+        return result;
+    }
+
+    private (Expr Expr, int EndOffset) ParseJsxElementCoreImpl()
     {
         Token open = Consume(TokenType.LESS, "Expect '<' before JSX element.");
         if (open.Start >= 0)
@@ -342,10 +367,13 @@ public partial class Parser
 
                 if (Match(TokenType.LEFT_BRACE))
                 {
+                    int spreadStart = Previous().Start;
                     Consume(TokenType.DOT_DOT_DOT, "Expect '...' in JSX spread attribute.");
                     Expr spread = Expression();
                     Consume(TokenType.RIGHT_BRACE, "Expect '}' after JSX spread attribute.");
-                    attributes.Add(new Expr.Property(null, spread, IsSpread: true));
+                    var property = new Expr.Property(null, spread, IsSpread: true);
+                    attributes.Add(property);
+                    RecordEditorRange(property, new SourceSpan(spreadStart, ConsumedSourceEnd), EditorSyntaxKind.JsxAttribute);
                     continue;
                 }
 
@@ -355,12 +383,14 @@ public partial class Parser
 
                 Token nameStart;
                 string attributeName;
+                int attributeNameEnd;
                 if (TryReadEscapedJsxName(attributeProbe, out string escapedName, out int escapedEnd))
                 {
                     while (!IsAtEnd() && Peek().Start >= 0 && Peek().Start < escapedEnd)
                         Advance();
                     attributeName = escapedName;
                     nameStart = new Token(TokenType.IDENTIFIER, attributeName, null, Peek().Line);
+                    attributeNameEnd = escapedEnd;
                 }
                 else
                 {
@@ -371,18 +401,20 @@ public partial class Parser
                         char separator = Advance().Type == TokenType.MINUS ? '-' : ':';
                         attributeName += separator + ConsumeJsxNamePart("Expect JSX attribute name part.");
                     }
+                    attributeNameEnd = ConsumedSourceEnd;
                 }
                 var attributeToken = new Token(
                     TokenType.IDENTIFIER, attributeName, null, nameStart.Line, nameStart.Start);
 
-                Expr value = new Expr.Literal(true);
+                Expr value = HiddenJsx(new Expr.Literal(true));
                 if (Match(TokenType.EQUAL))
                 {
                     value = ParseJsxAttributeValue(out int? recoveryEndOffset);
                     if (recoveryEndOffset is not null)
                     {
-                        attributes.Add(new Expr.Property(
-                            new Expr.IdentifierKey(attributeToken), value));
+                        var recoveredProperty = new Expr.Property(new Expr.IdentifierKey(attributeToken), value);
+                        attributes.Add(recoveredProperty);
+                        RecordJsxAttribute(recoveredProperty, attributeToken, attributeProbe, attributeNameEnd, recoveryEndOffset.Value);
                         // The nested JSX consumed what would have closed this
                         // attribute/opening tag. Retain the partial element and
                         // let its enclosing JSX text scan resume at the next token.
@@ -391,7 +423,9 @@ public partial class Parser
                         break;
                     }
                 }
-                attributes.Add(new Expr.Property(new Expr.IdentifierKey(attributeToken), value));
+                var attribute = new Expr.Property(new Expr.IdentifierKey(attributeToken), value);
+                attributes.Add(attribute);
+                RecordJsxAttribute(attribute, attributeToken, attributeProbe, attributeNameEnd, Math.Max(attributeNameEnd, ConsumedSourceEnd));
             }
 
             if (!selfClosing)
@@ -415,12 +449,15 @@ public partial class Parser
             bool suppressNextSpreadRightBraceError = false;
             while (true)
             {
+                _cancellationToken.ThrowIfCancellationRequested();
                 // A recovered child can end at EOF after trivia that produced no token;
                 // derive the line from the source offset rather than Previous(), whose
                 // token may still be on the opening line.
                 var scan = JsxText.ScanText(_source!, childStart, LineAtOffset(childStart));
+                _cancellationToken.ThrowIfCancellationRequested();
                 foreach (var error in scan.Errors ?? [])
                 {
+                    CheckCancellation();
                     // The right brace immediately following a JSX spread child closes the
                     // spread syntax consumed by ParseJsxExpressionChild; it is not JSX text.
                     if (error.Character == '}' &&
@@ -433,9 +470,16 @@ public partial class Parser
                 }
                 suppressNextSpreadRightBraceError = false;
                 string? text = JsxText.CookChildText(scan.Raw);
+                _cancellationToken.ThrowIfCancellationRequested();
                 if (text is not null)
                 {
-                    children.Add(new Expr.Literal(text));
+                    var textExpression = new Expr.Literal(text);
+                    children.Add(textExpression);
+                    if (EditorSyntaxEnabled)
+                    {
+                        _spans.Record(textExpression, new SourceSpan(childStart, scan.EndOffset));
+                        RecordEditorRange(textExpression, new SourceSpan(childStart, scan.EndOffset), EditorSyntaxKind.Literal);
+                    }
                     childLines.Add(LineAtOffset(childStart));
                 }
 
@@ -469,6 +513,7 @@ public partial class Parser
                     while (childContentOffset < _source!.Length &&
                            char.IsWhiteSpace(_source[childContentOffset]))
                     {
+                        CheckCancellation();
                         childContentOffset++;
                     }
                     bool childStartedWithSlash = childContentOffset < _source.Length &&
@@ -506,6 +551,10 @@ public partial class Parser
                                 ex.Message, ex.TsCode);
                             childStart = offset >= 0 ? offset : _source!.Length;
                             continue;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
                         }
                         catch
                         {
@@ -681,23 +730,28 @@ public partial class Parser
         // Dashed/namespaced names are intrinsic elements. Member expressions take
         // precedence over the lowercase rule (`<x.video />` is a component access).
         if (tagName.Contains('-') || tagName.Contains(':'))
-            return (tagName, new Expr.Literal(tagName));
+            return (tagName, RecordJsxTag(new Expr.Literal(tagName), first.Start, nameEnd));
 
         int firstLine = first.Start >= 0 ? LineAtOffset(first.Start) : first.Line;
         Expr tagExpression = first.Lexeme == "this"
             ? new Expr.This(new Token(TokenType.THIS, "this", null, firstLine, first.Start))
             : new Expr.Variable(new Token(
                 TokenType.IDENTIFIER, first.Lexeme, null, firstLine, first.Start));
+        RecordJsxTag(tagExpression, first.Start, first.End, first);
         bool hasMemberAccess = false;
         while (Match(TokenType.DOT))
         {
+            Token dot = Previous();
             hasMemberAccess = true;
             Token part = ConsumeJsxIdentifierName("Expect JSX member name.");
             tagName += "." + part.Lexeme;
-            tagExpression = new Expr.Get(tagExpression, part);
+            Expr receiver = tagExpression;
+            tagExpression = new Expr.Get(receiver, part);
+            RecordExpression(tagExpression, first.Start, part.End);
+            RecordMemberSyntax(tagExpression, receiver, part, new SourceSpan(dot.Start, dot.End));
         }
         if (!hasMemberAccess && char.IsLower(tagName[0]) && tagName != "this")
-            return (tagName, new Expr.Literal(tagName));
+            return (tagName, RecordJsxTag(new Expr.Literal(tagName), first.Start, first.End, first));
         return (tagName, tagExpression);
     }
 
@@ -717,6 +771,7 @@ public partial class Parser
             Advance();
 
         tagExpression = BuildJsxTagExpression(tagName, open.Line);
+        RecordJsxTag(tagExpression, start, end);
         return true;
     }
 
@@ -727,6 +782,7 @@ public partial class Parser
                !char.IsWhiteSpace(_source[end]) &&
                _source[end] is not '>' and not '/' and not '=')
         {
+            CheckCancellation();
             end++;
         }
 
@@ -739,6 +795,7 @@ public partial class Parser
 
         decoded = Regex.Replace(raw, @"\\u\{([0-9a-fA-F]+)\}|\\u([0-9a-fA-F]{4})", match =>
         {
+            CheckCancellation();
             string digits = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
             int codePoint = int.Parse(digits, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
             return char.ConvertFromUtf32(codePoint);
@@ -753,6 +810,7 @@ public partial class Parser
         int braceDepth = 0;
         for (int i = openOffset + 1; i < _source!.Length; i++)
         {
+            CheckCancellation();
             char c = _source[i];
             if (c == '\n') line++;
             if (quote != '\0')
@@ -890,10 +948,15 @@ public partial class Parser
         Token equals = Previous();
         int probe = equals.Start >= 0 ? equals.Start + equals.Lexeme.Length : -1;
         while (probe >= 0 && probe < _source!.Length && char.IsWhiteSpace(_source[probe]))
+        {
+            CheckCancellation();
             probe++;
+        }
         if (probe >= 0 && probe < _source!.Length && _source[probe] is '"' or '\'')
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             var scan = JsxText.CookAttributeValue(_source, probe, equals.Line);
+            _cancellationToken.ThrowIfCancellationRequested();
             // When the upfront lex agrees on the string's extent, just consume its token;
             // otherwise the stream is corrupted from here — repair it from after the quote.
             Token valueToken = Peek();
@@ -906,7 +969,14 @@ public partial class Parser
             {
                 SpliceRelexedTokens(scan.EndOffset + 1);
             }
-            return new Expr.Literal(scan.Value);
+            var literal = new Expr.Literal(scan.Value);
+            if (EditorSyntaxEnabled)
+            {
+                var span = new SourceSpan(probe, scan.EndOffset + 1);
+                _spans.Record(literal, span);
+                RecordEditorRange(literal, span, EditorSyntaxKind.Literal);
+            }
+            return literal;
         }
 
         if (Match(TokenType.LEFT_BRACE))
@@ -1036,7 +1106,7 @@ public partial class Parser
             ? inlineFactoryWithoutFragment
                 ? BuildDottedExpr("React.Fragment", open.Line)
                 : _jsx!.Mode == JsxMode.Preserve
-                    ? new Expr.Literal("Fragment")
+                    ? HiddenJsx(new Expr.Literal("Fragment"))
                     : BuildFragmentFactoryExpr(open.Line)
             : tagExpression;
 
@@ -1044,12 +1114,12 @@ public partial class Parser
         Expr propsArgument;
         if (attributes.Count > 0 || isIntrinsic)
         {
-            propsLiteral = new Expr.ObjectLiteral(attributes);
+            propsLiteral = HiddenJsx(new Expr.ObjectLiteral(attributes));
             propsArgument = propsLiteral;
         }
         else
         {
-            propsArgument = new Expr.Literal(null);
+            propsArgument = HiddenJsx(new Expr.Literal(null));
         }
 
         var arguments = new List<Expr> { tag, propsArgument };
@@ -1108,6 +1178,7 @@ public partial class Parser
             if (!attribute.IsSpread && attribute.Key is Expr.IdentifierKey { Name.Lexeme: "key" })
             {
                 keyExpr = attribute.Value;
+                CopyEditorSyntax(attribute, keyExpr);
                 continue;
             }
             props.Add(attribute);
@@ -1117,13 +1188,13 @@ public partial class Parser
         if (children.Count > 0)
         {
             Expr childrenValue = useJsxs || children.Count > 1
-                ? new Expr.ArrayLiteral([.. children])
+                ? HiddenJsx(new Expr.ArrayLiteral([.. children]))
                 : children[0];
             props.Add(new Expr.Property(
                 new Expr.IdentifierKey(SynthesizedToken(TokenType.IDENTIFIER, "children", open.Line)),
                 childrenValue));
         }
-        var propsLiteral = new Expr.ObjectLiteral(props);
+        var propsLiteral = HiddenJsx(new Expr.ObjectLiteral(props));
 
         string calleeName;
         if (dev)
@@ -1146,7 +1217,7 @@ public partial class Parser
         if (isFragment)
         {
             _jsxUsedFragment = true;
-            tag = new Expr.Variable(SynthesizedToken(TokenType.IDENTIFIER, JsxLocalPrefix + "Fragment", open.Line));
+            tag = HiddenJsx(new Expr.Variable(SynthesizedToken(TokenType.IDENTIFIER, JsxLocalPrefix + "Fragment", open.Line)));
         }
         else
         {
@@ -1155,26 +1226,26 @@ public partial class Parser
 
         var arguments = new List<Expr> { tag, propsLiteral };
         if (keyExpr is not null || dev)
-            arguments.Add(keyExpr ?? new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance));
+            arguments.Add(keyExpr ?? HiddenJsx(new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance)));
         if (dev)
         {
             // jsxDEV(type, props, key, isStaticChildren, {fileName, lineNumber, columnNumber}, this)
             // Tokens carry no column info, so columnNumber is pinned to 1; `this` is null.
-            arguments.Add(new Expr.Literal(useJsxs));
-            arguments.Add(new Expr.ObjectLiteral(
+            arguments.Add(HiddenJsx(new Expr.Literal(useJsxs)));
+            arguments.Add(HiddenJsx(new Expr.ObjectLiteral(
             [
                 new(new Expr.IdentifierKey(SynthesizedToken(TokenType.IDENTIFIER, "fileName", open.Line)),
-                    new Expr.Literal(_filePath ?? "")),
+                    HiddenJsx(new Expr.Literal(_filePath ?? ""))),
                 new(new Expr.IdentifierKey(SynthesizedToken(TokenType.IDENTIFIER, "lineNumber", open.Line)),
-                    new Expr.Literal((double)open.Line)),
+                    HiddenJsx(new Expr.Literal((double)open.Line))),
                 new(new Expr.IdentifierKey(SynthesizedToken(TokenType.IDENTIFIER, "columnNumber", open.Line)),
-                    new Expr.Literal(1d)),
-            ]));
-            arguments.Add(new Expr.Literal(null));
+                    HiddenJsx(new Expr.Literal(1d))),
+            ])));
+            arguments.Add(HiddenJsx(new Expr.Literal(null)));
         }
 
         return new Expr.Call(
-            new Expr.Variable(SynthesizedToken(TokenType.IDENTIFIER, calleeName, open.Line)),
+            HiddenJsx(new Expr.Variable(SynthesizedToken(TokenType.IDENTIFIER, calleeName, open.Line))),
             SynthesizedToken(TokenType.LEFT_PAREN, "(", open.Line),
             null,
             arguments)
@@ -1204,21 +1275,49 @@ public partial class Parser
     /// </summary>
     private Expr BuildFragmentFactoryExpr(int line) =>
         string.Equals(_jsx!.FragmentFactory, "null", StringComparison.Ordinal)
-            ? new Expr.Literal(null)
+            ? HiddenJsx(new Expr.Literal(null))
             : BuildDottedExpr(_jsx.FragmentFactory, line);
 
     /// <summary>Builds the value expression for a dotted factory name ("React.createElement" → React.createElement).</summary>
-    private static Expr BuildDottedExpr(string dottedName, int line)
+    private Expr BuildDottedExpr(string dottedName, int line)
     {
         string[] parts = dottedName.Split('.');
-        Expr expr = new Expr.Variable(SynthesizedToken(TokenType.IDENTIFIER, parts[0], line));
+        Expr expr = HiddenJsx(new Expr.Variable(SynthesizedToken(TokenType.IDENTIFIER, parts[0], line)));
         for (int i = 1; i < parts.Length; i++)
-            expr = new Expr.Get(expr, SynthesizedToken(TokenType.IDENTIFIER, parts[i], line));
+            expr = HiddenJsx(new Expr.Get(expr, SynthesizedToken(TokenType.IDENTIFIER, parts[i], line)));
         return expr;
     }
 
     private static Token SynthesizedToken(TokenType type, string lexeme, int line) =>
         new(type, lexeme, null, line);
+
+    private T HiddenJsx<T>(T node) where T : Expr
+    {
+        if (EditorSyntaxEnabled) _spans.MarkHidden(node);
+        return node;
+    }
+
+    private T RecordJsxTag<T>(T node, int start, int end, Token? token = null) where T : Expr
+    {
+        if (!EditorSyntaxEnabled) return node;
+        var span = new SourceSpan(start, end);
+        _spans.Record(node, span);
+        RecordEditorRange(node, span, EditorSyntaxKind.Name, token: token);
+        return node;
+    }
+
+    private void RecordJsxAttribute(Expr.Property property, Token token, int start, int nameEnd, int end)
+    {
+        if (!EditorSyntaxEnabled) return;
+        end = Math.Max(end, _spans.GetSpan(property.Value)?.End ?? end);
+        var nameSpan = new SourceSpan(start, nameEnd);
+        // Namespace separators, escaped spellings and trivia can make the runtime key's
+        // synthesized spelling differ from the original source. Keep its raw view exact.
+        Token? sourceToken = start >= 0 && nameEnd <= _source!.Length &&
+            string.Equals(_source[start..nameEnd], token.Lexeme, StringComparison.Ordinal) ? token : null;
+        RecordEditorRange(property, nameSpan, EditorSyntaxKind.Name, EditorSyntaxRole.MemberName, token: sourceToken);
+        RecordEditorRange(property, new SourceSpan(start, end), EditorSyntaxKind.JsxAttribute);
+    }
 
     /// <summary>
     /// The synthesized automatic-runtime import: only the names actually used, aliased under
@@ -1240,7 +1339,7 @@ public partial class Parser
         if (_jsxUsedFragment) Add("Fragment");
 
         string modulePath = _jsx.ImportSource + (dev ? "/jsx-dev-runtime" : "/jsx-runtime");
-        return new Stmt.Import(
+        var import = new Stmt.Import(
             SynthesizedToken(TokenType.IMPORT, "import", 1),
             named,
             DefaultImport: null,
@@ -1249,5 +1348,11 @@ public partial class Parser
         {
             IsSynthesizedJsxRuntime = true,
         };
+        if (EditorSyntaxEnabled)
+        {
+            _spans.MarkHidden(import);
+            foreach (var specifier in named) _spans.MarkHidden(specifier);
+        }
+        return import;
     }
 }

@@ -311,7 +311,7 @@ public partial class TypeChecker
 
             case Stmt.Var varStmt:
                 // Ambient variable - register with declared type
-                TypeInfo varType = ResolveAnnotation(varStmt.TypeAnnotation, varStmt.TypeAnnotationNode)
+                TypeInfo varType = ResolveAnnotation(varStmt.TypeAnnotation, varStmt.TypeAnnotationNode, varStmt)
                     ?? TypeInfo.Any.Shared;
                 _environment.Define(varStmt.Name.Lexeme, varType);
                 break;
@@ -364,7 +364,7 @@ public partial class TypeChecker
                 break;
 
             case Stmt.Var varStmt:
-                TypeInfo varType = ResolveAnnotation(varStmt.TypeAnnotation, varStmt.TypeAnnotationNode)
+                TypeInfo varType = ResolveAnnotation(varStmt.TypeAnnotation, varStmt.TypeAnnotationNode, varStmt)
                     ?? TypeInfo.Any.Shared;
                 _environment.Define(varStmt.Name.Lexeme, varType);
                 break;
@@ -397,7 +397,7 @@ public partial class TypeChecker
 
                 foreach (var member in interfaceStmt.Members)
                 {
-                    var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode)!;
+                    var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode, member)!;
                     if (name == "SymbolConstructor" && member.IsReadonly && memberType is TypeInfo.Symbol)
                     {
                         memberType = new TypeInfo.UniqueSymbol(

@@ -25,6 +25,9 @@ public partial class Parser
         bool isReadonly = false,
         List<Decorator>? decorators = null)
     {
+        int start = paramName.Start;
+        if (isRest && _current > 1 && _tokens[_current - 2].Type == TokenType.DOT_DOT_DOT)
+            start = _tokens[_current - 2].Start;
         // Check for optional parameter marker (?)
         bool isOptional = Match(TokenType.QUESTION);
 
@@ -42,8 +45,12 @@ public partial class Parser
             defaultValue = Expression();
         }
 
-        return new Stmt.Parameter(paramName, paramType, defaultValue, isRest,
+        var parameter = new Stmt.Parameter(paramName, paramType, defaultValue, isRest,
             isParameterProperty, access, isReadonly, isOptional, decorators, paramTypeNode);
+        RecordEditorName(paramName, parameter, EditorSyntaxRole.DeclarationName);
+        RecordEditorRange(parameter, new SourceSpan(start, ConsumedSourceEnd),
+            EditorSyntaxKind.Name, EditorSyntaxRole.Parameter);
+        return parameter;
     }
 
     /// <summary>
@@ -56,6 +63,7 @@ public partial class Parser
     private (Stmt.Parameter Parameter, DestructurePattern Pattern) ParseDestructuredParameter(
         int parameterIndex, List<Decorator>? decorators = null)
     {
+        int start = CurrentSourceStart();
         int line = Peek().Line;
         DestructurePattern pattern;
         if (Match(TokenType.LEFT_BRACKET))
@@ -89,6 +97,16 @@ public partial class Parser
         var parameter = new Stmt.Parameter(synthName, paramType, defaultValue,
             Decorators: decorators, TypeAnnotationNode: paramTypeNode,
             DestructuredProperties: destructuredProperties);
+        RecordEditorRange(parameter, new SourceSpan(start, ConsumedSourceEnd),
+            EditorSyntaxKind.Name, EditorSyntaxRole.Parameter);
+        // The generated _paramN identifier has no written name. Original binding/key tokens
+        // remain useful even though the runtime parameter itself uses a synthesized name.
+        if (destructuredProperties is not null)
+            foreach (Stmt.DestructuredParameterProperty property in destructuredProperties)
+            {
+                RecordEditorName(property.Key, parameter, EditorSyntaxRole.LiteralKey);
+                RecordEditorName(property.Binding, parameter, EditorSyntaxRole.DeclarationName);
+            }
         return (parameter, pattern);
     }
 

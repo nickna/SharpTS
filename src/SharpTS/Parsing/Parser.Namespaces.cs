@@ -74,6 +74,7 @@ public partial class Parser
         int first = _current;
         Stmt member = NamespaceMemberCore();
         RecordSpanFrom(member, first);
+        if (EditorSyntaxEnabled) RecordDeclarationNames(member);
         return member;
     }
 

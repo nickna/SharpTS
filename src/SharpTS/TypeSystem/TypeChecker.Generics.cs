@@ -302,8 +302,8 @@ public partial class TypeChecker
                 // through, resolve permissively rather than crash.
                 result = genericAlias.Value.DefinitionNode is { } definitionNode
                     ? TryExpandGenericAliasFromNode(baseName, definitionNode, genericAlias.Value.TypeParams, typeArgs)
-                        ?? TypeInfo.Any.Shared
-                    : TypeInfo.Any.Shared;
+                        ?? UnprovenEditorTypeFallback()
+                    : UnprovenEditorTypeFallback();
             }
             else
             {
@@ -322,7 +322,7 @@ public partial class TypeChecker
                     TypeInfo.GenericClass gc => new TypeInfo.Instance(InstantiateGenericClass(gc, typeArgs)),
                     TypeInfo.GenericInterface gi => InstantiateGenericInterface(gi, typeArgs),
                     TypeInfo.GenericFunction gf => InstantiateGenericFunction(gf, typeArgs),
-                    _ => TypeInfo.Any.Shared // Unknown generic type - fallback to any
+                    _ => UnprovenEditorTypeFallback() // Unknown generic type - fallback to any
                 };
             }
         }
@@ -492,7 +492,8 @@ public partial class TypeChecker
         var substitutedParams = generic.ParamTypes.Select(p => SubstitutePreservingSignatures(p, substitutions)).ToList();
         var substitutedReturn = SubstitutePreservingSignatures(generic.ReturnType, substitutions);
 
-        return new TypeInfo.Function(substitutedParams, substitutedReturn, generic.RequiredParams, generic.HasRestParam);
+        return CopyEditorSignatureMetadata(generic,
+            new TypeInfo.Function(substitutedParams, substitutedReturn, generic.RequiredParams, generic.HasRestParam));
     }
 
     /// <summary>

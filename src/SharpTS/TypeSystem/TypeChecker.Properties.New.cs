@@ -84,6 +84,14 @@ public partial class TypeChecker
 
     private TypeInfo CheckNew(Expr.New newExpr)
     {
+        using var invocationAttempt = BeginEditorInvocation(newExpr, EditorInvocationKind.New, newExpr.Arguments);
+        TypeInfo result = CheckNewCore(newExpr);
+        invocationAttempt?.Succeed(result);
+        return result;
+    }
+
+    private TypeInfo CheckNewCore(Expr.New newExpr)
+    {
         // Built-in types only apply when callee is a simple identifier
         bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
         string? simpleClassName = GetSimpleClassName(newExpr.Callee);
@@ -708,6 +716,7 @@ public partial class TypeChecker
         CheckDeclaredConstructor:
         string qualifiedName = GetCalleeClassName(newExpr.Callee);
         TypeInfo calleeType = CheckExpr(newExpr.Callee);
+        RecordEditorConstructorCandidates(calleeType);
 
         // Handle interfaces with constructor signatures
         if (calleeType is TypeInfo.Interface itf && itf.IsConstructable)
@@ -755,6 +764,7 @@ public partial class TypeChecker
                 typeArgs = newExpr.TypeArgs.Select((_, i) => ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, i)).ToList();
             }
             var instantiated = InstantiateGenericClass(genericClass, typeArgs);
+            RecordEditorConstructedType(instantiated);
 
             // Build substitution map for constructor parameter types
             Dictionary<string, TypeInfo> subs = [];
@@ -804,6 +814,7 @@ public partial class TypeChecker
         {
             if (newExpr.Arguments.Count > 0)
                 throw new TypeCheckException($" Constructor for '{qualifiedName}' expected 0 arguments but got {newExpr.Arguments.Count}.", tsCode: "TS2554");
+            _editorInvocationAttempt?.SelectImplicitConstructor();
             return;
         }
 
@@ -816,8 +827,11 @@ public partial class TypeChecker
                 var paramTypes = subs != null
                     ? sig.ParamTypes.Select(p => ResolveConstructorParameter(Substitute(p, subs))).ToList()
                     : sig.ParamTypes.Select(ResolveConstructorParameter).ToList();
+                RecordEditorConstructorInstantiation(sig, paramTypes, sig.MinArity, sig.HasRestParam,
+                    sig.ThisType, sig.ParamNames);
                 if (TryMatchConstructorArgs(argTypes, paramTypes, sig.MinArity, sig.HasRestParam))
                 {
+                    RecordEditorInvocationSelection(sig);
                     matched = true;
                     break;
                 }
@@ -830,6 +844,8 @@ public partial class TypeChecker
             var paramTypes = subs != null
                 ? ctorType.ParamTypes.Select(p => ResolveConstructorParameter(Substitute(p, subs))).ToList()
                 : ctorType.ParamTypes.Select(ResolveConstructorParameter).ToList();
+            RecordEditorConstructorInstantiation(ctorType, paramTypes, ctorType.MinArity, ctorType.HasRestParam,
+                ctorType.ThisType, ctorType.ParamNames);
 
             if (newExpr.Arguments.Count < ctorType.MinArity)
                 throw new TypeCheckException($" Constructor for '{qualifiedName}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.", tsCode: "TS2554");
@@ -850,6 +866,7 @@ public partial class TypeChecker
                 if (!IsArgumentCompatible(paramTypes[i], argType, optional))
                     throw new TypeCheckException($" Constructor argument {i + 1} expected type '{paramTypes[i]}' but got '{argType}'.", tsCode: "TS2345");
             }
+            RecordEditorInvocationSelection(ctorType);
         }
     }
 
@@ -1109,6 +1126,7 @@ public partial class TypeChecker
                             goto NextSignature;
                         }
                     }
+                    RecordEditorInvocationSelection(ctorSig);
                     return ctorSig.ReturnType;
                 }
             }
@@ -1156,7 +1174,15 @@ public partial class TypeChecker
                         if (!IsCompatible(substitutedParamTypes[i], argTypes[i]))
                             goto NextSignature;
                     }
-                    return Substitute(ctorSig.ReturnType, subs);
+                    TypeInfo result = Substitute(ctorSig.ReturnType, subs);
+                    if (_editorInvocationAttempt is { CanPublish: true })
+                    {
+                        var editorSignature = new TypeInfo.Function(substitutedParamTypes, result,
+                            ctorSig.MinArity, ctorSig.HasRestParam, ParamNames: ctorSig.ParamNames);
+                        RecordEditorInvocationInstantiation(ctorSig, editorSignature);
+                        RecordEditorInvocationSelection(ctorSig, editorSignature);
+                    }
+                    return result;
                 }
                 NextSignature:;
             }
@@ -1220,7 +1246,15 @@ public partial class TypeChecker
                 return null;
         }
 
-        return Substitute(ctorSig.ReturnType, inferred);
+        TypeInfo result = Substitute(ctorSig.ReturnType, inferred);
+        if (_editorInvocationAttempt is { CanPublish: true })
+        {
+            var editorSignature = new TypeInfo.Function(substitutedParamTypes, result,
+                ctorSig.MinArity, ctorSig.HasRestParam, ParamNames: ctorSig.ParamNames);
+            RecordEditorInvocationInstantiation(ctorSig, editorSignature);
+            RecordEditorInvocationSelection(ctorSig, editorSignature);
+        }
+        return result;
     }
 
     /// <summary>

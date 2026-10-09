@@ -11,6 +11,9 @@ public partial class Parser
         int first = _current;
         Stmt statement = StatementCore();
         RecordSpanFrom(statement, first);
+        if (statement is Stmt.For or Stmt.ForOf or Stmt.ForIn)
+            RecordEditorRange(statement, new SourceSpan(_tokens[first].Start, ConsumedSourceEnd),
+                EditorSyntaxKind.Block);
         return statement;
     }
 
@@ -29,7 +32,13 @@ public partial class Parser
         if (Match(TokenType.DO)) return DoWhileStatement();
         if (Match(TokenType.WHILE)) return WhileStatement();
         if (Match(TokenType.RETURN)) return ReturnStatement();
-        if (Match(TokenType.LEFT_BRACE)) return new Stmt.Block(Block());
+        if (Match(TokenType.LEFT_BRACE))
+        {
+            int start = Previous().Start;
+            var block = new Stmt.Block(Block());
+            RecordEditorRange(block, new SourceSpan(start, ConsumedSourceEnd), EditorSyntaxKind.Block, EditorSyntaxRole.Body);
+            return block;
+        }
 
         // Check for labeled statement: identifier : statement
         if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.COLON)
@@ -111,7 +120,9 @@ public partial class Parser
                 Expr iterable = Expression();
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after for...of expression.");
                 Stmt body = Statement();
-                return new Stmt.ForOf(varName, typeAnnotation, iterable, body, isAsync);
+                var loop = new Stmt.ForOf(varName, typeAnnotation, iterable, body, isAsync);
+                RecordEditorName(varName, loop, EditorSyntaxRole.DeclarationName);
+                return loop;
             }
 
             // 'for await' must be followed by 'of', not 'in' or traditional for
@@ -126,7 +137,9 @@ public partial class Parser
                 Expr obj = Expression();
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after for...in expression.");
                 Stmt body = Statement();
-                return new Stmt.ForIn(varName, typeAnnotation, obj, body);
+                var loop = new Stmt.ForIn(varName, typeAnnotation, obj, body);
+                RecordEditorName(varName, loop, EditorSyntaxRole.DeclarationName);
+                return loop;
             }
 
             // Otherwise it's a traditional for loop - we need to handle the initializer
@@ -139,6 +152,8 @@ public partial class Parser
 
             Stmt initializer;
             Stmt firstDecl = new Stmt.Var(varName, typeAnnotation, initValue, IsVar: initIsVar);
+            RecordEditorName(varName, firstDecl, EditorSyntaxRole.DeclarationName);
+            if (EditorSyntaxEnabled) _spans.Record(firstDecl, new SourceSpan(varName.Start, ConsumedSourceEnd));
 
             // Multi-declarator support: `for (var i = 0, j = 10; ...; ...)`
             if (Check(TokenType.COMMA))
@@ -151,7 +166,10 @@ public partial class Parser
                     if (Match(TokenType.COLON)) extraType = ParseTypeAnnotation();
                     Expr? extraInit = null;
                     if (Match(TokenType.EQUAL)) extraInit = Expression();
-                    decls.Add(new Stmt.Var(extraName, extraType, extraInit, IsVar: initIsVar));
+                    var extraDeclaration = new Stmt.Var(extraName, extraType, extraInit, IsVar: initIsVar);
+                    RecordEditorName(extraName, extraDeclaration, EditorSyntaxRole.DeclarationName);
+                    if (EditorSyntaxEnabled) _spans.Record(extraDeclaration, new SourceSpan(extraName.Start, ConsumedSourceEnd));
+                    decls.Add(extraDeclaration);
                 }
                 initializer = new Stmt.Sequence(decls);
             }
@@ -347,6 +365,7 @@ public partial class Parser
         Expr subject = Expression();
         Consume(TokenType.RIGHT_PAREN, "Expect ')' after switch expression.");
         Consume(TokenType.LEFT_BRACE, "Expect '{' before switch body.");
+        int bodyStart = Previous().Start;
 
         List<Stmt.SwitchCase> cases = [];
         List<Stmt>? defaultBody = null;
@@ -383,22 +402,32 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after switch body.");
-        return new Stmt.Switch(subject, cases, defaultBody);
+        var result = new Stmt.Switch(subject, cases, defaultBody);
+        RecordEditorRange(result, new SourceSpan(bodyStart, ConsumedSourceEnd), EditorSyntaxKind.Block, EditorSyntaxRole.Body);
+        return result;
     }
 
     private Stmt TryStatement()
     {
+        Token tryKeyword = Previous();
         Consume(TokenType.LEFT_BRACE, "Expect '{' after 'try'.");
+        int tryStart = Previous().Start;
         List<Stmt> tryBlock = Block();
+        var trySpan = new SourceSpan(tryStart, ConsumedSourceEnd);
 
         Token? catchParam = null;
         string? catchParamType = null;
         TypeNode? catchParamTypeNode = null;
         List<Stmt>? catchBlock = null;
         List<Stmt>? finallyBlock = null;
+        Token? catchKeyword = null;
+        Token? finallyKeyword = null;
+        SourceSpan? catchSpan = null;
+        SourceSpan? finallySpan = null;
 
         if (Match(TokenType.CATCH))
         {
+            catchKeyword = Previous();
             // Optional catch binding (ES2019): catch { } without parameter
             if (Check(TokenType.LEFT_PAREN))
             {
@@ -418,12 +447,16 @@ public partial class Parser
 
             Consume(TokenType.LEFT_BRACE, "Expect '{' before catch block.");
             catchBlock = Block();
+            catchSpan = new SourceSpan(catchKeyword.Start, ConsumedSourceEnd);
         }
 
         if (Match(TokenType.FINALLY))
         {
+            finallyKeyword = Previous();
             Consume(TokenType.LEFT_BRACE, "Expect '{' after 'finally'.");
+            int finallyStart = Previous().Start;
             finallyBlock = Block();
+            finallySpan = new SourceSpan(finallyStart, ConsumedSourceEnd);
         }
 
         if (catchBlock == null && finallyBlock == null)
@@ -431,7 +464,14 @@ public partial class Parser
             throw new Exception("Try statement must have catch or finally clause.");
         }
 
-        return new Stmt.TryCatch(tryBlock, catchParam, catchBlock, finallyBlock, catchParamType, catchParamTypeNode);
+        var result = new Stmt.TryCatch(tryBlock, catchParam, catchBlock, finallyBlock, catchParamType, catchParamTypeNode);
+        RecordEditorRange(result, trySpan, EditorSyntaxKind.Block, EditorSyntaxRole.Body, token: tryKeyword);
+        if (catchSpan is { } caught)
+            RecordEditorRange(result, caught, EditorSyntaxKind.Block, EditorSyntaxRole.Body, token: catchKeyword);
+        if (finallySpan is { } final)
+            RecordEditorRange(result, final, EditorSyntaxKind.Block, EditorSyntaxRole.Body, token: finallyKeyword);
+        if (catchParam is not null) RecordEditorName(catchParam, result, EditorSyntaxRole.DeclarationName);
+        return result;
     }
 
     private Stmt ThrowStatement()
@@ -487,6 +527,10 @@ public partial class Parser
             {
                 var decl = Declaration();
                 if (decl != null) statements.Add(decl);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

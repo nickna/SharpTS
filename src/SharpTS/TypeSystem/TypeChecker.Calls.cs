@@ -17,6 +17,18 @@ public partial class TypeChecker
         Expr.Call call,
         TypeInfo? contextualResultType = null)
     {
+        using var invocationAttempt = BeginEditorInvocation(call, EditorInvocationKind.Call, call.Arguments);
+        ForgetSourceMemberCall(call);
+        TypeInfo result = CheckCallCore(call, contextualResultType);
+        RecordSourceMemberCall(call);
+        invocationAttempt?.Succeed(result);
+        return result;
+    }
+
+    private TypeInfo CheckCallCore(
+        Expr.Call call,
+        TypeInfo? contextualResultType)
+    {
         // JSX-origin calls (parser-lowered elements) bypass ordinary call checking entirely:
         // the JSX pipeline owns their semantics and diagnostics (see TypeChecker.Jsx.cs), so
         // the factory signature never produces TS2554/TS2345 alongside JSX-shaped errors.
@@ -40,7 +52,9 @@ public partial class TypeChecker
         {
             calleeType = extensionMember;
             _typeMap.Set(call.Callee, extensionMember);
+            RecordEditorExpressionType(call.Callee, extensionMember);
         }
+        RecordEditorCallCandidates(calleeType, call.Optional);
 
         // Resolve the callee before invalidating receiver-property narrowings. A guard may narrow
         // the callable property itself (`obj.callback === undefined ? ... : obj.callback()`), and
@@ -131,6 +145,7 @@ public partial class TypeChecker
             }
             if (instantiatedFunc is TypeInfo.Function instFunc)
             {
+                RecordEditorInvocationInstantiation(genericFunc, instFunc);
                 for (int i = 0; i < call.Arguments.Count && i < instFunc.ParamTypes.Count; i++)
                 {
                     if (call.Arguments[i] is Expr.ObjectLiteral && argTypes[i] is TypeInfo.Record freshRecord
@@ -141,6 +156,7 @@ public partial class TypeChecker
                 // Re-contextualize callbacks after inference. This includes callbacks nested in
                 // object/array arguments, whose parameter types depend on the instantiated props.
                 ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
+                RecordEditorInvocationSelection(genericFunc, instFunc);
                 return instFunc.ReturnType;
             }
             return TypeInfo.Any.Shared;
@@ -285,6 +301,7 @@ public partial class TypeChecker
                                 expectedParamType,
                                 contextualReturnTsCode: "TS2345");
                             _typeMap.Set(arg, argType);
+                            RecordEditorExpressionType(arg, argType);
                         }
                         else
                         {
@@ -335,6 +352,7 @@ public partial class TypeChecker
                     argIndex++;
                 }
             }
+            RecordEditorInvocationSelection(funcType);
             // The legacy array surface models reduce as returning `any`, but
             // the two-argument form has an explicit accumulator seed. When a
             // typed reducer returns the same primitive kind as that seed, keep
@@ -945,7 +963,9 @@ public partial class TypeChecker
                 TypeInfo checkedType = CheckArrowFunction(arrow, contextualType);
                 // Preserve the declared callback shape for downstream delegate inference (not
                 // merely a value-returning implementation type accepted by a void sink).
-                _typeMap.Set(arrow, GetContextualFunctionType(contextualType) ?? checkedType);
+                TypeInfo finalType = GetContextualFunctionType(contextualType) ?? checkedType;
+                _typeMap.Set(arrow, finalType);
+                RecordEditorExpressionType(arrow, finalType);
                 return;
             }
 
@@ -1095,6 +1115,7 @@ public partial class TypeChecker
                 // Non-generic - direct matching
                 if (TryMatchSignature(new TypeInfo.Function(callSig.ParamTypes, callSig.ReturnType, callSig.MinArity, callSig.HasRestParam), argTypes))
                 {
+                    RecordEditorInvocationSelection(callSig);
                     return callSig.ReturnType;
                 }
             }
@@ -1133,7 +1154,16 @@ public partial class TypeChecker
                 var substitutedParamTypes = callSig.ParamTypes.Select(p => Substitute(p, subs)).ToList();
                 if (TryMatchSignature(new TypeInfo.Function(substitutedParamTypes, Substitute(callSig.ReturnType, subs), callSig.MinArity, callSig.HasRestParam), argTypes))
                 {
-                    return Substitute(callSig.ReturnType, subs);
+                    TypeInfo result = Substitute(callSig.ReturnType, subs);
+                    if (_editorInvocationAttempt is { CanPublish: true })
+                    {
+                        var instantiated = new TypeInfo.Function(substitutedParamTypes,
+                            result, callSig.MinArity, callSig.HasRestParam,
+                            ParamNames: callSig.ParamNames);
+                        RecordEditorInvocationInstantiation(callSig, instantiated);
+                        RecordEditorInvocationSelection(callSig, instantiated);
+                    }
+                    return result;
                 }
             }
         }
@@ -1195,13 +1225,28 @@ public partial class TypeChecker
 
         // Substitute and check argument compatibility
         var substitutedParamTypes = callSig.ParamTypes.Select(p => Substitute(p, inferred)).ToList();
-        if (!TryMatchSignature(new TypeInfo.Function(substitutedParamTypes, Substitute(callSig.ReturnType, inferred), callSig.MinArity, callSig.HasRestParam), argTypes))
+        TypeInfo matchedReturn = Substitute(callSig.ReturnType, inferred);
+        TypeInfo.Function? editorSignature = null;
+        if (_editorInvocationAttempt is { CanPublish: true })
+        {
+            editorSignature = new(substitutedParamTypes, matchedReturn,
+                callSig.MinArity, callSig.HasRestParam, ParamNames: callSig.ParamNames);
+            RecordEditorInvocationInstantiation(callSig, editorSignature);
+        }
+        if (!TryMatchSignature(new TypeInfo.Function(substitutedParamTypes, matchedReturn, callSig.MinArity, callSig.HasRestParam), argTypes))
             return null;
 
         if (arguments is not null)
             ContextualizeGenericCallArguments(arguments, substitutedParamTypes);
 
-        return Substitute(callSig.ReturnType, inferred);
+        TypeInfo result = Substitute(callSig.ReturnType, inferred);
+        if (editorSignature is not null)
+        {
+            editorSignature = editorSignature with { ReturnType = result };
+            RecordEditorInvocationInstantiation(callSig, editorSignature);
+            RecordEditorInvocationSelection(callSig, editorSignature);
+        }
+        return result;
     }
 
     /// <summary>
@@ -1294,6 +1339,7 @@ public partial class TypeChecker
         // `(x: E)` resolves to Object, not the more specific E.
         TypeInfo.Function bestMatch = matchingSignatures[0];
 
+        RecordEditorInvocationSelection(bestMatch);
         return bestMatch.ReturnType;
     }
 
@@ -1329,6 +1375,7 @@ public partial class TypeChecker
                         PrepareFreshCallArgumentsForInference(
                             candidate.ParamTypes, call.Arguments, argTypes));
                 instantiatedSig = (TypeInfo.Function)InstantiateGenericFunction(candidate, typeArgs);
+                RecordEditorInvocationInstantiation(signature, instantiatedSig);
             }
             catch (TypeCheckException)
             {
@@ -1376,6 +1423,7 @@ public partial class TypeChecker
 
         ContextualizeGenericCallArguments(call.Arguments, bestMatch.ParamTypes);
 
+        RecordEditorInvocationSelection(bestMatch);
         return bestMatch.ReturnType;
     }
 
@@ -1433,10 +1481,13 @@ public partial class TypeChecker
                 continue;
             }
 
+            if (signature is not null) RecordEditorInvocationInstantiation(candidate, signature);
             if (signature is not null &&
                 (TryMatchSignature(signature, argTypes) ||
                  TryMatchSpreadSignature(signature, argTypes, call.Arguments)))
+            {
                 matches.Add(signature);
+            }
         }
 
         if (matches.Count == 0)
@@ -1447,7 +1498,9 @@ public partial class TypeChecker
         }
 
         var subtypeMatches = matches.Where(sig => ArgsSubtypeMatch(sig, argTypes)).ToList();
-        return (subtypeMatches.Count > 0 ? subtypeMatches[0] : matches[0]).ReturnType;
+        TypeInfo.Function bestMatch = subtypeMatches.Count > 0 ? subtypeMatches[0] : matches[0];
+        RecordEditorInvocationSelection(bestMatch);
+        return bestMatch.ReturnType;
     }
 
     private TypeInfo.Function InstantiateMixedOverload(

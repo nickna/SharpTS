@@ -52,6 +52,9 @@ public sealed class SourceDocument
     /// <summary>Source positions of the AST nodes parsed from this document.</summary>
     public SpanTable Spans { get; }
 
+    /// <summary>Completed editor-only syntax metadata; null when capture was not requested.</summary>
+    public EditorSyntaxIndex? EditorSyntax { get; internal set; }
+
     /// <summary>
     /// SHA-256 of the document's UTF-8 bytes, letting a debugger detect that the file on disk has
     /// drifted from what was compiled. Computed on first use.

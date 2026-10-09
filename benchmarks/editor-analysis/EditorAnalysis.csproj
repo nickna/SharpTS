@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>SharpTS.Tests</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <DefineConstants Condition="'$(Baseline)' == 'true'">$(DefineConstants);BASELINE</DefineConstants>
+    <NoWarn>$(NoWarn);VSTHRD002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="$(LibraryDirectory)\*.dll" />
+  </ItemGroup>
+</Project>

@@ -8,6 +8,8 @@ namespace SharpTS.LanguageServer.Services;
 public sealed class NavigationWorkspaceContext
 {
     private string[] _roots = [];
+    private long _version;
+    public long Version => Volatile.Read(ref _version);
 
     public IReadOnlyList<string> SnapshotRoots() => [.. Volatile.Read(ref _roots)];
 
@@ -25,6 +27,16 @@ public sealed class NavigationWorkspaceContext
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Order(StringComparer.OrdinalIgnoreCase)
                 .ToArray());
+        Interlocked.Increment(ref _version);
+    }
+
+    public void Change(IEnumerable<string> added, IEnumerable<string> removed)
+    {
+        var roots = SnapshotRoots().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        roots.ExceptWith(removed.Select(Path.GetFullPath));
+        roots.UnionWith(added.Select(Path.GetFullPath));
+        Volatile.Write(ref _roots, roots.Order(StringComparer.OrdinalIgnoreCase).ToArray());
+        Interlocked.Increment(ref _version);
     }
 
     private static IEnumerable<string> RootFallback(InitializeParams request)

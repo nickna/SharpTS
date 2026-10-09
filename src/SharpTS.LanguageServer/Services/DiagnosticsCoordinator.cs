@@ -157,9 +157,10 @@ public sealed class DiagnosticsCoordinator : IDisposable
             return;
 
         cancellationToken.ThrowIfCancellationRequested();
-        IReadOnlyList<Parsing.Stmt> statements = _diagnostics.GetStatements(
-            snapshot.Document,
-            cancellationToken);
+        IReadOnlyList<Parsing.Stmt> statements = await _diagnostics.GetStatementsAsync(
+            snapshot,
+            _settings.Mode,
+            cancellationToken).ConfigureAwait(false);
         IReadOnlySet<string> affected = _graph.Update(
             snapshot.Document,
             snapshot.TextOverlay,
@@ -184,11 +185,11 @@ public sealed class DiagnosticsCoordinator : IDisposable
             if (!_store.TryCapture(open.Uri, out DocumentRequestSnapshot? snapshot))
                 continue;
 
-            Publish(snapshot, snapshot.Document, cancellationToken);
+            await PublishAsync(snapshot, snapshot.Document, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private Task AnalyzeAndPublishAsync(
+    private async Task AnalyzeAndPublishAsync(
         DocumentRequestSnapshot workspace,
         IReadOnlySet<string> affectedPaths,
         CancellationToken cancellationToken)
@@ -202,22 +203,24 @@ public sealed class DiagnosticsCoordinator : IDisposable
                 continue;
             }
 
-            Publish(workspace, document, cancellationToken);
+            await PublishAsync(workspace, document, cancellationToken).ConfigureAwait(false);
         }
-        return Task.CompletedTask;
     }
 
-    private void Publish(
+    private async Task PublishAsync(
         DocumentRequestSnapshot workspace,
         DocumentSnapshot document,
         CancellationToken cancellationToken)
     {
-        var diagnostics = _diagnostics.Analyze(
+        DiagnosticsAnalysisResult result = await _diagnostics.AnalyzeResultAsync(
             workspace,
             document,
             _settings.Mode,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (!result.IsCurrent(cancellationToken))
+            return;
 
         if (!_store.IsCurrent(
                 document.Uri,
@@ -227,11 +230,15 @@ public sealed class DiagnosticsCoordinator : IDisposable
             return;
         }
 
+        if (!result.IsCurrent(cancellationToken))
+            return;
+        cancellationToken.ThrowIfCancellationRequested();
+
         _publish(new PublishDiagnosticsParams
         {
             Uri = DocumentUri.Parse(document.Uri),
             Version = document.Version,
-            Diagnostics = new Container<Diagnostic>(diagnostics),
+            Diagnostics = new Container<Diagnostic>(result.Diagnostics),
         });
     }
 

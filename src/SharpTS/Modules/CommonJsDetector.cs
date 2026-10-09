@@ -1,3 +1,4 @@
+using SharpTS.IO;
 using SharpTS.Configuration;
 
 namespace SharpTS.Modules;
@@ -35,7 +36,13 @@ public static class CommonJsDetector
     /// </summary>
     /// <param name="filePath">Absolute path to the source file.</param>
     /// <returns>The detected module kind.</returns>
-    public static ModuleKind Detect(string filePath)
+    public static ModuleKind Detect(string filePath) =>
+        Detect(filePath, CompilerFileSystem.FileExists, CompilerFileSystem.ReadAllText);
+
+    // ModuleResolver supplies its overlay-aware operations so detection consumes the same
+    // package/source inputs as resolution, including entirely virtual compiler programs.
+    internal static ModuleKind Detect(string filePath,
+        Func<string, bool> fileExists, Func<string, string> readAllText)
     {
         var ext = Path.GetExtension(filePath).ToLowerInvariant();
 
@@ -55,7 +62,7 @@ public static class CommonJsDetector
         // Step 2: .js/.jsx — walk up to nearest package.json
         if (ext == ".js" || ext == ".jsx")
         {
-            var pkgType = FindNearestPackageJsonType(filePath);
+            var pkgType = FindNearestPackageJsonType(filePath, fileExists, readAllText);
             if (pkgType == "module")
                 return ModuleKind.EsModule;
             if (pkgType == "commonjs")
@@ -66,7 +73,7 @@ public static class CommonJsDetector
                 return ModuleKind.CommonJs;
 
             // Step 3: no reachable package.json — fall back to content heuristic
-            return DetectFromContent(filePath);
+            return DetectFromContent(filePath, readAllText);
         }
 
         // Unknown extension — assume ESM (TS-first project default)
@@ -77,15 +84,16 @@ public static class CommonJsDetector
     /// Walks up from <paramref name="filePath"/> looking for a package.json.
     /// Returns the value of the "type" field, an empty string if found but no type, or null if no package.json reachable.
     /// </summary>
-    private static string? FindNearestPackageJsonType(string filePath)
+    private static string? FindNearestPackageJsonType(string filePath,
+        Func<string, bool> fileExists, Func<string, string> readAllText)
     {
         var dir = Path.GetDirectoryName(filePath);
         while (!string.IsNullOrEmpty(dir))
         {
             var pkgPath = Path.Combine(dir, "package.json");
-            if (File.Exists(pkgPath))
+            if (fileExists(pkgPath))
             {
-                var pkg = ModulePackageJson.TryLoad(pkgPath);
+                var pkg = TryLoadPackageJson(pkgPath, readAllText);
                 if (pkg != null)
                 {
                     return pkg.Type ?? "";
@@ -96,15 +104,31 @@ public static class CommonJsDetector
         return null;
     }
 
+    private static ModulePackageJson? TryLoadPackageJson(string path, Func<string, string> readAllText)
+    {
+        try
+        {
+            return ModulePackageJson.TryLoadFromContent(readAllText(path));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Heuristic content scan: classifies a file as CJS if it uses require/module.exports/exports
     /// without import/export syntax. Used only when no package.json is reachable.
     /// </summary>
-    private static ModuleKind DetectFromContent(string filePath)
+    private static ModuleKind DetectFromContent(string filePath, Func<string, string> readAllText)
     {
         try
         {
-            var source = File.ReadAllText(filePath);
+            var source = readAllText(filePath);
 
             // Cheap token scan — not parsing, just looking for obvious markers
             bool hasEsm =
@@ -120,6 +144,10 @@ public static class CommonJsDetector
                 source.Contains("exports.");
 
             return hasCjs ? ModuleKind.CommonJs : ModuleKind.EsModule;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {

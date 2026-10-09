@@ -29,25 +29,26 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
         _workspace = workspace;
     }
 
-    public override Task<LocationContainer?> Handle(
+    public override async Task<LocationContainer?> Handle(
         ReferenceParams request,
         CancellationToken ct)
     {
         string uri = request.TextDocument.Uri.ToString();
         if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
-            return Task.FromResult<LocationContainer?>(null);
+            return null;
 
         ct.ThrowIfCancellationRequested();
 
-        var locations = _references.FindReferences(
-            request.TextDocument.Uri.GetFileSystemPath(),
-            snapshot.Document.Text,
+        long? workspaceVersion = _workspace?.Version;
+        var result = await _references.FindReferenceResultAsync(
+            snapshot,
             request.Position,
             request.Context.IncludeDeclaration,
-            snapshot.TextOverlay,
-            _workspace?.SnapshotRoots());
-        return Task.FromResult<LocationContainer?>(
-            new LocationContainer(locations));
+            _workspace?.SnapshotRoots(), cancellationToken: ct);
+        ct.ThrowIfCancellationRequested();
+        if (!_store.IsCurrent(uri, snapshot.Document.Version, snapshot.WorkspaceVersion) ||
+            _workspace?.Version != workspaceVersion || !result.IsCurrent(ct)) return null;
+        return new LocationContainer(result.Locations);
     }
 
     protected override ReferenceRegistrationOptions CreateRegistrationOptions(

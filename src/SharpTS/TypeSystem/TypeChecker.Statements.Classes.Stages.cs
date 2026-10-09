@@ -17,6 +17,7 @@ public partial class TypeChecker
         // (its inherited members and index signature then lose the type parameter).
         List<TypeInfo.TypeParameter>? classTypeParams = null;
         TypeEnvironment classTypeEnv = new(_environment);
+        RegisterEditorScope(classStmt, classTypeEnv, EditorScopeKind.Class, EditorSyntaxRole.Whole);
         if (classStmt.TypeParams != null && classStmt.TypeParams.Count > 0)
         {
             // Multi-pass so constraints that reference a later parameter resolve
@@ -353,6 +354,8 @@ public partial class TypeChecker
     {
         // Third pass: body check
         TypeEnvironment classEnv = new(_environment);
+        RegisterEditorScope(classStmt, classEnv, EditorScopeKind.Class, EditorSyntaxRole.Whole);
+        BindEditorClassSelf(classStmt, classEnv, _environment.Get(classStmt.Name.Lexeme) ?? classTypeForBody);
         // For generic classes, add type parameters to class scope
         if (classTypeParams != null)
         {

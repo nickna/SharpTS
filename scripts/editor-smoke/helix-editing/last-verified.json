@@ -1,0 +1,49 @@
+{
+  "completed": true,
+  "timestamp": "2026-10-08T05:03:15.012Z",
+  "editor": "helix 25.07.1 (a05c151b)",
+  "mode": "full",
+  "diagnostics": "all",
+  "commit": "a20b07d7259043dd06a33fae34a507b443c847d8",
+  "sourceNote": "Includes #1981 working-tree changes; the binary fingerprint identifies the server actually exercised.",
+  "serverSha256": "9dc0e3c3b4d401e833735179ee84185c460b9f2dcb2ae187f71f8e808627a40b",
+  "node": "v22.23.2",
+  "prettier": "3.9.9",
+  "platform": "win32",
+  "architecture": "arm64",
+  "versionedPrivateEdits": true,
+  "ordinaryHover": true,
+  "dirtyDependencyCompletion": true,
+  "nativeCompletionApplied": true,
+  "unfinishedSignature": true,
+  "definition": true,
+  "memberReferences": true,
+  "lexicalRenameApplied": true,
+  "privateRenameApplied": true,
+  "ordinaryDiagnosticsCleared": true,
+  "lspFormattingRequests": 0,
+  "formatted": [
+    {
+      "file": "main.ts",
+      "version": 9,
+      "sha256": "9d3926519c62e1c34744c9c4f5b9961e0e35b0c33c52de1e40271fe27a098be9",
+      "saveIndex": 3604,
+      "afterHoverId": 12
+    },
+    {
+      "file": "view.tsx",
+      "version": 2,
+      "sha256": "20301d306174f0b147a5a3bdf0bad93a55b0363bae0f75041ab90917a90850d0",
+      "saveIndex": 4442,
+      "afterHoverId": 14
+    },
+    {
+      "file": "dependency.ts",
+      "version": 3,
+      "sha256": "f955260cf15791e9f8bfe9b6b672b48c8c055aab8e00083cf4369a46de6ce4a5",
+      "saveIndex": 4849,
+      "afterHoverId": 17
+    }
+  ],
+  "evidenceDirectory": "artifacts/editor-contract/helix/run-ZAkEIw"
+}

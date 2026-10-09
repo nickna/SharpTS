@@ -1,0 +1,11 @@
+{
+  "name": "sharpts-editor-interop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Optional exact TypeScript adapter for real editor coexistence smoke tests",
+  "engines": { "node": ">=22.22.2" },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "typescript-language-server": "6.0.1"
+  }
+}

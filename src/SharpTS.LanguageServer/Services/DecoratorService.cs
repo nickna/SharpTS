@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Collections.Immutable;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using SharpTS.LanguageServer.Documentation;
 using SharpTS.Runtime.DotNet;
@@ -15,19 +16,40 @@ public sealed class DecoratorService
     private readonly Func<string, Type?> _resolve;
     private readonly Func<IEnumerable<string>>? _typeNamesProvider;
     private readonly XmlDocLoader _xmlDoc = new();
-    private List<string>? _typeNameCache;
+    private readonly Func<int>? _metadataGeneration;
+    private readonly object _typeNameGate = new();
+    private IReadOnlyList<string>? _typeNameCache;
+    private int _typeNameGeneration;
 
-    public DecoratorService(Func<string, Type?>? resolve = null, Func<IEnumerable<string>>? typeNames = null)
+    public DecoratorService(
+        Func<string, Type?>? resolve = null,
+        Func<IEnumerable<string>>? typeNames = null,
+        Func<int>? metadataGeneration = null)
     {
         _resolve = resolve ?? DotNetTypeRegistry.Resolve;
         _typeNamesProvider = typeNames;
+        _metadataGeneration = metadataGeneration;
     }
 
-    // Known public type names from the project's referenced assemblies (cached — the loaded
-    // set is fixed for the session). Empty when no resolver/loader supplies them.
-    private List<string> KnownTypeNames()
-        => _typeNameCache ??= (_typeNamesProvider?.Invoke() ?? Enumerable.Empty<string>())
-            .Distinct().OrderBy(n => n, StringComparer.Ordinal).ToList();
+    // A captured metadata generation defines the public type set. Custom providers without a
+    // generation callback are enumerated each time, so a changing provider cannot remain stale.
+    private IReadOnlyList<string> KnownTypeNames()
+    {
+        int? generation = _metadataGeneration?.Invoke();
+        lock (_typeNameGate)
+        {
+            if (generation is { } current && _typeNameCache is not null && current == _typeNameGeneration)
+                return _typeNameCache;
+            IReadOnlyList<string> names = (_typeNamesProvider?.Invoke() ?? [])
+                .Distinct().OrderBy(name => name, StringComparer.Ordinal).ToImmutableArray();
+            if (generation is { } next)
+            {
+                _typeNameCache = names;
+                _typeNameGeneration = next;
+            }
+            return names;
+        }
+    }
 
     private static readonly Regex DecoratorRx =
         new(@"@(\w+)(?:\s*\(\s*""([^""]*)""\s*\))?", RegexOptions.Compiled);

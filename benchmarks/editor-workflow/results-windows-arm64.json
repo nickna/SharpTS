@@ -1,0 +1,1159 @@
+{
+  "schemaVersion": 1,
+  "replaySourceSha256": {
+    "Program.cs": "747d1f3e5b65a6723bedc74ddd36b9d802d114f52fb1ff138bf96090f08ff7e1",
+    "EditorWorkflow.csproj": "5bfa3b90ed99b853624930e04e523de65d13889f589de5de82839b100ce05702",
+    "run.ps1": "9e458880f827d9b64504ffea351dfbf0a63241633a53ee432a4bcd7d0b3ab589",
+    "stdio.mjs": "615fdd7019d8189ab4e7db7285eea94be78f12a07fbfbf148d7702368a5cc1ff",
+    "summarize.mjs": "4cc1bff3b53e17b54b2e8d0fe0cc60809380bc75d4d68da01b0bf35b4582426c"
+  },
+  "workflow": {
+    "timestampUtc": "2026-10-08T05:09:22.3445472Z",
+    "sourceCommit": "a20b07d7259043dd06a33fae34a507b443c847d8",
+    "binaries": {
+      "languageServerSha256": "9dc0e3c3b4d401e833735179ee84185c460b9f2dcb2ae187f71f8e808627a40b",
+      "compilerSha256": "a2ee2949aace31ab14706d2bf2352125ed94d9fed085cb76ec7b55d95909e45b"
+    },
+    "runtime": ".NET 10.0.12",
+    "os": "Microsoft Windows 10.0.26220",
+    "architecture": "Arm64",
+    "coldSamples": 11,
+    "warmSamples": 31,
+    "methodology": "Current-version actual service sequence. Cold means empty service cache in a JIT/OS-cache-warmed process; warm means identical captured overlays and caret. All query currentness checks are included. Allocations are process-wide across async workers. Payload serialization/fingerprinting follows the measured window. Managed heap is a full-GC observation, not a cache/process limit. No prior equivalent for new features; earlier exact-baseline reports remain separate.",
+    "reports": [
+      {
+        "name": "small",
+        "SourceFiles": 1,
+        "Projects": 1,
+        "ExpectedReferences": 2,
+        "freshServiceConstruction": {
+          "medianMilliseconds": 0.0209,
+          "p90Milliseconds": 0.0409,
+          "medianAllocatedBytes": 6656
+        },
+        "cold": {
+          "sampleCount": 11,
+          "medianMilliseconds": 18.3651,
+          "p90Milliseconds": 19.8377,
+          "medianAllocatedBytes": 976272,
+          "checks": [
+            1
+          ],
+          "builds": [
+            2
+          ],
+          "fingerprints": [
+            "5300052BA6DE4A4ED29851557F85E8EC4878BD6746621285BAE00B3FC8C5F9EF"
+          ],
+          "payloadBytes": [
+            989
+          ]
+        },
+        "warm": {
+          "sampleCount": 31,
+          "medianMilliseconds": 6.7336,
+          "p90Milliseconds": 7.4085,
+          "medianAllocatedBytes": 262656,
+          "checks": [
+            0
+          ],
+          "builds": [
+            0
+          ],
+          "fingerprints": [
+            "5300052BA6DE4A4ED29851557F85E8EC4878BD6746621285BAE00B3FC8C5F9EF"
+          ],
+          "payloadBytes": [
+            989
+          ]
+        },
+        "changedOpenVersion": {
+          "sampleCount": 7,
+          "medianMilliseconds": 19.2149,
+          "p90Milliseconds": 19.8481,
+          "medianAllocatedBytes": 974352,
+          "checks": [
+            1
+          ],
+          "builds": [
+            2
+          ],
+          "fingerprints": [
+            "5300052BA6DE4A4ED29851557F85E8EC4878BD6746621285BAE00B3FC8C5F9EF"
+          ],
+          "payloadBytes": [
+            989
+          ]
+        },
+        "changedOpenDependency": null,
+        "RetainedSnapshots": 2,
+        "EstimatedRetainedBytes": 59090,
+        "memory": {
+          "emptySessionManagedHeap": 852648,
+          "activeCacheManagedHeap": 851192,
+          "afterInvalidationManagedHeap": 850912,
+          "activeMinusEmptyBytes": -1456,
+          "activeMinusInvalidatedBytes": 280
+        },
+        "sourceDocumentsInEntrySnapshot": 1
+      },
+      {
+        "name": "multi-project",
+        "SourceFiles": 25,
+        "Projects": 4,
+        "ExpectedReferences": 25,
+        "freshServiceConstruction": {
+          "medianMilliseconds": 0.0621,
+          "p90Milliseconds": 0.0773,
+          "medianAllocatedBytes": 6904
+        },
+        "cold": {
+          "sampleCount": 11,
+          "medianMilliseconds": 341.4121,
+          "p90Milliseconds": 485.1922,
+          "medianAllocatedBytes": 73776616,
+          "checks": [
+            3
+          ],
+          "builds": [
+            3
+          ],
+          "fingerprints": [
+            "40113F7B3E0B6CF94BCF8FF2F27A3C822B9137DCBABF6B27FD0055ACB1C878C3"
+          ],
+          "payloadBytes": [
+            3642
+          ]
+        },
+        "warm": {
+          "sampleCount": 31,
+          "medianMilliseconds": 27.9571,
+          "p90Milliseconds": 29.5466,
+          "medianAllocatedBytes": 6387800,
+          "checks": [
+            0
+          ],
+          "builds": [
+            0
+          ],
+          "fingerprints": [
+            "40113F7B3E0B6CF94BCF8FF2F27A3C822B9137DCBABF6B27FD0055ACB1C878C3"
+          ],
+          "payloadBytes": [
+            3642
+          ]
+        },
+        "changedOpenVersion": {
+          "sampleCount": 7,
+          "medianMilliseconds": 228.0271,
+          "p90Milliseconds": 233.9758,
+          "medianAllocatedBytes": 67363512,
+          "checks": [
+            3
+          ],
+          "builds": [
+            3
+          ],
+          "fingerprints": [
+            "40113F7B3E0B6CF94BCF8FF2F27A3C822B9137DCBABF6B27FD0055ACB1C878C3"
+          ],
+          "payloadBytes": [
+            3642
+          ]
+        },
+        "changedOpenDependency": {
+          "sampleCount": 7,
+          "medianMilliseconds": 210.6916,
+          "p90Milliseconds": 218.7471,
+          "medianAllocatedBytes": 66307280,
+          "checks": [
+            3
+          ],
+          "builds": [
+            3
+          ],
+          "fingerprints": [
+            "40113F7B3E0B6CF94BCF8FF2F27A3C822B9137DCBABF6B27FD0055ACB1C878C3"
+          ],
+          "payloadBytes": [
+            3642
+          ]
+        },
+        "RetainedSnapshots": 3,
+        "EstimatedRetainedBytes": 8382466,
+        "memory": {
+          "emptySessionManagedHeap": 4977624,
+          "activeCacheManagedHeap": 8616760,
+          "afterInvalidationManagedHeap": 4966064,
+          "activeMinusEmptyBytes": 3639136,
+          "activeMinusInvalidatedBytes": 3650696
+        },
+        "sourceDocumentsInEntrySnapshot": 13
+      },
+      {
+        "name": "default-library",
+        "SourceFiles": 1,
+        "Projects": 1,
+        "ExpectedReferences": 2,
+        "freshServiceConstruction": {
+          "medianMilliseconds": 0.0318,
+          "p90Milliseconds": 0.0321,
+          "medianAllocatedBytes": 6840
+        },
+        "cold": {
+          "sampleCount": 3,
+          "medianMilliseconds": 179.2652,
+          "p90Milliseconds": 184.2372,
+          "medianAllocatedBytes": 89300264,
+          "checks": [
+            1
+          ],
+          "builds": [
+            2
+          ],
+          "fingerprints": [
+            "5300052BA6DE4A4ED29851557F85E8EC4878BD6746621285BAE00B3FC8C5F9EF"
+          ],
+          "payloadBytes": [
+            989
+          ]
+        },
+        "warm": {
+          "sampleCount": 7,
+          "medianMilliseconds": 7.4453,
+          "p90Milliseconds": 8.7189,
+          "medianAllocatedBytes": 261984,
+          "checks": [
+            0
+          ],
+          "builds": [
+            0
+          ],
+          "fingerprints": [
+            "5300052BA6DE4A4ED29851557F85E8EC4878BD6746621285BAE00B3FC8C5F9EF"
+          ],
+          "payloadBytes": [
+            989
+          ]
+        },
+        "changedOpenVersion": {
+          "sampleCount": 7,
+          "medianMilliseconds": 152.124,
+          "p90Milliseconds": 190.855,
+          "medianAllocatedBytes": 89196616,
+          "checks": [
+            1
+          ],
+          "builds": [
+            2
+          ],
+          "fingerprints": [
+            "5300052BA6DE4A4ED29851557F85E8EC4878BD6746621285BAE00B3FC8C5F9EF"
+          ],
+          "payloadBytes": [
+            989
+          ]
+        },
+        "changedOpenDependency": null,
+        "RetainedSnapshots": 2,
+        "EstimatedRetainedBytes": 1475118,
+        "memory": {
+          "emptySessionManagedHeap": 16977040,
+          "activeCacheManagedHeap": 16973744,
+          "afterInvalidationManagedHeap": 16973400,
+          "activeMinusEmptyBytes": -3296,
+          "activeMinusInvalidatedBytes": 344
+        },
+        "sourceDocumentsInEntrySnapshot": 1
+      }
+    ],
+    "recovery": [
+      {
+        "kind": "member-completion",
+        "first": {
+          "Milliseconds": 19.0628,
+          "AllocatedBytes": 1161272,
+          "Checks": 2,
+          "Builds": 2,
+          "Fingerprint": "0C82B96D041C04CBF0BAF60FAC7CD8B1FB3F897C95023AFEFBDCC6748C38F550",
+          "PayloadBytes": 163
+        },
+        "unchangedCaret": {
+          "sampleCount": 15,
+          "medianMilliseconds": 1.277,
+          "p90Milliseconds": 1.6645,
+          "medianAllocatedBytes": 46184,
+          "checks": [
+            0
+          ],
+          "builds": [
+            0
+          ],
+          "fingerprints": [
+            "0C82B96D041C04CBF0BAF60FAC7CD8B1FB3F897C95023AFEFBDCC6748C38F550"
+          ],
+          "payloadBytes": [
+            163
+          ]
+        },
+        "changedCaret": {
+          "sampleCount": 8,
+          "medianMilliseconds": 9.572,
+          "p90Milliseconds": 25.9347,
+          "medianAllocatedBytes": 615608,
+          "checks": [
+            1
+          ],
+          "builds": [
+            1
+          ],
+          "fingerprints": [
+            "FE9F4B5878071DE5DD7CEC39709ED47C3D8BD4426130A26F2D74EDDB862B8B31",
+            "E34FC9F46C496AB136B97BFB25E0E611BE62C251E33B97D6711097E7E1427057",
+            "45A46E3A5BCC77581B43C2D3AF5D2C97F900BC39B0C875B4B807CC4D8C85811A",
+            "713EB2BF57725ED8A62246FFB210FBB575AB9EA099D6E0BE5205A028F3AEE167",
+            "FDB80E994FEA5B4061A74693C845DB9B65B7A30A2439274C1ED3453541852E87",
+            "B58A9F5E68BCA3E42FDD2B9F893D48FBBB70E688C91C93FA2407E2F4C813B1AD",
+            "1E76AB8D9C10D72514851FE3E5AC595971432F8777D0B1BB23A7D0ED05536091",
+            "6E97037F219E30A025386B964BCED7FA08C07C87E348EE8CDCF9F997FBBDA5D9"
+          ],
+          "payloadBytes": [
+            163,
+            165
+          ]
+        },
+        "changedVersion": {
+          "sampleCount": 7,
+          "medianMilliseconds": 12.849,
+          "p90Milliseconds": 17.5586,
+          "medianAllocatedBytes": 1153904,
+          "checks": [
+            2
+          ],
+          "builds": [
+            2
+          ],
+          "fingerprints": [
+            "B63F78B0DA074660734CF53B531C647E8C26F0F68E8FE42A4168F07A90A8CE63"
+          ],
+          "payloadBytes": [
+            165
+          ]
+        },
+        "cache": {
+          "Inflight": 0,
+          "AdmissionAvailable": 16,
+          "BuildSlotsAvailable": 2,
+          "RetainedEntries": 8,
+          "CursorEntries": 4,
+          "EstimatedBytes": 241616
+        }
+      },
+      {
+        "kind": "signature-help",
+        "first": {
+          "Milliseconds": 14.6721,
+          "AllocatedBytes": 1161032,
+          "Checks": 2,
+          "Builds": 2,
+          "Fingerprint": "43B1FED31071C58624102E9C0BB844F0BEA97A2DE73A2738A428F9AD43A3CC20",
+          "PayloadBytes": 129
+        },
+        "unchangedCaret": {
+          "sampleCount": 15,
+          "medianMilliseconds": 1.1715,
+          "p90Milliseconds": 1.2635,
+          "medianAllocatedBytes": 48480,
+          "checks": [
+            0
+          ],
+          "builds": [
+            0
+          ],
+          "fingerprints": [
+            "43B1FED31071C58624102E9C0BB844F0BEA97A2DE73A2738A428F9AD43A3CC20"
+          ],
+          "payloadBytes": [
+            129
+          ]
+        },
+        "changedCaret": {
+          "sampleCount": 8,
+          "medianMilliseconds": 6.6962,
+          "p90Milliseconds": 9.0013,
+          "medianAllocatedBytes": 619224,
+          "checks": [
+            1
+          ],
+          "builds": [
+            1
+          ],
+          "fingerprints": [
+            "43B1FED31071C58624102E9C0BB844F0BEA97A2DE73A2738A428F9AD43A3CC20"
+          ],
+          "payloadBytes": [
+            129
+          ]
+        },
+        "changedVersion": {
+          "sampleCount": 7,
+          "medianMilliseconds": 11.8333,
+          "p90Milliseconds": 13.1078,
+          "medianAllocatedBytes": 1162032,
+          "checks": [
+            2
+          ],
+          "builds": [
+            2
+          ],
+          "fingerprints": [
+            "43B1FED31071C58624102E9C0BB844F0BEA97A2DE73A2738A428F9AD43A3CC20"
+          ],
+          "payloadBytes": [
+            129
+          ]
+        },
+        "cache": {
+          "Inflight": 0,
+          "AdmissionAvailable": 16,
+          "BuildSlotsAvailable": 2,
+          "RetainedEntries": 8,
+          "CursorEntries": 4,
+          "EstimatedBytes": 245080
+        }
+      }
+    ],
+    "burst": {
+      "requests": 24,
+      "canceledWaiters": 24,
+      "blocked": {
+        "Inflight": 16,
+        "AdmissionAvailable": 0,
+        "BuildSlotsAvailable": 0,
+        "RetainedEntries": 0,
+        "CursorEntries": 0,
+        "EstimatedBytes": 0
+      },
+      "cancellationSettlementMilliseconds": 0.4425,
+      "checkedBuildsEnteringGate": 2,
+      "fresh": {
+        "Milliseconds": 75.6457,
+        "AllocatedBytes": 8940488,
+        "Checks": 16,
+        "Builds": 16,
+        "Fingerprint": "5300052BA6DE4A4ED29851557F85E8EC4878BD6746621285BAE00B3FC8C5F9EF",
+        "PayloadBytes": 989
+      },
+      "completed": {
+        "Inflight": 0,
+        "AdmissionAvailable": 16,
+        "BuildSlotsAvailable": 2,
+        "RetainedEntries": 8,
+        "CursorEntries": 0,
+        "EstimatedBytes": 235836
+      },
+      "statistics": {
+        "Builds": 18,
+        "Checks": 17,
+        "CacheHits": 7,
+        "RetainedSnapshots": 8,
+        "EstimatedRetainedBytes": 235836
+      }
+    },
+    "metadata": {
+      "referenceBytes": 294912,
+      "originalGeneration": 0,
+      "generations": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "unchangedGeneration": {
+        "sampleCount": 7,
+        "medianMilliseconds": 370.3403,
+        "p90Milliseconds": 396.4943,
+        "medianAllocatedBytes": 554200,
+        "checks": [
+          0
+        ],
+        "builds": [
+          0
+        ],
+        "fingerprints": [
+          "5300052BA6DE4A4ED29851557F85E8EC4878BD6746621285BAE00B3FC8C5F9EF"
+        ],
+        "payloadBytes": [
+          989
+        ]
+      },
+      "replacedAssembly": {
+        "sampleCount": 7,
+        "medianMilliseconds": 55.0024,
+        "p90Milliseconds": 551.0646,
+        "medianAllocatedBytes": 2806720,
+        "checks": [
+          1
+        ],
+        "builds": [
+          2
+        ],
+        "fingerprints": [
+          "5300052BA6DE4A4ED29851557F85E8EC4878BD6746621285BAE00B3FC8C5F9EF"
+        ],
+        "payloadBytes": [
+          989
+        ]
+      },
+      "note": "Real custom CLR reference bytes alternate between core and LS assemblies; BCL remains available. Full metadata capture/hash/currentness cost is included, no restore or executable loading.",
+      "referenceAssemblyBytes": {
+        "core": 16900608,
+        "languageServer": 294912
+      }
+    },
+    "retention": {
+      "documents": 12,
+      "cursorRequests": 24,
+      "cached": {
+        "Inflight": 0,
+        "AdmissionAvailable": 16,
+        "BuildSlotsAvailable": 2,
+        "RetainedEntries": 7,
+        "CursorEntries": 4,
+        "EstimatedBytes": 60516
+      },
+      "emptyManagedHeap": 24392328,
+      "activeManagedHeap": 24570096,
+      "invalidatedManagedHeap": 24401312,
+      "releasedManagedHeapObservation": 168784
+    }
+  },
+  "stdio": {
+    "timestampUtc": "2026-10-08T05:10:56.501Z",
+    "node": "v25.5.0",
+    "platform": "win32-arm64",
+    "server": "SharpTS.LanguageServer.dll",
+    "serverSha256": "9dc0e3c3b4d401e833735179ee84185c460b9f2dcb2ae187f71f8e808627a40b",
+    "methodology": "Actual full-mode stdio using the same on-disk service fixtures. Three fresh processes per fixture; initialize includes spawn/startup separately from the first request sequence. Fifteen unchanged sequences in the first process. Byte counts are parsed JSON response bytes (including JSON-RPC fields, excluding Content-Length framing), not raw pipe framing or notifications. Fingerprints normalize fixture URIs and only OmniSharp's random per-process completion routing ID; semantic fields remain intact. No internal server counters are observed in this run. Diagnostic publication uses the standalone all preset and may share/contend for analysis, as in a real client.",
+    "reports": [
+      {
+        "name": "small",
+        "freshProcessInitialize": {
+          "count": 3,
+          "medianMilliseconds": 402.1426999999999,
+          "p90Milliseconds": 404.4795,
+          "payloadBytes": [
+            686
+          ],
+          "fingerprints": []
+        },
+        "firstSequenceAfterInitialize": {
+          "count": 3,
+          "medianMilliseconds": 443.75879999999995,
+          "p90Milliseconds": 452.1582000000003,
+          "payloadBytes": [
+            1656
+          ],
+          "fingerprints": [
+            "e32e7592d268165d2039ec8853d730af1aaa8ab9d85bed15fdc35cf3423c5309"
+          ]
+        },
+        "unchangedWarmSequence": {
+          "count": 15,
+          "medianMilliseconds": 50.26819999999998,
+          "p90Milliseconds": 55.620900000000006,
+          "payloadBytes": [
+            1662,
+            1663,
+            1670
+          ],
+          "fingerprints": [
+            "e32e7592d268165d2039ec8853d730af1aaa8ab9d85bed15fdc35cf3423c5309"
+          ]
+        }
+      },
+      {
+        "name": "multi-project",
+        "freshProcessInitialize": {
+          "count": 3,
+          "medianMilliseconds": 400.84369999999944,
+          "p90Milliseconds": 401.9751000000001,
+          "payloadBytes": [
+            686
+          ],
+          "fingerprints": []
+        },
+        "firstSequenceAfterInitialize": {
+          "count": 3,
+          "medianMilliseconds": 768.5542999999998,
+          "p90Milliseconds": 781.3116999999993,
+          "payloadBytes": [
+            7116
+          ],
+          "fingerprints": [
+            "4839453e6a4f413edbdc53adb7b88c83878ed22fc8e371dde3550b838e7327f1"
+          ]
+        },
+        "unchangedWarmSequence": {
+          "count": 15,
+          "medianMilliseconds": 78.1204000000007,
+          "p90Milliseconds": 86.64179999999942,
+          "payloadBytes": [
+            7122,
+            7123,
+            7130
+          ],
+          "fingerprints": [
+            "4839453e6a4f413edbdc53adb7b88c83878ed22fc8e371dde3550b838e7327f1"
+          ]
+        }
+      },
+      {
+        "name": "default-library",
+        "freshProcessInitialize": {
+          "count": 3,
+          "medianMilliseconds": 399.41820000000007,
+          "p90Milliseconds": 400.27030000000013,
+          "payloadBytes": [
+            686
+          ],
+          "fingerprints": []
+        },
+        "firstSequenceAfterInitialize": {
+          "count": 3,
+          "medianMilliseconds": 894.1370999999999,
+          "p90Milliseconds": 896.965400000001,
+          "payloadBytes": [
+            1686
+          ],
+          "fingerprints": [
+            "e32e7592d268165d2039ec8853d730af1aaa8ab9d85bed15fdc35cf3423c5309"
+          ]
+        },
+        "unchangedWarmSequence": {
+          "count": 15,
+          "medianMilliseconds": 48.89090000000033,
+          "p90Milliseconds": 55.66909999999916,
+          "payloadBytes": [
+            1692,
+            1693,
+            1700
+          ],
+          "fingerprints": [
+            "e32e7592d268165d2039ec8853d730af1aaa8ab9d85bed15fdc35cf3423c5309"
+          ]
+        }
+      }
+    ]
+  },
+  "equivalentAnalysis": {
+    "baselineCommit": "df4589b7",
+    "baselineTimestampUtc": "2026-10-08T05:07:02.2586639Z",
+    "currentTimestampUtc": "2026-10-08T05:08:01.5101366Z",
+    "environment": {
+      "runtime": ".NET 10.0.12",
+      "os": "Microsoft Windows 10.0.26220",
+      "architecture": "Arm64",
+      "processorCount": 12
+    },
+    "binaries": {
+      "baseline": {
+        "languageServerSha256": "ed5a808e04b4217e59374038845b2c38ef4018cce9a84ee85ad02cfb47de19ed",
+        "compilerSha256": "db08b43d47c23232eea0d79ca00b5ea50d8d416365e2cec774a35f5055aae4c8"
+      },
+      "current": {
+        "languageServerSha256": "9dc0e3c3b4d401e833735179ee84185c460b9f2dcb2ae187f71f8e808627a40b",
+        "compilerSha256": "a2ee2949aace31ab14706d2bf2352125ed94d9fed085cb76ec7b55d95909e45b"
+      }
+    },
+    "methodology": "Same definition, references(includeDeclaration=true, workspace roots), statements, full diagnostics sequence. Fresh service cache for each cold sample; repeated unchanged capture for warm samples. Process/JIT/filesystem caches warmed. Deterministic noLib/types=[] fixtures isolate source graph. Services only, no transport or CLR metadata provider. Allocation measured process-wide across async workers. Baseline CheckModules entry counter is the only archived production source change; current uses Statistics.Checks. Retained heap is noisy process-wide full-GC live heap, cache bytes are implementation estimates.",
+    "reports": [
+      {
+        "name": "small",
+        "cold": {
+          "baseline": {
+            "medianMilliseconds": 20.4304,
+            "p90Milliseconds": 20.9224,
+            "medianAllocatedBytes": 774056,
+            "checksPerSequence": [
+              4
+            ],
+            "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+            "featureMedianMilliseconds": [
+              5.1432,
+              9.9994,
+              5.1393
+            ],
+            "featureMedianAllocatedBytes": [
+              194088,
+              382112,
+              193728
+            ]
+          },
+          "current": {
+            "medianMilliseconds": 15.1038,
+            "p90Milliseconds": 16.0725,
+            "medianAllocatedBytes": 541296,
+            "checksPerSequence": [
+              1
+            ],
+            "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+            "featureMedianMilliseconds": [
+              6.8093,
+              7.2136,
+              0.9868
+            ],
+            "featureMedianAllocatedBytes": [
+              293896,
+              209984,
+              33320
+            ]
+          },
+          "medianChangePercent": -26.071932022867884,
+          "allocatedChangePercent": -30.070175801234022
+        },
+        "warm": {
+          "baseline": {
+            "medianMilliseconds": 15.0986,
+            "p90Milliseconds": 15.2941,
+            "medianAllocatedBytes": 571744,
+            "checksPerSequence": [
+              3
+            ],
+            "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+            "featureMedianMilliseconds": [
+              5.1248,
+              9.8912,
+              0.0037
+            ],
+            "featureMedianAllocatedBytes": [
+              184640,
+              382144,
+              792
+            ]
+          },
+          "current": {
+            "medianMilliseconds": 3.2258,
+            "p90Milliseconds": 3.3171,
+            "medianAllocatedBytes": 119808,
+            "checksPerSequence": [
+              0
+            ],
+            "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+            "featureMedianMilliseconds": [
+              0.6503,
+              1.5597,
+              0.9732
+            ],
+            "featureMedianAllocatedBytes": [
+              23272,
+              59048,
+              33320
+            ]
+          },
+          "medianChangePercent": -78.63510524154557,
+          "allocatedChangePercent": -79.04516706777859
+        },
+        "retention": {
+          "baseline": {
+            "LiveHeapWithCacheBytes": 496760,
+            "LiveHeapAfterCacheClearBytes": 494344,
+            "CacheRetainedHeapBytes": 2416,
+            "EstimatedCachedBytes": null,
+            "CachedSnapshots": null
+          },
+          "current": {
+            "LiveHeapWithCacheBytes": 581872,
+            "LiveHeapAfterCacheClearBytes": 557664,
+            "CacheRetainedHeapBytes": 24208,
+            "EstimatedCachedBytes": 9928,
+            "CachedSnapshots": 2
+          }
+        },
+        "validation": {
+          "document": {
+            "inputs": 12,
+            "observedInputEstimatedBytes": 482,
+            "medianMilliseconds": 0.3136,
+            "p90Milliseconds": 0.3238,
+            "medianAllocatedBytes": 8680
+          },
+          "workspace": {
+            "inputs": 15,
+            "observedInputEstimatedBytes": 774,
+            "medianMilliseconds": 0.4262,
+            "p90Milliseconds": 0.44,
+            "medianAllocatedBytes": 10144
+          }
+        }
+      },
+      {
+        "name": "multi-project",
+        "cold": {
+          "baseline": {
+            "medianMilliseconds": 205.9992,
+            "p90Milliseconds": 276.106,
+            "medianAllocatedBytes": 56143688,
+            "checksPerSequence": [
+              6
+            ],
+            "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+            "featureMedianMilliseconds": [
+              36.2393,
+              129.5037,
+              38.2916
+            ],
+            "featureMedianAllocatedBytes": [
+              10654616,
+              34398616,
+              10977096
+            ]
+          },
+          "current": {
+            "medianMilliseconds": 259.3778,
+            "p90Milliseconds": 268.0345,
+            "medianAllocatedBytes": 64736336,
+            "checksPerSequence": [
+              3
+            ],
+            "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+            "featureMedianMilliseconds": [
+              97.93,
+              160.19,
+              3.2803
+            ],
+            "featureMedianAllocatedBytes": [
+              28184080,
+              35667480,
+              777032
+            ]
+          },
+          "medianChangePercent": 25.912042376863596,
+          "allocatedChangePercent": 15.304744497725187
+        },
+        "warm": {
+          "baseline": {
+            "medianMilliseconds": 111.7312,
+            "p90Milliseconds": 125.7972,
+            "medianAllocatedBytes": 40256928,
+            "checksPerSequence": [
+              5
+            ],
+            "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+            "featureMedianMilliseconds": [
+              22.7955,
+              87.5965,
+              0.013
+            ],
+            "featureMedianAllocatedBytes": [
+              9488976,
+              30648200,
+              6392
+            ]
+          },
+          "current": {
+            "medianMilliseconds": 14.3041,
+            "p90Milliseconds": 15.6062,
+            "medianAllocatedBytes": 3368120,
+            "checksPerSequence": [
+              0
+            ],
+            "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+            "featureMedianMilliseconds": [
+              2.0304,
+              8.89,
+              3.0868
+            ],
+            "featureMedianAllocatedBytes": [
+              514056,
+              1963672,
+              777032
+            ]
+          },
+          "medianChangePercent": -87.19775675907893,
+          "allocatedChangePercent": -91.63344008762914
+        },
+        "retention": {
+          "baseline": {
+            "LiveHeapWithCacheBytes": 902160,
+            "LiveHeapAfterCacheClearBytes": 820216,
+            "CacheRetainedHeapBytes": 81944,
+            "EstimatedCachedBytes": null,
+            "CachedSnapshots": null
+          },
+          "current": {
+            "LiveHeapWithCacheBytes": 16733800,
+            "LiveHeapAfterCacheClearBytes": 8963880,
+            "CacheRetainedHeapBytes": 7769920,
+            "EstimatedCachedBytes": 6775212,
+            "CachedSnapshots": 2
+          }
+        },
+        "validation": {
+          "document": {
+            "inputs": 33,
+            "observedInputEstimatedBytes": 56726,
+            "medianMilliseconds": 0.9771,
+            "p90Milliseconds": 1.1526,
+            "medianAllocatedBytes": 252800
+          },
+          "workspace": {
+            "inputs": 91,
+            "observedInputEstimatedBytes": 122322,
+            "medianMilliseconds": 3.0061,
+            "p90Milliseconds": 3.4346,
+            "medianAllocatedBytes": 551000
+          }
+        }
+      }
+    ],
+    "freshProcessRepeat": {
+      "baselineTimestampUtc": "2026-10-08T05:08:23.4666159Z",
+      "currentTimestampUtc": "2026-10-08T05:08:33.1154709Z",
+      "reports": [
+        {
+          "name": "small",
+          "cold": {
+            "baseline": {
+              "medianMilliseconds": 19.8311,
+              "p90Milliseconds": 20.2605,
+              "medianAllocatedBytes": 774096,
+              "checksPerSequence": [
+                4
+              ],
+              "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+              "featureMedianMilliseconds": [
+                5.0643,
+                9.6948,
+                5.0052
+              ],
+              "featureMedianAllocatedBytes": [
+                194088,
+                382112,
+                193728
+              ]
+            },
+            "current": {
+              "medianMilliseconds": 17.3767,
+              "p90Milliseconds": 20.1785,
+              "medianAllocatedBytes": 541088,
+              "checksPerSequence": [
+                1
+              ],
+              "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+              "featureMedianMilliseconds": [
+                8.0984,
+                7.8966,
+                1.1296
+              ],
+              "featureMedianAllocatedBytes": [
+                293624,
+                209984,
+                33320
+              ]
+            },
+            "medianChangePercent": -12.376519708942013,
+            "allocatedChangePercent": -30.10065934974473
+          },
+          "warm": {
+            "baseline": {
+              "medianMilliseconds": 15.0843,
+              "p90Milliseconds": 15.5312,
+              "medianAllocatedBytes": 571744,
+              "checksPerSequence": [
+                3
+              ],
+              "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+              "featureMedianMilliseconds": [
+                5.1659,
+                9.899,
+                0.0035
+              ],
+              "featureMedianAllocatedBytes": [
+                184640,
+                382144,
+                792
+              ]
+            },
+            "current": {
+              "medianMilliseconds": 3.7793,
+              "p90Milliseconds": 4.625,
+              "medianAllocatedBytes": 119808,
+              "checksPerSequence": [
+                0
+              ],
+              "resultFingerprint": "0D452F0C8902E0D5EEF6E72D1C67A1F9DDA7A27A35D06F31916F4E9D73EE3DBB",
+              "featureMedianMilliseconds": [
+                0.7487,
+                1.8454,
+                1.0901
+              ],
+              "featureMedianAllocatedBytes": [
+                23272,
+                59048,
+                33320
+              ]
+            },
+            "medianChangePercent": -74.94547310780082,
+            "allocatedChangePercent": -79.04516706777859
+          },
+          "retention": {
+            "baseline": {
+              "LiveHeapWithCacheBytes": 496648,
+              "LiveHeapAfterCacheClearBytes": 494232,
+              "CacheRetainedHeapBytes": 2416,
+              "EstimatedCachedBytes": null,
+              "CachedSnapshots": null
+            },
+            "current": {
+              "LiveHeapWithCacheBytes": 582736,
+              "LiveHeapAfterCacheClearBytes": 558240,
+              "CacheRetainedHeapBytes": 24496,
+              "EstimatedCachedBytes": 9928,
+              "CachedSnapshots": 2
+            }
+          },
+          "validation": {
+            "document": {
+              "inputs": 12,
+              "observedInputEstimatedBytes": 482,
+              "medianMilliseconds": 0.3472,
+              "p90Milliseconds": 0.4389,
+              "medianAllocatedBytes": 8680
+            },
+            "workspace": {
+              "inputs": 15,
+              "observedInputEstimatedBytes": 774,
+              "medianMilliseconds": 0.5072,
+              "p90Milliseconds": 0.7516,
+              "medianAllocatedBytes": 10144
+            }
+          }
+        },
+        {
+          "name": "multi-project",
+          "cold": {
+            "baseline": {
+              "medianMilliseconds": 186.9769,
+              "p90Milliseconds": 198.4855,
+              "medianAllocatedBytes": 56143688,
+              "checksPerSequence": [
+                6
+              ],
+              "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+              "featureMedianMilliseconds": [
+                31.8903,
+                119.3871,
+                35.3542
+              ],
+              "featureMedianAllocatedBytes": [
+                10654616,
+                34398616,
+                10977096
+              ]
+            },
+            "current": {
+              "medianMilliseconds": 256.0315,
+              "p90Milliseconds": 259.3635,
+              "medianAllocatedBytes": 64727272,
+              "checksPerSequence": [
+                3
+              ],
+              "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+              "featureMedianMilliseconds": [
+                91.6325,
+                153.9189,
+                3.2777
+              ],
+              "featureMedianAllocatedBytes": [
+                28191056,
+                35655464,
+                777080
+              ]
+            },
+            "medianChangePercent": 36.93215579036768,
+            "allocatedChangePercent": 15.288600207382164
+          },
+          "warm": {
+            "baseline": {
+              "medianMilliseconds": 118.4045,
+              "p90Milliseconds": 167.3787,
+              "medianAllocatedBytes": 41096408,
+              "checksPerSequence": [
+                5
+              ],
+              "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+              "featureMedianMilliseconds": [
+                25.2589,
+                91.9264,
+                0.0124
+              ],
+              "featureMedianAllocatedBytes": [
+                9675464,
+                31302856,
+                6392
+              ]
+            },
+            "current": {
+              "medianMilliseconds": 17.1,
+              "p90Milliseconds": 18.9637,
+              "medianAllocatedBytes": 3368240,
+              "checksPerSequence": [
+                0
+              ],
+              "resultFingerprint": "215F3E9CFCFAEDE2C9783683F26A6766859D588F43DE8AF99EDA41422A47ACE0",
+              "featureMedianMilliseconds": [
+                2.3084,
+                10.773,
+                3.7039
+              ],
+              "featureMedianAllocatedBytes": [
+                514080,
+                1963720,
+                777080
+              ]
+            },
+            "medianChangePercent": -85.55798132672322,
+            "allocatedChangePercent": -91.80405255855938
+          },
+          "retention": {
+            "baseline": {
+              "LiveHeapWithCacheBytes": 893832,
+              "LiveHeapAfterCacheClearBytes": 811888,
+              "CacheRetainedHeapBytes": 81944,
+              "EstimatedCachedBytes": null,
+              "CachedSnapshots": null
+            },
+            "current": {
+              "LiveHeapWithCacheBytes": 16720048,
+              "LiveHeapAfterCacheClearBytes": 8924640,
+              "CacheRetainedHeapBytes": 7795408,
+              "EstimatedCachedBytes": 6775212,
+              "CachedSnapshots": 2
+            }
+          },
+          "validation": {
+            "document": {
+              "inputs": 33,
+              "observedInputEstimatedBytes": 56726,
+              "medianMilliseconds": 0.985,
+              "p90Milliseconds": 1.0715,
+              "medianAllocatedBytes": 252800
+            },
+            "workspace": {
+              "inputs": 91,
+              "observedInputEstimatedBytes": 122322,
+              "medianMilliseconds": 3.0667,
+              "p90Milliseconds": 3.4941,
+              "medianAllocatedBytes": 551000
+            }
+          }
+        }
+      ]
+    }
+  },
+  "limits": "Single-machine measurements. New feature sequences report absolute costs. Only the unchanged pre-existing definition/reference/statements/diagnostics sequence has an exact historical baseline. Allocation churn, estimated completed-cache bytes and full-GC live heap are distinct. Stdio counters are unobserved. Raw samples remain in ignored artifacts."
+}

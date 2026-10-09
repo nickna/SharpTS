@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using SharpTS.IO;
 
 namespace SharpTS.LanguageServer.Services;
 
@@ -81,13 +82,20 @@ public sealed class GuiContractService
 
     public Location? Definition(string? documentPath, string text, int line, int character)
     {
+        try { return FindDefinition(documentPath, text, line, character); }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
+
+    private static Location? FindDefinition(string? documentPath, string text, int line, int character)
+    {
         Contract? contract = Load(documentPath);
         string? lineText = GetLine(text, line);
-        if (contract is null || lineText is null || !File.Exists(contract.DeclarationPath)) return null;
+        if (contract is null || lineText is null || !CompilerFileSystem.FileExists(contract.DeclarationPath)) return null;
         (string word, _, _) = WordAt(lineText, character);
         Control? control = contract.Controls.FirstOrDefault(item => item.Kind == word);
         if (control is null) return null;
-        string[] declarations = File.ReadAllLines(contract.DeclarationPath);
+        string[] declarations = CompilerFileSystem.ReadAllText(contract.DeclarationPath).Split('\n');
         int declarationLine = Array.FindIndex(declarations, value => value.Contains($"export const {word} =", StringComparison.Ordinal));
         if (declarationLine < 0) return null;
         int start = declarations[declarationLine].IndexOf(word, StringComparison.Ordinal);
@@ -101,11 +109,11 @@ public sealed class GuiContractService
 
     private static Contract? Load(string? documentPath)
     {
-        string? metadata = LocateMetadata(documentPath);
-        if (metadata is null) return null;
         try
         {
-            using JsonDocument json = JsonDocument.Parse(File.ReadAllText(metadata));
+            string? metadata = LocateMetadata(documentPath);
+            if (metadata is null) return null;
+            using JsonDocument json = JsonDocument.Parse(CompilerFileSystem.ReadAllText(metadata));
             var controls = json.RootElement.GetProperty("controls").EnumerateArray().Select(control => new Control(
                 control.GetProperty("kind").GetString()!,
                 control.GetProperty("documentation").GetString() ?? string.Empty,
@@ -119,7 +127,10 @@ public sealed class GuiContractService
             return new Contract(Path.Combine(Path.GetDirectoryName(metadata)!, "control-surface.generated.ts"), controls);
         }
         catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
         catch (JsonException) { return null; }
+        catch (KeyNotFoundException) { return null; }
+        catch (InvalidOperationException) { return null; }
     }
 
     private static string? LocateMetadata(string? documentPath)
@@ -128,39 +139,52 @@ public sealed class GuiContractService
         string? directory = Path.GetDirectoryName(Path.GetFullPath(documentPath));
         while (directory is not null)
         {
-            string[] projects = Directory.Exists(directory)
-                ? Directory.GetFiles(directory, "*.csproj", SearchOption.TopDirectoryOnly)
+            CompilerFileSystem.ThrowIfCancellationRequested();
+            IReadOnlyList<string> projects = CompilerFileSystem.DirectoryExists(directory)
+                ? CompilerFileSystem.EnumerateFiles(directory, "*.csproj", SearchOption.TopDirectoryOnly)
                 : [];
-            string? guiProject = projects.FirstOrDefault(path => File.ReadAllText(path).Contains("SharpTS.Gui.Sdk", StringComparison.OrdinalIgnoreCase));
+            string? guiProject = projects.FirstOrDefault(path => CompilerFileSystem.ReadAllText(path).Contains("SharpTS.Gui.Sdk", StringComparison.OrdinalIgnoreCase));
             if (guiProject is not null)
             {
                 string obj = Path.Combine(directory, "obj");
-                if (Directory.Exists(obj))
+                if (CompilerFileSystem.DirectoryExists(obj))
                 {
-                    string? built = Directory.EnumerateFiles(obj, "control-docs.generated.json", SearchOption.AllDirectories)
+                    string? built = CompilerFileSystem.EnumerateFiles(obj, "control-docs.generated.json", new EnumerationOptions
+                        { RecurseSubdirectories = true, IgnoreInaccessible = true })
                         .FirstOrDefault(path => path.Contains("@sharpts", StringComparison.OrdinalIgnoreCase));
                     if (built is not null) return built;
                 }
-                Match version = Regex.Match(File.ReadAllText(guiProject), @"SharpTS\.Gui\.Sdk/(?<version>[^\""<]+)");
+                Match version = Regex.Match(CompilerFileSystem.ReadAllText(guiProject), @"SharpTS\.Gui\.Sdk/(?<version>[^\""<]+)");
                 if (version.Success)
                 {
                     string packages = Environment.GetEnvironmentVariable("NUGET_PACKAGES")
                         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
                     string cached = Path.Combine(packages, "sharpts.gui.sdk", version.Groups["version"].Value, "gui", "control-docs.generated.json");
-                    if (File.Exists(cached)) return cached;
+                    if (CompilerFileSystem.FileExists(cached)) return cached;
                 }
                 string? repository = directory;
                 while (repository is not null)
                 {
                     string source = Path.Combine(repository, "src", "SharpTS.Gui.Sdk", "GuiPackage", "control-docs.generated.json");
-                    if (File.Exists(source)) return source;
-                    repository = Path.GetDirectoryName(repository);
+                    if (CompilerFileSystem.FileExists(source)) return source;
+                    repository = AmbientParent(repository);
                 }
                 return null;
             }
-            directory = Path.GetDirectoryName(directory);
+            directory = AmbientParent(directory);
         }
         return null;
+    }
+
+    private static string? AmbientParent(string directory)
+    {
+        string? parent = Path.GetDirectoryName(directory);
+        if (parent is null) return null;
+        string normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent));
+        return new[] { Path.GetTempPath(), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) }
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Any(path => string.Equals(normalized, Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)),
+                StringComparison.OrdinalIgnoreCase)) ? null : parent;
     }
 
     private static Hover Markdown(string value) => new()

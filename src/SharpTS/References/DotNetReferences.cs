@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using SharpTS.Diagnostics.Exceptions;
+using SharpTS.IO;
 
 namespace SharpTS.References;
 
@@ -33,6 +34,19 @@ public static class DotNetReferences
     /// <exception cref="Exception">Missing reference DLL, malformed manifest, or
     /// failed restore — all with messages naming the offending file/entry.</exception>
     public static ReferenceSet Resolve(string startDirectory, IReadOnlyList<string> cliReferences)
+        => ResolveCore(startDirectory, cliReferences, allowRestore: true);
+
+    /// <summary>
+    /// Resolves references from the current manifest and already restored package graph without
+    /// launching a process or changing workspace files. Editor refreshes use this form.
+    /// </summary>
+    public static ReferenceSet ResolveReadOnly(string startDirectory, IReadOnlyList<string> cliReferences)
+        => ResolveCore(startDirectory, cliReferences, allowRestore: false);
+
+    private static ReferenceSet ResolveCore(
+        string startDirectory,
+        IReadOnlyList<string> cliReferences,
+        bool allowRestore)
     {
         var manifest = SharpTsManifestLoader.FindAndLoad(startDirectory);
         if (manifest == null && cliReferences.Count == 0)
@@ -44,7 +58,7 @@ public static class DotNetReferences
         foreach (var cliRef in cliReferences)
         {
             string fullPath = Path.GetFullPath(cliRef);
-            if (!File.Exists(fullPath))
+            if (!CompilerFileSystem.FileExists(fullPath))
             {
                 throw new Exception(
                     $"Error: reference '{cliRef}' (from -r/--reference) not found" +
@@ -60,7 +74,7 @@ public static class DotNetReferences
             foreach (var entry in manifest.References ?? [])
             {
                 string fullPath = Path.GetFullPath(Path.Combine(manifest.ManifestDirectory, entry));
-                if (!File.Exists(fullPath))
+                if (!CompilerFileSystem.FileExists(fullPath))
                 {
                     throw new Exception(
                         $"Error: sharpts.json ('{manifest.ManifestPath}'): reference '{entry}' not found " +
@@ -72,7 +86,9 @@ public static class DotNetReferences
 
             if (manifest.Packages is { Count: > 0 })
             {
-                var restore = NuGetRestorer.Restore(manifest);
+                var restore = allowRestore
+                    ? NuGetRestorer.Restore(manifest)
+                    : NuGetRestorer.ReadRestored(manifest);
                 packageClosures = restore.PackageClosures;
                 foreach (var asset in restore.RuntimeAssets)
                 {

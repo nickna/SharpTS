@@ -38,6 +38,23 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private int _ambientNamespaceDepth = 0;
     private int _ambientClassDepth = 0;
     private bool _isDeclarationFile = false;
+    private CancellationToken _cancellationToken;
+    private int _cancellationCheckpoints;
+
+    /// <summary>Observes cancellation while parsing; cancellation is never a syntax diagnostic.</summary>
+    public Parser WithCancellation(CancellationToken cancellationToken)
+    {
+        _cancellationToken = cancellationToken;
+        _cancellationCheckpoints = 0;
+        return this;
+    }
+
+    private void CheckCancellation()
+    {
+        // Lookahead and cursor movement share a cheap, allocation-free polling budget.
+        if (_cancellationToken.CanBeCanceled && (_cancellationCheckpoints++ & 255) == 0)
+            _cancellationToken.ThrowIfCancellationRequested();
+    }
 
     // Strict mode tracking - tracks whether we're in a strict mode context
     private bool _isStrictMode = false;
@@ -107,6 +124,18 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     /// <returns>A ParseDiagnosticResult containing parsed statements and any errors encountered.</returns>
     public ParseDiagnosticResult Parse()
     {
+        try { return ParseCore(); }
+        finally
+        {
+            _spans.Copied = null;
+            _editorSyntax = null;
+            _splitTokenEdits = null;
+        }
+    }
+
+    private ParseDiagnosticResult ParseCore()
+    {
+        _cancellationToken.ThrowIfCancellationRequested();
         List<Stmt> statements = [];
 
         // Parse directive prologue at the start of the file
@@ -125,17 +154,26 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
         while (!IsAtEnd())
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var decl = Declaration();
                 if (decl != null) statements.Add(decl);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 RecordError(ex.Message, (ex as ParseError)?.TsCode);
                 Synchronize();
                 if (_diagnostics.HitErrorLimit)
+                {
+                    _cancellationToken.ThrowIfCancellationRequested();
+                    PublishEditorSyntax(statements);
                     return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics, HitErrorLimit: true);
+                }
             }
         }
 
@@ -146,17 +184,22 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         {
             int insertAt = 0;
             while (insertAt < statements.Count && statements[insertAt] is Stmt.Directive)
+            {
+                CheckCancellation();
                 insertAt++;
+            }
             statements.Insert(insertAt, BuildJsxRuntimeImport());
         }
 
         // Apply var hoisting to the top-level (module/script) statement list. Function bodies
         // and arrow function bodies are hoisted at their respective parse sites.
+        _cancellationToken.ThrowIfCancellationRequested();
         statements = VarHoister.Hoist(statements, _spans);
 
         // Lift generator function expressions to top-level function declarations so the
         // existing generator-declaration IL pipeline handles them. No-op when the module
         // contains no `function*() {...}` expressions.
+        _cancellationToken.ThrowIfCancellationRequested();
         statements = GeneratorArrowLifter.Lift(statements, _spans);
 
         // TypeScript reports TS1155 as a grammar diagnostic from the checker. Checker
@@ -168,6 +211,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         {
             foreach (Token name in _uninitializedConstDeclarations)
             {
+                CheckCancellation();
                 _diagnostics.AddError(
                     DiagnosticCode.ParseError,
                     "'const' declarations must be initialized.",
@@ -176,6 +220,8 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             }
         }
 
+        _cancellationToken.ThrowIfCancellationRequested();
+        PublishEditorSyntax(statements);
         return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics);
     }
 
@@ -191,14 +237,14 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         // Directives must be string literals followed by semicolons at the beginning
         while (Check(TokenType.STRING))
         {
-            int saved = _current;
+            var saved = SaveCursor();
             Token stringToken = Advance();
 
             // Must be followed by semicolon (or end of input for single-statement case)
             if (!Match(TokenType.SEMICOLON))
             {
                 // Not a directive - restore position and stop
-                _current = saved;
+                RestoreCursor(saved);
                 break;
             }
 
@@ -389,7 +435,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         if (IsContextualKeyword(Peek().Type))
         {
             var token = Advance();
-            return new Token(TokenType.IDENTIFIER, token.Lexeme, null, token.Line);
+            return AliasEditorToken(new Token(TokenType.IDENTIFIER, token.Lexeme, null, token.Line), token);
         }
 
         throw new Exception(message);
@@ -408,12 +454,12 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         if (Check(TokenType.STRING))
         {
             var lit = Advance();
-            return new Token(TokenType.IDENTIFIER, (string)lit.Literal!, null, lit.Line);
+            return AliasEditorToken(new Token(TokenType.IDENTIFIER, (string)lit.Literal!, null, lit.Line), lit);
         }
         if (Check(TokenType.NUMBER))
         {
             var lit = Advance();
-            return new Token(TokenType.IDENTIFIER, lit.Literal!.ToString()!, null, lit.Line);
+            return AliasEditorToken(new Token(TokenType.IDENTIFIER, lit.Literal!.ToString()!, null, lit.Line), lit);
         }
         return ConsumePropertyName(message);
     }
@@ -462,7 +508,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         {
             Advance();
             // Convert keyword token to identifier token for AST consistency
-            return new Token(TokenType.IDENTIFIER, current.Lexeme, null, current.Line);
+            return AliasEditorToken(new Token(TokenType.IDENTIFIER, current.Lexeme, null, current.Line), current);
         }
 
         throw new Exception(message);
@@ -501,6 +547,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
     private Token Advance()
     {
+        CheckCancellation();
         if (!IsAtEnd()) _current++;
         return Previous();
     }
@@ -517,6 +564,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
     private Token PeekAt(int offset)
     {
+        CheckCancellation();
         int i = _current + offset;
         return i >= _tokens.Count ? _tokens[^1] : _tokens[i];
     }
@@ -568,20 +616,24 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
     private Expr? TryParseAngleBracketAssertion()
     {
-        int saved = _current;
+        var saved = SaveCursor();
         try
         {
             Advance(); // consume <
-            if (!IsTypeStart()) { _current = saved; return null; }
+            if (!IsTypeStart()) { RestoreCursor(saved); return null; }
 
             string typeName = ParseTypeAnnotation();
-            if (!Check(TokenType.GREATER)) { _current = saved; return null; }
+            if (!Check(TokenType.GREATER)) { RestoreCursor(saved); return null; }
             Advance(); // consume >
 
             Expr expression = Unary();
             return new Expr.TypeAssertion(expression, typeName);
         }
-        catch { _current = saved; return null; }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch { RestoreCursor(saved); return null; }
     }
 
     private bool IsTypeStart() =>
@@ -659,11 +711,17 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             // Carrying that offset forward keeps the rest of the token locatable in the source.
             case TokenType.GREATER_GREATER:
                 // Split >> into > (consumed) and > (remaining)
+                RecordSplitToken(current);
+                _partialGreaterIndex = _current;
+                _partialGreaterEnd = Shift(current, 1);
                 _tokens[_current] = new Token(TokenType.GREATER, ">", null, current.Line, Shift(current, 1));
                 return true;
 
             case TokenType.GREATER_GREATER_GREATER:
                 // Split >>> into > (consumed) and >> (remaining)
+                RecordSplitToken(current);
+                _partialGreaterIndex = _current;
+                _partialGreaterEnd = Shift(current, 1);
                 _tokens[_current] = new Token(TokenType.GREATER_GREATER, ">>", null, current.Line, Shift(current, 1));
                 return true;
 

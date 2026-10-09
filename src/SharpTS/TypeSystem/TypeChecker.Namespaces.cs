@@ -61,6 +61,7 @@ public partial class TypeChecker
 
         // Create new scope for namespace body
         var namespaceEnv = new TypeEnvironment(_environment);
+        RegisterEditorScope(ns, namespaceEnv, EditorScopeKind.Block, EditorSyntaxRole.Whole);
         foreach (var (memberName, binding) in typeBindings)
             namespaceEnv.DefineTypeBinding(memberName, binding);
         foreach (var (memberName, binding) in valueBindings)

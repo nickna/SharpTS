@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using SharpTS.Diagnostics;
+using SharpTS.IO;
 using SharpTS.LanguageServer.Conversions;
+using SharpTS.LanguageServer.Project;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using LspDiagnostic = OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic;
@@ -8,25 +11,59 @@ using SharpDiagnostic = SharpTS.Diagnostics.Diagnostic;
 
 namespace SharpTS.LanguageServer.Services;
 
+/// <summary>Diagnostics and the input validation required before they can be published.</summary>
+internal sealed record DiagnosticsAnalysisResult(
+    List<LspDiagnostic> Diagnostics,
+    AnalysisValidation? Validation = null,
+    AnalysisMetadataProvider? Metadata = null,
+    int? MetadataGeneration = null)
+{
+    public bool IsCurrent(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (Validation is not null && !Validation.IsCurrent(cancellationToken))
+            return false;
+        if (Metadata is null || MetadataGeneration is null)
+            return true;
+        // Validation must see physical inputs, even when called inside an older build scope.
+        using var scope = CompilerFileSystem.Use(CompilerFileSystem.Physical, cancellationToken);
+        return Metadata.RefreshGeneration() == MetadataGeneration;
+    }
+}
+
 /// <summary>
-/// Produces the LSP diagnostics for a document. Phase 1 = the @DotNetType interop analyzer
-/// (the tsserver-impossible value). Parse errors are left to the built-in TypeScript server.
+/// Uses shared checked editor snapshots for full diagnostics and keeps SharpTS-only analysis
+/// lazy so an interop-only editor never starts the general TypeScript checker.
 /// </summary>
-public sealed class DiagnosticsService
+public sealed class DiagnosticsService : IDisposable
 {
     private readonly InteropAnalyzer _interop;
+    private readonly SemanticAnalysisService _analysis;
+    private readonly bool _ownsAnalysis;
+    private readonly AnalysisMetadataProvider? _metadata;
     private readonly ConcurrentDictionary<string, CachedAnalysis> _cache =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, CachedWorkspaceCheck> _workspaceChecks =
-        new(StringComparer.OrdinalIgnoreCase);
 
-    /// <param name="resolve">CLR type resolver. Null = in-process registry (BCL only);
-    /// the server injects an AssemblyReferenceLoader when a project/references are configured
-    /// so the user's own @DotNetType targets resolve too.</param>
+    /// <param name="resolve">CLR resolver, or the in-process registry when none is supplied.</param>
+    /// <param name="typeNames">Public CLR type names used for interop suggestions.</param>
+    /// <param name="analysis">The server's shared checked analysis service.</param>
+    /// <param name="metadata">Optional stable CLR metadata generations for interop diagnostics.</param>
     public DiagnosticsService(
         Func<string, Type?>? resolve = null,
-        Func<IEnumerable<string>>? typeNames = null) =>
+        Func<IEnumerable<string>>? typeNames = null,
+        SemanticAnalysisService? analysis = null,
+        AnalysisMetadataProvider? metadata = null)
+    {
+        _analysis = analysis ?? new SemanticAnalysisService();
+        _ownsAnalysis = analysis is null;
+        _metadata = metadata;
+        if (metadata is not null)
+        {
+            resolve ??= metadata.Resolve;
+            typeNames ??= metadata.GetTypeNames;
+        }
         _interop = new InteropAnalyzer(resolve, typeNames);
+    }
 
     public List<LspDiagnostic> Analyze(
         string text,
@@ -34,232 +71,185 @@ public sealed class DiagnosticsService
         string? fileName = null)
     {
         var snapshot = new DocumentSnapshot(
-            fileName is null
-                ? "untitled:diagnostics"
-                : new Uri(Path.GetFullPath(fileName)).AbsoluteUri,
+            fileName is null ? "untitled:diagnostics" : new Uri(Path.GetFullPath(fileName)).AbsoluteUri,
             text,
             Version: 0,
             fileName is null ? null : Path.GetFullPath(fileName));
         return Analyze(snapshot, mode, CancellationToken.None);
     }
 
-    /// <summary>
-    /// Analyzes one immutable text version. Lexing, AST/source spans, interop diagnostics, and
-    /// the optional full type-check result are retained together and reused only for that exact
-    /// version and text.
-    /// </summary>
     public List<LspDiagnostic> Analyze(
+        DocumentSnapshot snapshot,
+        DiagnosticPublishMode mode,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyDictionary<string, DocumentSnapshot> documents = snapshot.FilePath is null
+            ? new Dictionary<string, DocumentSnapshot>()
+            : new Dictionary<string, DocumentSnapshot>(StringComparer.OrdinalIgnoreCase)
+            {
+                [snapshot.FilePath] = snapshot,
+            };
+        return Analyze(new DocumentRequestSnapshot(snapshot, 0, documents), snapshot, mode, cancellationToken);
+    }
+
+    [SuppressMessage("Usage", "VSTHRD002", Justification = "Compatibility wrapper; production publication awaits analysis.")]
+    public List<LspDiagnostic> Analyze(
+        DocumentRequestSnapshot workspace,
+        DocumentSnapshot snapshot,
+        DiagnosticPublishMode mode,
+        CancellationToken cancellationToken)
+    {
+        DiagnosticsAnalysisResult result = AnalyzeResultAsync(workspace, snapshot, mode, cancellationToken)
+            .GetAwaiter().GetResult();
+        return result.IsCurrent(cancellationToken) ? result.Diagnostics : [];
+    }
+
+    internal async Task<DiagnosticsAnalysisResult> AnalyzeResultAsync(
+        DocumentRequestSnapshot workspace,
         DocumentSnapshot snapshot,
         DiagnosticPublishMode mode,
         CancellationToken cancellationToken)
     {
         if (mode == DiagnosticPublishMode.Off)
-            return [];
+            return new DiagnosticsAnalysisResult([]);
 
-        CachedAnalysis analysis = GetOrBuild(snapshot, cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var diagnostics = new List<SharpDiagnostic>(analysis.InteropDiagnostics);
-        if (mode == DiagnosticPublishMode.All)
+        if (mode == DiagnosticPublishMode.All && snapshot.FilePath is not null)
         {
-            diagnostics.AddRange(analysis.ParseResult.Diagnostics);
-            if (analysis.ParseResult.IsSuccess)
+            using AnalysisLease? lease = await _analysis.GetDocumentAsync(
+                workspace with { Document = snapshot }, cancellationToken).ConfigureAwait(false);
+            if (lease is not null && TryGetSharedDocument(lease, snapshot, out AnalysisDocument? document))
             {
-                TypeCheckDiagnosticResult result =
-                    analysis.TypeCheckResult ??
-                    BuildTypeCheck(analysis, cancellationToken);
-                analysis.TypeCheckResult = result;
-                diagnostics.AddRange(result.Diagnostics);
+                using var metadataScope = lease.EnterMetadataScope();
+                var diagnostics = new List<SharpDiagnostic>();
+                if (!document!.HasRecoveredSyntax)
+                {
+                    diagnostics.AddRange(_interop.Analyze(
+                        document.Statements, new PositionMap(snapshot.Text), cancellationToken));
+                }
+                diagnostics.AddRange(document.ParseDiagnostics);
+                diagnostics.AddRange(lease.Model.Snapshot.Diagnostics.Where(diagnostic =>
+                    BelongsToDocument(diagnostic, snapshot.FilePath)));
+                cancellationToken.ThrowIfCancellationRequested();
+                return new DiagnosticsAnalysisResult(
+                    LspConversions.ToLsp(diagnostics, snapshot.Text, mode), lease.Validation);
             }
         }
 
-        return LspConversions.ToLsp(diagnostics, snapshot.Text, mode);
+        // Untitled or unavailable semantic models retain standalone diagnostics. These ASTs
+        // are private to this cheap cache and are never a published semantic snapshot's AST.
+        using AnalysisMetadataView? metadata = _metadata?.Capture();
+        using var scope = metadata?.EnterScope();
+        CachedAnalysis analysis = GetOrBuild(snapshot, metadata?.Generation ?? 0, cancellationToken);
+        var standaloneDiagnostics = new List<SharpDiagnostic>(analysis.InteropDiagnostics);
+        if (mode == DiagnosticPublishMode.All)
+        {
+            standaloneDiagnostics.AddRange(analysis.ParseResult.Diagnostics);
+            if (analysis.ParseResult.IsSuccess)
+            {
+                lock (analysis.TypeCheckGate)
+                {
+                    analysis.TypeCheckResult ??= BuildTypeCheck(analysis, cancellationToken);
+                    standaloneDiagnostics.AddRange(analysis.TypeCheckResult.Diagnostics);
+                }
+            }
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        return new DiagnosticsAnalysisResult(
+            LspConversions.ToLsp(standaloneDiagnostics, snapshot.Text, mode),
+            Metadata: _metadata, MetadataGeneration: metadata?.Generation);
     }
 
-    /// <summary>
-    /// Workspace-aware form used by diagnostic publication. In <c>all</c> mode it checks the
-    /// module graph from the same overlay snapshot and caches that result by workspace version.
-    /// </summary>
-    public List<LspDiagnostic> Analyze(
+    public void Invalidate(string uriOrPath) => _cache.TryRemove(uriOrPath, out _);
+
+    internal IReadOnlyList<Stmt> GetStatements(DocumentSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        using AnalysisMetadataView? metadata = _metadata?.Capture();
+        using var scope = metadata?.EnterScope();
+        return GetOrBuild(snapshot, metadata?.Generation ?? 0, cancellationToken).ParseResult.Statements;
+    }
+
+    internal async Task<IReadOnlyList<Stmt>> GetStatementsAsync(
         DocumentRequestSnapshot workspace,
-        DocumentSnapshot snapshot,
         DiagnosticPublishMode mode,
         CancellationToken cancellationToken)
     {
-        if (mode != DiagnosticPublishMode.All ||
-            snapshot.FilePath is null)
+        if (mode == DiagnosticPublishMode.All && workspace.Document.FilePath is not null)
         {
-            return Analyze(snapshot, mode, cancellationToken);
+            using AnalysisLease? lease = await _analysis.GetDocumentAsync(workspace, cancellationToken)
+                .ConfigureAwait(false);
+            if (lease is not null && TryGetSharedDocument(lease, workspace.Document, out AnalysisDocument? document))
+                return document!.Statements;
         }
+        return GetStatements(workspace.Document, cancellationToken);
+    }
 
-        CachedAnalysis analysis = GetOrBuild(snapshot, cancellationToken);
-        var diagnostics = new List<SharpDiagnostic>(
-            analysis.InteropDiagnostics);
-        diagnostics.AddRange(analysis.ParseResult.Diagnostics);
-        if (analysis.ParseResult.IsSuccess)
-        {
-            string path = snapshot.FilePath;
-            CachedWorkspaceCheck workspaceCheck = _workspaceChecks.AddOrUpdate(
-                path,
-                _ => BuildWorkspaceCheck(
-                    workspace,
-                    snapshot,
-                    analysis,
-                    cancellationToken),
-                (_, current) =>
-                    current.DocumentVersion == snapshot.Version &&
-                    current.WorkspaceVersion == workspace.WorkspaceVersion
-                        ? current
-                        : BuildWorkspaceCheck(
-                            workspace,
-                            snapshot,
-                            analysis,
-                            cancellationToken));
-            diagnostics.AddRange(workspaceCheck.Diagnostics);
-        }
+    private static bool TryGetSharedDocument(
+        AnalysisLease lease, DocumentSnapshot snapshot, out AnalysisDocument? document)
+    {
+        document = null;
+        return snapshot.FilePath is not null &&
+            lease.Model.Snapshot.TryGetDocument(snapshot.FilePath, out document) &&
+            document is not null && string.Equals(document.Document.Text, snapshot.Text, StringComparison.Ordinal);
+    }
 
+    private static bool BelongsToDocument(SharpDiagnostic diagnostic, string path) =>
+        diagnostic.FilePath is null || string.Equals(
+            Path.GetFullPath(diagnostic.FilePath), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase);
+
+    private CachedAnalysis GetOrBuild(DocumentSnapshot snapshot, int metadataGeneration, CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
-        return LspConversions.ToLsp(
-            diagnostics,
-            snapshot.Text,
-            DiagnosticPublishMode.All);
-    }
-
-    public void Invalidate(string uriOrPath)
-    {
-        _cache.TryRemove(uriOrPath, out _);
-        _workspaceChecks.TryRemove(uriOrPath, out _);
-    }
-
-    internal IReadOnlyList<Stmt> GetStatements(
-        DocumentSnapshot snapshot,
-        CancellationToken cancellationToken) =>
-        GetOrBuild(snapshot, cancellationToken).ParseResult.Statements;
-
-    private CachedAnalysis GetOrBuild(
-        DocumentSnapshot snapshot,
-        CancellationToken cancellationToken)
-    {
         string key = snapshot.FilePath ?? snapshot.Uri;
-        return _cache.AddOrUpdate(
-            key,
-            _ => Build(snapshot, cancellationToken),
-            (_, current) =>
-                current.Version == snapshot.Version &&
+        return _cache.AddOrUpdate(key,
+            _ => Build(snapshot, metadataGeneration, cancellationToken),
+            (_, current) => current.Version == snapshot.Version &&
+                current.MetadataGeneration == metadataGeneration &&
                 string.Equals(current.Text, snapshot.Text, StringComparison.Ordinal)
-                    ? current
-                    : Build(snapshot, cancellationToken));
+                    ? current : Build(snapshot, metadataGeneration, cancellationToken));
     }
 
-    private CachedAnalysis Build(
-        DocumentSnapshot snapshot,
-        CancellationToken cancellationToken)
+    private CachedAnalysis Build(DocumentSnapshot snapshot, int metadataGeneration, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string fileName = snapshot.FilePath ?? snapshot.Uri;
-
-        // Stage3 decorators are the run-mode default and are required for @DotNetType to parse.
-        bool isTsx =
-            (fileName.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
-             fileName.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase));
-        List<Token> tokens =
-            new Lexer(snapshot.Text) { JsxTolerant = isTsx }.ScanTokens();
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var document = new SourceDocument(
-            fileName,
-            snapshot.Text,
-            isVirtual: snapshot.FilePath is null);
+        bool isTsx = fileName.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase);
+        List<Token> tokens = new Lexer(snapshot.Text) { JsxTolerant = isTsx }
+            .WithCancellation(cancellationToken).ScanTokens();
+        var document = new SourceDocument(fileName, snapshot.Text, isVirtual: snapshot.FilePath is null);
         var parser = new Parser(tokens, DecoratorMode.Stage3)
-            .WithSourceDocument(document);
-        if (isTsx)
-        {
-            parser.WithJsx(snapshot.Text, JsxParseOptions.Default);
-        }
+            .WithCancellation(cancellationToken).WithSourceDocument(document);
+        if (isTsx) parser.WithJsx(snapshot.Text, JsxParseOptions.Default);
         ParseDiagnosticResult parsed = parser.Parse();
         cancellationToken.ThrowIfCancellationRequested();
-
         IReadOnlyList<SharpDiagnostic> interopDiagnostics = parsed.IsSuccess
-            ? _interop.Analyze(
-                parsed.Statements,
-                new PositionMap(snapshot.Text),
-                cancellationToken)
-            : [];
-
-        return new CachedAnalysis(
-            snapshot.Version,
-            snapshot.Text,
-            document,
-            tokens,
-            parsed,
-            interopDiagnostics);
+            ? _interop.Analyze(parsed.Statements, new PositionMap(snapshot.Text), cancellationToken) : [];
+        return new CachedAnalysis(snapshot.Version, metadataGeneration, snapshot.Text, document, parsed, interopDiagnostics);
     }
 
-    private static TypeCheckDiagnosticResult BuildTypeCheck(
-        CachedAnalysis analysis,
-        CancellationToken cancellationToken)
+    private static TypeCheckDiagnosticResult BuildTypeCheck(CachedAnalysis analysis, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var checker = new TypeChecker(
-            TypeCheckerOptions.Default with { MaxErrors = int.MaxValue })
-            .WithFilePath(analysis.Document.Path)
-            .WithCancellation(cancellationToken);
-        return checker.CheckWithRecovery(
-            analysis.ParseResult.Statements,
-            analysis.Document);
+        var checker = new TypeChecker(TypeCheckerOptions.Default with { MaxErrors = int.MaxValue })
+            .WithFilePath(analysis.Document.Path).WithCancellation(cancellationToken);
+        return checker.CheckWithRecovery(analysis.ParseResult.Statements, analysis.Document);
     }
 
-    private static CachedWorkspaceCheck BuildWorkspaceCheck(
-        DocumentRequestSnapshot workspace,
-        DocumentSnapshot snapshot,
-        CachedAnalysis analysis,
-        CancellationToken cancellationToken)
+    public void Dispose()
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        CheckedNavigationModel? model = NavigationModelBuilder.TryBuild(
-            snapshot.FilePath!,
-            snapshot.Text,
-            workspace.TextOverlay,
-            cancellationToken);
-        IReadOnlyList<SharpDiagnostic> diagnostics;
-        if (model is null)
-        {
-            diagnostics = BuildTypeCheck(
-                    analysis,
-                    cancellationToken)
-                .Diagnostics;
-        }
-        else
-        {
-            diagnostics = model.Checker.GetDiagnostics()
-                .Where(diagnostic =>
-                    diagnostic.FilePath is null ||
-                    string.Equals(
-                        Path.GetFullPath(diagnostic.FilePath),
-                        snapshot.FilePath,
-                        StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-        }
-
-        return new CachedWorkspaceCheck(
-            snapshot.Version,
-            workspace.WorkspaceVersion,
-            diagnostics);
+        _cache.Clear();
+        if (_ownsAnalysis) _analysis.Dispose();
     }
 
-    internal sealed record CachedAnalysis(
+    private sealed record CachedAnalysis(
         int Version,
+        int MetadataGeneration,
         string Text,
         SourceDocument Document,
-        IReadOnlyList<Token> Tokens,
         ParseDiagnosticResult ParseResult,
         IReadOnlyList<SharpDiagnostic> InteropDiagnostics)
     {
+        public object TypeCheckGate { get; } = new();
         public TypeCheckDiagnosticResult? TypeCheckResult { get; set; }
     }
-
-    private sealed record CachedWorkspaceCheck(
-        int DocumentVersion,
-        long WorkspaceVersion,
-        IReadOnlyList<SharpDiagnostic> Diagnostics);
 }

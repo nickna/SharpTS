@@ -113,6 +113,159 @@ User code imports only public specifiers. `primitive:` modules are private imple
 The user-facing declaration, interpreter export, and compiled emitter for a built-in must describe
 the same surface. See [`src/SharpTS/stdlib/CONTRIBUTING.md`](src/SharpTS/stdlib/CONTRIBUTING.md).
 
+## Editor analysis
+
+`SharpTS.LanguageServer.Services.SemanticAnalysisService` owns completed editor analyses.
+`DocumentStore.TryCapture` supplies one immutable open-buffer capture. The analysis key includes
+that capture's versions/text, workspace roots, and service generation; each build records exact
+compiler filesystem reads, probes, and inventories through the scoped `CompilerFileSystem` seam.
+This includes negative import/configuration probes and disconnected configured roots, since a
+closed root can become a reverse importer. Physical validation and CLR metadata generation checks
+run before publication, reuse, and the final handler response. Lifecycle and file/folder
+notifications invalidate the service and cancel obsolete builds.
+
+A completed `AnalysisSnapshot` owns source documents, tokens, recovered parser output, a private
+TypeMap, frozen bindings/member origins, diagnostics, options, and graph/completeness facts. No checker or resolver
+escapes the builder. Published ASTs are read-only inputs and must never be checked again. Embedded
+standard-library ASTs remain shared read-only compiler inputs. Cursor-specific recovery must use
+separate artifacts keyed by caret/query context and policy, never mutate a base snapshot.
+Recovered syntax and partial semantics are explicit; recovered configured roots keep lexical
+rename completeness false. Workspace expansion can reuse an already checked source component
+without inserting a closed declaration into the open-buffer overlay.
+
+Editor parses opt into a flat, document-owned `EditorSyntaxIndex` over the existing AST references.
+Its immutable ranges distinguish written names/expressions/types, grouping/header/body views,
+source-equivalent replacements, generated syntax, and recovered syntax. Invocation metadata
+captures the actual parentheses and top-level commas during parsing. Lookup uses deterministic
+range/role ordering; TSX lowering retains original source ownership without turning generated
+factory calls into written invocations. Ordinary compiler parsing keeps this index disabled.
+The [syntax coverage table](docs/editor-syntax-coverage.md) defines supported views and limits.
+
+Editor checking opts into a generation-owned `MemberIndex`, independent of the lexical
+`BindingIndex`. Reference-equal source class owners and captured documents identify canonical
+instance/static/private member groups. Actual checker declaration IDs alias that source owner
+across preparatory passes; generic instantiation and inherited lookup retain its origin. Overloads and
+getter/setter pairs share their source group. Parameter-properties retain separate lexical and
+property identities. Lookup hooks record the member selected by the checker, including operation
+facts and finite candidate sets. An aggregate is authoritative only when every required selection
+is supported and agrees on one origin. Structural, dynamic, CLR/built-in and index-signature
+fallbacks do not acquire fabricated source identities.
+
+`FrozenMemberIndex` copies completed identities and occurrences into the same analysis snapshot,
+without retaining the checker. Ordinary compiler checking leaves member capture disabled.
+Current compound/logical and literal-index paths that fall back to `any` without selecting a
+named source member remain unavailable; checked update operands can retain a proven read without
+claiming write proof. This metadata does not change checker diagnostics or class compatibility.
+Every new member identity denies rename. Lexical parameter-property bindings also deny rename,
+independently of graph completeness, until lexical and property edits can be coordinated.
+The [member provenance contract](docs/editor-member-provenance.md) records supported operations
+and checker paths that currently cannot establish a source origin.
+
+Full-mode `DefinitionService` selects lexical bindings first and only falls back to complete,
+unambiguous frozen member origins when no lexical facet is selected. It projects canonical
+declaration names through each target document's own line index, deduplicates full path/span
+locations and orders results deterministically. Known definitions do not require an exhaustive
+workspace graph. The existing request guard and analysis validation still refuse stale results.
+
+Full-mode member references use the same lexical-first selection, then join fresh frozen member
+groups across configured projects using normalized declaration paths/full name spans and exact
+member facets. They require complete initialized workspace discovery before collecting any new
+member locations, project each through its own captured source and deduplicate full spans. Graph
+completion does not prove unsupported or unvisited member uses. Generation-local IDs remain
+within one snapshot, and member reference results never grant general rename eligibility.
+If a configured component's exact resolver-cache lookup misses a Windows URI drive spelling,
+the builder selects only one equivalent already-loaded physical source module. Virtual module
+names keep their existing identity rules; multiple physical candidates make discovery incomplete.
+
+Full-mode `PrivateRenameService` uses a separate snapshot-local private-domain proof. The frozen
+member index audits every original private token in one authoritative class span and requires
+exact checker-owned declarations/occurrences plus entered-body evidence from the editor index.
+Unresolved tokens, unvisited bodies, nested class environments, unsupported declaration groups
+and target-document parse errors refuse the complete operation. Workspace discovery completeness
+is independent of this single-file proof. The handler requires negotiated versioned document
+changes and an exact open capture, returns the entire private token/placeholder during prepare,
+and publishes one versioned document edit only after source/dependency/metadata validation.
+The general member/reference rename gate stays false; no parser/checker language expansion or
+spelling-based occurrence search is added.
+
+`WithEditorMetadata` additionally captures actual declaration/occurrence types, source-linked
+checker scopes, receiver member projections and invocation candidates/selections. Publication
+in `FrozenEditorSemanticIndex` replaces raw types with bounded TypeScript presentations and
+copies identities/collections; no type environment, mutable class or inference callback escapes.
+Failed attempts clear stale results. Recovery, holes and incomplete candidates cannot establish
+an overload winner. Source scopes preserve unavailable shadowing locals and canonical import
+identities. Projections inspect already checked types without another inference pass, and
+ordinary checking leaves capture disabled. The [semantic query contract](docs/editor-semantic-queries.md)
+defines authority, unsupported paths and presentation limits.
+
+Full-mode `SemanticHoverService` selects exact written declaration, occurrence, annotation and
+member facts from that shared snapshot. Type-use capture records existing resolution decisions;
+unresolved named fallbacks remain unavailable even when the compiler represents them as `any`.
+Bounded callable presentation uses the public overload surface retained during checking, including
+callables nested in other types. Private calls, assignments, brand checks and `super` use separate
+name/receiver facts rather than an enclosing expression's result. Existing GUI/decorator/CLR hover
+keeps precedence; full-mode CLR usage shares the checked analysis, while interop-only does not
+request ordinary semantic analysis. The handler negotiates Markdown/plain text and revalidates
+the captured state before returning its exact UTF-16 source range.
+
+Full-mode `SemanticSignatureHelpService` joins parser-owned argument lists to frozen invocation
+facts from the same checked graph. Exact signature construction, source owners, explicit type
+arguments and callee/receiver annotation proof determine candidate eligibility. Existing signature
+substitution carries that proof by reference; unresolved fallbacks cannot create displayed `any`
+parameters. The consumer preserves public candidate order and only publishes a complete checker
+selection. Parser commas and bounded signature ranges supply active parameters and negotiated
+UTF-16 label offsets. Unfinished calls use the shared fresh cursor graph; unvisited inner calls
+remain unavailable. Decorator help retains priority in both modes.
+
+`Parser.ParseForEditor` clones the source capture for bounded cursor-local missing member names
+and unfinished call/new lists, including a hidden name after `super.`. A repair gap must contain
+the caret between consumed source and the next real token. Comma-run lookahead stops beyond the
+remaining repair budget and polls cancellation. It preserves original offsets and marks holes
+and recovered delimiters as non-authoritative. Bare `this.#` lexical failure and arbitrary broken
+enclosing braces remain unavailable. The parser itself never checks or adds bindings.
+
+Semantic cursor analysis uses an opt-in exact `ModuleResolver.EditorParseTarget` to create a fresh
+target parse inside a fresh checked graph. The original lexer retains reference directives and
+JSX pragmas; ordinary configuration, resolution, imports and program/library processing continue.
+Other source modules parse normally, and embedded read-only library declarations remain on their
+existing shared path. A configured cursor build refuses default-option fallback if configuration
+loading or membership fails, or checking cannot produce a model. Published base graphs and cached
+parse-only artifacts are never checked again.
+
+Seeded builds require the same service owner, exact originating request stamp and target path,
+plus current inputs. They replay captured reads, probes and inventories before reconstructing
+the program, observe extra inputs, capture their own fresh metadata view and validate both seed
+and combined inputs before publication. Missing or mismatched seeds use a fresh configured build.
+Checked cursor entries share the ordinary admission/LRU/64 MiB estimated budget below, with an
+additional four-entry cursor cap and no ordinary document aliases. Opaque weak-table identities
+in their keys do not retain a base AST; the shared build owns its seed lease only until completion.
+
+The existing parse-only syntax cache remains independent of checked cursor graphs.
+`SemanticAnalysisService` keys those artifacts by base document identity, cursor, query and
+recovery policy. Its separate LRU retains at most 32 artifacts and 8 MiB of estimated payload
+within the combined byte budget; invalidation clears both syntax artifacts and checked analyses.
+
+Identical in-flight requests coalesce. Caller cancellation stops only that caller's wait;
+invalidation/disposal owns build cancellation. At most two builds execute and sixteen builds are
+admitted concurrently. Completed entries use LRU eviction with an eight-entry bound and a 64 MiB
+estimated source/semantic payload budget. This estimate is not a total heap bound: it excludes CLR
+assembly image ownership and approximates AST/binding overhead. Active leases survive eviction;
+cache/lease disposal releases metadata generations when their last owner finishes. Shared build
+failures remain observable on stderr even if every caller has cancelled.
+
+`AnalysisMetadataProvider` captures read-only project/manifest inputs and reference-counted
+`MetadataLoadContext` generations. Captured private assembly bytes permit replacing user DLLs
+while older requests finish; content fingerprints detect same-size/timestamp changes. XML docs
+and decorator type-name caches validate against their own content/generation. Query-time refresh
+does not run restore or load user assemblies into the execution runtime. The installed default
+framework is a fixed host input; an explicit SDK directory is a mutable observed input.
+
+Interop editor services use these metadata views. General checker CLR synthesis still follows
+the runtime registry path: routing metadata-only Types through synthesis requires metadata-safe
+attribute/primitive inspection and scoped synthesis identities. Missing custom-reference general
+symbols remain partial and acquire no guessed source binding. The shared analysis service
+conservatively invalidates on metadata changes without claiming that synthesis bridge.
+
 ## Interpreter architecture
 
 The interpreter evaluates expressions to `RuntimeValue` and executes statements against a

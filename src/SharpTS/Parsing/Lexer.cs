@@ -22,6 +22,8 @@ public class Lexer(string source)
     private int _start = 0;
     private int _current = 0;
     private int _line = 1;
+    private CancellationToken _cancellationToken;
+    private int _cancellationCheckpoints;
     // Line where the current token starts. Snapshotted before each ScanToken so
     // that multi-line tokens (template literals) record their starting line, not
     // their ending line. Needed so `return <template>` on the same line doesn't
@@ -39,6 +41,21 @@ public class Lexer(string source)
     /// so the upfront pass survives to reach the parser's source-driven JSX text scanning.
     /// </summary>
     public bool JsxTolerant { get; init; } = false;
+
+    /// <summary>Observes cancellation while scanning without changing the default lexer behavior.</summary>
+    public Lexer WithCancellation(CancellationToken cancellationToken)
+    {
+        _cancellationToken = cancellationToken;
+        _cancellationCheckpoints = 0;
+        return this;
+    }
+
+    private void CheckCancellation()
+    {
+        // Keep the uncancelled hot path cheap; sample long scans every 256 cursor steps.
+        if (_cancellationToken.CanBeCanceled && (_cancellationCheckpoints++ & 255) == 0)
+            _cancellationToken.ThrowIfCancellationRequested();
+    }
 
     // Triple-slash directive support
     private readonly List<TripleSlashDirective> _tripleSlashDirectives = [];
@@ -165,6 +182,7 @@ public class Lexer(string source)
 
     public List<Token> ScanTokens()
     {
+        _cancellationToken.ThrowIfCancellationRequested();
         while (!IsAtEnd())
         {
             _start = _current;
@@ -172,6 +190,7 @@ public class Lexer(string source)
             ScanToken();
         }
 
+        _cancellationToken.ThrowIfCancellationRequested();
         _tokens.Add(new Token(TokenType.EOF, "", null, _line));
         return _tokens;
     }
@@ -206,9 +225,12 @@ public class Lexer(string source)
     /// the original stream could agree with a fresh-state lex from there onward.
     /// </summary>
     internal static List<(Token Token, bool NeutralAfter)> Relex(
-        string source, int fromOffset, int startLine, int templateInterpolationDepth = 0)
+        string source, int fromOffset, int startLine, int templateInterpolationDepth = 0,
+        CancellationToken cancellationToken = default)
     {
-        var lexer = new Lexer(source, fromOffset, startLine, templateInterpolationDepth) { JsxTolerant = true };
+        cancellationToken.ThrowIfCancellationRequested();
+        var lexer = new Lexer(source, fromOffset, startLine, templateInterpolationDepth) { JsxTolerant = true }
+            .WithCancellation(cancellationToken);
         var result = new List<(Token, bool)>();
         while (!lexer.IsAtEnd())
         {
@@ -220,6 +242,7 @@ public class Lexer(string source)
             for (int i = before; i < lexer._tokens.Count; i++)
                 result.Add((lexer._tokens[i], neutral));
         }
+        cancellationToken.ThrowIfCancellationRequested();
         result.Add((new Token(TokenType.EOF, "", null, lexer._line, source.Length), true));
         return result;
     }
@@ -477,7 +500,10 @@ public class Lexer(string source)
         // before `>` rules out a JSX closer and preserves ordinary `/regex/`
         // after a relational `<` expression.
         while (i < _source.Length && _source[i] is not '>' and not '/' and not '\r' and not '\n')
+        {
+            CheckCancellation();
             i++;
+        }
         return i < _source.Length && _source[i] == '>';
     }
 
@@ -778,21 +804,23 @@ public class Lexer(string source)
         return c == '0' || c == '1';
     }
 
-    private static BigInteger BinaryStringToBigInteger(string binary)
+    private BigInteger BinaryStringToBigInteger(string binary)
     {
         BigInteger result = 0;
         foreach (char c in binary)
         {
+            CheckCancellation();
             result = result * 2 + (c - '0');
         }
         return result;
     }
 
-    private static BigInteger OctalStringToBigInteger(string octal)
+    private BigInteger OctalStringToBigInteger(string octal)
     {
         BigInteger result = 0;
         foreach (char c in octal)
         {
+            CheckCancellation();
             result = result * 8 + (c - '0');
         }
         return result;
@@ -953,6 +981,7 @@ public class Lexer(string source)
         if (_hasEmittedCodeToken) return;
         for (int i = bodyStart; i < bodyEndExclusive; i++)
         {
+            CheckCancellation();
             if (_source[i] != '@') continue;
             int cursor = i + 1;
             // Longest names first — "@jsx" is a prefix of the others.
@@ -987,10 +1016,16 @@ public class Lexer(string source)
         if (position < endExclusive && _source[position] is not (' ' or '\t' or '\r' or '\n'))
             return false;
         while (position < endExclusive && _source[position] is ' ' or '\t' or '\r' or '\n')
+        {
+            CheckCancellation();
             position++;
+        }
         int valueStart = position;
         while (position < endExclusive && !char.IsWhiteSpace(_source[position]) && _source[position] != '*')
+        {
+            CheckCancellation();
             position++;
+        }
         if (position == valueStart) return false;
 
         value = _source[valueStart..position];
@@ -1445,6 +1480,7 @@ public class Lexer(string source)
 
     private bool Match(char expected)
     {
+        CheckCancellation();
         if (IsAtEnd()) return false;
         if (_source[_current] != expected) return false;
 
@@ -1458,7 +1494,11 @@ public class Lexer(string source)
 
     private bool IsAtEnd() => _current >= _source.Length;
 
-    private char Advance() => _source[_current++];
+    private char Advance()
+    {
+        CheckCancellation();
+        return _source[_current++];
+    }
 
     private void AddToken(TokenType type) => AddToken(type, null);
 
@@ -1520,7 +1560,10 @@ public class Lexer(string source)
         // Skip leading whitespace inside the comment body.
         int i = bodyStart;
         while (i < bodyEndExclusive && (_source[i] == ' ' || _source[i] == '\t'))
+        {
+            CheckCancellation();
             i++;
+        }
         if (i >= bodyEndExclusive || _source[i] != '@')
             return;
         i++; // consume @

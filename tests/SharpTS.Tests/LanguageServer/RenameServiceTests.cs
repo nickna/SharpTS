@@ -11,6 +11,64 @@ namespace SharpTS.Tests.LanguageServer;
 
 public class RenameServiceTests
 {
+    [Theory]
+    [InlineData("public")]
+    [InlineData("protected")]
+    [InlineData("private")]
+    [InlineData("readonly")]
+    public void ParameterPropertiesRefuseRenameFromEveryFacetInACompleteWorkspace(string modifier)
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile("tsconfig.json",
+            """{"compilerOptions":{"noLib":true,"types":[]},"include":["*.ts"]}""");
+        string source = $$"""
+            class Box {
+                constructor({{modifier}} value: number) { value; }
+                read(): number { return this.value; }
+            }
+            const box = new Box(1);
+            """;
+        string path = directory.CreateFile("box.ts", source);
+        var open = new Dictionary<string, string> { [path] = source };
+        using var references = new ReferenceService();
+        var rename = new RenameService(references);
+
+        // The constructor-local binding still has useful references. A complete graph does not
+        // make editing that lexical facet safe while its separate property facet is uncoordinated.
+        NavigationReferenceResult local = references.FindReferenceResult(path, source,
+            PositionOf(source, "value", occurrence: 1), true, open, [directory.Path],
+            includeDeclarationFacets: true);
+        Assert.True(local.IsComplete);
+        Assert.False(local.IsRenameEligible);
+        Assert.True(local.Locations.Count >= 2);
+        for (int occurrence = 0; occurrence < 3; occurrence++)
+        {
+            Position position = PositionOf(source, "value", occurrence);
+            Assert.Null(rename.Prepare(path, source, position, open, [directory.Path]));
+            Assert.Null(rename.Rename(path, source, position, "renamed", open, [directory.Path]));
+        }
+    }
+
+    [Fact]
+    public void OrdinaryConstructorParametersKeepIndependentLexicalRename()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile("tsconfig.json",
+            """{"compilerOptions":{"noLib":true,"types":[]},"include":["*.ts"]}""");
+        const string source = "class Box { constructor(value: number) { value; } } const box = new Box(1);";
+        string path = directory.CreateFile("box.ts", source);
+        var open = new Dictionary<string, string> { [path] = source };
+        using var references = new ReferenceService();
+        var rename = new RenameService(references);
+        Position position = PositionOf(source, "value", occurrence: 1);
+
+        Assert.NotNull(rename.Prepare(path, source, position, open, [directory.Path]));
+        WorkspaceEdit? edit = rename.Rename(path, source, position, "renamed", open, [directory.Path]);
+
+        Assert.NotNull(edit?.Changes);
+        Assert.Equal(2, Assert.Single(edit.Changes).Value.Count());
+    }
+
     [Fact]
     public void CompleteWorkspaceRenameEditsDeclarationsAliasesAndClosedImporters()
     {

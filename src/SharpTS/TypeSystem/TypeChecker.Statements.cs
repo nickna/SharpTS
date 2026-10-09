@@ -27,14 +27,20 @@ public partial class TypeChecker
     /// <param name="stmt">The statement AST node to type-check.</param>
     private void CheckStmt(Stmt stmt)
     {
+        using var editorScope = stmt is Stmt.For or Stmt.ForOf or Stmt.ForIn
+            ? EnterEditorLexicalScope(stmt, EditorSyntaxRole.Whole) : null;
+        if (EditorFacts.IsEnabled) BeginEditorDeclaration(stmt);
         DispatchStmt(stmt);
+        if (EditorFacts.IsEnabled) CompleteEditorDeclaration(stmt);
     }
 
     // Statement handlers - called by the dispatch switch
 
     internal VoidResult VisitBlock(Stmt.Block stmt)
     {
-        CheckBlock(stmt.Statements, new TypeEnvironment(_environment));
+        var blockEnvironment = new TypeEnvironment(_environment);
+        RegisterEditorScope(stmt, blockEnvironment);
+        CheckBlock(stmt.Statements, blockEnvironment);
         return VoidResult.Instance;
     }
 
@@ -116,7 +122,7 @@ public partial class TypeChecker
             // never referenced, so resolve that targeted declaration form eagerly.
             if (_hasDefaultLibraries &&
                 stmt.TypeDefinition.Contains("typeof globalThis", StringComparison.Ordinal))
-                _ = ResolveAnnotation(stmt.TypeDefinition, stmt.TypeDefinitionNode);
+                _ = ResolveAnnotation(stmt.TypeDefinition, stmt.TypeDefinitionNode, stmt);
         }
         // After defining (so the alias stays usable even when a clause is malformed): validate
         // the infer declarations of every conditional type in the alias body.
@@ -208,7 +214,7 @@ public partial class TypeChecker
         // initializer either and must still be rejected.
         TypeInfo? declaredType = stmt.TypeAnnotation == "unique symbol" && stmt.IsDeclare
             ? new TypeInfo.UniqueSymbol(stmt.Name.Lexeme, $"typeof {stmt.Name.Lexeme}")
-            : ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode);
+            : ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt);
         if (stmt.TypeAnnotationNode is NamedTypeNode { Name: var annotatedAlias } &&
             _recursiveGenericIndexedAliases.Contains(annotatedAlias))
             _excessivelyRecursiveVariables.Add(stmt.Name.Lexeme);
@@ -296,6 +302,7 @@ public partial class TypeChecker
             CheckVarRedeclaration(stmt, preExistingType, declaredType!);
             // Record the declared type for assignment checking
             RecordDeclaredType(stmt.Name.Lexeme, declaredType!);
+            RecordEditorFinalDeclaration(stmt.Name, declaredType!);
             // Register as local variable for escape analysis
             _escapeAnalyzer.DefineVariable(stmt.Name.Lexeme);
             RecordDefiniteAssignmentDeclaration(variableSymbol, isAssigned: true, declaredType!);
@@ -337,18 +344,29 @@ public partial class TypeChecker
                 }
 
                 TypeInfo initializerType;
-                if (declaredType != null && initializer is Expr.ArrowFunction arrowFn)
+                bool copiedInitializer = !ReferenceEquals(initializer, stmt.Initializer);
+                if (copiedInitializer) BeginEditorExpression(stmt.Initializer);
+                try
                 {
-                    initializerType = CheckArrowFunction(arrowFn, declaredType);
+                    if (declaredType != null && initializer is Expr.ArrowFunction arrowFn)
+                    {
+                        initializerType = CheckArrowFunction(arrowFn, declaredType);
+                    }
+                    else
+                    {
+                        // An un-annotated synthetic temp may carry a contextual shape (the destructuring
+                        // binding pattern) used ONLY to guide inference — never as the binding's type and with
+                        // no compatibility check; the inferred result below is still what's kept (#783).
+                        TypeInfo? context = declaredType ?? ResolveAnnotation(null, stmt.InitializerContext);
+                        initializerType = CheckExprWithContext(initializer, context);
+                    }
                 }
-                else
+                catch
                 {
-                    // An un-annotated synthetic temp may carry a contextual shape (the destructuring
-                    // binding pattern) used ONLY to guide inference — never as the binding's type and with
-                    // no compatibility check; the inferred result below is still what's kept (#783).
-                    TypeInfo? context = declaredType ?? ResolveAnnotation(null, stmt.InitializerContext);
-                    initializerType = CheckExprWithContext(initializer, context);
+                    if (copiedInitializer) FailEditorExpression(stmt.Initializer);
+                    throw;
                 }
+                if (copiedInitializer) RecordEditorExpressionType(stmt.Initializer, initializerType);
 
                 if (declaredType != null)
                 {
@@ -383,6 +401,7 @@ public partial class TypeChecker
             CheckVarRedeclaration(stmt, preExistingType, declaredType!);
             // Record the declared type for assignment checking
             RecordDeclaredType(stmt.Name.Lexeme, declaredType!);
+            RecordEditorFinalDeclaration(stmt.Name, declaredType!);
             RecordDefiniteAssignmentDeclaration(variableSymbol, isAssigned: true, declaredType!);
             return VoidResult.Instance;
         }
@@ -392,6 +411,7 @@ public partial class TypeChecker
         CheckVarRedeclaration(stmt, preExistingType, declaredType);
         // Record the declared type for assignment checking
         RecordDeclaredType(stmt.Name.Lexeme, declaredType);
+        RecordEditorFinalDeclaration(stmt.Name, declaredType);
         RecordDefiniteAssignmentDeclaration(
             variableSymbol,
             isAssigned: stmt.IsDeclare ||
@@ -692,7 +712,7 @@ public partial class TypeChecker
         }
         else if (stmt.TypeAnnotation != null)
         {
-            constDeclaredType = ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode)!;
+            constDeclaredType = ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt)!;
             if (constDeclaredType is TypeInfo.Any)
                 ReportUnknownTypeName(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt.Name.Line);
             _environment.Define(stmt.Name.Lexeme, constDeclaredType);
@@ -716,6 +736,7 @@ public partial class TypeChecker
         // undefined diagnostic.
         _environment.Define(stmt.Name.Lexeme, initializerFlowType ?? constDeclaredType);
         RecordDeclaredType(stmt.Name.Lexeme, constDeclaredType);
+        RecordEditorFinalDeclaration(stmt.Name, constDeclaredType);
         // Register as local variable for escape analysis
         _escapeAnalyzer.DefineVariable(stmt.Name.Lexeme);
         return VoidResult.Instance;
@@ -1399,6 +1420,7 @@ public partial class TypeChecker
             elementType = ResolveAwaitedType(elementType);
 
         TypeEnvironment forOfEnv = new(_environment);
+        RegisterEditorScope(stmt, forOfEnv, EditorScopeKind.Block, EditorSyntaxRole.Whole);
         DeclareValue(forOfEnv, stmt.Variable, elementType);
 
         try
@@ -1461,6 +1483,7 @@ public partial class TypeChecker
         };
 
         TypeEnvironment forInEnv = new(_environment);
+        RegisterEditorScope(stmt, forInEnv, EditorScopeKind.Block, EditorSyntaxRole.Whole);
         if (stmt.IsDeclaration)
             DeclareValue(forInEnv, stmt.Variable, loopKeyType);
         else
@@ -1793,7 +1816,7 @@ public partial class TypeChecker
             TypeInfo? declaredType = null;
             if (binding.TypeAnnotation != null)
             {
-                declaredType = ResolveAnnotation(binding.TypeAnnotation, binding.TypeAnnotationNode);
+                declaredType = ResolveAnnotation(binding.TypeAnnotation, binding.TypeAnnotationNode, binding);
                 if (declaredType != null && !IsCompatible(declaredType, initType))
                 {
                     throw new TypeMismatchException(declaredType, initType, binding.Name!.Line, tsCode: "TS2322");

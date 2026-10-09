@@ -55,8 +55,8 @@ public partial class TypeChecker
             result = [];
             foreach (var tp in decls)
             {
-                TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
-                TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
+                TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode, tp, EditorAnnotationSlot.Constraint);
+                TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode, tp, EditorAnnotationSlot.Default);
                 var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
                 result.Add(typeParam);
                 DefineSourceTypeParameter(env, tp, typeParam);
@@ -365,7 +365,7 @@ public partial class TypeChecker
 
             foreach (var param in arrow.Parameters)
             {
-                TypeInfo paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode)
+                TypeInfo paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode, param)
                     ?? TypeInfo.Any.Shared;
 
                 if (param.IsRest)
@@ -399,7 +399,7 @@ public partial class TypeChecker
             else if (arrow.ReturnType != null)
             {
                 // Use the return type from the arrow function
-                returnType = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode)!;
+                returnType = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode, arrow, EditorAnnotationSlot.Return)!;
             }
             else
             {
@@ -416,7 +416,7 @@ public partial class TypeChecker
             }
 
             // Handle 'this' type
-            TypeInfo? thisType = ResolveAnnotation(arrow.ThisType, arrow.ThisTypeNode);
+            TypeInfo? thisType = ResolveAnnotation(arrow.ThisType, arrow.ThisTypeNode, arrow, EditorAnnotationSlot.This);
             if (arrow.HasOwnThis && thisType == null)
             {
                 thisType = TypeInfo.Any.Shared;
@@ -455,6 +455,7 @@ public partial class TypeChecker
         {
             // Build the function type
             TypeEnvironment funcEnv = new(_environment);
+            RegisterEditorScope(funcStmt, funcEnv, EditorScopeKind.Function, EditorSyntaxRole.Whole);
 
             // Set up environment for parsing type parameters and constraints
             TypeEnvironment previousEnvForParsing = _environment;
@@ -472,13 +473,14 @@ public partial class TypeChecker
                 var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
                     funcStmt.Parameters,
                     validateDefaults: false, // Don't validate defaults during hoisting
-                    contextName: $"function '{funcStmt.Name.Lexeme}'"
+                    contextName: $"function '{funcStmt.Name.Lexeme}'",
+                    editorOwner: funcStmt
                 );
 
-                TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode)
+                TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode, funcStmt, EditorAnnotationSlot.Return)
                     ?? TypeInfo.Any.Shared; // Any during hoisting — real type inferred when body is checked
 
-                TypeInfo? thisType = ResolveAnnotation(funcStmt.ThisType, funcStmt.ThisTypeNode);
+                TypeInfo? thisType = ResolveAnnotation(funcStmt.ThisType, funcStmt.ThisTypeNode, funcStmt, EditorAnnotationSlot.This);
 
                 // Restore environment before defining function type
                 _environment = previousEnvForParsing;
@@ -509,6 +511,7 @@ public partial class TypeChecker
                 }
 
                 // Register the function type (hoisting)
+                RegisterEditorSignature(funcType, funcStmt, funcStmt.Name);
                 _environment.Define(funcName, funcType);
             }
             catch
@@ -537,6 +540,7 @@ public partial class TypeChecker
 
         // Build the function type for this declaration
         TypeEnvironment funcEnv = new(_environment);
+        RegisterEditorScope(funcStmt, funcEnv, EditorScopeKind.Function, EditorSyntaxRole.Whole);
 
         // Set up environment for parsing type parameters and constraints
         TypeEnvironment previousEnvForParsing = _environment;
@@ -552,7 +556,8 @@ public partial class TypeChecker
         var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
             funcStmt.Parameters,
             validateDefaults: true,
-            contextName: $"function '{funcStmt.Name.Lexeme}'"
+            contextName: $"function '{funcStmt.Name.Lexeme}'",
+            editorOwner: funcStmt
         );
 
         // A return/this type may reference a parameter via `typeof param`
@@ -563,7 +568,7 @@ public partial class TypeChecker
             funcEnv.Define(paramNames[i], paramTypes[i]);
 
         bool inferringReturnType = funcStmt.ReturnType == null;
-        TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode)
+        TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode, funcStmt, EditorAnnotationSlot.Return)
             ?? TypeInfo.Inferred.Shared;
 
         // Validate type predicate return types
@@ -571,7 +576,7 @@ public partial class TypeChecker
             ValidateTypePredicateReturnType(returnType, funcStmt.Parameters, funcStmt.Name.Lexeme);
 
         // Parse explicit 'this' type if present
-        TypeInfo? thisType = ResolveAnnotation(funcStmt.ThisType, funcStmt.ThisTypeNode);
+        TypeInfo? thisType = ResolveAnnotation(funcStmt.ThisType, funcStmt.ThisTypeNode, funcStmt, EditorAnnotationSlot.This);
 
         _environment = previousEnvForParsing;
 
@@ -591,6 +596,7 @@ public partial class TypeChecker
         }
 
         var thisFuncType = new TypeInfo.Function(paramTypes, funcReturnType, requiredParams, hasRest, thisType, paramNames);
+        RegisterEditorSignature(thisFuncType, funcStmt, funcStmt.Name);
         var overloadKey = (_environment, funcName);
 
         // Check if this is an overload signature (no body)
@@ -626,9 +632,11 @@ public partial class TypeChecker
                     ambientSignatures = [];
                     _ambientOverloadSignatures[overloadKey] = ambientSignatures;
                 }
-                ambientSignatures.Add(typeParams is { Count: > 0 }
+                TypeInfo ambientSignature = typeParams is { Count: > 0 }
                     ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
-                    : thisFuncType);
+                    : thisFuncType;
+                ambientSignatures.Add(ambientSignature);
+                RegisterEditorSignature(ambientSignature, funcStmt, funcStmt.Name);
                 TypeInfo ambientType = ambientSignatures.Count == 1
                     ? ambientSignatures[0]
                     : new TypeInfo.OverloadSet(new List<TypeInfo>(ambientSignatures));
@@ -682,6 +690,11 @@ public partial class TypeChecker
         }
 
         // Define or update the function type (may have been hoisted earlier)
+        RegisterEditorSignature(funcType, funcStmt, funcStmt.Name);
+        if (funcType is TypeInfo.OverloadedFunction publicOverload)
+            RegisterEditorPublicSignatures(funcType, publicOverload.Signatures);
+        else if (funcType is TypeInfo.GenericOverloadedFunction publicGenericOverload)
+            RegisterEditorPublicSignatures(funcType, publicGenericOverload.Signatures);
         // For overloaded functions, we need to update with the complete type
         if (!_environment.IsDefinedLocally(funcName) || funcType is TypeInfo.OverloadedFunction or TypeInfo.GenericOverloadedFunction)
         {
@@ -739,6 +752,8 @@ public partial class TypeChecker
         // The enclosing environment, where the (possibly refined) function type is registered.
         TypeEnvironment previousEnv = _environment;
 
+        RegisterEditorScope(funcStmt, funcEnv, EditorScopeKind.Function, EditorSyntaxRole.Whole);
+
         // Add parameters to function environment and check body. Body-scope binding widens a bare
         // `?`-optional parameter with `| undefined` (the caller may omit it) — the function's own
         // callable signature (paramTypes, used for thisFuncType et al.) keeps the declared type.
@@ -765,6 +780,7 @@ public partial class TypeChecker
         var previousInferredYieldTypes = _inferredYieldTypes;
 
         _environment = funcEnv;
+        if (!suppress) MarkEditorBodyEntered(funcStmt);
         if (inferringReturnType)
         {
             _inferredReturnTypes = new List<TypeInfo>();
@@ -878,7 +894,10 @@ public partial class TypeChecker
                 var updatedFuncType = typeParams != null && typeParams.Count > 0
                     ? (TypeInfo)new TypeInfo.GenericFunction(typeParams, paramTypes, inferredReturn, requiredParams, hasRest, thisType, paramNames)
                     : new TypeInfo.Function(paramTypes, inferredReturn, requiredParams, hasRest, thisType, paramNames);
+                if (EditorFacts.IsEnabled && previousEnv.Get(funcName) is { } oldFunction)
+                    CopyEditorPublicSignatures(oldFunction, updatedFuncType);
                 previousEnv.Define(funcName, updatedFuncType);
+                RegisterEditorSignature(updatedFuncType, funcStmt, funcStmt.Name);
                 if (suppress)
                 {
                     // Memoize so later passes re-register without re-checking the body.

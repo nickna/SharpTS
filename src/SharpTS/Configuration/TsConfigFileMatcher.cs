@@ -1,3 +1,4 @@
+using SharpTS.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -27,8 +28,9 @@ internal static class TsConfigFileMatcher
         {
             foreach (string file in files)
             {
+                CompilerFileSystem.ThrowIfCancellationRequested();
                 string full = Path.GetFullPath(file);
-                if (!File.Exists(full))
+                if (!CompilerFileSystem.FileExists(full))
                     throw new Exception($"Error: tsconfig.json: file '{full}' listed in 'files' does not exist.");
                 if (IsSupportedSource(full, allowJs))
                     roots.Add(full);
@@ -56,9 +58,11 @@ internal static class TsConfigFileMatcher
             .ToArray();
         foreach (string include in effectiveIncludes)
         {
+            CompilerFileSystem.ThrowIfCancellationRequested();
             string pattern = NormalizeInclude(include);
             foreach (string candidate in EnumerateCandidates(pattern))
             {
+                CompilerFileSystem.ThrowIfCancellationRequested();
                 string full = Path.GetFullPath(candidate);
                 if (!IsSupportedSource(full, allowJs))
                     continue;
@@ -88,7 +92,7 @@ internal static class TsConfigFileMatcher
         string full = Path.GetFullPath(include);
         if (ContainsWildcard(full))
             return full;
-        if (File.Exists(full) || Path.HasExtension(full))
+        if (CompilerFileSystem.FileExists(full) || Path.HasExtension(full))
             return full;
         return Path.Combine(full, "**", "*");
     }
@@ -97,13 +101,13 @@ internal static class TsConfigFileMatcher
     {
         if (!ContainsWildcard(pattern))
         {
-            if (File.Exists(pattern))
+            if (CompilerFileSystem.FileExists(pattern))
                 yield return pattern;
             yield break;
         }
 
         string root = SearchRoot(pattern);
-        if (!Directory.Exists(root))
+        if (!CompilerFileSystem.DirectoryExists(root))
             yield break;
 
         var matches = CreateMatcher(pattern);
@@ -113,7 +117,7 @@ internal static class TsConfigFileMatcher
             IgnoreInaccessible = true,
             AttributesToSkip = FileAttributes.ReparsePoint,
         };
-        foreach (string file in Directory.EnumerateFiles(root, "*", enumeration))
+        foreach (string file in CompilerFileSystem.EnumerateFiles(root, "*", enumeration))
         {
             if (matches(file))
                 yield return file;
