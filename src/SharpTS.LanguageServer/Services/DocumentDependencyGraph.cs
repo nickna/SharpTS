@@ -1,3 +1,4 @@
+using SharpTS.Configuration;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 
@@ -31,8 +32,49 @@ public sealed class DocumentDependencyGraph
             statements,
             cancellationToken);
 
+        return Update(path, dependencies, cancellationToken);
+    }
+
+    internal IReadOnlySet<string> Update(
+        DocumentSnapshot document,
+        IReadOnlyDictionary<string, string> overlay,
+        DiagnosticsDocumentInputs inputs,
+        CancellationToken cancellationToken)
+    {
+        if (document.FilePath is null)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (inputs.Dependencies is null)
+            return Update(document, overlay, inputs.Statements, cancellationToken);
+
+        // The checked graph already used the selected project's resolution rules and includes
+        // closed intermediaries. Retain its transitive physical dependencies for this open file.
+        var edges = inputs.Dependencies.ToLookup(edge => edge.SourcePath, StringComparer.OrdinalIgnoreCase);
+        var dependencies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { document.FilePath };
+        Queue<string> pending = new([document.FilePath]);
+        while (pending.TryDequeue(out string? source))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (AnalysisDependency edge in edges[source])
+            {
+                if (Path.IsPathFullyQualified(edge.TargetPath))
+                    dependencies.Add(Path.GetFullPath(edge.TargetPath));
+                if (visited.Add(edge.TargetPath))
+                    pending.Enqueue(edge.TargetPath);
+            }
+        }
+        return Update(document.FilePath, dependencies, cancellationToken);
+    }
+
+    private IReadOnlySet<string> Update(
+        string path,
+        HashSet<string> dependencies,
+        CancellationToken cancellationToken)
+    {
         lock (_gate)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             HashSet<string> affected = CollectImporters(path);
             RemoveForwardEdges(path);
 
@@ -117,7 +159,21 @@ public sealed class DocumentDependencyGraph
     {
         var dependencies = new HashSet<string>(
             StringComparer.OrdinalIgnoreCase);
-        var resolver = new ModuleResolver(path, overlay, fallBackToFileSystem: true);
+        ModuleResolutionOptions resolution = ModuleResolutionOptions.Default;
+        try
+        {
+            string? configPath = TsConfigLoader.Discover(Path.GetDirectoryName(path)!);
+            if (configPath is not null)
+                resolution = TsConfigLoader.Load(configPath).ModuleResolution;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch
+        {
+            // A broken configuration still permits ordinary relative dependency tracking.
+        }
+        var resolver = new ModuleResolver(path, resolution, overlay,
+            TypeScriptProgramOptions.Disabled, virtualFilesFallBackToDisk: true)
+            .WithCancellation(cancellationToken);
 
         foreach ((string Specifier, ResolutionKind Kind) dependency in
                  EnumerateSpecifiers(statements))
@@ -132,6 +188,7 @@ public sealed class DocumentDependencyGraph
                 if (Path.IsPathRooted(resolved))
                     dependencies.Add(Path.GetFullPath(resolved));
             }
+            catch (OperationCanceledException) { throw; }
             catch
             {
                 // An unresolved edge cannot participate in invalidation yet. The importing

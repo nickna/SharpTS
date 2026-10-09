@@ -114,6 +114,20 @@ public sealed class EmittedFunctionAttributesRuntime
         internal set => SetHandle(ref _nonConstructibleCtor, value);
     }
 
+    private TypeBuilder? _sourceParametersType;
+    public TypeBuilder SourceParametersType
+    {
+        get => Require(_sourceParametersType);
+        internal set => SetHandle(ref _sourceParametersType, value);
+    }
+
+    private ConstructorBuilder? _sourceParametersCtor;
+    public ConstructorBuilder SourceParametersCtor
+    {
+        get => Require(_sourceParametersCtor);
+        internal set => SetHandle(ref _sourceParametersCtor, value);
+    }
+
     private TypeBuilder? _expectsThisType;
     public TypeBuilder ExpectsThisType
     {
@@ -166,6 +180,8 @@ public sealed class EmittedFunctionAttributesRuntime
         _ = NonConstructibleCtor;
         _ = ExpectsThisType;
         _ = ExpectsThisCtor;
+        _ = SourceParametersType;
+        _ = SourceParametersCtor;
         IsComplete = true;
     }
 }

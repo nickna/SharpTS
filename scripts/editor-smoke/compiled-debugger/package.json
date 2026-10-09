@@ -1,0 +1,9 @@
+{
+  "name": "compiled-debugger-acceptance",
+  "publisher": "sharpts-tests",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "vscode": "^1.101.0" },
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.cjs"
+}

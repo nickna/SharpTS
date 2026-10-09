@@ -1,3 +1,5 @@
+using SharpTS.Parsing;
+
 namespace SharpTS.IO;
 
 /// <summary>Read-only filesystem inputs consumed by configuration and module loading.</summary>
@@ -6,6 +8,11 @@ public interface ICompilerFileSystem
     bool FileExists(string path);
     bool DirectoryExists(string path);
     string ReadAllText(string path);
+    /// <summary>
+    /// Reads one source snapshot. Text-backed readers retain their captured text; physical
+    /// readers also preserve its original byte checksum without a second read.
+    /// </summary>
+    SourceDocument ReadSourceDocument(string path) => new(path, ReadAllText(path));
     FileAttributes GetAttributes(string path);
     IReadOnlyList<string> EnumerateFiles(string path, string searchPattern, EnumerationOptions options);
     IReadOnlyList<string> EnumerateDirectories(string path, string searchPattern, EnumerationOptions options);
@@ -52,6 +59,14 @@ public static class CompilerFileSystem
         string text = Current.ReadAllText(path);
         ThrowIfCancellationRequested();
         return text;
+    }
+
+    public static SourceDocument ReadSourceDocument(string path)
+    {
+        ThrowIfCancellationRequested();
+        SourceDocument document = Current.ReadSourceDocument(path);
+        ThrowIfCancellationRequested();
+        return document;
     }
 
     public static FileAttributes GetAttributes(string path)
@@ -121,6 +136,8 @@ public static class CompilerFileSystem
         public bool FileExists(string path) => File.Exists(path);
         public bool DirectoryExists(string path) => Directory.Exists(path);
         public string ReadAllText(string path) => File.ReadAllText(path);
+        public SourceDocument ReadSourceDocument(string path) =>
+            SourceDocument.FromBytes(path, File.ReadAllBytes(path));
         public FileAttributes GetAttributes(string path) => File.GetAttributes(path);
         public IReadOnlyList<string> EnumerateFiles(string path, string searchPattern, EnumerationOptions options) =>
             Materialize(Directory.EnumerateFiles(path, searchPattern, options));

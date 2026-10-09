@@ -210,6 +210,7 @@ public partial class RuntimeEmitter
         // Defined+created before EmitTSFunctionClass so the ctor IL can ldtoken the type for the
         // IsDefined read that backstops the (ref-asm-fragile) parameter-name check. (#738)
         EmitExpectsThisAttribute(moduleBuilder, runtime.FunctionAttributes);
+        EmitSourceParametersAttribute(moduleBuilder, runtime.FunctionAttributes);
         runtime.FunctionAttributes.CompleteEmission();
 
         if (features.CompactObjectRecordStableIteratorShapes.Count > 0)

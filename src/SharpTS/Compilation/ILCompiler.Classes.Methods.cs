@@ -1284,11 +1284,19 @@ public partial class ILCompiler
         MethodBuilder wrapper,
         MethodBuilder core)
     {
+        if (core.GetParameters().Length > 0)
+            wrapper.SetCustomAttribute(_runtime!.FunctionAttributes.SourceParametersCtor,
+                CustomAttributeEncoder.EmptyBlob);
         var il = wrapper.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         var parameters = core.GetParameters();
         for (int i = 0; i < parameters.Length; i++)
+        {
+            // The source body lives in the typed core, but the public method's signature
+            // should expose the same source argument names to reflection and debuggers.
+            wrapper.DefineParameter(i + 1, parameters[i].Attributes, parameters[i].Name);
             il.Emit(OpCodes.Ldarg, i + 1);
+        }
         il.Emit(OpCodes.Call, core);
         il.Emit(OpCodes.Box, core.ReturnType);
         il.Emit(OpCodes.Ret);

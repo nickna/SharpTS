@@ -101,14 +101,14 @@ public sealed class EmittedReceiverGuardRuntimeTests
             var coerce = function.GetMethod("CoercePrimitiveArgs", BindingFlags.NonPublic | BindingFlags.Static)!;
             Assert.Null(cache.GetValue(null));
             var parameters = typeof(EmittedReceiverGuardRuntimeTests).GetMethod(nameof(ReceiverEcho))!.GetParameters();
-            object?[] numberArgs = [123.0]; coerce.Invoke(null, [parameters, numberArgs]);
+            object?[] numberArgs = [123.0]; coerce.Invoke(null, [parameters, numberArgs, true]);
             Assert.Equal("123", Assert.IsType<string>(numberArgs[0]));
             var resolved = Assert.IsAssignableFrom<MethodInfo>(cache.GetValue(null));
             Assert.Same(type, resolved.DeclaringType); Assert.Equal(guard.MetadataToken, resolved.MetadataToken);
             foreach (object? value in new object?[] { null, undefined, symbol })
             {
                 object?[] receiverArgs = [value];
-                AssertGuestError(() => coerce.Invoke(null, [parameters, receiverArgs]), ReferenceEquals(value, symbol));
+                AssertGuestError(() => coerce.Invoke(null, [parameters, receiverArgs, true]), ReferenceEquals(value, symbol));
             }
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
             Assert.Equal(hosted, loaded.GetReferencedAssemblies().Any(a => a.Name == "SharpTS.Hosting.Abstractions"));

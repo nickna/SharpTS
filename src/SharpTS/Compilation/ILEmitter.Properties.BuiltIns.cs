@@ -248,21 +248,9 @@ public partial class ILEmitter
             string resolvedName = _ctx.ResolveFunctionName(v.Name.Lexeme);
             if (_ctx.Functions.TryGetValue(resolvedName, out var methodBuilder))
             {
-                // Count parameters excluding optional, rest, and internal (__this, etc.)
-                var parameters = methodBuilder.GetParameters();
-                foreach (var param in parameters)
-                {
-                    // Skip optional parameters
-                    if (param.IsOptional)
-                        continue;
-                    // Skip rest parameters (List<object>)
-                    if (param.ParameterType == typeof(List<object>))
-                        continue;
-                    // Skip internal parameters starting with "__"
-                    if (param.Name?.StartsWith("__") == true)
-                        continue;
-                    arity++;
-                }
+                // Source metadata retains default/rest rules and includes legal source names
+                // such as __this; parameter names alone cannot identify internal slots.
+                arity = _ctx.GetFunctionLength(methodBuilder);
                 return true;
             }
         }

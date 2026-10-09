@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "verifiedUtc": "2026-10-09T04:02:47.55Z",
+  "status": "passed",
+  "source": {
+    "baseCommit": "f10a2d4785379c2beb88bbceabfdeb83ea7108e0",
+    "workingTreeChangesIncluded": true,
+    "configuration": "Debug",
+    "shippingInputs": [
+      {
+        "path": "src/SharpTS.LanguageServer/Services/DiagnosticsCoordinator.cs",
+        "sha256": "0aaeac139c015d2c18808f7320a92a64c2bc81f1146de94eadb48d97960942f4"
+      },
+      {
+        "path": "src/SharpTS.LanguageServer/Services/DiagnosticsService.cs",
+        "sha256": "36297b2ca729800d9fd5199b6be186341a5f9a2d48877dfb20581a7f71c7f8a2"
+      },
+      {
+        "path": "src/SharpTS.LanguageServer/Services/DocumentDependencyGraph.cs",
+        "sha256": "c0b132ca378dc240342ba9d512a8de31df1dd954e9544f7f486d85005b641c49"
+      },
+      {
+        "path": "src/SharpTS/Compilation/CompilationContext.cs",
+        "sha256": "dfb0be404a38134153fe6c1d69c25888caa6abc7cf49fe2fdb99fbd9a0a75df6"
+      },
+      {
+        "path": "src/SharpTS/Compilation/EmittedFunctionAttributesRuntime.cs",
+        "sha256": "903e76ec868fbb5404d17213353d672aee4051a796fcfa7f47a1e695b90f51b5"
+      },
+      {
+        "path": "src/SharpTS/Compilation/ILCompiler.Classes.Methods.cs",
+        "sha256": "65121b22b60b1a219b2c0632d1caed80a9f13e906cf668fceed25235ba56616c"
+      },
+      {
+        "path": "src/SharpTS/Compilation/ILCompiler.cs",
+        "sha256": "3d3f83865bee670b067d498898f50f22d070ce1e7d699ea46dc4295ae4486feb"
+      },
+      {
+        "path": "src/SharpTS/Compilation/ILEmitter.Properties.BuiltIns.cs",
+        "sha256": "93c71659869c9fff1f2dbf09650fd0a876f14557da716f03e707c8f9b5144c35"
+      },
+      {
+        "path": "src/SharpTS/Compilation/RuntimeEmitter.TSFunction.cs",
+        "sha256": "b40dab2fea7f16f3c08af7bba995aea887669e485e15a743380b4515acb64ff6"
+      },
+      {
+        "path": "src/SharpTS/Compilation/RuntimeEmitter.cs",
+        "sha256": "e1a6d7b95e0af1e271509eb36579ebcd3a946a295357481f7f8a5ef6c2353753"
+      },
+      {
+        "path": "src/SharpTS/Compilation/Symbols/DebugInfoCollector.cs",
+        "sha256": "90828679e3bfe03a8cc25ba992f5000b17b591582b472b268496cf08fc0b11b7"
+      },
+      {
+        "path": "src/SharpTS/IO/ICompilerFileSystem.cs",
+        "sha256": "ecf6722f331b33097c4e8d2ce7160760a5c880c2cda387f2c9c495abe5c6e73e"
+      },
+      {
+        "path": "src/SharpTS/Modules/ModuleResolver.cs",
+        "sha256": "075fda2214d48868273d3607a2501f783278b5541b056b9c5ba070f5e9c5986a"
+      },
+      {
+        "path": "src/SharpTS/Parsing/SourceDocument.cs",
+        "sha256": "b6b868f137d4c8d6e70abc46617d9f629a0bdfe2a2bdaeac994819e266ac6f87"
+      }
+    ]
+  },
+  "environment": {
+    "platform": "win32-arm64",
+    "editor": "VS Code 1.134.0",
+    "csharp": "2.140.9",
+    "dotnetRuntimeExtension": "3.1.0",
+    "dotnetSdk": "10.0.401",
+    "runnerNode": "v25.5.0"
+  },
+  "binaries": {
+    "compilerSha256": "a1ff808c43acf23fe364f3f5b2c86c5b36347dba06daf4919298ea2170547d46",
+    "finalAssemblySha256": "b952ae206903bf88972fcd4dc15bf4b931eb8d1ae3a1152c23a3c6ad74ff7bf1",
+    "pdbSha256": "cbc9c6e306dd2f1b661a0280742a8ee5d0ccd0acb87aa9a19f6a419fd434e78a"
+  },
+  "debugger": {
+    "type": "coreclr",
+    "client": "Supported VS Code extension-test host",
+    "justMyCode": true,
+    "requireExactSource": true,
+    "referenceAssemblyRewrite": true,
+    "sourceEncodings": {
+      "main.ts": "UTF-8 with BOM",
+      "helper.ts": "UTF-16 LE with BOM"
+    },
+    "asyncResumptionVerified": true,
+    "exitCode": 0
+  },
+  "stops": [
+    {
+      "marker": "break:top-level",
+      "reason": "breakpoint",
+      "file": "main.ts",
+      "line": 42,
+      "frame": "main.dll!$Module_main.$Initialize() Line 42"
+    },
+    {
+      "marker": "break:function",
+      "reason": "breakpoint",
+      "file": "main.ts",
+      "line": 4,
+      "frame": "main.dll!$Program.$M_main_exercise(double __this) Line 4"
+    },
+    {
+      "marker": "step:brace-body",
+      "reason": "step",
+      "file": "main.ts",
+      "line": 6,
+      "frame": "main.dll!$Program.$M_main_exercise(double __this) Line 6"
+    },
+    {
+      "marker": "step:loop-header",
+      "reason": "step",
+      "file": "main.ts",
+      "line": 8,
+      "frame": "main.dll!$Program.$M_main_exercise(double __this) Line 8"
+    },
+    {
+      "marker": "step:loop-body",
+      "reason": "step",
+      "file": "main.ts",
+      "line": 9,
+      "frame": "main.dll!$Program.$M_main_exercise(double __this) Line 9"
+    },
+    {
+      "marker": "step:loop-header",
+      "reason": "step",
+      "file": "main.ts",
+      "line": 8,
+      "frame": "main.dll!$Program.$M_main_exercise(double __this) Line 8"
+    },
+    {
+      "marker": "step:loop-body",
+      "reason": "step",
+      "file": "main.ts",
+      "line": 9,
+      "frame": "main.dll!$Program.$M_main_exercise(double __this) Line 9"
+    },
+    {
+      "marker": "break:imported",
+      "reason": "breakpoint",
+      "file": "helper.ts",
+      "line": 2,
+      "frame": "main.dll!$Program.$M_helper_twice(double value) Line 2"
+    },
+    {
+      "marker": "break:catch",
+      "reason": "breakpoint",
+      "file": "main.ts",
+      "line": 17,
+      "frame": "main.dll!$Program.$M_main_exercise(double __this) Line 17"
+    },
+    {
+      "marker": "break:class",
+      "reason": "breakpoint",
+      "file": "main.ts",
+      "line": 24,
+      "frame": "main.dll!$M_main_Counter.$typed$calculate$0(double value) Line 24"
+    },
+    {
+      "marker": "break:generator",
+      "reason": "breakpoint",
+      "file": "main.ts",
+      "line": 38,
+      "frame": "main.dll!<Unknown function> Line 38"
+    },
+    {
+      "marker": "break:async",
+      "reason": "breakpoint",
+      "file": "main.ts",
+      "line": 31,
+      "frame": "main.dll!<Unknown function> Line 31"
+    }
+  ],
+  "locals": [
+    {
+      "name": "__this [double]",
+      "value": "2",
+      "type": "double"
+    },
+    {
+      "name": "total [double]",
+      "value": "0",
+      "type": "double"
+    }
+  ],
+  "watches": {
+    "total": "0",
+    "__this": "2"
+  },
+  "output": "first 11\nsecond 12\ndone 11\nasync 12\ncompleted 12\n",
+  "debugAndNonDebugOutputMatch": true,
+  "nonDebugPdbAbsent": true,
+  "evidence": "artifacts/compiled-debugger/run-KuNleC/result.json",
+  "transcript": "artifacts/compiled-debugger/run-KuNleC/transcript.json"
+}

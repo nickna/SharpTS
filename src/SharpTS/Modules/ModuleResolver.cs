@@ -182,6 +182,14 @@ public class ModuleResolver
         return CompilerFileSystem.ReadAllText(path);
     }
 
+    private SourceDocument ResolverReadSourceDocument(string path)
+    {
+        ThrowIfCancellationRequested();
+        if (_virtualFiles is not null && _virtualFiles.TryGetValue(NormalizePath(path), out var source))
+            return new SourceDocument(path, source);
+        return CompilerFileSystem.ReadSourceDocument(path);
+    }
+
     /// <summary>
     /// The stdlib provider chain. Exposed for diagnostics; not intended for mutation.
     /// </summary>
@@ -924,7 +932,10 @@ public class ModuleResolver
 
         try
         {
-            string source = ResolverReadAllText(absolutePath);
+            // Capture text and its byte checksum together; symbol emission must describe this
+            // snapshot even if the source changes on disk before the assembly is saved.
+            var document = ResolverReadSourceDocument(absolutePath);
+            string source = document.Text;
 
             bool isJsxSource = IsJsxSourcePath(absolutePath);
             var lexer = new Lexer(source) { JsxTolerant = isJsxSource }
@@ -932,7 +943,6 @@ public class ModuleResolver
             var tokens = lexer.ScanTokens();
             // Parse into a document so the module keeps its text, checksum and statement spans —
             // what debug symbols and editor navigation both resolve positions against.
-            var document = new SourceDocument(absolutePath, source);
             ParseDiagnosticResult parseResult;
             IReadOnlyList<Token> retainedTokens;
             if (EditorParseTarget is { } target && string.Equals(Path.GetFullPath(target.Path), absolutePath,

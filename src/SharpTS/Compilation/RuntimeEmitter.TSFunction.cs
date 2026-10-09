@@ -196,6 +196,24 @@ public partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 
+    /// <summary>Distinguishes source parameter names from runtime helper receiver conventions.</summary>
+    private void EmitSourceParametersAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
+    {
+        var typeBuilder = moduleBuilder.DefineType(
+            "$SourceParameters", TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            typeof(Attribute));
+        var ctor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var il = ctor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(Attribute).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null)!);
+        il.Emit(OpCodes.Ret);
+        attributes.SourceParametersType = typeBuilder;
+        attributes.SourceParametersCtor = ctor;
+        typeBuilder.CreateType();
+    }
+
     private void EmitTSFunctionClass(
         ModuleBuilder moduleBuilder,
         EmittedFunctionValueRuntime functionValues,
@@ -222,7 +240,7 @@ public partial class RuntimeEmitter
         var cachedNameField = typeBuilder.DefineField("_cachedName", _types.String, FieldAttributes.Private);
         var cachedLengthField = typeBuilder.DefineField("_cachedLength", _types.Int32, FieldAttributes.Private);
         // Cached "first parameter is the synthetic __this slot" flag. Computed
-        // ONCE at ctor time from MethodInfo.GetParameters()[0].Name, then read
+        // ONCE at ctor time from source-function markers / helper metadata, then read
         // from the field on every InvokeWithThis call. Pre-cache: every iter
         // helper invocation of the callback paid GetParameters + string-compare
         // through reflection — N=1M Map = 1M reflection lookups. Now: 1 lookup
@@ -410,14 +428,14 @@ public partial class RuntimeEmitter
         // recover the "stop at the first default initializer" rule.
         EmitComputeFunctionLength(ctorIL, cachedLengthField, inputs.FunctionAttributes, methodArgIndex: 2);
         EmitComputeFunctionName(ctorIL, cachedNameField, inputs.FunctionAttributes, methodArgIndex: 2);
-        // this._expectsThis = (method.GetParameters().Length > 0 && params[0].Name == "__this")
+        // Source receivers are explicitly marked; helpers retain their metadata convention.
         EmitComputeExpectsThis(ctorIL, expectsThisField, inputs.FunctionAttributes, methodArgIndex: 2);
         // this._capturesArguments = method.IsDefined($CapturesArguments)
         EmitComputeCapturesArguments(ctorIL, capturesArgumentsField, inputs.FunctionAttributes, methodArgIndex: 2);
         // this._padUndefinedMask = $PadUndefined ? (object-param bits) : 0
         EmitComputePadUndefinedMask(ctorIL, padUndefinedMaskField, inputs.FunctionAttributes, methodArgIndex: 2);
         // this._paramCount, _hasListRest, _hasArrayRest: cached by AdjustArgs.
-        EmitComputeAdjustArgsCache(ctorIL, paramCountField, hasListRestField, hasArrayRestField, methodArgIndex: 2);
+        EmitComputeAdjustArgsCache(ctorIL, paramCountField, hasListRestField, hasArrayRestField, expectsThisField, methodArgIndex: 2);
         EmitComputeNeedsArgConversion(ctorIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)  [pseudocode]
         EmitLookupOrCreateInvoker(ctorIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
@@ -457,11 +475,11 @@ public partial class RuntimeEmitter
         var noCachedMethodLabel = ctorCacheIL.DefineLabel();
         ctorCacheIL.Emit(OpCodes.Ldarg_2);
         ctorCacheIL.Emit(OpCodes.Brfalse, noCachedMethodLabel);
-        // this._expectsThis = (method.GetParameters().Length > 0 && params[0].Name == "__this")
+        // Source receivers are explicitly marked; helpers retain their metadata convention.
         EmitComputeExpectsThis(ctorCacheIL, expectsThisField, inputs.FunctionAttributes, methodArgIndex: 2);
         EmitComputeCapturesArguments(ctorCacheIL, capturesArgumentsField, inputs.FunctionAttributes, methodArgIndex: 2);
         EmitComputePadUndefinedMask(ctorCacheIL, padUndefinedMaskField, inputs.FunctionAttributes, methodArgIndex: 2);
-        EmitComputeAdjustArgsCache(ctorCacheIL, paramCountField, hasListRestField, hasArrayRestField, methodArgIndex: 2);
+        EmitComputeAdjustArgsCache(ctorCacheIL, paramCountField, hasListRestField, hasArrayRestField, expectsThisField, methodArgIndex: 2);
         EmitComputeNeedsArgConversion(ctorCacheIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)
         EmitLookupOrCreateInvoker(ctorCacheIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
@@ -610,6 +628,11 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, conversionParametersField);
                 il.Emit(OpCodes.Ldloc, args);
+                if (kind == 2)
+                {
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldfld, expectsThisField);
+                }
                 il.Emit(OpCodes.Call, helper);
                 il.MarkLabel(skip);
             }
@@ -1052,6 +1075,7 @@ public partial class RuntimeEmitter
         var countLocal = lengthIL.DeclareLocal(_types.Int32);
         var indexLocalLength = lengthIL.DeclareLocal(_types.Int32);
         var paramLocalLength = lengthIL.DeclareLocal(_types.ParameterInfo);
+        var sourceParametersLocal = lengthIL.DeclareLocal(_types.Boolean);
         var lengthLoopStart = lengthIL.DefineLabel();
         var lengthLoopEnd = lengthIL.DefineLabel();
         var incrementCount = lengthIL.DefineLabel();
@@ -1099,6 +1123,16 @@ public partial class RuntimeEmitter
         lengthIL.Emit(OpCodes.Ldc_I4_0);
         lengthIL.Emit(OpCodes.Stloc, indexLocalLength);
 
+        // Source accessors may not have an explicit FunctionLength attribute. Their
+        // parameter spelling is still user metadata, including legal '__' prefixes.
+        lengthIL.Emit(OpCodes.Ldarg_0);
+        lengthIL.Emit(OpCodes.Ldfld, methodField);
+        lengthIL.Emit(OpCodes.Ldtoken, inputs.FunctionAttributes.SourceParametersType);
+        lengthIL.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        lengthIL.Emit(OpCodes.Ldc_I4_0);
+        lengthIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
+        lengthIL.Emit(OpCodes.Stloc, sourceParametersLocal);
+
         // Loop through parameters
         lengthIL.MarkLabel(lengthLoopStart);
         // if (index >= params.Length) goto end
@@ -1113,6 +1147,17 @@ public partial class RuntimeEmitter
         lengthIL.Emit(OpCodes.Ldloc, indexLocalLength);
         lengthIL.Emit(OpCodes.Ldelem_Ref);
         lengthIL.Emit(OpCodes.Stloc, paramLocalLength);
+
+        var helperParameter = lengthIL.DefineLabel();
+        lengthIL.Emit(OpCodes.Ldloc, sourceParametersLocal);
+        lengthIL.Emit(OpCodes.Brfalse, helperParameter);
+        lengthIL.Emit(OpCodes.Ldloc, indexLocalLength);
+        lengthIL.Emit(OpCodes.Brtrue, incrementCount);
+        lengthIL.Emit(OpCodes.Ldarg_0);
+        lengthIL.Emit(OpCodes.Ldfld, expectsThisField);
+        lengthIL.Emit(OpCodes.Brtrue, skipParam);
+        lengthIL.Emit(OpCodes.Br, incrementCount);
+        lengthIL.MarkLabel(helperParameter);
 
         // Skip if param.IsOptional (has default value or is optional)
         lengthIL.Emit(OpCodes.Ldloc, paramLocalLength);
@@ -1295,7 +1340,7 @@ public partial class RuntimeEmitter
     /// per invocation. Reflection cost is paid once at construction time.
     /// </summary>
     private void EmitComputeAdjustArgsCache(ILGenerator il, FieldBuilder paramCountField,
-        FieldBuilder hasListRestField, FieldBuilder hasArrayRestField, int methodArgIndex)
+        FieldBuilder hasListRestField, FieldBuilder hasArrayRestField, FieldBuilder expectsThisField, int methodArgIndex)
     {
         var paramsLocal = il.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
         var paramCountLocal = il.DeclareLocal(_types.Int32);
@@ -1349,12 +1394,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, paramCountLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Bne_Un, storeHasListRestLabel);
-        il.Emit(OpCodes.Ldloc, paramsLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "Name")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldstr, "__this");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, expectsThisField);
         il.Emit(OpCodes.Brfalse, storeHasListRestLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, hasListRestLocal);
@@ -1500,18 +1541,36 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits IL inside a constructor to compute and store the cached <c>_expectsThis</c> bool field:
-    /// <c>this._expectsThis = (params.Length > 0 &amp;&amp; params[0].Name == "__this")
-    /// || method.IsDefined(typeof($ExpectsThis), false)</c>. The name check is the primary path; the
-    /// <c>$ExpectsThis</c> attribute backstops it because a <c>--ref-asm</c> rewrite strips parameter
-    /// names (so the name check fails there, otherwise shifting a value-call's arguments). Caller
+    /// Source parameter metadata carries <c>$SourceParameters</c>, while synthetic receivers use
+    /// <c>$ExpectsThis</c>. Their source parameters may legally be named <c>__this</c>, so the
+    /// legacy first-parameter-name convention is used only by runtime helpers. The markers also
+    /// survive <c>--ref-asm</c> rewrites. Caller
     /// provides the field and the constructor argument index of the <c>MethodInfo</c> param. (#738)
     /// </summary>
     private void EmitComputeExpectsThis(ILGenerator il, FieldBuilder expectsThisField, EmittedFunctionAttributesRuntime attributes, int methodArgIndex)
     {
         var paramsLocal = il.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
         var resultLocal = il.DeclareLocal(_types.Boolean);
-        var checkAttr = il.DefineLabel();
         var store = il.DefineLabel();
+
+        // Explicit source receiver metadata wins over any source parameter spelling.
+        il.Emit(OpCodes.Ldarg, methodArgIndex);
+        il.Emit(OpCodes.Ldtoken, attributes.ExpectsThisType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Brtrue, store);
+
+        // The source-name marker also covers accessors, which lack $FunctionLength.
+        // $PadUndefined cannot distinguish source methods: some built-ins also carry it.
+        il.Emit(OpCodes.Ldarg, methodArgIndex);
+        il.Emit(OpCodes.Ldtoken, attributes.SourceParametersType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
+        il.Emit(OpCodes.Brtrue, store);
 
         // params = method.GetParameters()
         il.Emit(OpCodes.Ldarg, methodArgIndex);
@@ -1522,7 +1581,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, paramsLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Brfalse, checkAttr);   // 0 params → fall back to the attribute
+        il.Emit(OpCodes.Brfalse, store);
 
         il.Emit(OpCodes.Ldloc, paramsLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1530,19 +1589,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "Name")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "__this");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Stloc, resultLocal);
-
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Brtrue, store);        // name matched → done
-
-        // Backstop: resultLocal = method.IsDefined(typeof($ExpectsThis), false) — survives the
-        // parameter-name strip the name check above does not.
-        il.MarkLabel(checkAttr);
-        il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Ldtoken, attributes.ExpectsThisType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.MarkLabel(store);
@@ -2246,7 +2292,7 @@ public partial class RuntimeEmitter
             "CoercePrimitiveArgs",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
-            [_types.MakeArrayType(_types.ParameterInfo), _types.ObjectArray]
+            [_types.MakeArrayType(_types.ParameterInfo), _types.ObjectArray, _types.Boolean]
         );
         var il = method.GetILGenerator();
 
@@ -2355,13 +2401,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Brfalse, skipNullishThisCheckLabel);
-        // Check params[0].Name == "__this" first.
-        il.Emit(OpCodes.Ldloc, paramsLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "Name")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldstr, "__this");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        // Use the cached receiver classification, so a source parameter named
+        // __this is converted as an ordinary argument.
+        il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Brfalse, skipNullishThisCheckLabel);
 
         // String receiver slots always use the helper (Symbol must throw).

@@ -286,6 +286,20 @@ public class SourceSpanTests
     }
 
     [Fact]
+    public void ByteSourceRetainsItsOriginalChecksumAfterInputBytesChange()
+    {
+        byte[] bytes = [0xef, 0xbb, 0xbf, (byte)'x', 0xff];
+        byte[] expectedChecksum = System.Security.Cryptography.SHA256.HashData(bytes);
+
+        var document = SourceDocument.FromBytes("encoded.ts", bytes);
+        Array.Fill(bytes, (byte)0);
+
+        Assert.Equal("x\ufffd", document.Text);
+        Assert.Equal(expectedChecksum, document.Checksum);
+        Assert.False(document.IsVirtual);
+    }
+
+    [Fact]
     public void ParsingIntoADocumentPopulatesItsSpanTable()
     {
         var document = Parse("const x = 1;\n");

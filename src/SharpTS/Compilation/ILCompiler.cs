@@ -381,7 +381,7 @@ public partial class ILCompiler
             _debugInfo,
             // Embedded stdlib and other virtual documents have no file a debugger could open, so
             // their text travels inside the PDB instead of being referenced by path.
-            _debugInfo.AddDocument(document.Path, document.Text, embedSource: document.IsVirtual),
+            _debugInfo.AddDocument(document),
             document.Spans,
             document.Lines,
             isLibrary: document.IsVirtual);
