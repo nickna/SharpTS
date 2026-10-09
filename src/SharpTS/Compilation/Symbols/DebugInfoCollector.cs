@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
-using System.Security.Cryptography;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation.Symbols;
 
@@ -120,22 +120,28 @@ internal sealed class DebugInfoCollector
     /// Path recorded in the PDB. Callers should normalize to a full path so debuggers can locate the
     /// file; it is also the identity used to deduplicate documents.
     /// </param>
-    /// <param name="sourceText">
-    /// The exact text compiled. Its UTF-8 bytes are hashed with SHA-256 so a debugger can tell
-    /// whether the file on disk still matches what was compiled.
-    /// </param>
+    /// <param name="sourceText">Text-backed source, encoded as UTF-8 without a preamble.</param>
     /// <param name="embedSource">
     /// Embeds <paramref name="sourceText"/> in the PDB. Used for virtual documents such as the
     /// bundled stdlib, which have no file on disk for a debugger to open.
     /// </param>
     internal SourceFile AddDocument(string path, string sourceText, bool embedSource = false)
+        => AddDocument(new SourceDocument(path, sourceText, isVirtual: embedSource));
+
+    /// <summary>
+    /// Registers the checksum captured when the source was loaded. Physical documents retain
+    /// their original bytes; virtual documents embed the same UTF-8 text their checksum covers.
+    /// </summary>
+    internal SourceFile AddDocument(SourceDocument source)
     {
-        if (_documents.TryGetValue(path, out var existing))
+        if (_documents.TryGetValue(source.Path, out var existing))
             return existing;
 
-        byte[] utf8 = System.Text.Encoding.UTF8.GetBytes(sourceText);
-        var document = new SourceFile(path, SHA256.HashData(utf8), embedSource ? utf8 : null);
-        _documents[path] = document;
+        var document = new SourceFile(
+            source.Path,
+            source.Checksum.ToArray(),
+            source.IsVirtual ? System.Text.Encoding.UTF8.GetBytes(source.Text) : null);
+        _documents[source.Path] = document;
         return document;
     }
 

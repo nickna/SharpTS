@@ -210,7 +210,7 @@ public class EmittedNumericCoercionRuntimeTests
             var coerce = wrapper.GetMethod("CoercePrimitiveArgs", BindingFlags.NonPublic | BindingFlags.Static)!;
             var parameters = type.GetMethod("JsNumberToInt32")!.GetParameters();
             object[] arguments = ["7"];
-            coerce.Invoke(null, [parameters, arguments]);
+            coerce.Invoke(null, [parameters, arguments, false]);
             Assert.Equal(7d, arguments[0]);
             var resolved = Assert.IsAssignableFrom<MethodInfo>(cache.GetValue(null));
             Assert.Same(assembly, resolved.DeclaringType!.Assembly);
@@ -218,7 +218,7 @@ public class EmittedNumericCoercionRuntimeTests
             Assert.DoesNotContain(resolved, resolvedMethods);
             resolvedMethods.Add(resolved);
             arguments[0] = "8";
-            coerce.Invoke(null, [parameters, arguments]);
+            coerce.Invoke(null, [parameters, arguments, false]);
             Assert.Equal(8d, arguments[0]);
             Assert.Same(resolved, cache.GetValue(null));
             Assert.Equal(1d, Call(type, runtime.NumericCoercion.ConvertToNumber, BigInteger.One));

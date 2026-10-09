@@ -40,6 +40,26 @@ public sealed class SourceDocument
         Spans = new SpanTable();
     }
 
+    /// <summary>
+    /// Captures a physical source file's decoded text and checksum from the same bytes. BOM
+    /// detection and replacement of invalid UTF-8 match <see cref="File.ReadAllText(string)"/>.
+    /// The checksum retains the original encoding and preamble even though parsing uses text.
+    /// </summary>
+    public static SourceDocument FromBytes(string path, byte[] sourceBytes)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(sourceBytes);
+
+        using var reader = new StreamReader(
+            new MemoryStream(sourceBytes, writable: false),
+            Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true);
+        return new SourceDocument(path, reader.ReadToEnd())
+        {
+            _checksum = SHA256.HashData(sourceBytes),
+        };
+    }
+
     public string Path { get; }
 
     public string Text { get; }
@@ -56,8 +76,9 @@ public sealed class SourceDocument
     public EditorSyntaxIndex? EditorSyntax { get; internal set; }
 
     /// <summary>
-    /// SHA-256 of the document's UTF-8 bytes, letting a debugger detect that the file on disk has
-    /// drifted from what was compiled. Computed on first use.
+    /// SHA-256 of the captured source bytes, including their original encoding and preamble for
+    /// physical files. Text-backed documents use UTF-8 without a preamble, computed on first use.
+    /// The checksum never rereads the backing file after parsing.
     /// </summary>
     public byte[] Checksum => _checksum ??= SHA256.HashData(Encoding.UTF8.GetBytes(Text));
 

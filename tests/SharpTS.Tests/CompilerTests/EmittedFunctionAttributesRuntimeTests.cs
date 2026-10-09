@@ -9,7 +9,7 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class EmittedFunctionAttributesRuntimeTests
 {
     private const BindingFlags Members = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-    private static readonly string[] Helpers = ["CapturesArguments", "PadUndefined", "FunctionLength", "FunctionName", "NumericRest4", "NonConstructible", "ExpectsThis"];
+    private static readonly string[] Helpers = ["CapturesArguments", "PadUndefined", "FunctionLength", "FunctionName", "NumericRest4", "NonConstructible", "ExpectsThis", "SourceParameters"];
     public static IEnumerable<object[]> Handles => typeof(EmittedFunctionAttributesRuntime).GetProperties()
         .Where(p => typeof(MemberInfo).IsAssignableFrom(p.PropertyType)).Select(p => new object[] { p.Name });
 
@@ -37,12 +37,12 @@ public sealed class EmittedFunctionAttributesRuntimeTests
     }
 
     [Fact]
-    public void AllSevenCreatedAttributesPreserveValuesAndOutputIdentity()
+    public void AllCreatedAttributesPreserveValuesAndOutputIdentity()
     {
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
         var owner = new EmittedFunctionAttributesRuntime(); Populate(module, owner); owner.CompleteEmission();
         var members = typeof(EmittedFunctionAttributesRuntime).GetProperties().Where(p => typeof(MemberInfo).IsAssignableFrom(p.PropertyType)).ToArray();
-        Assert.Equal(17, members.Length);
+        Assert.Equal(19, members.Length);
         foreach (var property in members)
         {
             var member = Assert.IsAssignableFrom<MemberInfo>(property.GetValue(owner));

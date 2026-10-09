@@ -9,6 +9,23 @@ namespace SharpTS.Tests.Modules;
 public sealed class CompilerFileSystemTests
 {
     [Fact]
+    public void ScopedSourceReadUsesTheCapturedTextReader()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        string path = directory.CreateFile("main.ts", "const value = 1;");
+        File.WriteAllText(path, "const value = 1;", new System.Text.UTF8Encoding(true));
+        var inputs = new RecordingFileSystem();
+        using var scope = CompilerFileSystem.Use(inputs);
+
+        var document = CompilerFileSystem.ReadSourceDocument(path);
+
+        Assert.Equal("const value = 1;", document.Text);
+        Assert.Equal(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(document.Text)), document.Checksum);
+        Assert.Equal([path], inputs.Reads);
+    }
+
+    [Fact]
     public void OverlayProgramLoadsDiskAutomaticTypesAndCustomLibrary()
     {
         using var directory = CliTestHelper.CreateTempDirectory();

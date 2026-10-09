@@ -22,7 +22,7 @@ public sealed class DiagnosticsCoordinator : IDisposable
     private readonly Action<PublishDiagnosticsParams> _publish;
     private readonly Action<Exception> _reportFailure;
     private readonly TimeSpan _debounce;
-    private readonly Dictionary<string, CancellationTokenSource> _documentCancellation =
+    private readonly HashSet<string> _queuedDocuments =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<Task> _pending = [];
     private CancellationTokenSource _workspaceCancellation = new();
@@ -70,52 +70,38 @@ public sealed class DiagnosticsCoordinator : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
+            _queuedDocuments.Add(uri);
             CancelWorkspace();
-
-            if (_documentCancellation.Remove(uri, out CancellationTokenSource? old))
-            {
-                old.Cancel();
-                old.Dispose();
-            }
-
-            var documentCancellation =
-                CancellationTokenSource.CreateLinkedTokenSource(
-                    _workspaceCancellation.Token);
-            _documentCancellation[uri] = documentCancellation;
-            token = documentCancellation.Token;
+            token = _workspaceCancellation.Token;
         }
 
-        Track(RunChangedDocumentAsync(uri, token));
+        Track(RunPendingDocumentsAsync(token));
     }
 
     public void Close(DocumentSnapshot closed)
     {
-        IReadOnlySet<string> affected =
-            closed.FilePath is null
-                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                : _graph.Remove(closed.FilePath);
         _diagnostics.Invalidate(closed.FilePath ?? closed.Uri);
 
         CancellationToken token;
         lock (_gate)
         {
-            if (_documentCancellation.Remove(
-                    closed.Uri,
-                    out CancellationTokenSource? documentCancellation))
-            {
-                documentCancellation.Cancel();
-                documentCancellation.Dispose();
-            }
+            ThrowIfDisposed();
             CancelWorkspace();
+            IReadOnlySet<string> affected = closed.FilePath is null
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : _graph.Remove(closed.FilePath);
+            bool reopened = _store.TryGetSnapshot(closed.Uri, out _);
+            if (reopened)
+                _queuedDocuments.Add(closed.Uri);
+            else
+                _queuedDocuments.Remove(closed.Uri);
+            QueueAffectedDocuments(affected);
             token = _workspaceCancellation.Token;
+            if (!reopened)
+                PublishEmpty(closed);
         }
 
-        PublishEmpty(closed);
-        Track(RunAffectedDocumentsAsync(
-            affected.Where(path =>
-                closed.FilePath is null ||
-                !string.Equals(path, closed.FilePath, StringComparison.OrdinalIgnoreCase)),
-            token));
+        Track(RunPendingDocumentsAsync(token));
     }
 
     public void RepublishAll()
@@ -124,15 +110,12 @@ public sealed class DiagnosticsCoordinator : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
+            _queuedDocuments.UnionWith(_store.SnapshotDocuments().Select(document => document.Uri));
             CancelWorkspace();
             token = _workspaceCancellation.Token;
         }
 
-        Track(RunAffectedDocumentsAsync(
-            _store.SnapshotDocuments()
-                .Where(document => document.FilePath is not null)
-                .Select(document => document.FilePath!),
-            token));
+        Track(RunPendingDocumentsAsync(token));
     }
 
     internal async Task DrainAsync()
@@ -148,62 +131,87 @@ public sealed class DiagnosticsCoordinator : IDisposable
         }
     }
 
-    private async Task RunChangedDocumentAsync(
-        string uri,
-        CancellationToken cancellationToken)
+    private async Task RunPendingDocumentsAsync(CancellationToken cancellationToken)
     {
         await Task.Delay(_debounce, cancellationToken);
-        if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
-            return;
+        var prepared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Cancellation retires a capture, not its queued URIs. Expand all affected open files
+        // before publishing so import cycles cannot continually requeue an already-published file.
+        while (true)
+        {
+            string[] unprepared;
+            lock (_gate)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                unprepared = _queuedDocuments.Where(uri => !prepared.Contains(uri)).ToArray();
+            }
+            if (unprepared.Length == 0)
+                break;
 
-        cancellationToken.ThrowIfCancellationRequested();
-        IReadOnlyList<Parsing.Stmt> statements = await _diagnostics.GetStatementsAsync(
-            snapshot,
-            _settings.Mode,
-            cancellationToken).ConfigureAwait(false);
-        IReadOnlySet<string> affected = _graph.Update(
-            snapshot.Document,
-            snapshot.TextOverlay,
-            statements,
-            cancellationToken);
+            foreach (string uri in unprepared)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                prepared.Add(uri);
+                try
+                {
+                    if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
+                        continue;
+                    DiagnosticsDocumentInputs inputs = await _diagnostics.GetDocumentInputsAsync(
+                        snapshot, _settings.Mode, cancellationToken).ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!_store.IsCurrent(uri, snapshot.Document.Version, snapshot.WorkspaceVersion))
+                        continue;
+                    IReadOnlySet<string> affected = _graph.Update(
+                        snapshot.Document, snapshot.TextOverlay, inputs, cancellationToken);
+                    lock (_gate)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        QueueAffectedDocuments(affected);
+                    }
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception exception)
+                {
+                    failed.Add(uri);
+                    _reportFailure(exception);
+                }
+            }
+        }
 
-        await AnalyzeAndPublishAsync(snapshot, affected, cancellationToken);
-    }
-
-    private async Task RunAffectedDocumentsAsync(
-        IEnumerable<string> affectedPaths,
-        CancellationToken cancellationToken)
-    {
-        await Task.Delay(_debounce, cancellationToken);
-        HashSet<string> pending = affectedPaths.ToHashSet(
-            StringComparer.OrdinalIgnoreCase);
-        foreach (DocumentSnapshot open in _store.SnapshotDocuments())
+        foreach (string uri in prepared)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (open.FilePath is null || !pending.Contains(open.FilePath))
+            if (failed.Contains(uri))
                 continue;
-            if (!_store.TryCapture(open.Uri, out DocumentRequestSnapshot? snapshot))
-                continue;
-
-            await PublishAsync(snapshot, snapshot.Document, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
+                {
+                    lock (_gate)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        _queuedDocuments.Remove(uri);
+                    }
+                    continue;
+                }
+                await PublishAsync(snapshot, snapshot.Document, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception exception)
+            {
+                // Retain this URI for a later event without starving the rest of this batch.
+                _reportFailure(exception);
+            }
         }
     }
 
-    private async Task AnalyzeAndPublishAsync(
-        DocumentRequestSnapshot workspace,
-        IReadOnlySet<string> affectedPaths,
-        CancellationToken cancellationToken)
+    private void QueueAffectedDocuments(IReadOnlySet<string> affectedPaths)
     {
-        foreach (DocumentSnapshot document in workspace.FileSystemDocuments.Values)
+        foreach (DocumentSnapshot document in _store.SnapshotDocuments())
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (document.FilePath is null ||
-                !affectedPaths.Contains(document.FilePath))
-            {
-                continue;
-            }
-
-            await PublishAsync(workspace, document, cancellationToken).ConfigureAwait(false);
+            if (document.FilePath is not null && affectedPaths.Contains(document.FilePath))
+                _queuedDocuments.Add(document.Uri);
         }
     }
 
@@ -221,25 +229,22 @@ public sealed class DiagnosticsCoordinator : IDisposable
 
         if (!result.IsCurrent(cancellationToken))
             return;
-
-        if (!_store.IsCurrent(
-                document.Uri,
-                document.Version,
-                workspace.WorkspaceVersion))
+        lock (_gate)
         {
-            return;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_store.IsCurrent(document.Uri, document.Version, workspace.WorkspaceVersion))
+                return;
+            if (!result.IsCurrent(cancellationToken))
+                return;
+            _publish(new PublishDiagnosticsParams
+            {
+                Uri = DocumentUri.Parse(document.Uri),
+                Version = document.Version,
+                Diagnostics = new Container<Diagnostic>(result.Diagnostics),
+            });
+            if (!cancellationToken.IsCancellationRequested)
+                _queuedDocuments.Remove(document.Uri);
         }
-
-        if (!result.IsCurrent(cancellationToken))
-            return;
-        cancellationToken.ThrowIfCancellationRequested();
-
-        _publish(new PublishDiagnosticsParams
-        {
-            Uri = DocumentUri.Parse(document.Uri),
-            Version = document.Version,
-            Diagnostics = new Container<Diagnostic>(result.Diagnostics),
-        });
     }
 
     private void PublishEmpty(DocumentSnapshot document)
@@ -310,13 +315,7 @@ public sealed class DiagnosticsCoordinator : IDisposable
             _disposed = true;
             _workspaceCancellation.Cancel();
             _workspaceCancellation.Dispose();
-            foreach (CancellationTokenSource cancellation in
-                     _documentCancellation.Values)
-            {
-                cancellation.Cancel();
-                cancellation.Dispose();
-            }
-            _documentCancellation.Clear();
+            _queuedDocuments.Clear();
         }
     }
 }

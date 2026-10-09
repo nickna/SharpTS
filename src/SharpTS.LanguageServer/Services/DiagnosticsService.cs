@@ -31,6 +31,10 @@ internal sealed record DiagnosticsAnalysisResult(
     }
 }
 
+internal sealed record DiagnosticsDocumentInputs(
+    IReadOnlyList<Stmt> Statements,
+    IReadOnlyList<AnalysisDependency>? Dependencies = null);
+
 /// <summary>
 /// Uses shared checked editor snapshots for full diagnostics and keeps SharpTS-only analysis
 /// lazy so an interop-only editor never starts the general TypeScript checker.
@@ -171,6 +175,12 @@ public sealed class DiagnosticsService : IDisposable
     internal async Task<IReadOnlyList<Stmt>> GetStatementsAsync(
         DocumentRequestSnapshot workspace,
         DiagnosticPublishMode mode,
+        CancellationToken cancellationToken) =>
+        (await GetDocumentInputsAsync(workspace, mode, cancellationToken).ConfigureAwait(false)).Statements;
+
+    internal async Task<DiagnosticsDocumentInputs> GetDocumentInputsAsync(
+        DocumentRequestSnapshot workspace,
+        DiagnosticPublishMode mode,
         CancellationToken cancellationToken)
     {
         if (mode == DiagnosticPublishMode.All && workspace.Document.FilePath is not null)
@@ -178,9 +188,9 @@ public sealed class DiagnosticsService : IDisposable
             using AnalysisLease? lease = await _analysis.GetDocumentAsync(workspace, cancellationToken)
                 .ConfigureAwait(false);
             if (lease is not null && TryGetSharedDocument(lease, workspace.Document, out AnalysisDocument? document))
-                return document!.Statements;
+                return new DiagnosticsDocumentInputs(document!.Statements, lease.Model.Snapshot.Dependencies);
         }
-        return GetStatements(workspace.Document, cancellationToken);
+        return new DiagnosticsDocumentInputs(GetStatements(workspace.Document, cancellationToken));
     }
 
     private static bool TryGetSharedDocument(

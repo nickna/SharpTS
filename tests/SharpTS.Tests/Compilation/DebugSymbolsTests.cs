@@ -5,6 +5,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
+using System.Text;
 using PEPacker;
 using SharpTS.Compilation;
 using SharpTS.Compilation.Symbols;
@@ -144,6 +145,120 @@ public class DebugSymbolsTests
             ReadPdb(artifacts.Pdb!).MethodDebugInformation.Count);
     }
 
+    // ---------------------------------------------------------------- captured source checksums
+
+    [Theory]
+    [InlineData("utf8-bom")]
+    [InlineData("utf16-le")]
+    [InlineData("utf16-be")]
+    public void DebugDocumentsMatchOriginalEncodedSourceBytes(string encodingName)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"sharpts_encoding_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            Encoding encoding = encodingName switch
+            {
+                "utf8-bom" => new UTF8Encoding(encoderShouldEmitUTF8Identifier: true),
+                "utf16-le" => new UnicodeEncoding(bigEndian: false, byteOrderMark: true),
+                "utf16-be" => new UnicodeEncoding(bigEndian: true, byteOrderMark: true),
+                _ => throw new ArgumentOutOfRangeException(nameof(encodingName)),
+            };
+            string helperPath = Path.Combine(directory, "helper.ts");
+            string entryPath = Path.Combine(directory, "main.ts");
+            File.WriteAllText(helperPath, """
+                export function twice(n: number): number {
+                  const doubled = n * 2;
+                  return doubled;
+                }
+                """, encoding);
+            File.WriteAllText(entryPath, """
+                import { twice } from "./helper";
+                const label = "café 🐈";
+                console.log(label, twice(21));
+                """, encoding);
+
+            var artifacts = CompileModules(entryPath, "encoded");
+            var pdb = ReadPdb(artifacts.Pdb!);
+            var documents = pdb.Documents.Select(pdb.GetDocument)
+                .ToDictionary(document => pdb.GetString(document.Name), document => pdb.GetBlobBytes(document.Hash));
+
+            AssertCodeViewMatchesPdb(artifacts.Assembly, artifacts.Pdb!, "encoded.pdb");
+            AssertLoadable(artifacts.Assembly);
+            Assert.Equal(SHA256.HashData(File.ReadAllBytes(entryPath)), documents[entryPath]);
+            Assert.Equal(SHA256.HashData(File.ReadAllBytes(helperPath)), documents[helperPath]);
+            Assert.Contains(SequencePointsByMethod(artifacts), method =>
+                method.Key.Contains("twice", StringComparison.Ordinal) && method.Value.Document == "helper.ts");
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public void DebugChecksumDescribesLoadedBytesWhenFileChangesBeforeEmission()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"sharpts_snapshot_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string entryPath = Path.Combine(directory, "main.ts");
+            File.WriteAllText(entryPath, SourceText, new UnicodeEncoding(bigEndian: false, byteOrderMark: true));
+            byte[] capturedBytes = File.ReadAllBytes(entryPath);
+            SourceDocument? loadedDocument = null;
+
+            var artifacts = CompileModules(entryPath, "snapshot", modules =>
+            {
+                loadedDocument = Assert.Single(modules).Document;
+                File.WriteAllText(entryPath, "console.log(0);", new UTF8Encoding(false));
+            });
+            var pdb = ReadPdb(artifacts.Pdb!);
+            var document = pdb.GetDocument(Assert.Single(pdb.Documents));
+
+            Assert.NotNull(loadedDocument);
+            Assert.Equal(SourceText, loadedDocument.Text);
+            Assert.Equal(SHA256.HashData(capturedBytes), loadedDocument.Checksum);
+            Assert.Equal(SHA256.HashData(capturedBytes), pdb.GetBlobBytes(document.Hash));
+            Assert.NotEqual(SHA256.HashData(File.ReadAllBytes(entryPath)), pdb.GetBlobBytes(document.Hash));
+            AssertCodeViewMatchesPdb(artifacts.Assembly, artifacts.Pdb!, "snapshot.pdb");
+            Assert.Equal([2, 3, 5], AllSequencePointLines(artifacts));
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public void VirtualDebugDocumentChecksumMatchesItsEmbeddedSource()
+    {
+        var document = new SourceDocument("virtual.ts", "const label = \"café\";", isVirtual: true);
+        var statements = new Parser(new Lexer(document.Text).ScanTokens())
+            .WithSourceDocument(document).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var compiler = new ILCompiler(
+            "virtual", preserveConstEnums: false, useReferenceAssemblies: true,
+            sdkPath: SdkResolver.FindReferenceAssembliesPath())
+        {
+            EmitDebugSymbols = true,
+        };
+        compiler.SetSourceDocument(document);
+        compiler.Compile(statements, typeMap, new DeadCodeAnalyzer(typeMap).Analyze(statements));
+        var artifacts = compiler.SaveArtifacts("virtual.pdb");
+        var pdb = ReadPdb(artifacts.Pdb!);
+        var pdbDocument = pdb.GetDocument(Assert.Single(pdb.Documents));
+        var embeddedSourceKind = new Guid("0e8a571b-6926-466e-b4ad-8ab04611f5fe");
+        var embedded = Assert.Single(pdb.GetCustomDebugInformation(Assert.Single(pdb.Documents))
+            .Select(pdb.GetCustomDebugInformation), info => pdb.GetGuid(info.Kind) == embeddedSourceKind);
+        byte[] sourceBlob = pdb.GetBlobBytes(embedded.Value);
+
+        Assert.Equal(0, BitConverter.ToInt32(sourceBlob));
+        Assert.Equal(Encoding.UTF8.GetBytes(document.Text), sourceBlob[4..]);
+        Assert.Equal(SHA256.HashData(sourceBlob[4..]), pdb.GetBlobBytes(pdbDocument.Hash));
+        AssertCodeViewMatchesPdb(artifacts.Assembly, artifacts.Pdb!, "virtual.pdb");
+    }
+
     // ---------------------------------------------------------------- statement sequence points
 
     /// <summary>
@@ -239,6 +354,47 @@ public class DebugSymbolsTests
     }
 
     // ---------------------------------------------------------------- named locals and scopes
+
+    [Fact]
+    public void SourceParameterNamesSurviveTheFinalAssemblyReferenceRewrite()
+    {
+        const string source = """
+            function first(limit: number): number { return limit + 1; }
+            function second(seed: number): number { return seed + 2; }
+            class Probe {
+              constructor(initial: number) {}
+              calculate(amount: number): number { return amount + 3; }
+              static createValue(factor: number): number { return factor + 4; }
+              set value(next: number) {}
+            }
+            console.log(first(1), second(2), new Probe(0).calculate(3), Probe.createValue(4));
+            """;
+        var artifacts = CompileTypeScript(source, emitDebugSymbols: true);
+        using var pe = new PEReader(new MemoryStream(artifacts.Assembly, writable: false));
+        var metadata = pe.GetMetadataReader();
+        var methods = metadata.MethodDefinitions.Select(metadata.GetMethodDefinition).ToArray();
+
+        AssertParameters("$Program", "first", "limit");
+        AssertParameters("$Program", "second", "seed");
+        AssertParameters("Probe", ".ctor", "initial");
+        AssertParameters("Probe", "calculate", "amount");
+        AssertParameters("Probe", "createValue", "factor");
+        AssertParameters("Probe", "set_Value", "next");
+        AssertCodeViewMatchesPdb(artifacts.Assembly, artifacts.Pdb!, "output.pdb");
+
+        void AssertParameters(string typeName, string methodName, params string[] names)
+        {
+            // User constructors are public. The compiler also emits a FamORAssem constructor
+            // taking its prototype marker; that infrastructure overload has no source bindings.
+            var method = Assert.Single(methods, method =>
+                metadata.GetString(method.Name) == methodName &&
+                (method.Attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public &&
+                metadata.GetString(metadata.GetTypeDefinition(method.GetDeclaringType()).Name) == typeName);
+            var parameters = method.GetParameters().Select(metadata.GetParameter).ToArray();
+            Assert.Equal(names, parameters.Select(parameter => metadata.GetString(parameter.Name)));
+            Assert.Equal(Enumerable.Range(1, names.Length), parameters.Select(parameter => parameter.SequenceNumber));
+        }
+    }
 
     [Fact]
     public void LocalsCarryTheirTypeScriptNames()
@@ -848,10 +1004,12 @@ public class DebugSymbolsTests
     /// <summary>
     /// Compiles a whole module graph the way the CLI does, with symbols, and returns the artifacts.
     /// </summary>
-    private static CompilationArtifacts CompileModules(string entryPath, string assemblyName)
+    private static CompilationArtifacts CompileModules(
+        string entryPath, string assemblyName, Action<List<ParsedModule>>? afterLoad = null)
     {
         var resolver = new ModuleResolver(entryPath);
         var modules = resolver.GetRuntimeModulesInOrder(resolver.LoadProgram(entryPath));
+        afterLoad?.Invoke(modules);
         var typeMap = new TypeChecker().CheckModules(resolver.GetModulesInOrder(modules), resolver);
         var deadCode = new DeadCodeAnalyzer(typeMap).Analyze(modules.SelectMany(m => m.Statements).ToList());
 

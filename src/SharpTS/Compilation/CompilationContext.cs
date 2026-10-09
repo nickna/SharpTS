@@ -77,6 +77,7 @@ public record struct HoistedCompactRecordEntry(
 /// <seealso cref="LocalsManager"/>
 public partial class CompilationContext
 {
+    private readonly HashSet<MethodBuilder> _sourceParameterMethods = [];
     // ============================================
     // Core Compilation Infrastructure
     // ============================================
@@ -627,6 +628,31 @@ public partial class CompilationContext
         if (paramType != null)
         {
             _parameterTypes[name] = paramType;
+        }
+
+        // IL argument slots include an instance receiver; PE Param rows are one-based and do
+        // not. Debuggers read argument names from these rows, independently of PDB locals.
+        if (CurrentMethod is not { } emittedMethod) return;
+        if (emittedMethod is MethodBuilder sourceMethod && Runtime is { } runtime &&
+            _sourceParameterMethods.Add(sourceMethod))
+        {
+            sourceMethod.SetCustomAttribute(runtime.FunctionAttributes.SourceParametersCtor,
+                CustomAttributeEncoder.EmptyBlob);
+        }
+        int position = argIndex + (emittedMethod.IsStatic ? 1 : 0);
+        var parameters = emittedMethod.GetParameters();
+        if (position <= 0 || position > parameters.Length || parameters[position - 1].Name == name)
+            return;
+
+        var attributes = parameters[position - 1].Attributes;
+        switch (emittedMethod)
+        {
+            case MethodBuilder method:
+                method.DefineParameter(position, attributes, name);
+                break;
+            case ConstructorBuilder constructor:
+                constructor.DefineParameter(position, attributes, name);
+                break;
         }
     }
 

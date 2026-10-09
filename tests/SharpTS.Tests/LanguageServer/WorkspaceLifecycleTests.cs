@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using SharpTS.Compilation;
 using SharpTS.LanguageServer;
@@ -147,6 +148,127 @@ public sealed class WorkspaceLifecycleTests
         Assert.Equal(2, result.Version);
     }
 
+    [Theory]
+    [InlineData("queue")]
+    [InlineData("close")]
+    [InlineData("configuration")]
+    public async Task WorkspaceCancellationPreservesOtherPendingDocuments(string operation)
+    {
+        using var workspace = new DiagnosticsWorkspace(TimeSpan.FromMilliseconds(50));
+        string first = workspace.Open("first.ts", "const text: string = 1;\n");
+        string second = workspace.Open("second.ts", "const text: string = 1;\n");
+        workspace.Coordinator.Queue(first);
+        await workspace.Coordinator.DrainAsync();
+        workspace.Coordinator.Queue(second);
+        await workspace.Coordinator.DrainAsync();
+        Assert.All(workspace.Published, item => Assert.NotEmpty(item.Diagnostics));
+        workspace.Published.Clear();
+
+        workspace.Change(first, "const text: string = 'ready';\n");
+        workspace.Coordinator.Queue(first);
+        switch (operation)
+        {
+            case "queue":
+                workspace.Change(second, "const text: string = 'ready';\n");
+                workspace.Coordinator.Queue(second);
+                break;
+            case "close":
+                workspace.Coordinator.Close(workspace.Store.Remove(second)!);
+                break;
+            case "configuration":
+                workspace.Settings.Mode = DiagnosticPublishMode.Off;
+                workspace.Coordinator.RepublishAll();
+                // A subsequent document event must retain the other files queued by settings.
+                workspace.Coordinator.Queue(second);
+                break;
+        }
+        await workspace.Coordinator.DrainAsync();
+
+        PublishDiagnosticsParams firstResult = Assert.Single(workspace.Results(first));
+        Assert.Equal(2, firstResult.Version);
+        Assert.Empty(firstResult.Diagnostics);
+        Assert.Empty(Assert.Single(workspace.Results(second)).Diagnostics);
+        Assert.Empty(workspace.Failures);
+    }
+
+    [Theory]
+    [InlineData(DiagnosticPublishMode.All, false)]
+    [InlineData(DiagnosticPublishMode.All, true)]
+    [InlineData(DiagnosticPublishMode.SharpTsOnly, false)]
+    public async Task ConfiguredDependencyChangesRepublishImportersAndCloseRestoresDisk(
+        DiagnosticPublishMode mode, bool closedIntermediate)
+    {
+        using var workspace = new DiagnosticsWorkspace(TimeSpan.Zero, mode);
+        workspace.Directory.CreateFile("tsconfig.json", """
+            {
+              "compilerOptions": {
+                "noLib": true, "types": [], "baseUrl": ".",
+                "paths": { "@lib/*": ["src/lib/*"] }
+              },
+              "include": ["src/**/*.ts"]
+            }
+            """);
+        string dependency = workspace.Open("src/lib/dependency.ts", "export const value = 1;\n");
+        if (closedIntermediate)
+            workspace.Directory.CreateFile("src/lib/bridge.ts", "export { value } from './dependency';\n");
+        string specifier = closedIntermediate ? "@lib/bridge" : "@lib/dependency";
+        string importer = workspace.Open("src/importer.ts",
+            $"import {{ value }} from '{specifier}';\nconst text: string = value;\n");
+        workspace.Coordinator.Queue(importer);
+        await workspace.Coordinator.DrainAsync();
+        if (mode == DiagnosticPublishMode.All)
+            Assert.NotEmpty(Assert.Single(workspace.Results(importer)).Diagnostics);
+        workspace.Published.Clear();
+
+        workspace.Change(dependency, "export const value = 'ready';\n");
+        workspace.Coordinator.Queue(dependency);
+        await workspace.Coordinator.DrainAsync();
+
+        Assert.Equal(2, Assert.Single(workspace.Results(dependency)).Version);
+        Assert.Empty(Assert.Single(workspace.Results(importer)).Diagnostics);
+        workspace.Published.Clear();
+
+        workspace.Analysis.InvalidateAll();
+        workspace.Coordinator.Close(workspace.Store.Remove(dependency)!);
+        await workspace.Coordinator.DrainAsync();
+        PublishDiagnosticsParams restored = Assert.Single(workspace.Results(importer));
+        if (mode == DiagnosticPublishMode.All)
+            Assert.NotEmpty(restored.Diagnostics);
+        else
+            Assert.Equal(0, workspace.Analysis.Statistics.Checks);
+        Assert.Empty(workspace.Failures);
+    }
+
+    [Fact]
+    public async Task CancellationAfterPublishingDependencyPreservesItsPendingImporters()
+    {
+        using var workspace = new DiagnosticsWorkspace(TimeSpan.FromMilliseconds(25));
+        string dependency = workspace.Open("dependency.ts", "export const value = 1;\n");
+        string importer = workspace.Open("importer.ts",
+            "import { value } from './dependency';\nconst text: string = value;\n");
+        string unrelated = workspace.Open("unrelated.ts", "const ready = false;\n");
+        workspace.Coordinator.Queue(importer);
+        await workspace.Coordinator.DrainAsync();
+        Assert.NotEmpty(Assert.Single(workspace.Results(importer)).Diagnostics);
+        workspace.Published.Clear();
+        workspace.OnPublish = item =>
+        {
+            if (!SameUri(item.Uri.ToString(), dependency) || item.Version != 2)
+                return;
+            workspace.OnPublish = null;
+            workspace.Change(unrelated, "const ready = true;\n");
+            workspace.Coordinator.Queue(unrelated);
+        };
+
+        workspace.Change(dependency, "export const value = 'ready';\n");
+        workspace.Coordinator.Queue(dependency);
+        await workspace.Coordinator.DrainAsync();
+
+        Assert.Empty(workspace.Results(importer).Last().Diagnostics);
+        Assert.Equal(2, Assert.Single(workspace.Results(unrelated)).Version);
+        Assert.Empty(workspace.Failures);
+    }
+
     [Fact]
     public void AllDiagnosticsUsesTheCachedFullCheckerResult()
     {
@@ -213,5 +335,59 @@ public sealed class WorkspaceLifecycleTests
 
         Assert.Equal(1, loader.Generation);
         Assert.Equal("System.String", original!.FullName);
+    }
+
+    private static bool SameUri(string first, string second) =>
+        string.Equals(first, second, StringComparison.OrdinalIgnoreCase);
+
+    private sealed class DiagnosticsWorkspace : IDisposable
+    {
+        public TempTestDirectory Directory { get; } = CliTestHelper.CreateTempDirectory();
+        public DocumentStore Store { get; } = new();
+        public SemanticAnalysisService Analysis { get; } = new();
+        public DiagnosticsSettings Settings { get; }
+        public ConcurrentQueue<PublishDiagnosticsParams> Published { get; } = new();
+        public ConcurrentQueue<Exception> Failures { get; } = new();
+        public DiagnosticsCoordinator Coordinator { get; }
+        public Action<PublishDiagnosticsParams>? OnPublish { get; set; }
+        private readonly DiagnosticsService _diagnostics;
+
+        public DiagnosticsWorkspace(TimeSpan debounce, DiagnosticPublishMode mode = DiagnosticPublishMode.All)
+        {
+            Settings = new DiagnosticsSettings(mode);
+            _diagnostics = new DiagnosticsService(analysis: Analysis);
+            Coordinator = new DiagnosticsCoordinator(Store, _diagnostics, new DocumentDependencyGraph(),
+                Settings, item =>
+                {
+                    Published.Enqueue(item);
+                    OnPublish?.Invoke(item);
+                }, debounce, Failures.Enqueue);
+        }
+
+        public string Open(string relativePath, string source)
+        {
+            string uri = new Uri(Directory.CreateFile(relativePath, source)).AbsoluteUri;
+            Assert.True(Store.Open(uri, source, 1));
+            return uri;
+        }
+
+        public void Change(string uri, string source)
+        {
+            Assert.True(Store.TryGetSnapshot(uri, out DocumentSnapshot? current));
+            Assert.True(Store.ApplyChanges(uri, current.Version + 1,
+                [new TextDocumentContentChangeEvent { Text = source }]));
+            Analysis.InvalidateAll();
+        }
+
+        public IEnumerable<PublishDiagnosticsParams> Results(string uri) =>
+            Published.Where(item => SameUri(item.Uri.ToString(), uri));
+
+        public void Dispose()
+        {
+            Coordinator.Dispose();
+            _diagnostics.Dispose();
+            Analysis.Dispose();
+            Directory.Dispose();
+        }
     }
 }

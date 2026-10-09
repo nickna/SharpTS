@@ -112,13 +112,16 @@ both locate `app.pdb` beside `app.dll` and open the `.ts` files it names.
 `tests/SharpTS.Tests/Compilation/DebugSymbolsTests.cs` asserts the symbol *metadata* thoroughly —
 documents and checksums, sequence points and the lines they land on, named locals, lexical scope
 nesting, state-machine mappings, async suspension/resume records, generated-code attributes, and a
-CodeView identity that still matches after the reference rewriter. What no automated test covers is
-a debugger actually stopping, so run this by hand when changing statement emission, the span model,
-or the symbol pipeline.
+CodeView identity that still matches after the reference rewriter. These unit tests do not launch
+a debugger. When changing statement emission, the span model, or the symbol pipeline, also run the
+[real VS Code debugger acceptance check](../scripts/editor-smoke/compiled-debugger/README.md) or the
+manual checklist below. The optional acceptance check records actual source breakpoint hits,
+stepping, locals/Watch, imported frames, and debug/non-debug execution through the installed C#
+extension. It also checks BOM-encoded source files with exact-source validation enabled.
 
-Scripting `vsdbg` for this is not an option: it is licensed for use only with Visual Studio and
-VS Code, and enforces that with a handshake its own clients answer. Automating this would mean
-`netcoredbg`, which is separately installed; until that is set up, the check below is manual.
+The VS Code check runs the adapter inside its supported client using public editor debug APIs.
+It does not script `vsdbg` as a standalone adapter. A client-free automated scenario would require
+a separately installed debugger such as `netcoredbg`.
 
 Use a program with a function, a loop, a conditional, a `try`/`catch`, a class method, an `async`
 function, a generator, and an `import`.
