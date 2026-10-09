@@ -1,4 +1,5 @@
 using System.Globalization;
+using SharpTS.DebugAdapter.Protocol;
 using SharpTS.Runtime;
 using SharpTS.Runtime.Types;
 
@@ -16,35 +17,45 @@ internal sealed record DebugVariableValue(
 internal static class DebugValueInspector
 {
     private const int MaximumPreviewLength = 256;
+    private const int MaximumVariablesPerRequest = 1_000;
 
-    public static IReadOnlyList<DebugVariableValue> EnumerateScope(DebugScopeHandle scope)
+    private static IEnumerable<DebugVariableValue> EnumerateScope(DebugScopeHandle scope)
     {
         IEnumerable<string> names = scope.Names ?? scope.Environment.Names;
         return names
             .OrderBy(name => name, StringComparer.Ordinal)
-            .Select(name => Describe(name, scope.Environment.Get(name), name))
-            .ToArray();
+            .Select(name => Describe(name, scope.Environment.Get(name), name));
     }
 
     public static IReadOnlyList<DebugVariableValue> EnumerateChildren(
         object value,
         int start,
-        int? count)
+        int? count,
+        string? filter = null)
     {
         start = Math.Max(0, start);
-        int take = Math.Clamp(count ?? 100, 0, 1_000);
+        int take = count is > 0 ? Math.Min(count.Value, MaximumVariablesPerRequest + 1)
+            : MaximumVariablesPerRequest + 1;
+        bool named = filter != "indexed";
+        bool indexed = filter != "named";
         IEnumerable<DebugVariableValue> children = value switch
         {
-            SharpTSArray array => EnumerateArray(array),
-            SharpTSObject obj => EnumerateObject(obj),
-            SharpTSInstance instance => EnumerateInstance(instance),
-            SharpTSMap map => EnumerateMap(map),
-            SharpTSSet set => EnumerateSet(set),
-            SharpTSError error => EnumerateError(error),
-            DebugScopeHandle scope => EnumerateScope(scope),
+            SharpTSArray array => EnumerateArray(array, named, indexed, indexed ? start : 0),
+            SharpTSObject obj when named => EnumerateObject(obj),
+            SharpTSInstance instance when named => EnumerateInstance(instance),
+            SharpTSMap map when indexed => EnumerateMap(map),
+            SharpTSSet set when indexed => EnumerateSet(set),
+            SharpTSError error when named => EnumerateError(error),
+            DebugScopeHandle scope when named => EnumerateScope(scope),
             _ => [],
         };
-        return children.Skip(start).Take(take).ToArray();
+        if (value is SharpTSArray pagedArray && indexed)
+            start = Math.Max(0, start - pagedArray.Length);
+        DebugVariableValue[] page = children.Skip(start).Take(take).ToArray();
+        if (page.Length > MaximumVariablesPerRequest)
+            throw new DapRequestException(
+                $"Variable page exceeds {MaximumVariablesPerRequest} entries; request a smaller page.");
+        return page;
     }
 
     public static DebugVariableValue Describe(string name, object? raw, string? evaluateName = null)
@@ -60,8 +71,8 @@ internal static class DebugValueInspector
             decimal number => new(name, number.ToString(CultureInfo.InvariantCulture), "number", EvaluateName: evaluateName),
             string text => new(name, Quote(text), "string", EvaluateName: evaluateName),
             char character => new(name, Quote(character.ToString()), "string", EvaluateName: evaluateName),
-            SharpTSBigInt bigint => new(name, bigint.ToString(), "bigint", EvaluateName: evaluateName),
-            SharpTSSymbol symbol => new(name, symbol.ToString(), "symbol", EvaluateName: evaluateName),
+            SharpTSBigInt bigint => new(name, Truncate(bigint.Value.ToString(CultureInfo.InvariantCulture)) + "n", "bigint", EvaluateName: evaluateName),
+            SharpTSSymbol symbol => new(name, $"Symbol({Truncate(symbol.Description ?? "")})", "symbol", EvaluateName: evaluateName),
             SharpTSArray array => new(
                 name, $"Array({array.Length})", "array", array,
                 NamedVariables: array.NamedPropertyNames.Count(), IndexedVariables: array.Length,
@@ -76,15 +87,16 @@ internal static class DebugValueInspector
                 NamedVariables: obj.Fields.Count + obj.AccessorPropertyNames.Count(), EvaluateName: evaluateName),
             SharpTSInstance instance => new(name, FormatInstance(instance), instance.RuntimeClass.Name, instance,
                 NamedVariables: instance.GetFieldNames().Count(), EvaluateName: evaluateName),
-            ISharpTSCallable callable => new(name, callable.ToString() ?? "<function>", "function", EvaluateName: evaluateName),
+            ISharpTSCallable => new(name, "<function>", "function", EvaluateName: evaluateName),
             DateTime date => new(name, date.ToString("O", CultureInfo.InvariantCulture), "Date", EvaluateName: evaluateName),
             _ => new(name, $"<{value.GetType().Name}>", value.GetType().Name, EvaluateName: evaluateName),
         };
     }
 
-    private static IEnumerable<DebugVariableValue> EnumerateArray(SharpTSArray array)
+    private static IEnumerable<DebugVariableValue> EnumerateArray(
+        SharpTSArray array, bool named, bool indexed, int firstIndex)
     {
-        for (int index = 0; index < array.Length; index++)
+        for (int index = firstIndex; indexed && index < array.Length; index++)
         {
             string name = index.ToString(CultureInfo.InvariantCulture);
             yield return array.HasIndex(index)
@@ -92,6 +104,8 @@ internal static class DebugValueInspector
                 : new DebugVariableValue(name, "<empty>", "undefined", EvaluateName: $"[{name}]");
         }
 
+        if (!named)
+            yield break;
         foreach (string name in array.NamedPropertyNames.OrderBy(name => name, StringComparer.Ordinal))
         {
             if (array.TryGetNamedAccessor(name, out _, out _))
@@ -161,7 +175,7 @@ internal static class DebugValueInspector
         object? message = instance.GetRawField("message");
         return message is string text
             ? $"{instance.RuntimeClass.Name}: {Truncate(text)}"
-            : instance.ToString();
+            : $"{instance.RuntimeClass.Name} instance";
     }
 
     private static string Quote(string text) => $"\"{Truncate(text.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\"", "\\\""))}\"";

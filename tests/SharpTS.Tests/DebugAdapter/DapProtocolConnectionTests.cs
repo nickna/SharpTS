@@ -83,15 +83,17 @@ public sealed class DapProtocolConnectionTests
         Assert.Contains("not ASCII", exception.Message);
     }
 
-    [Fact]
-    public async Task WritesProtocolCleanResponseAndEvent()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WritesProtocolCleanResponseAndEvent(bool success)
     {
         await using var input = new MemoryStream();
         await using var output = new MemoryStream();
         await using var connection = new DapProtocolConnection(input, output);
         var request = new DapRequest(7, "initialize", default);
 
-        await connection.SendResponseAsync(request, true, new { supportsConfigurationDoneRequest = true });
+        await connection.SendResponseAsync(request, success, new { supportsConfigurationDoneRequest = true });
         await connection.SendEventAsync("initialized");
 
         output.Position = 0;
@@ -102,7 +104,12 @@ public sealed class DapProtocolConnectionTests
         List<JsonElement> messages = await ReadServerMessagesAsync(output.ToArray());
         Assert.Equal(2, messages.Count);
         Assert.Equal("response", messages[0].GetProperty("type").GetString());
-        Assert.Equal(7, messages[0].GetProperty("requestSeq").GetInt32());
+        Assert.Equal(new[] { "body", "command", "request_seq", "seq", "success", "type" },
+            messages[0].EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(7, messages[0].GetProperty("request_seq").GetInt32());
+        Assert.False(messages[0].TryGetProperty("requestSeq", out _));
+        Assert.Equal("initialize", messages[0].GetProperty("command").GetString());
+        Assert.Equal(success, messages[0].GetProperty("success").GetBoolean());
         Assert.Equal("event", messages[1].GetProperty("type").GetString());
         Assert.Equal("initialized", messages[1].GetProperty("event").GetString());
         Assert.Null(notARequest);

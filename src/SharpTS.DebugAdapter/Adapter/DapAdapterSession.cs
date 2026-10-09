@@ -49,7 +49,11 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
         {
             while (!linked.IsCancellationRequested)
             {
-                DapRequest? request = await connection.ReadRequestAsync(linked.Token).ConfigureAwait(false);
+                // Console stdin may leave an already-started read blocked after cancellation.
+                // Race the whole parser task so it retains its pooled buffers until I/O ends.
+                Task<DapRequest?> reading = connection.ReadRequestAsync(linked.Token).AsTask();
+                Observe(reading);
+                DapRequest? request = await reading.WaitAsync(linked.Token).ConfigureAwait(false);
                 if (request is null)
                     break;
 
@@ -418,9 +422,11 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
         object value = _handles.Get<object>(reference);
         int start = TryGetInt(request.Arguments, "start") ?? 0;
         int? count = TryGetInt(request.Arguments, "count");
-        IReadOnlyList<DebugVariableValue> values = value is DebugScopeHandle scope
-            ? DebugValueInspector.EnumerateScope(scope).Skip(Math.Max(0, start)).Take(count ?? 1_000).ToArray()
-            : DebugValueInspector.EnumerateChildren(value, start, count);
+        string? filter = request.Arguments.OptionalString("filter");
+        if (filter is not (null or "named" or "indexed"))
+            throw new DapRequestException("'filter' must be 'named' or 'indexed'.");
+        IReadOnlyList<DebugVariableValue> values =
+            DebugValueInspector.EnumerateChildren(value, start, count, filter);
 
         return connection.SendResponseAsync(request, true, new
         {

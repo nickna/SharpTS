@@ -61,6 +61,20 @@ public partial class Interpreter
 
     private sealed class ReadOnlyEvaluationValidator(bool allowPropertyAccess) : AstVisitorBase
     {
+        public override void Visit(Expr expr)
+        {
+            // Even an expression without a call node can invoke conversion methods,
+            // iterator hooks, getters, or CLR operators. Hover must stay inert.
+            if (!allowPropertyAccess && expr is not (
+                Expr.Variable or Expr.Literal or Expr.This or Expr.Grouping
+                or Expr.TypeAssertion or Expr.Satisfies or Expr.NonNullAssertion
+                or Expr.Logical or Expr.NullishCoalescing or Expr.Ternary or Expr.Comma)
+                && !(expr is Expr.Unary unary
+                    && unary.Operator.Type is TokenType.TYPEOF or TokenType.VOID))
+                Reject("expression that may execute guest code in hover evaluation");
+            base.Visit(expr);
+        }
+
         protected override void VisitAssign(Expr.Assign expr) => Reject("assignment");
         protected override void VisitDestructuringAssign(Expr.DestructuringAssign expr) => Reject("assignment");
         protected override void VisitSet(Expr.Set expr) => Reject("assignment");
@@ -84,6 +98,14 @@ public partial class Interpreter
         protected override void VisitYield(Expr.Yield expr) => Reject("yield");
         protected override void VisitArrowFunction(Expr.ArrowFunction expr) => Reject("function creation");
         protected override void VisitClassExpr(Expr.ClassExpr expr) => Reject("class creation");
+        protected override void VisitSpread(Expr.Spread expr) => Reject("spread");
+
+        protected override void VisitObjectLiteral(Expr.ObjectLiteral expr)
+        {
+            if (expr.Properties.Any(property => property.IsSpread))
+                Reject("spread");
+            base.VisitObjectLiteral(expr);
+        }
 
         protected override void VisitGet(Expr.Get expr)
         {

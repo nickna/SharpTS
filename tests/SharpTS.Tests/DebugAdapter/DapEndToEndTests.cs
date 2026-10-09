@@ -90,6 +90,8 @@ public sealed class DapEndToEndTests
         JsonElement exited = await dap.WaitForEventAsync("exited");
         Assert.Equal(0, exited.GetProperty("body").GetProperty("exitCode").GetInt32());
         await dap.WaitForEventAsync("terminated");
+        AssertSuccess(await dap.RequestAsync("disconnect", new { terminateDebuggee = true }));
+        Assert.Equal(0, await dap.WaitForExitAsync());
     }
 
     [Fact]
@@ -551,6 +553,7 @@ public sealed class DapEndToEndTests
         await dap.WaitForEventAsync("stopped");
 
         AssertSuccess(await dap.RequestAsync("disconnect", new { terminateDebuggee = true }));
+        Assert.Equal(0, await dap.WaitForExitAsync());
     }
 
     [Theory]
@@ -584,6 +587,123 @@ public sealed class DapEndToEndTests
         AssertSuccess(await dap.RequestAsync("continue", new { threadId = 1 }));
         JsonElement exited = await dap.WaitForEventAsync("exited");
         Assert.Equal(expectedExitCode, exited.GetProperty("body").GetProperty("exitCode").GetInt32());
+    }
+
+    [Fact]
+    public async Task HoverAndSpreadRejectionsLeaveGuestMutationCounterUnchanged()
+    {
+        string directory = CreateFixtureDirectory();
+        string program = Path.Combine(directory, "main.ts");
+        await File.WriteAllTextAsync(program, """
+            let touches = 0;
+            let record = { get answer() { touches++; return 42; }, valueOf() { touches++; return 40; } };
+            console.log(touches);
+            """);
+
+        await using var dap = new DapProtocolHarness();
+        AssertSuccess(await dap.RequestAsync("initialize", new { adapterID = "sharpts" }));
+        AssertSuccess(await dap.RequestAsync("launch", new { program }));
+        AssertSuccess(await dap.RequestAsync("setBreakpoints", new
+        {
+            source = new { path = program },
+            breakpoints = new[] { new { line = 3 } },
+        }));
+        AssertSuccess(await dap.RequestAsync("configurationDone"));
+        await dap.WaitForEventAsync("stopped");
+        Assert.False((await dap.RequestAsync("evaluate", new
+        {
+            expression = "record + 2",
+            context = "hover",
+        })).GetProperty("success").GetBoolean());
+        Assert.False((await dap.RequestAsync("evaluate", new
+        {
+            expression = "({...record})",
+            context = "watch",
+        })).GetProperty("success").GetBoolean());
+        JsonElement unchanged = await dap.RequestAsync("evaluate", new
+        {
+            expression = "touches",
+            context = "watch",
+        });
+        AssertSuccess(unchanged);
+        Assert.Equal("0", unchanged.GetProperty("body").GetProperty("result").GetString());
+        JsonElement property = await dap.RequestAsync("evaluate", new
+        {
+            expression = "record.answer",
+            context = "watch",
+        });
+        AssertSuccess(property);
+        Assert.Equal("42", property.GetProperty("body").GetProperty("result").GetString());
+        JsonElement changed = await dap.RequestAsync("evaluate", new
+        {
+            expression = "touches",
+            context = "watch",
+        });
+        AssertSuccess(changed);
+        Assert.Equal("1", changed.GetProperty("body").GetProperty("result").GetString());
+        AssertSuccess(await dap.RequestAsync("continue", new { threadId = 1 }));
+        await dap.WaitForEventAsync("terminated");
+    }
+
+    [Fact]
+    public async Task VariableFiltersPageArrayIndicesAndNamedPropertiesIndependently()
+    {
+        string directory = CreateFixtureDirectory();
+        string program = Path.Combine(directory, "main.ts");
+        await File.WriteAllTextAsync(program, """
+            let values: any = [10, 20, 30];
+            values.label = "numbers";
+            console.log(values.label);
+            """);
+
+        await using var dap = new DapProtocolHarness();
+        AssertSuccess(await dap.RequestAsync("initialize", new
+        {
+            adapterID = "sharpts",
+            supportsVariablePaging = true,
+        }));
+        AssertSuccess(await dap.RequestAsync("launch", new { program }));
+        AssertSuccess(await dap.RequestAsync("setBreakpoints", new
+        {
+            source = new { path = program },
+            breakpoints = new[] { new { line = 3 } },
+        }));
+        AssertSuccess(await dap.RequestAsync("configurationDone"));
+        await dap.WaitForEventAsync("stopped");
+        JsonElement evaluated = await dap.RequestAsync("evaluate", new
+        {
+            expression = "values",
+            context = "watch",
+        });
+        AssertSuccess(evaluated);
+        int reference = evaluated.GetProperty("body").GetProperty("variablesReference").GetInt32();
+        Assert.Equal(3, evaluated.GetProperty("body").GetProperty("indexedVariables").GetInt32());
+        Assert.Equal(1, evaluated.GetProperty("body").GetProperty("namedVariables").GetInt32());
+
+        JsonElement named = await dap.RequestAsync("variables", new
+        {
+            variablesReference = reference,
+            filter = "named",
+            count = 0,
+        });
+        AssertSuccess(named);
+        JsonElement label = Assert.Single(named.GetProperty("body").GetProperty("variables").EnumerateArray());
+        Assert.Equal("label", label.GetProperty("name").GetString());
+        Assert.Equal("\"numbers\"", label.GetProperty("value").GetString());
+
+        JsonElement indexed = await dap.RequestAsync("variables", new
+        {
+            variablesReference = reference,
+            filter = "indexed",
+            start = 1,
+            count = 1,
+        });
+        AssertSuccess(indexed);
+        JsonElement element = Assert.Single(indexed.GetProperty("body").GetProperty("variables").EnumerateArray());
+        Assert.Equal("1", element.GetProperty("name").GetString());
+        Assert.Equal("20", element.GetProperty("value").GetString());
+        AssertSuccess(await dap.RequestAsync("continue", new { threadId = 1 }));
+        await dap.WaitForEventAsync("terminated");
     }
 
     private static string CreateFixtureDirectory()

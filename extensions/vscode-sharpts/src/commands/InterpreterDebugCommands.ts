@@ -26,6 +26,7 @@ export class InterpreterDebugCommands {
 
         const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
         const settings = vscode.workspace.getConfiguration('sharpts', editor.document.uri);
+        // VS Code's separate save-all participant would also save unrelated dirty documents.
         await vscode.debug.startDebugging(folder, createInterpreterDebugConfiguration(
             editor.document.uri.fsPath,
             folder?.uri.fsPath ?? path.dirname(editor.document.uri.fsPath),
@@ -33,6 +34,6 @@ export class InterpreterDebugCommands {
                 projectFile: settings.get<string>('projectFile'),
                 additionalReferences: settings.get<string[]>('additionalReferences', []),
             },
-        ));
+        ), { suppressSaveBeforeStart: true });
     }
 }

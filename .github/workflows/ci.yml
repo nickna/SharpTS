@@ -114,14 +114,7 @@ jobs:
 
       - name: Pack and smoke test interpreter debug adapter tool
         shell: pwsh
-        run: |
-          dotnet pack src/SharpTS.DebugAdapter/SharpTS.DebugAdapter.csproj `
-            --no-build --configuration Release --output artifacts/dap-tool
-          dotnet tool install SharpTS.DebugAdapter `
-            --tool-path artifacts/dap-tool-install `
-            --add-source artifacts/dap-tool --prerelease --ignore-failed-sources
-          $shimName = if ($IsWindows) { 'sharpts-dap.exe' } else { 'sharpts-dap' }
-          & (Join-Path 'artifacts/dap-tool-install' $shimName) --version
+        run: ./scripts/test-debug-adapter-package.ps1
 
       - name: Setup Node for VS Code extension packaging
         if: matrix.os == 'ubuntu-24.04'
@@ -340,13 +333,7 @@ jobs:
         run: dotnet build tests/SharpTS.Tests/SharpTS.Tests.csproj --no-restore --configuration Release
       - name: Pack and install interpreter debug adapter
         shell: pwsh
-        run: |
-          dotnet pack src/SharpTS.DebugAdapter/SharpTS.DebugAdapter.csproj `
-            --no-build --configuration Release --output artifacts/dap-tool
-          dotnet tool install SharpTS.DebugAdapter `
-            --tool-path artifacts/dap-tool-install `
-            --add-source artifacts/dap-tool --prerelease --ignore-failed-sources
-          ./artifacts/dap-tool-install/sharpts-dap --version
+        run: ./scripts/test-debug-adapter-package.ps1
       - name: Launch real programs through raw DAP
         run: >-
           dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj
