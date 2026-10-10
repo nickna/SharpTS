@@ -1,11 +1,61 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using SharpTS.Compilation.Symbols;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
 
 public partial class ILCompiler
 {
+    private Dictionary<object, StateMachineDebugSymbols>? _debugHoistedBindings;
+
+    private StateMachineDebugSymbols GetDebugHoistedBindings(
+        IReadOnlyList<Stmt.Parameter> parameters, IReadOnlyList<Stmt>? body,
+        IReadOnlyDictionary<object, string>? renames, StateMachineDebugSymbols? ancestor = null)
+    {
+        _debugHoistedBindings ??= new(ReferenceEqualityComparer.Instance);
+        object key = (object?)body ?? parameters;
+        if (!_debugHoistedBindings.TryGetValue(key, out StateMachineDebugSymbols? symbols))
+            _debugHoistedBindings.Add(key, symbols = StateMachineDebugSymbols.Create(parameters, body, renames, ancestor?.DescendantSlotBase ?? 0));
+        return symbols;
+    }
+
+    private StateMachineDebugSymbols? GetDebugHoistedBindings(object? callable)
+    {
+        if (!EmitDebugSymbols) return null;
+        return callable switch
+        {
+            Stmt.Function function when function.IsAsync || function.IsGenerator => GetDebugHoistedBindings(
+                function.Parameters, function.Body,
+                GeneratorBlockScopeRenamer.Compute(function, preserveDebugBindings: true).Renames),
+            Expr.ArrowFunction arrow when arrow.IsAsync => GetDebugHoistedBindings(
+                arrow.Parameters, arrow.BlockBody,
+                GeneratorBlockScopeRenamer.Compute(arrow, preserveDebugBindings: true).Renames,
+                GetDebugHoistedBindings(_arrowEnclosingCallable.GetValueOrDefault(arrow))),
+            _ => null,
+        };
+    }
+
+    private void ConfigureDebugStateMachineOwner(
+        StateMachineBuilderBase builder,
+        TypeBuilder containingType,
+        string kickoffName)
+    {
+        if (EmitDebugSymbols)
+            builder.SetDebugMetadataOwner(containingType, kickoffName);
+    }
+
+    private void ConfigureDebugHoistedBindings(
+        StateMachineBuilderBase builder,
+        IReadOnlyList<Stmt.Parameter> parameters,
+        IReadOnlyList<Stmt>? body,
+        IReadOnlyDictionary<object, string>? renames, StateMachineDebugSymbols? ancestor = null)
+    {
+        if (EmitDebugSymbols)
+            builder.DebugSymbols = GetDebugHoistedBindings(parameters, body, renames, ancestor);
+    }
+
     private enum EmittedStateMachineKind
     {
         Async,

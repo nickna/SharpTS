@@ -85,6 +85,36 @@ internal static class PdbEmitter
     }
 
     /// <summary>
+    /// Maps each <c>MethodDef</c> row id to the number of slots in its final local signature
+    /// (0 when the method declares no locals or has no body).
+    /// </summary>
+    internal static Func<int, int> ReadLocalSlotCounts(byte[] finalPe)
+    {
+        using var reader = new PEReader(new MemoryStream(finalPe, writable: false));
+        var metadata = reader.GetMetadataReader();
+
+        var byRid = new int[metadata.MethodDefinitions.Count + 1];
+        foreach (var handle in metadata.MethodDefinitions)
+        {
+            var method = metadata.GetMethodDefinition(handle);
+            if (method.RelativeVirtualAddress == 0) continue;
+
+            var localSignature = reader.GetMethodBody(method.RelativeVirtualAddress).LocalSignature;
+            if (localSignature.IsNil) continue;
+
+            var signature = metadata.GetBlobReader(metadata.GetStandaloneSignature(localSignature).Signature);
+            if (signature.ReadSignatureHeader().RawValue != (byte)SignatureKind.LocalVariables)
+                throw new BadImageFormatException("A method's local signature must have a local-variables header.");
+            if (!signature.TryReadCompressedInteger(out int localCount) || localCount < 0)
+                throw new BadImageFormatException("A method's local signature has an invalid slot count.");
+
+            byRid[MetadataTokens.GetRowNumber(handle)] = localCount;
+        }
+
+        return rid => (uint)rid < (uint)byRid.Length ? byRid[rid] : 0;
+    }
+
+    /// <summary>
     /// Maps each <c>MethodDef</c> row id to the byte length of its IL body (0 when it has none).
     /// </summary>
     /// <remarks>

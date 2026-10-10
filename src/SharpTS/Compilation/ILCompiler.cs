@@ -384,6 +384,7 @@ public partial class ILCompiler
             _debugInfo.AddDocument(document),
             document.Spans,
             document.Lines,
+            document.Text,
             isLibrary: document.IsVirtual);
     }
 
@@ -1859,7 +1860,8 @@ public partial class ILCompiler
         var pdbMetadata = _debugInfo.BuildPdbMetadata(
             metadataBuilder.GetRowCounts()[(int)TableIndex.MethodDef],
             PdbEmitter.ReadLocalSignatureRids(image),
-            PdbEmitter.ReadMethodIlSizes(image));
+            PdbEmitter.ReadMethodIlSizes(image),
+            PdbEmitter.ReadLocalSlotCounts(image));
         var pdb = PdbEmitter.Serialize(
             pdbMetadata,
             PdbEmitter.ReadTypeSystemRowCounts(image),

@@ -22,6 +22,8 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
 
     // The type being built
     public override TypeBuilder StateMachineType => _stateMachineType;
+
+    internal string StubMethodName => $"<>AsyncArrow_{_counter}_Stub";
     protected override TypeProvider Types => _types;
 
     // Whether this is a standalone (top-level) async arrow without an outer async function
@@ -89,6 +91,52 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
     // never collides with the OuterFunctionDCField relay's use of ctx.FunctionDisplayClassFields.
     public Dictionary<string, FieldBuilder> FunctionDCFieldMap { get; } = [];
 
+    // These are references to existing authoritative display classes, rather than value copies.
+    internal Dictionary<string, (FieldBuilder Holder, FieldBuilder Field)> DebugCapturedBindings { get; } = [];
+    private readonly List<(FieldBuilder Source, FieldBuilder Target)> _debugCaptureLinks = [];
+    private readonly HashSet<string> _debugCapturedValues = [];
+
+    internal void DefineDebugCapturedValue(string sourceName, FieldBuilder sourceField)
+    {
+        if (DebugSymbols is null || IsStandalone || DebugCapturedBindings.ContainsKey(sourceName)
+            || !_debugCapturedValues.Add(sourceName)) return;
+        FieldBuilder target = _stateMachineType.DefineField(
+            DebugSymbols.AddCapturedValueField(sourceName), sourceField.FieldType, FieldAttributes.Public);
+        _debugCaptureLinks.Add((sourceField, target));
+    }
+
+    internal void DefineDebugCaptureReference(FieldBuilder sourceHolder,
+        IReadOnlyDictionary<string, FieldBuilder> sourceFields,
+        IReadOnlyDictionary<string, string>? captureRenames = null)
+    {
+        if (DebugSymbols is null || IsStandalone) return;
+        var captures = Captures.Where(name => !DebugCapturedBindings.ContainsKey(name))
+            .Select(name => (Name: name, Storage: captureRenames?.GetValueOrDefault(name) ?? name))
+            .Where(capture => sourceFields.ContainsKey(capture.Storage)).ToArray();
+        if (captures.Length == 0) return;
+        FieldBuilder holder = _stateMachineType.DefineField(DebugDisplayClassName(), sourceHolder.FieldType, FieldAttributes.Public);
+        _debugCaptureLinks.Add((sourceHolder, holder));
+        foreach (var capture in captures)
+        {
+            FieldBuilder field = sourceFields[capture.Storage];
+            DebugSymbols.ImportCapturedField(field);
+            DebugCapturedBindings[capture.Name] = (holder, field);
+        }
+    }
+
+    internal void EmitDebugCaptureReferences(ILGenerator il)
+    {
+        foreach (var (source, target) in _debugCaptureLinks)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, OuterStateMachineField!);
+            il.Emit(OpCodes.Unbox, OuterStateMachineType!);
+            il.Emit(OpCodes.Ldfld, source);
+            il.Emit(OpCodes.Stfld, target);
+        }
+    }
+
     // Methods
     public MethodBuilder MoveNextMethod { get; private set; } = null!;
     public MethodBuilder SetStateMachineMethod { get; private set; } = null!;
@@ -142,8 +190,9 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         GrandparentStateMachineType = grandparentType;
 
         // Define the state machine struct
-        _stateMachineType = EmitTypeDefinitions.DefineType(_moduleBuilder,
+        _stateMachineType = DefineStateMachineType(_moduleBuilder,
             $"<>c__AsyncArrow_{_counter}",
+            _counter,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.ValueType,
             [_types.IAsyncStateMachine]
@@ -152,7 +201,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         // Add outer reference field (stores reference to outer state machine)
         // We use object type and cast as needed, since the outer type might not be created yet
         OuterStateMachineField = _stateMachineType.DefineField(
-            "<>__outer",
+            DebugScaffoldingName("<>__outer"),
             _types.Object,
             FieldAttributes.Public
         );
@@ -161,7 +210,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         if (hasNestedAsyncArrows)
         {
             SelfBoxedField = _stateMachineType.DefineField(
-                "<>__selfBoxed",
+                DebugScaffoldingName("<>__selfBoxed"),
                 _types.Object,
                 FieldAttributes.Public
             );
@@ -194,28 +243,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
             FieldAttributes.Public
         );
 
-        // Define parameter fields (arrow parameters become state machine fields)
-        foreach (var param in arrowParameters)
-        {
-            var field = _stateMachineType.DefineField(
-                param.Name.Lexeme,
-                _types.Object,
-                FieldAttributes.Public
-            );
-            ParameterFields[param.Name.Lexeme] = field;
-            ParameterOrder.Add(param.Name.Lexeme);
-        }
-
-        // Define local fields for variables that span await points
-        foreach (var localName in hoistedLocals)
-        {
-            var field = _stateMachineType.DefineField(
-                localName,
-                _types.Object,
-                FieldAttributes.Public
-            );
-            LocalFields[localName] = field;
-        }
+        DefineOwnVariableFields(arrowParameters, hoistedLocals);
 
         // Define awaiter fields
         for (int i = 0; i < awaitCount; i++)
@@ -244,15 +272,17 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         int awaitCount,
         List<Stmt.Parameter> arrowParameters,
         HashSet<string> hoistedLocals,
-        IReadOnlyDictionary<string, FieldBuilder>? liveCaptures = null)
+        IReadOnlyDictionary<string, FieldBuilder>? liveCaptures = null,
+        IReadOnlySet<string>? debugStaticCaptures = null)
     {
         IsStandalone = true;
         OuterStateMachineType = null;
         OuterStateMachineField = null;
 
         // Define the state machine struct
-        _stateMachineType = EmitTypeDefinitions.DefineType(_moduleBuilder,
+        _stateMachineType = DefineStateMachineType(_moduleBuilder,
             $"<>c__AsyncArrow_{_counter}",
+            _counter,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.ValueType,
             [_types.IAsyncStateMachine]
@@ -275,28 +305,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
             FieldAttributes.Public
         );
 
-        // Define parameter fields (arrow parameters become state machine fields)
-        foreach (var param in arrowParameters)
-        {
-            var field = _stateMachineType.DefineField(
-                param.Name.Lexeme,
-                _types.Object,
-                FieldAttributes.Public
-            );
-            ParameterFields[param.Name.Lexeme] = field;
-            ParameterOrder.Add(param.Name.Lexeme);
-        }
-
-        // Define local fields for variables that span await points
-        foreach (var localName in hoistedLocals)
-        {
-            var field = _stateMachineType.DefineField(
-                localName,
-                _types.Object,
-                FieldAttributes.Public
-            );
-            LocalFields[localName] = field;
-        }
+        DefineOwnVariableFields(arrowParameters, hoistedLocals);
 
         // Async function expressions bind `this` dynamically at call time, so give
         // them a dedicated field the stub fills from the thread-local receiver
@@ -324,8 +333,21 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
                 StandaloneLiveCaptureFields[captureName] = liveField;
                 captureType = liveField.DeclaringType!;
             }
+            string fieldName = $"<>captured_{captureName}";
+            if (DebugSymbols is not null)
+            {
+                if (StandaloneLiveCaptureFields.TryGetValue(captureName, out var sourceField))
+                {
+                    fieldName = DebugDisplayClassName();
+                    DebugSymbols.ImportCapturedField(sourceField);
+                }
+                else if (debugStaticCaptures?.Contains(captureName) == true)
+                    fieldName = DebugScaffoldingName(fieldName);
+                else
+                    fieldName = captureName == "this" ? "<>4__this" : DebugSymbols.AddCapturedValueField(captureName);
+            }
             var field = _stateMachineType.DefineField(
-                $"<>captured_{captureName}",
+                fieldName,
                 captureType,
                 FieldAttributes.Public
             );
@@ -358,7 +380,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
     public void DefineFunctionDisplayClassField(Type dcType, ConstructorBuilder dcCtor,
         IReadOnlyDictionary<string, FieldBuilder> dcFields)
     {
-        FunctionDCField = _stateMachineType.DefineField("<>__functionDC", dcType, FieldAttributes.Public);
+        FunctionDCField = _stateMachineType.DefineField(DebugDisplayClassName(), dcType, FieldAttributes.Public);
         FunctionDCCtor = dcCtor;
         foreach (var (name, field) in dcFields)
             FunctionDCFieldMap[name] = field;
@@ -369,6 +391,15 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
     /// The stub takes (outer state machine boxed, params...) and returns Task&lt;object&gt;.
     /// For standalone arrows, there's no outer SM parameter but captures are passed.
     /// </summary>
+    private void DefineOwnVariableFields(List<Stmt.Parameter> parameters, HashSet<string> locals)
+    {
+        var hoisting = new HoistingManager(_stateMachineType, _types.Object);
+        hoisting.DefineHoistedVariables(parameters.Select(parameter => parameter.Name.Lexeme), locals, DebugSymbols);
+        foreach (var (name, field) in hoisting.HoistedParameters) ParameterFields[name] = field;
+        foreach (var (name, field) in hoisting.HoistedLocals) LocalFields[name] = field;
+        foreach (Stmt.Parameter parameter in parameters) ParameterOrder.Add(parameter.Name.Lexeme);
+    }
+
     public void DefineStubMethod(TypeBuilder programType, EmittedRuntime? runtime = null)
     {
         // Build parameter types list
@@ -402,7 +433,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         }
 
         StubMethod = programType.DefineMethod(
-            $"<>AsyncArrow_{_counter}_Stub",
+            StubMethodName,
             MethodAttributes.Private | MethodAttributes.Static,
             _types.TaskOfObject,
             [.. paramTypes]

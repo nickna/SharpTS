@@ -255,8 +255,8 @@ public class AsyncBlockScopeShadowTests
         // slot; the arrow reads the inner value while the outer keeps its own (#837). Compiled async
         // FUNCTIONS used to lift every captured local into a name-keyed function display class, so a
         // read-only arrow capture of the shadow collided with the outer binding on one DC field (leaked
-        // 5,5). The fix renames the shadow (#767 pivot) and excludes it from the function DC so the
-        // arrow's read flows through the per-arrow snapshot path the pivot redirects.
+        // 5,5). The function DC now tracks the renamed shadow (#767 pivot), so the arrow reads its
+        // distinct shared field and also observes mutations made by the enclosing body.
         var source = """
             async function af(): Promise<string> {
               const out: string[] = [];
@@ -305,7 +305,7 @@ public class AsyncBlockScopeShadowTests
     public void AsyncFunction_TwoShadowsReadCapturedByDistinctArrows(ExecutionMode mode)
     {
         // Two independent nested-block shadows, each read by its own arrow, must each get their own slot
-        // without cross-contamination (#837). Confirms the exclusion handles more than one renamed shadow.
+        // without cross-contamination (#837). Confirms the DC tracks more than one renamed shadow.
         var source = """
             async function af(): Promise<string> {
               const out: string[] = [];

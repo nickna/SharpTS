@@ -24,7 +24,7 @@ internal sealed class MethodLocalSymbols(MethodBase method, ILGenerator il) : IL
     {
         internal int StartOffset { get; } = startOffset;
         internal int EndOffset { get; set; } = -1;
-        internal List<(string Name, int Slot)> Locals { get; } = [];
+        internal List<(string Name, int Slot, bool IsUser)> Locals { get; } = [];
 
         /// <summary>True for the method-body scope, whose end is the end of the method.</summary>
         internal bool IsOpen => EndOffset < 0;
@@ -34,6 +34,7 @@ internal sealed class MethodLocalSymbols(MethodBase method, ILGenerator il) : IL
     private readonly Stack<Scope> _open = new();
 
     internal MethodBase Method { get; } = method;
+    internal StateMachineDebugSymbols? HoistedSymbols { get; set; }
 
     /// <summary>All scopes recorded, in the order they were opened.</summary>
     internal IReadOnlyList<Scope> Scopes => _scopes;
@@ -69,6 +70,10 @@ internal sealed class MethodLocalSymbols(MethodBase method, ILGenerator il) : IL
     {
         if (_open.Count == 0) return;
 
-        _open.Peek().Locals.Add((name, local.LocalIndex));
+        var binding = HoistedSymbols?.GetBinding(name);
+        // Catch/loop lowering may keep a scratch IL slot even when the authoritative binding
+        // lives in a field. Naming that reset-on-reentry slot would shadow the correct field.
+        if (binding?.Field is not null || binding?.DisplayClassSlot is not null) return;
+        _open.Peek().Locals.Add((binding?.SourceName ?? name, local.LocalIndex, binding is not null));
     }
 }

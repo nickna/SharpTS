@@ -29,15 +29,21 @@ namespace SharpTS.Compilation;
 /// same-named binding's field (#838). A shadow both read and written by the same arrow is recorded here
 /// (a write makes it DC-backed). Empty unless a renamed write-captured shadow exists.
 /// </param>
+/// <param name="PerIterationStorageNames">
+/// Storage keys for block-scoped loop declarations. Read-only captures keep their per-iteration
+/// snapshot/cell storage even when a same-named ordinary binding belongs to the function display class.
+/// </param>
 internal sealed record BlockScopeRenameResult(
     IReadOnlyDictionary<object, string> Renames,
     IReadOnlyDictionary<object, IReadOnlyDictionary<string, string>> CaptureRenames,
-    IReadOnlyDictionary<object, IReadOnlyDictionary<string, string>> WriteCaptureRenames)
+    IReadOnlyDictionary<object, IReadOnlyDictionary<string, string>> WriteCaptureRenames,
+    IReadOnlySet<string> PerIterationStorageNames)
 {
     public static readonly BlockScopeRenameResult Empty = new(
         new Dictionary<object, string>(),
         new Dictionary<object, IReadOnlyDictionary<string, string>>(),
-        new Dictionary<object, IReadOnlyDictionary<string, string>>());
+        new Dictionary<object, IReadOnlyDictionary<string, string>>(),
+        new HashSet<string>());
 }
 
 /// <summary>
@@ -103,7 +109,14 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
     // Names WRITTEN inside an arrow only (no intervening non-arrow function/class): renameable and
     // DC-backed — the arrow's accesses route to the shared $functionDC field (#674/#725/#838).
     private readonly HashSet<string> _writeCaptured = [];
+    private readonly HashSet<string> _perIterationStorageNames = [];
+    private readonly HashSet<string> _loopBodyStorageNames = [];
+    private readonly HashSet<string> _assignedStorageNames = [];
+    private readonly HashSet<string> _relayedLoopBodyStorageNames = [];
+    private int _loopBodyDepth;
     private int _counter;
+    private bool _preserveDebugBindings;
+    private HashSet<string>? _seenBindings;
     // Depth of nested arrows currently being walked (0 == directly in the state-machine body).
     private int _arrowDepth;
     // The outermost arrow (directly in the state-machine body) currently being walked; captures of
@@ -122,20 +135,21 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
     /// pass false: they lift only captured-AND-mutated locals, so a read-only arrow capture flows through
     /// the per-arrow snapshot path the capture pivot can redirect (#767).
     /// </param>
-    public static BlockScopeRenameResult Compute(Stmt.Function func, bool arrowReadCapturesShareStorage = false) =>
-        Compute(func.Name.Lexeme, func.Parameters, func.Body, arrowReadCapturesShareStorage);
+    public static BlockScopeRenameResult Compute(Stmt.Function func, bool arrowReadCapturesShareStorage = false, bool preserveDebugBindings = false) =>
+        Compute(func.Name.Lexeme, func.Parameters, func.Body, arrowReadCapturesShareStorage, preserveDebugBindings);
 
     /// <summary>
     /// Arrow-function overload (#766). Arrows have no self-name, and only a block body can hold
     /// block-scoped declarations (an expression-bodied arrow has none, so it has no shadows to rename).
     /// </summary>
-    public static BlockScopeRenameResult Compute(Expr.ArrowFunction arrow, bool arrowReadCapturesShareStorage = false) =>
-        Compute(selfName: null, arrow.Parameters, arrow.BlockBody, arrowReadCapturesShareStorage);
+    public static BlockScopeRenameResult Compute(Expr.ArrowFunction arrow, bool arrowReadCapturesShareStorage = false, bool preserveDebugBindings = false) =>
+        Compute(selfName: null, arrow.Parameters, arrow.BlockBody, arrowReadCapturesShareStorage, preserveDebugBindings);
 
     private static BlockScopeRenameResult Compute(
-        string? selfName, List<Stmt.Parameter> parameters, List<Stmt>? body, bool arrowReadCapturesShareStorage)
+        string? selfName, List<Stmt.Parameter> parameters, List<Stmt>? body, bool arrowReadCapturesShareStorage, bool preserveDebugBindings)
     {
-        var renamer = new GeneratorBlockScopeRenamer();
+        var renamer = new GeneratorBlockScopeRenamer { _preserveDebugBindings = preserveDebugBindings };
+        if (preserveDebugBindings) renamer._seenBindings = [];
         if (body == null) return BlockScopeRenameResult.Empty;   // expression-bodied arrow: nothing to rename
 
         new CaptureClassifier(renamer._renameOffLimits, renamer._writeCaptured, arrowReadCapturesShareStorage).Run(body);
@@ -148,10 +162,19 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
             renamer.CurrentScope[selfName] = selfName;
         // Parameters live in the function scope; an inner block let/const may shadow them. Never renamed.
         foreach (var p in parameters)
+        {
             renamer.CurrentScope[p.Name.Lexeme] = p.Name.Lexeme;
+            renamer._seenBindings?.Add(p.Name.Lexeme);
+        }
         foreach (var stmt in body)
             renamer.Visit(stmt);
         renamer.PopScope();
+
+        // A never-reassigned body binding has a stable value within each iteration.
+        // Keep mutation and relay cases on the existing shared-storage path.
+        renamer._loopBodyStorageNames.ExceptWith(renamer._assignedStorageNames);
+        renamer._loopBodyStorageNames.ExceptWith(renamer._relayedLoopBodyStorageNames);
+        renamer._perIterationStorageNames.UnionWith(renamer._loopBodyStorageNames);
 
         if (renamer._renames.Count == 0 && renamer._captureSources.Count == 0 && renamer._writeCaptureSources.Count == 0)
             return BlockScopeRenameResult.Empty;
@@ -162,7 +185,7 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         var writeCaptures = new Dictionary<object, IReadOnlyDictionary<string, string>>(ReferenceEqualityComparer.Instance);
         foreach (var (arrow, names) in renamer._writeCaptureSources)
             writeCaptures[arrow] = names;
-        return new BlockScopeRenameResult(renamer._renames, captures, writeCaptures);
+        return new BlockScopeRenameResult(renamer._renames, captures, writeCaptures, renamer._perIterationStorageNames);
     }
 
     private Dictionary<string, string> CurrentScope => _scopes[^1];
@@ -192,7 +215,8 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         // Same-scope redeclaration is a TypeScript error; keep the first binding.
         if (CurrentScope.ContainsKey(name)) return;
 
-        if (ShadowsEnclosing(name) && !_renameOffLimits.Contains(name))
+        bool seenBinding = _seenBindings?.Add(name) == false;
+        if ((ShadowsEnclosing(name) || (_preserveDebugBindings && seenBinding)) && !_renameOffLimits.Contains(name))
         {
             var storage = $"<{name}>__bs{_counter++}";
             CurrentScope[name] = storage;
@@ -202,6 +226,8 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         {
             CurrentScope[name] = name;
         }
+        if (_loopBodyDepth > 0 && node is Stmt.Const or Stmt.Var)
+            _loopBodyStorageNames.Add(CurrentScope[name]);
     }
 
     private void RecordRef(object node, string name)
@@ -217,6 +243,8 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         }
         else if (_currentTopArrow != null)
         {
+            if (_arrowDepth > 1 || _currentTopArrow.IsAsync)
+                _relayedLoopBodyStorageNames.Add(storage);
             // Reference inside a nested arrow that lexically binds to a renamed generator shadow. The
             // reference node itself is NOT renamed (the arrow body compiles in its own context); instead
             // the source name → storage pivot is recorded so the emit phase can redirect it. A WRITE
@@ -227,6 +255,12 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
                 sink[_currentTopArrow] = names = [];
             names[name] = storage;
         }
+    }
+
+    private void RecordAssignment(string name)
+    {
+        if (_arrowDepth == 0 && Resolve(name) is { } storage)
+            _assignedStorageNames.Add(storage);
     }
 
     #region Declarations
@@ -268,6 +302,7 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
             // `var` is function-scoped: record it in the bottom scope so a later block-scoped
             // let/const that shadows it is detected, but never rename it (one binding per name).
             _scopes[0].TryAdd(stmt.Name.Lexeme, stmt.Name.Lexeme);
+            _seenBindings?.Add(stmt.Name.Lexeme);
         }
         else
         {
@@ -283,24 +318,36 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
 
     protected override void VisitAssign(Expr.Assign expr)
     {
+        RecordAssignment(expr.Name.Lexeme);
         RecordRef(expr, expr.Name.Lexeme);
         base.VisitAssign(expr);
     }
 
     protected override void VisitCompoundAssign(Expr.CompoundAssign expr)
     {
+        RecordAssignment(expr.Name.Lexeme);
         RecordRef(expr, expr.Name.Lexeme);
         base.VisitCompoundAssign(expr);
     }
 
     protected override void VisitLogicalAssign(Expr.LogicalAssign expr)
     {
+        RecordAssignment(expr.Name.Lexeme);
         RecordRef(expr, expr.Name.Lexeme);
         base.VisitLogicalAssign(expr);
     }
 
-    // Increment/decrement record the operand Variable (via the default traversal → VisitVariable),
-    // matching how the emitter resolves it (it reads/writes through the operand variable node).
+    protected override void VisitPrefixIncrement(Expr.PrefixIncrement expr)
+    {
+        if (expr.Operand is Expr.Variable variable) RecordAssignment(variable.Name.Lexeme);
+        base.VisitPrefixIncrement(expr);
+    }
+
+    protected override void VisitPostfixIncrement(Expr.PostfixIncrement expr)
+    {
+        if (expr.Operand is Expr.Variable variable) RecordAssignment(variable.Name.Lexeme);
+        base.VisitPostfixIncrement(expr);
+    }
 
     #endregion
 
@@ -317,25 +364,86 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
     {
         // The for-statement owns a scope for any let/const declared in its initializer.
         PushScope();
-        base.VisitFor(stmt);
+        if (stmt.Initializer is not null) Visit(stmt.Initializer);
+        if (_arrowDepth == 0)
+        {
+            string? name = stmt.Initializer switch
+            {
+                Stmt.Var { IsVar: false } variable => variable.Name.Lexeme,
+                Stmt.Const constant => constant.Name.Lexeme,
+                _ => null
+            };
+            if (name is not null) _perIterationStorageNames.Add(Resolve(name) ?? name);
+        }
+        if (stmt.Condition is not null) Visit(stmt.Condition);
+        if (stmt.Increment is not null) Visit(stmt.Increment);
+        _loopBodyDepth++;
+        Visit(stmt.Body);
+        _loopBodyDepth--;
         PopScope();
+    }
+
+    protected override void VisitWhile(Stmt.While stmt)
+    {
+        Visit(stmt.Condition);
+        _loopBodyDepth++;
+        Visit(stmt.Body);
+        _loopBodyDepth--;
+    }
+
+    protected override void VisitDoWhile(Stmt.DoWhile stmt)
+    {
+        _loopBodyDepth++;
+        Visit(stmt.Body);
+        _loopBodyDepth--;
+        Visit(stmt.Condition);
     }
 
     protected override void VisitForOf(Stmt.ForOf stmt)
     {
         Visit(stmt.Iterable);   // iterable is evaluated in the enclosing scope
+        string storage = _preserveDebugBindings && !stmt.IsDeclaration
+            ? Resolve(stmt.Variable.Lexeme) ?? stmt.Variable.Lexeme : stmt.Variable.Lexeme;
+        if (_preserveDebugBindings && storage != stmt.Variable.Lexeme && _arrowDepth == 0) _renames[stmt] = storage;
+        if (_preserveDebugBindings && stmt.IsVar)
+        {
+            _scopes[0].TryAdd(storage, storage);
+            _seenBindings?.Add(storage);
+        }
         PushScope();
-        CurrentScope[stmt.Variable.Lexeme] = stmt.Variable.Lexeme;   // loop var: detected, not renamed
+        if (_preserveDebugBindings && _arrowDepth == 0 && stmt.IsDeclaration && !stmt.IsVar)
+            DeclareBlockScoped(stmt, stmt.Variable.Lexeme);
+        else
+            CurrentScope[stmt.Variable.Lexeme] = storage;
+        if (_arrowDepth == 0 && stmt.IsDeclaration && !stmt.IsVar)
+            _perIterationStorageNames.Add(Resolve(stmt.Variable.Lexeme) ?? stmt.Variable.Lexeme);
+        _loopBodyDepth++;
         Visit(stmt.Body);
+        _loopBodyDepth--;
         PopScope();
     }
 
     protected override void VisitForIn(Stmt.ForIn stmt)
     {
         Visit(stmt.Object);
+        string storage = _preserveDebugBindings && !stmt.IsDeclaration
+            ? Resolve(stmt.Variable.Lexeme) ?? stmt.Variable.Lexeme : stmt.Variable.Lexeme;
+        if (_preserveDebugBindings && storage != stmt.Variable.Lexeme && _arrowDepth == 0) _renames[stmt] = storage;
+        if (_preserveDebugBindings && stmt.IsVar)
+        {
+            _scopes[0].TryAdd(storage, storage);
+            _seenBindings?.Add(storage);
+        }
         PushScope();
-        CurrentScope[stmt.Variable.Lexeme] = stmt.Variable.Lexeme;
+        if (_preserveDebugBindings && _arrowDepth == 0 && stmt.IsDeclaration && !stmt.IsVar)
+            DeclareBlockScoped(stmt, stmt.Variable.Lexeme);
+        else
+            CurrentScope[stmt.Variable.Lexeme] = storage;
+        if (_arrowDepth == 0 && stmt.IsDeclaration && !stmt.IsVar)
+            _perIterationStorageNames.Add(Resolve(stmt.Variable.Lexeme) ?? stmt.Variable.Lexeme);
+        _loopBodyDepth++;
         Visit(stmt.Body);
+        _loopBodyDepth--;
         PopScope();
     }
 
@@ -363,7 +471,12 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         {
             PushScope();
             if (stmt.CatchParam != null)
-                CurrentScope[stmt.CatchParam.Lexeme] = stmt.CatchParam.Lexeme;   // catch param: detected, not renamed
+            {
+                if (_arrowDepth == 0)
+                    DeclareBlockScoped(stmt, stmt.CatchParam.Lexeme);
+                else
+                    CurrentScope[stmt.CatchParam.Lexeme] = stmt.CatchParam.Lexeme;
+            }
             foreach (var s in stmt.CatchBlock) Visit(s);
             PopScope();
         }

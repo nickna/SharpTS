@@ -30,26 +30,41 @@ A brace never takes a stop on its own. `{ … }` blocks, the sequences a lowerin
 emit no instructions of their own, so the first real statement inside them owns that position.
 Conditions do execute, so `if`, `while`, `for`, and `switch` headers keep their own points.
 
-Locals show under the names you wrote, over the range they are actually in scope — a `for` binding
-is offered inside its loop and not outside it, and a shadowing inner `let` resolves ahead of the
-outer one. Temporaries the compiler introduces (destructuring scratch slots and similar) are marked
-hidden and stay out of the locals window.
+Locals show under the names you wrote, over the range they are actually in scope — a `let` or
+`const` loop binding is offered inside its loop and not outside it, while `var` retains its function
+scope. A shadowing inner `let` resolves ahead of the outer one. Temporaries the compiler introduces
+(destructuring scratch slots and similar) are marked hidden and stay out of the locals window.
 
-### Where variables do not appear as locals
+This also covers variables that survive `await` or `yield` in async functions, generators,
+async generators, and async arrows. Debug builds describe each hoisted source binding and its
+lexical lifetime, including the shared storage used by closures. The VS Code C# debugger presents
+those bindings in Locals and resolves source names in Watch before and after suspension. Inner
+shadows resolve to the inner binding; leaving a block or catch restores the outer binding or makes
+the name unavailable. Compiler state, awaiters, spill fields, and hidden scratch slots stay out of
+that presentation.
 
-Two categories are visible to a debugger, but not as ordinary locals. This is accepted behavior for
-now, not an oversight.
+Watch uses the C# expression evaluator. Escape a TypeScript name that is a C# keyword with `@`:
+for a binding named `int`, evaluate `@int` (also its Locals display name); bare `int` fails to
+parse. The tested source name `$dollar` evaluates directly in Watch.
+
+Hoisted-local presentation was verified at 55 stops with VS Code 1.140.0 and C# 2.140.9 on Windows
+x64: all 123 expected Locals values matched, with exactly one entry for each binding. The separate
+`netcoredbg` 3.2.0-1092 comparison passed the same 55 stops on the same assembly: all 123 first Locals
+values, expected Watch values, and lexical visibility matched, and no empty-name entries or compiler
+scaffolding appeared. Its Locals list still duplicates names at seven shadowing stops, including
+three loop iterations; the first Locals entry and Watch select the correct binding. Boxed numbers
+may require expanding `m_value`. Earlier empty-name
+entries came from parsing wrapped generated-field prefixes, which the compiler now normalizes.
+Visual Studio and Rider have not been checked for this projection. See the
+[acceptance evidence](../scripts/editor-smoke/compiled-debugger/hoisted-last-verified.json)
+and [debugger investigation](plans/issue-1399-hoisted-locals.md) for the tested cases and limits.
+
+### Top-level bindings
 
 *Module and script top-level bindings* are emitted as static fields of `$Program`, because they
 outlive the initializer that assigns them and may be captured by other modules. Inspect them under
-the static fields of `$Program` rather than in the locals window.
-
-*Locals of `async` functions and generators* are hoisted into the state machine's fields so they
-survive suspension, so they appear as fields of the `<name>d__N` frame instead of as locals of
-`MoveNext`. The generated state-machine and display-class names are stable, and their fields retain
-the source binding names. Reconstructing every hoisted field as an ordinary locals-window entry
-would require additional debugger-specific hoisted-local metadata and remains outside the accepted
-v1 behavior.
+the static fields of `$Program` rather than in the locals window. Captured top-level bindings retain
+their static storage in async arrows, and stale state-machine snapshots stay hidden.
 
 ### Stepping and the bundled stdlib
 
@@ -109,11 +124,14 @@ both locate `app.pdb` beside `app.dll` and open the `.ts` files it names.
 
 ## Manual smoke checklist
 
-`tests/SharpTS.Tests/Compilation/DebugSymbolsTests.cs` asserts the symbol *metadata* thoroughly —
-documents and checksums, sequence points and the lines they land on, named locals, lexical scope
-nesting, state-machine mappings, async suspension/resume records, generated-code attributes, and a
-CodeView identity that still matches after the reference rewriter. These unit tests do not launch
-a debugger. When changing statement emission, the span model, or the symbol pipeline, also run the
+`tests/SharpTS.Tests/Compilation/DebugSymbolsTests.cs` and `DebugSymbolsHoistedLocalsTests.cs`
+assert the symbol *metadata* thoroughly — documents and checksums, sequence points and the lines
+they land on, named locals, lexical scope
+nesting, state-machine mappings, async suspension/resume records, hoisted-binding lifetimes,
+authoritative closure storage, generated-code attributes, and a CodeView identity that still matches
+after the reference rewriter. The hoisted tests also execute debug and non-debug assemblies across
+real suspension. These unit tests do not launch a debugger. When changing statement emission,
+the span model, or the symbol pipeline, also run the
 [real VS Code debugger acceptance check](../scripts/editor-smoke/compiled-debugger/README.md) or the
 manual checklist below. The optional acceptance check records actual source breakpoint hits,
 stepping, locals/Watch, imported frames, and debug/non-debug execution through the installed C#
@@ -132,6 +150,9 @@ function, a generator, and an `import`.
 4. Step over a `{`-only line: the debugger moves to the first statement inside, never onto the brace.
 5. Step through a loop: the header and the body alternate rather than sticking on one line.
 6. Break inside a `catch` and confirm the frame is the catch body, not the `try` line.
-7. Break inside an `async` function after an `await`, and inside a generator after a `yield`.
+7. Break before and after suspension in an async function, generator, async generator, and async
+   arrow. Confirm the source frame and Locals/Watch values, including a captured variable changed
+   by a closure. Repeat inside a shadowing block, loop, and suspending catch; confirm inner values
+   while inside and outer values or unavailable names after leaving the scope.
 8. Break in an imported module's function and confirm the debugger opens that file, not the entry file.
 9. Rebuild without `-g`, confirm no `.pdb` is produced and the program still runs.

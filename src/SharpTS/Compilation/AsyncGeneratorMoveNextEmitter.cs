@@ -79,7 +79,7 @@ public partial class AsyncGeneratorMoveNextEmitter : IteratorMoveNextEmitter
         // the async-generator analog of #400. This was the only state-machine emitter that lacked the
         // wiring (the other three enable it), so such a value was silently lost across a suspension.
         _helpers.EnablePersistentSpills(name => _builder.StateMachineType.DefineField(
-            name, _types.Object, FieldAttributes.Private));
+            _builder.DebugScaffoldingName(name), _types.Object, FieldAttributes.Private));
     }
 
     // DeclareLoopVariable and EmitStoreLoopVariable are handled by StatementEmitterBase
@@ -98,6 +98,7 @@ public partial class AsyncGeneratorMoveNextEmitter : IteratorMoveNextEmitter
         }
 
         _ctx = ctx;
+        _builder.AttachDebugSymbols(ctx);
         // Wire the runtime into the helper now that the context is bound, so MoveNext uses the
         // $Undefined sentinel and JS-spec coercion/comparison helpers rather than null/Convert (#600).
         if (ctx.Runtime != null) _helpers.SetRuntime(ctx.Runtime);

@@ -101,8 +101,9 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
 
         // Define the state machine struct
         // Name follows C# compiler convention: <MethodName>d__N
-        _stateMachineType = EmitTypeDefinitions.DefineType(_moduleBuilder,
+        _stateMachineType = DefineStateMachineType(_moduleBuilder,
             $"<{methodName}>d__{_counter}",
+            _counter,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.ValueType,
             [_types.IAsyncStateMachine]
@@ -114,9 +115,8 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
 
         // Define hoisted variables using HoistingManager
         _hoisting = new HoistingManager(_stateMachineType, _types.Object);
-        _hoisting.DefineHoistedParameters(
-            analysis.HoistedParameters, hoistedParameterTypes);
-        _hoisting.DefineHoistedLocals(analysis.HoistedLocals);
+        _hoisting.DefineHoistedVariables(
+            analysis.HoistedParameters, analysis.HoistedLocals, DebugSymbols, hoistedParameterTypes);
 
         // Define awaiter fields (one per await point)
         foreach (var awaitPoint in analysis.AwaitPoints)
@@ -146,7 +146,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
         if (hasAsyncArrows)
         {
             SelfBoxedField = _stateMachineType.DefineField(
-                "<>__selfBoxed",
+                DebugScaffoldingName("<>__selfBoxed"),
                 _types.Object,
                 FieldAttributes.Public
             );
@@ -155,7 +155,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
         // Define defaults applied flag field
         // This prevents re-evaluation of default parameters on every state machine resume
         DefaultsAppliedField = _stateMachineType.DefineField(
-            "<>__defaultsApplied",
+            DebugScaffoldingName("<>__defaultsApplied"),
             typeof(bool),
             FieldAttributes.Public
         );
@@ -168,14 +168,14 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
 
             // <>__prevReentrancy - stores the reentrancy count at method entry
             LockPrevReentrancyField = _stateMachineType.DefineField(
-                "<>__prevReentrancy",
+                DebugScaffoldingName("<>__prevReentrancy"),
                 _types.Int32,
                 FieldAttributes.Public
             );
 
             // <>__lockAcquired - whether we acquired the lock (true if prevReentrancy was 0)
             LockAcquiredField = _stateMachineType.DefineField(
-                "<>__lockAcquired",
+                DebugScaffoldingName("<>__lockAcquired"),
                 typeof(bool),
                 FieldAttributes.Public
             );
@@ -183,7 +183,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
             // <>__lockAwaiter - awaiter for SemaphoreSlim.WaitAsync()
             // This uses TaskAwaiter (for Task, not Task<T>) since WaitAsync() returns Task
             LockAwaiterField = _stateMachineType.DefineField(
-                "<>__lockAwaiter",
+                DebugScaffoldingName("<>__lockAwaiter"),
                 typeof(TaskAwaiter),
                 FieldAttributes.Private
             );
@@ -191,7 +191,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
             // <>__asyncLockRef - reference to the outer class's SemaphoreSlim
             // Stored here to avoid casting ThisField to concrete class type
             AsyncLockRefField = _stateMachineType.DefineField(
-                "<>__asyncLockRef",
+                DebugScaffoldingName("<>__asyncLockRef"),
                 typeof(SemaphoreSlim),
                 FieldAttributes.Public
             );
@@ -199,7 +199,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
             // <>__lockReentrancyRef - reference to the outer class's AsyncLocal<int>
             // Stored here to avoid casting ThisField to concrete class type
             LockReentrancyRefField = _stateMachineType.DefineField(
-                "<>__lockReentrancyRef",
+                DebugScaffoldingName("<>__lockReentrancyRef"),
                 typeof(AsyncLocal<int>),
                 FieldAttributes.Public
             );
@@ -271,7 +271,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
     public void DefineFunctionDisplayClassField(Type dcType)
     {
         FunctionDCField = _stateMachineType.DefineField(
-            "<>__functionDC",
+            DebugDisplayClassName(),
             dcType,
             FieldAttributes.Public);
     }

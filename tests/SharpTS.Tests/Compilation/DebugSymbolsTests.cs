@@ -26,7 +26,7 @@ namespace SharpTS.Tests.Compilation;
 /// symbols to the finished bytes. These tests pin the two properties that makes safe: the rewriter
 /// preserves <c>MethodDef</c> row identity, and the injected directory leaves a loadable image.
 /// </remarks>
-public class DebugSymbolsTests
+public partial class DebugSymbolsTests
 {
     private const string SourceText = """
         function add(a: number, b: number): number {
@@ -304,11 +304,15 @@ public class DebugSymbolsTests
             }
             """;
 
-        var lines = AllSequencePointLines(CompileTypeScript(source, emitDebugSymbols: true));
+        var artifacts = CompileTypeScript(source, emitDebugSymbols: true);
+        var lines = AllSequencePointLines(artifacts);
 
         // Line 1 the declaration, 2 the `if` test, 3 its body; `try` (5) yields to its body (6),
         // and the catch body is 8. No point sits on a line that is only a brace.
         Assert.Equal([1, 2, 3, 6, 8], lines);
+        SequencePoint[] headers = AllSequencePoints(artifacts).Where(point => !point.IsHidden && point.StartLine == 2).ToArray();
+        Assert.NotEmpty(headers);
+        Assert.All(headers, header => Assert.Equal(2, header.EndLine));
     }
 
     /// <summary>
@@ -324,9 +328,28 @@ public class DebugSymbolsTests
             }
             """;
 
-        var lines = AllSequencePointLines(CompileTypeScript(source, emitDebugSymbols: true));
+        var artifacts = CompileTypeScript(source, emitDebugSymbols: true);
+        var lines = AllSequencePointLines(artifacts);
 
         Assert.Equal([1, 2, 3], lines);
+        SequencePoint[] headers = AllSequencePoints(artifacts).Where(point => !point.IsHidden && point.StartLine == 2).ToArray();
+        Assert.NotEmpty(headers);
+        Assert.All(headers, header => Assert.Equal(2, header.EndLine));
+    }
+
+    [Theory]
+    [InlineData("if (total === 0)")]
+    [InlineData("while (total < 1)")]
+    [InlineData("for (let i = 0; i < 1; i++)")]
+    public void UnbracedControlFlowHeadersDoNotCoverBodyStatements(string header)
+    {
+        string source = "let total = 0;\n" + header + "\n  total += 1;\nconsole.log(total);";
+        CompilationArtifacts artifacts = CompileTypeScript(source, emitDebugSymbols: true);
+        SequencePoint[] conditions = AllSequencePoints(artifacts).Where(point => !point.IsHidden && point.StartLine == 2).ToArray();
+        SequencePoint body = Assert.Single(AllSequencePoints(artifacts), point => !point.IsHidden && point.StartLine == 3);
+        Assert.NotEmpty(conditions);
+        Assert.All(conditions, condition => Assert.True(condition.EndLine < body.StartLine,
+            "A body breakpoint must bind after its lexical scope is entered."));
     }
 
     /// <summary>
@@ -697,16 +720,16 @@ public class DebugSymbolsTests
             .Select(handle => metadata.GetString(
                 metadata.GetFieldDefinition(handle).Name))
             .ToArray();
-        Assert.Contains("seed", asyncFields);
-        Assert.Contains("increment", asyncFields);
+        Assert.Contains(asyncFields, field => field.StartsWith("<seed>5__", StringComparison.Ordinal));
+        Assert.Contains(asyncFields, field => field.StartsWith("<increment>5__", StringComparison.Ordinal));
         Assert.Contains(generatedTypes, handle =>
         {
             TypeDefinition type = metadata.GetTypeDefinition(handle);
             return metadata.GetString(type.Name)
                     .Contains("FuncDisplayClass", StringComparison.Ordinal) &&
                 type.GetFields().Any(field =>
-                    metadata.GetString(metadata.GetFieldDefinition(field).Name) ==
-                    "carried");
+                    metadata.GetString(metadata.GetFieldDefinition(field).Name)
+                        .StartsWith("<carried>5__", StringComparison.Ordinal));
         });
 
         MethodDefinitionHandle[] kickoffMethods = metadata.MethodDefinitions

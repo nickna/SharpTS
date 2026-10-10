@@ -19,7 +19,7 @@ public partial class AsyncGeneratorMoveNextEmitter
     // `__returnRequested` is clear.
 
     protected override FieldBuilder DefineStateMachineField(string name, Type type) =>
-        _builder.StateMachineType.DefineField(name, type, FieldAttributes.Private);
+        _builder.StateMachineType.DefineField(_builder.DebugScaffoldingName(name), type, FieldAttributes.Private);
 
     // ProtectedRegionDepth and its _protectedRegionDepth backing field, plus the suspension-agnostic
     // EmitSimpleTryCatch / StoreCaughtExceptionToParam, live in the shared IteratorMoveNextEmitter base
@@ -106,8 +106,7 @@ public partial class AsyncGeneratorMoveNextEmitter
     private FieldBuilder? _pendingExceptionField;
 
     private FieldBuilder GetPendingExceptionField() =>
-        _pendingExceptionField ??= _builder.StateMachineType.DefineField(
-            "<>pendingException", typeof(object), FieldAttributes.Private);
+        _pendingExceptionField ??= DefineStateMachineField("<>pendingException", typeof(object));
 
     // ---- Throw routing (generator-specific) -----------------------------------------------------
     // The loop-scope methods and break/continue (with their finally routing) are inherited from
@@ -345,7 +344,7 @@ public partial class AsyncGeneratorMoveNextEmitter
             if (t.CatchParam != null)
             {
                 _il.Emit(OpCodes.Ldloc, caughtExceptionLocal);
-                StoreCaughtExceptionToParam(t.CatchParam.Lexeme);
+                StoreCaughtExceptionToParam(GetBindingStorageName(t, t.CatchParam.Lexeme));
             }
 
             // Catch handles it; clear the present flag so the post-finally rethrow below is skipped —

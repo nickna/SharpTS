@@ -124,7 +124,7 @@ public partial class AsyncMoveNextEmitter
             return;
         }
 
-        string varName = f.Variable.Lexeme;
+        string varName = GetBindingStorageName(f, f.Variable.Lexeme);
         var varField = _builder.GetVariableField(varName);
 
         EmitExpression(f.Iterable);
@@ -198,7 +198,7 @@ public partial class AsyncMoveNextEmitter
         var startLabel = _il.DefineLabel();
         var continueLabel = _il.DefineLabel();
 
-        string varName = f.Variable.Lexeme;
+        string varName = GetBindingStorageName(f, f.Variable.Lexeme);
         var varField = _builder.GetVariableField(varName);
 
         EmitExpression(f.Object);

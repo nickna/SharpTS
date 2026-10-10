@@ -1,0 +1,395 @@
+{
+  "issue": "https://github.com/nickna/SharpTS/issues/1399",
+  "verifiedUtc": "2026-10-09T10:08:00.046Z",
+  "sourceCommit": "5256a80bc3c4a2b387b287017f371f9d13da7cfa",
+  "workingTreeChangesIncluded": true,
+  "platform": "win32-x64",
+  "dotnetSdk": "10.0.401",
+  "compilerSources": {
+    "src/SharpTS/Compilation/AsyncArrowMoveNextEmitter.Variables.cs": "3cfe6721fc7898ca173e1ea1de434509997dd2f35649faa8364e1c475bb90b1c",
+    "src/SharpTS/Compilation/AsyncArrowMoveNextEmitter.cs": "e2bf429e24519882c0ed7303a39cb0cd31897059b1a5524544ad20d9b0d4cdee",
+    "src/SharpTS/Compilation/AsyncArrowStateMachineBuilder.cs": "6e223b0d5fa9c74a7916141d4c1b6de5deb779b7472b00d400d67ef24117d019",
+    "src/SharpTS/Compilation/AsyncFunctionMoveNextEmitter.TryCatch.cs": "d4cecaa0ef28b90a427a37dcb106b7d4d7f983cf8419b99606c97c20763c37e3",
+    "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Statements.TryCatch.cs": "d6c925c47ac383d563abeb2f35576d35cc9ebb40c537a1ea7af3a10a0d2d5334",
+    "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Statements.cs": "518e24e8c0e0f8f15d8700bd86eccb73007b228af98593f43375f1744a542ced",
+    "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.cs": "99c07d76b379def48f43d75306cecdf5ab8bb33d9132dc9b1b983637ce10ae0b",
+    "src/SharpTS/Compilation/AsyncGeneratorStateAnalyzer.Statements.cs": "82647079151414dc4649c5b5f620ba769ae7cba0fad5f1e1ecb6fa5ee0c79723",
+    "src/SharpTS/Compilation/AsyncGeneratorStateAnalyzer.cs": "7e5272fef7eacbfc6719da4bf63aaefb77efa88261c6932bbb9b9ba1d46ca3ca",
+    "src/SharpTS/Compilation/AsyncGeneratorStateMachineBuilder.cs": "ed9fe7677a94161863ab01cf6b165a8496899af243ecfc86fe9224d05af56aaa",
+    "src/SharpTS/Compilation/AsyncMoveNextEmitter.Statements.LabeledLoops.cs": "3b34f56c27645adfb8db13f45cde733ca7905c391d1ea829e02fdbd91c94c0ab",
+    "src/SharpTS/Compilation/AsyncMoveNextEmitter.Statements.Loops.cs": "c30eb340a77bdcdf217083395a79b0358c83ca14b2be93f118a7566892a3fce1",
+    "src/SharpTS/Compilation/AsyncMoveNextEmitter.cs": "05b1b774572d7b31430c17839b6d431452ec78f060ee7d49a826c0f89234f013",
+    "src/SharpTS/Compilation/AsyncStateAnalyzer.Statements.cs": "4f3592407487c4fac2b882eb7c4c71a540aba54cf28f5a5aeadcb72d2be9470e",
+    "src/SharpTS/Compilation/AsyncStateAnalyzer.cs": "864f3dbe50294db315f871b26d66d96a42b7990916991f65acfb11b74d0faeae",
+    "src/SharpTS/Compilation/AsyncStateMachineBuilder.cs": "ae4e02de9a3c942119f72dca6606f74498dc65eb9dd8a66e32a34a18770e1b11",
+    "src/SharpTS/Compilation/CompilationContext.cs": "597805e0b6c33c9df12b09177eca69daeaf3ab7b9f433857178c27d17956566f",
+    "src/SharpTS/Compilation/EmitTypeDefinitions.cs": "a5ba78cc2a47d99eabea2d2de06f63955d775d9f805aa3b777d0e0fe0a4bd62b",
+    "src/SharpTS/Compilation/GeneratorBlockScopeRenamer.cs": "8db727cf9f53f815d681d56dcbd649c8baf0773158f0fee23be53fe9a7eab261",
+    "src/SharpTS/Compilation/GeneratorMoveNextEmitter.Statements.TryCatch.cs": "f26286abe00a04f0c78d028140bace43b22ccb77fb33e13b76de6cfa579106da",
+    "src/SharpTS/Compilation/GeneratorMoveNextEmitter.Statements.cs": "0cb852fdb841457a737f3b1570c34d1696ab9ea893109cb7b32fa362481e5606",
+    "src/SharpTS/Compilation/GeneratorMoveNextEmitter.cs": "bbc14b16bac158dfa8475d44df0debbe4a19e6effa03ef533c2f6bc388deefcb",
+    "src/SharpTS/Compilation/GeneratorStateAnalyzer.cs": "ec85f7b09ff02be0b5eb151dea97444b9b223e1998d24c6f4d2011602f62e826",
+    "src/SharpTS/Compilation/GeneratorStateMachineBuilder.cs": "7abb19ac30cdcb17376dfce853a054a663d61b869fd8acecff2f227b7243f843",
+    "src/SharpTS/Compilation/HoistingManager.cs": "9818cbab937e545a36a44665921230f11d211458e6d21187c26af5bc4e3adc2f",
+    "src/SharpTS/Compilation/ILCompiler.ArrowFunctions.cs": "3605dd3b07487dc8c2dec9e8e5bf35b4daa23205de1d12f2ef328829b3313df5",
+    "src/SharpTS/Compilation/ILCompiler.Async.StandaloneCaptures.cs": "e8b4b6bd1b232a2d81465b621e872749f855016428cd2c0d1e52cf5de13beecd",
+    "src/SharpTS/Compilation/ILCompiler.Async.cs": "e77b4ec5228bb815f5beb1774615c4eeac0661f4761dbe7c94ea21bf90258e00",
+    "src/SharpTS/Compilation/ILCompiler.AsyncGenerators.cs": "b35ce8a0380ead279538f7d41270e951ecf8b7d5f9f3b1969bcf7b54724acb32",
+    "src/SharpTS/Compilation/ILCompiler.Classes.Static.cs": "b9f35d9d63d607ea3b4cdd328655755ae84b9c69a3ffce30c087420efa66b9fd",
+    "src/SharpTS/Compilation/ILCompiler.DebuggerMetadata.cs": "2426841e2d8f94b5f484880045c17c10edcef7213dcf0bd181f6a609863c29ef",
+    "src/SharpTS/Compilation/ILCompiler.Functions.cs": "1f586f3e52ae8e7e2852837e150791ce97d7aeedd74d3810fa3903e539b572f1",
+    "src/SharpTS/Compilation/ILCompiler.Generators.cs": "9742e9c9fb3af8cc52021619fc759bcad6b06a4ad6563345d73aa199aa234d6d",
+    "src/SharpTS/Compilation/ILCompiler.cs": "9dd6ea2fe1f0de5de11cd689a01edb60dbc4ec4478ca2ed848b3946257035047",
+    "src/SharpTS/Compilation/IteratorMoveNextEmitter.cs": "1cc0e6930920491f99e24f0aa14e30bec08f3eaffc94039f7f95d937498a5b82",
+    "src/SharpTS/Compilation/StateMachineBuilderBase.cs": "727056e05264362dc6da22d2559cbda82795a8c21644194b3d3fb2bf6b2e880c",
+    "src/SharpTS/Compilation/StateMachineExitRoutingEmitter.cs": "61f1a303d8f29b007664eeb0073ab72d79f985b0ffca89f60bc763af1b45fbb0",
+    "src/SharpTS/Compilation/StatementEmitterBase.cs": "4a0f42657e94b9e80fd3d5fd29ad21c8552f9ad7f09eb356931550bb9c5ed215",
+    "src/SharpTS/Compilation/Symbols/DebugEmitScope.cs": "0da7170264682c7c51cf62c9017dd43bdfb5cb55179c479cfe6692ebb213f091",
+    "src/SharpTS/Compilation/Symbols/DebugInfoCollector.cs": "566da5ec2911325dd927f5d926bdd72fe4f228497856f147cdd112f65b68a0ef",
+    "src/SharpTS/Compilation/Symbols/MethodLocalSymbols.cs": "28118850df22188286ec1d295f0015ac34566f11a4d8fd7edeeef5f39d0d01a4",
+    "src/SharpTS/Compilation/Symbols/PdbEmitter.cs": "2947ef59db09f7be80c49d79fde1e631afe71a6e4b9d609a36754bf118bec690",
+    "src/SharpTS/Compilation/Symbols/StateMachineDebugSymbols.cs": "8c97ae493a6f52d70cd00098b83f1473aa5e675d90a852b314b96eea1e190943",
+    "src/SharpTS/Parsing/AST.cs": "b9b3459b827e93e51e9c601118510af7d2e617e7874aebde23389d43421e20bd",
+    "src/SharpTS/Parsing/Parser.Statements.cs": "4468d18a63ddf8ce4060788b9d7bc4ef96e46b8343ffd75a985c479bf62f576d"
+  },
+  "acceptanceSources": {
+    "scripts/editor-smoke/compiled-debugger/run.mjs": "9734f54ea97c42b838afb164f6d04515345df6ce4a075b3fd72356a75ea93d92",
+    "scripts/editor-smoke/compiled-debugger/hoisted.test.cjs": "13c262b61e7ea72979ef0833b1c3f75a37fdeed877a6bc166bc071d2853c6a83",
+    "scripts/editor-smoke/compiled-debugger/test.cjs": "ea42bceac9e4f9728ffdf4a0ffc5671ae4ae0d04907f25d9db95184eceeb29a0",
+    "tests/fixtures/HoistedDebuggerAcceptance/main.ts": "92aea2ff3f129480c474293ac990c02b6378394a356774bb265e13a857b2037f",
+    "tests/fixtures/HoistedDebuggerAcceptance/helper.ts": "c89cd08bddabf29ae302d452e2e28884281630e62a862ad1ba202b1e31269ea9",
+    "tests/fixtures/HoistedDebuggerAcceptance/expectations.json": "20b1cff43dd6e556d8622e11b9dba2174e924308cc8c78467811023646c97cc4",
+    "tests/fixtures/HoistedDebuggerAcceptance/roslyn/Program.cs": "ee232a1af4903d881390f54db8e1fbb38c45c909142bff93e7c0491e7659a4a3",
+    "tests/fixtures/HoistedDebuggerAcceptance/roslyn/RoslynControl.csproj": "79193dda9e9b30f381edd6aa923a18022c0dd8a1e33b564eb66d628f7007e880",
+    "tests/fixtures/HoistedDebuggerAcceptance/roslyn/expectations.json": "b6b228783eeb19360cad6b1f912dd6a6fdd45cd2c1bcd6be92b4673180a430a4",
+    "tests/SharpTS.Tests/Compilation/DebugSymbolsTests.cs": "b50cec8303d47e8eb023556937433de7d6a6b95f2f4c0456ac23b99071758351",
+    "tests/SharpTS.Tests/Compilation/DebugSymbolsHoistedLocalsTests.cs": "65832a3a03a102eeabdd83be4ba49123d75c94eb951dee88a5bb353987f6b8a4",
+    "tests/SharpTS.Tests/Compilation/DebugSymbolsCapturedGlobalsTests.cs": "624eaa22f88f09e9592eba8097644dd26bd9a9dc60887f6c1329397fa528c587",
+    "tests/SharpTS.Tests/Compilation/EmitterSyncTests.cs": "0c69ea4062bbf41843d3cd9e3489210f3273c83c1bae66287fb16d16edf4ffa2",
+    "tests/SharpTS.Tests/SharedTests/AsyncBlockScopeShadowTests.cs": "1d55ea8614c5224fc419db177019e657fdc62e70aa9966ff31da531a9eda1c85"
+  },
+  "compilerSourceProvenance": {
+    "record": "artifacts/hoisted-investigation/full-tests/accepted/compiler-source-provenance.json",
+    "documentsChecked": 1388,
+    "changedSourceChecksumsMatch": true
+  },
+  "primary": {
+    "status": "passed",
+    "artifacts": "artifacts/hoisted-accepted55/run-32raXH",
+    "stops": 55,
+    "compilerSha256": "cdc6e7c3f7b0982bc8bbc065173359bcaa4ffc93b69c83a1d4e0b37953f0ffd5",
+    "assemblySha256": "35fea26a939014372f5ffae513abdd220ad9c75cd1b017ed33f0c1f326dc94fa",
+    "pdbSha256": "38f7950ab7ec13b6c55bf42eb97c7399209a2277b2cea0976a24f9e3ad6669ba",
+    "editor": "VS Code 1.140.0",
+    "csharpVersion": "2.140.9",
+    "extensionVersions": {
+      "ms-dotnettools.csharp": "2.140.9",
+      "ms-dotnettools.vscode-dotnet-runtime": "3.2.0"
+    },
+    "debugAndNonDebugOutputMatch": true,
+    "nonDebugPdbAbsent": true,
+    "referenceAssemblyRewrite": true,
+    "sourceEncodings": {
+      "main.ts": "UTF-8 with BOM",
+      "helper.ts": "UTF-16 LE with BOM"
+    },
+    "expectedBindingObservations": 123,
+    "exactSingleLocalsValues": true,
+    "watchValues": true,
+    "lexicalAbsences": true,
+    "compilerScaffoldingHidden": true
+  },
+  "secondary": {
+    "version": "NET Core debugger 3.2.0-1 (9744e1f, Release)",
+    "summary": "artifacts/hoisted-investigation/netcoredbg/candidate-32raXH-summary.json",
+    "assemblySha256": "35fea26a939014372f5ffae513abdd220ad9c75cd1b017ed33f0c1f326dc94fa",
+    "stops": 55,
+    "watchFailures": [],
+    "markerFailures": [],
+    "firstLocalsValueChecks": 123,
+    "firstLocalsValueFailures": [],
+    "expectedAbsenceChecks": 29,
+    "hiddenLocalsChecks": 2,
+    "duplicateShadowLocals": [
+      {
+        "marker": "async-shadow",
+        "duplicate": "local",
+        "count": 2
+      },
+      {
+        "marker": "async-parameter-shadow",
+        "duplicate": "parameter",
+        "count": 2
+      },
+      {
+        "marker": "async-captured-shadow",
+        "duplicate": "local",
+        "count": 2
+      },
+      {
+        "marker": "iterator-shadow",
+        "duplicate": "local",
+        "count": 2
+      },
+      {
+        "marker": "numeric-capture-loop",
+        "duplicate": "i",
+        "count": 2
+      },
+      {
+        "marker": "numeric-capture-loop",
+        "duplicate": "i",
+        "count": 2
+      },
+      {
+        "marker": "numeric-capture-loop",
+        "duplicate": "i",
+        "count": 2
+      }
+    ],
+    "emptyNamesOrCompilerScaffolding": false,
+    "boxedValues": "Expand m_value to inspect boxed doubles.",
+    "officialArchiveSha256": "3c410a45fa502415203a94fcb88654af65bf8e3dac158a5527a722e7a6b9274a"
+  },
+  "originalStepping": {
+    "status": "passed",
+    "artifacts": "artifacts/stepping-accepted55/run-mgSbKi",
+    "stops": 12,
+    "compilerSha256": "cdc6e7c3f7b0982bc8bbc065173359bcaa4ffc93b69c83a1d4e0b37953f0ffd5",
+    "assemblySha256": "00467b2adc53ad32f1c065259a3fa64b24317716aeee5cb33fc83f48f1cdab2b",
+    "pdbSha256": "1dbdeec1436ff93fa1e5cb479ad1b926ed13e084e0ac7fa668d2fab697a7efc0",
+    "editor": "VS Code 1.140.0",
+    "csharpVersion": "2.140.9",
+    "extensionVersions": {
+      "ms-dotnettools.csharp": "2.140.9",
+      "ms-dotnettools.vscode-dotnet-runtime": "3.2.0"
+    },
+    "debugAndNonDebugOutputMatch": true,
+    "nonDebugPdbAbsent": true,
+    "referenceAssemblyRewrite": true,
+    "sourceEncodings": {
+      "main.ts": "UTF-8 with BOM",
+      "helper.ts": "UTF-16 LE with BOM"
+    }
+  },
+  "roslynControl": {
+    "status": "passed",
+    "artifacts": "artifacts/roslyn-final51/run-k6ocI5",
+    "stops": 8,
+    "assemblySha256": "d866082f54abaa166fc7f683bd4b8903b7ca493e825b241b38c1c79e298e64e3",
+    "pdbSha256": "3146733d81084ed6b3368df021956720501d855139445e03eb9c0e17794dc8d6",
+    "editor": "VS Code 1.140.0",
+    "csharpVersion": "2.140.9",
+    "extensionVersions": {
+      "ms-dotnettools.csharp": "2.140.9",
+      "ms-dotnettools.vscode-dotnet-runtime": "3.2.0"
+    },
+    "debugAndNonDebugOutputMatch": null,
+    "nonDebugPdbAbsent": null,
+    "referenceAssemblyRewrite": false,
+    "sourceEncodings": null,
+    "compiler": "Roslyn through .NET SDK 10.0.401",
+    "buildCommand": "dotnet build tests/fixtures/HoistedDebuggerAcceptance/roslyn/RoslynControl.csproj -c Debug",
+    "initialInvestigationArtifacts": "artifacts/hoisted-investigation/roslyn-committed/run-3tlDBB"
+  },
+  "validation": {
+    "releaseSolutionBuild": {
+      "status": "passed",
+      "errors": 0,
+      "warnings": 20,
+      "log": "artifacts/hoisted-investigation/full-tests/build-accepted.log",
+      "notes": "NU1900 warnings concern unavailable package vulnerability feeds. UsedAvaloniaProducts was empty to avoid unrelated telemetry writes."
+    },
+    "focusedMetadataAndRuntime": {
+      "status": "passed",
+      "passed": 153,
+      "failed": 0,
+      "skipped": 0,
+      "record": "artifacts/hoisted-investigation/focused-debug-153/validation.json"
+    },
+    "fixtureIlVerification": {
+      "status": "passed",
+      "log": "artifacts/hoisted-investigation/accepted55-ilverify/verify.log"
+    },
+    "sourceQuality": {
+      "status": "passed",
+      "errors": 0,
+      "log": "artifacts/hoisted-investigation/source-quality-accepted.log",
+      "policyAndAnalyzerChecks": "artifacts/hoisted-investigation/quality-final.log"
+    },
+    "typescriptFull": {
+      "status": "inherited-baseline-differences",
+      "cases": 534,
+      "passed": 532,
+      "failed": 2,
+      "harnessChecksPassed": 16,
+      "identicalCaseRecordsAgainstUnchangedHead": 534,
+      "candidate": "artifacts/hoisted-investigation/typescript-accepted/15ed5faed20040479b86db54c7d71b00",
+      "baseline": "artifacts/hoisted-investigation/ts-b",
+      "failures": [
+        "checkJsxSubtleSkipContextSensitiveBug.tsx: extra TS2339 at line 12",
+        "variance.ts: extra TS2345 at line 23"
+      ],
+      "notes": "The later loop-capture fixes change emission only; this parser/type-checker-only gate does not invoke ILCompiler. No baseline updates."
+    },
+    "localSuite": {
+      "status": "passed",
+      "command": "pwsh -NoProfile -File scripts/test-local.ps1 -Suite All -Configuration Release -Hermetic -NoBuild -ResultsDirectory artifacts/hoisted-investigation/full-tests/accepted",
+      "artifacts": "artifacts/hoisted-investigation/full-tests/accepted",
+      "core": {
+        "total": 25337,
+        "passedInitially": 25326,
+        "failedInitially": 8,
+        "skipped": 3,
+        "passedAfterRetry": 25334,
+        "retryRowsPassed": 53,
+        "retryAttribution": "artifacts/hoisted-investigation/full-tests/accepted/retry-attribution.json",
+        "notes": "All eight initial failures have unique exact-name Passed matches on the sequential retry. The emitter override contract was aligned with the shared GetBindingStorageName helper; six process timeouts and one Fs callback output failure did not recur. Recovery does not prove timing causality."
+      },
+      "gui": {
+        "total": 134,
+        "passed": 134,
+        "failed": 0
+      },
+      "standalone": {
+        "actualRows": 2233,
+        "listedEntries": 2063,
+        "initialPassed": 1642,
+        "initialFailures": 0,
+        "continuationRows": 616,
+        "uniqueMissingRows": 591,
+        "partialTheoryRowsRepeated": 25,
+        "status": "passed",
+        "plan": "artifacts/hoisted-investigation/full-tests/accepted/standalone-continuation-plan.json",
+        "notes": "The 30-minute runner budget interrupted healthy shards. Reflection expands deferred MemberData theories. The final identity audit verifies all 257 methods and 2,233 rows, excludes all 142 fully completed original methods, and matches all 25 repeated partial-theory rows, with zero mismatches.",
+        "passedUniqueRows": 2233,
+        "failed": 0,
+        "completedMethods": 257,
+        "continuationPassedRows": 616,
+        "coverage": "artifacts/hoisted-investigation/full-tests/accepted/standalone-final-coverage.json"
+      },
+      "totalUniqueCases": 27704,
+      "passedUniqueCases": 27701,
+      "failed": 0,
+      "skipped": 3
+    },
+    "test262": {
+      "status": "inherited-baseline-differences",
+      "baseline": {
+        "total": 3223,
+        "passed": 3183,
+        "failed": 36,
+        "skipped": 4,
+        "failures": "artifacts/hoisted-investigation/test262-baseline/full-failures.json"
+      },
+      "firstStage": {
+        "status": "inherited-baseline-differences",
+        "total": 3220,
+        "passed": 3181,
+        "failed": 35,
+        "skipped": 4,
+        "matchedStableTestIdsAgainstUnchangedHead": 3220,
+        "outcomeChanges": 0,
+        "failureMessageChanges": 0,
+        "proof": "artifacts/hoisted-investigation/test262-final/first-stage-versus-head.json",
+        "notes": "The same 33 Issue1279 parity failures, Diagnostic_NoRegressions, and InterpretedBaseline fail on archived HEAD. Two performance diagnostic facts are excluded; CompiledBaseline is replaced by one equivalent public-API full capture."
+      },
+      "interpretedCorpus": {
+        "cases": 11384,
+        "candidate": {
+          "Pass": 9878,
+          "Fail": 336,
+          "ParseError": 10,
+          "RuntimeError": 280,
+          "Timeout": 1,
+          "Skipped": 879
+        },
+        "archivedHead": {
+          "Pass": 9878,
+          "Fail": 336,
+          "ParseError": 10,
+          "RuntimeError": 281,
+          "Timeout": 0,
+          "Skipped": 879
+        },
+        "notes": "Both runs report the same four named hard regressions, 59 new passes, and no added/removed paths. Candidate has six soft changes; archived HEAD adds a seventh for Object/prototype/__proto__/set-cycle-shadowed.js (committed Timeout to RuntimeError:worker-stalled). Candidate retains committed Timeout. Failure gate messages match; exact all-file bucket equality is not claimed.",
+        "hardDriftCasesAgainstCommittedBaseline": 4,
+        "newPassesAgainstCommittedBaseline": 59,
+        "additionalHardDriftCasesAgainstUnchangedHead": 0
+      },
+      "compiledCorpus": {
+        "status": "inherited-baseline-differences",
+        "cases": 11384,
+        "workers": 2,
+        "gateEquivalence": "artifacts/hoisted-investigation/test262-final/capture-harness/GATE-COMPARISON.md",
+        "elapsedSeconds": 4110.374567,
+        "candidate": {
+          "Pass": 9716,
+          "Fail": 34,
+          "ParseError": 10,
+          "RuntimeError": 733,
+          "Timeout": 5,
+          "HarnessError": 7,
+          "Skipped": 879
+        },
+        "archivedHead": {
+          "Pass": 9716,
+          "Fail": 34,
+          "ParseError": 10,
+          "RuntimeError": 733,
+          "Timeout": 5,
+          "HarnessError": 7,
+          "Skipped": 879
+        },
+        "committedDrift": {
+          "regressions": 185,
+          "newPasses": 40,
+          "softBucketChanges": 286,
+          "addedPaths": 0,
+          "removedPaths": 0
+        },
+        "candidateArtifacts": "artifacts/hoisted-investigation/test262-final/compiled-capture",
+        "nonpassingControls": {
+          "status": "passed",
+          "cases": 789,
+          "exactBucketMatches": 789,
+          "reusedCompletedCases": 320,
+          "freshCases": 469,
+          "duplicateExecutions": 0,
+          "newHardRegressions": 0,
+          "softDifferences": 0,
+          "missingOrExtraPaths": 0,
+          "summary": "artifacts/hoisted-investigation/test262-final/archived-nonpassing-control/summary.json"
+        },
+        "newPassControls": {
+          "status": "passed",
+          "cases": 40,
+          "exactPassMatches": 40,
+          "missingOrExtraPaths": 0,
+          "summary": "artifacts/hoisted-investigation/test262-final/archived-newpass-controls/summary.json"
+        },
+        "exactCurrentDriftEntriesAttributedToUnchangedHead": 511,
+        "baselineHashesUnchanged": true,
+        "notes": "The original compiled corpus fact is replaced by one equivalent full public-API capture. Every current nonpassing case and current committed-baseline new pass was compared against archived HEAD; all current drift entries match by path, change kind, old bucket, and new bucket. Exact equality of all 11,384 archived passing results is not claimed because the original logger did not export a full map. No baseline updates."
+      },
+      "proof": "artifacts/hoisted-investigation/test262-final/comparison.json",
+      "proofSha256": "37dc401513bd88ddb97d8f616cc2f96fa6c8d67c8a8f3bf6f9a7185ae77be017"
+    },
+    "compilerSourceProvenance": {
+      "status": "passed",
+      "documentsChecked": 1388,
+      "mismatches": 0,
+      "record": "artifacts/hoisted-investigation/full-tests/accepted/compiler-source-provenance.json",
+      "notes": "All non-generated SharpTS C# source bytes match the accepted Debug compiler's embedded portable-PDB SHA256 document checksums."
+    }
+  },
+  "limitations": [
+    "Visual Studio and Rider presentation have not been certified.",
+    "netcoredbg duplicates names at 7 shadowing stops; Watch and first Locals values are correct.",
+    "Ordinary synchronous display-class captures can expose additional plain-named fields from their shared closure.",
+    "Existing name-keyed capture lowering paths without distinct stable storage cannot offer independent shadow lifetimes.",
+    "Immediate-parent const projection does not cover arbitrary-depth constant relays or parent-owned mutable/parameter captures without authoritative shared display-class storage.",
+    "A deeper per-iteration arrow relay remains runtime-incorrect in both old and new compilers (expected 3, old 0, new 21); baseline-equivalent values are not claimed for that unsupported lowering shape.",
+    "Source C# keywords require @ escaping in the primary expression evaluator; $dollar evaluates directly."
+  ]
+}

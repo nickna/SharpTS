@@ -272,6 +272,7 @@ public partial class CompilationContext
     /// producing debug symbols. See <see cref="Symbols.DebugEmitScope"/>.
     /// </summary>
     internal Symbols.DebugEmitScope? DebugScope { get; set; }
+    internal Symbols.StateMachineDebugSymbols? HoistedDebugSymbols { get; set; }
 
     /// <summary>
     /// Whether the current compilation context is in JavaScript strict mode.

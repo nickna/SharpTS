@@ -1150,9 +1150,9 @@ public partial class ILCompiler
             // #838 (additive): expands `members` with renamed storage keys for write-captured shadows AND
             // records ArrowFunctionDCFieldRenames[nestedSyncArrow] so the sync arrow's body resolves the
             // renamed field generically (main's CurrentArrowFunctionDCFieldRenames path).
-            ApplyWriteCaptureRenames(members, GeneratorBlockScopeRenamer.Compute(arrow));
+            ApplyWriteCaptureRenames(members, GeneratorBlockScopeRenamer.Compute(arrow, preserveDebugBindings: EmitDebugSymbols));
 
-            RegisterFunctionDisplayClass(key, members);
+            RegisterFunctionDisplayClass(key, members, arrow);
             if (_closures.FunctionDisplayClasses.ContainsKey(key))
                 _closures.AsyncArrowDCKeys[arrow] = key;
         }

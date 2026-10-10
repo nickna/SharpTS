@@ -114,7 +114,7 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
         // A value spilled across an await must survive the MoveNext re-entry in a
         // state-machine field, not a transient IL local (#400/#414).
         _helpers.EnablePersistentSpills(name => _builder.StateMachineType.DefineField(
-            name, _types.Object, System.Reflection.FieldAttributes.Private));
+            _builder.DebugScaffoldingName(name), _types.Object, System.Reflection.FieldAttributes.Private));
     }
 
     /// <summary>
@@ -127,6 +127,8 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
     {
         // Note: _il is initialized in constructor via GetILGenerator()
         _ctx = ctx;
+        _builder.AttachDebugSymbols(ctx);
+        _builder.EmitDebugCaptureReferences(_il);
         // Wire the runtime into the helper now that the context is bound, so MoveNext uses the
         // $Undefined sentinel and JS-spec coercion/comparison helpers rather than null/Convert (#600).
         if (ctx.Runtime != null) _helpers.SetRuntime(ctx.Runtime);
@@ -256,7 +258,7 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
     // an `await` inside a `try`; the shared base fixes it. Only the two completion seams differ:
 
     protected override FieldBuilder DefineStateMachineField(string name, System.Type type)
-        => _builder.StateMachineType.DefineField(name, type, FieldAttributes.Private);
+        => _builder.StateMachineType.DefineField(_builder.DebugScaffoldingName(name), type, FieldAttributes.Private);
 
     /// <summary>
     /// Completes the async-arrow state machine using the boxed value on the IL stack: the arrow's

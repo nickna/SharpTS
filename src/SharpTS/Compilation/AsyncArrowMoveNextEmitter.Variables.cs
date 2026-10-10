@@ -223,6 +223,9 @@ public partial class AsyncArrowMoveNextEmitter
 
     private AsyncArrowStorageAccess? TryResolveDisplayClassStorage(string name)
     {
+        if (_builder.DebugCapturedBindings.TryGetValue(name, out var debugCapture))
+            return AsyncArrowStorageAccess.OwnDisplayClassField(debugCapture.Holder, debugCapture.Field);
+
         if (_builder.StandaloneLiveCaptureFields.TryGetValue(name, out var liveField))
             return AsyncArrowStorageAccess.OwnDisplayClassField(
                 _builder.StandaloneCaptureFields[name], liveField);

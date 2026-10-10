@@ -24,7 +24,7 @@ public partial class ILCompiler
         string qualifiedName = GetDefinitionContext().GetQualifiedFunctionName(funcName);
 
         // Analyze the async generator function for yield/await points and hoisted variables
-        var analysis = _asyncGenerators.Analyzer.Analyze(funcStmt);
+        var analysis = _asyncGenerators.Analyzer.Analyze(funcStmt, EmitDebugSymbols);
 
         // #775: a free-function async generator binds its own dynamic `this`; when its body uses `this`
         // the stub captures the active dynamic receiver into <>4__this at creation time (see
@@ -33,6 +33,8 @@ public partial class ILCompiler
 
         // Create the state machine builder
         var smBuilder = new AsyncGeneratorStateMachineBuilder(_moduleBuilder, _types, _asyncGenerators.StateMachineCounter++);
+        ConfigureDebugStateMachineOwner(smBuilder, _programType, qualifiedName);
+        ConfigureDebugHoistedBindings(smBuilder, funcStmt.Parameters, funcStmt.Body, analysis.BlockScopeRenames);
         smBuilder.DefineStateMachine(funcName, analysis, isInstanceMethod: false, runtime: _runtime, hasDynamicThis: hasDynamicThis);
 
         _asyncGenerators.StateMachines[qualifiedName] = smBuilder;
@@ -101,7 +103,7 @@ public partial class ILCompiler
         if (mutatedCaptured.Count == 0)
             return;
 
-        RegisterFunctionDisplayClass(qualifiedName, mutatedCaptured);
+        RegisterFunctionDisplayClass(qualifiedName, mutatedCaptured, funcStmt);
         if (_closures.FunctionDisplayClasses.TryGetValue(qualifiedName, out var funcDC))
             smBuilder.DefineFunctionDisplayClassField(funcDC);
     }
@@ -150,7 +152,7 @@ public partial class ILCompiler
     /// </summary>
     private void EmitAsyncGeneratorMoveNextAsyncBody(AsyncGeneratorStateMachineBuilder smBuilder, Stmt.Function funcStmt, string qualifiedName)
     {
-        var analysis = _asyncGenerators.Analyzer.Analyze(funcStmt);
+        var analysis = _asyncGenerators.Analyzer.Analyze(funcStmt, EmitDebugSymbols);
 
         // Create a compilation context for the state machine
         var il = smBuilder.MoveNextAsyncMethod.GetILGenerator();
@@ -184,7 +186,7 @@ public partial class ILCompiler
         bool isInstanceMethod = true, string? currentClassName = null)
     {
         // Analyze async generator function to determine yield/await points and hoisted variables
-        var analysis = _asyncGenerators.Analyzer.Analyze(method);
+        var analysis = _asyncGenerators.Analyzer.Analyze(method, EmitDebugSymbols);
         if (isInstanceMethod && (_classExprs.DefinitionMethods.ContainsKey(methodBuilder) || _classExprs.Builders.Values.Any(builder => ReferenceEquals(builder, methodBuilder.DeclaringType))))
             analysis = analysis with { UsesThis = true };
 
@@ -193,6 +195,8 @@ public partial class ILCompiler
         // MethodBuilder's (mangled) name rather than method.Name.Lexeme so a private async generator's
         // `#p` lexeme doesn't put a `#` in the name.
         var smBuilder = new AsyncGeneratorStateMachineBuilder(_moduleBuilder, _types, _asyncGenerators.StateMachineCounter++);
+        ConfigureDebugStateMachineOwner(smBuilder, (TypeBuilder)methodBuilder.DeclaringType!, methodBuilder.Name);
+        ConfigureDebugHoistedBindings(smBuilder, method.Parameters, method.Body, analysis.BlockScopeRenames);
         smBuilder.DefineStateMachine(
             $"{methodBuilder.DeclaringType!.Name}_{methodBuilder.Name}",
             analysis,

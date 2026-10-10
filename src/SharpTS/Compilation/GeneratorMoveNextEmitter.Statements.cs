@@ -200,7 +200,7 @@ public partial class GeneratorMoveNextEmitter
         EnterLoop(endLabel, continueLabel);
 
         // Declare loop variable (may be hoisted or local)
-        var loopVarLocal = DeclareLoopVariable(f.Variable.Lexeme);
+        var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme));
 
         _il.MarkLabel(startLabel);
 
@@ -211,7 +211,7 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Brfalse, endLabel);
 
         // Set loop variable from Current
-        EmitStoreLoopVariable(loopVarLocal, f.Variable.Lexeme, () =>
+        EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme), () =>
         {
             _il.Emit(OpCodes.Ldarg_0);  // this
             _il.Emit(OpCodes.Ldfld, enumeratorField);
@@ -272,7 +272,7 @@ public partial class GeneratorMoveNextEmitter
 
         EnterLoop(endLabel, continueLabel);
 
-        var loopVarLocal = DeclareLoopVariable(f.Variable.Lexeme);
+        var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme));
 
         _il.MarkLabel(startLabel);
         EmitCancellationCheck();
@@ -287,7 +287,7 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Brfalse, endLabel);
 
         // loopVar = keys[index]
-        EmitStoreLoopVariable(loopVarLocal, f.Variable.Lexeme, () =>
+        EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme), () =>
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, keysField);

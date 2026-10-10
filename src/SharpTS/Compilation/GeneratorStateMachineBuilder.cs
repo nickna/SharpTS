@@ -138,8 +138,9 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
 
         // Define the state machine class (using class for reference semantics with IEnumerable)
         // Name follows C# compiler convention: <MethodName>d__N
-        _stateMachineType = EmitTypeDefinitions.DefineType(_moduleBuilder,
+        _stateMachineType = DefineStateMachineType(_moduleBuilder,
             $"<{methodName}>d__{_counter}",
+            _counter,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
             interfaces.ToArray()
@@ -158,8 +159,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         // from JS closure semantics (#541). They are instead read live from their enclosing
         // storage in MoveNext, the same way the async-generator path already works.
         _hoisting = new HoistingManager(_stateMachineType, _types.Object);
-        _hoisting.DefineHoistedParameters(analysis.HoistedParameters, hoistedFieldTypes);
-        _hoisting.DefineHoistedLocals(analysis.HoistedLocals, hoistedFieldTypes);
+        _hoisting.DefineHoistedVariables(analysis.HoistedParameters, analysis.HoistedLocals, DebugSymbols, hoistedFieldTypes, hoistedFieldTypes);
         _hoisting.DefineHoistedEnumerators(analysis.ForOfLoopsWithYield, _types.IEnumerator);
         _hoisting.DefineHoistedForInState(analysis.ForInLoopsWithYield, _types.ListOfObject, _types.Int32);
 
@@ -437,7 +437,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
     public void DefineFunctionDisplayClassField(Type dcType)
     {
         FunctionDCField = _stateMachineType.DefineField(
-            "<>__functionDC",
+            DebugDisplayClassName(),
             dcType,
             FieldAttributes.Public);
     }
@@ -490,16 +490,16 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         // TypeError. Without this the compiled state machine would recurse into MoveNext
         // and overflow the stack rather than throw (#521).
         var executingField = _stateMachineType.DefineField(
-            "<>5__executing",
+            DebugScaffoldingName("<>5__executing"),
             _types.Boolean,
             FieldAttributes.Private);
         ExecutingField = executingField;
 
         // Injection state for external return()/throw() on a suspended generator (#526).
         InjectedKindField = _stateMachineType.DefineField(
-            "<>6__injectedKind", _types.Int32, FieldAttributes.Private);
+            DebugScaffoldingName("<>6__injectedKind"), _types.Int32, FieldAttributes.Private);
         InjectedValueField = _stateMachineType.DefineField(
-            "<>6__injectedValue", _types.Object, FieldAttributes.Private);
+            DebugScaffoldingName("<>6__injectedValue"), _types.Object, FieldAttributes.Private);
 
         // next() method - wraps MoveNext/Current into iterator result
         // Using lowercase to match JavaScript API

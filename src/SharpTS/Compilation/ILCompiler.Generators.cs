@@ -38,7 +38,7 @@ public partial class ILCompiler
         string qualifiedName = GetDefinitionContext().GetQualifiedFunctionName(funcName);
 
         // Analyze the generator function for yield points and hoisted variables
-        var analysis = _generators.Analyzer.Analyze(funcStmt);
+        var analysis = _generators.Analyzer.Analyze(funcStmt, EmitDebugSymbols);
         var nativeFieldTypes = GetStableGeneratorFieldTypes(funcStmt);
         bool useNativeNumberCurrent = CanUseNativeNumberCurrent(analysis, nativeFieldTypes);
 
@@ -53,6 +53,8 @@ public partial class ILCompiler
 
         // Create the state machine builder
         var smBuilder = new GeneratorStateMachineBuilder(_moduleBuilder, _types, _generators.StateMachineCounter++);
+        ConfigureDebugStateMachineOwner(smBuilder, _programType, qualifiedName);
+        ConfigureDebugHoistedBindings(smBuilder, funcStmt.Parameters, funcStmt.Body, analysis.BlockScopeRenames);
         smBuilder.DefineStateMachine(
             funcName,
             analysis,
@@ -219,13 +221,13 @@ public partial class ILCompiler
     {
         var capturedLocals = new HashSet<string>(_closures.Analyzer.GetCapturedLocals(funcStmt));
         capturedLocals.ExceptWith(_closures.Analyzer.GetPerIterationLoopBindings(funcStmt));
-        var blockScopeRenames = GeneratorBlockScopeRenamer.Compute(funcStmt);
+        var blockScopeRenames = GeneratorBlockScopeRenamer.Compute(funcStmt, preserveDebugBindings: EmitDebugSymbols);
         ApplyWriteCaptureRenames(capturedLocals, blockScopeRenames);
         ApplyReadCaptureRenames(capturedLocals, blockScopeRenames);
         if (capturedLocals.Count == 0)
             return;
 
-        RegisterFunctionDisplayClass(qualifiedName, capturedLocals);
+        RegisterFunctionDisplayClass(qualifiedName, capturedLocals, funcStmt);
         if (_closures.FunctionDisplayClasses.TryGetValue(qualifiedName, out var funcDC))
             smBuilder.DefineFunctionDisplayClassField(funcDC);
     }
@@ -264,7 +266,7 @@ public partial class ILCompiler
             result.ExceptWith(perIteration);
         // #838: a write-captured nested-block shadow gets its own renamed DC field so it does not collide
         // with the outer same-named binding on a single name-keyed cell.
-        ApplyWriteCaptureRenames(result, GeneratorBlockScopeRenamer.Compute(funcStmt));
+        ApplyWriteCaptureRenames(result, GeneratorBlockScopeRenamer.Compute(funcStmt, preserveDebugBindings: EmitDebugSymbols));
         return result;
     }
 
@@ -322,7 +324,11 @@ public partial class ILCompiler
             {
                 if (!capturedLocals.Contains(name))
                     continue;
-                capturedLocals.Add(storage);
+                // Loop declarations have a fresh binding for each iteration. Record the
+                // lexical remap even when its storage is absent from this shared DC, so
+                // a same-named outer DC field cannot override the arrow's own snapshot.
+                if (!renames.PerIterationStorageNames.Contains(storage))
+                    capturedLocals.Add(storage);
                 (perArrow ??= [])[name] = storage;
             }
 
@@ -423,7 +429,7 @@ public partial class ILCompiler
             // otherwise observe the enclosing/global binding instead of the method-local binding.
             var capturedLocals = new HashSet<string>(_closures.Analyzer.GetCapturedLocals(method));
             capturedLocals.ExceptWith(_closures.Analyzer.GetPerIterationLoopBindings(method));
-            var blockScopeRenames = GeneratorBlockScopeRenamer.Compute(method);
+            var blockScopeRenames = GeneratorBlockScopeRenamer.Compute(method, preserveDebugBindings: EmitDebugSymbols);
             ApplyWriteCaptureRenames(capturedLocals, blockScopeRenames);
             ApplyReadCaptureRenames(capturedLocals, blockScopeRenames);
             if (capturedLocals.Count == 0)
@@ -434,7 +440,7 @@ public partial class ILCompiler
             string dispatchKind = method.IsStatic ? "static" : "instance";
             string key = $"{qualifiedClassName}::{dispatchKind}::{method.Name.Lexeme}";
             _closures.FunctionAstNodes[key] = method;
-            RegisterFunctionDisplayClass(key, capturedLocals);
+            RegisterFunctionDisplayClass(key, capturedLocals, method);
             (method.IsAsync ? _asyncGeneratorMethodFunctionDCKeys : _generatorMethodFunctionDCKeys)[method] = key;
         }
     }
@@ -532,7 +538,7 @@ public partial class ILCompiler
     /// </summary>
     private void EmitGeneratorMoveNextBody(GeneratorStateMachineBuilder smBuilder, Stmt.Function funcStmt, string qualifiedName)
     {
-        var analysis = _generators.Analyzer.Analyze(funcStmt);
+        var analysis = _generators.Analyzer.Analyze(funcStmt, EmitDebugSymbols);
 
         // Create a compilation context for the state machine
         var il = smBuilder.MoveNextMethod.GetILGenerator();
@@ -571,7 +577,7 @@ public partial class ILCompiler
         bool isInstanceMethod = true, string? currentClassName = null)
     {
         // Analyze generator function to determine yield points and hoisted variables
-        var analysis = _generators.Analyzer.Analyze(method);
+        var analysis = _generators.Analyzer.Analyze(method, EmitDebugSymbols);
         if (isInstanceMethod && (_classExprs.DefinitionMethods.ContainsKey(methodBuilder) || _classExprs.Builders.Values.Any(builder => ReferenceEquals(builder, methodBuilder.DeclaringType))))
             analysis = analysis with { UsesThis = true };
 
@@ -579,6 +585,8 @@ public partial class ILCompiler
         // is set up like a free function (isInstanceMethod: false, static stub). The type name uses the
         // MethodBuilder's (mangled) name so a private generator's `#p` lexeme doesn't put a `#` in it (#720).
         var smBuilder = new GeneratorStateMachineBuilder(_moduleBuilder, _types, _generators.StateMachineCounter++);
+        ConfigureDebugStateMachineOwner(smBuilder, (TypeBuilder)methodBuilder.DeclaringType!, methodBuilder.Name);
+        ConfigureDebugHoistedBindings(smBuilder, method.Parameters, method.Body, analysis.BlockScopeRenames);
         smBuilder.DefineStateMachine(
             $"{methodBuilder.DeclaringType!.Name}_{methodBuilder.Name}",
             analysis,
