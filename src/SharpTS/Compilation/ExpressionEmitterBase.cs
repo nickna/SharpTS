@@ -2035,10 +2035,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 {
                     IL.Emit(OpCodes.Ldarg_0);
                     IL.Emit(OpCodes.Ldfld, hoistedField);
+                    EmitCaptureFieldConversion(hoistedField.FieldType, field.FieldType);
                 }
                 else if (Ctx.Locals.TryGetLocal(sourceVar, out var local))
                 {
                     IL.Emit(OpCodes.Ldloc, local);
+                    EmitCaptureFieldConversion(local.LocalType, field.FieldType);
                 }
                 else if (!TryEmitClassDefinitionCapture(sourceVar) && !TryEmitGlobalVariable(sourceVar))
                 {
@@ -2046,9 +2048,34 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 }
 
                 IL.Emit(OpCodes.Stfld, field);
+                SetStackUnknown();
             }
         }
 
+    }
+
+    /// <summary>
+    /// Converts a loaded capture from its CLR storage type to the closure field's representation.
+    /// </summary>
+    /// <param name="sourceType">The CLR type of the value already on the IL stack.</param>
+    /// <param name="targetType">The CLR type of the capture field that will receive the value.</param>
+    /// <remarks>
+    /// Stable numeric captures use double fields even when suspension hoists their source as object.
+    /// Other value-type captures must be boxed for object fields; reference captures, including
+    /// per-iteration cells, retain their identity.
+    /// </remarks>
+    protected void EmitCaptureFieldConversion(Type sourceType, Type targetType)
+    {
+        if (targetType == Types.Double)
+        {
+            if (sourceType == Types.Double) return;
+            if (sourceType.IsValueType) IL.Emit(OpCodes.Box, sourceType);
+            EmitConvertToDouble();
+        }
+        else if (targetType == Types.Object && sourceType.IsValueType)
+        {
+            IL.Emit(OpCodes.Box, sourceType);
+        }
     }
 
     // EmitCall is virtual with a default implementation in ExpressionEmitterBase.CallHelpers.cs

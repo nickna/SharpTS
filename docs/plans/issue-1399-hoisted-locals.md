@@ -33,7 +33,7 @@ The first primary candidate passed 44 strict source stops in
 passed all 44 secondary Watch/value and out-of-scope checks. This early result
 does not substitute for the final-source acceptance record linked below.
 
-The final primary run passes 55 stops and 123 expected binding observations.
+The final #1985 primary run passed 55 stops and 123 expected binding observations.
 Each expected binding appears exactly once in Locals with its correct value,
 and Watch agrees. It includes free functions, methods, namespaces, async arrows,
 true suspension, captures, shadows, loops, catches, imported source, and scope
@@ -124,15 +124,16 @@ source-named field refreshed before `MoveNext` dispatch; the source value and
 field type remain the same. The two additional debugger stops check the ancestor
 captures, parent constant, and child's own parameter/local together.
 
-## Reproduction and validation
+## Original #1985 reproduction and validation
 
 The [runner guide](../../scripts/editor-smoke/compiled-debugger/README.md)
 describes the original stepping acceptance check, the stricter
 [hoisted-variable fixture](../../tests/fixtures/HoistedDebuggerAcceptance/main.ts),
 and the Roslyn control. Each run records the complete DAP exchange, source stops,
 variables, Watches, output, versions, and binary hashes in ignored artifacts.
-The [compact final record](../../scripts/editor-smoke/compiled-debugger/hoisted-last-verified.json)
-binds the accepted runs to their source and binary inputs.
+The [original projection record](../../scripts/editor-smoke/compiled-debugger/hoisted-last-verified.json)
+binds the #1985 accepted runs to their source and binary inputs. It remains historical;
+the numeric-timer follow-up below has a separate record.
 
 `DebugSymbolsHoistedLocalsTests.cs` structurally decodes every added scope blob,
 checks its exact owner and field-slot associations, checks instruction boundaries
@@ -202,6 +203,32 @@ every passing file result, so exact full-map equality across all 11,384 files is
 not claimed. The existing conformance gates remain red, and no baselines were
 updated.
 
+## Follow-up: numeric captures after timer suspension
+
+A numeric loop capture after a genuinely suspending timer await previously produced invalid IL
+in both build modes. Suspension hoisted the numeric source binding into an `object` field, while
+the readonly closure snapshot used a `double` field. Copying between those storage representations
+without conversion caused the verification error. Closure initialization now converts the loaded
+source to the capture field's actual CLR type in both modes, retaining per-iteration snapshots.
+
+The [live fixture](../../tests/fixtures/HoistedDebuggerAcceptance/main.ts) now uses `await delay()`
+before its numeric loop. Its existing markers check all three iteration values `0/1/2`, their sum
+`3`, and restored outer `i = 7`. The fresh VS Code C# run passes all 55 stops and 123 expected
+Locals/Watch values, with identical debug and nondebug output. The original numeric control now
+passes IL verification and prints `result 3 7` in both modes.
+
+The fresh secondary run uses the same primary assembly. All 123 first Locals and Watch values,
+29 scope-absence checks, and two hidden-field checks pass. Its seven duplicate-name Locals cases
+match #1985 exactly, with correct first values and Watches; no empty-name entries or compiler
+scaffolding appear. The saved secondary audit is
+`artifacts/hoisted-numeric-timer/secondary/audit.json`.
+
+The [numeric-timer verification record](../../scripts/editor-smoke/compiled-debugger/numeric-timer-last-verified.json)
+identifies the follow-up's sources, binaries, and bounded checks. The earlier failing control
+remains in `artifacts/hoisted-investigation/numeric-real`; #1985's accepted numeric fixture used
+the valid `Promise.resolve` path. The original full-suite and conformance results above describe
+#1985 and remain in its unchanged verification record.
+
 ## Remaining limits
 
 The C# and netcoredbg expression evaluators have different presentation rules;
@@ -233,6 +260,14 @@ verification. This unsupported lowering shape is outside the accepted direct
 per-iteration capture path; its values are not claimed to be baseline-equivalent.
 The exact controls are in `artifacts/hoisted-investigation/numeric/relay-results.json`.
 
+Nondebug async and async-generator `for-of` loops retain an inherited readonly-capture
+shadowing bug when `const item` shadows outer `item = 7`. Both the frozen #1985 compiler and
+this follow-up print `result 21 7` for the async control instead of `result 3 7`; the
+async-generator control prints `result 3 2` instead of `result 3 7`, then yields `3` and
+completes normally. All four assemblies pass IL verification. The focused `for-of` parity
+tests use a distinct loop binding; same-name numeric `for` loop regressions remain covered.
+Controls and output are in `artifacts/hoisted-numeric-timer/shadow-for-of`.
+
 Some preexisting capture lowering paths use a single name-keyed storage cell for
 distinct shadows: captures through named functions/classes and writes from an
 async arrow can prevent independent renaming. Such bindings do not have distinct
@@ -245,10 +280,3 @@ key; a first declaration in `for (var item of/in ...)` is rejected if `item` is
 used after the loop. The runtime binding checks use a single-key `for-in` and a
 prior `var` declaration, while retaining multi-iteration `for-of` checks. The
 exact unchanged controls are in `artifacts/hoisted-investigation/baseline-runtime`.
-
-A separate numeric loop capture after a genuinely suspending timer await has an
-inherited object-to-double IL verification error in both the unchanged and final
-compiler. That exact control is retained in
-`artifacts/hoisted-investigation/numeric-real`. The numeric fixture above uses
-the existing valid `Promise.resolve` case; other fixture functions still suspend
-on real timers and iterator yields.

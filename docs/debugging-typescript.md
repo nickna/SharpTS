@@ -47,7 +47,7 @@ Watch uses the C# expression evaluator. Escape a TypeScript name that is a C# ke
 for a binding named `int`, evaluate `@int` (also its Locals display name); bare `int` fails to
 parse. The tested source name `$dollar` evaluates directly in Watch.
 
-Hoisted-local presentation was verified at 55 stops with VS Code 1.140.0 and C# 2.140.9 on Windows
+The #1985 hoisted-local acceptance was verified at 55 stops with VS Code 1.140.0 and C# 2.140.9 on Windows
 x64: all 123 expected Locals values matched, with exactly one entry for each binding. The separate
 `netcoredbg` 3.2.0-1092 comparison passed the same 55 stops on the same assembly: all 123 first Locals
 values, expected Watch values, and lexical visibility matched, and no empty-name entries or compiler
@@ -58,6 +58,16 @@ entries came from parsing wrapped generated-field prefixes, which the compiler n
 Visual Studio and Rider have not been checked for this projection. See the
 [acceptance evidence](../scripts/editor-smoke/compiled-debugger/hoisted-last-verified.json)
 and [debugger investigation](plans/issue-1399-hoisted-locals.md) for the tested cases and limits.
+
+The numeric loop capture check now also runs after a timer suspension. Its closures retain
+independent values `0`, `1`, and `2`, their sum is `3`, and leaving the loop restores outer `i = 7`.
+The fresh C# debugger run passes all 55 stops and 123 expected Locals/Watch values, with matching
+debug and nondebug output. The earlier numeric control now passes IL verification in both modes.
+The fresh `netcoredbg` comparison on the same assembly also passes all 123 first Locals/Watch
+values, 29 scope-absence checks, and two hidden-field checks, with the same seven duplicate-name
+Locals cases as #1985.
+The [numeric-timer follow-up record](../scripts/editor-smoke/compiled-debugger/numeric-timer-last-verified.json)
+preserves this bounded validation separately from #1985's original full-suite evidence.
 
 ### Top-level bindings
 

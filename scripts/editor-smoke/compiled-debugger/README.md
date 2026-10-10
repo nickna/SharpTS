@@ -77,7 +77,7 @@ and evaluate in Watch; out-of-scope names must be absent and fail Watch evaluati
 frames must be recognized, and compiler scaffolding must not appear as user variables. Debug and
 non-debug output must match after reference rewriting, with no PDB in the fresh non-debug output.
 
-Current primary acceptance passed 55 stops with VS Code 1.140.0, C# 2.140.9 and .NET SDK 10.0.401
+The #1985 primary acceptance passed 55 stops with VS Code 1.140.0, C# 2.140.9 and .NET SDK 10.0.401
 on Windows x64. All 123 expected Locals values matched, with exactly one entry for each binding.
 The [hoisted verification record](hoisted-last-verified.json) identifies the accepted compiler,
 assembly/PDB hashes, environment, and observations. The
@@ -95,6 +95,16 @@ restores outer `i = 7` with `result = 3`. Boxed doubles may need
 expansion of `m_value`. Earlier empty-name entries came from parsing wrapped generated-field
 prefixes, which the compiler now normalizes. The primary acceptance also requires exactly one Locals
 entry for each expected binding.
+
+The numeric-timer follow-up replaces the numeric loop's initial resolved promise with a timer
+delay. The fresh primary run passes the same 55 stops and all 123 expected Locals/Watch values,
+including independent iteration captures `0`, `1`, and `2`, restored outer `i = 7`, and sum `3`.
+Debug and nondebug output match, and the earlier failing numeric control now passes IL verification
+in both modes. The fresh secondary comparison on the same assembly passes all 123 first Locals
+values, Watches, 29 scope-absence checks, and two hidden-field checks; its seven duplicate-name
+Locals cases exactly match the original record. [Follow-up verification](numeric-timer-last-verified.json)
+records the new inputs and bounded checks. The original record above retains #1985's prior source
+hashes, debugger comparison, and full local and conformance validation.
 
 The global async-arrow case keeps a module binding in its authoritative static field. Its stale
 state-machine copy is hidden, and bare `moduleShared` Watch lookup is unavailable; inspect the
