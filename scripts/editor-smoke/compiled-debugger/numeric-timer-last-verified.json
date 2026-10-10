@@ -1,0 +1,190 @@
+{
+  "issue": "https://github.com/nickna/SharpTS/issues/1399",
+  "scope": "Numeric closure snapshots after genuine timer suspension",
+  "verifiedUtc": "2026-10-10T04:08:21.273Z",
+  "sourceCommit": "e3f69107324652e842d5bfd20ae25a11fa90a615",
+  "workingTreeChangesIncluded": true,
+  "platform": "win32-x64",
+  "dotnetSdk": "10.0.401",
+  "compilerSources": {
+    "src/SharpTS/Compilation/ExpressionEmitterBase.cs": "b299d61b5d20920cc0416cdcd0f1c0abf582d5f528ef634c15b7527fbaf77d34",
+    "src/SharpTS/Compilation/ILEmitter.Calls.Closures.cs": "074cf3a2a996c4d0071febf76c2396683fa28282cebbf4b80785c6e778c35b2f"
+  },
+  "acceptanceSources": {
+    "tests/SharpTS.Tests/Compilation/NumericSuspendedLoopCaptureTests.cs": "a1eba8934e3936b6d9749da0947bc42a8e7bb71bc79a31010405eeb0c2dedb5b",
+    "tests/SharpTS.Tests/Infrastructure/TestHarness.cs": "610de6b1ddc223a0acfcd82b603c9456cf92ec84d89296b62f38c8994d7b0492",
+    "tests/SharpTS.Tests/SharpTS.Tests.csproj": "60d60caf31dd57027a2078b769064b3edc99444fde48caa1062d3108937a732f",
+    "tests/fixtures/HoistedDebuggerAcceptance/main.ts": "c2c1f6f181dd880b781825da31725cd40dd37233b1f2cbf841e310562af7ccc0",
+    "tests/fixtures/HoistedDebuggerAcceptance/helper.ts": "c89cd08bddabf29ae302d452e2e28884281630e62a862ad1ba202b1e31269ea9",
+    "tests/fixtures/HoistedDebuggerAcceptance/expectations.json": "20b1cff43dd6e556d8622e11b9dba2174e924308cc8c78467811023646c97cc4",
+    "scripts/editor-smoke/compiled-debugger/run.mjs": "9734f54ea97c42b838afb164f6d04515345df6ce4a075b3fd72356a75ea93d92",
+    "scripts/editor-smoke/compiled-debugger/hoisted.test.cjs": "13c262b61e7ea72979ef0833b1c3f75a37fdeed877a6bc166bc071d2853c6a83"
+  },
+  "primary": {
+    "status": "passed",
+    "artifacts": "artifacts/hoisted-numeric-timer/primary/run-qfcI0C",
+    "editor": "VS Code 1.140.0",
+    "csharpVersion": "2.140.9",
+    "extensionVersions": {
+      "ms-dotnettools.csharp": "2.140.9",
+      "ms-dotnettools.vscode-dotnet-runtime": "3.2.0"
+    },
+    "stops": 55,
+    "localsValueChecks": 123,
+    "watchValueChecks": 123,
+    "exactlyOneLocalsEntryPerExpectedBinding": true,
+    "scopeAbsenceChecks": 29,
+    "hiddenLocalsChecks": 2,
+    "compilerSha256": "62446e5c045b6b545ebf1329cb5c170102f13c9ab5fde46896e59768e2c9f249",
+    "assemblySha256": "26e2156e395980273a5c3cde8829be4111f0dd2c33bc4552b8694c5f49f7882c",
+    "pdbSha256": "df936e9331af5d2abdc9d4d9829cfd8bebe393c863d7488f808415da197cc7fd",
+    "debugAndNonDebugOutputMatch": true,
+    "nonDebugPdbAbsent": true,
+    "numericLoopValues": [
+      0,
+      1,
+      2
+    ],
+    "restoredOuterValue": 7,
+    "sum": 3,
+    "resultSha256": "143882dadea5ccc327865a7389d9a97003718aa638a5213c77acfe02768b79d5"
+  },
+  "secondary": {
+    "status": "passed",
+    "adapterVersion": "NET Core debugger 3.2.0-1 (9744e1f, Release)",
+    "audit": "artifacts/hoisted-numeric-timer/secondary/audit.json",
+    "auditSha256": "880b4ee4b59e79ac4860ea3cfe7ff8cbe18d4cbff425d98d0e94833a80303935",
+    "sameAssemblyAsPrimary": true,
+    "stops": 55,
+    "firstLocalsValueChecks": 123,
+    "watchValueChecks": 123,
+    "scopeAbsenceChecks": 29,
+    "hiddenLocalsChecks": 2,
+    "knownDuplicateLocals": [
+      {
+        "marker": "async-shadow",
+        "duplicate": "local",
+        "count": 2
+      },
+      {
+        "marker": "async-parameter-shadow",
+        "duplicate": "parameter",
+        "count": 2
+      },
+      {
+        "marker": "async-captured-shadow",
+        "duplicate": "local",
+        "count": 2
+      },
+      {
+        "marker": "iterator-shadow",
+        "duplicate": "local",
+        "count": 2
+      },
+      {
+        "marker": "numeric-capture-loop",
+        "duplicate": "i",
+        "count": 2
+      },
+      {
+        "marker": "numeric-capture-loop",
+        "duplicate": "i",
+        "count": 2
+      },
+      {
+        "marker": "numeric-capture-loop",
+        "duplicate": "i",
+        "count": 2
+      }
+    ],
+    "duplicatesExactlyMatchHistoricalRecord": true
+  },
+  "validation": {
+    "debugBuild": {
+      "status": "passed",
+      "errors": 0,
+      "warnings": 9,
+      "log": "artifacts/hoisted-numeric-timer/build-tests-final.log",
+      "notes": "NU1900 vulnerability-feed warnings. Final test-only rebuild reused already-built Debug project references."
+    },
+    "focused": {
+      "status": "passed",
+      "total": 371,
+      "passed": 371,
+      "failed": 0,
+      "skipped": 0,
+      "numericSuspensionCases": 10,
+      "numericSuspensionPassed": 10,
+      "trx": "artifacts/hoisted-numeric-timer/focused-final/focused.trx",
+      "trxSha256": "d8be999dfa4613073fc2711a51b4f5fefaaf3c42f5e7c5a1cdd73d5fe7264362",
+      "compilerSha256": "62446e5c045b6b545ebf1329cb5c170102f13c9ab5fde46896e59768e2c9f249",
+      "testAssemblySha256": "9b4e90dd35b05b328054636d33848196fa9ca9a6f62f6d221670cc6344ce438a"
+    },
+    "finalFixtureIlVerification": {
+      "status": "passed",
+      "record": "artifacts/hoisted-numeric-timer/fixture-ilverify.json",
+      "recordSha256": "ff5e9b06f87c6839434e457bf3edb2fff17e6809e6c8305e4384a7911777259b",
+      "assemblies": [
+        {
+          "mode": "debug",
+          "assembly": "artifacts/hoisted-numeric-timer/primary/run-qfcI0C/workspace/debug/main.dll",
+          "sha256": "26e2156e395980273a5c3cde8829be4111f0dd2c33bc4552b8694c5f49f7882c",
+          "errors": [],
+          "status": "passed"
+        },
+        {
+          "mode": "plain",
+          "assembly": "artifacts/hoisted-numeric-timer/primary/run-qfcI0C/workspace/plain/main.dll",
+          "sha256": "6cb4a61d2c136feb670c3e8ad81a886c17a2841d548d45323ed7d8fe63ef15c3",
+          "errors": [],
+          "status": "passed"
+        }
+      ]
+    },
+    "numericControl": {
+      "status": "passed",
+      "source": "artifacts/hoisted-investigation/numeric-real/n.ts",
+      "sourceSha256": "66938c508209a6838167617223e258e2d535f1032eca361842981d69c23532d6",
+      "baselineCompilerSha256": "cdc6e7c3f7b0982bc8bbc065173359bcaa4ffc93b69c83a1d4e0b37953f0ffd5",
+      "baselineError": "StackUnexpected: Found=ref 'object', Expected=Double",
+      "candidateOutput": "result 3 7\n",
+      "bothSymbolModesChecked": true,
+      "artifacts": "artifacts/hoisted-numeric-timer/candidate"
+    },
+    "codeQuality": {
+      "status": "passed",
+      "duplicateGroups": 27,
+      "errors": 0,
+      "log": "artifacts/hoisted-numeric-timer/quality-gates.log",
+      "logSha256": "76345b7b5b8dbef6c9ac4d14244851384f773295aa4ef777bdfaea4d906f96bb"
+    }
+  },
+  "inheritedForOfShadowControl": {
+    "status": "inherited-limitation",
+    "artifacts": "artifacts/hoisted-numeric-timer/shadow-for-of",
+    "expected": {
+      "async": "result 3 7\n",
+      "async-generator": "result 3 7\nyield 3\ndone true\n"
+    },
+    "actual": {
+      "async-baseline": "result 21 7\n",
+      "async-candidate": "result 21 7\n",
+      "async-generator-baseline": "result 3 2\nyield 3\ndone true\n",
+      "async-generator-candidate": "result 3 2\nyield 3\ndone true\n"
+    },
+    "allFourAssembliesPassIlVerification": true,
+    "baselineCompilerSha256": "cdc6e7c3f7b0982bc8bbc065173359bcaa4ffc93b69c83a1d4e0b37953f0ffd5",
+    "notes": "Nondebug readonly for-of shadowing remains incorrect on merged #1985 and this compiler. The nonspecialized for-of test controls use a distinct entry binding; numeric for-loop shadow regressions retain the original same-name item binding."
+  },
+  "previousFullValidation": {
+    "record": "scripts/editor-smoke/compiled-debugger/hoisted-last-verified.json",
+    "recordSha256": "2804f394c84e0065a3c0469ba3936acb53dfbe17fa3902eaff9fda60a4ff4c34",
+    "notes": "Historical #1985 full-suite, TypeScript, Test262, stepping, and Roslyn-control results. They were not rerun for this bounded follow-up."
+  },
+  "knownLimits": [
+    "The seven netcoredbg duplicate Locals names and boxed-number expansion behavior remain.",
+    "Deeper loop relays, unsupported ancestor capture paths, and nondebug for-of shadowing remain documented limitations.",
+    "Visual Studio and Rider presentation remains uncertified."
+  ],
+  "artifactPolicy": "Raw debugger transcripts, controls, and test outputs are ignored local artifacts; tracked fixtures and tests reproduce the shipping change."
+}

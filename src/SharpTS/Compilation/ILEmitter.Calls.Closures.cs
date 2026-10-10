@@ -533,25 +533,7 @@ public partial class ILEmitter
                 if (local != null)
                 {
                     IL.Emit(OpCodes.Ldloc, local);
-                    if (field.FieldType == _ctx.Types.Double)
-                    {
-                        // Stable numeric loop snapshots keep the already-unboxed
-                        // counter in an unboxed display field. The captured loop
-                        // binding cannot take the integer-counter path, but retain a
-                        // defensive widening for future numeric local shapes.
-                        if (local.LocalType != _ctx.Types.Double)
-                        {
-                            if (local.LocalType.IsValueType)
-                                IL.Emit(OpCodes.Box, local.LocalType);
-                            IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ConvertToNumber);
-                        }
-                    }
-                    // General capture fields are object-typed, so a value-type local
-                    // must still be boxed before Stfld (#431).
-                    else if (local.LocalType.IsValueType)
-                    {
-                        IL.Emit(OpCodes.Box, local.LocalType);
-                    }
+                    EmitCaptureFieldConversion(local.LocalType, field.FieldType);
                 }
                 else
                 {
@@ -560,6 +542,7 @@ public partial class ILEmitter
             }
 
             IL.Emit(OpCodes.Stfld, field);
+            SetStackUnknown();
         }
     }
 

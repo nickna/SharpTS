@@ -197,7 +197,7 @@ async function transitiveArrowOwner(seed: number): Promise<number> {
 
 async function numericCaptureLoop(n: number): Promise<number> {
     let i: number = 7;
-    await Promise.resolve(0);
+    await delay();
     let chain: Promise<number> = Promise.resolve(0);
     {
         for (let i: number = 0; i < n; i++) {
