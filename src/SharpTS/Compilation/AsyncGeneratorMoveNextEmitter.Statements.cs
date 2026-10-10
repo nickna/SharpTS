@@ -109,7 +109,7 @@ public partial class AsyncGeneratorMoveNextEmitter
     {
         // For...of loop with hoisted enumerator (contains yield/await)
         // The enumerator is stored in a state machine field so it persists across suspension boundaries
-        string varName = f.Variable.Lexeme;
+        string varName = GetBindingStorageName(f, f.Variable.Lexeme);
         var varField = _builder.GetVariableField(varName);
 
         var getEnumerator = typeof(System.Collections.IEnumerable).GetMethod("GetEnumerator")!;
@@ -191,7 +191,7 @@ public partial class AsyncGeneratorMoveNextEmitter
     /// </remarks>
     protected override void EmitForAwaitOf(Stmt.ForOf f)
     {
-        string varName = f.Variable.Lexeme;
+        string varName = GetBindingStorageName(f, f.Variable.Lexeme);
         var varField = _builder.GetVariableField(varName);
         var asyncGenInterface = _ctx!.Runtime!.RequireAsyncGenerators().Type;
 

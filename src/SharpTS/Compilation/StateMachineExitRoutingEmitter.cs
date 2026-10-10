@@ -29,6 +29,9 @@ public abstract partial class StateMachineExitRoutingEmitter : StatementEmitterB
     {
     }
 
+    protected override string GetBindingStorageName(object declaration, string sourceName) =>
+        BlockScopeRenames.TryGetValue(declaration, out string? storage) ? storage : sourceName;
+
     /// <summary>
     /// Defines a private field on the concrete state-machine type. The routing needs fields that
     /// survive a MoveNext re-entry, not IL locals.

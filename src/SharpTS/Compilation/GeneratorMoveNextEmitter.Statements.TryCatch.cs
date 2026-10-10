@@ -13,7 +13,7 @@ public partial class GeneratorMoveNextEmitter
     // (<>pendingException), the yield-aware try/catch body, and the return/throw terminals.
 
     protected override FieldBuilder DefineStateMachineField(string name, Type type) =>
-        _builder.StateMachineType.DefineField(name, type, FieldAttributes.Private);
+        _builder.StateMachineType.DefineField(_builder.DebugScaffoldingName(name), type, FieldAttributes.Private);
 
     // ProtectedRegionDepth and its _protectedRegionDepth backing field, plus the suspension-agnostic
     // EmitSimpleTryCatch / StoreCaughtExceptionToParam, live in the shared IteratorMoveNextEmitter base
@@ -41,8 +41,7 @@ public partial class GeneratorMoveNextEmitter
     private FieldBuilder? _pendingExceptionField;
 
     private FieldBuilder GetPendingExceptionField() =>
-        _pendingExceptionField ??= _builder.StateMachineType.DefineField(
-            "<>pendingException", typeof(object), FieldAttributes.Private);
+        _pendingExceptionField ??= DefineStateMachineField("<>pendingException", typeof(object));
 
     // Per-construct fields holding a try-body exception across a *yielding* finally in a try/finally
     // with no catch (#599). The exception is captured into an IL local during the try body, but that
@@ -53,8 +52,7 @@ public partial class GeneratorMoveNextEmitter
     private int _caughtExceptionFieldCounter;
 
     private FieldBuilder DefineCaughtExceptionField() =>
-        _builder.StateMachineType.DefineField(
-            $"<>caughtException{_caughtExceptionFieldCounter++}", typeof(object), FieldAttributes.Private);
+        DefineStateMachineField($"<>caughtException{_caughtExceptionFieldCounter++}", typeof(object));
 
     // Companion to `<>caughtException{n}`: the exception-present flag (#619) that must likewise survive
     // a *yielding* finally in a catch-less try/finally. Gating the catch/rethrow on this boolean rather
@@ -63,8 +61,7 @@ public partial class GeneratorMoveNextEmitter
     private int _exceptionPresentFieldCounter;
 
     private FieldBuilder DefineExceptionPresentField() =>
-        _builder.StateMachineType.DefineField(
-            $"<>exceptionPresent{_exceptionPresentFieldCounter++}", typeof(bool), FieldAttributes.Private);
+        DefineStateMachineField($"<>exceptionPresent{_exceptionPresentFieldCounter++}", typeof(bool));
 
     // ---- Throw routing (generator-specific) -----------------------------------------------------
     // The loop-scope methods and break/continue (with their finally routing) are inherited from
@@ -338,8 +335,14 @@ public partial class GeneratorMoveNextEmitter
     /// </summary>
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
+        // Lowering clones the try node. Resolve its binding while the original declaration identity
+        // is available, then carry that storage token into the lowered node.
+        Token? catchParameter = t.CatchParam;
+        if (catchParameter is not null)
+            catchParameter = RenameToken(catchParameter, GetBindingStorageName(t, catchParameter.Lexeme));
         t = t with
         {
+            CatchParam = catchParameter,
             TryBlock = LowerUsingScopes(t.TryBlock),
             CatchBlock = t.CatchBlock is null ? null : LowerUsingScopes(t.CatchBlock),
             FinallyBlock = t.FinallyBlock is null ? null : LowerUsingScopes(t.FinallyBlock)
@@ -463,7 +466,7 @@ public partial class GeneratorMoveNextEmitter
             if (t.CatchParam != null)
             {
                 _il.Emit(OpCodes.Ldloc, caughtExceptionLocal);
-                StoreCaughtExceptionToParam(t.CatchParam.Lexeme);
+                StoreCaughtExceptionToParam(GetBindingStorageName(t, t.CatchParam.Lexeme));
             }
 
             // Catch handles it; clear the present flag so the post-finally rethrow below is skipped —

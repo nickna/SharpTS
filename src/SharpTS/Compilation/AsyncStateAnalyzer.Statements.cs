@@ -28,7 +28,7 @@ public partial class AsyncStateAnalyzer
     protected override void VisitForOf(Stmt.ForOf stmt)
     {
         // Loop variable is declared and potentially survives await
-        _declaredVariables.Add(stmt.Variable.Lexeme);
+        _declaredVariables.Add(StorageName(stmt, stmt.Variable.Lexeme));
 
         if (stmt.IsAsync)
         {
@@ -50,7 +50,7 @@ public partial class AsyncStateAnalyzer
     protected override void VisitForIn(Stmt.ForIn stmt)
     {
         // Loop variable is declared and potentially survives await
-        _declaredVariables.Add(stmt.Variable.Lexeme);
+        _declaredVariables.Add(StorageName(stmt, stmt.Variable.Lexeme));
 
         base.VisitForIn(stmt);
     }
@@ -236,8 +236,7 @@ public partial class AsyncStateAnalyzer
             _currentTryRegion = TryRegion.Catch;
             if (t.CatchParam != null)
             {
-                _declaredVariables.Add(t.CatchParam.Lexeme);
-                _catchParameters.Add(t.CatchParam.Lexeme);  // Track as catch param (should not be hoisted)
+                _declaredVariables.Add(StorageName(t, t.CatchParam.Lexeme));
             }
             foreach (var cs in t.CatchBlock)
                 Visit(cs);

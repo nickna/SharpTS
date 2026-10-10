@@ -694,13 +694,15 @@ public partial class ILCompiler
         var methodBuilder = _classes.StaticMethods[className][method.Name.Lexeme];
 
         // Analyze async function to determine await points and hoisted variables
-        var analysis = _async.Analyzer.Analyze(method);
+        var analysis = _async.Analyzer.Analyze(method, preserveDebugBindings: EmitDebugSymbols);
 
         // Check if method has @lock decorator
         bool hasLock = HasLockDecorator(method);
 
         // Build state machine type
         var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _async.StateMachineCounter++);
+        ConfigureDebugStateMachineOwner(smBuilder, typeBuilder, methodBuilder.Name);
+        ConfigureDebugHoistedBindings(smBuilder, method.Parameters, method.Body, analysis.BlockScopeRenames);
         var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
         smBuilder.DefineStateMachine(
             $"{className}_{method.Name.Lexeme}",
@@ -711,6 +713,10 @@ public partial class ILCompiler
             hasLock: hasLock,
             hoistedParameterTypes: GetStableAsyncParameterFieldTypes(method)
         );
+
+        if (EmitDebugSymbols)
+            RegisterStateMachine(methodBuilder, smBuilder.StateMachineType, smBuilder.MoveNextMethod,
+                EmittedStateMachineKind.Async, smBuilder.SetStateMachineMethod);
 
         // #682/#follow-up: attach the static method's function display class (registered in Phase 4) to
         // the state machine — shares verifiable reference storage for both async-arrow and nested

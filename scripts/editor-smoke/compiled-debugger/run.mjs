@@ -38,14 +38,20 @@ for (const [directory, expected] of [[csharp, "ms-dotnettools.csharp"], [runtime
   await fs.cp(directory, path.join(extensions, `${expected}-${manifest.version}`), { recursive: true });
 }
 const markers = {};
-for (const name of ["main.ts", "helper.ts"]) {
-  const source = await fs.readFile(path.join(root, "tests/fixtures/CompiledDebuggerAcceptance", name), "utf8");
-  const destination = path.join(workspace, name);
+const fixture = path.resolve(root, values.get("fixture") ?? "tests/fixtures/CompiledDebuggerAcceptance");
+const existingAssembly = values.has("assembly") ? path.resolve(root, values.get("assembly")) : null;
+const sourceNames = existingAssembly
+  ? (await fs.readdir(fixture)).filter(name => /\.(cs|ts)$/.test(name))
+  : ["main.ts", "helper.ts"];
+for (const name of sourceNames) {
+  const sourcePath = path.join(fixture, name);
+  const source = await fs.readFile(sourcePath, "utf8");
+  const destination = existingAssembly ? sourcePath : path.join(workspace, name);
   // Exercise exact-source validation with encodings that text-only hashing loses.
   const bytes = name === "main.ts"
     ? Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(source, "utf8")])
     : Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(source, "utf16le")]);
-  await fs.writeFile(destination, bytes);
+  if (!existingAssembly) await fs.writeFile(destination, bytes);
   source.split(/\r?\n/).forEach((line, index) => {
     const marker = line.match(/@(break|step):([\w-]+)/);
     if (marker) markers[`${marker[1]}:${marker[2]}`] = { path: destination, line: index + 1 };
@@ -63,19 +69,22 @@ await fs.writeFile(path.join(userData, "User/settings.json"), JSON.stringify(set
 function execute(command, args, options = {}) {
   const result = spawnSync(command, args, { cwd: workspace, encoding: "utf8", timeout: 60_000,
     windowsHide: true, ...options });
-  assert.equal(result.status, 0, `${command} ${args.join(" ")}\n${result.stdout}\n${result.stderr}`);
+  assert.equal(result.status, 0, `${command} ${args.join(" ")}\n${result.error ?? ""}\n${result.stdout}\n${result.stderr}`);
   return result.stdout;
 }
-const entry = path.join(workspace, "main.ts");
-const assembly = path.join(workspace, "debug/main.dll");
+const entry = existingAssembly ? path.join(fixture, sourceNames[0]) : path.join(workspace, "main.ts");
+const assembly = existingAssembly ?? path.join(workspace, "debug/main.dll");
 const plainAssembly = path.join(workspace, "plain/main.dll");
-await fs.mkdir(path.dirname(assembly), { recursive: true });
-await fs.mkdir(path.dirname(plainAssembly), { recursive: true });
-const compileLog = execute(dotnet, [compiler, "--compile", entry, "--ref-asm", "-g", "-o", assembly]);
+let compileLog = "Precompiled debugger control\n";
+if (!existingAssembly) {
+  await fs.mkdir(path.dirname(assembly), { recursive: true });
+  await fs.mkdir(path.dirname(plainAssembly), { recursive: true });
+  compileLog = execute(dotnet, [compiler, "--compile", entry, "--ref-asm", "-g", "-o", assembly]);
+  execute(dotnet, [compiler, "--compile", entry, "--ref-asm", "-o", plainAssembly]);
+  await assert.rejects(fs.access(plainAssembly.replace(/\.dll$/, ".pdb")));
+}
 assert.ok((await fs.stat(assembly.replace(/\.dll$/, ".pdb"))).size > 0);
-execute(dotnet, [compiler, "--compile", entry, "--ref-asm", "-o", plainAssembly]);
-await assert.rejects(fs.access(plainAssembly.replace(/\.dll$/, ".pdb")));
-const expectedOutput = execute(dotnet, [plainAssembly]).replaceAll("\r\n", "\n");
+const expectedOutput = execute(dotnet, [existingAssembly ?? plainAssembly]).replaceAll("\r\n", "\n");
 assert.equal(execute(dotnet, [assembly]).replaceAll("\r\n", "\n"), expectedOutput);
 await fs.writeFile(path.join(artifacts, "compile.log"), compileLog);
 let cli = values.get("code-cli");
@@ -94,12 +103,15 @@ execute(code, cli ? [cli, "--user-data-dir", userData, "--extensions-dir", exten
   { env: cli ? { ...process.env, ELECTRON_RUN_AS_NODE: "1" } : process.env });
 const config = { workspace, entry, assembly, expectedOutput, markers, extensionVersions,
   result: path.join(artifacts, "extension-result.json"), transcript: path.join(artifacts, "transcript.json") };
+try { config.expectations = JSON.parse(await fs.readFile(path.join(fixture, "expectations.json"), "utf8")); }
+catch (error) { if (error.code !== "ENOENT") throw error; }
+config.observeOnly = values.get("observe-only") === "true";
 const configFile = path.join(artifacts, "config.json");
 await fs.writeFile(configFile, JSON.stringify(config, null, 2) + "\n");
 const env = { ...process.env, SHARPTS_COMPILED_DEBUGGER_CONFIG: configFile };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(code, ["--user-data-dir", userData, "--extensions-dir", extensions,
-  "--extensionDevelopmentPath", script, "--extensionTestsPath", path.join(script, "test.cjs"),
+  "--extensionDevelopmentPath", script, "--extensionTestsPath", path.resolve(script, values.get("tests") ?? "test.cjs"),
   "--disable-workspace-trust", "--skip-welcome", "--skip-release-notes", "--disable-updates",
   "--disable-telemetry", "--disable-gpu", "--new-window", workspace],
   { cwd: root, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
@@ -123,12 +135,15 @@ assert.equal(result.status, "passed");
 assert.equal(await hash(compiler), compilerSha256, "compiler changed during acceptance; rerun without a concurrent build");
 Object.assign(result, { compilerSha256, assemblySha256: await hash(assembly),
   pdbSha256: await hash(assembly.replace(/\.dll$/, ".pdb")), extensionVersions,
-  debugAndNonDebugOutputMatch: true, nonDebugPdbAbsent: true, referenceAssemblyRewrite: true,
+  debugAndNonDebugOutputMatch: existingAssembly ? null : true,
+  nonDebugPdbAbsent: existingAssembly ? null : true, referenceAssemblyRewrite: !existingAssembly,
   expectedOutput, artifacts,
   verifiedUtc: new Date().toISOString(),
   sourceCommit: execute("git", ["rev-parse", "HEAD"], { cwd: root }).trim(),
   workingTreeChangesIncluded: Boolean(execute("git", ["status", "--porcelain"], { cwd: root }).trim()),
-  sourceEncodings: { "main.ts": "UTF-8 with BOM", "helper.ts": "UTF-16 LE with BOM" } });
+  sourceEncodings: existingAssembly ? null
+    : { "main.ts": "UTF-8 with BOM", "helper.ts": "UTF-16 LE with BOM" } });
 await fs.writeFile(path.join(artifacts, "result.json"), JSON.stringify(result, null, 2) + "\n");
 console.log(JSON.stringify({ status: result.status, editor: result.editor, csharpVersion: result.csharpVersion,
-  stops: result.observations.length, debugAndNonDebugOutputMatch: true, artifacts }, null, 2));
+  stops: result.observations.length, debugAndNonDebugOutputMatch: result.debugAndNonDebugOutputMatch,
+  artifacts }, null, 2));

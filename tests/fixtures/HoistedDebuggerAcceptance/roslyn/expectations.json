@@ -1,0 +1,10 @@
+[
+  { "marker": "break:async_before", "values": { "parameter": 10, "local": 11, "captured": 12 }, "absent": ["blockLocal"] },
+  { "marker": "break:async_after", "values": { "parameter": 10, "local": 11, "captured": 12 }, "absent": ["blockLocal"] },
+  { "marker": "break:async_block", "values": { "parameter": 10, "local": 11, "captured": 12, "blockLocal": 14 } },
+  { "marker": "break:async_out_of_block", "values": { "parameter": 10, "local": 11, "captured": 13 }, "absent": ["blockLocal"] },
+  { "marker": "break:iterator_before", "values": { "parameter": 20, "local": 21 } },
+  { "marker": "break:iterator_after", "values": { "parameter": 20, "local": 23 } },
+  { "marker": "break:async_iterator_before", "values": { "parameter": 30, "local": 31 } },
+  { "marker": "break:async_iterator_after", "values": { "parameter": 30, "local": 33 } }
+]

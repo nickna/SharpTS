@@ -127,13 +127,13 @@ public partial class AsyncGeneratorStateAnalyzer : AstVisitorBase
     /// <summary>
     /// Analyzes an async generator function to determine suspension points and hoisted variables.
     /// </summary>
-    public AsyncGeneratorFunctionAnalysis Analyze(Stmt.Function func)
+    public AsyncGeneratorFunctionAnalysis Analyze(Stmt.Function func, bool preserveDebugBindings = false)
     {
         Reset();
 
         // Disambiguate block-scoped let/const declarations that shadow an enclosing binding so the
         // hoisting decision below is made per-binding rather than per-name (#766, async analog of #711).
-        var renameResult = GeneratorBlockScopeRenamer.Compute(func);
+        var renameResult = GeneratorBlockScopeRenamer.Compute(func, preserveDebugBindings: preserveDebugBindings);
         _renames = renameResult.Renames;
         _captureRenames = renameResult.CaptureRenames;
 

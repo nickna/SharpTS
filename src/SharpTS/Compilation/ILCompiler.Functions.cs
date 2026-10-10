@@ -425,6 +425,13 @@ public partial class ILCompiler
             capturedLocals = renameAware;
         }
 
+        if ((funcStmt.IsAsync || funcStmt.IsGenerator) && blockScopeRenames is { } readRenames)
+        {
+            var renameAware = new HashSet<string>(capturedLocals);
+            ApplyReadCaptureRenames(renameAware, readRenames);
+            capturedLocals = renameAware;
+        }
+
         RegisterFunctionDisplayClass(qualifiedFunctionName, capturedLocals, funcStmt);
     }
 
@@ -450,13 +457,15 @@ public partial class ILCompiler
 
         // Define fields for each captured variable
         var fieldMap = new Dictionary<string, FieldBuilder>();
-        foreach (var varName in capturedLocals)
+        var debugSymbols = GetDebugHoistedBindings(callable);
+        var fieldNames = debugSymbols is null ? capturedLocals : capturedLocals.OrderBy(name => debugSymbols.GetBinding(name)?.Slot ?? int.MaxValue);
+        foreach (var varName in fieldNames)
         {
-            Type fieldType = callable is not null &&
+            Type fieldType = debugSymbols is null && callable is not null &&
                 _typeMap?.IsStableNumericFunctionCaptureField(callable, varName) == true
                 ? _types.Double
                 : _types.Object;
-            var field = displayClass.DefineField(varName, fieldType, FieldAttributes.Public);
+            var field = displayClass.DefineField(debugSymbols?.DefineDisplayClassFieldName(varName) ?? varName, fieldType, FieldAttributes.Public);
             fieldMap[varName] = field;
         }
 

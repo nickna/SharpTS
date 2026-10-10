@@ -15,7 +15,7 @@ public partial class ILCompiler
     private void DefineAsyncFunction(Stmt.Function funcStmt)
     {
         // Analyze the async function for await points and hoisted variables
-        var analysis = _async.Analyzer.Analyze(funcStmt);
+        var analysis = _async.Analyzer.Analyze(funcStmt, preserveDebugBindings: EmitDebugSymbols);
 
         // Module-qualify the stub/registry keys (#418) so two modules that each declare a
         // same-named async function don't clobber each other. Single-file compilation returns
@@ -28,7 +28,7 @@ public partial class ILCompiler
             funcStmt, ctx, analysis);
         if (suspensionFreeAwaits.Count > 0)
         {
-            analysis = _async.Analyzer.Analyze(funcStmt, suspensionFreeAwaits);
+            analysis = _async.Analyzer.Analyze(funcStmt, suspensionFreeAwaits, EmitDebugSymbols);
             _async.SuspensionFreeAwaits[qualifiedFunctionName] = suspensionFreeAwaits;
         }
 
@@ -42,6 +42,8 @@ public partial class ILCompiler
 
         // Create state machine builder
         var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _async.StateMachineCounter++);
+        ConfigureDebugStateMachineOwner(smBuilder, _programType, qualifiedFunctionName);
+        ConfigureDebugHoistedBindings(smBuilder, funcStmt.Parameters, funcStmt.Body, analysis.BlockScopeRenames);
         var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
         smBuilder.DefineStateMachine(
             funcStmt.Name.Lexeme,
@@ -455,9 +457,9 @@ public partial class ILCompiler
     /// Registers the function-level display class ($functionDC) for an async free function OR async
     /// method, keyed by <paramref name="key"/>. Lifts the captured locals a nested SYNC arrow shares —
     /// minus the ones an async arrow captures (those use the boxed-outer hoisted-field path), keeping the
-    /// direct-child async-arrow WRITES that #625 promotes for verifiable mutation. Excludes read-only
-    /// renamed shadows from the name-keyed DC (#837) and makes the DC rename-aware for write-captured
-    /// shadows (#838) via <c>DefineFunctionDisplayClass</c> → <c>ApplyWriteCaptureRenames</c>. Records the
+    /// direct-child async-arrow WRITES that #625 promotes for verifiable mutation. Makes the DC
+    /// rename-aware for captured shadows via <c>DefineFunctionDisplayClass</c>, preserving shared
+    /// storage when the enclosing body mutates a binding read by a closure. Records the
     /// AST node so the arrow-collection (<see cref="PropagateFunctionDCRequirements"/>) can resolve a
     /// nested sync arrow's enclosing scope back to this DC. Does NOT attach the state-machine field — the
     /// caller does that once its <c>smBuilder</c> exists (free functions inline; methods in phase 7).
@@ -484,38 +486,25 @@ public partial class ILCompiler
         // reference) is verifiable. Read-only captures stay on the SM field (the existing, working
         // load path).
         var promotedToFunctionDC = ComputeArrowWrittenCapturesToPromote(analysis.AsyncArrows);
-        asyncCapturedVars.ExceptWith(promotedToFunctionDC);
+        if (EmitDebugSymbols)
+        {
+            // Captures need a typed reference to their authoritative storage for managed expression
+            // evaluators. Reuse the existing reference-storage lowering for read captures as well.
+            promotedToFunctionDC.UnionWith(asyncCapturedVars);
+            asyncCapturedVars.Clear();
+        }
+        else
+            asyncCapturedVars.ExceptWith(promotedToFunctionDC);
 
         // Filter out (still-)async-captured vars before creating the DC
         if (asyncCapturedVars.Count > 0)
             _closures.AsyncCapturedVarsExclusion[key] = asyncCapturedVars;
 
-        // #837: a nested-block let/const that shadows an enclosing binding and is merely READ by an
-        // inner arrow is now renamed (#767), recording a capture-source pivot. Keep its SOURCE name out
-        // of the name-keyed function DC so the arrow body's read resolves to the arrow's own pivot-aware
-        // snapshot field instead of the shared `$functionDC.<name>` (the resolver prefers the function DC
-        // over the per-arrow field, so the name colliding there is what leaks the outer value). The keys
-        // of BlockScopeCaptureRenames are exactly those read-only-captured renamed shadows (names written
-        // inside any closure are off-limits and never appear). Gate on the promoted-written set so a
-        // same-named mutated capture stays in the DC for verifiable mutation (#625).
-        var readOnlyRenamedShadows = new HashSet<string>();
-        if (analysis.BlockScopeCaptureRenames != null)
-            foreach (var perArrow in analysis.BlockScopeCaptureRenames.Values)
-                readOnlyRenamedShadows.UnionWith(perArrow.Keys);
-        readOnlyRenamedShadows.ExceptWith(promotedToFunctionDC);
-        if (readOnlyRenamedShadows.Count > 0)
-        {
-            if (_closures.AsyncCapturedVarsExclusion.TryGetValue(key, out var existing))
-                existing.UnionWith(readOnlyRenamedShadows);
-            else
-                _closures.AsyncCapturedVarsExclusion[key] = readOnlyRenamedShadows;
-        }
-
         // #838: an async body is retokenized by the block-scope renamer, so make its function DC
         // rename-aware — a write-captured nested-block shadow gets its own renamed field instead of
         // colliding with the outer same-named binding on a single name-keyed cell (matching the existing
         // generator path). Recomputed here (deterministic, same flag the AsyncStateAnalyzer used).
-        var blockScopeRenames = GeneratorBlockScopeRenamer.Compute(funcStmt, arrowReadCapturesShareStorage: false);
+        var blockScopeRenames = GeneratorBlockScopeRenamer.Compute(funcStmt, arrowReadCapturesShareStorage: false, preserveDebugBindings: EmitDebugSymbols);
         DefineFunctionDisplayClass(funcStmt, key, blockScopeRenames);
     }
 
@@ -549,7 +538,7 @@ public partial class ILCompiler
             string infix = method.IsStatic ? "::static::" : "::";
             string key = $"{qualifiedClassName}{infix}{method.Name.Lexeme}";
 
-            var analysis = _async.Analyzer.Analyze(method);
+            var analysis = _async.Analyzer.Analyze(method, preserveDebugBindings: EmitDebugSymbols);
             RegisterAsyncFunctionDisplayClass(method, key, analysis);
 
             // Only track the key when a DC was actually created (captured locals to share); otherwise the
@@ -677,14 +666,26 @@ public partial class ILCompiler
         {
             // Create a dedicated analyzer for this arrow's await points
             var arrowAnalysis = AnalyzeAsyncArrow(arrowInfo.Arrow);
+            var captures = new HashSet<string>(arrowInfo.Captures);
+            if (arrowInfo.ParentArrow is not null)
+            {
+                // The suspension analyzer starts with the root function's declarations.
+                // Lexical closure analysis also records bindings declared by an intermediate
+                // arrow, which a nested arrow must access through its parent's frame.
+                captures.UnionWith(_closures.Analyzer.GetCaptures(arrowInfo.Arrow));
+            }
 
             // Create state machine builder for the async arrow
             var arrowBuilder = new AsyncArrowStateMachineBuilder(
                 _moduleBuilder,
                 _types,
                 arrowInfo.Arrow,
-                arrowInfo.Captures,
+                captures,
                 _async.ArrowCounter++);
+            ConfigureDebugStateMachineOwner(arrowBuilder, _programType, arrowBuilder.StubMethodName);
+            ConfigureDebugHoistedBindings(arrowBuilder, arrowInfo.Arrow.Parameters, arrowInfo.Arrow.BlockBody, arrowAnalysis.Renames,
+                arrowInfo.ParentArrow is not null && _async.ArrowBuilders.TryGetValue(arrowInfo.ParentArrow, out var lexicalParent)
+                    ? lexicalParent.DebugSymbols : outerBuilder.DebugSymbols);
 
             // Determine the outer state machine type and hoisted fields
             Type outerStateMachineType;
@@ -722,14 +723,24 @@ public partial class ILCompiler
                 HashSet<string> transitiveCaptures = [];
                 foreach (var (name, field) in parentBuilder.CapturedFieldMap)
                 {
-                    outerHoistedFields[name] = field;
-                    transitiveCaptures.Add(name);
+                    if (outerHoistedFields.TryAdd(name, field))
+                        transitiveCaptures.Add(name);
                 }
                 // Also include parent's transitive captures (for deeper nesting)
                 foreach (var name in parentBuilder.TransitiveCaptures)
                 {
-                    transitiveCaptures.Add(name);
+                    if (!parentBuilder.ParameterFields.ContainsKey(name) && !parentBuilder.LocalFields.ContainsKey(name))
+                        transitiveCaptures.Add(name);
                 }
+
+                var parentAnalysis = AnalyzeAsyncArrow(parentBuilder.Arrow);
+                if (parentAnalysis.CaptureRenames.TryGetValue(arrowInfo.Arrow, out var captureRenames))
+                    foreach (var (name, storage) in captureRenames)
+                        if (parentBuilder.LocalFields.TryGetValue(storage, out var field))
+                        {
+                            outerHoistedFields[name] = field;
+                            transitiveCaptures.Remove(name);
+                        }
 
                 _async.ArrowParentBuilders[arrowInfo.Arrow] = parentBuilder;
 
@@ -813,7 +824,7 @@ public partial class ILCompiler
         // an async arrow does not lift read-only captures into a name-keyed function display class (only
         // promoted WRITTEN captures, #682/#625), so the inner arrow's read flows through the per-arrow
         // snapshot path the pivot redirects — no DC exclusion is needed here, unlike async functions (#837).
-        var renameResult = GeneratorBlockScopeRenamer.Compute(arrow, arrowReadCapturesShareStorage: false);
+        var renameResult = GeneratorBlockScopeRenamer.Compute(arrow, arrowReadCapturesShareStorage: false, preserveDebugBindings: EmitDebugSymbols);
         _arrowBlockScopeRenames = renameResult.Renames;
         _arrowBlockScopeCaptureRenames = renameResult.CaptureRenames;
 
@@ -918,9 +929,9 @@ public partial class ILCompiler
                 AnalyzeArrowStmtForAwaits(w.Body, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
             case Stmt.ForOf f:
-                declaredVariables.Add(f.Variable.Lexeme);
+                declaredVariables.Add(ArrowStorageName(f, f.Variable.Lexeme));
                 if (!seenAwait)
-                    declaredBeforeAwait.Add(f.Variable.Lexeme);
+                    declaredBeforeAwait.Add(ArrowStorageName(f, f.Variable.Lexeme));
                 AnalyzeArrowExprForAwaits(f.Iterable, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 AnalyzeArrowStmtForAwaits(f.Body, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
@@ -948,9 +959,9 @@ public partial class ILCompiler
                 {
                     if (t.CatchParam != null)
                     {
-                        declaredVariables.Add(t.CatchParam.Lexeme);
+                        declaredVariables.Add(ArrowStorageName(t, t.CatchParam.Lexeme));
                         if (!seenAwait)
-                            declaredBeforeAwait.Add(t.CatchParam.Lexeme);
+                            declaredBeforeAwait.Add(ArrowStorageName(t, t.CatchParam.Lexeme));
                     }
                     foreach (var cs in t.CatchBlock)
                         AnalyzeArrowStmtForAwaits(cs, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
@@ -1367,6 +1378,34 @@ public partial class ILCompiler
         // Create a new context for arrow MoveNext emission
         var ctx = CreateNestedAsyncArrowContext(il, parentCtx, arrowBuilder.MoveNextMethod);
 
+        if (EmitDebugSymbols)
+        {
+            if (_async.ArrowParentBuilders.TryGetValue(arrow, out var lexicalParent))
+            {
+                if (lexicalParent.FunctionDCField is { } ownHolder)
+                    arrowBuilder.DefineDebugCaptureReference(ownHolder, lexicalParent.FunctionDCFieldMap);
+                foreach (var group in lexicalParent.DebugCapturedBindings.GroupBy(binding => binding.Value.Holder))
+                    arrowBuilder.DefineDebugCaptureReference(group.Key,
+                        group.ToDictionary(binding => binding.Key, binding => binding.Value.Field));
+                // Immutable parent bindings can retain their existing field storage. Expose
+                // that stable value under its source name without allocating a display class.
+                foreach (var (name, field) in arrowBuilder.CapturedFieldMap)
+                {
+                    if (!arrowBuilder.TransitiveCaptures.Contains(name)
+                        && lexicalParent.DebugSymbols?.GetBinding(
+                            lexicalParent.LocalFields.FirstOrDefault(binding => binding.Value == field).Key ?? name)
+                            ?.Declaration is Stmt.Const)
+                        arrowBuilder.DefineDebugCapturedValue(name, field);
+                }
+            }
+            else if (parentCtx.OuterFunctionDCField is { } outerHolder && parentCtx.FunctionDisplayClassFields is { } outerFields)
+            {
+                IReadOnlyDictionary<string, string>? captureRenames = null;
+                if (_closures.ArrowFunctionDCFieldRenames.TryGetValue(arrow, out var renamedFields)) captureRenames = renamedFields;
+                arrowBuilder.DefineDebugCaptureReference(outerHolder, outerFields, captureRenames);
+            }
+        }
+
         // Create arrow-specific emitter
         var arrowEmitter = new AsyncArrowMoveNextEmitter(arrowBuilder, analysis, _types);
 
@@ -1581,7 +1620,7 @@ public partial class ILCompiler
         bool isInstanceMethod = true, string? currentClassName = null)
     {
         // Analyze async function to determine await points and hoisted variables
-        var analysis = _async.Analyzer.Analyze(method);
+        var analysis = _async.Analyzer.Analyze(method, preserveDebugBindings: EmitDebugSymbols);
         if (isInstanceMethod && (_classExprs.DefinitionMethods.ContainsKey(methodBuilder) || _classExprs.Builders.Values.Any(builder => ReferenceEquals(builder, methodBuilder.DeclaringType))))
             analysis = analysis with { UsesThis = true };
 
@@ -1591,6 +1630,8 @@ public partial class ILCompiler
         // Build state machine type. Use the MethodBuilder's (mangled) name, not method.Name.Lexeme: a
         // private method's lexeme is `#p`, whose `#` would land in the generated state-machine type name.
         var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _async.StateMachineCounter++);
+        ConfigureDebugStateMachineOwner(smBuilder, (TypeBuilder)methodBuilder.DeclaringType!, methodBuilder.Name);
+        ConfigureDebugHoistedBindings(smBuilder, method.Parameters, method.Body, analysis.BlockScopeRenames);
         var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
         smBuilder.DefineStateMachine(
             $"{methodBuilder.DeclaringType!.Name}_{methodBuilder.Name}",
@@ -1746,13 +1787,16 @@ public partial class ILCompiler
                 arrow,
                 captures,
                 _async.ArrowCounter++);
+            ConfigureDebugStateMachineOwner(arrowBuilder, _programType, arrowBuilder.StubMethodName);
+            ConfigureDebugHoistedBindings(arrowBuilder, arrow.Parameters, arrow.BlockBody, arrowAnalysis.Renames);
 
             // Define standalone state machine (no outer reference)
             arrowBuilder.DefineStateMachineStandalone(
                 arrowAnalysis.AwaitCount,
                 arrow.Parameters,
                 arrowAnalysis.HoistedLocals,
-                GetStandaloneLiveCaptureFields(arrow, captures));
+                GetStandaloneLiveCaptureFields(arrow, captures),
+                GetDebugStaticCaptureNames(arrow, captures));
 
             // Define the stub method
             arrowBuilder.DefineStubMethod(_programType, _runtime);

@@ -52,7 +52,7 @@ public partial class AsyncMoveNextEmitter
         // the event-loop thread (#631). The analyzer reserved one suspension state for each await
         // (AsyncStateAnalyzer.VisitForOf), consumed below in the same order.
 
-        string varName = f.Variable.Lexeme;
+        string varName = GetBindingStorageName(f, f.Variable.Lexeme);
         var varField = _builder.GetVariableField(varName);
 
         var iterableLocal = _il.DeclareLocal(_types.Object);

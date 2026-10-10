@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.Compilation.Symbols;
 
 namespace SharpTS.Compilation;
 
@@ -45,6 +46,38 @@ public class HoistingManager
     {
         _typeBuilder = typeBuilder;
         _objectType = objectType;
+    }
+
+    internal void DefineHoistedVariables(
+        IEnumerable<string> parameters,
+        IEnumerable<string> locals,
+        StateMachineDebugSymbols? symbols,
+        IReadOnlyDictionary<string, Type>? parameterTypes = null,
+        IReadOnlyDictionary<string, Type>? localTypes = null)
+    {
+        if (symbols is null)
+        {
+            DefineHoistedParameters(parameters, parameterTypes);
+            DefineHoistedLocals(locals, localTypes);
+            return;
+        }
+
+        var parameterNames = parameters.ToHashSet();
+        var localNames = locals.ToHashSet();
+        foreach (StateMachineDebugSymbols.Binding binding in symbols.Bindings)
+        {
+            if (!(binding.IsParameter ? parameterNames : localNames).Contains(binding.StorageName)) continue;
+            Type type = (binding.IsParameter ? parameterTypes : localTypes)?.GetValueOrDefault(binding.StorageName) ?? _objectType;
+            FieldBuilder field = _typeBuilder.DefineField(binding.MachineFieldName, type, FieldAttributes.Public);
+            binding.Field = field;
+            (binding.IsParameter ? HoistedParameters : HoistedLocals).Add(binding.StorageName, field);
+        }
+        foreach (string name in parameters)
+            if (!HoistedParameters.ContainsKey(name))
+                HoistedParameters[name] = _typeBuilder.DefineField($"<>7__{name}", parameterTypes?.GetValueOrDefault(name) ?? _objectType, FieldAttributes.Public);
+        foreach (string name in locals)
+            if (!HoistedLocals.ContainsKey(name))
+                HoistedLocals[name] = _typeBuilder.DefineField($"<>7__{name}", localTypes?.GetValueOrDefault(name) ?? _objectType, FieldAttributes.Public);
     }
 
     /// <summary>

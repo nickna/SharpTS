@@ -69,7 +69,6 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
     private readonly List<AwaitPoint> _awaitPoints = [];
     private readonly HashSet<string> _declaredVariables = [];
     private readonly HashSet<string> _variablesUsedAfterAwait = [];
-    private readonly HashSet<string> _catchParameters = [];  // Catch params should not be hoisted
     private readonly List<AsyncArrowInfo> _asyncArrows = [];
     private readonly List<TryBlockInfo> _tryBlocks = [];
     private int _awaitCounter = 0;
@@ -116,7 +115,8 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
     /// </summary>
     public AsyncFunctionAnalysis Analyze(
         Stmt.Function func,
-        IReadOnlySet<Expr.Await>? nonSuspendingAwaits = null)
+        IReadOnlySet<Expr.Await>? nonSuspendingAwaits = null,
+        bool preserveDebugBindings = false)
     {
         Reset();
         _nonSuspendingAwaits = nonSuspendingAwaits;
@@ -127,7 +127,7 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
         // DefineAsyncFunction excludes such read-only-captured renamed shadows from the name-keyed
         // function display class so the arrow's read flows through the per-arrow snapshot path the pivot
         // redirects, instead of colliding with the outer same-named binding on one DC field (#837).
-        var renameResult = GeneratorBlockScopeRenamer.Compute(func, arrowReadCapturesShareStorage: false);
+        var renameResult = GeneratorBlockScopeRenamer.Compute(func, arrowReadCapturesShareStorage: false, preserveDebugBindings);
         _renames = renameResult.Renames;
         _captureRenames = renameResult.CaptureRenames;
 
@@ -153,7 +153,8 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
         var hoistedLocals = new HashSet<string>(_declaredVariables);
         hoistedLocals.IntersectWith(_variablesUsedAfterAwait);
         hoistedLocals.ExceptWith(parameters); // Parameters are tracked separately
-        hoistedLocals.ExceptWith(_catchParameters); // Catch params are scoped to catch block, not hoisted
+        // Catch parameters used after an await are ordinary live bindings: an IL local is reset
+        // on MoveNext reentry, so excluding them would turn the caught value into null.
 
         // Build TryBlockInfo list from collected data
         var tryBlocks = BuildTryBlockInfoList();
@@ -205,7 +206,6 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
         _awaitPoints.Clear();
         _declaredVariables.Clear();
         _variablesUsedAfterAwait.Clear();
-        _catchParameters.Clear();
         _asyncArrows.Clear();
         _tryBlocks.Clear();
         _awaitCounter = 0;

@@ -51,6 +51,8 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
     #region Virtual Methods - Variable Declaration
 
+    protected virtual string GetBindingStorageName(object declaration, string sourceName) => sourceName;
+
     // GetHoistedVariableField moved to ExpressionEmitterBase for EmitStoreVariable access.
 
     /// <summary>
@@ -236,8 +238,9 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             return;
 
         MarkStatementStart(stmt);
-
+        Ctx.HoistedDebugSymbols?.RecordStatementStart(stmt, IL.ILOffset);
         EmitStatementCore(stmt);
+        Ctx.HoistedDebugSymbols?.RecordStatementEnd(stmt, IL.ILOffset);
     }
 
     /// <summary>
@@ -1077,7 +1080,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         EnterLoop(endLabel, continueLabel);
 
         // Declare loop variable
-        var loopVarLocal = DeclareLoopVariable(f.Variable.Lexeme);
+        var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme));
 
         IL.MarkLabel(startLabel);
         EmitCancellationCheck();
@@ -1088,7 +1091,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Brfalse, endLabel);
 
         // Set loop variable from Current
-        EmitStoreLoopVariable(loopVarLocal, f.Variable.Lexeme, () =>
+        EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme), () =>
         {
             loadEnumerator();
             IL.Emit(OpCodes.Callvirt, current);
@@ -1139,7 +1142,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         var types = Types;
         var runtime = Ctx.Runtime!;
 
-        string varName = f.Variable.Lexeme;
+        string varName = GetBindingStorageName(f, f.Variable.Lexeme);
 
         // Emit the async iterable expression
         EmitExpression(f.Iterable);
@@ -1455,7 +1458,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         EnterLoop(endLabel, continueLabel);
 
         // Loop variable
-        var loopVarLocal = DeclareLoopVariable(f.Variable.Lexeme);
+        var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme));
 
         IL.MarkLabel(startLabel);
         EmitCancellationCheck();
@@ -1468,7 +1471,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Brfalse, endLabel);
 
         // Set loop variable from keys[index]
-        EmitStoreLoopVariable(loopVarLocal, f.Variable.Lexeme, () =>
+        EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme), () =>
         {
             IL.Emit(OpCodes.Ldloc, keysLocal);
             IL.Emit(OpCodes.Ldloc, indexLocal);

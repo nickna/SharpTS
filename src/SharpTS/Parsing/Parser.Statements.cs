@@ -120,7 +120,7 @@ public partial class Parser
                 Expr iterable = Expression();
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after for...of expression.");
                 Stmt body = Statement();
-                var loop = new Stmt.ForOf(varName, typeAnnotation, iterable, body, isAsync);
+                var loop = new Stmt.ForOf(varName, typeAnnotation, iterable, body, isAsync, IsVar: initIsVar);
                 RecordEditorName(varName, loop, EditorSyntaxRole.DeclarationName);
                 return loop;
             }
@@ -137,7 +137,7 @@ public partial class Parser
                 Expr obj = Expression();
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after for...in expression.");
                 Stmt body = Statement();
-                var loop = new Stmt.ForIn(varName, typeAnnotation, obj, body);
+                var loop = new Stmt.ForIn(varName, typeAnnotation, obj, body, IsVar: initIsVar);
                 RecordEditorName(varName, loop, EditorSyntaxRole.DeclarationName);
                 return loop;
             }
@@ -197,7 +197,7 @@ public partial class Parser
             Consume(TokenType.RIGHT_PAREN, "Expect ')' after for-loop expression.");
             Stmt body = Statement();
             if (isOfLoop)
-                return new Stmt.ForOf(varName, null, rhs, body, isAsync);
+                return new Stmt.ForOf(varName, null, rhs, body, isAsync, IsDeclaration: false);
             return new Stmt.ForIn(varName, null, rhs, body, IsDeclaration: false);
         }
 

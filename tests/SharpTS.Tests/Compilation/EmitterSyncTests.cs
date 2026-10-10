@@ -47,6 +47,9 @@ public class EmitterSyncTests
             //     storage; these overrides retoken the operator node so the read/write land on the
             //     shadow's slot. Byte-identical across all four state machines, so they live here. ---
             "EmitConstDeclaration", // Route a shadowing const declaration to its own slot
+            // #1399: loop/catch lowering receives declaration identities rather than rewritten
+            // variables; resolve analyzed binding storage while retaining the shared lowering.
+            "GetBindingStorageName",
             "GetClassStorageName",  // Use analyzed per-binding class storage across suspension without changing the AST node used for class-builder lookup
             "EmitCompoundAssign",   // Route a shadowing compound assignment to its own slot
             "EmitLogicalAssign",    // Route a shadowing logical assignment to its own slot

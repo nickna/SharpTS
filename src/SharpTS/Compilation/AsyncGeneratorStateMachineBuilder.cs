@@ -136,8 +136,9 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
 
         // Define the state machine class (using class for reference semantics)
         // Name follows C# compiler convention: <MethodName>d__N
-        _stateMachineType = EmitTypeDefinitions.DefineType(_moduleBuilder,
+        _stateMachineType = DefineStateMachineType(_moduleBuilder,
             $"<{methodName}>d__{_counter}",
+            _counter,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
             interfaces.ToArray()
@@ -150,8 +151,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
 
         // Define hoisted variables using HoistingManager
         _hoisting = new HoistingManager(_stateMachineType, _types.Object);
-        _hoisting.DefineHoistedParameters(analysis.HoistedParameters);
-        _hoisting.DefineHoistedLocals(analysis.HoistedLocals);
+        _hoisting.DefineHoistedVariables(analysis.HoistedParameters, analysis.HoistedLocals, DebugSymbols);
 
         // Define hoisted enumerators for for...of loops containing suspensions (yield/await)
         _hoisting.DefineHoistedEnumerators(analysis.ForOfLoopsWithSuspension, _types.IEnumerator);
@@ -170,26 +170,26 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
 
         // Define __returnRequested flag field for generator.return() to trigger finally blocks
         ReturnRequestedField = _stateMachineType.DefineField(
-            "__returnRequested",
+            DebugScaffoldingName("__returnRequested"),
             _types.Boolean,
             FieldAttributes.Public
         );
 
         ThrowRequestedField = _stateMachineType.DefineField(
-            "<>throwRequested", _types.Boolean, FieldAttributes.Private);
+            DebugScaffoldingName("<>throwRequested"), _types.Boolean, FieldAttributes.Private);
         ThrowValueField = _stateMachineType.DefineField(
-            "<>throwValue", _types.Object, FieldAttributes.Private);
+            DebugScaffoldingName("<>throwValue"), _types.Object, FieldAttributes.Private);
 
         // Define the re-entrancy guard flag (#542); see EmitThrowIfExecutingAsync.
         ExecutingField = _stateMachineType.DefineField(
-            "<>5__executing",
+            DebugScaffoldingName("<>5__executing"),
             _types.Boolean,
             FieldAttributes.Private
         );
 
         // Tail of the request chain for truly-async, serialized next() (#631/#542).
         PendingTailField = _stateMachineType.DefineField(
-            "<>5__pendingTail",
+            DebugScaffoldingName("<>5__pendingTail"),
             _types.Task,
             FieldAttributes.Private
         );
@@ -261,14 +261,14 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
 
         // Task field to store the awaited task (needed for continuation in EmitAwaitSuspensionReturn)
         AwaitedTaskField = _stateMachineType.DefineField(
-            "<>__awaitedTask",
+            DebugScaffoldingName("<>__awaitedTask"),
             _types.TaskOfObject,
             FieldAttributes.Private
         );
 
         // For simple implementation, we'll track whether we have a value pending
         PendingValueField = _stateMachineType.DefineField(
-            "<>__hasPendingValue",
+            DebugScaffoldingName("<>__hasPendingValue"),
             _types.Boolean,
             FieldAttributes.Private
         );
@@ -838,7 +838,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
     public void DefineFunctionDisplayClassField(Type dcType)
     {
         FunctionDCField = _stateMachineType.DefineField(
-            "<>__functionDC",
+            DebugDisplayClassName(),
             dcType,
             FieldAttributes.Public);
     }

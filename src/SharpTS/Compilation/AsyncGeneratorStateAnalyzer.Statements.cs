@@ -28,9 +28,9 @@ public partial class AsyncGeneratorStateAnalyzer
 
     protected override void VisitForOf(Stmt.ForOf stmt)
     {
-        _declaredVariables.Add(stmt.Variable.Lexeme);
+        _declaredVariables.Add(StorageName(stmt, stmt.Variable.Lexeme));
         if (!_seenSuspension)
-            _variablesDeclaredBeforeSuspension.Add(stmt.Variable.Lexeme);
+            _variablesDeclaredBeforeSuspension.Add(StorageName(stmt, stmt.Variable.Lexeme));
 
         // Track for...of loops to detect suspensions inside them
         _forOfStack.Push(stmt);
@@ -69,9 +69,9 @@ public partial class AsyncGeneratorStateAnalyzer
 
     protected override void VisitForIn(Stmt.ForIn stmt)
     {
-        _declaredVariables.Add(stmt.Variable.Lexeme);
+        _declaredVariables.Add(StorageName(stmt, stmt.Variable.Lexeme));
         if (!_seenSuspension)
-            _variablesDeclaredBeforeSuspension.Add(stmt.Variable.Lexeme);
+            _variablesDeclaredBeforeSuspension.Add(StorageName(stmt, stmt.Variable.Lexeme));
         base.VisitForIn(stmt);
     }
 
@@ -165,9 +165,9 @@ public partial class AsyncGeneratorStateAnalyzer
             _currentTryRegion = TryRegion.Catch;
             if (t.CatchParam != null)
             {
-                _declaredVariables.Add(t.CatchParam.Lexeme);
+                _declaredVariables.Add(StorageName(t, t.CatchParam.Lexeme));
                 if (!_seenSuspension)
-                    _variablesDeclaredBeforeSuspension.Add(t.CatchParam.Lexeme);
+                    _variablesDeclaredBeforeSuspension.Add(StorageName(t, t.CatchParam.Lexeme));
             }
             foreach (var cs in t.CatchBlock)
                 Visit(cs);

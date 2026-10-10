@@ -48,6 +48,24 @@ internal static class EmitTypeDefinitions
         "Trimming",
         "IL2067",
         Justification = EmitMetadataJustification)]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2077",
+        Justification = EmitMetadataJustification)]
+    internal static TypeBuilder DefineNestedType(
+        TypeBuilder containingType,
+        string name,
+        TypeAttributes attributes,
+        Type? parent,
+        Type[]? interfaces)
+    {
+        return containingType.DefineNestedType(name, attributes, parent, interfaces);
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2067",
+        Justification = EmitMetadataJustification)]
     internal static void SetParent(TypeBuilder typeBuilder, Type? parent)
     {
         typeBuilder.SetParent(parent);

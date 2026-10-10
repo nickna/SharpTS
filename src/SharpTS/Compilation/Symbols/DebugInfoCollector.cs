@@ -47,9 +47,19 @@ internal sealed class DebugInfoCollector
         new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<MethodBase, List<AsyncStep>> _asyncSteps =
         new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<MethodBase, StateMachineDebugSymbols> _hoistedLocals =
+        new(ReferenceEqualityComparer.Instance);
 
     private static readonly Guid AsyncMethodSteppingInformationKind =
         new("54fd2ac5-e925-401a-9c2a-f94f171072f8");
+    private static readonly Guid StateMachineHoistedLocalScopesKind =
+        new("6da9a61e-f8c7-4874-be62-68bc5630df71");
+
+    internal void RecordHoistedLocals(MethodBase method, StateMachineDebugSymbols symbols)
+    {
+        _hoistedLocals[method] = symbols;
+        if (_locals.TryGetValue(method, out MethodLocalSymbols? locals)) locals.HoistedSymbols = symbols;
+    }
 
     /// <summary>
     /// Starts collecting named locals and lexical scopes for a method body, returning the sink to
@@ -200,7 +210,8 @@ internal sealed class DebugInfoCollector
     /// reports.
     /// </param>
     internal MetadataBuilder BuildPdbMetadata(
-        int methodDefRowCount, Func<int, int> localSignatureRid, Func<int, int>? methodIlSize = null)
+        int methodDefRowCount, Func<int, int> localSignatureRid, Func<int, int>? methodIlSize = null,
+        Func<int, int>? localSlotCount = null)
     {
         var pdb = new MetadataBuilder();
 
@@ -234,7 +245,8 @@ internal sealed class DebugInfoCollector
         }
 
         WriteStateMachineMetadata(pdb);
-        WriteLocalScopes(pdb, methodIlSize);
+        WriteHoistedLocalScopes(pdb, methodIlSize);
+        WriteLocalScopes(pdb, methodIlSize, localSlotCount);
         EmbedSources(pdb);
         return pdb;
     }
@@ -286,8 +298,19 @@ internal sealed class DebugInfoCollector
     /// variables must occupy a contiguous run of <c>LocalVariable</c> rows, so the variables are
     /// written immediately before the scope that owns them.
     /// </remarks>
-    private void WriteLocalScopes(MetadataBuilder pdb, Func<int, int>? methodIlSize)
+    private void WriteLocalScopes(MetadataBuilder pdb, Func<int, int>? methodIlSize, Func<int, int>? localSlotCount)
     {
+        // A missing LocalVariable row makes managed evaluators synthesize an unnamed local.
+        // Give scratch slots explicit hidden rows on source state-machine methods.
+        if (localSlotCount is not null)
+            foreach (MethodBase method in _hoistedLocals.Keys)
+                if (_locals.TryGetValue(method, out MethodLocalSymbols? symbols))
+                {
+                    int rid = MetadataTokens.GetRowNumber(MetadataTokens.MethodDefinitionHandle(method.MetadataToken));
+                    var namedSlots = symbols.Scopes.SelectMany(scope => scope.Locals).Select(local => local.Slot).ToHashSet();
+                    for (int slot = 0; slot < localSlotCount(rid); slot++)
+                        if (!namedSlots.Contains(slot)) symbols.Scopes[0].Locals.Add(($"$scratch{slot}", slot, false));
+                }
         foreach (var symbols in _locals.Values
             .Where(s => s.HasLocals)
             .Select(s => (Symbols: s, Rid: MetadataTokens.GetRowNumber(
@@ -304,10 +327,10 @@ internal sealed class DebugInfoCollector
                 var firstVariable = MetadataTokens.LocalVariableHandle(
                     pdb.GetRowCount(TableIndex.LocalVariable) + 1);
 
-                foreach (var (name, slot) in scope.Locals)
+                foreach (var (name, slot, isUser) in scope.Locals)
                 {
                     pdb.AddLocalVariable(
-                        IsCompilerGenerated(name) ? LocalVariableAttributes.DebuggerHidden : LocalVariableAttributes.None,
+                        !isUser && IsCompilerGenerated(name) ? LocalVariableAttributes.DebuggerHidden : LocalVariableAttributes.None,
                         slot,
                         pdb.GetOrAddString(name));
                 }
@@ -328,10 +351,27 @@ internal sealed class DebugInfoCollector
     }
 
     /// <summary>
-    /// Whether a binding is scaffolding rather than something the user declared. The parser and the
-    /// lowerings name their temporaries distinctively, and marking them hidden keeps a debugger's
-    /// locals window showing only variables that appear in the source.
+    /// Writes one lexical IL range per generated hoisted slot on its owning MoveNext method.
     /// </summary>
+    private void WriteHoistedLocalScopes(MetadataBuilder pdb, Func<int, int>? methodIlSize)
+    {
+        foreach (var (method, symbols) in _hoistedLocals.OrderBy(pair => pair.Key.MetadataToken))
+        {
+            if (symbols.SlotCount == 0) continue;
+            MethodDefinitionHandle owner = MetadataTokens.MethodDefinitionHandle(method.MetadataToken);
+            int methodSize = methodIlSize?.Invoke(MetadataTokens.GetRowNumber(owner)) ?? 0;
+            var blob = new BlobBuilder();
+            for (int slot = 0; slot < symbols.SlotCount; slot++)
+            {
+                var (start, length) = symbols.GetScope(slot, methodSize);
+                blob.WriteInt32(start);
+                blob.WriteInt32(length);
+            }
+            pdb.AddCustomDebugInformation(owner, pdb.GetOrAddGuid(StateMachineHoistedLocalScopesKind), pdb.GetOrAddBlob(blob));
+        }
+    }
+
+    /// <summary>Recognizes lowering temporaries when source declaration provenance is unavailable.</summary>
     private static bool IsCompilerGenerated(string name) =>
         name.StartsWith('$') || name.StartsWith("__") || name.StartsWith("_dest");
 

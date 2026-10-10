@@ -17,6 +17,7 @@ internal sealed class DebugEmitScope(
     DebugInfoCollector.SourceFile document,
     SpanTable spans,
     LineIndex lines,
+    string sourceText,
     bool isLibrary)
 {
     internal DebugInfoCollector Collector { get; } = collector;
@@ -52,9 +53,33 @@ internal sealed class DebugEmitScope(
             return;
         }
 
+        span = ExecutableSpan(statement, span);
         var (startLine, startColumn) = Lines.ToPosition(span.Start);
         var (endLine, endColumn) = Lines.ToPosition(span.End);
         Collector.RecordSequencePoint(method, Document, ilOffset, startLine, startColumn, endLine, endColumn);
+    }
+
+    private SourceSpan ExecutableSpan(Stmt statement, SourceSpan span)
+    {
+        // Overlapping header/body ranges bind body breakpoints to the header before its
+        // locals are in scope. Attribute the test only to the source preceding its body.
+        Stmt? body = statement switch
+        {
+            Stmt.If conditional => conditional.ThenBranch,
+            Stmt.While loop => loop.Body,
+            Stmt.For loop => loop.Body,
+            Stmt.ForOf loop => loop.Body,
+            Stmt.ForIn loop => loop.Body,
+            Stmt.Switch choice => choice.Cases.SelectMany(@case => @case.Body).FirstOrDefault()
+                ?? choice.DefaultBody?.FirstOrDefault(),
+            _ => null,
+        };
+        if (body is null || !Spans.TryGetSpan(body, out SourceSpan bodySpan) || bodySpan.IsHidden)
+            return span;
+
+        int end = Math.Min(span.End, bodySpan.Start);
+        while (end > span.Start && char.IsWhiteSpace(sourceText[end - 1])) end--;
+        return end > span.Start ? new SourceSpan(span.Start, end) : span;
     }
 
     internal void RecordAsyncStep(

@@ -69,13 +69,13 @@ public class GeneratorStateAnalyzer : AstVisitorBase
     /// <summary>
     /// Analyzes a generator function to determine yield points and hoisted variables.
     /// </summary>
-    public GeneratorFunctionAnalysis Analyze(Stmt.Function func)
+    public GeneratorFunctionAnalysis Analyze(Stmt.Function func, bool preserveDebugBindings = false)
     {
         Reset();
 
         // Disambiguate block-scoped let/const declarations that shadow an enclosing binding so the
         // hoisting decision below is made per-binding rather than per-name (#711).
-        var renameResult = GeneratorBlockScopeRenamer.Compute(func);
+        var renameResult = GeneratorBlockScopeRenamer.Compute(func, preserveDebugBindings: preserveDebugBindings);
         _renames = renameResult.Renames;
         _captureRenames = renameResult.CaptureRenames;
 
@@ -226,9 +226,9 @@ public class GeneratorStateAnalyzer : AstVisitorBase
 
     protected override void VisitForOf(Stmt.ForOf stmt)
     {
-        _declaredVariables.Add(stmt.Variable.Lexeme);
+        _declaredVariables.Add(StorageName(stmt, stmt.Variable.Lexeme));
         if (!_seenYield)
-            _variablesDeclaredBeforeYield.Add(stmt.Variable.Lexeme);
+            _variablesDeclaredBeforeYield.Add(StorageName(stmt, stmt.Variable.Lexeme));
 
         // Pass the loop node so a yield inside also records it for enumerator hoisting.
         EnterLoop(stmt);
@@ -238,9 +238,9 @@ public class GeneratorStateAnalyzer : AstVisitorBase
 
     protected override void VisitForIn(Stmt.ForIn stmt)
     {
-        _declaredVariables.Add(stmt.Variable.Lexeme);
+        _declaredVariables.Add(StorageName(stmt, stmt.Variable.Lexeme));
         if (!_seenYield)
-            _variablesDeclaredBeforeYield.Add(stmt.Variable.Lexeme);
+            _variablesDeclaredBeforeYield.Add(StorageName(stmt, stmt.Variable.Lexeme));
 
         // Pass the loop node so a yield inside also records it for key-list/index hoisting (#547).
         EnterLoop(forIn: stmt);
@@ -276,9 +276,9 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         {
             if (stmt.CatchParam != null)
             {
-                _declaredVariables.Add(stmt.CatchParam.Lexeme);
+                _declaredVariables.Add(StorageName(stmt, stmt.CatchParam.Lexeme));
                 if (!_seenYield)
-                    _variablesDeclaredBeforeYield.Add(stmt.CatchParam.Lexeme);
+                    _variablesDeclaredBeforeYield.Add(StorageName(stmt, stmt.CatchParam.Lexeme));
             }
             foreach (var cs in stmt.CatchBlock)
                 Visit(cs);
