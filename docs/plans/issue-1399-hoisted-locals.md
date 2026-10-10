@@ -26,7 +26,7 @@ checks. Rider is not installed.
 | Debugger | Unchanged SharpTS | Roslyn control | Accepted SharpTS behavior |
 |---|---|---|---|
 | VS Code C# | Source breakpoints bind, but async/iterator frames are `<Unknown function>`; requesting Locals or bare source Watches returns an expression-evaluator internal error. | All eight source stops provide expected source variables, values, and block visibility. | Recognized source frames, source-named Locals and Watch values, lexical scope exit, and correct shadow resolution. |
-| netcoredbg | Bare source-named fields are already offered as variables; unnamed scratch slots can appear. | All eight stops provide expected values and scope visibility. | Source Watch values and scope visibility agree with the primary target, with no unnamed entries or compiler scaffolding. Seven shadowing stops retain duplicate names in Locals; boxed numeric values require expanding `m_value`. |
+| netcoredbg | Bare source-named fields are already offered as variables; unnamed generated entries can appear. | All eight stops provide expected values and scope visibility. | Source Watch values and scope visibility agree with the primary target, with no unnamed entries or compiler scaffolding. Seven shadowing stops retain duplicate names in Locals; boxed numeric values require expanding `m_value`. |
 
 The first primary candidate passed 44 strict source stops in
 `artifacts/hoisted-investigation/scopes-candidate/run-OmUxZS`. The same assembly
