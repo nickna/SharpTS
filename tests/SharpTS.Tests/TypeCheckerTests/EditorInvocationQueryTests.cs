@@ -173,7 +173,7 @@ public sealed class EditorInvocationQueryTests
     }
 
     [Fact]
-    public void RuntimeConstructorKeepsPublicCandidatesWithoutInventingSelectionAfterBaselineFlattening()
+    public void RuntimeConstructorPreservesPublicOverloadsAndTheirActualSelection()
     {
         const string source = """
             class C {
@@ -187,23 +187,23 @@ public sealed class EditorInvocationQueryTests
         var disabled = Check(source, capture: false);
         Clean(enabled);
         Clean(disabled);
-        // Ordinary checking currently replaces the constructor overload set while inferring
-        // the implementation's return. Metadata must preserve the public declarations without
-        // pretending that the actual implementation-only validation chose one of them.
-        var ordinaryConstructor = Assert.IsType<TypeInfo.Function>(
+        var ordinaryConstructor = Assert.IsType<TypeInfo.OverloadedFunction>(
             disabled.Result.TypeMap.GetClassType("C")!.Methods["constructor"]);
-        Assert.IsType<TypeInfo.Any>(Assert.Single(ordinaryConstructor.ParamTypes));
-        var capturedConstructor = Assert.IsType<TypeInfo.Function>(
+        Assert.Equal(2, ordinaryConstructor.Signatures.Count);
+        Assert.IsType<TypeInfo.Any>(Assert.Single(ordinaryConstructor.Implementation.ParamTypes));
+        var capturedConstructor = Assert.IsType<TypeInfo.OverloadedFunction>(
             enabled.Result.TypeMap.GetClassType("C")!.Methods["constructor"]);
-        Assert.IsType<TypeInfo.Any>(Assert.Single(capturedConstructor.ParamTypes));
+        Assert.Equal(2, capturedConstructor.Signatures.Count);
+        Assert.IsType<TypeInfo.Any>(Assert.Single(capturedConstructor.Implementation.ParamTypes));
         var constructor = At(enabled, "new");
-        Assert.Equal(EditorInvocationStatus.CandidatesOnly, constructor.Status);
-        Assert.Null(constructor.SelectedOrdinal);
+        Selected(constructor, 1);
+        Assert.True(constructor.IsComplete);
         Assert.Equal(2, constructor.Candidates.Count);
         Assert.Equal("number", constructor.Candidates[0].Declared.Parameters[0].Type.Text);
         Assert.Equal("string", constructor.Candidates[1].Declared.Parameters[0].Type.Text);
         Assert.DoesNotContain(constructor.Candidates,
             candidate => candidate.Declared.Parameters[0].Type.Text == "any");
+        Assert.All(constructor.Candidates, candidate => Assert.NotNull(candidate.Origin));
     }
 
     [Fact]
@@ -305,7 +305,7 @@ public sealed class EditorInvocationQueryTests
                 }
             }
             """);
-        Clean(value);
+        Assert.Equal("TS2339", Assert.Single(value.Result.Diagnostics).TsCode);
         Selected(At(value, "valid"), 0);
         foreach (string marker in new[] { "any", "unrelated" })
         {

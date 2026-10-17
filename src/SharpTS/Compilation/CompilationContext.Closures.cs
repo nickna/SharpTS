@@ -296,6 +296,10 @@ public partial class CompilationContext
     /// </summary>
     public LocalBuilder? FunctionDisplayClassLocal { get; set; }
 
+    // Enabled after synchronous method parameters have been copied into their
+    // shared cells; defaults still read the incoming argument slots beforehand.
+    internal bool UseFunctionDisplayClassParameterStorage { get; set; }
+
     /// <summary>
     /// Fields in the current function's display class (variable name -> field).
     /// These are local variables that are captured by inner arrow functions.

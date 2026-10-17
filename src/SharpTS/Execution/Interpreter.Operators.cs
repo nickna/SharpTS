@@ -695,12 +695,11 @@ public partial class Interpreter
 
     /// <summary>
     /// ECMA-262 §7.1.1 ToPrimitive / OrdinaryToPrimitive for the cases the
-    /// interpreter must coerce explicitly: boxed primitive wrappers and plain
-    /// objects carrying an own <c>valueOf</c>/<c>toString</c>. Calls the own
+    /// interpreter must coerce explicitly: boxed primitive wrappers, class instances,
+    /// and plain objects carrying <c>valueOf</c>/<c>toString</c>. Calls the
     /// conversion methods in hint order (honoring a user override — #574), then
-    /// falls back to a wrapper's <c>__primitiveValue</c> (#708). Every other
-    /// value (already-primitive, array, class instance, plain object without an
-    /// own conversion) is returned unchanged so existing behavior is preserved.
+    /// falls back to a wrapper's <c>__primitiveValue</c> (#708). Primitive values
+    /// pass through unchanged.
     /// </summary>
     private object? ToPrimitive(object? value, PrimitiveHint hint)
     {
@@ -730,6 +729,12 @@ public partial class Interpreter
             return OrdinaryToPrimitiveObject(value, hint);
         if (value is ISharpTSCallable)
             return OrdinaryToPrimitiveObject(value, hint);
+        if (value is SharpTSInstance instance)
+        {
+            if (TryCallExoticToPrimitive(instance, hint, out var instancePrimitive))
+                return instancePrimitive;
+            return OrdinaryToPrimitiveObject(instance, hint);
+        }
         if (value is not SharpTSObject obj) return value;
         if (TryCallExoticToPrimitive(obj, hint, out var exoticResult))
             return exoticResult;
@@ -917,27 +922,10 @@ public partial class Interpreter
     /// a non-callable method or an object result throws TypeError.
     /// </summary>
     private bool TryCallExoticToPrimitive(
-        SharpTSObject receiver, PrimitiveHint hint, out object? result)
+        object receiver, PrimitiveHint hint, out object? result)
     {
         result = null;
-        object? method;
-        if (receiver.TryGetSymbolAccessor(
-                SharpTSSymbol.ToPrimitive, out var getter, out _))
-        {
-            method = getter is null
-                ? SharpTSUndefined.Instance
-                : FunctionBuiltIns.CallWithThis(this, getter, receiver, []);
-        }
-        else if (receiver.HasSymbolProperty(SharpTSSymbol.ToPrimitive))
-        {
-            method = receiver.GetBySymbol(SharpTSSymbol.ToPrimitive)
-                ?? SharpTSUndefined.Instance;
-        }
-        else
-        {
-            return false;
-        }
-
+        object? method = GetSymbolPropertyValue(receiver, SharpTSSymbol.ToPrimitive);
         if (method is null or SharpTSUndefined)
             return false;
         if (method is not ISharpTSCallable callable)

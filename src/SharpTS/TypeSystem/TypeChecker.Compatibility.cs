@@ -1077,11 +1077,13 @@ public partial class TypeChecker
                     return IsInSuperclassChain(actualIG, expectedIG);
                 }
 
-                // Check if actual is a regular Class that extends the expected InstantiatedGeneric
-                // e.g., NumberBox extends Box<number>, checking if NumberBox assignable to Box<number>
-                if (i2.ClassType is TypeInfo.Class actualClassForIG)
+                // A generic class body uses its open, non-generic shape for `this`.
+                // Relate that shape structurally after checking inherited instantiations,
+                // so members independent of the type argument retain ordinary assignability.
+                if (i2.ResolvedClassType is TypeInfo.Class or TypeInfo.MutableClass)
                 {
-                    return IsInSuperclassChain(actualClassForIG, expectedIG);
+                    return IsInSuperclassChain(i2.ResolvedClassType, expectedIG)
+                        || StructurallyAssignableToClassTarget(expectedIG, i2);
                 }
             }
 

@@ -71,6 +71,8 @@ public partial class TypeChecker
             TypeInfo.Promise promise =>
                 new TypeInfo.Promise(Sub(promise.ValueType)),
             TypeInfo.FunctionSupertype => type,
+            TypeInfo.GenericFunction generic => SubstituteGenericMethod(generic, substitutions, evalConditionals),
+            TypeInfo.OverloadSet overloaded => new TypeInfo.OverloadSet(overloaded.Signatures.Select(Sub).ToList()),
             TypeInfo.Function func =>
                 new TypeInfo.Function(
                     func.ParamTypes.Select(Sub).ToList(),
@@ -169,7 +171,135 @@ public partial class TypeChecker
             _ => type
         };
         if (EditorFacts.IsEnabled) CopyEditorSignatureMetadata(type, result);
+        if (!ReferenceEquals(type, result) && _typeMap.GetClassMethodImplementation(type) is { } implementation)
+        {
+            TypeInfo substitutedCallable = result switch
+            {
+                TypeInfo.Function function => function,
+                TypeInfo.GenericFunction generic => generic,
+                _ => Substitute(
+                    ClassMethodCallable(implementation, _classMethodImplementationParameters.GetValueOrDefault(implementation)),
+                    substitutions, evalConditionals)
+            };
+            var substitutedImplementation = ClassMethodImplementation(substitutedCallable);
+            _classMethodImplementationParameters[substitutedImplementation] =
+                substitutedCallable is TypeInfo.GenericFunction genericCallable ? genericCallable.TypeParams : null;
+            _typeMap.SetClassMethodImplementation(result, substitutedImplementation);
+            if (result is TypeInfo.OverloadSet overloads)
+                RegisterEditorPublicSignatures(result, overloads.Signatures);
+        }
         return result;
+    }
+
+    private TypeInfo.GenericFunction SubstituteGenericMethod(
+        TypeInfo.GenericFunction method, Dictionary<string, TypeInfo> substitutions, bool evalConditionals)
+    {
+        // A method's own parameters shadow equally named containing-class parameters. Outer
+        // parameters still participate in its constraints, defaults and callable signature.
+        var ownNames = method.TypeParams.Select(parameter => parameter.Name).ToHashSet(StringComparer.Ordinal);
+        var scoped = substitutions.Where(pair => !ownNames.Contains(pair.Key))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        if (scoped.Count == 0) return method;
+        var introducedNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var replacement in scoped.Values) CollectSubstitutionParameterNames(replacement, introducedNames);
+        var reservedNames = new HashSet<string>(introducedNames.Concat(ownNames), StringComparer.Ordinal);
+        var renamedNames = method.TypeParams.Select(parameter =>
+        {
+            string name = parameter.Name;
+            if (introducedNames.Contains(name))
+            {
+                int suffix = 1;
+                while (!reservedNames.Add(name = $"{parameter.Name}_{suffix++}")) { }
+            }
+            return name;
+        }).ToList();
+        var parameters = method.TypeParams.Select((parameter, index) => parameter with
+            { Name = renamedNames[index], Constraint = null, Default = null }).ToList();
+        for (int index = 0; index < parameters.Count; index++) scoped[method.TypeParams[index].Name] = parameters[index];
+        for (int pass = 0; pass < parameters.Count; pass++)
+        {
+            parameters = method.TypeParams.Select((parameter, index) => parameter with
+            {
+                Name = renamedNames[index],
+                Constraint = parameter.Constraint is { } constraint ? Substitute(constraint, scoped, evalConditionals) : null,
+                Default = parameter.Default is { } defaultType ? Substitute(defaultType, scoped, evalConditionals) : null,
+            }).ToList();
+            for (int index = 0; index < parameters.Count; index++) scoped[method.TypeParams[index].Name] = parameters[index];
+        }
+        return method with
+        {
+            TypeParams = parameters,
+            ParamTypes = method.ParamTypes.Select(parameter => Substitute(parameter, scoped, evalConditionals)).ToList(),
+            ReturnType = Substitute(method.ReturnType, scoped, evalConditionals),
+            ThisType = method.ThisType is { } thisType ? Substitute(thisType, scoped, evalConditionals) : null,
+        };
+    }
+
+    private static void CollectSubstitutionParameterNames(TypeInfo type, HashSet<string> names)
+    {
+        HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);
+        void Visit(TypeInfo current)
+        {
+            if (!visited.Add(current)) return;
+            switch (current)
+            {
+                case TypeInfo.TypeParameter parameter:
+                    names.Add(parameter.Name);
+                    if (parameter.Constraint is { } constraint) Visit(constraint);
+                    if (parameter.Default is { } defaultType) Visit(defaultType);
+                    break;
+                case TypeInfo.Array array: Visit(array.ElementType); break;
+                case TypeInfo.Promise promise: Visit(promise.ValueType); break;
+                case TypeInfo.Union union: foreach (var member in union.Types) Visit(member); break;
+                case TypeInfo.Intersection intersection: foreach (var member in intersection.Types) Visit(member); break;
+                case TypeInfo.Tuple tuple:
+                    foreach (var element in tuple.Elements) Visit(element.Type);
+                    if (tuple.RestElementType is { } rest) Visit(rest);
+                    break;
+                case TypeInfo.Function function:
+                    foreach (var parameter in function.ParamTypes) Visit(parameter);
+                    Visit(function.ReturnType);
+                    if (function.ThisType is { } thisType) Visit(thisType);
+                    break;
+                case TypeInfo.GenericFunction function:
+                    foreach (var parameter in function.TypeParams) Visit(parameter);
+                    foreach (var parameter in function.ParamTypes) Visit(parameter);
+                    Visit(function.ReturnType);
+                    break;
+                case TypeInfo.OverloadSet overloads: foreach (var signature in overloads.Signatures) Visit(signature); break;
+                case TypeInfo.Record record:
+                    foreach (var field in record.Fields.Values) Visit(field);
+                    if (record.StringIndexType is { } textIndex) Visit(textIndex);
+                    if (record.NumberIndexType is { } numberIndex) Visit(numberIndex);
+                    if (record.SymbolIndexType is { } symbolIndex) Visit(symbolIndex);
+                    break;
+                case TypeInfo.Instance instance: Visit(instance.ResolvedClassType); break;
+                case TypeInfo.InstantiatedGeneric instantiated:
+                    foreach (var argument in instantiated.TypeArguments) Visit(argument);
+                    break;
+                case TypeInfo.IndexedAccess indexed: Visit(indexed.ObjectType); Visit(indexed.IndexType); break;
+                case TypeInfo.KeyOf key: Visit(key.SourceType); break;
+                case TypeInfo.ConditionalType conditional:
+                    Visit(conditional.CheckType); Visit(conditional.ExtendsType); Visit(conditional.TrueType); Visit(conditional.FalseType);
+                    break;
+                case TypeInfo.MappedType mapped:
+                    Visit(mapped.Constraint); Visit(mapped.ValueType);
+                    if (mapped.AsClause is { } asClause) Visit(asClause);
+                    break;
+                case TypeInfo.IntrinsicStringType intrinsic: Visit(intrinsic.Inner); break;
+                case TypeInfo.TemplateLiteralType template:
+                    foreach (var interpolated in template.InterpolatedTypes) Visit(interpolated);
+                    break;
+                case TypeInfo.SpreadType spread: Visit(spread.Inner); break;
+                case TypeInfo.RecursiveTypeAlias alias:
+                    foreach (var argument in alias.TypeArguments ?? []) Visit(argument);
+                    break;
+                default:
+                    foreach (var argument in DecomposeBuiltInContainer(current) ?? []) Visit(argument);
+                    break;
+            }
+        }
+        Visit(type);
     }
 
     /// <summary>

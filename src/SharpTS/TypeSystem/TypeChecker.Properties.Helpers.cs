@@ -113,7 +113,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckGetOnTypeParameter(TypeInfo.TypeParameter tp, Token memberName)
     {
-        if (tp.Constraint != null)
+        if (tp.Constraint is not (null or TypeInfo.Any or TypeInfo.Unknown))
         {
             return CheckGetOnType(tp.Constraint, memberName);
         }
@@ -126,31 +126,107 @@ public partial class TypeChecker
     private TypeInfo CheckGetOnClass(TypeInfo classType, Token memberName)
     {
         TypeInfo? current = classType;
+        TypeInfo? staticStringIndex = null;
+        bool dynamicSuperclass = false;
+        bool dotNetMappedSurface = false;
         while (current != null)
         {
+            // A class extending an any-valued constructor keeps that dynamic
+            // constructor's unknown static surface.
+            if (current is TypeInfo.Any or TypeInfo.MutableClass { IsDynamicSuperclass: true })
+            {
+                dynamicSuperclass = true;
+                break;
+            }
+            dotNetMappedSurface |= IsDotNetMappedConstructor(current);
+            staticStringIndex ??= ClassInfoAccessor.Get(current,
+                c => c.Core.StaticStringIndexType, gc => gc.Core.StaticStringIndexType);
             var staticMethods = GetStaticMethods(current);
             var staticProps = GetStaticProperties(current);
-            if (staticMethods != null && staticMethods.TryGetValue(memberName.Lexeme, out var staticMethodType))
+            string lookupName = ResolveDotNetStaticMemberName(current, memberName.Lexeme, staticMethods, staticProps);
+            Token lookupMember = lookupName == memberName.Lexeme ? memberName
+                : new Token(memberName.Type, lookupName, memberName.Literal, memberName.Line);
+            if (staticMethods != null && staticMethods.TryGetValue(lookupName, out var staticMethodType))
             {
-                EnforceStaticMemberAccess(current, memberName);
+                EnforceStaticMemberAccess(current, lookupMember);
                 ObserveSourceMemberSelection(memberName, current, MemberFacet.Static);
                 return staticMethodType;
             }
-            if (staticProps != null && staticProps.TryGetValue(memberName.Lexeme, out var staticPropType))
+            if (staticProps != null && staticProps.TryGetValue(lookupName, out var staticPropType))
             {
-                if (TryGetAccessorSetterAccess(current, isStatic: true, memberName.Lexeme, out _))
-                    EnforceAccessorAccess(current, classType, memberName, isStatic: true, isWrite: false);
+                if (TryGetAccessorSetterAccess(current, isStatic: true, lookupName, out _))
+                    EnforceAccessorAccess(current, classType, lookupMember, isStatic: true, isWrite: false);
                 else
                 {
-                    EnforceStaticMemberAccess(current, memberName);
-                    ObservePendingGetterFieldRead(current, isStatic: true, memberName.Lexeme);
+                    EnforceStaticMemberAccess(current, lookupMember);
+                    ObservePendingGetterFieldRead(current, isStatic: true, lookupName);
                 }
                 ObserveSourceMemberSelection(memberName, current, MemberFacet.Static);
-                return ResolveFieldStageGetter(current, isStatic: true, memberName.Lexeme, staticPropType);
+                return ResolveFieldStageGetter(current, isStatic: true, lookupName, staticPropType);
             }
             current = GetSuperclass(current);
         }
-        return TypeInfo.Any.Shared;
+
+        // Constructors inherit Function and Object members independently of
+        // the source class's declared static members. Keep this surface finite:
+        // GetFunctionMemberType deliberately returns any for arbitrary names.
+        if (memberName.Lexeme == "prototype")
+            return TypeInfo.Any.Shared;
+        // A bound constructor remains constructable. An ordinary Function
+        // return type would make `new (C.bind(null))()` fail static checking.
+        if (memberName.Lexeme == "bind")
+            return new TypeInfo.Function([new TypeInfo.Array(TypeInfo.Any.Shared)],
+                TypeInfo.Any.Shared, RequiredParams: 0, HasRestParam: true);
+        if (_globalDeclarationEnvironment?.GetTypeBinding("Function") is { } declaredFunction &&
+            RefreshCompletedInterfaceBinding(declaredFunction) is TypeInfo.Interface function &&
+            ResolveNamedInterfaceMember(function, memberName.Lexeme) is { } declaredMember)
+            return declaredMember;
+        if (memberName.Lexeme is "call" or "apply" or "length" or "name")
+            return BuiltInTypes.GetFunctionMemberType(memberName.Lexeme, classType)!;
+        if (memberName.Lexeme is "caller" or "arguments")
+            return TypeInfo.Any.Shared;
+        if (ResolveObjectPrototypeMember(memberName.Lexeme) is { } objectMember)
+            return objectMember;
+        if (staticStringIndex is not null)
+            return WithUncheckedUndefined(staticStringIndex);
+        if (dynamicSuperclass)
+            return TypeInfo.Any.Shared;
+        // A DotNetType declaration can describe only part of the CLR surface.
+        // The native binder resolves undeclared members, while declared members
+        // above retain their argument, return, and access checks.
+        if (dotNetMappedSurface)
+            return TypeInfo.Any.Shared;
+
+        throw new TypeCheckException(
+            $"Property '{memberName.Lexeme}' does not exist on type 'typeof {GetClassName(classType)}'.",
+            memberName.Line, tsCode: "TS2339");
+    }
+
+    private static string ResolveDotNetStaticMemberName(TypeInfo owner, string requested,
+        IReadOnlyDictionary<string, TypeInfo>? methods, IReadOnlyDictionary<string, TypeInfo>? properties)
+    {
+        if (methods?.ContainsKey(requested) == true || properties?.ContainsKey(requested) == true
+            || !IsDotNetMappedConstructor(owner))
+            return requested;
+
+        string clrName = Runtime.DotNet.DotNetTypeRegistry.ToPascalCase(requested);
+        return (methods?.Keys ?? []).Concat(properties?.Keys ?? [])
+            .FirstOrDefault(name => Runtime.DotNet.DotNetTypeRegistry.ToPascalCase(name) == clrName)
+            ?? requested;
+    }
+
+    private static bool IsDotNetMappedConstructor(TypeInfo owner) => owner is TypeInfo.MutableClass mutable
+        ? mutable.IsDotNetMapped
+        : ClassInfoAccessor.Get(owner, c => c.Core.IsDotNetMapped, gc => gc.Core.IsDotNetMapped);
+
+    private static TypeInfo? GetConstructorStringIndexType(TypeInfo classType)
+    {
+        TypeInfo? current = classType;
+        for (int depth = 0; current is not null && depth < 256; depth++, current = GetSuperclass(current))
+            if (ClassInfoAccessor.Get(current, c => c.Core.StaticStringIndexType,
+                    gc => gc.Core.StaticStringIndexType) is { } indexType)
+                return indexType;
+        return null;
     }
 
     /// <summary>
@@ -463,6 +539,8 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo SubstituteMethodType(TypeInfo methodType, Dictionary<string, TypeInfo> subs)
     {
+        if (methodType is TypeInfo.GenericFunction or TypeInfo.OverloadSet)
+            return Substitute(methodType, subs);
         if (methodType is TypeInfo.Function funcType)
         {
             var substitutedParams = funcType.ParamTypes.Select(p => Substitute(p, subs)).ToList();

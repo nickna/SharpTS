@@ -15,7 +15,16 @@ public partial class TypeChecker
     private readonly Dictionary<TypeEnvironment, HashSet<Stmt.Function>> _completedBodylessFunctions =
         new(ReferenceEqualityComparer.Instance);
 
-    private void ResetFunctionDeclarationTracking() => _completedBodylessFunctions.Clear();
+    private void ResetFunctionDeclarationTracking()
+    {
+        _completedBodylessFunctions.Clear();
+        _forwardClassDeclarations.Clear();
+        _forwardClassTypeShadows.Clear();
+        _forwardClassSignatureDepth = 0;
+        _classDeclarationLines.Clear();
+        _classMethodSignatures.Clear();
+        _classMethodImplementationParameters.Clear();
+    }
 
     private bool MarkBodylessFunctionCompleted(Stmt.Function declaration)
     {
@@ -272,18 +281,11 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// Pre-registers top-level class declarations by defining their names as 'any' in the type
-    /// environment. This enables forward references to classes from within function bodies that
-    /// appear before the class declaration — a common pattern in CJS libraries where functions
-    /// reference classes defined later in the same file. The real class type is defined when
-    /// CheckClassDeclaration runs during the sequential pass, overwriting the Any placeholder.
-    /// </summary>
-    /// <summary>
-    /// Source line of each class's textual declaration, keyed by name. Populated during hoisting so
+    /// Source line of each class's textual declaration, keyed by binding. Populated during hoisting so
     /// a later <c>extends</c> clause can detect a forward reference (TS2449 — using a class before
     /// its declaration; class values, unlike types, are not hoisted for that position).
     /// </summary>
-    private readonly Dictionary<string, int> _classDeclarationLines = [];
+    private readonly Dictionary<BindingSymbol, int> _classDeclarationLines = new(ReferenceEqualityComparer.Instance);
 
     private void HoistClassDeclarations(IEnumerable<Stmt> statements)
     {
@@ -292,14 +294,14 @@ public partial class TypeChecker
             switch (stmt)
             {
                 case Stmt.Class cls:
-                    RegisterValueDeclaration(cls.Name);
-                    _classDeclarationLines[cls.Name.Lexeme] = cls.Name.Line;
+                    BindingSymbol symbol = RegisterForwardClassDeclaration(cls);
+                    _classDeclarationLines[symbol] = cls.Name.Line;
                     if (!_environment.IsDefinedLocally(cls.Name.Lexeme))
                         _environment.Define(cls.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
                 case Stmt.Export { Declaration: Stmt.Class exportCls }:
-                    RegisterValueDeclaration(exportCls.Name);
-                    _classDeclarationLines[exportCls.Name.Lexeme] = exportCls.Name.Line;
+                    BindingSymbol exportSymbol = RegisterForwardClassDeclaration(exportCls);
+                    _classDeclarationLines[exportSymbol] = exportCls.Name.Line;
                     if (!_environment.IsDefinedLocally(exportCls.Name.Lexeme))
                         _environment.Define(exportCls.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
@@ -843,6 +845,7 @@ public partial class TypeChecker
                 // JS spec hoists all `function` decls to the top of the containing
                 // scope before any statement executes; the TypeChecker needs to
                 // mirror that to accept well-formed mutually-recursive inner fns.
+                HoistClassDeclarations(body);
                 HoistFunctionDeclarations(body);
 
                 // Hoist the body's own let/const (as `any`) so an inner function declared before a

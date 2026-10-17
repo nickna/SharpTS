@@ -1423,11 +1423,50 @@ public partial class Interpreter
     /// </summary>
     private RuntimeValue ApplyCompoundOperatorRV(TokenType op, RuntimeValue left, RuntimeValue right)
     {
-        if (DotNetOperatorResolver.GetBinaryTokenForCompound(op) is { } binaryToken &&
-            TryEvaluateDotNetBinary(
+        TokenType binaryToken = DotNetOperatorResolver.GetBinaryTokenForCompound(op)
+            ?? throw new InterpreterException($"Unknown compound operator: {op}");
+        if (TryEvaluateDotNetBinary(
                 binaryToken, left.ToObject(), right.ToObject(), out var clrResult))
         {
             return clrResult;
+        }
+
+        if (!left.IsNumber || !right.IsNumber)
+        {
+            if (op == TokenType.PLUS_EQUAL)
+            {
+                // Addition reduces both operands with the default hint before
+                // deciding whether to concatenate or perform numeric addition.
+                object? leftPrimitive = ToPrimitive(left.ToObject(), PrimitiveHint.Default);
+                object? rightPrimitive = ToPrimitive(right.ToObject(), PrimitiveHint.Default);
+                if (leftPrimitive is string || rightPrimitive is string)
+                    return RuntimeValue.FromBoxed(EvaluatePlus(leftPrimitive, rightPrimitive));
+                left = RuntimeValue.FromBoxed(leftPrimitive);
+                right = RuntimeValue.FromBoxed(rightPrimitive);
+            }
+
+            // ToNumeric must finish on the left before converting the right:
+            // a left-hand Symbol failure must not invoke a right-hand hook.
+            left = ToCompoundNumeric(left);
+            right = ToCompoundNumeric(right);
+            if (left.IsBigInt || right.IsBigInt)
+            {
+                if (!left.IsBigInt || !right.IsBigInt)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Cannot mix BigInt and other types in operations"));
+                if (op == TokenType.GREATER_GREATER_GREATER_EQUAL)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "BigInts have no unsigned right shift"));
+                try
+                {
+                    return BigIntOperatorHelper.EvaluateBinaryRV(
+                        binaryToken, left.AsBigInt().Value, right.AsBigInt().Value);
+                }
+                catch (DivideByZeroException)
+                {
+                    throw new ThrowException(new SharpTSRangeError("Division by zero"));
+                }
+            }
         }
 
         // Fast path: both numeric (most common for compound assignment)
@@ -1451,38 +1490,15 @@ public partial class Interpreter
             };
         }
 
-        // String concatenation path
-        if (op == TokenType.PLUS_EQUAL && left.IsString)
-        {
-            // ECMA-262 §7.1.17: a Symbol operand cannot be coerced to a string.
-            ThrowIfSymbolStringCoercion(right.ToObject());
-            return RuntimeValue.FromString(string.Concat(left.AsStringUnsafe(), Stringify(right.ToObject())));
-        }
+        throw new InterpreterException($"Unknown compound operator: {op}");
+    }
 
-        // Fallback for mixed types
-        object? l2 = left.ToObject(), r2 = right.ToObject();
-        // ECMA-262 §7.1.17: a string `+=` Symbol operand cannot coerce to string.
-        if (op == TokenType.PLUS_EQUAL && l2 is string)
-            ThrowIfSymbolStringCoercion(r2);
-        return op switch
-        {
-            TokenType.PLUS_EQUAL => RuntimeValue.FromBoxed(
-                l2 is string s ? string.Concat(s, Stringify(r2)) : (double)l2! + (double)r2!),
-            _ => RuntimeValue.FromNumber(op switch
-            {
-                TokenType.MINUS_EQUAL => (double)l2! - (double)r2!,
-                TokenType.STAR_EQUAL => (double)l2! * (double)r2!,
-                TokenType.SLASH_EQUAL => (double)l2! / (double)r2!,
-                TokenType.PERCENT_EQUAL => (double)l2! % (double)r2!,
-                TokenType.AMPERSAND_EQUAL => ToInt32(l2) & ToInt32(r2),
-                TokenType.PIPE_EQUAL => ToInt32(l2) | ToInt32(r2),
-                TokenType.CARET_EQUAL => ToInt32(l2) ^ ToInt32(r2),
-                TokenType.LESS_LESS_EQUAL => ToInt32(l2) << (ToInt32(r2) & 0x1F),
-                TokenType.GREATER_GREATER_EQUAL => ToInt32(l2) >> (ToInt32(r2) & 0x1F),
-                TokenType.GREATER_GREATER_GREATER_EQUAL => (double)(ToUint32(l2) >> (ToInt32(r2) & 0x1F)),
-                _ => throw new InterpreterException($"Unknown compound operator: {op}")
-            })
-        };
+    private RuntimeValue ToCompoundNumeric(RuntimeValue value)
+    {
+        object? primitive = ToPrimitive(value.ToObject(), PrimitiveHint.Number);
+        return primitive is SharpTSBigInt bigint
+            ? RuntimeValue.FromBigInt(bigint)
+            : RuntimeValue.FromNumber(CoerceToNumber(primitive));
     }
 
     // ===================== Shared Builder Helpers =====================

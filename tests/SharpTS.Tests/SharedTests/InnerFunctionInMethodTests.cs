@@ -227,4 +227,33 @@ public class InnerFunctionInMethodTests
             """;
         Assert.Equal("priv!\n", TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void PrivateMethods_InnerFunctionsShareLocalAndParameterStorage(ExecutionMode mode)
+    {
+        const string source = """
+            class C {
+                #instance(value: number = 5) {
+                    let count = 1;
+                    function next() { value = value + 2; count++; return value + count; }
+                    const first = next();
+                    value = 10;
+                    const second = next();
+                    return first + ":" + second + ":" + value + ":" + count;
+                }
+                static #static(value: number = 20) {
+                    let count = 1;
+                    function next() { value = value + 2; count++; return value + count; }
+                    const first = next();
+                    value = 10;
+                    const second = next();
+                    return first + ":" + second + ":" + value + ":" + count;
+                }
+                run() { return this.#instance(); }
+                static run() { return C.#static(); }
+            }
+            console.log(new C().run(), C.run(), new C().run());
+            """;
+        Assert.Equal("9:15:12:3 24:15:12:3 9:15:12:3\n", TestHarness.Run(source, mode));
+    }
 }

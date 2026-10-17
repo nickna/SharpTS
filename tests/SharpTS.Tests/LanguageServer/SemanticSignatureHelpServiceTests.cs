@@ -111,13 +111,19 @@ public sealed class SemanticSignatureHelpServiceTests
     }
 
     [Fact]
-    public async Task RuntimeConstructorOverloadsDoNotPretendTheFlattenedImplementationSelectedAPublicOverload()
+    public async Task RuntimeConstructorOverloadsPreservePublicSignaturesAndActualSelection()
     {
         using var project = new SignatureProject("class C { constructor(value: number); constructor(value: string); constructor(value: any) {} } new C(/*cursor*/'s');");
         var help = Assert.IsType<SignatureHelp>(await project.HelpAsync());
-        Assert.Equal(2, help.Signatures.Count());
-        Assert.DoesNotContain(help.Signatures, signature => signature.Label.Contains("any", StringComparison.Ordinal));
-        Assert.Null(help.ActiveSignature);
+        var signatures = help.Signatures.ToArray();
+        Assert.Equal(2, signatures.Length);
+        Assert.Equal("new (value: number): C", signatures[0].Label);
+        Assert.Equal("new (value: string): C", signatures[1].Label);
+        Assert.Equal("value: number", Assert.Single(signatures[0].Parameters!).Label.Label);
+        Assert.Equal("value: string", Assert.Single(signatures[1].Parameters!).Label.Label);
+        Assert.DoesNotContain(signatures, signature => signature.Label.Contains("any", StringComparison.Ordinal));
+        Assert.Equal(1, help.ActiveSignature);
+        Assert.Equal(0, help.ActiveParameter);
     }
 
     [Fact]

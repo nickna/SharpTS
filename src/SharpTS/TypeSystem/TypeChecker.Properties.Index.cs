@@ -368,11 +368,21 @@ public partial class TypeChecker
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
             return apparentNamedMember;
 
+        if (IsNumericConstructorIndex(indexType) &&
+            GetConstructorIndexType(objType, TokenType.TYPE_NUMBER) is { } constructorNumberIndex)
+            return WithUncheckedUndefined(constructorNumberIndex);
+
         // Exclude<keyof T, symbol> remains a deferred conditional while T is open, but every
         // possible result is a string-or-number property key. Such a domain can safely read a
         // string index signature without inventing an implicit-any TS7053.
-        if (IsStringOrNumberIndexDomain(indexType) && StringIndexOf(objType) is { } domainIndex)
+        if (IsStringOrNumberIndexDomain(indexType) && ReadStringIndexOf(objType) is { } domainIndex)
+        {
+            if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
+                getIndex.Index is Expr.Literal { Value: string staticMemberName })
+                return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, staticMemberName, null,
+                    TryGetExprLine(getIndex.Object) ?? _currentStatementLine ?? 0));
             return WithUncheckedUndefined(domainIndex);
+        }
 
         // Handle string index on objects/interfaces
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
@@ -400,7 +410,8 @@ public partial class TypeChecker
                 return WithUncheckedUndefined(rec2.StringIndexType);
             if (objType is TypeInfo.Interface itf2 && itf2.StringIndexType != null)
                 return WithUncheckedUndefined(itf2.StringIndexType);
-            if (GetClassIndexType(objType, TokenType.TYPE_STRING) is { } clsStr)
+            if ((objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass }
+                    ? GetConstructorStringIndexType(objType) : GetClassIndexType(objType, TokenType.TYPE_STRING)) is { } clsStr)
                 return WithUncheckedUndefined(clsStr);
 
             // Allow bracket access on any object/interface (returns any for unknown keys)
@@ -577,14 +588,16 @@ public partial class TypeChecker
 
     /// <summary>
     /// Returns the value type of a class's index signature for the given key type, or null if the
-    /// type is not a class instance (or has no such index signature). Accepts both a bare
-    /// <see cref="TypeInfo.Class"/> and a <see cref="TypeInfo.Instance"/> wrapping one.
+    /// type is not a class (or has no such index signature). Constructor types use the
+    /// static facet; a <see cref="TypeInfo.Instance"/> uses its instance facet.
     /// </summary>
     private static TypeInfo? GetClassIndexType(TypeInfo objType, TokenType keyType)
     {
+        if (objType is TypeInfo.Class or TypeInfo.GenericClass or
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
+            return GetConstructorIndexType(objType, keyType);
         TypeInfo.Class? cls = objType switch
         {
-            TypeInfo.Class c => c,
             TypeInfo.Instance { ClassType: TypeInfo.Class ic } => ic,
             _ => null
         };
@@ -597,6 +610,34 @@ public partial class TypeChecker
             _ => null
         };
     }
+
+    private static TypeInfo? GetConstructorIndexType(TypeInfo constructor, TokenType keyType)
+    {
+        if (constructor is not (TypeInfo.Class or TypeInfo.GenericClass or
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass }))
+            return null;
+
+        static TypeInfo? ReadIndex(ClassMetadataCore core, TokenType keyType) => keyType switch
+        {
+            TokenType.TYPE_STRING => core.StaticStringIndexType,
+            TokenType.TYPE_NUMBER => core.StaticNumberIndexType,
+            TokenType.TYPE_SYMBOL => core.StaticSymbolIndexType,
+            _ => null,
+        };
+        TypeInfo? current = constructor;
+        for (int depth = 0; current is not null && depth < 256; depth++, current = GetSuperclass(current))
+            if (ClassInfoAccessor.Get(current, c => ReadIndex(c.Core, keyType),
+                    gc => ReadIndex(gc.Core, keyType)) is { } indexType)
+                return indexType;
+        return null;
+    }
+
+    private bool IsNumericConstructorIndex(TypeInfo indexType) =>
+        IsNumber(indexType) || indexType is TypeInfo.NumberLiteral ||
+        indexType is TypeInfo.StringLiteral literal &&
+        double.TryParse(literal.Value, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out double numericKey) &&
+        Runtime.PropertyKeyConverter.ToPropertyKeyString(numericKey) == literal.Value;
 
     private TypeInfo CheckSetIndex(Expr.SetIndex setIndex)
     {
@@ -829,6 +870,14 @@ public partial class TypeChecker
             return valueType;
         }
 
+        if (IsNumericConstructorIndex(indexType) &&
+            GetConstructorIndexType(objType, TokenType.TYPE_NUMBER) is { } constructorNumberIndex)
+        {
+            if (!IsCompatible(constructorNumberIndex, valueType))
+                throw new TypeCheckException($" Cannot assign '{valueType}' to number index signature type '{constructorNumberIndex}'.", tsCode: "TS2322");
+            return valueType;
+        }
+
         // Handle string index on objects/interfaces
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
         {
@@ -1038,6 +1087,12 @@ public partial class TypeChecker
             {
                 if (!IsCompatible(rec3.SymbolIndexType, valueType))
                     throw new TypeCheckException($" Cannot assign '{valueType}' to symbol index signature type '{rec3.SymbolIndexType}'.", tsCode: "TS2322");
+                return valueType;
+            }
+            if (GetClassIndexType(objType, TokenType.TYPE_SYMBOL) is { } classSymbolIndex)
+            {
+                if (!IsCompatible(classSymbolIndex, valueType))
+                    throw new TypeCheckException($" Cannot assign '{valueType}' to symbol index signature type '{classSymbolIndex}'.", tsCode: "TS2322");
                 return valueType;
             }
 
@@ -1268,8 +1323,21 @@ public partial class TypeChecker
         if (getIndex.Index is Expr.Literal { Value: string functionMemberName } &&
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
             return apparentNamedMember;
-        if (IsStringOrNumberIndexDomain(indexType) && StringIndexOf(objType) is { } domainIndex)
+        if (IsNumericConstructorIndex(indexType) &&
+            (GetConstructorIndexType(objType, TokenType.TYPE_NUMBER) ??
+             GetConstructorIndexType(objType, TokenType.TYPE_STRING)) is { } constructorNumberIndex)
+            return WithUncheckedUndefined(constructorNumberIndex);
+        if (indexType is TypeInfo.Symbol or TypeInfo.UniqueSymbol &&
+            GetConstructorIndexType(objType, TokenType.TYPE_SYMBOL) is { } constructorSymbolIndex)
+            return WithUncheckedUndefined(constructorSymbolIndex);
+        if (IsStringOrNumberIndexDomain(indexType) && ReadStringIndexOf(objType) is { } domainIndex)
+        {
+            if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
+                getIndex.Index is Expr.Literal { Value: string staticMemberName })
+                return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, staticMemberName, null,
+                    TryGetExprLine(getIndex.Object) ?? _currentStatementLine ?? 0));
             return WithUncheckedUndefined(domainIndex);
+        }
 
         // Handle string index
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
@@ -1335,6 +1403,11 @@ public partial class TypeChecker
         return null;
     }
 
+    private TypeInfo? ReadStringIndexOf(TypeInfo receiver) =>
+        receiver is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass }
+            ? GetConstructorStringIndexType(receiver)
+            : StringIndexOf(receiver);
+
     /// <summary>
     /// Checks index assignment on a given type (used for delegating from Union types).
     /// Returns the value type if assignment is valid, null when the index is structurally invalid
@@ -1353,6 +1426,18 @@ public partial class TypeChecker
 
         if (indexType is TypeInfo.Any)
             return valueType;
+
+        TypeInfo? constructorIndex = IsNumericConstructorIndex(indexType)
+            ? GetConstructorIndexType(objType, TokenType.TYPE_NUMBER) ?? GetConstructorIndexType(objType, TokenType.TYPE_STRING)
+            : indexType is TypeInfo.Symbol or TypeInfo.UniqueSymbol
+                ? GetConstructorIndexType(objType, TokenType.TYPE_SYMBOL)
+                : null;
+        if (constructorIndex is not null)
+        {
+            if (!IsCompatible(constructorIndex, valueType))
+                throw new TypeCheckException($" Cannot assign '{valueType}' to index signature type '{constructorIndex}'.", tsCode: "TS2322");
+            return valueType;
+        }
 
         // Handle string index
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)

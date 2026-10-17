@@ -211,6 +211,7 @@ public partial class TypeChecker
         // implementations.
         if (_environment.GetTypeBinding(typeName) is { } declaredType)
         {
+            EnsureForwardClassTypeSignature(declaredType);
             return declaredType switch
             {
                 TypeInfo.MutableClass loadedMutableClass => new TypeInfo.Instance(loadedMutableClass),

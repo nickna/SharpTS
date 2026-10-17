@@ -20,6 +20,21 @@ public class TypeMap
     internal TypeInfo.Class? GetPrivateInOwner(Token name) => _privateInOwners.GetValueOrDefault(name);
     private readonly Dictionary<string, TypeInfo.Class> _classTypes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo.Function> _functionTypes = new(StringComparer.Ordinal);
+    private readonly Dictionary<Stmt.Function, TypeInfo.Function> _classMethodImplementations = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<List<Stmt.Parameter>, TypeInfo.Function> _classMethodParameterImplementations = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<TypeInfo, TypeInfo.Function> _classMethodCallableImplementations = new(ReferenceEqualityComparer.Instance);
+
+    internal void SetClassMethodImplementation(Stmt.Function method, TypeInfo.Function implementation, TypeInfo callable)
+    {
+        _classMethodImplementations[method] = implementation;
+        _classMethodParameterImplementations[method.Parameters] = implementation;
+        SetClassMethodImplementation(callable, implementation);
+    }
+    internal void SetClassMethodImplementation(TypeInfo callable, TypeInfo.Function implementation) =>
+        _classMethodCallableImplementations[callable] = implementation;
+    public TypeInfo.Function? GetClassMethodImplementation(Stmt.Function method) => _classMethodImplementations.GetValueOrDefault(method);
+    public TypeInfo.Function? GetClassMethodImplementation(List<Stmt.Parameter> parameters) => _classMethodParameterImplementations.GetValueOrDefault(parameters);
+    public TypeInfo.Function? GetClassMethodImplementation(TypeInfo callable) => _classMethodCallableImplementations.GetValueOrDefault(callable);
     private readonly Dictionary<Expr.ClassExpr, TypeInfo.Class> _classExprTypes = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr> _undefinedReachableReturns = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<object> _undefinedReachableNumericLocals = new(ReferenceEqualityComparer.Instance);

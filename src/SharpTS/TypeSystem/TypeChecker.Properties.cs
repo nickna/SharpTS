@@ -1400,12 +1400,14 @@ public partial class TypeChecker
         // Select the nearest lexical declaration before checking the member kind.
         if (owner.PrivateFieldTypes.TryGetValue(fieldName, out var fieldType))
         {
+            ValidatePrivateReceiver(objType, owner, isStatic: false, get.Name);
             ObservePendingGetterFieldRead(owner, isStatic: false, fieldName);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateInstance);
             return fieldType;
         }
         if (owner.PrivateMethodTypes.TryGetValue(fieldName, out var methodType))
         {
+            ValidatePrivateReceiver(objType, owner, isStatic: false, get.Name);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateInstance);
             return methodType;
         }
@@ -1456,6 +1458,7 @@ public partial class TypeChecker
         TypeInfo? fieldType = null;
         if (owner.PrivateFieldTypes.TryGetValue(fieldName, out var pf))
         {
+            ValidatePrivateReceiver(objType, owner, isStatic: false, set.Name);
             ObservePrivateSourceMemberSelection(set.Name, objType, owner, MemberFacet.PrivateInstance);
             fieldType = pf;
         }
@@ -1531,11 +1534,29 @@ public partial class TypeChecker
             throw new TypeCheckException($" Private method '{methodName}' does not exist on class '{_currentClass.Name}'.", tsCode: "TS2339");
         }
 
+        if (selectedFacet == MemberFacet.PrivateInstance)
+            ValidatePrivateReceiver(objType, owner, isStatic: false, call.Name);
         RecordPrivateSourceMemberRead(call, call.Name, objType, owner, selectedFacet);
         if (methodType is TypeInfo.Any || selectedFacet == MemberFacet.PrivateStatic && objType is TypeInfo.Any)
         {
             foreach (var argument in call.Arguments) CheckExpr(argument);
             return TypeInfo.Any.Shared;
+        }
+
+        TypeInfo originalMethodType = methodType;
+        if (methodType is TypeInfo.GenericFunction genericMethod)
+        {
+            var argumentTypes = CheckGenericInferenceArguments(call.Arguments);
+            try
+            {
+                var arguments = InferTypeArguments(genericMethod,
+                    PrepareFreshCallArgumentsForInference(genericMethod.ParamTypes, call.Arguments, argumentTypes));
+                methodType = InstantiateGenericFunction(genericMethod, arguments);
+            }
+            catch (TypeCheckException exception) when (exception.Diagnostic.TsCode == "TS2344")
+            {
+                throw new TypeCheckException(exception.Message, call.Name.Line, tsCode: "TS2345");
+            }
         }
 
         // Check argument types against the callable member's signature.
@@ -1545,12 +1566,14 @@ public partial class TypeChecker
         }
         if (EditorFacts.IsEnabled && HasPrivateSourceOwner(objType, owner.Core.DeclarationId,
                 selectedFacet == MemberFacet.PrivateStatic))
-            RecordEditorCallCandidates(funcType);
+            RecordEditorCallCandidates(originalMethodType);
 
         CheckPrivateCallArguments(call, funcType);
 
         RecordProvenSourceMemberCall(call, call.Name, call);
-        RecordEditorInvocationSelection(funcType);
+        if (!ReferenceEquals(originalMethodType, funcType))
+            RecordEditorInvocationInstantiation(originalMethodType, funcType);
+        RecordEditorInvocationSelection(originalMethodType, funcType);
         return funcType.ReturnType;
     }
 

@@ -244,8 +244,10 @@ public partial class ILCompiler
     /// </summary>
     private void DefineInnerFunctions()
     {
-        foreach (var (func, captures, enclosingFuncName) in _collectedInnerFunctions)
+        foreach (var (func, captures, collectedEnclosingFuncName) in _collectedInnerFunctions)
         {
+            string enclosingFuncName = ResolveInnerFunctionEnclosingFunctionName(
+                func, captures, collectedEnclosingFuncName);
             // Resolve parameter types (use annotations only, no TypeMap function type)
             var resolvedParamTypes = ParameterTypeResolver.ResolveParameters(
                 func.Parameters, _typeMapper, null, _typeMap);
@@ -265,7 +267,8 @@ public partial class ILCompiler
             string? sourceFunctionForDC = null;
             if (_closures.FunctionDisplayClassFields.TryGetValue(enclosingFuncName, out var enclosingFuncDCFields))
             {
-                if (captures.Any(c => enclosingFuncDCFields.ContainsKey(c)))
+                if (captures.Any(c => IsInnerFunctionFunctionDCCapture(
+                    func, c, enclosingFuncName, enclosingFuncDCFields)))
                 {
                     needsFunctionDC = true;
                     sourceFunctionForDC = enclosingFuncName;
@@ -361,7 +364,7 @@ public partial class ILCompiler
                     // Skip function-level captured vars - accessed through $functionDC
                     if (needsFunctionDC && sourceFunctionForDC != null &&
                         _closures.FunctionDisplayClassFields.TryGetValue(sourceFunctionForDC, out var funcFields) &&
-                        funcFields.ContainsKey(capturedVar))
+                        IsInnerFunctionFunctionDCCapture(func, capturedVar, sourceFunctionForDC, funcFields))
                         continue;
 
                     // Skip enclosing-arrow scope vars - accessed live through $arrowScopeDC
@@ -438,8 +441,10 @@ public partial class ILCompiler
     private void EmitInnerFunctionBodies()
     {
         var savedPath = _modules.CurrentPath;
-        foreach (var (func, captures, enclosingFuncName) in _collectedInnerFunctions)
+        foreach (var (func, captures, collectedEnclosingFuncName) in _collectedInnerFunctions)
         {
+            string enclosingFuncName = ResolveInnerFunctionEnclosingFunctionName(
+                func, captures, collectedEnclosingFuncName);
             if (_functionDefinitionModule.TryGetValue(enclosingFuncName, out var fnModule))
             {
                 _modules.CurrentPath = NormalizeToEmissionPath(fnModule);
@@ -503,7 +508,8 @@ public partial class ILCompiler
                     string? sourceFuncName = null;
                     if (_closures.FunctionDisplayClassFields.TryGetValue(enclosingFuncName, out var enclosingDCFields))
                     {
-                        if (captures.Any(c => enclosingDCFields.ContainsKey(c)))
+                        if (captures.Any(c => IsInnerFunctionFunctionDCCapture(
+                            func, c, enclosingFuncName, enclosingDCFields)))
                         {
                             needsFunctionDC = true;
                             sourceFuncName = enclosingFuncName;
@@ -514,7 +520,8 @@ public partial class ILCompiler
                         _closures.FunctionDisplayClassFields.TryGetValue(sourceFuncName, out var funcDCFields))
                     {
                         ctx.FunctionDisplayClassFields = funcDCFields;
-                        ctx.CapturedFunctionLocals = [.. funcDCFields.Keys];
+                        ctx.CapturedFunctionLocals = [.. captures.Where(c =>
+                            IsInnerFunctionFunctionDCCapture(func, c, sourceFuncName, funcDCFields))];
                     }
                 }
 
@@ -646,6 +653,53 @@ public partial class ILCompiler
         _modules.CurrentPath = savedPath;
     }
 
+    private string ResolveInnerFunctionEnclosingFunctionName(
+        Stmt.Function function, HashSet<string> captures, string collectedName)
+    {
+        // Method display classes use class-qualified keys, whereas collection's
+        // enclosing-name cursor describes free functions. Resolve the storage
+        // owner by AST identity so same-named methods and shadowed locals cannot
+        // select another invocation's environment.
+        string? methodKey = null;
+        foreach (string name in captures)
+            if (_closures.Analyzer.GetCaptureSource(function, name) is Stmt.Function source
+                && _syncMethodFunctionDCKeys.TryGetValue(source, out string? key)
+                && _closures.FunctionDisplayClassFields[key].ContainsKey(name))
+            {
+                // The existing single reference cannot represent distinct owners.
+                if (methodKey != null && methodKey != key)
+                    return collectedName;
+                methodKey = key;
+            }
+        if (methodKey == null
+            || !_innerFunctionParentCallable.TryGetValue(function, out var parent))
+            return collectedName;
+
+        var methodDC = _closures.FunctionDisplayClasses[methodKey];
+        bool reachable = parent switch
+        {
+            Stmt.Function method when _syncMethodFunctionDCKeys.TryGetValue(method, out var parentKey)
+                => parentKey == methodKey,
+            Stmt.Function declaration
+                => _innerFunctionFunctionDCFields.TryGetValue(declaration, out var functionField)
+                    && functionField.FieldType == methodDC,
+            Expr.ArrowFunction arrow
+                => _closures.ArrowFunctionDCFields.TryGetValue(arrow, out var arrowField)
+                    && arrowField.FieldType == methodDC,
+            _ => false
+        };
+        // Uncapturing intermediate declarations do not yet relay method storage.
+        // Keep their existing capture path until explicit pass-through support exists.
+        return reachable ? methodKey : collectedName;
+    }
+
+    private bool IsInnerFunctionFunctionDCCapture(
+        Stmt.Function function, string name, string sourceName,
+        Dictionary<string, FieldBuilder> fields)
+        => fields.ContainsKey(name)
+            && (!_closures.FunctionAstNodes.TryGetValue(sourceName, out var source)
+                || ReferenceEquals(_closures.Analyzer.GetCaptureSource(function, name), source));
+
     /// <summary>
     /// Emits hoisting code at the start of a function body for inner function declarations.
     /// Scans the body's TOP-LEVEL statements for Stmt.Function nodes and creates TSFunction locals
@@ -705,15 +759,12 @@ public partial class ILCompiler
     /// <summary>
     /// Wires the in-place inner-function materializer (<see cref="EmitBlockScopedInnerFunctionDeclaration"/>)
     /// onto <paramref name="ctx"/> WITHOUT running the top-of-body two-pass hoist that
-    /// <see cref="EmitInnerFunctionHoisting"/> performs. Class-method bodies (#1237) use this: unlike a
-    /// plain function or arrow, a method has no function-level display class, so hoisting a capturing
-    /// inner function to the top of the body would snapshot its captured method-locals BEFORE the body
-    /// assigns them — leaving the closure's capture fields null. Leaving
+    /// <see cref="EmitInnerFunctionHoisting"/> performs. Class-method bodies (#1237) use this. Leaving
     /// <see cref="CompilationContext.HoistedInnerFunctions"/> empty means every inner function
     /// declaration — top-level-of-body or block-nested — is materialized in place at its textual
-    /// position by the statement emitter's <c>Stmt.Function</c> arm, so its capture snapshot sees the
-    /// values already assigned. This matches how arrows inside methods capture (snapshot at creation),
-    /// and admits every program the type checker allows: it rejects forward references to a method's
+    /// position by the statement emitter's <c>Stmt.Function</c> arm. Captured method locals use the
+    /// method's shared display class, while remaining snapshot captures see the values assigned at
+    /// that point. This admits every program the type checker allows: it rejects forward references to a method's
     /// inner functions (unlike function bodies, which it hoists), so no valid program needs the two-pass
     /// pre-materialization here.
     /// </summary>
@@ -896,10 +947,21 @@ public partial class ILCompiler
             // Populate $functionDC field (references the enclosing function DC; same logic).
             if (_innerFunctionFunctionDCFields.TryGetValue(funcStmt, out var funcDCField))
             {
-                if (ctx.FunctionDisplayClassLocal != null)
+                if (ctx.FunctionDisplayClassLocal is { } functionDCLocal
+                    && functionDCLocal.LocalType == funcDCField.FieldType)
                 {
                     il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Ldloc, ctx.FunctionDisplayClassLocal);
+                    il.Emit(OpCodes.Ldloc, functionDCLocal);
+                    il.Emit(OpCodes.Stfld, funcDCField);
+                }
+                else if (ctx.CurrentArrowFunctionDCField is { } parentFunctionDC
+                    && parentFunctionDC.FieldType == funcDCField.FieldType)
+                {
+                    // An ordinary function nested inside another closure retains
+                    // the same method environment rather than copying its values.
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldfld, parentFunctionDC);
                     il.Emit(OpCodes.Stfld, funcDCField);
                 }
             }

@@ -67,6 +67,19 @@ public sealed class SourceMemberOccurrenceTests
         Assert.True(value.Result.IsSuccess, string.Join(Environment.NewLine, value.Result.Errors));
 
     [Fact]
+    public void DeferredReadOfLaterConstructorKeepsItsAuthoritativeMemberOrigin()
+    {
+        var value = Check("""
+            function read(): number { return Later./*early*/value; }
+            class Later { static value: number = 1; }
+            Later./*late*/value;
+            """);
+        AssertClean(value);
+        Assert.Same(Symbol(value, "early"), Symbol(value, "late"));
+        Assert.Equal(MemberFacet.Static, Symbol(value, "early").Facet);
+    }
+
+    [Fact]
     public void ReadsWritesCallsAndThisKeepDistinctInstanceAndStaticFacets()
     {
         var value = Check("""

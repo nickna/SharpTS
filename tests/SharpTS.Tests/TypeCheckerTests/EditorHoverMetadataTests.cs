@@ -201,7 +201,7 @@ public sealed class EditorHoverMetadataTests
     }
 
     [Fact]
-    public void UnsupportedMethodLocalGenericAnnotationsRemainRawAnyButUnprovenForEditors()
+    public void MethodLocalGenericAnnotationsRetainTheirTypesAndSourceProof()
     {
         const string source = "class Base<T> { method<U>(input: /*parameter*/U): /*return*/U { return input; } } const value = new Base<number>(); value./*member*/method;";
         var captured = Check(source);
@@ -211,15 +211,21 @@ public sealed class EditorHoverMetadataTests
         var raw = captured.Result.TypeMap.GetClassType(declaration)!.Methods["method"];
         var ordinaryDeclaration = Assert.IsType<Stmt.Class>(ordinary.Statements[0]);
         var ordinaryRaw = ordinary.Result.TypeMap.GetClassType(ordinaryDeclaration)!.Methods["method"];
-        Assert.Equal("(input: any) => any", EditorTypeRenderer.Render(ordinaryRaw, EditorTypeRenderContext.Value).Text);
+        Assert.Equal("<U>(input: U) => U", EditorTypeRenderer.Render(ordinaryRaw, EditorTypeRenderContext.Value).Text);
         Assert.Equal(EditorTypeRenderer.Render(ordinaryRaw).Text, EditorTypeRenderer.Render(raw).Text);
-        Assert.Equal(EditorFactAvailability.Unavailable, TypeAt(captured, "parameter").Availability);
-        Assert.Equal(EditorFactAvailability.Unavailable, TypeAt(captured, "return").Availability);
-        Assert.Equal(EditorFactAvailability.Unavailable,
-            Assert.Single(captured.Facts.GetDeclarations(captured.Document, declaration.Methods[0])).Availability);
+        Assert.Equal(EditorFactAvailability.Available, TypeAt(captured, "parameter").Availability);
+        Assert.Equal("U", TypeAt(captured, "parameter").Type.Text);
+        Assert.Equal(EditorFactAvailability.Available, TypeAt(captured, "return").Availability);
+        Assert.Equal("U", TypeAt(captured, "return").Type.Text);
+        var methodDeclaration = Assert.Single(captured.Facts.GetDeclarations(captured.Document, declaration.Methods[0]));
+        Assert.Equal(EditorFactAvailability.Available, methodDeclaration.Availability);
+        Assert.Equal("<U>(input: U) => U", methodDeclaration.Type.Text);
         var member = captured.Document.EditorSyntax!.FindMember(At(captured, "member"))!;
-        Assert.False(Assert.Single(captured.Facts.GetReceiverMembers(captured.Document, member.Receiver).Members,
-            candidate => candidate.Name == "method").Type.IsAvailable);
+        var methodMember = Assert.Single(captured.Facts.GetReceiverMembers(captured.Document, member.Receiver).Members,
+            candidate => candidate.Name == "method");
+        Assert.True(methodMember.Type.IsAvailable);
+        Assert.Equal("<U>(input: U) => U", methodMember.Type.Text);
+        Assert.NotNull(methodMember.Source);
     }
 
     [Fact]

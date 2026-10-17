@@ -1152,7 +1152,8 @@ public partial class TypeChecker
         List<Stmt.Parameter> parameters,
         bool validateDefaults,
         string contextName,
-        object? editorOwner = null)
+        object? editorOwner = null,
+        bool inspectDestructuredDefaults = true)
     {
         List<TypeInfo> paramTypes = [];
         List<string> paramNames = [];
@@ -1178,7 +1179,11 @@ public partial class TypeChecker
                 foreach (Stmt.DestructuredParameterProperty property in properties)
                 {
                     fields[property.Key.Lexeme] = property.DefaultValue is { } defaultExpression
-                        ? WidenLiteralType(CheckExpr(defaultExpression))
+                        ? inspectDestructuredDefaults
+                            ? WidenLiteralType(CheckExpr(defaultExpression))
+                            : defaultExpression is Expr.Literal literal
+                                ? WidenLiteralType(GetLiteralType(literal.Value))
+                                : TypeInfo.Any.Shared
                         : TypeInfo.Any.Shared;
                     if (property.DefaultValue is not null) optional.Add(property.Key.Lexeme);
 

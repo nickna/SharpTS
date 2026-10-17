@@ -395,18 +395,18 @@ public static class ParameterTypeResolver
         if (classType == null)
             return parameters.Select(p => ResolveParameterType(p, typeMapper)).ToArray();
 
-        TSTypeInfo.Function? funcType = null;
+        TSTypeInfo.Function? funcType = typeMap.GetClassMethodImplementation(parameters);
         bool isStatic = false;
 
         // Check instance methods
         if (classType.Methods.TryGetValue(methodName, out var methodType))
         {
-            funcType = ExtractFunctionType(methodType);
+            funcType ??= ExtractFunctionType(methodType, typeMap);
         }
         // Check static methods
         else if (classType.StaticMethods.TryGetValue(methodName, out var staticMethodType))
         {
-            funcType = ExtractFunctionType(staticMethodType);
+            funcType ??= ExtractFunctionType(staticMethodType, typeMap);
             isStatic = true;
         }
 
@@ -522,7 +522,7 @@ public static class ParameterTypeResolver
                 continue;
             if (FindMethodRootDeclarer(otherName, methodName, typeMap) != root)
                 continue;
-            if (ExtractFunctionType(otherMethodType) is not { } f)
+            if (ExtractFunctionType(otherMethodType, typeMap) is not { } f)
                 continue;
 
             int minArity = f.MinArity;
@@ -624,7 +624,8 @@ public static class ParameterTypeResolver
         if (!classType.Methods.TryGetValue("constructor", out var ctorTypeInfo))
             return parameters.Select(p => ResolveParameterType(p, typeMapper)).ToArray();
 
-        var funcType = ExtractFunctionType(ctorTypeInfo);
+        var funcType = typeMap.GetClassMethodImplementation(parameters)
+            ?? ExtractFunctionType(ctorTypeInfo, typeMap);
         if (funcType == null || funcType.ParamTypes.Count != parameters.Count)
             return parameters.Select(p => WidenIfUndefinedReachableParam(ResolveParameterType(p, typeMapper), p, typeMap)).ToArray();
 
@@ -668,14 +669,21 @@ public static class ParameterTypeResolver
     }
 
     /// <summary>
-    /// Extracts Function type from a method TypeInfo (handles overloads).
+    /// Extracts a method's erased implementation signature, preserving the
+    /// implementation's optionality rather than selecting a public overload.
     /// </summary>
-    private static TSTypeInfo.Function? ExtractFunctionType(TSTypeInfo methodType)
+    private static TSTypeInfo.Function? ExtractFunctionType(TSTypeInfo methodType, TypeMap typeMap)
     {
+        if (typeMap.GetClassMethodImplementation(methodType) is { } implementation)
+            return implementation;
         return methodType switch
         {
             TSTypeInfo.Function f => f,
             TSTypeInfo.OverloadedFunction of => of.Implementation,
+            TSTypeInfo.GenericOverloadedFunction overloaded => overloaded.Implementation,
+            TSTypeInfo.GenericFunction generic => new TSTypeInfo.Function(
+                generic.ParamTypes, generic.ReturnType, generic.RequiredParams,
+                generic.HasRestParam, generic.ThisType, generic.ParamNames),
             _ => null
         };
     }

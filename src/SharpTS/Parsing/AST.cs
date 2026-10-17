@@ -277,7 +277,8 @@ public abstract record Expr
         // Node twins of SuperclassTypeArgs / InterfaceTypeArgs (type-AST migration); inner lists
         // stay index-aligned with their string twins.
         List<TypeNode?>? SuperclassTypeArgNodes = null,
-        List<List<TypeNode?>>? InterfaceTypeArgNodes = null
+        List<List<TypeNode?>>? InterfaceTypeArgNodes = null,
+        List<Stmt.IndexSignature>? IndexSignatures = null
     ) : Expr;
 
     /// <summary>
@@ -448,7 +449,7 @@ public abstract record Stmt
     /// <summary>
     /// Index signature in interfaces: [key: string]: valueType, [key: number]: valueType, [key: symbol]: valueType
     /// </summary>
-    public record IndexSignature(Token KeyName, TokenType KeyType, string ValueType, TypeNode? ValueTypeNode = null);
+    public record IndexSignature(Token KeyName, TokenType KeyType, string ValueType, TypeNode? ValueTypeNode = null, bool IsStatic = false);
     /// <summary>
     /// Call signature in interfaces: (params): ReturnType or &lt;T&gt;(params): ReturnType
     /// Indicates the interface represents a callable type (e.g., function).

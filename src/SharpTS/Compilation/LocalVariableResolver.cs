@@ -285,7 +285,21 @@ public class LocalVariableResolver : IVariableResolver
     {
         if (!_ctx.TryGetParameter(name, out var argIndex)) return null;
 
-        _il.Emit(OpCodes.Ldarg, argIndex);
+        if (_ctx.UseFunctionDisplayClassParameterStorage &&
+            _ctx.FunctionDisplayClassLocal is { } displayClass &&
+            _ctx.CapturedFunctionLocals?.Contains(name) == true &&
+            _ctx.FunctionDisplayClassFields?.TryGetValue(name, out var field) == true)
+        {
+            _il.Emit(OpCodes.Ldloc, displayClass);
+            _il.Emit(OpCodes.Ldfld, field);
+            if (field.FieldType.IsValueType)
+                _il.Emit(OpCodes.Box, field.FieldType);
+            // Retain the parameter's physical representation for typed loads
+            // and callers that consult TryGetParameterType for boxing decisions.
+            _ctx.EmitConvertForParamSlot(_il, name);
+        }
+        else
+            _il.Emit(OpCodes.Ldarg, argIndex);
         if (_ctx.TryGetParameterType(name, out var paramType) && paramType != null)
         {
             var stackType = MapTypeToStackType(paramType);

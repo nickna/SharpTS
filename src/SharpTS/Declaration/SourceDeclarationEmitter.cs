@@ -443,7 +443,7 @@ public static class SourceDeclarationEmitter
                 foreach (Stmt.AutoAccessor accessor in @class.AutoAccessors ?? [])
                     EmitAutoAccessor(accessor, resolvedType);
                 foreach (Stmt.IndexSignature index in @class.IndexSignatures ?? [])
-                    WriteLine($"[{index.KeyName.Lexeme}: {RenderIndexKeyType(index.KeyType)}]: {index.ValueType};");
+                    WriteLine($"{(index.IsStatic ? "static " : "")}[{index.KeyName.Lexeme}: {RenderIndexKeyType(index.KeyType)}]: {index.ValueType};");
             });
             WriteLine("}");
         }

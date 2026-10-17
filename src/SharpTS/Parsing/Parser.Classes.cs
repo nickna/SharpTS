@@ -301,8 +301,8 @@ public partial class Parser
 
                 Token fieldName = Consume(TokenType.PRIVATE_IDENTIFIER, "Expect private field name.");
 
-                // Check if it's a method: #name(
-                if (Check(TokenType.LEFT_PAREN))
+                // A private method may declare type parameters before its parameter list.
+                if (Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS))
                 {
                     // Private method: #name() { }
                     List<TypeParam>? typeParams2 = ParseTypeParameters();
@@ -368,7 +368,7 @@ public partial class Parser
             {
                 // Index signature: [key: string|number|symbol]: ValueType. Distinguished from a
                 // computed property name ([expr]: T) by an identifier immediately followed by ':'.
-                if (TryParseClassIndexSignature() is { } indexSig)
+                if (TryParseClassIndexSignature(isStatic) is { } indexSig)
                 {
                     indexSignatures.Add(indexSig);
                     continue;
@@ -657,7 +657,7 @@ public partial class Parser
     /// restores position and returns null so the caller can fall through to computed-property-name
     /// parsing.
     /// </summary>
-    private Stmt.IndexSignature? TryParseClassIndexSignature()
+    private Stmt.IndexSignature? TryParseClassIndexSignature(bool isStatic)
     {
         int saved = _current;
 
@@ -677,7 +677,7 @@ public partial class Parser
         string valueType = ParseTypeAnnotation();
         TypeNode? valueTypeNode = TakeTypeNode();
         ConsumeSemicolon("Expect ';' after index signature.");
-        return new Stmt.IndexSignature(keyName, keyType, valueType, valueTypeNode);
+        return new Stmt.IndexSignature(keyName, keyType, valueType, valueTypeNode, isStatic);
     }
 
     /// <summary>
@@ -770,6 +770,7 @@ public partial class Parser
         List<Stmt.Accessor> accessors = [];
         List<Stmt.AutoAccessor> autoAccessors = [];
         List<Stmt> staticInitializers = [];
+        List<Stmt.IndexSignature> indexSignatures = [];
         while (!Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
             if (Match(TokenType.SEMICOLON)) continue;
@@ -941,8 +942,8 @@ public partial class Parser
 
                 Token fieldName = Consume(TokenType.PRIVATE_IDENTIFIER, "Expect private field name.");
 
-                // Check if it's a method: #name(
-                if (Check(TokenType.LEFT_PAREN))
+                // A private method may declare type parameters before its parameter list.
+                if (Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS))
                 {
                     // Private method: #name() { }
                     List<TypeParam>? typeParams2 = ParseTypeParameters();
@@ -1054,6 +1055,11 @@ public partial class Parser
             // Computed-name member: [Symbol.iterator]() {} (method) or [expr]: T = v (field).
             else if (Check(TokenType.LEFT_BRACKET))
             {
+                if (TryParseClassIndexSignature(isStatic) is { } indexSig)
+                {
+                    indexSignatures.Add(indexSig);
+                    continue;
+                }
                 if (isMemberDeclare)
                 {
                     throw new Exception($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with computed property names.");
@@ -1141,7 +1147,8 @@ public partial class Parser
             IsAbstract: false,  // Class expressions cannot be abstract
             staticInitializers.Count > 0 ? staticInitializers : null,
             superclassTypeArgNodes,
-            interfaceTypeArgNodes
+            interfaceTypeArgNodes,
+            indexSignatures.Count > 0 ? indexSignatures : null
         );
         RecordClassSyntax(expression, name, headerStart, bodyOpen.Start, ConsumedSourceEnd);
         return expression;

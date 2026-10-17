@@ -81,7 +81,7 @@ public sealed class EditorReceiverQueryTests
     }
 
     [Fact]
-    public void InheritedGenericPresentationComposesKnownBaseArgumentsWithoutInventingMethodInference()
+    public void InheritedGenericPresentationComposesBaseArgumentsAndPreservesMethodParameters()
     {
         const string source = """
             class Base<T> {
@@ -99,12 +99,10 @@ public sealed class EditorReceiverQueryTests
         var ordinary = Check(source, enabled: false);
         var sourceClass = Assert.IsType<Stmt.Class>(ordinary.Statements[0]);
         var actualMethod = ordinary.Types.GetClassType(sourceClass)!.Methods["method"];
-        // This checker path does not install the method-local U while resolving the
-        // written signature. The ordinary checker still falls back to any; editor
-        // presentation refuses that unresolved annotation rather than claiming any.
-        Assert.Equal("(input: any) => any", EditorTypeRenderer.Render(actualMethod, EditorTypeRenderContext.Value).Text);
-        Assert.False(method.IsAvailable);
-        Assert.Equal("unavailable", method.Text);
+        Assert.Equal("<U>(input: U) => U", EditorTypeRenderer.Render(actualMethod, EditorTypeRenderContext.Value).Text);
+        Assert.True(method.IsAvailable);
+        Assert.Equal("<U>(input: U) => U", method.Text);
+        Assert.NotNull(Assert.Single(members.Members, member => member.Name == "method").Source);
         Assert.NotNull(Assert.Single(members.Members, member => member.Name == "value").Source);
     }
 

@@ -14,6 +14,7 @@ public partial class TypeChecker
         try
         {
             _environment = environment;
+            HoistClassDeclarations(statements);
             CheckStmtList(statements);
         }
         finally

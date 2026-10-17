@@ -26,6 +26,8 @@ public partial class ILCompiler
             string infix = method.IsStatic ? "::static::" : "::";
             string key = $"{qualifiedClassName}{infix}{method.Name.Lexeme}";
             _closures.FunctionAstNodes[key] = method;
+            if (_modules.CurrentPath != null)
+                _functionDefinitionModule[key] = _modules.CurrentPath;
             DefineFunctionDisplayClass(method, key);
             if (_closures.FunctionDisplayClasses.ContainsKey(key))
                 _syncMethodFunctionDCKeys[method] = key;
@@ -92,6 +94,7 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Box, parameterType);
             il.Emit(OpCodes.Stfld, field);
         }
+        ctx.UseFunctionDisplayClassParameterStorage = true;
     }
 
     private void DefineFunction(Stmt.Function funcStmt)

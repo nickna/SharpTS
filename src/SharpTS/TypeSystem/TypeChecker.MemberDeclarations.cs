@@ -26,9 +26,17 @@ public partial class TypeChecker
         RecordEditorBinding(environment, parameter.Name, symbol, BindingNamespace.Value, type, EditorFactAvailability.Available);
     }
 
-    private void RegisterSourceClassMembers(Stmt.Class declaration, TypeInfo.MutableClass classType) =>
+    private void RegisterSourceClassMembers(Stmt.Class declaration, TypeInfo.MutableClass classType)
+    {
+        classType.IsDotNetMapped = declaration.Decorators?.Any(decorator =>
+            decorator.Expression is Expr.Call
+            {
+                Callee: Expr.Variable { Name.Lexeme: "DotNetType" },
+                Arguments: [Expr.Literal { Value: string }]
+            }) == true;
         RegisterSourceClassMembers(classType, declaration, declaration.Fields, declaration.Methods,
             declaration.Accessors, declaration.AutoAccessors);
+    }
 
     private void RegisterSourceClassMembers(Expr.ClassExpr declaration, TypeInfo.MutableClass classType) =>
         RegisterSourceClassMembers(classType, declaration, declaration.Fields, declaration.Methods,

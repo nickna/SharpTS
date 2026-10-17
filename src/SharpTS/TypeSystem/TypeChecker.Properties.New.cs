@@ -1119,6 +1119,21 @@ public partial class TypeChecker
             }
             InferFromTypeForConstructor(paramFunc.ReturnType, argFunc.ReturnType, inferred);
         }
+        else if (paramType is TypeInfo.InstantiatedGeneric
+                 { GenericDefinition: TypeInfo.GenericInterface } instantiatedInterface
+                 && argType is TypeInfo.Record
+                 && FlattenInstantiatedInterface(instantiatedInterface) is { } interfaceShape)
+        {
+            // Constructor options preserve inference sites through named generic
+            // interfaces, including members inherited from instantiated interfaces.
+            InferFromTypeForConstructor(interfaceShape, argType, inferred);
+        }
+        else if (paramType is TypeInfo.Interface paramInterface && argType is TypeInfo.Record interfaceArgument)
+        {
+            foreach (var (name, memberType) in paramInterface.GetAllMembers())
+                if (interfaceArgument.Fields.TryGetValue(name, out var argumentMember))
+                    InferFromTypeForConstructor(memberType, argumentMember, inferred);
+        }
         else if (paramType is TypeInfo.InstantiatedGeneric paramGen && argType is TypeInfo.InstantiatedGeneric argGen)
         {
             // Same generic base - infer from type arguments

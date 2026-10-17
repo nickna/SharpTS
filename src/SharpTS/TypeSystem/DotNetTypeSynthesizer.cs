@@ -373,7 +373,7 @@ public static class DotNetTypeSynthesizer
     private static TypeInfo.Class Build(Type type)
     {
         var meta = new TypeInspector().Inspect(type, includeInherited: true);
-        var mc = new TypeInfo.MutableClass(type.Name);
+        var mc = new TypeInfo.MutableClass(type.Name) { IsDotNetMapped = true };
 
         foreach (var group in meta.Methods.GroupBy(m => m.TypeScriptName, StringComparer.Ordinal))
         {
@@ -738,11 +738,24 @@ public static class DotNetTypeSynthesizer
             var parameterType = p.ParameterType.IsByRef
                 ? p.ParameterType.GetElementType()!
                 : p.ParameterType;
-            paramTypes.Add(MapSlot(parameterType, self, mc));
+            paramTypes.Add(MapParameterSlot(parameterType, self, mc));
             if (!p.IsOptional) requiredParams = paramTypes.Count;
         }
 
         return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest);
+    }
+
+    /// <summary>
+    /// CLR reference arguments accept null independently of nullable annotations. Preserve
+    /// that boundary for precisely mapped string/self parameters; other object slots are any.
+    /// Value types such as char keep their non-nullable mapping.
+    /// </summary>
+    private static TypeInfo MapParameterSlot(Type clrType, Type self, TypeInfo.MutableClass mc)
+    {
+        TypeInfo mapped = MapSlot(clrType, self, mc);
+        return !clrType.IsValueType && mapped is TypeInfo.String or TypeInfo.Instance
+            ? new TypeInfo.Union([mapped, TypeInfo.Null.Shared])
+            : mapped;
     }
 
     /// <summary>

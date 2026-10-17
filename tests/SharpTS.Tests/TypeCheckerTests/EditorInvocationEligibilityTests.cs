@@ -118,13 +118,29 @@ public sealed class EditorInvocationEligibilityTests
 
     [Theory]
     [InlineData("class Base<T> { read(input: Missing): T { return null; } } class Derived extends Base<number> {} const value = new Derived(); /*call*/value.read(1);")]
-    [InlineData("class Base<T> { read<U>(input: U): U { return input; } } class Derived extends Base<number> {} const value = new Derived(); /*call*/value.read(1);")]
     public void SubstitutedClassSignaturesRetainTheirExactSourceAnnotationProof(string source)
     {
         var value = Check(source);
         var call = Call(value);
         Assert.NotNull(Assert.Single(call.Candidates).Origin);
         Unavailable(call);
+    }
+
+    [Fact]
+    public void SubstitutedGenericClassMethodRetainsProvenDeclaredAndInstantiatedSignatures()
+    {
+        var value = Check("class Base<T> { read<U>(input: U): U { return input; } } class Derived extends Base<number> {} " +
+            "const value = new Derived(); /*call*/value.read(1);");
+        Assert.True(value.Result.IsSuccess, string.Join(Environment.NewLine, value.Result.Errors));
+        var call = Call(value);
+        var candidate = Assert.Single(call.Candidates);
+        Assert.NotNull(candidate.Origin);
+        Assert.True(candidate.Declared.IsAvailable);
+        Assert.Equal("<U>(input: U): U", candidate.Declared.Label);
+        Assert.Equal(EditorInvocationStatus.Selected, call.Status);
+        Assert.True(call.IsComplete);
+        Assert.Equal(0, call.SelectedOrdinal);
+        Assert.Equal("1", call.SelectedSignature!.ReturnType.Text);
     }
 
     [Fact]
