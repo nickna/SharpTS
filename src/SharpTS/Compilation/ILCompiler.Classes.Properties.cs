@@ -39,6 +39,11 @@ public partial class ILCompiler
             var classType = _typeMap.GetClassType(className);
             if (classType != null && classType.FieldTypes.TryGetValue(field.Name.Lexeme, out var fieldTypeInfo))
             {
+                // Undefined is an emitted singleton, not CLR null. Even reference types
+                // and Nullable<T> cannot store that singleton alongside the declared value.
+                if (fieldTypeInfo is TSTypeInfo.Union { ContainsUndefined: true })
+                    return _types.Object;
+
                 var mapped = _typeMapper.MapTypeInfoStrict(fieldTypeInfo);
                 // Guest callables use $TSFunction rather than CLR Delegate storage. Concrete
                 // CLR delegate types retain their own interop signatures and conversion policy.
@@ -49,7 +54,7 @@ public partial class ILCompiler
                 // field: the runtime value is not a CLR instance of that type, so a typed field throws
                 // InvalidCastException on store/read (e.g. a `d: Date` parameter-property storing a
                 // $TSDate). This generalizes the original typed-array carve-out to the whole dynamic
-                // family; primitives, classes, and unions stay typed. (#573)
+                // family; other mapped field types stay typed. (#573)
                 if (!_typeMapper.IsDynamicRuntimeType(mapped))
                 {
                     return mapped;
@@ -150,7 +155,7 @@ public partial class ILCompiler
             setterIL.Emit(OpCodes.Ldarg_0);          // this
             setterIL.Emit(OpCodes.Ldarg_1);          // value (already typed)
             setterIL.Emit(OpCodes.Stfld, backingFieldRef);  // this.__fieldName = value
-            if (propertyType == _types.Double || propertyType == _types.Boolean)
+            if (propertyType == _types.Double || propertyType == _types.Boolean || propertyType == _types.String)
                 EmitClearGuestFieldOverride(setterIL, _classes.InstanceFieldsField[className], fieldName);
             setterIL.Emit(OpCodes.Ret);
             if (field.ComputedKey == null)

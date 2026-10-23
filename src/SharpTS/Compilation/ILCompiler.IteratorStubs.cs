@@ -85,7 +85,7 @@ public partial class ILCompiler
         if (ReferencesArgumentsIdentifier(info.FunctionShape.Body, source.Parameters))
             arguments = EmitArgumentsLocalPrologueCore(il, context, source.Parameters,
                 sourceTypes, argumentOffset, publishedArgsLeadingSkip: receiverSkip);
-        new ILEmitter(context).EmitDefaultParameters(source.Parameters, argumentOffset, sourceTypes);
+        new ILEmitter(context).EmitDefaultParameters(source.Parameters, argumentOffset, sourceTypes, source.BlockBody);
 
         il.Emit(OpCodes.Newobj, iterator.Constructor);
         EmitIteratorArgumentsStore(il, iterator, arguments);
@@ -141,6 +141,7 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Stfld, selfField);
             }
         }
+        EmitIteratorPatternBindingStore(il, iterator, source.BlockBody, context);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, info.FunctionValueField);
@@ -233,6 +234,7 @@ public partial class ILCompiler
         EmitGeneratorFunctionDCInit(
             il, smBuilder.FunctionDCField, funcStmt, qualifiedName, paramOffset: 0,
             precreatedFunctionDC: environment.FunctionDisplayClass);
+        EmitIteratorPatternBindingStore(il, smBuilder, funcStmt.Body, environment.Context);
 
         EmitIteratorPrototypeAssociation(il, methodBuilder);
         il.Emit(OpCodes.Ret);
@@ -305,6 +307,7 @@ public partial class ILCompiler
             EmitGeneratorFunctionDCInit(
                 il, smBuilder.FunctionDCField, method, funcDCKey, paramOffset, paramTypes,
                 environment.FunctionDisplayClass);
+        EmitIteratorPatternBindingStore(il, smBuilder, method.Body, environment.Context);
 
         EmitIteratorPrototypeAssociation(il, methodBuilder);
         il.Emit(OpCodes.Ret);
@@ -332,7 +335,28 @@ public partial class ILCompiler
     /// creation stub. Defaults update the argument slots before those values are copied
     /// into the state machine and any function display class.
     /// </summary>
-    private readonly record struct IteratorStubEnvironment(LocalBuilder? FunctionDisplayClass, LocalBuilder? Arguments);
+    private readonly record struct IteratorStubEnvironment(LocalBuilder? FunctionDisplayClass, LocalBuilder? Arguments,
+        CompilationContext? Context);
+
+    private void EmitIteratorPatternBindingStore(ILGenerator il, IIteratorStateMachineBuilder builder,
+        List<Stmt>? body, CompilationContext? context)
+    {
+        if (context is null) return;
+        var resolver = new LocalVariableResolver(il, context, _types);
+        foreach (var (declaration, name) in ParameterPatternBindings.Declarations(body))
+        {
+            string storageName = builder.BlockScopeRenames.GetValueOrDefault(declaration) ?? name.Lexeme;
+            if (builder.GetVariableField(storageName) is not { } field) continue;
+            il.Emit(OpCodes.Dup);
+            var stackType = resolver.TryLoadVariable(name.Lexeme)
+                ?? throw new InvalidOperationException($"Initialized parameter binding '{name.Lexeme}' is unavailable.");
+            if (stackType == StackType.Double) il.Emit(OpCodes.Box, _types.Double);
+            else if (stackType == StackType.Boolean) il.Emit(OpCodes.Box, _types.Boolean);
+            if (field.FieldType == _types.Double)
+                il.Emit(OpCodes.Call, _runtime.NumericCoercion.ConvertToNumber);
+            il.Emit(OpCodes.Stfld, field);
+        }
+    }
 
     private void EmitIteratorArgumentsStore(ILGenerator il, IIteratorStateMachineBuilder builder, LocalBuilder? arguments)
     {
@@ -352,7 +376,8 @@ public partial class ILCompiler
         string? funcDCKey = null)
     {
         if (!function.Parameters.Any(p => p.DefaultValue != null)
-            && !ReferencesArgumentsIdentifier(function.Body, function.Parameters))
+            && !ReferencesArgumentsIdentifier(function.Body, function.Parameters)
+            && Runtime.ParameterBinder.ParameterInitializers(function.Body) is null)
             return default;
 
         var ctx = CreateModuleMemberContext(methodBuilder.GetILGenerator(), methodBuilder);
@@ -393,12 +418,10 @@ public partial class ILCompiler
         // Snapshot caller values before eager defaults rewrite any argument slots.
         var arguments = EmitSuspendedArgumentsPrologue(methodBuilder, function, isInstanceMethod, ctx);
 
-        new ILEmitter(ctx).EmitDefaultParameters(
-            function.Parameters,
-            isInstanceMethod,
-            paramTypes: methodParams.Select(p => p.ParameterType).ToArray());
+        new ILEmitter(ctx).EmitDefaultParameters(function.Parameters, paramOffset,
+            methodParams.Select(p => p.ParameterType).ToArray(), function.Body);
 
-        return new(functionDCLocal, arguments);
+        return new(functionDCLocal, arguments, ctx);
     }
 
     private LocalBuilder? EmitSuspendedArgumentsPrologue(MethodBuilder method, Stmt.Function function,

@@ -89,9 +89,7 @@ public sealed class ClassPrototypeReflectDeleteTests
     {
         foreach (var row in Cases())
         {
-            // #2715: interpreter seal/freeze does not update class prototype descriptors.
-            if ((string)row[0] is not "sealed-and-frozen-prototype-properties")
-                yield return [row[0], row[1], row[2], ExecutionMode.Interpreted];
+            yield return [row[0], row[1], row[2], ExecutionMode.Interpreted];
             yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
         }
     }

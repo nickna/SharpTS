@@ -34,7 +34,7 @@ internal static class StableMapIterationAnalyzer
 
             foreach (var loop in loops)
             {
-                if (loop.IsAsync
+                if (!loop.IsDeclaration || loop.IsVar || loop.IsAsync
                     || loop.Variable.Lexeme == key.Name
                     || typeMap.Get(loop.Iterable) is not TypeInfo.Map map
                     || !IsNumber(map.KeyType)

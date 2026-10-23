@@ -359,6 +359,14 @@ public sealed class EmittedPromiseRuntime
         internal set => Set(ref _resolveValueMethod, value);
     }
 
+    private MethodBuilder? _resolveValueWithRootMethod;
+    /// <summary>Recursive thenable resolution retaining the original public capability's task identity.</summary>
+    public MethodBuilder ResolveValueWithRootMethod
+    {
+        get => Require(_resolveValueWithRootMethod);
+        internal set => Set(ref _resolveValueWithRootMethod, value);
+    }
+
     private MethodBuilder? _adoptPromiseCombinatorResultMethod;
     public MethodBuilder AdoptPromiseCombinatorResultMethod
     {
@@ -465,6 +473,13 @@ public sealed class EmittedPromiseRuntime
     {
         get => Require(_resolveCallbackCtor);
         internal set => Set(ref _resolveCallbackCtor, value);
+    }
+
+    private ConstructorBuilder? _resolveCallbackWithRootCtor;
+    public ConstructorBuilder ResolveCallbackWithRootCtor
+    {
+        get => Require(_resolveCallbackWithRootCtor);
+        internal set => Set(ref _resolveCallbackWithRootCtor, value);
     }
 
     private MethodBuilder? _resolveCallbackInvoke;
@@ -670,6 +685,7 @@ public sealed class EmittedPromiseRuntime
         _ = GetPromiseCapabilityResolveMethod;
         _ = GetPromiseCapabilityRejectMethod;
         _ = ResolveValueMethod;
+        _ = ResolveValueWithRootMethod;
         _ = AdoptPromiseCombinatorResultMethod;
         _ = SettlePromiseCombinatorResultMethod;
         _ = MarkNonAutoAwaitPromiseMethod;
@@ -685,6 +701,7 @@ public sealed class EmittedPromiseRuntime
         _ = CapabilitySettleMethod;
         _ = ResolveCallbackType;
         _ = ResolveCallbackCtor;
+        _ = ResolveCallbackWithRootCtor;
         _ = ResolveCallbackInvoke;
         _ = RejectCallbackType;
         _ = RejectCallbackCtor;

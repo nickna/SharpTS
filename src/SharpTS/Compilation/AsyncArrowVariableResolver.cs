@@ -58,7 +58,10 @@ public class AsyncArrowVariableResolver : IVariableResolver
     }
 
     /// <inheritdoc />
-    public bool HasVariable(string name) => TryResolveVariable(name) != null;
+    // Include emitter-owned live paths and standalone captures without changing their read priority.
+    public bool HasVariable(string name) => TryResolveVariable(name) != null
+        || _builder.CapturedLiveStorage.ContainsKey(name)
+        || _builder.StandaloneCaptureFields.ContainsKey(name);
 
     /// <inheritdoc />
     public bool TryStoreVariable(string name)
@@ -76,17 +79,32 @@ public class AsyncArrowVariableResolver : IVariableResolver
     {
         if (name == "this" && _builder.LexicalThisStorage is { } lexicalThis)
             return lexicalThis;
-        if (_builder.ParameterFields.TryGetValue(name, out var parameter))
-            return AsyncArrowStorageAccess.StateMachineField(parameter);
-        if (_builder.LocalFields.TryGetValue(name, out var local))
-            return AsyncArrowStorageAccess.StateMachineField(local);
+        if (TryResolveOwnHoisted(name) is { } own)
+            return own;
+        if (TryResolvePrivateSelf(name) is { } self)
+            return self;
         if (_builder.IsCaptured(name) && _builder.CapturedFieldMap.TryGetValue(name, out var captured))
             return AsyncArrowStorageAccess.CapturedField(_builder, name, captured);
         return null;
     }
 
+    internal AsyncArrowStorageAccess? TryResolveOwnHoisted(string name)
+    {
+        if (_builder.ParameterFields.TryGetValue(name, out var parameter))
+            return AsyncArrowStorageAccess.StateMachineField(parameter);
+        if (_builder.LocalFields.TryGetValue(name, out var local))
+            return AsyncArrowStorageAccess.StateMachineField(local);
+        return null;
+    }
+
     internal AsyncArrowStorageAccess? TryResolveLocal(string name)
         => _locals.TryGetValue(name, out var local) ? AsyncArrowStorageAccess.Local(local) : null;
+
+    internal AsyncArrowStorageAccess? TryResolvePrivateSelf(string name)
+        => name == _builder.PrivateSelfName && _builder.PrivateSelfField is { } field
+            && !_builder.ParameterFields.ContainsKey(name) && !_builder.LocalFields.ContainsKey(name)
+            && !_locals.ContainsKey(name)
+                ? AsyncArrowStorageAccess.StateMachineField(field) : null;
 
     internal AsyncArrowStorageAccess GetOrCreateLocal(string name)
     {

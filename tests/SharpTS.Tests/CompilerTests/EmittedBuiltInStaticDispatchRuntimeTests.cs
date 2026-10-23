@@ -206,7 +206,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
         var input = Assert.Single(inputsType.GetConstructors()).Invoke([
             typeof(EmittedBuiltInStaticDispatchRuntimeTests).GetMethod(nameof(DescribeSuppliedMethod))!, Stub("ArrayCheck"), numbers,
             Stub("CharCode"), Stub("CodePoint"), Stub("Raw"), keys, operations, state, prototypes, descriptors, Stub("Own"),
-            typeof(Uri), Stub("SymbolFor"), Stub("SymbolKeyFor"), bigInt, promise, typeof(Version), Stub("ErrorCheck"), date, map]);
+            typeof(Uri), Stub("SymbolFor"), Stub("SymbolKeyFor"), bigInt, promise, typeof(Version), Stub("ErrorCheck"), date, map, null]);
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         typeof(RuntimeEmitter).GetField("_features", Members)!.SetValue(emitter,
             new RuntimeFeatureSet { UsesPromise = !optional, UsesMap = !optional });

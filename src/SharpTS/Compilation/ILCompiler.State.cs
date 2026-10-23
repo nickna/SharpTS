@@ -278,7 +278,6 @@ public partial class ILCompiler
         public Dictionary<string, AsyncStateMachineBuilder> StateMachines { get; } = [];
         public Dictionary<string, Stmt.Function> Functions { get; } = [];
         public Dictionary<string, AsyncStateAnalyzer.AsyncFunctionAnalysis> Analyses { get; } = [];
-        public Dictionary<string, HashSet<Expr.Await>> SuspensionFreeAwaits { get; } = [];
         public Dictionary<string, Stmt.Function> SuspensionFreePrimitiveFunctions { get; } = [];
         public Dictionary<string, MethodBuilder> SuspensionFreePrimitiveCores { get; } = [];
         public Dictionary<string, MethodBuilder> StableSuspensionFreePrimitiveCores { get; } = [];
@@ -402,6 +401,7 @@ public partial class ILCompiler
     {
         public Dictionary<Expr.ClassExpr, TypeBuilder> Builders { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, string> Names { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Expr.ClassExpr, string> InferredNames { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, Expr.ClassExpr> VarToClassExpr { get; } = [];
         public List<Expr.ClassExpr> ToDefine { get; } = [];
         public HashSet<Expr.ClassExpr> MethodsBeingDefined { get; } = new(ReferenceEqualityComparer.Instance);

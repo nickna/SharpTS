@@ -137,6 +137,41 @@ public class EscapeAnalyzer
     }
 
     /// <summary>
+    /// Keeps a lexical shadow's escape state separate from the same-named outer variable.
+    /// </summary>
+    internal IDisposable ShadowVariables(IReadOnlySet<string> names) => new VariableShadowScope(this, names);
+
+    private sealed class VariableShadowScope : IDisposable
+    {
+        private readonly EscapeAnalyzer _analyzer;
+        private readonly IReadOnlySet<string> _names;
+        private readonly HashSet<string> _escaped;
+        private readonly (HashSet<string> Scope, string[] Names)[] _defined;
+
+        internal VariableShadowScope(EscapeAnalyzer analyzer, IReadOnlySet<string> names)
+        {
+            _analyzer = analyzer;
+            _names = names;
+            _escaped = new(analyzer._escapedVariables.Where(names.Contains));
+            _defined = analyzer._scopeVariables
+                .Select(scope => (scope, scope.Where(names.Contains).ToArray())).ToArray();
+            analyzer._escapedVariables.ExceptWith(names);
+            foreach (var scope in analyzer._scopeVariables)
+                scope.ExceptWith(names);
+        }
+
+        public void Dispose()
+        {
+            _analyzer._escapedVariables.ExceptWith(_names);
+            _analyzer._escapedVariables.UnionWith(_escaped);
+            foreach (var scope in _analyzer._scopeVariables)
+                scope.ExceptWith(_names);
+            foreach (var (scope, names) in _defined)
+                scope.UnionWith(names);
+        }
+    }
+
+    /// <summary>
     /// Clears all tracking state. Called between top-level statements or modules.
     /// </summary>
     public void Clear()

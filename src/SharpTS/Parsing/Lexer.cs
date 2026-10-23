@@ -323,7 +323,7 @@ public class Lexer(string source)
                 break;
             case ';': AddToken(TokenType.SEMICOLON); break;
             case '*':
-                if (Match('*')) AddToken(TokenType.STAR_STAR);
+                if (Match('*')) AddToken(Match('=') ? TokenType.STAR_STAR_EQUAL : TokenType.STAR_STAR);
                 else if (Match('=')) AddToken(TokenType.STAR_EQUAL);
                 else AddToken(TokenType.STAR);
                 break;

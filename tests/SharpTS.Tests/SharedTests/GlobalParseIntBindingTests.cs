@@ -164,19 +164,161 @@ public sealed class GlobalParseIntBindingTests
                 console.log((parseInt("7", 10) as any) === undefined, (held("8", 10) as any) === undefined);
             } finally { target.parseInt = original; }
             """, "true true\n"];
+        yield return ["pending-argument-keeps-descriptor-callee-snapshot", """
+            const target: any = globalThis;
+            const original = Object.getOwnPropertyDescriptor(target, 'parseInt')!;
+            const events: string[] = [];
+            let reads = 0, calls = 0;
+            async function run() {
+                let release: (value: string) => void = () => {};
+                const pending = new Promise<string>(resolve => { release = resolve; });
+                let current: any = function(text: string, radix: number) {
+                    calls++; events.push('call:' + text + ':' + radix); return 17;
+                };
+                try {
+                    Object.defineProperty(target, 'parseInt', {
+                        configurable: true,
+                        get() { reads++; events.push('get:' + (this === target)); return current; }
+                    });
+                    function argument() { events.push('argument'); return pending; }
+                    const task = (async () => parseInt(await argument(), 10))();
+                    console.log('pending', reads, calls, events.join(','));
+                    current = () => 99;
+                    Object.defineProperty(target, 'parseInt', { value: current, writable: true, configurable: true });
+                    release('7');
+                    console.log('settled', await task, reads, calls, events.join(','));
+                } finally { Object.defineProperty(target, 'parseInt', original); }
+                console.log(parseInt('12', 10));
+            }
+            run().catch((error: any) => console.log('unexpected', error && error.name));
+            """, "pending 1 0 get:true,argument\nsettled 17 1 1 get:true,argument,call:7:10\n12\n"];
+        yield return ["reflect-and-map-descriptor-installs-share-the-global-binding", """
+            const target: any = globalThis;
+            const original = Object.getOwnPropertyDescriptor(target, 'parseInt')!;
+            const first = (_text: string, _radix?: number) => 23;
+            const second = (_text: string, _radix?: number) => 29;
+            let reads = 0, receiver = true;
+            try {
+                const defined = Reflect.defineProperty(target, 'parseInt', { value: first, writable: true, configurable: true });
+                const held = parseInt;
+                console.log(defined, held === first, parseInt('7', 10), held('8', 10));
+                Object.defineProperties(target, {
+                    parseInt: { configurable: true, get() { reads++; receiver = receiver && this === target; return second; } }
+                });
+                const fresh = parseInt;
+                console.log(fresh === second, parseInt('7', 10), fresh('8', 10), held('9', 10), reads, receiver);
+            } finally { Object.defineProperty(target, 'parseInt', original); }
+            console.log(parseInt('12', 10));
+            """, "true true 23 23\ntrue 29 29 23 2 true\n12\n"];
+        yield return ["dot-assigned-awaited-argument-control", """
+            const original = globalThis.parseInt;
+            const events: string[] = [];
+            async function run() {
+                try {
+                    globalThis.parseInt = (_text: string, _radix?: number) => { events.push("call"); return 17; };
+                    async function argument() {
+                        events.push("argument");
+                        await Promise.resolve(0);
+                        globalThis.parseInt = () => 99;
+                        return "7";
+                    }
+                    const result = parseInt(await argument(), 10);
+                    console.log(result, events.join(","));
+                } finally { globalThis.parseInt = original; }
+            }
+            run().catch((error: any) => console.log("unexpected", error && error.name));
+            """, "17 argument,call\n"];
+        yield return ["deleted-binding-throws-before-call-arguments-with-lexical-shadows", """
+            const target: any = globalThis;
+            const original = Object.getOwnPropertyDescriptor(target, 'parseInt')!;
+            let argumentsRead = 0;
+            function argument() { argumentsRead++; return '7'; }
+            function local() { const parseInt = (_text: string, _radix?: number) => 17; return parseInt('7', 10); }
+            function parameter(parseInt: any) { return () => parseInt('8', 10); }
+            try {
+                delete target.parseInt;
+                console.log(typeof parseInt, typeof (parseInt), Object.hasOwn(target, 'parseInt'));
+                try { const value = parseInt; console.log('unexpected', value); }
+                catch (error) { console.log(error instanceof ReferenceError); }
+                try { const value = (parseInt); console.log('unexpected', value); }
+                catch (error) { console.log(error instanceof ReferenceError); }
+                try { parseInt(argument(), 10); }
+                catch (error) { console.log(error instanceof ReferenceError, argumentsRead); }
+                console.log(local(), parameter(() => 23)(), argumentsRead);
+            } finally { Object.defineProperty(target, 'parseInt', original); }
+            console.log(parseInt('12', 10));
+            """, "undefined undefined false\ntrue\ntrue\ntrue 0\n17 23 0\n12\n"];
+        yield return ["present-undefined-null-and-number-are-values-with-noncallable-errors", """
+            const target: any = globalThis;
+            const original = Object.getOwnPropertyDescriptor(target, 'parseInt')!;
+            const values: any[] = [undefined, null, 5];
+            let argumentsRead = 0;
+            function argument() { argumentsRead++; return '7'; }
+            try {
+                for (const current of values) {
+                    target.parseInt = current;
+                    const held: any = parseInt;
+                    console.log(held === current, typeof parseInt, Object.hasOwn(target, 'parseInt'));
+                    argumentsRead = 0;
+                    try { parseInt(argument(), 10); }
+                    catch (error) { console.log(error instanceof TypeError, argumentsRead); }
+                }
+                delete target.parseInt;
+                target.parseInt = undefined;
+                console.log('revived', parseInt === undefined, typeof parseInt);
+                delete target.parseInt;
+                target.parseInt = (_text: string, _radix?: number) => 23;
+                const revived = parseInt;
+                console.log(revived === target.parseInt, parseInt('7', 10), revived('8', 10));
+            } finally { Object.defineProperty(target, 'parseInt', original); }
+            console.log(parseInt('12', 10));
+            """, "true undefined true\ntrue 1\ntrue object true\ntrue 1\ntrue number true\ntrue 1\nrevived true undefined\ntrue 23 23\n12\n"];
+        yield return ["deleted-binding-typeof-and-read-after-await-in-both-async-forms", """
+            const target: any = globalThis;
+            const original = Object.getOwnPropertyDescriptor(target, 'parseInt')!;
+            async function declaration() {
+                await Promise.resolve(0);
+                console.log('declaration', typeof parseInt, typeof (parseInt));
+                try { const held = parseInt; console.log('value', held === undefined); }
+                catch (error) { console.log(error instanceof ReferenceError); }
+            }
+            const arrow = async () => {
+                await Promise.resolve(0);
+                console.log('arrow', typeof parseInt, typeof (parseInt));
+                try { const held = parseInt; console.log('value', held === undefined); }
+                catch (error) { console.log(error instanceof ReferenceError); }
+            };
+            async function run() {
+                try {
+                    delete target.parseInt;
+                    await declaration();
+                    await arrow();
+                    target.parseInt = undefined;
+                    await declaration();
+                    await arrow();
+                } finally { Object.defineProperty(target, 'parseInt', original); }
+                console.log(parseInt('12', 10));
+            }
+            run().catch((error: any) => console.log('unexpected', error && error.name));
+            """, "declaration undefined undefined\ntrue\narrow undefined undefined\ntrue\ndeclaration undefined undefined\nvalue true\narrow undefined undefined\nvalue true\n12\n"];
     }
+
+    public static IEnumerable<object[]> SavedCases() => Cases().Where(row => (string)row[0] is
+        "issue" or "defineproperty-data-write-and-identity" or "accessor-callee-read-before-arguments" or
+        "async-accessor-callee-read-before-awaited-argument" or "throwing-accessor-suppresses-arguments" or
+        "dot-bracket-writes-and-captured-values" or "local-parameter-let-and-captured-shadows" or
+        "pending-argument-keeps-descriptor-callee-snapshot" or
+        "reflect-and-map-descriptor-installs-share-the-global-binding" or "dot-assigned-awaited-argument-control" or
+        "delete-and-restore-global-function" or "deleted-binding-throws-before-call-arguments-with-lexical-shadows" or
+        "present-undefined-null-and-number-are-values-with-noncallable-errors" or
+        "deleted-binding-typeof-and-read-after-await-in-both-async-forms");
 
     public static IEnumerable<object[]> ModeCases()
     {
         foreach (var row in Cases())
         {
             yield return [row[0], row[1], row[2], ExecutionMode.Interpreted];
-            // Qualified compiled call is #2539; descriptor-defined bare calls are #2693.
-            // A deleted global's compiled bare read returns undefined instead of throwing (#2696).
-            if ((string)row[0] is "dot-bracket-writes-and-captured-values" or
-                "local-parameter-let-and-captured-shadows" or "noncallable-and-nullish-optional-call" or
-                "canonical-with-number-alias" or "strict-bare-and-detached-receiver")
-                yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
+            yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
         }
     }
 

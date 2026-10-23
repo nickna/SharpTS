@@ -288,8 +288,8 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                     // list, build the spread-expanded args array await-safely (EmitArgsArrayWithSpread
                     // evaluates into temps with a clear stack — the spread expr may contain await),
                     // then reload [list] under [items] so ArrayConcat sees (list, items).
-                    var concatListTmp = il.DeclareLocal(ctx.Types.ListOfObject);
-                    il.Emit(OpCodes.Stloc, concatListTmp);
+                    // Register the receiver too: it is live across await/yield in the spread arguments.
+                    var concatListTmp = emitter.SpillStackToObjectLocal();
                     emitter.EmitArgsArrayWithSpread(arguments);
                     var concatItemsTmp = il.DeclareLocal(ctx.Types.ObjectArray);
                     il.Emit(OpCodes.Stloc, concatItemsTmp);

@@ -68,8 +68,7 @@ public sealed class ForAwaitIdentifierHeadTests
     }
 
     public static IEnumerable<object[]> ModeCases() => BindingCases().SelectMany(row =>
-        // #2586: compiled assignment heads write detached function-local storage.
-        new[] { ExecutionMode.Interpreted }.Select(mode =>
+        new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }.Select(mode =>
             new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ModeCases))]

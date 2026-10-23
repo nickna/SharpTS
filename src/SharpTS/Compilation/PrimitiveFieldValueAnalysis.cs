@@ -37,8 +37,8 @@ internal static class PrimitiveFieldValueAnalysis
         return false;
     }
 
-    private static bool IsPrimitive(TypeInfo type) => type is TypeInfo.Primitive
-        { Type: TokenType.TYPE_NUMBER or TokenType.TYPE_BOOLEAN };
+    private static bool IsPrimitive(TypeInfo type) => type is TypeInfo.String or TypeInfo.StringLiteral
+        or TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER or TokenType.TYPE_BOOLEAN };
 
     internal static List<Expr.Get> Reads(IReadOnlyList<Stmt> body, TypeMap? map)
     {

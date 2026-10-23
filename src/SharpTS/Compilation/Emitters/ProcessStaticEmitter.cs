@@ -418,7 +418,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
     /// <summary>
     /// Emits IL for process.nextTick(callback, ...args).
-    /// Schedules callback to run via SetTimeout with delay 0.
+    /// Queues the callback before due timers.
     /// </summary>
     private static void EmitNextTick(IEmitterContext emitter, List<Expr> arguments)
     {
@@ -436,17 +436,12 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             il.Emit(OpCodes.Ldnull);
         }
 
-        // Delay is always 0 for nextTick
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-
         // Emit args array - remaining arguments (starting from index 1)
         EmitArgsArray(emitter, arguments, 1);
 
-        // Call $Runtime.SetTimeout(callback, 0, args)
-        il.Emit(OpCodes.Call, ctx.Runtime!.Timers.SetTimeout);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Process.QueueNextTick);
 
-        // nextTick returns undefined, so pop the result and push null
-        il.Emit(OpCodes.Pop);
+        // nextTick has no result, retaining its existing undefined representation.
         il.Emit(OpCodes.Ldnull);
     }
 

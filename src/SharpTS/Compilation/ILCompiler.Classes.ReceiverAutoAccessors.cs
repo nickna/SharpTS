@@ -166,11 +166,13 @@ public partial class ILCompiler
         il.MarkLabel(done);
     }
 
-    private void EmitReceiverAutoAccessorDescriptors(ILGenerator il, TypeBuilder owner)
+    private void EmitReceiverAutoAccessorDescriptors(ILGenerator il, TypeBuilder owner,
+        Stmt.AutoAccessor? selected = null, Type? descriptorOwner = null)
     {
-        foreach (var (source, metadata) in _receiverAutoAccessors.Where(entry => ReferenceEquals(entry.Value.Owner, owner)))
+        foreach (var (source, metadata) in _receiverAutoAccessors.Where(entry => ReferenceEquals(entry.Value.Owner, owner)
+            && (selected == null || ReferenceEquals(entry.Key, selected))))
         {
-            Type self = owner.IsGenericTypeDefinition ? EmitGenerics.MakeGenericType(owner, owner.GetGenericArguments()) : owner;
+            Type self = descriptorOwner ?? (owner.IsGenericTypeDefinition ? EmitGenerics.MakeGenericType(owner, owner.GetGenericArguments()) : owner);
             il.Emit(OpCodes.Ldtoken, self); il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle); il.Emit(OpCodes.Call, _runtime.ClassPrototypes.Get);
             il.Emit(OpCodes.Ldstr, source.Name.Lexeme);
             il.Emit(OpCodes.Newobj, _runtime.DescriptorStorage.DescriptorConstructor);

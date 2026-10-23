@@ -187,8 +187,8 @@ public static class ParameterTypeResolver
     /// it throws InvalidCastException. A value-type union additionally maps to <c>Nullable&lt;T&gt;</c>,
     /// which the emitter has no store path for. Locals already use object here; parameters must
     /// too. (#568)</item>
-    /// <item><c>symbol</c> — strictly mapped to String, but a runtime symbol is a $Symbol reference,
-    /// so a String slot can't hold it. (#573 scope)</item>
+    /// <item><c>symbol</c>, including a union collapsed to String by strict mapping — a runtime
+    /// symbol is a $Symbol reference, so a String slot can't hold it. (#573, #2767)</item>
     /// <item>Class constructors (<c>typeof C</c>) — runtime values are Type or $ClassDefinition,
     /// rather than CLR instances of C.</item>
     /// </list>
@@ -206,13 +206,34 @@ public static class ParameterTypeResolver
             return typeof(object);
         if (Nullable.GetUnderlyingType(mapped) != null)
             return typeof(object);
-        if (source is TSTypeInfo.Symbol)
+        if (source is TSTypeInfo.Symbol || IsStringMappedSymbolUnion(mapped, source))
             return typeof(object);
         if (UnionAdmitsUndefined(source))
             return typeof(object);
         if (IsPromiseTaskSlot(mapped))
             return typeof(object);
         return mapped;
+    }
+
+    private static bool IsStringMappedSymbolUnion(Type mapped, TSTypeInfo source) =>
+        mapped == typeof(string) && source is TSTypeInfo.Union union &&
+        union.FlattenedTypes.Any(member => member is TSTypeInfo.Symbol);
+
+    private static bool IsStringMappedSymbolUnion(TSTypeInfo source, TypeMapper typeMapper)
+    {
+        if (source is not TSTypeInfo.Union union ||
+            !union.FlattenedTypes.Any(member => member is TSTypeInfo.Symbol))
+            return false;
+        try
+        {
+            return IsStringMappedSymbolUnion(typeMapper.MapTypeInfoStrict(source), source);
+        }
+        catch
+        {
+            // Early method definition may not yet map a complex union. Only an
+            // established String mapping belongs to this override-widening family.
+            return false;
+        }
     }
 
     /// <summary>
@@ -465,7 +486,7 @@ public static class ParameterTypeResolver
                 .ToArray();
         }
 
-        WidenMethodParams(resolved, parameters, className, methodName, isStatic, typeMap);
+        WidenMethodParams(resolved, parameters, className, methodName, isStatic, typeMap, typeMapper);
         ForceRestParamsToListMarker(resolved, parameters);
         return resolved;
     }
@@ -474,7 +495,8 @@ public static class ParameterTypeResolver
     /// Widens a method parameter slot to <c>object</c> wherever a default needs to distinguish the
     /// <c>$Undefined</c> sentinel from JavaScript <c>null</c> — non-virtually for static methods, and
     /// hierarchy-consistently for (virtual) instance methods. Raw numeric/boolean parameter
-    /// writes also widen the complete override group. Other methods keep unboxed slots.
+    /// writes and String-mapped symbol unions also widen the complete override group.
+    /// Other methods keep their existing typed slots.
     /// </summary>
     private static void WidenMethodParams(
         Type[] resolved,
@@ -482,7 +504,8 @@ public static class ParameterTypeResolver
         string className,
         string methodName,
         bool isStatic,
-        TypeMap typeMap)
+        TypeMap typeMap,
+        TypeMapper typeMapper)
     {
         if (isStatic)
         {
@@ -495,7 +518,7 @@ public static class ParameterTypeResolver
 
         // Virtual: widen each raw or optional slot the override group needs as object, so every override
         // keeps an identical CLR signature (preserving vtable dispatch).
-        var mask = ComputeInstanceMethodWidenMask(className, methodName, resolved.Length, typeMap);
+        var mask = ComputeInstanceMethodWidenMask(className, methodName, resolved.Length, typeMap, typeMapper);
         for (int i = 0; i < resolved.Length; i++)
             if (mask[i])
                 resolved[i] = typeof(object);
@@ -507,13 +530,14 @@ public static class ParameterTypeResolver
     /// explicitly supplied <c>null</c>. The decision is
     /// <b>hierarchy-consistent</b>: a position is flagged when ANY member of the method's override
     /// group (its root declaration plus every class that overrides it) makes that position an
-    /// optional parameter or can assign a raw value into a numeric/boolean parameter.
+    /// optional parameter, can assign a raw value into a numeric/boolean parameter, or has a
+    /// String-mapped symbol union that needs an object slot.
     /// Flagging the whole group keeps every override's CLR signature
     /// identical, so a derived override that adds a default still lands in the base's vtable slot
     /// and a base-typed call dispatches to it correctly. (#737)
     /// </summary>
     private static bool[] ComputeInstanceMethodWidenMask(
-        string className, string methodName, int paramCount, TypeMap typeMap)
+        string className, string methodName, int paramCount, TypeMap typeMap, TypeMapper typeMapper)
     {
         var mask = new bool[paramCount];
         if (paramCount == 0)
@@ -539,7 +563,8 @@ public static class ParameterTypeResolver
             int count = Math.Min(paramCount, f.ParamTypes.Count);
             for (int i = 0; i < count; i++)
             {
-                mask[i] |= i >= minArity || typeMap.IsClassMethodParameterUndefinedReachable(f, i);
+                mask[i] |= i >= minArity || typeMap.IsClassMethodParameterUndefinedReachable(f, i) ||
+                    IsStringMappedSymbolUnion(f.ParamTypes[i], typeMapper);
             }
         }
 

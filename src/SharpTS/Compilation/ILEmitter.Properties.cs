@@ -103,6 +103,7 @@ public partial class ILEmitter
         // Catches direct uses inside the function body — the most common
         // pattern in test262's "applied to Arguments object" cluster.
         if (g.Name.Lexeme == "length"
+            && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != true
             && g.Object is Expr.Variable argsVar
             && argsVar.Name.Lexeme == "arguments"
             && _ctx.Runtime?.Arguments.Type != null
@@ -462,7 +463,7 @@ public partial class ILEmitter
     private bool TryEmitTypedRecordNumberGet(Expr.Get g, JsonSerializationShape.Record? recordShape,
         bool requireMaterializationGuard = false)
     {
-        if (_ctx.ProgramType is null || _ctx.Runtime is not { } runtime ||
+        if (g.Defaulted || _ctx.ProgramType is null || _ctx.Runtime is not { } runtime ||
             recordShape is null)
         {
             return false;
@@ -623,7 +624,7 @@ public partial class ILEmitter
             }
 
             string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(recordShape);
-            if (scalarIndex >= 0 &&
+            if (!g.Defaulted && scalarIndex >= 0 &&
                 _ctx.Runtime!.Records.TypedScalarTypes.TryGetValue(
                     fingerprint, out var jsonExactType) &&
                 _ctx.Runtime.Records.TypedScalarValueFields.TryGetValue(
@@ -1148,6 +1149,12 @@ public partial class ILEmitter
 
     protected override void EmitGetIndex(Expr.GetIndex gi)
     {
+        if (gi.Object is Expr.Super { Method: null })
+        {
+            EmitComputedSuperGet(gi);
+            return;
+        }
+
         if (TryEmitStableArrayDestructureGet(gi))
             return;
 
@@ -1168,6 +1175,8 @@ public partial class ILEmitter
         if (!gi.Optional
             && gi.Object is Expr.Variable staticIndexVar
             && gi.Index is Expr.Literal { Value: string staticIndexName }
+            && (staticIndexVar.Name.Lexeme is not ("Number" or "Math" or "ArrayBuffer" or "globalThis" or "Reflect")
+                || CanUseStaticTypeStrategy(staticIndexVar.Name.Lexeme))
             && _ctx.TypeEmitterRegistry?.GetStaticStrategy(staticIndexVar.Name.Lexeme) is { } staticIndexStrategy
             && staticIndexStrategy.TryEmitStaticPropertyGet(this, staticIndexName))
         {
@@ -1217,7 +1226,8 @@ public partial class ILEmitter
         }
 
         // globalThis[key] → GlobalThisGetProperty(key)
-        if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis")
+        if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis"
+            && CanUseStaticTypeStrategy(gtGetIdx.Name.Lexeme))
         {
             if (gi.Index is not Expr.Literal { Value: string key } || key == "eval")
                 _ctx.Runtime!.Deployment.Require("indirect eval");
@@ -2613,7 +2623,8 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stloc, savedReceiver);
             EmitExpression(value);
             bool nativeValue = (_stackType == StackType.Double && _ctx.Types.IsDouble(guestField.NativeType)) ||
-                (_stackType == StackType.Boolean && _ctx.Types.IsBoolean(guestField.NativeType));
+                (_stackType == StackType.Boolean && _ctx.Types.IsBoolean(guestField.NativeType)) ||
+                (_stackType == StackType.String && _ctx.Types.IsString(guestField.NativeType));
             bool nativeStore = nativeValue && _ctx.ClassRegistry.CanUseNativePrimitiveField(guestField);
             StackType valueStack = nativeValue ? _stackType : StackType.Unknown;
             if (!nativeValue) EnsureBoxed();
@@ -2634,7 +2645,8 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, savedReceiver);
             IL.Emit(OpCodes.Castclass, nativeStore ? nativeCast : guestCast);
             IL.Emit(OpCodes.Ldloc, savedValue);
-            if (nativeValue && !nativeStore) IL.Emit(OpCodes.Box, guestField.NativeType);
+            if (nativeValue && !nativeStore && guestField.NativeType.IsValueType)
+                IL.Emit(OpCodes.Box, guestField.NativeType);
             IL.Emit(OpCodes.Callvirt, nativeStore ? nativeSetter : guestSetter);
             IL.MarkLabel(done);
             IL.Emit(OpCodes.Ldloc, savedValue);
@@ -2763,9 +2775,6 @@ public partial class ILEmitter
         else if (_ctx.Types.IsBoolean(setterParamType)
                  && _ctx.TypeMap?.Get(value) is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN })
             resultStackType = StackType.Boolean;
-        else if (_ctx.Types.IsString(setterParamType)
-                 && _ctx.TypeMap?.Get(value) is TypeInfo.String)
-            resultStackType = StackType.String;
         else
             return false;
 
@@ -2774,7 +2783,6 @@ public partial class ILEmitter
         {
             case StackType.Double: EnsureDouble(); break;
             case StackType.Boolean: EnsureBoolean(); break;
-            case StackType.String: EnsureString(); break;
         }
 
         var valueTemp = IL.DeclareLocal(setterParamType);
@@ -2907,9 +2915,9 @@ public partial class ILEmitter
     /// Returns true if the expression statically resolves to globalThis.
     /// Handles Var("globalThis") and any chain of globalThis.globalThis.globalThis...
     /// </summary>
-    private static bool IsGlobalThisExpression(Expr expr) => expr switch
+    private bool IsGlobalThisExpression(Expr expr) => expr switch
     {
-        Expr.Variable v when v.Name.Lexeme == "globalThis" => true,
+        Expr.Variable v when v.Name.Lexeme == "globalThis" => CanUseStaticTypeStrategy(v.Name.Lexeme),
         Expr.Get g when g.Name.Lexeme == "globalThis" => IsGlobalThisExpression(g.Object),
         _ => false
     };

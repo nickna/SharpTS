@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Numerics;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
 
@@ -679,7 +680,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitBigIntArithmetic(TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt)
+    private void EmitBigIntArithmetic(TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt,
+        MethodInfo createException, ConstructorInfo rangeErrorCtor)
     {
         var bigIntType = _types.BigInteger;
 
@@ -730,11 +732,18 @@ public partial class RuntimeEmitter
                 m.Name == "op_Explicit" && m.ReturnType == _types.Int32 &&
                 m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == bigIntType);
 
+            var leftBig = il.DeclareLocal(bigIntType);
+            var rightBig = il.DeclareLocal(bigIntType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Unbox_Any, bigIntType);
+            il.Emit(OpCodes.Stloc, leftBig);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Unbox_Any, bigIntType);
-            // Convert exponent to int for BigInteger.Pow (value on stack, not address)
+            il.Emit(OpCodes.Stloc, rightBig);
+            EmitBigIntCountGuard(il, TokenType.STAR_STAR, leftBig, rightBig, createException, rangeErrorCtor);
+            il.Emit(OpCodes.Ldloc, leftBig);
+            il.Emit(OpCodes.Ldloc, rightBig);
+            // The count guard has resolved negative and oversized exponents.
             il.Emit(OpCodes.Call, explicitToIntMethod);
             il.Emit(OpCodes.Call, _types.GetMethod(bigIntType, "Pow", bigIntType, _types.Int32));
             il.Emit(OpCodes.Box, bigIntType);
@@ -1079,7 +1088,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitBigIntBitwise(TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt)
+    private void EmitBigIntBitwise(TypeBuilder typeBuilder, EmittedBigIntImplementation bigInt,
+        MethodInfo createException, ConstructorInfo rangeErrorCtor)
     {
         var bigIntType = _types.BigInteger;
 
@@ -1143,13 +1153,17 @@ public partial class RuntimeEmitter
             bigInt.LeftShift = method;
 
             var il = method.GetILGenerator();
-            // Stack after setup: [value, shiftAmount]
-            // Need: [value, (int)shiftAmount] for op_LeftShift
+            var leftBig = il.DeclareLocal(bigIntType);
+            var rightBig = il.DeclareLocal(bigIntType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Unbox_Any, bigIntType);
+            il.Emit(OpCodes.Stloc, leftBig);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Unbox_Any, bigIntType);
-            // Convert shift count to int (value on stack)
+            il.Emit(OpCodes.Stloc, rightBig);
+            EmitBigIntCountGuard(il, TokenType.LESS_LESS, leftBig, rightBig, createException, rangeErrorCtor);
+            il.Emit(OpCodes.Ldloc, leftBig);
+            il.Emit(OpCodes.Ldloc, rightBig);
             il.Emit(OpCodes.Call, explicitToInt);
             il.Emit(OpCodes.Call, _types.GetMethod(bigIntType, "op_LeftShift", bigIntType, _types.Int32));
             il.Emit(OpCodes.Box, bigIntType);
@@ -1167,11 +1181,17 @@ public partial class RuntimeEmitter
             bigInt.RightShift = method;
 
             var il = method.GetILGenerator();
+            var leftBig = il.DeclareLocal(bigIntType);
+            var rightBig = il.DeclareLocal(bigIntType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Unbox_Any, bigIntType);
+            il.Emit(OpCodes.Stloc, leftBig);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Unbox_Any, bigIntType);
-            // Convert shift count to int (value on stack)
+            il.Emit(OpCodes.Stloc, rightBig);
+            EmitBigIntCountGuard(il, TokenType.GREATER_GREATER, leftBig, rightBig, createException, rangeErrorCtor);
+            il.Emit(OpCodes.Ldloc, leftBig);
+            il.Emit(OpCodes.Ldloc, rightBig);
             il.Emit(OpCodes.Call, explicitToInt);
             il.Emit(OpCodes.Call, _types.GetMethod(bigIntType, "op_RightShift", bigIntType, _types.Int32));
             il.Emit(OpCodes.Box, bigIntType);

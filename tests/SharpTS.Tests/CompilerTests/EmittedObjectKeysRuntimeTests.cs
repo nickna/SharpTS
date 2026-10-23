@@ -48,7 +48,7 @@ public sealed class EmittedObjectKeysRuntimeTests
         var first = new EmittedRuntime(); var second = new EmittedRuntime();
         Assert.NotSame(first.ObjectKeys, second.ObjectKeys);
         Assert.False(first.ObjectKeys.IsComplete); Assert.False(second.ObjectKeys.IsComplete);
-        Assert.Equal(6, Handles(typeof(EmittedObjectKeysRuntime)).Length);
+        Assert.Equal(11, Handles(typeof(EmittedObjectKeysRuntime)).Length);
         Assert.Null(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.ObjectKeys))!.SetMethod);
     }
 
@@ -61,7 +61,10 @@ public sealed class EmittedObjectKeysRuntimeTests
         var shared = new Dictionary<string, object?> { ["persist"] = 1d };
         foreach (bool optional in new[] { false, true, false, true })
         {
-            var builder = NewAssembly(); var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect(optional));
+            var builder = NewAssembly(); var features = Detect(optional);
+            // This probe invokes the canonical descriptor APIs directly.
+            features.UsesObjectDefinitionRuntime = true;
+            var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             Assert.True(owners.Add(runtime.ObjectKeys)); AssertFrozen(runtime.ObjectKeys);
             foreach (var property in Handles(typeof(EmittedObjectKeysRuntime)))
                 Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.ObjectKeys)).Module.Assembly);
@@ -114,7 +117,7 @@ public sealed class EmittedObjectKeysRuntimeTests
         var probe = runtime.RuntimeClass.Type.DefineNestedType("OwnNamesPromiseProbe", TypeAttributes.NestedPublic);
         var resolve = SimpleReceiver(probe, "SuppliedResolve"); var reject = SimpleReceiver(probe, "SuppliedReject");
         var promise = supplied ? new EmittedPromiseRuntime { ResolveCallbackType = resolve, RejectCallbackType = reject } : null;
-        var owner = new EmittedObjectKeysRuntime { Normalize = runtime.ObjectKeys.Normalize };
+        var owner = new EmittedObjectKeysRuntime { Normalize = runtime.ObjectKeys.Normalize, ConstructorKeys = runtime.ObjectKeys.ConstructorKeys };
         var helper = typeof(RuntimeEmitter).GetMethod("EmitGetOwnPropertyNames", Members)!;
         var inputs = MakeInputs(helper.GetParameters()[2].ParameterType, runtime, new Dictionary<string, object?> { ["Promise"] = promise });
         helper.Invoke(emitter, [probe, owner, inputs]); probe.CreateType();
@@ -142,7 +145,7 @@ public sealed class EmittedObjectKeysRuntimeTests
         foreach (var name in FormerHandles) Assert.Null(typeof(EmittedRuntime).GetProperty(name));
     }
 
-    private static readonly string[] ScopedMethods = ["EmitGetKeys", "EmitNormalizeOwnPropertyKeys", "EmitGetOwnPropertyNames", "EmitGetOwnPropertySymbols", "DeclareProxyOwnKeysHelpers", "EmitProxyOwnKeysHelperBodies", "EmitProxyOwnKeysCheck"];
+    private static readonly string[] ScopedMethods = ["EmitGetKeys", "EmitNormalizeOwnPropertyKeys", "EmitGetOwnPropertyNames", "EmitGetOwnPropertySymbols", "DeclareProxyOwnKeysHelpers", "EmitProxyOwnKeysHelperBodies", "EmitProxyOwnKeysCheck", "EmitClassStaticPropertyAttribute", "EmitClassConstructorKeys"];
     private static readonly string[] FormerHandles = ["GetKeys", "NormalizeOwnPropertyKeys", "GetOwnPropertyNames", "GetOrdinaryOwnPropertyKeys", "CreateProxyOwnKeysList", "GetOwnPropertySymbols"];
     private static object MakeInputs(Type type, EmittedRuntime runtime, IReadOnlyDictionary<string, object?> overrides)
     {
@@ -173,7 +176,9 @@ public sealed class EmittedObjectKeysRuntimeTests
     {
         if (property.PropertyType == typeof(Type)) return typeof(object);
         var type = NewAssembly().DefineDynamicModule("main").DefineType("Declaration");
-        return property.PropertyType == typeof(FieldBuilder) ? type.DefineField("Value", typeof(object), FieldAttributes.Public)
+        return property.PropertyType == typeof(TypeBuilder) ? type
+            : property.PropertyType == typeof(ConstructorBuilder) ? type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes)
+            : property.PropertyType == typeof(FieldBuilder) ? type.DefineField("Value", typeof(object), FieldAttributes.Public)
             : type.DefineMethod("Invoke", MethodAttributes.Public, typeof(void), Type.EmptyTypes);
     }
     private static void MarkBodies(object owner)

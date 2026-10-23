@@ -163,9 +163,9 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
             case State.SuspendedStart:
                 if (kind == GeneratorResumeKind.Return)
                 {
-                    // return() before the body starts closes it without running the body.
-                    _state = State.Completed;
-                    return Task.FromResult<object?>(new SharpTSIteratorResult(value, done: true));
+                    // Reserve the request before PromiseResolve can read a guest
+                    // getter and reentrantly enqueue next(), without starting the body.
+                    return StartCompletedReturn(value);
                 }
                 if (kind == GeneratorResumeKind.Throw)
                 {
@@ -302,6 +302,27 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
 
         _interpreter.SetEnvironment(genEnv);
         _interpreter.CurrentAsyncGenerator = this;
+        if (next.Kind == GeneratorResumeKind.Return)
+        {
+            // This is request adoption, not execution of the generator body.
+            // A getter/then callback may enqueue next() behind this request.
+            _running = false;
+            try
+            {
+                object? returned = await _interpreter.AwaitAsyncGeneratorReturnValue(next.Value);
+                return new GeneratorResume(GeneratorResumeKind.Return, returned);
+            }
+            catch (Exception error)
+            {
+                // A rejected return argument is a throw at the suspended yield;
+                // an enclosing catch may handle it and continue yielding.
+                return new GeneratorResume(GeneratorResumeKind.Throw, _interpreter.TranslateException(error));
+            }
+            finally
+            {
+                _running = true;
+            }
+        }
         return new GeneratorResume(next.Kind, next.Value);
     }
 
@@ -419,32 +440,61 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
                 req.Completion.SetResult(new SharpTSIteratorResult(completionValue, done: true));
         }
 
-        while (_queue.Count > 0)
-            SettleCompletedInto(_queue.Dequeue());
+        _ = DrainCompletedRequestsAsync();
     }
 
     /// <summary>Resolves a next/return/throw issued after the generator has finished (§27.6.1.2).</summary>
-    private static Task<object?> SettleCompleted(GeneratorResumeKind kind, object? value) => kind switch
+    private Task<object?> SettleCompleted(GeneratorResumeKind kind, object? value) => kind switch
     {
         GeneratorResumeKind.Throw => Task.FromException<object?>(ThrowException.FromResult(value)),
-        GeneratorResumeKind.Return => Task.FromResult<object?>(new SharpTSIteratorResult(value, done: true)),
+        GeneratorResumeKind.Return => StartCompletedReturn(value),
         _ => Task.FromResult<object?>(new SharpTSIteratorResult(SharpTSUndefined.Instance, done: true)),
     };
 
-    private static void SettleCompletedInto(Request req)
+    private Task<object?> StartCompletedReturn(object? value)
     {
-        switch (req.Kind)
+        var request = new Request(GeneratorResumeKind.Return, value);
+        _currentRequest = request;
+        _state = State.Executing;
+        _ = CompleteReturnAsync(value);
+        return request.Completion.Task;
+    }
+
+    private async Task CompleteReturnAsync(object? value)
+    {
+        object? returned = SharpTSUndefined.Instance;
+        Exception? failure = null;
+        try
         {
-            case GeneratorResumeKind.Throw:
-                req.Completion.SetException(ThrowException.FromResult(req.Value));
-                break;
-            case GeneratorResumeKind.Return:
-                req.Completion.SetResult(new SharpTSIteratorResult(req.Value, done: true));
-                break;
-            default:
-                req.Completion.SetResult(new SharpTSIteratorResult(SharpTSUndefined.Instance, done: true));
-                break;
+            returned = await _interpreter.AwaitAsyncGeneratorReturnValue(value);
         }
+        catch (Exception error) { failure = error; }
+        CompleteBody(returned, failure);
+    }
+
+    private async Task DrainCompletedRequestsAsync()
+    {
+        while (_queue.Count > 0)
+        {
+            // Keep later/reentrant requests queued until this completed return
+            // finishes adopting, preserving the existing request order.
+            _state = State.Executing;
+            Request request = _queue.Dequeue();
+            try
+            {
+                if (request.Kind == GeneratorResumeKind.Throw)
+                    request.Completion.SetException(ThrowException.FromResult(request.Value));
+                else
+                {
+                    object? value = request.Kind == GeneratorResumeKind.Return
+                        ? await _interpreter.AwaitAsyncGeneratorReturnValue(request.Value)
+                        : SharpTSUndefined.Instance;
+                    request.Completion.SetResult(new SharpTSIteratorResult(value, done: true));
+                }
+            }
+            catch (Exception error) { request.Completion.SetException(error); }
+        }
+        _state = State.Completed;
     }
 
     private static (bool Done, object? Value) ReadIteratorResult(object? result) => result switch

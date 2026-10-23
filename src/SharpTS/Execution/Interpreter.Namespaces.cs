@@ -56,6 +56,17 @@ public partial class Interpreter
 
         using (PushScope(namespaceEnv))
         {
+            var loopNames = InterpreterVarDeclarations.CollectLoopHeads(ns.Members)
+                .Select(name => name.Lexeme).ToHashSet(StringComparer.Ordinal);
+            // Do not let a precreated var slot suppress initialization of a
+            // same-name function; leave unrelated namespace functions in place.
+            HoistFunctionDeclarations(ns.Members.Where(member => member switch
+            {
+                Stmt.Function function => loopNames.Contains(function.Name.Lexeme),
+                Stmt.Export { Declaration: Stmt.Function function } => loopNames.Contains(function.Name.Lexeme),
+                _ => false
+            }));
+            HoistLocalLoopVarDeclarations(ns.Members);
             foreach (var member in ns.Members)
             {
                 var result = ExecuteNamespaceMember(member, nsObj);

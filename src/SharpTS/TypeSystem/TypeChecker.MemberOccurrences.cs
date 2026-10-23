@@ -90,6 +90,7 @@ public partial class TypeChecker
             switch (callee)
             {
                 case Expr.Grouping grouping: callee = grouping.Expression; continue;
+                case Expr.Instantiation instantiation: callee = instantiation.Expression; continue;
                 case Expr.NonNullAssertion assertion: callee = assertion.Expression; continue;
                 case Expr.TypeAssertion assertion: callee = assertion.Expression; continue;
             }
@@ -132,6 +133,7 @@ public partial class TypeChecker
             switch (callee)
             {
                 case Expr.Grouping grouping: callee = grouping.Expression; continue;
+                case Expr.Instantiation instantiation: callee = instantiation.Expression; continue;
                 case Expr.NonNullAssertion assertion: callee = assertion.Expression; continue;
                 case Expr.TypeAssertion assertion: callee = assertion.Expression; continue;
             }

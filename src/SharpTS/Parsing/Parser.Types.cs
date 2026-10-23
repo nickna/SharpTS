@@ -1639,6 +1639,71 @@ public partial class Parser
         }
     }
 
+    /// <summary>Parses call-less type arguments without committing a relational-expression alternative.</summary>
+    private List<string>? TryParseTypeArgumentsForInstantiation(out List<TypeNode?>? argNodes)
+    {
+        argNodes = null;
+        if (!Check(TokenType.LESS)) return null;
+        var saved = SaveCursor();
+        try
+        {
+            Advance();
+            if (!IsTypeStart()) { RestoreCursor(saved); return null; }
+            List<string> args = [ParseTypeAnnotation()];
+            List<TypeNode?> nodes = [TakeTypeNode()];
+            while (Match(TokenType.COMMA))
+            {
+                args.Add(ParseTypeAnnotation());
+                nodes.Add(TakeTypeNode());
+            }
+            // Unlike a type-context closer, the final expression closer must be exactly >.
+            // An inner type may split >> and leave this >, but >=/shifts here are operators.
+            if (!Check(TokenType.GREATER)) { RestoreCursor(saved); return null; }
+            Advance();
+            if (!CanFollowInstantiationTypeArguments()) { RestoreCursor(saved); return null; }
+            argNodes = nodes;
+            return args;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch
+        {
+            RestoreCursor(saved);
+            return null;
+        }
+    }
+
+    private bool CanFollowInstantiationTypeArguments()
+    {
+        TokenType type = Peek().Type;
+        if (type is TokenType.LEFT_PAREN or TokenType.TEMPLATE_FULL or TokenType.TEMPLATE_HEAD)
+            return true;
+        // TypeScript's scanner exposes a single > before a binary re-scan. Our lexer
+        // combines > operators, so every greater-family spelling is rejected here too.
+        if (type is TokenType.LESS or TokenType.GREATER or TokenType.GREATER_EQUAL
+            or TokenType.GREATER_GREATER or TokenType.GREATER_GREATER_EQUAL
+            or TokenType.GREATER_GREATER_GREATER or TokenType.GREATER_GREATER_GREATER_EQUAL
+            or TokenType.PLUS or TokenType.MINUS)
+            return false;
+        if (HasLineTerminatorBeforeCurrent()) return true;
+        if (type is TokenType.STAR or TokenType.SLASH or TokenType.PERCENT or TokenType.STAR_STAR
+            or TokenType.LESS_EQUAL or TokenType.IN or TokenType.INSTANCEOF
+            or TokenType.EQUAL_EQUAL or TokenType.BANG_EQUAL or TokenType.EQUAL_EQUAL_EQUAL or TokenType.BANG_EQUAL_EQUAL
+            or TokenType.AND_AND or TokenType.OR_OR or TokenType.QUESTION_QUESTION
+            or TokenType.AMPERSAND or TokenType.PIPE or TokenType.CARET
+            or TokenType.LESS_LESS
+            or TokenType.AS or TokenType.SATISFIES)
+            return true;
+        // Same-line expression starts belong to the relational alternative, not an instantiation.
+        return !IsContextualKeyword(type) && type is not
+            (TokenType.IDENTIFIER or TokenType.PRIVATE_IDENTIFIER or TokenType.NUMBER or TokenType.BIGINT_LITERAL
+            or TokenType.STRING or TokenType.REGEX or TokenType.TRUE or TokenType.FALSE or TokenType.NULL
+            or TokenType.UNDEFINED or TokenType.THIS or TokenType.SUPER or TokenType.IMPORT or TokenType.NEW
+            or TokenType.FUNCTION or TokenType.CLASS or TokenType.SYMBOL or TokenType.BIGINT
+            or TokenType.LEFT_BRACKET or TokenType.LEFT_BRACE or TokenType.BANG or TokenType.TILDE
+            or TokenType.DELETE or TokenType.TYPEOF or TokenType.VOID or TokenType.PLUS_PLUS or TokenType.MINUS_MINUS
+            or TokenType.AWAIT or TokenType.YIELD or TokenType.AT);
+    }
+
     // ============== TEMPLATE LITERAL TYPE PARSING ==============
 
     /// <summary>

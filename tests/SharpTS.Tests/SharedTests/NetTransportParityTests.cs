@@ -322,6 +322,9 @@ public class NetTransportParityTests
     [Theory, ModeData]
     public void Server_Drop_FiresPastMaxConnections(ExecutionMode mode)
     {
+        // The server must own c1 before the excess connection is attempted.
+        // The existing harness timeout owns failure cleanup; do not race acceptance
+        // with a short timer that destroys c2 and manufactures its close event.
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = """
@@ -338,14 +341,13 @@ public class NetTransportParityTests
                     const port = server.address().port;
                     const c1 = net.createConnection({ port: port, host: '127.0.0.1' });
                     c1.on('error', () => {});
-                    c1.on('connect', () => {
+                    server.once('connection', () => {
                         const c2 = net.createConnection({ port: port, host: '127.0.0.1' });
                         c2.on('error', () => {});
                         c2.on('close', () => {
                             console.log('c2 closed');
                             c1.end();
                         });
-                        setTimeout(() => { c2.destroy(); }, 500);
                     });
                     c1.on('close', () => { server.close(); });
                 });

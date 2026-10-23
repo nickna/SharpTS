@@ -5,6 +5,20 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitCanonicalStaticStorageAttribute(ModuleBuilder module, EmittedClassInitializationRuntime initialization)
+    {
+        var type = module.DefineType("$CanonicalStaticStorage",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, typeof(Attribute));
+        var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var il = constructor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(Attribute).GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic,
+            null, Type.EmptyTypes, null)!);
+        il.Emit(OpCodes.Ret);
+        initialization.CanonicalStaticStorageAttributeConstructor = constructor;
+        type.CreateType();
+    }
+
     private void EmitRunClassDefinition(TypeBuilder typeBuilder, EmittedClassInitializationRuntime initialization,
         Type userClassInterface)
     {

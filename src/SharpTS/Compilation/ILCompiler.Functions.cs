@@ -76,6 +76,8 @@ public partial class ILCompiler
         for (int i = 0; i < method.Parameters.Count; i++)
         {
             string name = method.Parameters[i].Name.Lexeme;
+            if (ctx.PublishedCapturedParameterNames?.Contains(name) == true)
+                continue;
             if (!fields.TryGetValue(name, out var field))
                 continue;
 
@@ -384,6 +386,17 @@ public partial class ILCompiler
         if (capturedLocals.Count == 0)
             return;
 
+        // Declaration-owned lexical cells already provide the authoritative storage.
+        // A redundant name-keyed field would mask an outer binding after the block exits.
+        var cellOnlyNames = _closures.Analyzer.GetCellOnlyCapturedLocalNames(funcStmt);
+        if (cellOnlyNames.Count > 0)
+        {
+            capturedLocals = new HashSet<string>(capturedLocals);
+            capturedLocals.ExceptWith(cellOnlyNames);
+            if (capturedLocals.Count == 0)
+                return;
+        }
+
         // Per-iteration `for (let/const …)` loop bindings must NOT share the function
         // display class (a single instance per call): each iteration gets its own
         // binding (ECMA-262 13.7.4), so closures created in different iterations must
@@ -601,7 +614,7 @@ public partial class ILCompiler
             for (int i = 0; i < funcStmt.Parameters.Count && i < currentFuncType.ParamTypes.Count; i++)
             {
                 string parameterName = funcStmt.Parameters[i].Name.Lexeme;
-                if (assignedParameters.Contains(parameterName) ||
+                if (ctx.HasLoopBodyBindingAccess(parameterName) || assignedParameters.Contains(parameterName) ||
                     !TryGetCompactRecordShape(currentFuncType.ParamTypes[i], out var parameterShape))
                     continue;
 
@@ -622,14 +635,15 @@ public partial class ILCompiler
             }
         }
 
-        // Initialize captured parameters into the function display class. Runs
-        // AFTER EmitDefaultParameters (which writes defaults back via Starg) so
-        // closures see the defaulted value, not the missing-arg padding.
+        // The default prologue already published initialized captures. Retain
+        // the fallback for other entries without overwriting live closure writes.
         if (displayLocal != null && capturedLocals != null && _closures.FunctionDisplayClassFields.TryGetValue(qualifiedFunctionName, out var funcDCFieldMap))
         {
             for (int i = 0; i < funcStmt.Parameters.Count; i++)
             {
                 var paramName = funcStmt.Parameters[i].Name.Lexeme;
+                if (ctx.PublishedCapturedParameterNames?.Contains(paramName) == true)
+                    continue;
                 if (capturedLocals.Contains(paramName) && funcDCFieldMap.TryGetValue(paramName, out var field))
                 {
                     il.Emit(OpCodes.Ldloc, displayLocal);
@@ -873,7 +887,17 @@ public partial class ILCompiler
                 publishedArgsLeadingSkip);
         }
 
-        emitter.EmitDefaultParameters(parameters, argumentOffset, paramTypes);
+        emitter.EmitDefaultParameters(parameters, argumentOffset, paramTypes, body,
+            publishCapturedParameters: true);
+        ctx.InitializedParameterNames = parameters.Select(parameter => parameter.Name.Lexeme)
+            .Concat(body is null ? [] : body.OfType<Stmt.Sequence>()
+                .Where(sequence => sequence.ParameterName != null)
+                .SelectMany(sequence => LexicalDeclarationBindings.Collect(sequence.Statements))
+                .Select(name => name.Lexeme))
+            .ToHashSet(StringComparer.Ordinal);
+        // Body vars exist before their source initializer executes. Parameter
+        // copies keep separate storage from closures created by defaults.
+        emitter.InitializeFunctionBodyVarBindings(body);
     }
 
     /// <summary>
@@ -1431,6 +1455,24 @@ public partial class ILCompiler
     /// sentinel before executing any statement. CLR fields otherwise start as
     /// null, which is observably different for reads before the declaration.
     /// </summary>
+    // Metadata-only declarations: never inserted into the checked AST. Existing
+    // hoisted functions keep their own initialization/lookup contract.
+    private static IEnumerable<Stmt.Var> GetVarLoopHeadDeclarations(IEnumerable<Stmt> statements)
+    {
+        static IEnumerable<string> FunctionNames(Stmt statement) => statement switch
+        {
+            Stmt.Function function => [function.Name.Lexeme],
+            Stmt.Sequence sequence => sequence.Statements.SelectMany(FunctionNames),
+            Stmt.Export { Declaration: { } declaration } => FunctionNames(declaration),
+            _ => []
+        };
+        var body = statements.ToList();
+        var functions = body.SelectMany(FunctionNames).ToHashSet(StringComparer.Ordinal);
+        return SharpTS.Execution.InterpreterVarDeclarations.CollectLoopHeads(body)
+            .Where(name => !functions.Contains(name.Lexeme))
+            .Select(name => new Stmt.Var(name, null, null, IsVar: true));
+    }
+
     private void EmitInitializeHoistedVars(
         ILGenerator il,
         CompilationContext ctx,
@@ -1455,12 +1497,17 @@ public partial class ILCompiler
             }
         }
 
-        foreach (var variable in statements.SelectMany(HoistedVars).DistinctBy(v => v.Name.Lexeme))
+        var body = statements.ToList();
+        foreach (var variable in body.SelectMany(HoistedVars)
+            .Concat(GetVarLoopHeadDeclarations(body)).DistinctBy(v => v.Name.Lexeme))
         {
-            if (ctx.EntryPointDisplayClassLocal != null &&
-                ctx.EntryPointDisplayClassFields?.TryGetValue(variable.Name.Lexeme, out var displayField) == true)
+            if (ctx.EntryPointDisplayClassFields?.TryGetValue(variable.Name.Lexeme, out var displayField) == true
+                && (ctx.EntryPointDisplayClassLocal != null || ctx.EntryPointDisplayClassStaticField != null))
             {
-                il.Emit(OpCodes.Ldloc, ctx.EntryPointDisplayClassLocal);
+                if (ctx.EntryPointDisplayClassLocal != null)
+                    il.Emit(OpCodes.Ldloc, ctx.EntryPointDisplayClassLocal);
+                else
+                    il.Emit(OpCodes.Ldsfld, ctx.EntryPointDisplayClassStaticField!);
                 il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
                 il.Emit(OpCodes.Stfld, displayField);
             }

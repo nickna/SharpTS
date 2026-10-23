@@ -17,15 +17,16 @@ internal static class LexicalEnvironmentCellAccess
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, shadow);
-                il.Emit(OpCodes.Ldfld, ctx.Types.StrongBoxOfObjectValueField);
+                il.Emit(OpCodes.Ldfld, LexicalCellStorage.ForBinding(ctx, name).ValueField);
             }
             else il.Emit(OpCodes.Ldloc, ctx.Locals.GetLocal(name)!);
         }
         else
         {
             EmitOwnReference(il, ctx, name);
-            il.Emit(OpCodes.Castclass, ctx.Types.StrongBoxOfObject);
-            il.Emit(OpCodes.Ldfld, ctx.Types.StrongBoxOfObjectValueField);
+            var storage = LexicalCellStorage.ForBinding(ctx, name);
+            il.Emit(OpCodes.Castclass, storage.ReferenceType);
+            il.Emit(OpCodes.Ldfld, storage.ValueField);
         }
         string sourceName = ctx.LoopBodyCellDeclarations.GetValueOrDefault(name)?.Lexeme
             ?? ctx.LoopBodyCellShadows.GetValueOrDefault(name)?.Lexeme ?? name;
@@ -47,7 +48,7 @@ internal static class LexicalEnvironmentCellAccess
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, shadow);
                 il.Emit(OpCodes.Ldloc, value);
-                il.Emit(OpCodes.Stfld, ctx.Types.StrongBoxOfObjectValueField);
+                il.Emit(OpCodes.Stfld, LexicalCellStorage.ForBinding(ctx, name).ValueField);
             }
             else
             {
@@ -58,9 +59,10 @@ internal static class LexicalEnvironmentCellAccess
         else
         {
             EmitOwnReference(il, ctx, name);
-            il.Emit(OpCodes.Castclass, ctx.Types.StrongBoxOfObject);
+            var storage = LexicalCellStorage.ForBinding(ctx, name);
+            il.Emit(OpCodes.Castclass, storage.ReferenceType);
             il.Emit(OpCodes.Ldloc, value);
-            il.Emit(OpCodes.Stfld, ctx.Types.StrongBoxOfObjectValueField);
+            il.Emit(OpCodes.Stfld, storage.ValueField);
         }
         return true;
     }

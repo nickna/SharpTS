@@ -101,9 +101,6 @@ public sealed class FunctionPrototypeMutationTests
 
     public static IEnumerable<object[]> ParityCases()
         => Cases().SelectMany(row => new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
-            // Compiled ordinary lookup after mutation is tracked separately in #2359.
-            .Where(mode => mode == ExecutionMode.Interpreted || (string)row[0] is not
-                ("ordinary-function-forms" or "inherited-data-getter-and-symbol" or "deleted-metadata"))
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ParityCases))]

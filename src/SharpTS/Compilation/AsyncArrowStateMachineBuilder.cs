@@ -40,11 +40,14 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
     // Self-boxed field for sharing this state machine with nested async arrows
     public FieldBuilder? SelfBoxedField { get; private set; }
 
-    // Dynamic `this` field for a standalone async FUNCTION EXPRESSION (HasOwnThis).
+    // Dynamic `this` field for an async function expression or lowered declaration (HasOwnThis).
     // Unlike a true arrow (lexical this), its `this` is bound at call time via
     // fn.call/apply/bind, so it lives in its own field populated by the stub from
     // the thread-local — not in a lexical capture field. Null for true arrows.
     public FieldBuilder? OwnThisField { get; private set; }
+    internal string? PrivateSelfName => Arrow.Name?.Lexeme;
+    internal FieldBuilder? PrivateSelfField { get; private set; }
+    internal bool PrivateSelfHasOwnShadow { get; }
 
     internal AsyncArrowStorageAccess? LexicalThisStorage { get; set; }
 
@@ -96,6 +99,10 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
     // read/write through `this.<>__functionDC.field`. Kept on the builder rather than the context so it
     // never collides with the OuterFunctionDCField relay's use of ctx.FunctionDisplayClassFields.
     public Dictionary<string, FieldBuilder> FunctionDCFieldMap { get; } = [];
+
+    // Lowered declarations can capture a lexical binding before its initializer.
+    // These compiler-only paths retain its exact owner's authoritative DC field.
+    internal Dictionary<string, AsyncArrowStorageAccess> CapturedLiveStorage { get; } = [];
 
     // These are references to existing authoritative display classes, rather than value copies.
     internal Dictionary<string, (FieldBuilder Holder, FieldBuilder Field)> DebugCapturedBindings { get; } = [];
@@ -162,7 +169,12 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         _moduleBuilder = moduleBuilder;
         _types = types;
         Arrow = arrow;
-        Captures = captures;
+        PrivateSelfHasOwnShadow = PrivateSelfName is { } privateName
+            && LocalBindingCollector.Collect(arrow.Parameters, arrow.BlockBody ?? [], selfName: null)
+                .Contains(privateName);
+        Captures = new HashSet<string>(captures);
+        if (PrivateSelfName is { } selfName)
+            Captures.Remove(selfName);
         _counter = counter;
         BuilderType = _types.AsyncTaskMethodBuilderOfObject;
         AwaiterType = _types.TaskAwaiterOfObject;
@@ -279,7 +291,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         List<Stmt.Parameter> arrowParameters,
         HashSet<string> hoistedLocals,
         IReadOnlyDictionary<string, FieldBuilder>? liveCaptures = null,
-        IReadOnlySet<string>? debugStaticCaptures = null,
+        IReadOnlySet<string>? staticCaptures = null,
         IReadOnlyDictionary<string, Token>? cellCaptures = null)
     {
         IsStandalone = true;
@@ -314,18 +326,6 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
 
         DefineOwnVariableFields(arrowParameters, hoistedLocals);
 
-        // Async function expressions bind `this` dynamically at call time, so give
-        // them a dedicated field the stub fills from the thread-local receiver
-        // (see DefineStubMethod). True arrows capture `this` lexically instead.
-        if (Arrow.HasOwnThis)
-        {
-            OwnThisField = _stateMachineType.DefineField(
-                "<>4__this",
-                _types.Object,
-                FieldAttributes.Public
-            );
-        }
-
         // Capture slots carry a live display-class reference where one exists;
         // remaining values keep the existing snapshot path.
         foreach (var captureName in Captures)
@@ -334,13 +334,28 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
             if (ParameterFields.ContainsKey(captureName) || LocalFields.ContainsKey(captureName))
                 continue;
 
+            // MoveNext resolves module bindings through their shared static storage.
+            // Capturing the environment must not read a lexical binding before its initializer.
+            if (staticCaptures?.Contains(captureName) == true
+                && cellCaptures?.ContainsKey(captureName) != true
+                && liveCaptures?.ContainsKey(captureName) != true)
+            {
+                // Preserve hidden debug scaffolding without reading the module binding
+                // or adding it to the function's creation-time capture payload.
+                if (DebugSymbols is not null)
+                    _stateMachineType.DefineField(DebugScaffoldingName($"<>captured_{captureName}"),
+                        _types.Object, FieldAttributes.Public);
+                continue;
+            }
+
             Type captureType = _types.Object;
             if (cellCaptures?.TryGetValue(captureName, out var declaration) == true)
             {
                 // Record only fields actually created after own parameters and
                 // locals were excluded; their same-spelled bindings stay own.
                 StandaloneCellCaptureDeclarations[captureName] = declaration;
-                captureType = _types.StrongBoxOfObject;
+                captureType = DebugLexicalCellStorages?.GetValueOrDefault(declaration)?.ReferenceType
+                    ?? _types.StrongBoxOfObject;
             }
             else if (liveCaptures?.TryGetValue(captureName, out var liveField) == true)
             {
@@ -350,13 +365,17 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
             string fieldName = $"<>captured_{captureName}";
             if (DebugSymbols is not null)
             {
-                if (StandaloneLiveCaptureFields.TryGetValue(captureName, out var sourceField))
+                if (StandaloneCellCaptureDeclarations.TryGetValue(captureName, out var sourceDeclaration)
+                    && DebugLexicalCellStorages?.GetValueOrDefault(sourceDeclaration) is { DebugOwner: not null } cellStorage)
+                {
+                    fieldName = DebugDisplayClassName();
+                    DebugSymbols.ImportCapturedField((FieldBuilder)cellStorage.ValueField);
+                }
+                else if (StandaloneLiveCaptureFields.TryGetValue(captureName, out var sourceField))
                 {
                     fieldName = DebugDisplayClassName();
                     DebugSymbols.ImportCapturedField(sourceField);
                 }
-                else if (debugStaticCaptures?.Contains(captureName) == true)
-                    fieldName = DebugScaffoldingName(fieldName);
                 else
                     fieldName = captureName == "this" ? "<>4__this" : DebugSymbols.AddCapturedValueField(captureName);
             }
@@ -407,6 +426,19 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
     /// </summary>
     private void DefineOwnVariableFields(List<Stmt.Parameter> parameters, HashSet<string> locals)
     {
+        if (PrivateSelfName != null)
+            PrivateSelfField = _stateMachineType.DefineField(
+                DebugScaffoldingName("<>__functionSelf"), _types.Object, FieldAttributes.Public);
+        // Function expressions and lowered declarations bind `this` at call time,
+        // including when an enclosing async state machine owns their captures.
+        if (Arrow.HasOwnThis)
+        {
+            OwnThisField = _stateMachineType.DefineField(
+                "<>4__this",
+                _types.Object,
+                FieldAttributes.Public
+            );
+        }
         if (Arrow.HasOwnThis && SharpTS.Parsing.Visitors.ArgumentsRefScanner.Contains(
                 Arrow.Parameters, Arrow.BlockBody, Arrow.ExpressionBody, treatEvalReferenceAsUse: true))
             locals = [.. locals, "arguments"];
@@ -439,15 +471,16 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         // the unpack loop below.
         var captureOrder = StandaloneCaptureFields.Keys.OrderBy(k => k, System.StringComparer.Ordinal).ToList();
         bool hasStandaloneCaptures = IsStandalone && captureOrder.Count > 0;
-        if (hasStandaloneCaptures)
+        if (hasStandaloneCaptures || (IsStandalone && PrivateSelfField != null))
         {
-            paramTypes.Add(_types.Object); // object[] of captured values (the single target slot)
+            paramTypes.Add(_types.Object); // Capture array or named-self envelope: one target slot.
         }
 
-        // Add arrow parameters
-        foreach (var _ in ParameterOrder)
+        // Indirect invocation recognizes a trailing List<object> slot as rest
+        // and packs the caller's remaining arguments before entering the stub.
+        foreach (var parameter in Arrow.Parameters)
         {
-            paramTypes.Add(_types.Object); // All arrow params are object
+            paramTypes.Add(parameter.IsRest ? _types.ListOfObject : _types.Object);
         }
 
         StubMethod = programType.DefineMethod(
@@ -464,12 +497,37 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Initobj, _stateMachineType);
 
+        // Named expressions carry [original target, wrapping function]. The self
+        // binding exists before defaults and never resolves in the creating scope.
+        LocalBuilder? originalTarget = null;
+        if (PrivateSelfField != null)
+        {
+            originalTarget = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.ObjectArray);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Stloc, originalTarget);
+            il.Emit(OpCodes.Ldloca, smLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.ObjectArray);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Stfld, PrivateSelfField);
+        }
+
+        void LoadOriginalTarget()
+        {
+            if (originalTarget != null) il.Emit(OpCodes.Ldloc, originalTarget);
+            else il.Emit(OpCodes.Ldarg_0);
+        }
+
         // For non-standalone: sm.<>__outer = arg0 (outer state machine boxed)
         int paramOffset = 0;
         if (!IsStandalone && OuterStateMachineField != null)
         {
             il.Emit(OpCodes.Ldloca, smLocal);
-            il.Emit(OpCodes.Ldarg_0);
+            LoadOriginalTarget();
             il.Emit(OpCodes.Stfld, OuterStateMachineField);
             paramOffset = 1; // Skip outer SM arg when copying params
         }
@@ -483,7 +541,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
             {
                 var captureField = StandaloneCaptureFields[captureOrder[i]];
                 il.Emit(OpCodes.Ldloca, smLocal);
-                il.Emit(OpCodes.Ldarg_0);
+                LoadOriginalTarget();
                 il.Emit(OpCodes.Castclass, _types.ObjectArray);
                 il.Emit(OpCodes.Ldc_I4, i);
                 il.Emit(OpCodes.Ldelem_Ref);
@@ -493,6 +551,8 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
             }
             paramOffset = 1; // Skip the single capture-array arg when copying params
         }
+        else if (IsStandalone && PrivateSelfField != null)
+            paramOffset = 1; // The self envelope is the sole transport argument.
 
         // Async function expressions (HasOwnThis) have a DYNAMIC `this` bound at
         // call time — `fn.call(receiver)`, `fn.apply(...)`, `fn.bind(...)` — not a
@@ -503,7 +563,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         // suspension/resume on another thread. A null thread-local means a plain
         // call → sloppy `this` (globalThis sentinel), matching
         // LocalVariableResolver.LoadThis.
-        if (IsStandalone && Arrow.HasOwnThis && runtime != null && OwnThisField != null)
+        if (Arrow.HasOwnThis && runtime != null && OwnThisField != null)
         {
             il.Emit(OpCodes.Ldloca, smLocal);
             il.Emit(OpCodes.Ldsfld, runtime.FunctionValues.CurrentThisField);
@@ -614,6 +674,8 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
             return paramField;
         if (LocalFields.TryGetValue(name, out var localField))
             return localField;
+        if (name == PrivateSelfName)
+            return PrivateSelfField;
         if (StandaloneCaptureFields.TryGetValue(name, out var captureField))
             return captureField;
         return null;

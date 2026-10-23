@@ -26,12 +26,14 @@ public class StaticTypeHandler : ICallHandler
 
         if (staticVar.Name.Lexeme == "Number"
             && (emitter.HasVariable("Number")
+                || ctx.HasVisibleValueBinding("Number")
                 || ctx.RuntimeFeatures?.UsesNumberConstructorMutation == true))
         {
             return false;
         }
         if (staticVar.Name.Lexeme == "Math"
             && (emitter.HasVariable("Math")
+                || ctx.HasVisibleValueBinding("Math")
                 || ctx.RuntimeFeatures?.UsesMathMutation == true))
         {
             return false;
@@ -40,6 +42,26 @@ public class StaticTypeHandler : ICallHandler
             && (emitter.HasVariable("Promise")
                 || ctx.HasVisibleValueBinding("Promise")
                 || ctx.RuntimeFeatures?.UsesPromisePrototypeMutation == true))
+        {
+            return false;
+        }
+        if (staticVar.Name.Lexeme == "ArrayBuffer"
+            && (emitter.HasVariable("ArrayBuffer")
+                || ctx.HasVisibleValueBinding("ArrayBuffer")))
+        {
+            return false;
+        }
+
+        if (staticVar.Name.Lexeme == "globalThis"
+            && (emitter.HasVariable("globalThis")
+                || ctx.HasVisibleValueBinding("globalThis")))
+        {
+            return false;
+        }
+
+        if (staticVar.Name.Lexeme == "Reflect"
+            && (emitter.HasVariable("Reflect")
+                || ctx.HasVisibleValueBinding("Reflect")))
         {
             return false;
         }

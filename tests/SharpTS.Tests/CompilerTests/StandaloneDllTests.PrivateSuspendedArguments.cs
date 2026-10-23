@@ -12,6 +12,8 @@ public partial class StandaloneDllTests
     [InlineData("snapshots")]
     [InlineData("pending-snapshots")]
     [InlineData("expression-controls")]
+    [InlineData("ordinary-own-pending")]
+    [InlineData("lexical-arrow-pending")]
     public void Isolated_Issue2065PrivateSuspendedArguments_Verify(string name)
     {
         var row = PrivateSuspendedArgumentsTests.Cases().Single(row => (string)row[0] == name);

@@ -93,6 +93,7 @@ public sealed class RuntimeFeatureDetector
             UsesIteratorHelpers = false,
             UsesPromise = false,
             UsesUserClasses = false,
+            UsesObjectDefinitionRuntime = false,
             UsesDate = false,
             UsesRegExp = false,
             UsesBuffer = false,
@@ -360,6 +361,7 @@ public sealed class RuntimeFeatureDetector
             case "Object":
             case "eval":
             case "Function":
+                _set.UsesObjectDefinitionRuntime = true;
                 _set.UsesObjectIntegrityMutation = true;
                 if (name is "eval" or "Function")
                 {
@@ -506,6 +508,7 @@ public sealed class RuntimeFeatureDetector
             // We flag Reflect generally; the metadata-specific arms are still
             // flagged separately via HandleMemberAccess for finer granularity.
             case "Reflect":
+                _set.UsesObjectDefinitionRuntime = true;
                 _set.UsesObjectIntegrityMutation = true;
                 _set.UsesReflect = true; break;
 
@@ -590,6 +593,7 @@ public sealed class RuntimeFeatureDetector
             // valve; the fine-grained ones still get set by their own triggers.
             case "globalThis":
             case "global":
+                _set.UsesObjectDefinitionRuntime = true;
                 _set.UsesArrayReceiverScopes = true;
                 _set.UsesObjectIntegrityMutation = true;
                 _set.UsesPromise = true;
@@ -714,6 +718,8 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Stmt.Var var:
+                if (var.DestructuringSource != DestructuringSourceKind.None)
+                    _set.UsesObjectDefinitionRuntime = true;
                 if (var.Initializer is not null)
                 {
                     TrackGlobalObjectAlias(var.Name.Lexeme, var.Initializer);
@@ -758,7 +764,10 @@ public sealed class RuntimeFeatureDetector
                 foreach (var binding in usg.Bindings)
                 {
                     if (binding.DestructuringPattern is not null)
+                    {
+                        _set.UsesObjectDefinitionRuntime = true;
                         VisitExpr(binding.DestructuringPattern);
+                    }
                     VisitExpr(binding.Initializer);
                 }
                 break;
@@ -906,6 +915,7 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.This:
+                _set.UsesObjectDefinitionRuntime = true;
                 // Script `this` can expose the global Array constructor to a
                 // host or callback without an explicit prototype member read.
                 _set.UsesArrayReceiverScopes = true;
@@ -918,6 +928,12 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Get g:
+                // A held constructor or definition method can be reached without
+                // a literal Object reference, including through a native receiver.
+                if (g.Name.Lexeme is "Object" or "Reflect" or "constructor"
+                    or "defineProperty" or "defineProperties" or "create"
+                    or "__defineGetter__" or "__defineSetter__")
+                    _set.UsesObjectDefinitionRuntime = true;
                 if (UsesArrayReceiverScope(g.Name.Lexeme))
                     _set.UsesArrayReceiverScopes = true;
                 if (IsOpaqueEvaluator(g.Object, g.Name.Lexeme))
@@ -1091,6 +1107,8 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.GetIndex gi:
+                // Opaque keys can select a constructor or descriptor mutator.
+                _set.UsesObjectDefinitionRuntime = true;
                 if (gi.Index is Expr.Literal { Value: "prototype" or "__proto__" or "setPrototypeOf" })
                     _set.UsesClassPrototypeMutation = true;
                 if (gi.Index is Expr.Literal { Value: string scopedArrayMember }
@@ -1227,6 +1245,7 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesRegExpPrototypeMutation = true;
                     _set.UsesStringPrototypeMutation = true;
                     _set.UsesMathMutation = true;
+                    _set.UsesGlobalParseIntMutation = true;
                 }
                 if (c.Callee is not Expr.Variable directSourceCall ||
                     !_sourceFunctions.Contains(directSourceCall.Name.Lexeme))
@@ -1552,6 +1571,7 @@ public sealed class RuntimeFeatureDetector
                 VisitExpr(cm.Right);
                 break;
             case Expr.DestructuringAssign da:
+                _set.UsesObjectDefinitionRuntime = true;
                 // Walk the lowered assignment statements so a feature inside the rhs/targets
                 // (e.g. eval/Proxy in the source expression) is still detected (#754).
                 foreach (var s in da.Assignments)
@@ -1737,6 +1757,9 @@ public sealed class RuntimeFeatureDetector
             case Expr.Spread sp2:
                 MarkPotentiallyMaterialized(sp2.Expression);
                 VisitExpr(sp2.Expression);
+                break;
+            case Expr.Instantiation instantiation:
+                VisitExpr(instantiation.Expression);
                 break;
             case Expr.TypeAssertion ta:
                 VisitExpr(ta.Expression);

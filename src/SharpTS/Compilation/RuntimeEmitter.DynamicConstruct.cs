@@ -8,6 +8,10 @@ public partial class RuntimeEmitter
     private readonly record struct ConstructDynamicValueInputs(
         EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedDynamicConstructionRuntime DynamicConstruction,
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedOperatorRuntime Operators,
         EmittedBoxedPrimitiveRuntime BoxedPrimitives,
         EmittedBooleanRuntime Booleans,
         EmittedErrorRuntime Errors,
@@ -90,12 +94,47 @@ public partial class RuntimeEmitter
         // Array values use an IList<object> Type token, whose CLR construction
         // is unrelated to JavaScript's numeric-length and element-list forms.
         var notArrayTypeLabel = il.DefineLabel();
+        var constructArray = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Beq, constructArray);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Bne_Un, notArrayTypeLabel);
+        il.MarkLabel(constructArray);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.ArrayConstructor);
+        var array = il.DeclareLocal(_types.Object);
+        var prototype = il.DeclareLocal(_types.Object);
+        var prototypeKind = il.DeclareLocal(_types.String);
+        var useArrayPrototype = il.DefineLabel();
+        var installPrototype = il.DefineLabel();
+        il.Emit(OpCodes.Stloc, array);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldstr, "prototype");
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
+        il.Emit(OpCodes.Stloc, prototype);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Brfalse, useArrayPrototype);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Call, inputs.Operators.TypeOf);
+        il.Emit(OpCodes.Stloc, prototypeKind);
+        foreach (var kind in new[] { "object", "function" })
+        {
+            il.Emit(OpCodes.Ldloc, prototypeKind);
+            il.Emit(OpCodes.Ldstr, kind);
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, installPrototype);
+        }
+        il.Emit(OpCodes.Br, useArrayPrototype);
+        il.MarkLabel(installPrototype);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
+        il.MarkLabel(useArrayPrototype);
+        il.Emit(OpCodes.Ldloc, array);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArrayTypeLabel);
 

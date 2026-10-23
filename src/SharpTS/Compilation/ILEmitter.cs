@@ -255,6 +255,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 break;
 
             case Stmt.Sequence seq:
+                if (_ctx.InitializedParameterInitializers?.Contains(seq) == true) break;
                 if (TryEmitNumericDestructuringSequence(seq))
                     break;
                 // Execute in current scope (no new environment)

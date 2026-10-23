@@ -37,7 +37,8 @@ public partial class TypeChecker
             TypeCategory.Date => BuiltInTypes.GetDateInstanceMemberType(memberName),
             TypeCategory.RegExp => ResolveRegExpMemberType(memberName),
             TypeCategory.Error when objType is TypeInfo.Error err =>
-                BuiltInTypes.GetErrorMemberType(memberName, err.Name),
+                BuiltInTypes.GetErrorMemberType(memberName, err.Name)
+                ?? ResolveObjectPrototypeMember(memberName),
             TypeCategory.Timeout => BuiltInTypes.GetTimeoutMemberType(memberName),
             TypeCategory.Buffer => BuiltInTypes.GetBufferMemberType(memberName),
             TypeCategory.Function when objType is TypeInfo.Function func =>

@@ -191,10 +191,9 @@ public partial class ILCompiler
 
         il.Emit(OpCodes.Call, _runtime.ClassPrototypes.Register);
 
-        // Materialize the ordinary own properties created by
-        // ClassDefinitionEvaluation. Generated instances expose methods through
-        // compile-time dispatch, but reflective operations on C.prototype must
-        // see stable descriptors for the constructor and each declared method.
+        // Create the constructor property before the source-ordered instance
+        // member installer. Reflective operations use these stable descriptors
+        // independently of generated instance method dispatch.
         il.Emit(OpCodes.Ldtoken, selfType);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Call, _runtime.ClassPrototypes.Get);
@@ -256,57 +255,24 @@ public partial class ILCompiler
         il.Emit(OpCodes.Call, _runtime.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
-        Dictionary<string, MethodBuilder>? instanceMethods = null;
         Dictionary<string, MethodBuilder>? staticMethods = null;
         foreach (var (className, builder) in _classes.Builders)
         {
             if (ReferenceEquals(builder, typeBuilder))
             {
-                _classes.InstanceMethods.TryGetValue(className, out instanceMethods);
                 _classes.StaticMethods.TryGetValue(className, out staticMethods);
                 break;
             }
         }
-        if (instanceMethods == null)
+        if (staticMethods == null)
         {
             foreach (var (classExpression, builder) in _classExprs.Builders)
             {
                 if (ReferenceEquals(builder, typeBuilder))
                 {
-                    _classExprs.InstanceMethods.TryGetValue(classExpression, out instanceMethods);
                     _classExprs.StaticMethods.TryGetValue(classExpression, out staticMethods);
                     break;
                 }
-            }
-        }
-
-        if (instanceMethods != null)
-        {
-            foreach (var (methodName, methodBuilder) in instanceMethods)
-            {
-                if (methodName == "constructor"
-                    || methodName.StartsWith("$symmethod_", StringComparison.Ordinal))
-                    continue;
-
-                EmitPrototypeDataDescriptor(methodName, () =>
-                {
-                    if (TryEmitDeclaredInstanceMethodValue(il, typeBuilder, methodBuilder))
-                        return;
-                    if (DefineDeclarationReceiverMethod(typeBuilder, methodBuilder) is { } adapter)
-                    {
-                        il.Emit(OpCodes.Newobj, adapter.Constructor);
-                        EmitMethodInfoLiteral(il, adapter.Method, adapter.Type);
-                    }
-                    else
-                    {
-                        il.Emit(OpCodes.Ldloc, prototypeLocal);
-                        il.Emit(OpCodes.Ldtoken, methodBuilder);
-                        il.Emit(OpCodes.Ldtoken, selfType);
-                        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
-                        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-                    }
-                    il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
-                });
             }
         }
 
@@ -321,8 +287,11 @@ public partial class ILCompiler
             }
         }
 
-        EmitKnownDeclaredAccessorDescriptors(il, typeBuilder);
-        EmitReceiverAutoAccessorDescriptors(il, typeBuilder);
+        // Instance methods/accessors share the later source-ordered installer.
+        // Expression definitions likewise install on their owned prototype.
+        EmitKnownDeclaredAccessorDescriptors(il, typeBuilder, staticOnly: true);
+        if (GetNominalClassDeclaration(typeBuilder) == null)
+            EmitReceiverAutoAccessorDescriptors(il, typeBuilder);
 
         void EmitStaticDataDescriptor(string propertyName, MethodBuilder methodBuilder)
         {

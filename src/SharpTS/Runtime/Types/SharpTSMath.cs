@@ -93,6 +93,14 @@ public class SharpTSMath
         return deleted || BuiltIns.MathBuiltIns.IsMember(name);
     }
     internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    internal IEnumerable<string> OwnStringKeys()
+        => BuiltIns.MathBuiltIns.MemberNames.Where(name => !_deletedBuiltIns.Contains(name))
+            .Concat(_extras.OwnVisibleStringKeys())
+            .Distinct(StringComparer.Ordinal)
+            // Integer expandos precede ordinary strings; stable ordering keeps
+            // the intrinsic inventory followed by the existing extra-key order.
+            .OrderBy(name => PropertySemantics.TryGetArrayIndex(name, out uint index)
+                ? (long)index : long.MaxValue);
 
     internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
         => _extras.GetSymbolPropertyNames();

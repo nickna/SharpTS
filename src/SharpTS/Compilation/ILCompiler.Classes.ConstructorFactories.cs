@@ -9,7 +9,13 @@ public partial class ILCompiler
     /// <summary>Adapts a flat guest argument list to this declaration's canonical constructor.</summary>
     private void EmitDeclaredConstructorFactory(TypeBuilder owner, Stmt.Class declaration, ConstructorBuilder constructor)
     {
-        if ((owner.Attributes & TypeAttributes.Abstract) != 0)
+        bool abstractOwner = (owner.Attributes & TypeAttributes.Abstract) != 0;
+        bool abstractReceiverFactory = abstractOwner && _usesRuntimeParents && !owner.IsGenericTypeDefinition
+            && owner.BaseType is not { Name: "$Promise" }
+            && !_classes.ErrorSubclasses.Contains(GetQualifiedClassDeclarationName(declaration))
+            && !_classes.PromiseSubclasses.Contains(GetQualifiedClassDeclarationName(declaration))
+            && SupportsReceiverInitialization(declaration);
+        if (abstractOwner && !abstractReceiverFactory)
             return;
 
         string name = "$ConstructFromArguments";
@@ -31,6 +37,26 @@ public partial class ILCompiler
         var il = factory.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, factory);
         var emitter = new ILEmitter(ctx);
+        if (abstractReceiverFactory || (UsesLiveSuperConstruction(declaration) && !owner.IsGenericTypeDefinition
+            && !_classes.ErrorSubclasses.Contains(GetQualifiedClassDeclarationName(declaration))
+            && !_classes.PromiseSubclasses.Contains(GetQualifiedClassDeclarationName(declaration))))
+        {
+            var nominalConstruction = il.DefineLabel();
+            bool hasNominalPath = !abstractOwner
+                && EmitNominalAbstractConstructorGuard(il, owner, declaration, nominalConstruction);
+            // The adapter's completion key is independent of the receiver
+            // returned by the dynamically selected superclass. An abstract CLR
+            // template uses this adapter without allocating the abstract type.
+            il.Emit(OpCodes.Ldtoken, owner);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, _runtime.ClassDefinitions.InitializeReceiver);
+            il.Emit(OpCodes.Ret);
+            if (!hasNominalPath) return;
+            il.MarkLabel(nominalConstruction);
+        }
         bool publishesArguments = _functions.MethodsCapturingArguments.Contains(constructor);
         LocalBuilder? previousArguments = null;
         LocalBuilder? result = null;

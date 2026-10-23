@@ -173,8 +173,6 @@ public sealed class StrictConstructorExpandoTests
 
     public static IEnumerable<object[]> ParityCases()
         => Cases().SelectMany(row => new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
-            // #2722: indexed class name/length writes still ignore writable or absent metadata descriptors.
-            .Where(mode => mode == ExecutionMode.Compiled || (string)row[0] != "prototype-metadata")
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ParityCases))]

@@ -35,7 +35,11 @@ public partial class Parser
             }
             else
             {
-                elements.Add(new ArrayPatternElement(ParseDestructurePattern(), IsHole: false));
+                DestructurePattern elementPattern = ParseDestructurePattern();
+                Expr? defaultValue = null;
+                if ((elementPattern is ArrayPattern or ObjectPattern) && Match(TokenType.EQUAL))
+                    defaultValue = Expression();
+                elements.Add(new ArrayPatternElement(elementPattern, IsHole: false, defaultValue));
             }
 
             if (!Check(TokenType.RIGHT_BRACKET))
@@ -64,8 +68,20 @@ public partial class Parser
                 break;
             }
 
-            // Property-key position accepts any keyword (JS semantics).
-            Token key = ConsumePropertyName("Expect property name.");
+            // A computed binding key must be followed by a binding target.
+            Expr? computedKey = null;
+            Token key;
+            if (Match(TokenType.LEFT_BRACKET))
+            {
+                key = Previous();
+                computedKey = Expression();
+                Consume(TokenType.RIGHT_BRACKET, "Expect ']' after computed binding key.");
+            }
+            else
+            {
+                // Property-key position accepts any keyword (JS semantics).
+                key = ConsumePropertyName("Expect property name.");
+            }
             DestructurePattern value;
             Expr? defaultValue = null;
 
@@ -75,6 +91,8 @@ public partial class Parser
                 if (Check(TokenType.LEFT_BRACE) || Check(TokenType.LEFT_BRACKET))
                 {
                     value = ParseDestructurePattern();
+                    if (Match(TokenType.EQUAL))
+                        defaultValue = Expression();
                 }
                 else
                 {
@@ -86,6 +104,8 @@ public partial class Parser
             }
             else
             {
+                if (computedKey is not null)
+                    throw new Exception("Expect ':' after computed binding key.");
                 // Shorthand: { x } or { x = default }
                 if (Match(TokenType.EQUAL))
                     defaultValue = Expression();
@@ -95,7 +115,7 @@ public partial class Parser
                 value = new IdentifierPattern(bindingName, defaultValue);
             }
 
-            properties.Add(new ObjectPatternProperty(key, value, defaultValue));
+            properties.Add(new ObjectPatternProperty(key, value, defaultValue, computedKey));
 
             if (!Check(TokenType.RIGHT_BRACE))
             {
@@ -201,22 +221,24 @@ public partial class Parser
                 new Expr.Literal((double)index)
             );
 
+            // Apply an element's undefined-only default before entering its binding.
+            // The shared helper spills the source read once and evaluates the default lazily.
+            Expr? defaultValue = element.DefaultValue ?? (element.Pattern as IdentifierPattern)?.DefaultValue;
+            bool elementDefaulted = underDefault || defaultValue != null;
+            if (defaultValue != null)
+                accessExpr = DefaultIfUndefined(accessExpr, defaultValue, statements, pattern.Line);
+
             if (element.Pattern is IdentifierPattern id)
             {
-                // Apply default value if present (undefined-only, #784)
-                if (id.DefaultValue != null)
-                {
-                    accessExpr = DefaultIfUndefined(accessExpr, id.DefaultValue, statements, pattern.Line);
-                }
                 statements.Add(new Stmt.Var(id.Name, null, accessExpr, IsVar: isVar));
             }
             else if (element.Pattern is ArrayPattern nestedArray)
             {
-                statements.Add(DesugarArrayPattern(nestedArray, accessExpr, underDefault, isVar));
+                statements.Add(DesugarArrayPattern(nestedArray, accessExpr, elementDefaulted, isVar));
             }
             else if (element.Pattern is ObjectPattern nestedObj)
             {
-                statements.Add(DesugarObjectPattern(nestedObj, accessExpr, underDefault, isVar));
+                statements.Add(DesugarObjectPattern(nestedObj, accessExpr, elementDefaulted, isVar));
             }
 
             index++;
@@ -230,7 +252,7 @@ public partial class Parser
     private Stmt DesugarObjectPattern(ObjectPattern pattern, Expr initializer, bool underDefault = false, bool isVar = false)
     {
         List<Stmt> statements = [];
-        List<string> usedKeys = [];
+        List<Expr> usedKeys = [];
 
         // const _dest0 = initializer;
         Token temp = GenerateTempVar(pattern.Line);
@@ -243,9 +265,7 @@ public partial class Parser
             if (prop.Value is RestPattern rest)
             {
                 // Generate: const rest = __objectRest(_dest0, ["x", "y", ...usedKeys]);
-                var excludeKeysExpr = new Expr.ArrayLiteral(
-                    usedKeys.Select(k => new Expr.Literal(k) as Expr).ToList()
-                );
+                var excludeKeysExpr = new Expr.ArrayLiteral(usedKeys);
                 var restCall = new Expr.Call(
                     new Expr.Variable(new Token(TokenType.IDENTIFIER, "__objectRest", null, pattern.Line)),
                     new Token(TokenType.RIGHT_PAREN, ")", null, pattern.Line),
@@ -256,23 +276,40 @@ public partial class Parser
                 break; // Rest must be last
             }
 
-            usedKeys.Add(prop.Key.Lexeme);
-
             // This read is tolerant if an enclosing pattern is defaulted, or this property itself
             // carries a default (its read may be missing on the source — the default covers it). #796
             bool propDefaulted = underDefault || prop.DefaultValue != null;
 
-            // Access expression: _dest0.key
-            Expr accessExpr = new Expr.Get(new Expr.Variable(temp), prop.Key, Defaulted: propDefaulted);
+            Expr accessExpr;
+            if (prop.ComputedKey is { } computedKey)
+            {
+                // Convert once, before reading the value. Both extraction and rest exclusion
+                // reuse this same primitive string/Symbol, including object-key coercion hooks.
+                Token keyTemp = GenerateTempVar(pattern.Line);
+                var normalizedKey = new Expr.Unary(
+                    new Token(TokenType.INTERNAL_TO_PROPERTY_KEY, "<property-key>", null, prop.Key.Line),
+                    computedKey);
+                statements.Add(new Stmt.Const(keyTemp, null, normalizedKey));
+                var keyReference = new Expr.Variable(keyTemp);
+                usedKeys.Add(keyReference);
+                accessExpr = new Expr.GetIndex(new Expr.Variable(temp), keyReference);
+            }
+            else
+            {
+                usedKeys.Add(new Expr.Literal(prop.Key.Lexeme));
+                accessExpr = new Expr.Get(new Expr.Variable(temp), prop.Key, Defaulted: propDefaulted);
+            }
+
+            // Apply the property's undefined-only default before entering either
+            // a simple binding or a nested pattern, evaluating the source once.
+            Expr? defaultVal = prop.DefaultValue ?? (prop.Value as IdentifierPattern)?.DefaultValue;
+            if (defaultVal != null)
+            {
+                accessExpr = DefaultIfUndefined(accessExpr, defaultVal, statements, pattern.Line);
+            }
 
             if (prop.Value is IdentifierPattern id)
             {
-                // Apply default value if present (undefined-only, #784)
-                Expr? defaultVal = prop.DefaultValue ?? id.DefaultValue;
-                if (defaultVal != null)
-                {
-                    accessExpr = DefaultIfUndefined(accessExpr, defaultVal, statements, pattern.Line);
-                }
                 statements.Add(new Stmt.Var(id.Name, null, accessExpr, IsVar: isVar));
             }
             else if (prop.Value is ArrayPattern nestedArray)
@@ -491,7 +528,7 @@ public partial class Parser
         // (the ternary below supplies the default) rather than reporting TS2339. #796
         if (access is Expr.Get g && !g.Defaulted) access = g with { Defaulted = true };
         Token valueTemp = GenerateTempVar(line);
-        stmts.Add(new Stmt.Var(valueTemp, null, access));
+        stmts.Add(new Stmt.Var(valueTemp, null, access) { PreserveRawInitializerValue = true });
         Expr isUndefined = new Expr.Binary(
             new Expr.Variable(valueTemp),
             new Token(TokenType.EQUAL_EQUAL_EQUAL, "===", null, line),
@@ -516,6 +553,10 @@ public partial class Parser
     {
         if (ContainsOptionalAssignmentChain(Unwrap(target)))
             throw new Exception("Invalid assignment target: optional chaining is not allowed.");
+        // Computed super reads carry a lexical-home marker, not an ordinary
+        // receiver. Keep writes out of the ordinary indexed-assignment path.
+        if (Unwrap(target) is Expr.GetIndex { Object: Expr.Super { Method: null } })
+            throw new Exception("Computed super assignment targets are not supported.");
     }
 
     // Only the target's receiver chain matters. Index expressions and call

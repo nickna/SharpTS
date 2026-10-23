@@ -85,8 +85,8 @@ public sealed class ReflectSymbolDescriptorTests
     }
 
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
-        // Compiled abrupt descriptor conversion is #2590; descriptor key coercion is #2591.
-        ((string)row[0] is "coercion-order" or "abrupt-descriptors"
+        // Compiled descriptor key coercion remains #2591.
+        ((string)row[0] is "coercion-order"
             ? new[] { ExecutionMode.Interpreted }
             : new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }).Select(mode =>
             new object[] { row[0], row[1], row[2], mode }));

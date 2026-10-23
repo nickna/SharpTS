@@ -267,6 +267,7 @@ public sealed class EditorSemanticIndex
                 Stmt.Var { TypeAnnotation: null, Initializer: { } initializer } => [initializer],
                 Stmt.Const { TypeAnnotation: null } constant => [constant.Initializer],
                 Stmt.Field { TypeAnnotation: null, Initializer: { } initializer } => [initializer],
+                Expr.Instantiation instantiation => [instantiation.Expression],
                 Expr.Grouping grouping => [grouping.Expression],
                 Expr.NonNullAssertion assertion => [assertion.Expression],
                 _ => [],
@@ -305,6 +306,7 @@ public sealed class EditorSemanticIndex
                  occurrence.Binding is { } binding && unprovenCalleeBindings.Contains(binding))) return true;
             return expression switch
             {
+                Expr.Instantiation instantiation => UnprovenCallee(document, instantiation.Expression, depth + 1),
                 Expr.Grouping grouping => UnprovenCallee(document, grouping.Expression, depth + 1),
                 Expr.NonNullAssertion assertion => UnprovenCallee(document, assertion.Expression, depth + 1),
                 Expr.Get member => UnprovenCallee(document, member.Object, depth + 1),

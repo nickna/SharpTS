@@ -9,6 +9,8 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILCompiler
 {
+    private readonly Dictionary<TypeBuilder, Action> _deferredClassRegistrarBodies = new(ReferenceEqualityComparer.Instance);
+
     private void DefineStaticMethod(TypeBuilder typeBuilder, string className, Stmt.Function method)
     {
         // Skip if already pre-defined in DefineClassMethodsOnly
@@ -30,6 +32,9 @@ public partial class ILCompiler
             paramTypes
         );
 
+        methodBuilder.SetCustomAttribute(_runtime.ObjectKeys.ClassStaticPropertyConstructor,
+            CustomAttributeEncoder.Encode(_runtime.ObjectKeys.ClassStaticPropertyConstructor, method.Name.Lexeme, false));
+
         // Initialize dictionary if needed
         if (!_classes.StaticMethods.ContainsKey(className))
         {
@@ -40,6 +45,10 @@ public partial class ILCompiler
 
     private void EmitStaticConstructor(TypeBuilder typeBuilder, Stmt.Class classStmt, string qualifiedClassName)
     {
+        // Registrar adapters may contain forward class references. Emit their
+        // bodies only after every class constructor/method signature exists.
+        if (_deferredClassRegistrarBodies.Remove(typeBuilder, out var emitRegistrar)) emitRegistrar();
+
         // Check if we need a static constructor
         // Note: Declare fields are excluded - they have no initialization
         var staticFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && !f.IsPrivate && !f.IsDeclare && f.Initializer != null).ToList();
@@ -158,7 +167,7 @@ public partial class ILCompiler
             {
                 switch (initializer)
                 {
-                    case Stmt.Field field when field.IsStatic:
+                    case Stmt.Field field when field.IsStatic && !field.IsDeclare:
                         if (field.ComputedKey != null)
                         {
                             _classes.DeferredDefinitions.TryGetFieldKey(field, out var computedKey);
@@ -188,11 +197,9 @@ public partial class ILCompiler
                         break;
 
                     case Stmt.StaticBlock block:
-                        // Emit block body statements
-                        foreach (var stmt in block.Body)
-                        {
-                            emitter.EmitStatement(stmt);
-                        }
+                        // Enter the ordinary lexical scope/cell storage for this block;
+                        // closures retain its cells while sibling blocks stay independent.
+                        emitter.EmitStatement(new Stmt.Block(block.Body));
                         break;
                 }
             }
@@ -253,7 +260,7 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Installs computed method/accessor descriptors in definition order.
+    /// Installs instance and computed static members in definition order.
     /// </summary>
     private void EmitComputedMemberRegistrations(ILEmitter emitter, ILGenerator il, TypeBuilder typeBuilder,
         DeferredClassDefinition? capturedDefinition = null)
@@ -268,65 +275,24 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldsfld, capturedKeys);
             il.Emit(OpCodes.Brfalse, noCapturedKeys);
         }
-        var members = new List<(Stmt.Function? Method, Stmt.Accessor? Accessor, Expr Key, MethodBuilder Builder, int Position)>();
-        foreach (var (method, key, builder) in _classes.ComputedMembers.GetMethods(typeBuilder))
-            members.Add((method, null, key, builder, method.Name.SourceOrderOffset));
-        foreach (var (accessor, builder) in _classes.ComputedMembers.GetAccessors(typeBuilder))
-            members.Add((null, accessor, accessor.ComputedKey!, builder, accessor.Name.SourceOrderOffset));
-
-        var getTypeFromHandle = _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle);
-        foreach (var (method, accessor, key, builder, _) in members.OrderBy(member => member.Position))
+        foreach (var member in GetClassMemberRegistrations(typeBuilder))
         {
-            if (capturedKeys != null && builder.IsStatic) continue;
-            if (accessor != null)
-            {
-                // These descriptors were installed before user initialization;
-                // do not restore a value that a static field/block changed.
-                if (accessor.IsStatic && GetConstantComputedAccessorName(key) != null
-                    && GetNominalClassDeclaration(typeBuilder) != null) continue;
-                var accessorKey = il.DeclareLocal(_types.Object);
-                EmitKey(key); il.Emit(OpCodes.Stloc, accessorKey);
-                EmitDeclaredAccessorDescriptor(il, typeBuilder, accessor, builder,
-                    () => il.Emit(OpCodes.Ldloc, accessorKey));
-                continue;
-            }
-            LocalBuilder? evaluatedKey = null;
-            var registrationDone = il.DefineLabel();
-            if (CanOwnDeclaredSymbolMethodValue(typeBuilder))
-            {
-                // Publish the canonical method value under the evaluated key.
-                // Retain ordinary keys only as ownership metadata: their reads
-                // consult live descriptors rather than reconstructing a wrapper.
-                evaluatedKey = il.DeclareLocal(_types.Object);
-                EmitKey(key);
-                il.Emit(OpCodes.Stloc, evaluatedKey);
-                EmitDeclaredComputedMethodDescriptor(il, typeBuilder, method!, builder, evaluatedKey);
-                il.Emit(OpCodes.Ldloc, evaluatedKey);
-                il.Emit(OpCodes.Isinst, _runtime.Symbols.Type);
-                il.Emit(OpCodes.Brtrue, registrationDone);
-            }
-            // owner: typeof(ThisClass)
-            il.Emit(OpCodes.Ldtoken, typeBuilder);
-            il.Emit(OpCodes.Call, getTypeFromHandle);
-
-            // property key: preserve Symbols; coerce every other value exactly as bracket
-            // access does (notably null -> "null") before using it as a registry key.
-            if (evaluatedKey != null) il.Emit(OpCodes.Ldloc, evaluatedKey);
-            else EmitKey(key);
-
-            // method MethodInfo
-            EmitMethodInfoLiteral(il, builder, typeBuilder);
-
-            // isStatic
-            il.Emit(method!.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-
-            il.Emit(OpCodes.Call, _runtime.SymbolAccessors.RegisterMethod);
-            il.MarkLabel(registrationDone);
+            if (capturedKeys != null && member.Builder?.IsStatic == true) continue;
+            // Constant static accessors were installed before user initialization.
+            if (member.Accessor is { IsStatic: true } && GetConstantComputedAccessorName(member.Key) != null
+                && GetNominalClassDeclaration(typeBuilder) != null) continue;
+            EmitClassMemberRegistration(il, typeBuilder, member, () => EmitKey(member));
         }
         il.MarkLabel(noCapturedKeys);
 
-        void EmitKey(Expr key)
+        void EmitKey(ClassMemberRegistration member)
         {
+            var key = member.Key;
+            if (member.Method?.ComputedKey == null && member.Accessor?.ComputedKey == null)
+            {
+                il.Emit(OpCodes.Ldstr, (string)((Expr.Literal)key).Value!);
+                return;
+            }
             if (capturedKeys == null)
             {
                 EmitComputedPropertyKey(emitter, il, key);
@@ -338,6 +304,68 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldc_I4, index);
             il.Emit(OpCodes.Ldelem_Ref);
         }
+    }
+
+    private sealed record ClassMemberRegistration(Stmt.Function? Method, Stmt.Accessor? Accessor,
+        Stmt.AutoAccessor? AutoAccessor, Expr Key, MethodBuilder? Builder, int Position);
+
+    private IEnumerable<ClassMemberRegistration> GetClassMemberRegistrations(TypeBuilder owner)
+    {
+        var members = new List<ClassMemberRegistration>();
+        foreach (var (method, key, builder) in _classes.ComputedMembers.GetMethods(owner))
+            members.Add(new(method, null, null, key, builder, method.Name.SourceOrderOffset));
+        foreach (var (accessor, builder) in _classes.ComputedMembers.GetAccessors(owner))
+            members.Add(new(null, accessor, null, accessor.ComputedKey!, builder, accessor.Name.SourceOrderOffset));
+        if (GetNominalClassDeclaration(owner) is { } declaration)
+        {
+            var methods = _classes.InstanceMethods.GetValueOrDefault(owner.FullName!);
+            foreach (var method in declaration.Methods.Where(method => method.Body != null && !method.IsStatic
+                         && !method.IsPrivate && method.ComputedKey == null && method.Name.Lexeme != "constructor"))
+                if (methods?.TryGetValue(method.Name.Lexeme, out var builder) == true)
+                    members.Add(new(method, null, null, new Expr.Literal(method.Name.Lexeme), builder, method.Name.SourceOrderOffset));
+            foreach (var accessor in (declaration.Accessors ?? []).Where(accessor => !accessor.IsStatic && accessor.ComputedKey == null))
+                if (_classes.AccessorBuilders.TryGetValue(accessor, out var builder))
+                    members.Add(new(null, accessor, null, new Expr.Literal(accessor.Name.Lexeme), builder, accessor.Name.SourceOrderOffset));
+            foreach (var source in _receiverAutoAccessors.Where(entry => ReferenceEquals(entry.Value.Owner, owner)).Select(entry => entry.Key))
+                members.Add(new(null, null, source, new Expr.Literal(source.Name.Lexeme), null, source.Name.SourceOrderOffset));
+        }
+        return members.OrderBy(member => member.Position);
+    }
+
+    private void EmitClassMemberRegistration(ILGenerator il, TypeBuilder owner, ClassMemberRegistration member,
+        Action emitKey, Type? descriptorOwner = null)
+    {
+        if (member.AutoAccessor is { } autoAccessor)
+        {
+            EmitReceiverAutoAccessorDescriptors(il, owner, autoAccessor, descriptorOwner);
+            return;
+        }
+        var key = il.DeclareLocal(_types.Object);
+        emitKey(); il.Emit(OpCodes.Stloc, key);
+        if (member.Accessor is { } accessor)
+        {
+            EmitDeclaredAccessorDescriptor(il, owner, accessor, member.Builder!,
+                () => il.Emit(OpCodes.Ldloc, key), descriptorOwner);
+            return;
+        }
+        var method = member.Method!;
+        var done = il.DefineLabel();
+        if (CanOwnDeclaredSymbolMethodValue(owner))
+        {
+            EmitDeclaredComputedMethodDescriptor(il, owner, method, member.Builder!, key, descriptorOwner,
+                sourceOrdered: !method.IsStatic);
+            il.Emit(OpCodes.Ldloc, key); il.Emit(OpCodes.Isinst, _runtime.Symbols.Type);
+            il.Emit(OpCodes.Brtrue, done);
+        }
+        if (method.ComputedKey != null)
+        {
+            il.Emit(OpCodes.Ldtoken, owner); il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldloc, key);
+            EmitMethodInfoLiteral(il, member.Builder!, owner);
+            il.Emit(method.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, _runtime.SymbolAccessors.RegisterMethod);
+        }
+        il.MarkLabel(done);
     }
 
     private void DefineDeferredComputedMethodKeyRegistrar(object source, TypeBuilder typeBuilder, IReadOnlyList<Stmt.Field> fields)
@@ -355,12 +383,11 @@ public partial class ILCompiler
             deferred.Add((accessor.ComputedKey!, builder, accessor.IsStatic, accessor.Kind.Type == TokenType.GET, accessor.Name.SourceOrderOffset, null));
         foreach (var field in fields.Where(field => field.ComputedKey != null && !field.IsDeclare))
             deferred.Add((field.ComputedKey!, null, field.IsStatic, null, field.Name.SourceOrderOffset, field));
-        // Generic accessor keys belong to the source definition, rather than
-        // each closed CLR owner's initializer. Reuse definition-time capture.
-        bool hasGenericAccessorKeys = source is Stmt.Class && typeBuilder.IsGenericTypeDefinition
-            && deferred.Any(entry => entry.IsGetter.HasValue);
+        // All closed owners replay the same source keys alongside ordinary
+        // members, preserving their shared creation order without re-evaluation.
+        bool hasGenericKeys = source is Stmt.Class && typeBuilder.IsGenericTypeDefinition && deferred.Count > 0;
         // Field names are evaluated with the definition, even when no key suspends.
-        if (!hasGenericAccessorKeys && !deferred.Any(entry => entry.Field != null || ExpressionContainsSuspension(entry.Key)
+        if (!hasGenericKeys && !deferred.Any(entry => entry.Field != null || ExpressionContainsSuspension(entry.Key)
             || ExpressionContainsLexicalNewTarget(entry.Key)))
             return;
 
@@ -377,73 +404,66 @@ public partial class ILCompiler
             _types.Void,
             [_types.ObjectArray]);
         var fieldKeys = new Dictionary<Stmt.Field, FieldBuilder>(ReferenceEqualityComparer.Instance);
-        var il = registrar.GetILGenerator();
-        var getTypeFromHandle = _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle);
         FieldBuilder? capturedKeys = null;
-        if (hasGenericAccessorKeys)
+        if (hasGenericKeys)
         {
             capturedKeys = keyOwner.DefineField($"$computedMemberKeys_{typeBuilder.Name}", _types.ObjectArray,
                 FieldAttributes.Assembly | FieldAttributes.Static);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Stsfld, capturedKeys);
         }
 
         for (int i = 0; i < deferred.Count; i++)
         {
-            var (_key, builder, isStatic, isGetter, _position, field) = deferred[i];
+            var field = deferred[i].Field;
             if (field != null)
             {
                 var keyField = keyOwner.DefineField($"$computedFieldKey_{typeBuilder.Name}_{i}", _types.Object,
                     FieldAttributes.Assembly | FieldAttributes.Static);
                 fieldKeys.Add(field, keyField);
-                il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldc_I4, i);
-                il.Emit(OpCodes.Ldelem_Ref);
-                il.Emit(OpCodes.Stsfld, keyField);
-                continue;
             }
-            if (isGetter.HasValue)
-            {
-                var accessor = _classes.ComputedMembers.GetAccessors(typeBuilder)
-                    .First(entry => ReferenceEquals(entry.Method, builder)).Accessor;
-                var descriptorOwner = CanonicalGenericClassOwner(typeBuilder);
-                EmitDeclaredAccessorDescriptor(il, typeBuilder, accessor, builder!, () =>
-                {
-                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, i); il.Emit(OpCodes.Ldelem_Ref);
-                }, descriptorOwner);
-                continue;
-            }
-            var registrationDone = il.DefineLabel();
-            if (CanOwnDeclaredSymbolMethodValue(typeBuilder))
-            {
-                var evaluatedKey = il.DeclareLocal(_types.Object);
-                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, i); il.Emit(OpCodes.Ldelem_Ref);
-                il.Emit(OpCodes.Stloc, evaluatedKey);
-                var methodSource = _classes.ComputedMembers.GetMethods(typeBuilder)
-                    .First(entry => ReferenceEquals(entry.Builder, builder)).Method;
-                EmitDeclaredComputedMethodDescriptor(il, typeBuilder, methodSource, builder!, evaluatedKey,
-                    CanonicalGenericClassOwner(typeBuilder));
-                il.Emit(OpCodes.Ldloc, evaluatedKey); il.Emit(OpCodes.Isinst, _runtime.Symbols.Type);
-                il.Emit(OpCodes.Brtrue, registrationDone);
-            }
-            il.Emit(OpCodes.Ldtoken, typeBuilder);
-            il.Emit(OpCodes.Call, getTypeFromHandle);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldc_I4, i);
-            il.Emit(OpCodes.Ldelem_Ref);
-            EmitMethodInfoLiteral(il, builder!, typeBuilder);
-            il.Emit(isStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Call, _runtime.SymbolAccessors.RegisterMethod);
-            il.MarkLabel(registrationDone);
         }
 
-        il.Emit(OpCodes.Call, typeBuilder.IsGenericTypeDefinition
-            ? EmitterTypeHelpers.ResolveMethod(
-                CanonicalGenericClassOwner(typeBuilder), initializer)
-            : initializer);
-        il.Emit(OpCodes.Ret);
+        _deferredClassRegistrarBodies.Add(typeBuilder, () =>
+        {
+            var il = registrar.GetILGenerator();
+            if (capturedKeys != null)
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Stsfld, capturedKeys);
+            }
+            for (int i = 0; i < deferred.Count; i++)
+            {
+                if (deferred[i].Field is { } field)
+                {
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, i); il.Emit(OpCodes.Ldelem_Ref);
+                    il.Emit(OpCodes.Stsfld, fieldKeys[field]);
+                }
+            }
+            foreach (var member in GetClassMemberRegistrations(typeBuilder))
+            {
+                EmitClassMemberRegistration(il, typeBuilder, member, () =>
+                {
+                    bool computed = member.Method?.ComputedKey != null || member.Accessor?.ComputedKey != null;
+                    if (!computed)
+                    {
+                        il.Emit(OpCodes.Ldstr, (string)((Expr.Literal)member.Key).Value!);
+                        return;
+                    }
+                    int index = Enumerable.Range(0, deferred.Count).First(index => ReferenceEquals(deferred[index].Key, member.Key));
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, index); il.Emit(OpCodes.Ldelem_Ref);
+                }, CanonicalGenericClassOwner(typeBuilder));
+            }
+
+            il.Emit(OpCodes.Call, typeBuilder.IsGenericTypeDefinition
+                ? EmitterTypeHelpers.ResolveMethod(
+                    CanonicalGenericClassOwner(typeBuilder), initializer)
+                : initializer);
+            il.Emit(OpCodes.Ret);
+        });
         var keys = deferred.Select(entry => entry.Key).ToArray();
         _classes.DeferredDefinitions.Declare(source, typeBuilder, initializer, registrar, keys, fieldKeys, capturedKeys);
+        if (hasGenericKeys)
+            typeBuilder.SetCustomAttribute(_runtime.ClassInitialization.CanonicalStaticStorageAttributeConstructor,
+                CustomAttributeEncoder.EmptyBlob);
     }
 
     private void EmitComputedStaticFieldInitializer(ILEmitter emitter, ILGenerator il,
@@ -465,7 +485,13 @@ public partial class ILCompiler
         }
         else
             il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
-        il.Emit(OpCodes.Call, _runtime.ObjectWrite.Index);
+
+        // A field defines an own W/E/C data property. Assignment would instead
+        // refuse configurable readonly constructor metadata such as name/length
+        // or invoke an inherited setter instead of creating the field.
+        var value = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Stloc, value);
+        EmitOwnDataDefinition(il, value);
     }
 
     private static bool ExpressionContainsSuspension(Expr expression)
@@ -507,22 +533,9 @@ public partial class ILCompiler
 
     private void EmitComputedPropertyKey(ILEmitter emitter, ILGenerator il, Expr key)
     {
-        var keyLocal = il.DeclareLocal(_types.Object);
-        var isSymbol = il.DefineLabel();
-
         emitter.EmitExpression(key);
         emitter.EmitBoxIfNeeded(key);
-        il.Emit(OpCodes.Stloc, keyLocal);
-
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Isinst, _runtime.Symbols.Type);
-        il.Emit(OpCodes.Brtrue, isSymbol);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, _runtime.StringCoercion.ToJsString);
-        il.Emit(OpCodes.Stloc, keyLocal);
-
-        il.MarkLabel(isSymbol);
-        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, _runtime.Reflect.ToPropertyKey);
     }
 
     private void EmitMethodInfoLiteral(ILGenerator il, MethodBuilder method, TypeBuilder declaringType)

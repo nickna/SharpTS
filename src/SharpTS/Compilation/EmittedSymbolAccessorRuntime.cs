@@ -34,6 +34,13 @@ public sealed class EmittedSymbolAccessorRuntime
         internal set => SetHandle(ref _findGetter, value);
     }
 
+    private MethodBuilder? _findOwnGetter;
+    public MethodBuilder FindOwnGetter
+    {
+        get => Require(_findOwnGetter);
+        internal set => SetHandle(ref _findOwnGetter, value);
+    }
+
     private MethodBuilder? _findSetter;
     public MethodBuilder FindSetter
     {
@@ -135,6 +142,7 @@ public sealed class EmittedSymbolAccessorRuntime
         _ = Registry;
         _ = RegisterAccessor;
         _ = FindGetter;
+        _ = FindOwnGetter;
         _ = FindSetter;
         _ = RegisterMethod;
         _ = FindMethod;

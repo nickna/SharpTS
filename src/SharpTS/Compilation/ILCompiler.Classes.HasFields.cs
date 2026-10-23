@@ -262,8 +262,125 @@ public partial class ILCompiler
         il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
         il.Emit(OpCodes.Stloc, fields);
         EmitAppendFieldSnapshot(il, fields, result, overwrite: false);
+        EmitInstanceFieldOrderProjection(il, owner, result);
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitInstanceFieldOrderProjection(ILGenerator il, TypeBuilder owner, LocalBuilder values)
+    {
+        var owners = new Stack<(Type Type, Expr.ClassExpr? Expression, IReadOnlyList<Stmt.Field> Fields)>();
+        for (Type? type = owner; type != null; type = type.BaseType)
+        {
+            var definition = type.IsConstructedGenericType ? type.GetGenericTypeDefinition() : type;
+            var expression = _classExprs.Builders.FirstOrDefault(entry => ReferenceEquals(entry.Value, definition)).Key;
+            var declaration = _classes.Declarations.FirstOrDefault(source =>
+                !_runtimeClassDeclarations.ContainsKey(source)
+                && _classes.DeclarationNames.TryGetValue(source, out var name)
+                && _classes.Builders.TryGetValue(name, out var builder) && ReferenceEquals(builder, definition));
+            if (expression?.Fields is { } expressionFields) owners.Push((type, expression, expressionFields));
+            else if (declaration?.Fields is { } declarationFields) owners.Push((type, null, declarationFields));
+        }
+        var plan = owners.SelectMany(entry => entry.Fields
+            .Where(field => !field.IsStatic && !field.IsPrivate && !field.IsDeclare)
+            .Select(field => (entry.Type, entry.Expression, Field: field))).ToArray();
+        if (!plan.Any(entry => entry.Field.ComputedKey != null)) return;
+
+        // The complete merged values already include dynamic writes dispatched into
+        // a derived owner's store. Project only existing keys, base before derived,
+        // then append expandos in their unchanged dictionary order.
+        var ordered = il.DeclareLocal(_types.DictionaryStringObject);
+        var key = il.DeclareLocal(_types.String);
+        var value = il.DeclareLocal(_types.Object);
+        var descriptor = il.DeclareLocal(_runtime.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, ordered);
+        foreach (var entry in plan)
+        {
+            var next = il.DefineLabel();
+            var haveValue = il.DefineLabel();
+            if (entry.Field.ComputedKey != null)
+            {
+                if (entry.Expression is { } expression)
+                {
+                    var definitionField = _classExprs.DefinitionFields[expression];
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldfld, entry.Type.IsConstructedGenericType
+                        ? EmitterTypeHelpers.ResolveField(entry.Type, definitionField)
+                        : EmitterTypeHelpers.SelfFieldReference(definitionField));
+                    il.Emit(OpCodes.Isinst, _runtime.ClassDefinitions.Type);
+                    var definitionReady = il.DefineLabel();
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Brtrue, definitionReady);
+                    il.Emit(OpCodes.Pop);
+                    il.Emit(OpCodes.Br, next);
+                    il.MarkLabel(definitionReady);
+                    il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.Keys);
+                    var keys = _classExprs.Factories[expression].Keys;
+                    il.Emit(OpCodes.Ldc_I4, Enumerable.Range(0, keys.Count)
+                        .First(index => ReferenceEquals(keys[index], entry.Field.ComputedKey)));
+                    il.Emit(OpCodes.Ldelem_Ref);
+                }
+                else il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(entry.Field));
+                // Captured keys have already undergone ToPropertyKey. Symbols stay
+                // on their existing separate enumeration path without coercion.
+                il.Emit(OpCodes.Isinst, _types.String);
+                il.Emit(OpCodes.Stloc, key);
+                il.Emit(OpCodes.Ldloc, key);
+                il.Emit(OpCodes.Brfalse, next);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldloc, key);
+                il.Emit(OpCodes.Call, _runtime.ObjectDeletion.WasClassFieldDeleted);
+                il.Emit(OpCodes.Brtrue, next);
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldstr, entry.Field.Name.Lexeme);
+                il.Emit(OpCodes.Stloc, key);
+            }
+            il.Emit(OpCodes.Ldloc, values);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Ldloca, value);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
+                [_types.String, _types.Object.MakeByRefType()])!);
+            if (entry.Field.ComputedKey != null)
+            {
+                il.Emit(OpCodes.Brtrue, haveValue);
+                // Preserve complete merged-value precedence. Only a computed key
+                // absent from that snapshot needs its own PDS data fallback.
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldloc, key);
+                il.Emit(OpCodes.Call, _runtime.DescriptorStorage.GetPropertyDescriptor);
+                il.Emit(OpCodes.Stloc, descriptor);
+                il.Emit(OpCodes.Ldloc, descriptor);
+                il.Emit(OpCodes.Brfalse, next);
+                il.Emit(OpCodes.Ldloc, descriptor);
+                il.Emit(OpCodes.Callvirt, _runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+                il.Emit(OpCodes.Brtrue, next);
+                il.Emit(OpCodes.Ldloc, descriptor);
+                il.Emit(OpCodes.Callvirt, _runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+                il.Emit(OpCodes.Brtrue, next);
+                // Hidden descriptor data stays on its existing PDS-only path.
+                il.Emit(OpCodes.Ldloc, descriptor);
+                il.Emit(OpCodes.Callvirt, _runtime.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+                il.Emit(OpCodes.Brfalse, next);
+                il.Emit(OpCodes.Ldloc, descriptor);
+                il.Emit(OpCodes.Callvirt, _runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!);
+                il.Emit(OpCodes.Stloc, value);
+            }
+            else il.Emit(OpCodes.Brfalse, next);
+            il.MarkLabel(haveValue);
+            il.Emit(OpCodes.Ldloc, ordered);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Ldloc, value);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryAdd",
+                [_types.String, _types.Object])!);
+            il.Emit(OpCodes.Pop);
+            il.MarkLabel(next);
+        }
+        EmitAppendFieldSnapshot(il, values, ordered, overwrite: false);
+        il.Emit(OpCodes.Ldloc, ordered);
+        il.Emit(OpCodes.Stloc, values);
     }
 
     private void EmitAppendFieldSnapshot(ILGenerator il, LocalBuilder fields, LocalBuilder result, bool overwrite,
@@ -1234,6 +1351,21 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ret);
             il.MarkLabel(unchangedChain);
         }
+        // Assigned prototype properties live in PDS, independently of the
+        // prototype's dynamic Fields dictionary. A present own descriptor
+        // decides the read even when its value/getter result is undefined.
+        // Without one, keep the existing method and ancestor fallback order.
+        var noOwnPrototypeDescriptor = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, prototypeLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _runtime.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Brfalse, noOwnPrototypeDescriptor);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, prototypeLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _runtime.ClassDefinitions.ReadPrototypeProperty);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noOwnPrototypeDescriptor);
         var noDescriptor = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _runtime.ClassDefinitions.InstanceInterface);

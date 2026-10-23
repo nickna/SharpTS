@@ -47,7 +47,10 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
         var shared = new Dictionary<string, object?> { ["persist"] = 1d };
         foreach (bool optional in new[] { false, true, false, true })
         {
-            var builder = NewAssembly(); var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect(optional));
+            var builder = NewAssembly(); var features = Detect(optional);
+            // This probe invokes the canonical descriptor APIs directly.
+            features.UsesObjectDefinitionRuntime = true;
+            var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             Assert.True(owners.Add(runtime.ObjectOwnProperties)); AssertFrozen(runtime.ObjectOwnProperties);
             foreach (var property in Handles(typeof(EmittedObjectOwnPropertiesRuntime)))
                 Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.ObjectOwnProperties)).Module.Assembly);
@@ -152,6 +155,8 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
             string name = parameter.Name!;
             if (overrides.TryGetValue(name, out var value)) return value;
             if (name == "ProxyDescriptor") return MakeInputs(parameter.ParameterType, runtime, overrides);
+            if (name == "OwnPrototype") return Activator.CreateInstance(parameter.ParameterType,
+                runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind)!;
             if (name == "GlobalThisSingletonField") return runtime.GlobalObject.SingletonField;
             if (name == "LookupBuiltInStaticMember") return runtime.BuiltInStatics.Lookup;
             return name switch

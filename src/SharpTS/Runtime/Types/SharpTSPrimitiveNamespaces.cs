@@ -393,6 +393,12 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
                 arguments.Count > 0 ? arguments[0] : SharpTSUndefined.Instance,
                 arguments.Count > 1 ? arguments[1] : SharpTSUndefined.Instance).ToObject();
         }
+        if (_name == "replaceAll")
+        {
+            return StringBuiltIns.ReplaceAllWithoutSymbolDispatch(interpreter, coerced,
+                arguments.Count > 0 ? arguments[0] : SharpTSUndefined.Instance,
+                arguments.Count > 1 ? arguments[1] : SharpTSUndefined.Instance).ToObject();
+        }
         return _inner.Bind(coerced).Call(interpreter, arguments);
     }
 

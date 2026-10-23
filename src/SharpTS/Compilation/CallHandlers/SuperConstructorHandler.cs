@@ -24,13 +24,17 @@ public class SuperConstructorHandler : ICallHandler
         var ctx = emitter.Context;
         if (ctx.IsRuntimeReceiverInitializer && ctx.ClassDefinitionParameterIndex is { } definitionParameter)
         {
+            bool liveParent = ctx.RuntimeFeatures?.UsesClassPrototypeMutation != false;
             emitter.IL.Emit(OpCodes.Ldarg, definitionParameter);
-            emitter.IL.Emit(OpCodes.Call, ctx.Runtime!.ClassDefinitions.GetParent);
-            emitter.IL.Emit(OpCodes.Ldarg_0);
+            emitter.IL.Emit(OpCodes.Call, liveParent
+                ? ctx.Runtime!.ObjectPrototypes.GetPrototypeOf : ctx.Runtime!.ClassDefinitions.GetParent);
+            if (liveParent) ConstructorReceiverEmitter.CloseNominalSuperTarget(emitter.IL, ctx);
+            if (!liveParent) emitter.IL.Emit(OpCodes.Ldarg_0);
             emitter.EmitArgsArrayWithSpread(call.Arguments);
             if (ctx.NewTargetParameterIndex is { } targetIndex) emitter.IL.Emit(OpCodes.Ldarg, targetIndex);
             else emitter.IL.Emit(OpCodes.Ldsfld, ctx.Runtime.Sentinels.UndefinedInstance);
-            emitter.IL.Emit(OpCodes.Call, ctx.Runtime.ClassDefinitions.InitializeReceiver);
+            emitter.IL.Emit(OpCodes.Call, liveParent
+                ? ctx.Runtime.DynamicConstruction.ConstructWithNewTarget : ctx.Runtime.ClassDefinitions.InitializeReceiver);
             emitter.IL.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver!);
             emitter.IL.Emit(OpCodes.Ldloc, ctx.ClassConstructorThisCell!);
             emitter.IL.Emit(OpCodes.Ldc_I4_0);

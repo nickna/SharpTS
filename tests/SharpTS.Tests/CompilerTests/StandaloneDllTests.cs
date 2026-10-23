@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using SharpTS.Compilation;
 using SharpTS.Modules;
@@ -14234,13 +14235,8 @@ public partial class StandaloneDllTests
         },
         new object[]
         {
-            """
-            const decoder = new TextDecoder(); const decode = decoder.decode;
-            console.log(decode(Buffer.from('direct')));
-            console.log(decode.call(decoder, Buffer.from('call')));
-            console.log(decode.apply(decoder, [Buffer.from('apply')]));
-            """,
-            "direct\ncall\napply\n"
+            "const decoder = new TextDecoder(); const decode = decoder.decode;\ntry { decode(Buffer.from('direct')); console.log('unexpected'); }\ncatch (error) { console.log(error instanceof TypeError); }\nconsole.log(decode.call(decoder, Buffer.from('call')));\nconsole.log(decode.apply(decoder, [Buffer.from('apply')]));\n",
+            "true\ncall\napply\n"
         },
         new object[]
         {
@@ -16264,23 +16260,32 @@ public partial class StandaloneDllTests
                 psi.ArgumentList.Add(argument);
         }
 
-        using var process = Process.Start(psi)!;
-        TaskCompletionSource<bool>? readiness = null;
-        Task<string> outputTask;
-        if (timeoutStartsAfterOutput is null)
-        {
-            outputTask = process.StandardOutput.ReadToEndAsync();
-        }
-        else
-        {
-            readiness = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            outputTask = ReadToEndAndSignalAsync(
-                process.StandardOutput,
-                timeoutStartsAfterOutput,
-                readiness);
-        }
+        return ExecuteProcessIsolated(psi, timeoutMs, timeoutStartsAfterOutput,
+            readinessTimeoutMs, verifyStandardError, standardInput, diagnosticDllPath: dllPath);
+    }
 
-        var errorTask = process.StandardError.ReadToEndAsync();
+    private static string ExecuteProcessIsolated(
+        ProcessStartInfo psi,
+        int timeoutMs,
+        string? timeoutStartsAfterOutput = null,
+        int readinessTimeoutMs = 15000,
+        Action<string>? verifyStandardError = null,
+        string? standardInput = null,
+        string? diagnosticDllPath = null)
+    {
+        // Hash before launch so diagnostic file I/O gives the child no extra
+        // running time outside the existing readiness/execution waits.
+        var dllIdentity = CaptureStandaloneDllIdentity(psi, diagnosticDllPath);
+        var clock = Stopwatch.StartNew();
+        using var process = Process.Start(psi)!;
+        using var readCancellation = new CancellationTokenSource();
+        var readiness = timeoutStartsAfterOutput is null ? null
+            : new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stdout = new StandalonePipeCapture(process.StandardOutput, clock, readCancellation.Token,
+            timeoutStartsAfterOutput, readiness);
+        var stderr = new StandalonePipeCapture(process.StandardError, clock, readCancellation.Token);
+        var outputTask = stdout.Completion;
+        var errorTask = stderr.Completion;
 
         using var inputCancellation = new CancellationTokenSource();
         var inputTask = standardInput is null ? Task.CompletedTask
@@ -16288,18 +16293,20 @@ public partial class StandaloneDllTests
         // Timeout cleanup must preserve its diagnostic even if killing the child breaks a pending write.
         _ = inputTask.ContinueWith(task => { _ = task.Exception; }, CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        var diagnostics = new StandaloneProcessDiagnostics(process, psi, clock, stdout, stderr, inputTask, dllIdentity);
+        Exception? captureFailure = null;
         try
         {
             if (readiness is not null &&
                 (!readiness.Task.Wait(readinessTimeoutMs) || !readiness.Task.GetAwaiter().GetResult()))
             {
                 TryTerminateProcessTree(process);
-                process.WaitForExit(5000);
-                Task.WaitAll([outputTask, errorTask], 5000);
+                if (process.WaitForExit(5000)) diagnostics.ObserveExit();
+                diagnostics.WaitForDrain();
 
                 var readinessOutput = outputTask.IsCompletedSuccessfully ? outputTask.Result : string.Empty;
                 var readinessError = errorTask.IsCompletedSuccessfully ? errorTask.Result : string.Empty;
-                throw new TimeoutException(
+                throw diagnostics.Timeout(
                     $"Compiled standalone probe did not emit '{timeoutStartsAfterOutput}' within " +
                     $"{readinessTimeoutMs} ms. Stdout: {readinessOutput} Stderr: {readinessError}");
             }
@@ -16310,45 +16317,74 @@ public partial class StandaloneDllTests
 
                 if (!process.WaitForExit(5000))
                 {
-                    throw new TimeoutException(
+                    throw diagnostics.Timeout(
                         $"Compiled standalone probe timed out after {timeoutMs} ms and its process tree did not terminate.");
                 }
+                diagnostics.ObserveExit();
 
-                if (!Task.WaitAll([outputTask, errorTask], 5000))
+                if (!diagnostics.WaitForDrain())
                 {
-                    throw new TimeoutException(
+                    throw diagnostics.Timeout(
                         $"Compiled standalone probe timed out after {timeoutMs} ms and its output pipes did not close.");
                 }
 
                 var timedOutOutput = outputTask.GetAwaiter().GetResult();
                 var timedOutError = errorTask.GetAwaiter().GetResult();
-                throw new TimeoutException(
+                throw diagnostics.Timeout(
                     $"Compiled standalone probe timed out after {timeoutMs} ms. " +
                     $"Stdout: {timedOutOutput} Stderr: {timedOutError}");
             }
 
-            if (!Task.WaitAll([outputTask, errorTask], 5000))
-                throw new TimeoutException("Compiled standalone probe exited, but its output pipes did not close.");
+            diagnostics.ObserveExit();
+            if (!diagnostics.WaitForDrain())
+                throw diagnostics.Timeout("Compiled standalone probe exited, but its output pipes did not close.");
 
             var output = outputTask.GetAwaiter().GetResult();
             var error = errorTask.GetAwaiter().GetResult();
 
-            if (process.ExitCode != 0)
+            if (diagnostics.ExitCode != 0)
             {
-                throw new Exception(
-                    $"Compiled standalone probe exited with code {process.ExitCode}. Stderr: {error}");
+                throw diagnostics.Failure(
+                    $"Compiled standalone probe exited with code {diagnostics.ExitCode}. Stderr: {error}");
             }
 
             if (!inputTask.Wait(5000))
-                throw new TimeoutException("Compiled standalone probe exited, but its input pipe did not close.");
+                throw diagnostics.Timeout("Compiled standalone probe exited, but its input pipe did not close.");
             inputTask.GetAwaiter().GetResult();
 
             verifyStandardError?.Invoke(error.Replace("\r\n", "\n"));
+            diagnostics.Complete();
             return output.Replace("\r\n", "\n");
+        }
+        catch (Exception exception)
+        {
+            captureFailure = exception;
+            diagnostics.AttachFailure(exception);
+            throw;
         }
         finally
         {
             inputCancellation.Cancel();
+            // Request cancellation without waiting or replacing the failure.
+            // Observing eventual faults does not prove every read completed.
+            ObserveStandaloneTaskFault(readCancellation.CancelAsync());
+            ObserveStandaloneTaskFault(outputTask);
+            ObserveStandaloneTaskFault(errorTask);
+            if (OperatingSystem.IsLinux())
+            {
+                // Cleanup only: never reinterpret cancellation as EOF or extend the
+                // original readiness, execution, or five-second output-drain waits.
+                var cleanup = Stopwatch.StartNew();
+                bool outputStopped = stdout.WaitForStop(5000);
+                int remaining = (int)Math.Clamp(5000 - cleanup.ElapsedMilliseconds, 0, 5000);
+                bool errorStopped = stderr.WaitForStop(remaining);
+                if (captureFailure is not null)
+                {
+                    captureFailure.Data["StandaloneCaptureStdoutStopped"] = outputStopped;
+                    captureFailure.Data["StandaloneCaptureStderrStopped"] = errorStopped;
+                    captureFailure.Data["StandaloneCaptureReaderCleanupMilliseconds"] = cleanup.Elapsed.TotalMilliseconds;
+                }
+            }
         }
 
     }
@@ -16360,30 +16396,524 @@ public partial class StandaloneDllTests
         writer.Close();
     }
 
-    private static async Task<string> ReadToEndAndSignalAsync(
-        StreamReader reader,
-        string readinessMarker,
-        TaskCompletionSource<bool> readiness)
+    private static void ObserveStandaloneTaskFault(Task task)
     {
-        var output = new StringBuilder();
-        var buffer = new char[1024];
+        _ = task.ContinueWith(static completed => { _ = completed.Exception; }, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+    }
 
-        while (true)
+    private static object CaptureStandaloneDllIdentity(ProcessStartInfo start, string? dllPath)
+    {
+        try
         {
-            var charsRead = await reader.ReadAsync(buffer).ConfigureAwait(false);
-            if (charsRead == 0)
-                break;
+            dllPath ??= start.ArgumentList.FirstOrDefault(argument =>
+                string.Equals(Path.GetExtension(argument), ".dll", StringComparison.OrdinalIgnoreCase));
+            if (dllPath is null && string.Equals(Path.GetExtension(start.Arguments.Trim('"')), ".dll", StringComparison.OrdinalIgnoreCase))
+                dllPath = start.Arguments.Trim('"');
+            if (dllPath is null) return new { path = (string?)null, sha256 = (string?)null, error = "No DLL argument identified.", utc = DateTimeOffset.UtcNow };
+            string workingDirectory = string.IsNullOrEmpty(start.WorkingDirectory) ? Environment.CurrentDirectory : start.WorkingDirectory;
+            dllPath = Path.GetFullPath(dllPath, workingDirectory);
+            using var stream = File.OpenRead(dllPath);
+            string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
+            return new { path = dllPath, sha256 = hash, error = (string?)null, utc = DateTimeOffset.UtcNow };
+        }
+        catch (Exception exception)
+        {
+            return new { path = dllPath, sha256 = (string?)null, error = exception.ToString(), utc = DateTimeOffset.UtcNow };
+        }
+    }
 
-            output.Append(buffer, 0, charsRead);
-            if (!readiness.Task.IsCompleted &&
-                output.ToString().Contains(readinessMarker, StringComparison.Ordinal))
+    private sealed record StandaloneCaptureTime(DateTimeOffset Utc, double ElapsedMilliseconds);
+
+    private sealed record StandalonePipeIdentity(
+        string? BaseStreamType, bool? IsAsync, string? ReadHandle,
+        bool? HandleIsClosed, bool? HandleIsInvalid, string? Error);
+
+    private sealed record StandalonePipeSnapshot(
+        string TaskStatus,
+        StandaloneCaptureTime? ReadStarted,
+        StandaloneCaptureTime? FirstRead,
+        StandaloneCaptureTime? LastRead,
+        StandaloneCaptureTime? Eof,
+        StandaloneCaptureTime? Fault,
+        StandaloneCaptureTime? Canceled,
+        string? FaultDescription,
+        int ReadCount,
+        long CharacterCount,
+        string PartialText,
+        StandalonePipeIdentity Stream);
+
+    private sealed class StandalonePipeCapture
+    {
+        private readonly object _gate = new();
+        private readonly StringBuilder _text = new();
+        private readonly Stopwatch _clock;
+        private readonly StandalonePipeIdentity _stream;
+        private StandaloneCaptureTime? _readStarted, _firstRead, _lastRead, _eof, _fault, _canceled;
+        private string? _faultDescription;
+        private int _readCount;
+        private long _characterCount;
+
+        public StandalonePipeCapture(StreamReader reader, Stopwatch clock, CancellationToken cancellation,
+            string? marker = null, TaskCompletionSource<bool>? readiness = null, int linuxReadChunkBytes = 1024)
+        {
+            _clock = clock;
+            _stream = CaptureStreamIdentity(reader);
+            Completion = OperatingSystem.IsLinux() && reader.BaseStream is System.IO.Pipes.PipeStream pipe
+                ? Task.Factory.StartNew(() => CapturePolling(reader, pipe, cancellation, marker, readiness,
+                    linuxReadChunkBytes), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)
+                : CaptureAsync(reader, cancellation, marker, readiness);
+            ObserveStandaloneTaskFault(Completion);
+        }
+
+        public Task<string> Completion { get; }
+
+        public bool WaitForStop(int timeoutMilliseconds)
+        {
+            try { return Completion.Wait(timeoutMilliseconds); }
+            catch (AggregateException) when (Completion.IsCompleted) { return true; }
+        }
+
+        public StandalonePipeSnapshot Snapshot()
+        {
+            lock (_gate)
+                return new(Completion.Status.ToString(), _readStarted, _firstRead, _lastRead, _eof,
+                    _fault, _canceled, _faultDescription, _readCount, _characterCount, _text.ToString(), _stream);
+        }
+
+        private static StandalonePipeIdentity CaptureStreamIdentity(StreamReader reader)
+        {
+            string? type = null;
+            try
             {
-                readiness.TrySetResult(true);
+                var stream = reader.BaseStream;
+                type = stream.GetType().FullName;
+                if (stream is not FileStream file) return new(type, null, null, null, null, null);
+                // Borrow identity only: the reader retains ownership of its handle.
+                var handle = file.SafeFileHandle;
+                return new(type, file.IsAsync, "0x" + handle.DangerousGetHandle().ToInt64().ToString("X"),
+                    handle.IsClosed, handle.IsInvalid, null);
+            }
+            catch (Exception exception) { return new(type, null, null, null, null, exception.ToString()); }
+        }
+
+        private StandaloneCaptureTime Now() => new(DateTimeOffset.UtcNow, _clock.Elapsed.TotalMilliseconds);
+
+        private string CapturePolling(StreamReader original, System.IO.Pipes.PipeStream pipe,
+            CancellationToken cancellation, string? marker, TaskCompletionSource<bool>? readiness,
+            int readChunkBytes)
+        {
+            lock (_gate) _readStarted = Now();
+            var buffer = new char[1024];
+            try
+            {
+                // The original Process reader has not consumed bytes. Preserve its
+                // encoding and normal BOM/partial-character decoding over a cancellable
+                // byte transport, rather than blocking directly in PipeStream.Read.
+                using var transport = new LinuxPollingReadStream(pipe.SafePipeHandle, cancellation, readChunkBytes);
+                using var prefix = new BomPrefixReadStream(transport);
+                using var reader = new StreamReader(prefix, original.CurrentEncoding,
+                    detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: false);
+                while (true)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    int count = reader.Read(buffer, 0, buffer.Length);
+                    bool foundMarker;
+                    lock (_gate)
+                    {
+                        if (count == 0)
+                        {
+                            _eof = Now();
+                            readiness?.TrySetResult(false);
+                            return _text.ToString();
+                        }
+                        _firstRead ??= Now();
+                        _lastRead = Now();
+                        _readCount++;
+                        _characterCount += count;
+                        _text.Append(buffer, 0, count);
+                        foundMarker = readiness is not null && !readiness.Task.IsCompleted &&
+                            _text.ToString().Contains(marker!, StringComparison.Ordinal);
+                    }
+                    if (foundMarker) readiness!.TrySetResult(true);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                lock (_gate) _canceled = Now();
+                throw;
+            }
+            catch (Exception exception)
+            {
+                lock (_gate)
+                {
+                    _fault = Now();
+                    _faultDescription = exception.ToString();
+                }
+                throw;
             }
         }
 
-        readiness.TrySetResult(false);
-        return output.ToString();
+        private async Task<string> CaptureAsync(StreamReader reader, CancellationToken cancellation,
+            string? marker, TaskCompletionSource<bool>? readiness)
+        {
+            lock (_gate) _readStarted = Now();
+            var buffer = new char[1024];
+            try
+            {
+                while (true)
+                {
+                    int count = await reader.ReadAsync(buffer.AsMemory(), cancellation).ConfigureAwait(false);
+                    bool foundMarker;
+                    lock (_gate)
+                    {
+                        if (count == 0)
+                        {
+                            _eof = Now();
+                            readiness?.TrySetResult(false);
+                            return _text.ToString();
+                        }
+                        _firstRead ??= Now();
+                        _lastRead = Now();
+                        _readCount++;
+                        _characterCount += count;
+                        _text.Append(buffer, 0, count);
+                        foundMarker = readiness is not null && !readiness.Task.IsCompleted &&
+                            _text.ToString().Contains(marker!, StringComparison.Ordinal);
+                    }
+                    if (foundMarker) readiness!.TrySetResult(true);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                lock (_gate) _canceled = Now();
+                throw;
+            }
+            catch (Exception exception)
+            {
+                lock (_gate)
+                {
+                    _fault = Now();
+                    _faultDescription = exception.ToString();
+                }
+                throw;
+            }
+        }
+    }
+
+    // StreamReader's BOM detection needs the initial bytes together when the
+    // supplied encoding has no preamble. Native pipe reads can split that prefix.
+    // Gather only a possible BOM: ordinary one-character output must remain live.
+    private sealed class BomPrefixReadStream(Stream inner) : Stream
+    {
+        private readonly byte[] _prefix = new byte[4];
+        private int _prefixLength, _prefixPosition;
+        private bool _initialized, _eof, _disposed;
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            ValidateBufferArguments(buffer, offset, count);
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (count == 0) return 0;
+            if (!_initialized)
+            {
+                do
+                {
+                    int received = inner.Read(_prefix, _prefixLength, 1);
+                    if (received == 0)
+                    {
+                        _eof = true;
+                        break;
+                    }
+                    _prefixLength += received;
+                }
+                while (CouldExtendBom(_prefix.AsSpan(0, _prefixLength)));
+                _initialized = true;
+            }
+
+            int available = _prefixLength - _prefixPosition;
+            if (available != 0)
+            {
+                int length = Math.Min(count, available);
+                Buffer.BlockCopy(_prefix, _prefixPosition, buffer, offset, length);
+                _prefixPosition += length;
+                return length;
+            }
+            return _eof ? 0 : inner.Read(buffer, offset, count);
+        }
+
+        private static bool CouldExtendBom(ReadOnlySpan<byte> prefix) => prefix.Length switch
+        {
+            1 => prefix[0] is 0x00 or 0xEF or 0xFE or 0xFF,
+            2 => (prefix[0] == 0xEF && prefix[1] == 0xBB) ||
+                 (prefix[0] == 0xFF && prefix[1] == 0xFE) ||
+                 (prefix[0] == 0x00 && prefix[1] == 0x00),
+            3 => (prefix[0] == 0xFF && prefix[1] == 0xFE && prefix[2] == 0x00) ||
+                 (prefix[0] == 0x00 && prefix[1] == 0x00 && prefix[2] == 0xFE),
+            _ => false
+        };
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && !_disposed) inner.Dispose();
+            _disposed = true;
+            base.Dispose(disposing);
+        }
+
+        public override bool CanRead => !_disposed && inner.CanRead;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    // Linux Process pipes use PipeSocket.ReceiveAsync in .NET 10. Their continuations
+    // can still depend on a busy pool. Keep this transport independent of that queue;
+    // a blocking read without poll would not offer bounded inherited-pipe cancellation.
+    private sealed class LinuxPollingReadStream : Stream
+    {
+        private readonly Microsoft.Win32.SafeHandles.SafePipeHandle _handle;
+        private readonly CancellationToken _cancellation;
+        private readonly int _descriptor;
+        private readonly int _readChunkBytes;
+        private int _disposed;
+
+        public LinuxPollingReadStream(Microsoft.Win32.SafeHandles.SafePipeHandle handle,
+            CancellationToken cancellation, int readChunkBytes)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(readChunkBytes, 1);
+            _handle = handle;
+            _cancellation = cancellation;
+            _readChunkBytes = readChunkBytes;
+            bool referenceHeld = false;
+            try
+            {
+                // Borrow, never close or duplicate the Process-owned descriptor. The
+                // reference prevents disposal/reuse until this reader actually stops.
+                handle.DangerousAddRef(ref referenceHeld);
+                _descriptor = handle.DangerousGetHandle().ToInt32();
+            }
+            catch
+            {
+                if (referenceHeld) handle.DangerousRelease();
+                throw;
+            }
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            ValidateBufferArguments(buffer, offset, count);
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            _cancellation.ThrowIfCancellationRequested();
+            if (count == 0) return 0;
+            var bytes = new byte[Math.Min(count, _readChunkBytes)];
+            var descriptor = new PollDescriptor { Descriptor = _descriptor, Events = 0x0001 };
+            while (true)
+            {
+                _cancellation.ThrowIfCancellationRequested();
+                descriptor.ReturnedEvents = 0;
+                int ready = Poll(ref descriptor, 1, 100);
+                if (ready < 0)
+                {
+                    int error = System.Runtime.InteropServices.Marshal.GetLastPInvokeError();
+                    if (error == 4) continue; // EINTR: recheck cancellation before retrying.
+                    throw NativeFailure("poll", error);
+                }
+                if (ready == 0) continue;
+                if ((descriptor.ReturnedEvents & 0x0020) != 0)
+                    throw new IOException("The borrowed output pipe descriptor became invalid.");
+                if ((descriptor.ReturnedEvents & (0x0001 | 0x0008 | 0x0010)) == 0) continue;
+                _cancellation.ThrowIfCancellationRequested();
+                // Only this transport reads the descriptor. Read at most the bytes
+                // made ready by poll; HUP is not EOF until read itself returns zero.
+                nint received = ReadDescriptor(_descriptor, bytes, (nuint)bytes.Length);
+                if (received >= 0)
+                {
+                    int length = checked((int)received);
+                    Buffer.BlockCopy(bytes, 0, buffer, offset, length);
+                    return length;
+                }
+                int readError = System.Runtime.InteropServices.Marshal.GetLastPInvokeError();
+                if (readError is 4 or 11) continue; // EINTR/EAGAIN: poll again, never synthesize EOF.
+                throw NativeFailure("read", readError);
+            }
+        }
+
+        private static IOException NativeFailure(string operation, int error) =>
+            new($"Output pipe {operation} failed with errno {error}.", new System.ComponentModel.Win32Exception(error));
+
+        protected override void Dispose(bool disposing)
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0) _handle.DangerousRelease();
+            base.Dispose(disposing);
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct PollDescriptor
+        {
+            public int Descriptor;
+            public short Events;
+            public short ReturnedEvents;
+        }
+
+        [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "poll", SetLastError = true)]
+        private static extern int Poll(ref PollDescriptor descriptor, nuint count, int timeoutMilliseconds);
+
+        [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "read", SetLastError = true)]
+        private static extern nint ReadDescriptor(int descriptor, [System.Runtime.InteropServices.Out] byte[] buffer, nuint count);
+    }
+
+    private sealed class StandaloneProcessDiagnostics(
+        Process process, ProcessStartInfo start, Stopwatch clock,
+        StandalonePipeCapture stdout, StandalonePipeCapture stderr, Task input, object dllIdentity)
+    {
+        private const string ArtifactKey = "StandaloneProcessDiagnosticPath";
+        private readonly string? _requestedDirectory = Environment.GetEnvironmentVariable("SHARPTS_STANDALONE_DIAGNOSTICS_DIR");
+        private readonly string _fileName = $"process-{process.Id}-{Guid.NewGuid():N}.json";
+        private readonly object _dllIdentity = dllIdentity;
+        private object? _observedExit;
+        private object? _atExit;
+        private int? _exitCode;
+        private long? _drainDeadline;
+
+        public int ExitCode => _exitCode ?? throw new InvalidOperationException("Child exit has not been observed.");
+
+        public void ObserveExit()
+        {
+            if (_exitCode is not null) return;
+            // Snapshot publication is charged to the original five-second drain
+            // budget, rather than giving pending readers additional time.
+            _drainDeadline = clock.ElapsedMilliseconds + 5000;
+            int pid = process.Id;
+            int code = process.ExitCode;
+            _exitCode = code;
+            _observedExit = new { processId = pid, exitCode = code, utc = DateTimeOffset.UtcNow,
+                elapsedMilliseconds = clock.Elapsed.TotalMilliseconds };
+            _atExit = new { stdout = stdout.Snapshot(), stderr = stderr.Snapshot() };
+            if (!string.IsNullOrEmpty(_requestedDirectory) &&
+                (!stdout.Completion.IsCompleted || !stderr.Completion.IsCompleted))
+                Publish("exited-draining", beforeCleanup: null, _requestedDirectory);
+        }
+
+        public bool WaitForDrain()
+        {
+            // The readiness-cleanup path may reach this even if forced exit was
+            // not observed; it still receives only its original drain budget.
+            _drainDeadline ??= clock.ElapsedMilliseconds + 5000;
+            int remaining = (int)Math.Clamp(_drainDeadline.Value - clock.ElapsedMilliseconds, 0, 5000);
+            // Task.Wait uses the pool's queue-transfer/cooperative-blocking path;
+            // WaitAll skips it and can leave these async-over-sync pipe reads
+            // queued behind unrelated work while this worker is blocked.
+            Task completion = Task.WhenAll(stdout.Completion, stderr.Completion);
+            ObserveStandaloneTaskFault(completion);
+            return completion.Wait(remaining);
+        }
+
+        public void Complete()
+        {
+            if (!string.IsNullOrEmpty(_requestedDirectory)) Publish("completed", beforeCleanup: null, _requestedDirectory);
+        }
+
+        public TimeoutException Timeout(string message) => AddFailure(new TimeoutException(message));
+        public Exception Failure(string message) => AddFailure(new Exception(message));
+
+        private T AddFailure<T>(T exception) where T : Exception
+        {
+            AttachFailure(exception);
+            string detail = exception.Data["StandaloneProcessDiagnosticSummary"]?.ToString() ?? "Diagnostics unavailable.";
+            Exception withDetail = exception is TimeoutException
+                ? new TimeoutException($"{exception.Message} {detail}", exception)
+                : new Exception($"{exception.Message} {detail}", exception);
+            foreach (System.Collections.DictionaryEntry entry in exception.Data) withDetail.Data[entry.Key] = entry.Value;
+            return (T)withDetail;
+        }
+
+        public void AttachFailure(Exception exception)
+        {
+            if (exception.Data.Contains(ArtifactKey)) return;
+            // Snapshot first: cancellation/disposal can change both task and pipe state.
+            var output = stdout.Snapshot();
+            var error = stderr.Snapshot();
+            var beforeCleanup = new { observedExit = _observedExit, stdout = output, stderr = error,
+                inputTaskStatus = input.Status.ToString(), utc = DateTimeOffset.UtcNow,
+                elapsedMilliseconds = clock.Elapsed.TotalMilliseconds };
+            string directory = string.IsNullOrEmpty(_requestedDirectory)
+                ? Path.Combine(Path.GetTempPath(), "sharpts-standalone-diagnostics") : _requestedDirectory;
+            string path = Publish("failure-before-cleanup", beforeCleanup, directory);
+            exception.Data[ArtifactKey] = path;
+            exception.Data["StandaloneProcessDiagnosticSummary"] =
+                $"PID {process.Id}; observed exit code {_exitCode?.ToString() ?? "<not observed>"}; " +
+                $"stdout task {output.TaskStatus}, EOF {output.Eof is not null}, chars {output.CharacterCount}: {Tail(output.PartialText)}; " +
+                $"stderr task {error.TaskStatus}, EOF {error.Eof is not null}, chars {error.CharacterCount}: {Tail(error.PartialText)}; " +
+                $"diagnostic: {path}";
+        }
+
+        private string Publish(string stage, object? beforeCleanup, string directory)
+        {
+            string path = directory;
+            try
+            {
+                path = Path.Combine(directory, _fileName);
+                var snapshot = new
+                {
+                    schemaVersion = 1, stage, utc = DateTimeOffset.UtcNow,
+                    elapsedMilliseconds = clock.Elapsed.TotalMilliseconds,
+                    launch = new { fileName = start.FileName, arguments = start.Arguments,
+                        argumentList = start.ArgumentList.ToArray(), workingDirectory = start.WorkingDirectory,
+                        dll = _dllIdentity },
+                    observedExit = _observedExit, atExit = _atExit, beforeCleanup,
+                    host = CaptureHost()
+                };
+                string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+                { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                Directory.CreateDirectory(directory);
+                string temporary = path + ".tmp";
+                File.WriteAllText(temporary, json);
+                File.Move(temporary, path, overwrite: true);
+                return path;
+            }
+            catch (Exception exception)
+            {
+                // Diagnostic failures must not replace the original bounded failure.
+                return $"<diagnostic write failed for {path}: {exception.GetType().Name}: {exception.Message}>";
+            }
+        }
+
+        private static object CaptureHost()
+        {
+            ThreadPool.GetAvailableThreads(out int availableWorkers, out int availableIo);
+            ThreadPool.GetMinThreads(out int minimumWorkers, out int minimumIo);
+            ThreadPool.GetMaxThreads(out int maximumWorkers, out int maximumIo);
+            int? handles = null, threads = null;
+            string? processError = null;
+            try
+            {
+                using var host = Process.GetCurrentProcess();
+                handles = host.HandleCount;
+                threads = host.Threads.Count;
+            }
+            catch (Exception exception) { processError = exception.ToString(); }
+            return new { processId = Environment.ProcessId, utc = DateTimeOffset.UtcNow, handles, threads, processError,
+                threadPool = new { availableWorkers, availableIo, minimumWorkers, minimumIo, maximumWorkers, maximumIo,
+                    threadCount = ThreadPool.ThreadCount, pendingWorkItemCount = ThreadPool.PendingWorkItemCount,
+                    completedWorkItemCount = ThreadPool.CompletedWorkItemCount } };
+        }
+
+        private static string Tail(string text) => text.Length <= 2000 ? text : "<truncated> " + text[^2000..];
     }
 
     private static void TryTerminateProcessTree(Process process)

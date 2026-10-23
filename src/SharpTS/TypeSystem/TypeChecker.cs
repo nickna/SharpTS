@@ -1166,7 +1166,8 @@ public partial class TypeChecker
         bool validateDefaults,
         string contextName,
         object? editorOwner = null,
-        bool inspectDestructuredDefaults = true)
+        bool inspectDestructuredDefaults = true,
+        bool deferClassContextDefaults = false)
     {
         List<TypeInfo> paramTypes = [];
         List<string> paramNames = [];
@@ -1181,6 +1182,8 @@ public partial class TypeChecker
         var paramScope = new TypeEnvironment(_environment);
         if (editorOwner is not null)
             RegisterEditorParameterScope(editorOwner, paramScope);
+        using var bindingScope = new ParameterBindingCheckScope(this, editorOwner, validateDefaults,
+            deferClassContextDefaults);
 
         foreach (var param in parameters)
         {
@@ -1191,13 +1194,14 @@ public partial class TypeChecker
                 var optional = new HashSet<string>(StringComparer.Ordinal);
                 foreach (Stmt.DestructuredParameterProperty property in properties)
                 {
-                    fields[property.Key.Lexeme] = property.DefaultValue is { } defaultExpression
-                        ? inspectDestructuredDefaults
-                            ? WidenLiteralType(CheckDeferredClassDefault(defaultExpression))
-                            : defaultExpression is Expr.Literal literal
-                                ? WidenLiteralType(GetLiteralType(literal.Value))
-                                : TypeInfo.Any.Shared
-                        : TypeInfo.Any.Shared;
+                    using (new EnvironmentScope(this, paramScope))
+                        fields[property.Key.Lexeme] = property.DefaultValue is { } defaultExpression
+                            ? inspectDestructuredDefaults
+                                ? WidenLiteralType(CheckMethodSignatureDefault(defaultExpression, deferClassContextDefaults))
+                                : defaultExpression is Expr.Literal literal
+                                    ? WidenLiteralType(GetLiteralType(literal.Value))
+                                    : TypeInfo.Any.Shared
+                            : TypeInfo.Any.Shared;
                     if (property.DefaultValue is not null) optional.Add(property.Key.Lexeme);
 
                     if (property.IsRenamed && property.Binding.Lexeme is
@@ -1225,6 +1229,7 @@ public partial class TypeChecker
             if (param.IsRest)
             {
                 DeclareParameterValue(paramScope, param, paramType);
+                bindingScope.Initialize(param, paramScope, paramType);
                 continue;
             }
 
@@ -1238,11 +1243,12 @@ public partial class TypeChecker
                     TypeInfo defaultType;
                     using (new EnvironmentScope(this, paramScope))
                     {
-                        defaultType = CheckDeferredClassDefault(param.DefaultValue);
+                        defaultType = CheckDeferredClassDefault(param.DefaultValue, ParameterDefaultTupleContext(paramType));
                     }
                     if (!IsCompatible(paramType, defaultType))
                     {
-                        throw new TypeMismatchException($"Default value type is not assignable to parameter type in {contextName}", paramType, defaultType, tsCode: "TS2322");
+                        throw new TypeMismatchException($"Default value type is not assignable to parameter type in {contextName}",
+                            paramType, defaultType, line: TryGetExprLine(param.DefaultValue) ?? param.Name.Line, tsCode: "TS2322");
                     }
                 }
             }
@@ -1259,12 +1265,14 @@ public partial class TypeChecker
                 requiredParams++;
             }
 
+            TypeInfo visibleType = param.IsOptional && param.DefaultValue == null
+                ? CreateUnion(paramType, TypeInfo.Undefined.Shared)
+                : paramType;
             DeclareParameterValue(
                 paramScope,
                 param,
-                param.IsOptional && param.DefaultValue == null
-                    ? CreateUnion(paramType, TypeInfo.Undefined.Shared)
-                    : paramType);
+                visibleType);
+            bindingScope.Initialize(param, paramScope, visibleType);
         }
 
         bool hasRest = parameters.Any(p => p.IsRest);
@@ -3186,6 +3194,7 @@ public partial class TypeChecker
     {
         Expr.AssertedAssignment assignment => TryGetExprLine(assignment.LoweredAssignment),
         Expr.Grouping g => TryGetExprLine(g.Expression),
+        Expr.Instantiation instantiation => instantiation.LessThan.Line,
         Expr.Variable v => v.Name.Line,
         Expr.This t => t.Keyword.Line,
         Expr.NewTarget nt => nt.Keyword.Line,

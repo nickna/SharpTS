@@ -37,7 +37,7 @@ public class EmittedNumericCoercionRuntimeTests
         var first = new EmittedRuntime().NumericCoercion;
         Assert.NotSame(first, new EmittedRuntime().NumericCoercion);
         Assert.False(first.IsComplete);
-        Assert.Equal(5, Handles.Length);
+        Assert.Equal(6, Handles.Length);
         Assert.Null(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.NumericCoercion))!.SetMethod);
     }
 

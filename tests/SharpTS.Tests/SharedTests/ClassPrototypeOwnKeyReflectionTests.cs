@@ -5,8 +5,16 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class ClassPrototypeOwnKeyReflectionTests
 {
+    public const string CreationOrderIssueSource = """
+        class C { first() {} get middle() { return 1; } last() {} }
+        console.log(Object.getOwnPropertyNames(C.prototype).join(","));
+        console.log(Reflect.ownKeys(C.prototype).join(","));
+        """;
+
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["creation-order-first-middle-last-issue", CreationOrderIssueSource,
+            "constructor,first,middle,last\nconstructor,first,middle,last\n"];
         yield return ["issue", """
             class C { a() { return 1; } }
             console.log(typeof C.prototype);
@@ -66,6 +74,71 @@ public sealed class ClassPrototypeOwnKeyReflectionTests
                 typeof pair.get, typeof pair.set, typeof symbolPair.get, typeof symbolPair.set,
                 pair.enumerable, symbolPair.enumerable);
             """, "1,2,10,constructor,alpha,pair,01,omega,beta\n1,2,10,constructor,alpha,pair,01,omega,beta,first,second 1,beta\n2 true true function function function function false false\n"];
+        yield return ["creation-order-in-place-update-does-not-invoke-getters", """
+            const first = Symbol('same'), second = Symbol('same');
+            let reads = 0;
+            class Owner {
+                first() {}
+                get middle() { reads++; return 1; }
+                [first]() {}
+                last() {}
+                set pair(value: number) {}
+                [second]() {}
+                get pair() { reads++; return 2; }
+            }
+            const prototype: any = Owner.prototype;
+            function keys(value: any): string {
+                return Reflect.ownKeys(value).map(key => key === first ? 'first-symbol'
+                    : key === second ? 'second-symbol' : String(key)).join(',');
+            }
+            console.log(Object.getOwnPropertyNames(prototype).join(','), keys(prototype), reads);
+            Object.defineProperty(prototype, 'middle', { enumerable: true });
+            Object.defineProperty(prototype, 'first', { writable: false });
+            console.log(Object.getOwnPropertyNames(prototype).join(','), keys(prototype), reads);
+            const pair = Object.getOwnPropertyDescriptor(prototype, 'pair')!;
+            console.log(Object.keys(prototype).join(','), typeof pair.get, typeof pair.set, reads);
+            """, "constructor,first,middle,last,pair constructor,first,middle,last,pair,first-symbol,second-symbol 0\nconstructor,first,middle,last,pair constructor,first,middle,last,pair,first-symbol,second-symbol 0\nmiddle function function 0\n"];
+        yield return ["creation-order-expression-and-generic-computed-accessors", """
+            const symbol = Symbol('member'), instanceField = 'instanceField', events: string[] = [];
+            let reads = 0;
+            function key(label: string): any { events.push(label); return label; }
+            const Expression = class {
+                first() {}
+                get [key('middle')]() { reads++; return 1; }
+                static observed = Object.getOwnPropertyNames(this.prototype).join(',');
+                [symbol]() {}
+                last() {}
+                set [key('middle')](value: number) {}
+            };
+            class Generic<T> {
+                first() {}
+                get [key('middle')]() { reads++; return 2; }
+                static observed = Object.getOwnPropertyNames(this.prototype).join(',');
+                ["instanceField"] = 1;
+                [symbol]() {}
+                last() {}
+                set [key('middle')](value: number) {}
+            }
+            const first = new Generic<number>(), second = new Generic<string>();
+            for (const owner of [Expression, Generic]) {
+                const prototype: any = owner.prototype;
+                console.log(Object.getOwnPropertyNames(prototype).join(','),
+                    Reflect.ownKeys(prototype).map(key => key === symbol ? 'symbol' : String(key)).join(','),
+                    owner.observed === Object.getOwnPropertyNames(prototype).join(','));
+                const descriptor = Object.getOwnPropertyDescriptor(prototype, 'middle')!;
+                const symbols = Object.getOwnPropertySymbols(prototype);
+                console.log(typeof descriptor.get, typeof descriptor.set, symbols.length,
+                    symbols[0] === symbol, Reflect.ownKeys(prototype).includes(instanceField), reads);
+            }
+            console.log(Object.getPrototypeOf(first) === Generic.prototype,
+                Object.getPrototypeOf(second) === Generic.prototype, events.join(','), reads);
+            """, "constructor,first,middle,last constructor,first,middle,last,symbol true\nfunction function 1 true false 0\nconstructor,first,middle,last constructor,first,middle,last,symbol true\nfunction function 1 true false 0\ntrue true middle,middle,middle,middle 0\n"];
+        yield return ["creation-order-deferred-registration-preserves-forward-class-body", """
+            const key = 'field';
+            class Owner { [key] = 1; make() { return new Later(); } }
+            class Later { value = 7; }
+            console.log(new Owner().make().value);
+            """, "7\n"];
         yield return ["enumerable-apis-avoid-getters-and-keep-receiver", """
             const symbol = Symbol("access");
             let gets = 0, wrongReceiver = 0;
@@ -200,15 +273,65 @@ public sealed class ClassPrototypeOwnKeyReflectionTests
             {
                 // #2570: compiled prototype auto-accessor descriptors are absent.
                 "auto-accessor-own-inventory" => false,
-                // #2675: compiled prototype methods/accessors lose mixed source order.
-                "numeric-string-symbol-order-and-pairing" => false,
-                // #2676: compiled Proxy values/entries omit class-prototype values.
-                "transparent-proxy-reflection" => false,
-                // #2674: compiled defineProperties skips Symbol descriptor-map keys.
-                "enumerable-apis-avoid-getters-and-keep-receiver" => false,
                 _ => true
             })
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
+
+    public static IEnumerable<object[]> PrototypeCreationOrderCases() => Cases().Where(row =>
+        (string)row[0] is "creation-order-first-middle-last-issue"
+            or "numeric-string-symbol-order-and-pairing"
+            or "creation-order-in-place-update-does-not-invoke-getters"
+            or "creation-order-expression-and-generic-computed-accessors"
+            or "creation-order-deferred-registration-preserves-forward-class-body");
+
+    public const string RecreationOrderSource = """
+        const first = Symbol('same'), second = Symbol('same');
+        let reads = 0;
+        class Owner {
+            first() {}
+            get middle() { reads++; return 1; }
+            [first]() {}
+            last() {}
+            set pair(value: number) {}
+            [second]() {}
+            get pair() { reads++; return 2; }
+        }
+        const prototype: any = Owner.prototype;
+        function keys(value: any): string {
+            return Reflect.ownKeys(value).map(key => key === first ? 'first-symbol'
+                : key === second ? 'second-symbol' : String(key)).join(',');
+        }
+        console.log(Object.getOwnPropertyNames(prototype).join(','), keys(prototype), reads);
+        delete prototype.middle;
+        Object.defineProperty(prototype, 'middle', {
+            get() { reads++; return 3; }, enumerable: true, configurable: true
+        });
+        delete prototype.first;
+        Object.defineProperty(prototype, 'first', {
+            value: () => 4, writable: true, enumerable: true, configurable: true
+        });
+        console.log(Object.getOwnPropertyNames(prototype).join(','), keys(prototype), reads);
+        const pair = Object.getOwnPropertyDescriptor(prototype, 'pair')!;
+        console.log(Object.keys(prototype).join(','), typeof pair.get, typeof pair.set, reads);
+        """;
+
+    public const string RecreationOrderExpected = "constructor,first,middle,last,pair constructor,first,middle,last,pair,first-symbol,second-symbol 0\nconstructor,last,pair,middle,first constructor,last,pair,middle,first,first-symbol,second-symbol 0\nmiddle,first function function 0\n";
+
+    [Fact]
+    public void DeletionAndRecreationAppendClassPrototypeKeysWithoutInvokingGetters()
+    {
+        const string source = RecreationOrderSource;
+        const string expected = RecreationOrderExpected;
+        Assert.Equal(expected, TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
+    [Fact]
+    public void CompiledDeletionAndRecreationAppendClassPrototypeKeysWithoutInvokingGetters()
+    {
+        var (errors, output) = TestHarness.CompileVerifyAndRun(RecreationOrderSource);
+        Assert.Empty(errors);
+        Assert.Equal(RecreationOrderExpected, output);
+    }
 
     [Theory, MemberData(nameof(ModeCases))]
     public void ClassPrototypeReflectionUsesOnlyItsOwnPropertyInventory(

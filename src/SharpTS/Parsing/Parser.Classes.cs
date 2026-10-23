@@ -330,7 +330,8 @@ public partial class Parser
                     // Private method: #name() { }
                     List<TypeParam>? typeParams2 = ParseTypeParameters();
                     Token parametersOpen = Consume(TokenType.LEFT_PAREN, "Expect '(' after private method name.");
-                    List<Stmt.Parameter> parameters = ParseMethodParameters();
+                    var (parameters, destructuredParams, thisType, thisTypeNode) =
+                        ParseRuntimeParameters(allowParameterDecoratorsAndProperties: false);
                     Token parametersClose = Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
 
                     string? returnType = null;
@@ -343,8 +344,10 @@ public partial class Parser
 
                     Token methodBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before private method body.");
                     List<Stmt> body = Block();
+                    body = PrependDestructuringPrologue(destructuredParams, body);
 
-                    var func = new Stmt.Function(fieldName, typeParams2, null, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: isOverride, IsAsync: isMemberAsync, IsGenerator: isMemberGenerator, Decorators: null, IsPrivate: true);
+                    var func = new Stmt.Function(fieldName, typeParams2, thisType, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: isOverride, IsAsync: isMemberAsync, IsGenerator: isMemberGenerator, Decorators: null, IsPrivate: true, ThisTypeNode: thisTypeNode);
+                    AttachEditorSyntax(func, thisTypeNode);
                     AttachEditorSyntax(func, returnTypeNode);
                     RecordFunctionSyntax(func, fieldName.Start, parametersOpen, parametersClose,
                         methodBodyOpen.Start, new SourceSpan(methodBodyOpen.Start, ConsumedSourceEnd));
@@ -400,16 +403,11 @@ public partial class Parser
                 // Validate: computed properties cannot have access modifiers in TypeScript
                 // Actually TypeScript does allow this, so we'll support it
 
-                // Validate: declare cannot be used with computed properties
-                if (isMemberDeclare)
-                {
-                    throw new Exception($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with computed property names.");
-                }
-
                 // Computed-name method ([Symbol.iterator]() {}) or field ([expr]: T = v).
                 ParseComputedClassMember(
                     isStatic, isMemberAsync, isMemberGenerator, isOverride, isReadonly,
-                    access, memberDecorators, methods, fields, staticInitializers, isDeclare);
+                    access, memberDecorators, methods, fields, staticInitializers,
+                    isDeclare, isMemberDeclare);
             }
             else if ((Peek().Type == TokenType.IDENTIFIER || IsKeyword(Peek().Type)
                       || IsContextualKeyword(Peek().Type)
@@ -570,16 +568,7 @@ public partial class Parser
                                     throw new Exception($"Parse Error: Parameter property '{param.Name.Lexeme}' conflicts with existing field declaration.");
                                 }
 
-                                // Synthesize field declaration (no initializer - set in constructor)
-                                fields.Add(new Stmt.Field(
-                                    param.Name,
-                                    param.Type,
-                                    null,  // No initializer
-                                    false, // Not static
-                                    param.Access ?? AccessModifier.Public,
-                                    param.IsReadonly,
-                                    false  // Not optional
-                                ));
+                                fields.Add(CreateParameterPropertyField(param));
                             }
                         }
                     }
@@ -616,7 +605,7 @@ public partial class Parser
         bool isStatic, bool isMemberAsync, bool isMemberGenerator, bool isOverride, bool isReadonly,
         AccessModifier access, List<Decorator>? memberDecorators,
         List<Stmt.Function> methods, List<Stmt.Field> fields, List<Stmt> staticInitializers,
-        bool isDeclare = false)
+        bool isDeclare = false, bool isMemberDeclare = false)
     {
         Advance(); // consume '['
         Expr computedKey = Expression();
@@ -629,6 +618,11 @@ public partial class Parser
         // anything else is a computed-name field ([expr]: T = v).
         if (Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS))
         {
+            if (isMemberDeclare)
+            {
+                throw new Exception("Parse Error: 'declare' modifier is only valid on fields, not methods.");
+            }
+
             var func = (Stmt.Function)FunctionDeclaration(
                 "method", isMemberAsync, isMemberGenerator, isDeclare: isDeclare,
                 computedMethod: (syntheticName, computedKey));
@@ -645,6 +639,8 @@ public partial class Parser
             throw new Exception($"Parse Error at line {syntheticName.Line}: Generator marker '*' can only be used with methods, not fields.");
         }
 
+        bool isOptional = Match(TokenType.QUESTION);
+
         // Type annotation is optional (ES class fields), matching the identifier-keyed field path:
         // `[Symbol.iterator] = 0;` / `[Symbol.iterator];` are both valid without a `: type`.
         string? typeAnnotation = null;
@@ -657,6 +653,10 @@ public partial class Parser
         Expr? initializer = null;
         if (Match(TokenType.EQUAL))
         {
+            if (isMemberDeclare)
+            {
+                throw new Exception($"Parse Error at line {syntheticName.Line}: 'declare' fields cannot have an initializer.");
+            }
             initializer = Expression();
         }
 
@@ -664,7 +664,7 @@ public partial class Parser
             Match(TokenType.SEMICOLON);
         else
             ConsumeSemicolon("Expect ';' after computed property field declaration.");
-        var field = new Stmt.Field(syntheticName, typeAnnotation, initializer, isStatic, access, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, memberDecorators, IsPrivate: false, IsDeclare: isDeclare, ComputedKey: computedKey);
+        var field = new Stmt.Field(syntheticName, typeAnnotation, initializer, isStatic, access, isReadonly, IsOptional: isOptional, HasDefiniteAssignmentAssertion: false, memberDecorators, IsPrivate: false, IsDeclare: isDeclare || isMemberDeclare, ComputedKey: computedKey);
         AttachEditorSyntax(field, typeAnnotationNode);
         fields.Add(field);
         if (isStatic)
@@ -991,7 +991,8 @@ public partial class Parser
                     // Private method: #name() { }
                     List<TypeParam>? typeParams2 = ParseTypeParameters();
                     Token parametersOpen = Consume(TokenType.LEFT_PAREN, "Expect '(' after private method name.");
-                    List<Stmt.Parameter> parameters = ParseMethodParameters();
+                    var (parameters, destructuredParams, thisType, thisTypeNode) =
+                        ParseRuntimeParameters(allowParameterDecoratorsAndProperties: false);
                     Token parametersClose = Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
 
                     string? returnType = null;
@@ -1004,8 +1005,10 @@ public partial class Parser
 
                     Token methodBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before private method body.");
                     List<Stmt> body = Block();
+                    body = PrependDestructuringPrologue(destructuredParams, body);
 
-                    var func = new Stmt.Function(fieldName, typeParams2, null, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: isOverride, IsAsync: isMemberAsync, IsGenerator: isMemberGenerator, Decorators: null, IsPrivate: true);
+                    var func = new Stmt.Function(fieldName, typeParams2, thisType, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: isOverride, IsAsync: isMemberAsync, IsGenerator: isMemberGenerator, Decorators: null, IsPrivate: true, ThisTypeNode: thisTypeNode);
+                    AttachEditorSyntax(func, thisTypeNode);
                     AttachEditorSyntax(func, returnTypeNode);
                     RecordFunctionSyntax(func, fieldName.Start, parametersOpen, parametersClose,
                         methodBodyOpen.Start, new SourceSpan(methodBodyOpen.Start, ConsumedSourceEnd));
@@ -1103,11 +1106,7 @@ public partial class Parser
                     indexSignatures.Add(indexSig);
                     continue;
                 }
-                if (isMemberDeclare)
-                {
-                    throw new Exception($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with computed property names.");
-                }
-                ParseComputedClassMember(isStatic, isMemberAsync, isMemberGenerator, isOverride, isReadonly, access, memberDecorators: null, methods, fields, staticInitializers);
+                ParseComputedClassMember(isStatic, isMemberAsync, isMemberGenerator, isOverride, isReadonly, access, memberDecorators: null, methods, fields, staticInitializers, isMemberDeclare: isMemberDeclare);
             }
             else
             {
@@ -1151,15 +1150,7 @@ public partial class Parser
                             {
                                 throw new Exception($"Parse Error: Parameter property '{param.Name.Lexeme}' conflicts with existing field declaration.");
                             }
-                            fields.Add(new Stmt.Field(
-                                param.Name,
-                                param.Type,
-                                null,
-                                false,
-                                param.Access ?? AccessModifier.Public,
-                                param.IsReadonly,
-                                false
-                            ));
+                            fields.Add(CreateParameterPropertyField(param));
                         }
                     }
                 }
@@ -1198,6 +1189,21 @@ public partial class Parser
         );
         RecordClassSyntax(expression, name, headerStart, bodyOpen.Start, ConsumedSourceEnd);
         return expression;
+    }
+
+    private static Stmt.Field CreateParameterPropertyField(Stmt.Parameter parameter)
+    {
+        string? type = parameter.Type;
+        if (parameter.IsOptional)
+        {
+            // Parameter properties receive the parameter's value type, including undefined,
+            // even with exactOptionalPropertyTypes enabled. Defaults alone do not widen it.
+            if (type is not null) type = $"({type}) | undefined";
+        }
+        return new Stmt.Field(parameter.Name, type, null,
+            Access: parameter.Access ?? AccessModifier.Public,
+            IsReadonly: parameter.IsReadonly,
+            IsOptional: parameter.IsOptional);
     }
 
     private void RecordAccessorSyntax(Stmt.Accessor accessor, Token kind, Token open, Token close, SourceSpan? body)

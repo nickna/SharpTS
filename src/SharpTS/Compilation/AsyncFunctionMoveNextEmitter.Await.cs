@@ -55,24 +55,15 @@ public abstract partial class AsyncFunctionMoveNextEmitter
     protected abstract MethodInfo BuilderAwaitUnsafeOnCompletedMethod();
 
     /// <summary>
-    /// True only for an async declaration whose exception routing can accept a direct synchronous
-    /// core call. Async arrows and functions with JavaScript try/catch retain the ordinary await path.
+    /// Legacy extension flag retained for compatibility with derived emitters. It no longer
+    /// controls await lowering; every syntactic await uses the ordinary suspension path.
     /// </summary>
     protected virtual bool AllowSuspensionFreePrimitiveAsyncCoreAwait => false;
 
     protected override void EmitAwait(Expr.Await a)
     {
-        if (TryEmitStablePrimitivePromiseResolveAwait(a))
-            return;
-
-        if (AllowSuspensionFreePrimitiveAsyncCoreAwait
-            && Ctx.SuspensionFreePrimitiveAsyncAwaits?.Contains(a) == true)
-        {
-            if (TryEmitSuspensionFreePrimitiveAsyncCoreCall(a.Expression))
-                return;
-            throw new CompileException(
-                "A pre-proven suspension-free async core call could not be emitted.");
-        }
+        // Even an immediately available native Promise result needs an Await
+        // job. Keep every syntactic await in the ordinary suspension path.
 
         // 1. Emit the awaited expression (should produce Task<object> or $Promise or any value)
         EmitExpression(a.Expression);
@@ -80,130 +71,6 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
         // 2+. Coerce to Task<object>, suspend/resume, and leave the awaited result on the stack.
         EmitAwaitFromValueOnStack(NextAwaitState());
-    }
-
-    /// <summary>
-    /// Elides the fresh completed <c>Task&lt;object&gt;</c> created for an immediately
-    /// awaited intrinsic <c>Promise.resolve(primitive)</c>. The generated await path
-    /// already continues synchronously for that completed task, so its identity and
-    /// the boxed primitive cannot be observed. Programs that can replace Promise
-    /// behavior, shadow the global binding, or pass a thenable retain ordinary
-    /// Promise resolution and await lowering.
-    /// </summary>
-    private bool TryEmitStablePrimitivePromiseResolveAwait(Expr.Await awaitExpression)
-    {
-        Expr expression = awaitExpression.Expression;
-        if (Ctx.RuntimeFeatures?.UsesPromisePrototypeMutation == true
-            || Resolver.HasVariable("Promise")
-            || Ctx.HasVisibleValueBinding("Promise")
-            || expression is not Expr.Call
-            {
-                Optional: false,
-                Callee: Expr.Get
-                {
-                    Optional: false,
-                    Object: Expr.Variable { Name.Lexeme: "Promise" },
-                    Name.Lexeme: "resolve"
-                },
-                Arguments: [var value]
-            }
-            || value is Expr.Spread
-            || !IsStaticallyNonNullPrimitive(Ctx.TypeMap?.Get(value)))
-        {
-            return false;
-        }
-
-        if (Ctx.SuspensionFreePrimitiveAsyncAwaits?.Contains(awaitExpression) != true)
-        {
-            // AsyncStateAnalyzer reserved a dispatch label for every syntactic
-            // await that was not proven non-suspending before state-machine
-            // definition. This path never stores that state, but the persisted
-            // switch target must still be marked.
-            MarkAwaitResumeLabel(NextAwaitState());
-        }
-        EmitExpression(value);
-        return true;
-    }
-
-    private static bool IsStaticallyNonNullPrimitive(TypeSystem.TypeInfo? type) => type is
-        TypeSystem.TypeInfo.Primitive
-        {
-            Type: TokenType.TYPE_NUMBER or TokenType.TYPE_BOOLEAN
-        }
-        or TypeSystem.TypeInfo.NumberLiteral
-        or TypeSystem.TypeInfo.BooleanLiteral
-        or TypeSystem.TypeInfo.String
-        or TypeSystem.TypeInfo.StringLiteral;
-
-    private bool TryEmitSuspensionFreePrimitiveAsyncCoreCall(Expr expression)
-    {
-        if (expression is not Expr.Call
-            {
-                Callee: Expr.Variable functionVariable,
-                Arguments: var arguments
-            }
-            || arguments.Any(argument => argument is Expr.Spread)
-            || AnyContainsSuspension(arguments))
-        {
-            return false;
-        }
-
-        string simpleName = functionVariable.Name.Lexeme;
-        string resolvedName = Ctx.ResolveFunctionName(simpleName);
-        bool isSameScopeDeclaration = string.Equals(
-            resolvedName,
-            Ctx.GetQualifiedFunctionName(simpleName),
-            StringComparison.Ordinal);
-        bool shadowedByLocalBinding = Resolver.HasVariable(simpleName);
-        if (shadowedByLocalBinding
-            && isSameScopeDeclaration
-            && Ctx.TopLevelStaticVars?.ContainsKey(simpleName) == true
-            && !Ctx.TryGetParameter(simpleName, out _)
-            && !Ctx.CellBindingLocals.ContainsKey(simpleName)
-            && !Ctx.Locals.HasLocal(simpleName)
-            && Ctx.CapturedFunctionLocals?.Contains(simpleName) != true
-            && Ctx.CapturedArrowLocals?.Contains(simpleName) != true
-            && Ctx.ParentArrowCapturedLocals?.Contains(simpleName) != true
-            && Ctx.ExtraArrowScopeBindings?.ContainsKey(simpleName) != true
-            && Ctx.CapturedFields?.ContainsKey(simpleName) != true)
-        {
-            shadowedByLocalBinding = false;
-        }
-
-        Dictionary<string, MethodBuilder>? stableCores =
-            Ctx.SuspensionFreePrimitiveAsyncCores;
-        if (stableCores == null
-            || !stableCores.TryGetValue(resolvedName, out MethodBuilder? coreMethod)
-            || !isSameScopeDeclaration
-            || arguments.Count != coreMethod.GetParameters().Length
-            || shadowedByLocalBinding)
-        {
-            return false;
-        }
-
-        ParameterInfo[] parameters = coreMethod.GetParameters();
-        var argumentLocals = new LocalBuilder[arguments.Count];
-        for (int index = 0; index < arguments.Count; index++)
-        {
-            EmitExpression(arguments[index]);
-            EmitConversionForParameter(arguments[index], parameters[index].ParameterType);
-            var argumentLocal = IL.DeclareLocal(parameters[index].ParameterType);
-            IL.Emit(OpCodes.Stloc, argumentLocal);
-            argumentLocals[index] = argumentLocal;
-        }
-        foreach (LocalBuilder argumentLocal in argumentLocals)
-            IL.Emit(OpCodes.Ldloc, argumentLocal);
-
-        IL.Emit(OpCodes.Call, coreMethod);
-        if (coreMethod.ReturnType == typeof(double))
-            SetStackType(StackType.Double);
-        else if (coreMethod.ReturnType == typeof(bool))
-            SetStackType(StackType.Boolean);
-        else if (coreMethod.ReturnType == typeof(string))
-            SetStackType(StackType.String);
-        else
-            SetStackUnknown();
-        return true;
     }
 
     /// <summary>

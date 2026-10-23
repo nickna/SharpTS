@@ -17,6 +17,7 @@ public sealed class EditorExpressionTests
             typeof(Expr.Comma), typeof(Expr.Binary), typeof(Expr.Logical), typeof(Expr.NullishCoalescing),
             typeof(Expr.Ternary), typeof(Expr.Grouping), typeof(Expr.Literal), typeof(Expr.Unary),
             typeof(Expr.Delete), typeof(Expr.Variable), typeof(Expr.Assign), typeof(Expr.Call),
+            typeof(Expr.Instantiation),
             typeof(Expr.Get), typeof(Expr.Set), typeof(Expr.GetPrivate), typeof(Expr.PrivateIn),
             typeof(Expr.SetPrivate), typeof(Expr.CallPrivate), typeof(Expr.This), typeof(Expr.New), typeof(Expr.NewTarget),
             typeof(Expr.ArrayLiteral), typeof(Expr.ObjectLiteral), typeof(Expr.GetIndex), typeof(Expr.SetIndex),
@@ -65,6 +66,48 @@ public sealed class EditorExpressionTests
         Assert.Equal("a.b", Text(parsed, first));
         Assert.Equal("a", Text(parsed, first.Object));
         Assert.Equal(new[] { "b", "c", "d" }, parsed.Syntax.Members.Select(member => member.Name.Lexeme));
+    }
+
+    [Fact]
+    public void CallLessInstantiationKeepsWrittenOperandAndNestedTypeRanges()
+    {
+        const string source = "const specialized = identity<Box<number>>;";
+        var parsed = Parse(source);
+        Assert.True(parsed.ParseResult.IsSuccess);
+        var declaration = Assert.IsType<Stmt.Const>(Assert.Single(parsed.ParseResult.Statements));
+        var instantiation = Assert.IsType<Expr.Instantiation>(declaration.Initializer);
+        var operand = Assert.IsType<Expr.Variable>(instantiation.Expression);
+        Assert.Equal("identity", operand.Name.Lexeme);
+        Assert.Equal(new[] { "Box<number>" }, instantiation.TypeArgs);
+        var argument = Assert.IsType<NamedTypeNode>(Assert.Single(instantiation.TypeArgNodes!));
+        var nested = Assert.IsType<NamedTypeNode>(Assert.Single(argument.TypeArguments!));
+        Assert.Equal("Box", argument.Name);
+        Assert.Equal("number", nested.Name);
+
+        Assert.Equal(TokenType.LESS, instantiation.LessThan.Type);
+        Assert.Equal("<", instantiation.LessThan.Lexeme);
+        int lessThan = source.IndexOf('<');
+        Assert.Equal(new SourceSpan(lessThan, lessThan + 1), instantiation.LessThan.Span);
+
+        (object Node, EditorSyntaxKind Kind, EditorSyntaxRole Role, string Written)[] views =
+        [
+            (instantiation, EditorSyntaxKind.Expression, EditorSyntaxRole.Whole, "identity<Box<number>>"),
+            (operand, EditorSyntaxKind.Expression, EditorSyntaxRole.Whole, "identity"),
+            (operand, EditorSyntaxKind.Name, EditorSyntaxRole.Name, "identity"),
+            (argument, EditorSyntaxKind.Type, EditorSyntaxRole.Annotation, "Box<number>"),
+            (nested, EditorSyntaxKind.Type, EditorSyntaxRole.Annotation, "number"),
+        ];
+        foreach (var (node, kind, role, written) in views)
+        {
+            Assert.Equal(written, Text(parsed, node));
+            int start = source.IndexOf(written, StringComparison.Ordinal);
+            Assert.Contains(parsed.Syntax.GetRecords(node), record => record.Kind == kind &&
+                record.Role == role && record.Origin == EditorSyntaxOrigin.Written &&
+                record.IsAuthoritative && record.Span == new SourceSpan(start, start + written.Length));
+        }
+
+        Assert.Empty(parsed.Syntax.Invocations);
+        Assert.DoesNotContain(parsed.Syntax.Records, record => record.Kind == EditorSyntaxKind.Invocation);
     }
 
     [Theory]

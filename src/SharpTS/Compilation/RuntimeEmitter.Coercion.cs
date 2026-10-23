@@ -1517,6 +1517,34 @@ public partial class RuntimeEmitter
         il.MarkLabel(skipToPrimLabelTop);
     }
 
+    private void EmitToNumeric(TypeBuilder typeBuilder, EmittedNumericCoercionRuntime numeric,
+        AbstractNumberInputs peers)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ToNumeric", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
+        numeric.ToNumeric = method;
+        var il = method.GetILGenerator();
+        var primitive = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, primitive);
+        EmitNumericToPrimitive(il, peers, primitive);
+
+        // Complete this operand's conversion before another operand's hook.
+        // ToNumber rejects Symbols, but BigInt retains its primitive kind.
+        var number = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, primitive);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brfalse, number);
+        il.Emit(OpCodes.Ldloc, primitive);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(number);
+        il.Emit(OpCodes.Ldloc, primitive);
+        il.Emit(OpCodes.Call, numeric.ToNumber);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitToNumber(TypeBuilder typeBuilder, EmittedNumericCoercionRuntime numeric,
         AbstractNumberInputs peers)
     {

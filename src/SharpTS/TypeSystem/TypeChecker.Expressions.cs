@@ -45,6 +45,11 @@ public partial class TypeChecker
         }
     }
 
+    private static TypeInfo? ParameterDefaultTupleContext(TypeInfo parameterType) =>
+        parameterType is TypeInfo.Tuple ||
+        parameterType is TypeInfo.Union union && union.FlattenedTypes.Any(member => member is TypeInfo.Tuple)
+            ? parameterType : null;
+
     /// <summary>
     /// Type-checks an expression under a contextual type (a narrow slice of tsc's
     /// checkExpressionWithContextualType). The context is consumed only by the node
@@ -1686,6 +1691,10 @@ public partial class TypeChecker
         int requiredParams = 0;
         bool seenDefault = false;
         TypeInfo returnType;
+        bool hasRest = arrow.Parameters.Any(p => p.IsRest);
+        List<string> paramNames = arrow.Parameters.Select(p => p.Name.Lexeme).ToList();
+        TypeInfo funcType;
+        TypeEnvironment? completedDefaultSelfEditorEnvironment = null;
 
         using (new EnvironmentScope(this, typeParamEnv))
         {
@@ -1700,15 +1709,8 @@ public partial class TypeChecker
             {
                 thisType = _pendingObjectThisType ?? TypeInfo.Any.Shared;
             }
-            // A default value may reference any PRECEDING parameter (`(a, b = a * 2)`), so each
-            // parameter is progressively defined in a dedicated scope and later defaults are checked
-            // against it. Each parameter is defined AFTER its own default is checked, so a
-            // self-reference resolves to an outer binding or errors. Mirrors BuildFunctionSignature,
-            // which the function-declaration/method path already uses (#698).
-            var paramScope = new TypeEnvironment(_environment);
-            RegisterEditorParameterScope(arrow, paramScope);
-
-            // Build parameter types and check defaults
+            // Complete the callable signature before checking defaults, so the private
+            // name of a function expression has its actual generic/parameter/return types.
             for (int i = 0; i < arrow.Parameters.Count; i++)
             {
                 var param = arrow.Parameters[i];
@@ -1730,46 +1732,10 @@ public partial class TypeChecker
                     paramType = TypeInfo.Any.Shared;
                 }
                 paramTypes.Add(paramType);
-
-                // Rest parameters are not counted toward required params
-                if (param.IsRest)
-                {
-                    DeclareValue(paramScope, param.Name, paramType);
-                    continue;
-                }
-
-                if (param.DefaultValue != null)
-                {
-                    seenDefault = true;
-                    TypeInfo defaultType;
-                    using (new EnvironmentScope(this, paramScope))
-                    {
-                        defaultType = _immediateClassCallables.ContainsKey(arrow)
-                            ? CheckExpr(param.DefaultValue)
-                            : CheckDeferredClassDefault(param.DefaultValue);
-                    }
-                    if (!IsCompatible(paramType, defaultType))
-                    {
-                        throw new TypeCheckException($" Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.", tsCode: "TS2322");
-                    }
-                }
-                else if (param.IsOptional)
-                {
-                    seenDefault = true; // Optional parameters are like having a default
-                }
-                else
-                {
-                    if (seenDefault)
-                    {
-                        throw new TypeCheckException($" Required parameter cannot follow optional parameter.", tsCode: "TS1016");
-                    }
+                if (!param.IsRest && param.DefaultValue is null && !param.IsOptional)
                     requiredParams++;
-                }
-
-                DeclareValue(paramScope, param.Name, paramType);
             }
 
-            // Determine return type (use expected type if available and no explicit annotation)
             if (arrow.ReturnType != null)
             {
                 returnType = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode, arrow, EditorAnnotationSlot.Return)!;
@@ -1782,14 +1748,84 @@ public partial class TypeChecker
             {
                 returnType = TypeInfo.Inferred.Shared;
             }
+
+            funcType = (typeParams != null && typeParams.Count > 0)
+                ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
+                : new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
+
+            TypeEnvironment defaultParent = _environment;
+            if (arrow.Name is { } privateName)
+            {
+                defaultParent = new TypeEnvironment(defaultParent);
+                RegisterEditorScope(arrow, defaultParent, EditorScopeKind.ParameterList, EditorSyntaxRole.Whole);
+                DeclareValue(defaultParent, privateName, funcType);
+                defaultParent.MarkAsConst(privateName.Lexeme);
+            }
+            // Earlier parameters become visible progressively. A same-name parameter
+            // masks the private name even before initialization, including pattern bindings.
+            var paramScope = new TypeEnvironment(defaultParent);
+            RegisterEditorParameterScope(arrow, paramScope);
+            var namedDefaults = arrow.Name is not null
+                ? new NamedExpressionParameterDefaults(this, arrow, paramScope, paramTypes) : null;
+            using var bindingScope = new ParameterBindingCheckScope(this, arrow, validate: true);
+
+            for (int i = 0; i < arrow.Parameters.Count; i++)
+            {
+                var param = arrow.Parameters[i];
+                TypeInfo paramType = paramTypes[i];
+
+                // Rest parameters are not counted toward required params
+                if (param.IsRest)
+                {
+                    DeclareValue(paramScope, param.Name, paramType);
+                    bindingScope.Initialize(param, paramScope, paramType);
+                    namedDefaults?.Initialize(param, i);
+                    continue;
+                }
+
+                if (param.DefaultValue != null)
+                {
+                    seenDefault = true;
+                    TypeInfo defaultType;
+                    using (new EnvironmentScope(this, paramScope))
+                    {
+                        TypeInfo? defaultContext = ParameterDefaultTupleContext(paramType);
+                        defaultType = _immediateClassCallables.ContainsKey(arrow)
+                            ? (defaultContext is null
+                                ? CheckExpr(param.DefaultValue)
+                                : CheckExprWithContext(param.DefaultValue, defaultContext))
+                            : CheckDeferredClassDefault(param.DefaultValue, defaultContext);
+                    }
+                    namedDefaults?.Check(param.DefaultValue, i);
+                    if (!IsCompatible(paramType, defaultType))
+                    {
+                        throw new TypeCheckException($" Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.",
+                            line: TryGetExprLine(param.DefaultValue) ?? param.Name.Line, tsCode: "TS2322");
+                    }
+                }
+                else if (param.IsOptional)
+                {
+                    seenDefault = true; // Optional parameters are like having a default
+                }
+                else
+                {
+                    if (seenDefault)
+                    {
+                        throw new TypeCheckException($" Required parameter cannot follow optional parameter.", tsCode: "TS1016");
+                    }
+                }
+
+                DeclareValue(paramScope, param.Name, paramType);
+                bindingScope.Initialize(param, paramScope, paramType);
+                namedDefaults?.Initialize(param, i);
+            }
+
+            // A real same-name parameter owns this shared editor scope slot.
+            if (ShouldCaptureEditorFacts && arrow.Name is { } defaultName &&
+                ReferenceEquals(paramScope.GetValueBinding(defaultName.Lexeme), Bindings.GetSymbol(defaultName)))
+                completedDefaultSelfEditorEnvironment = defaultParent;
         }
 
-        // Build the function type (needed for named function expressions self-reference)
-        bool hasRest = arrow.Parameters.Any(p => p.IsRest);
-        List<string> paramNames = arrow.Parameters.Select(p => p.Name.Lexeme).ToList();
-        TypeInfo funcType = (typeParams != null && typeParams.Count > 0)
-            ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
-            : new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
         _newTargetSourceTypes[arrow] = funcType;
 
         // Create new environment for function body
@@ -1895,7 +1931,11 @@ public partial class TypeChecker
                     // inference can also leave a literal contextual result (`5`) where the
                     // callback expression naturally widens to its primitive (`number`).
                     bool discardsResult = !arrow.IsAsync && expectedFuncType.ReturnType is TypeInfo.Void;
-                    if (!discardsResult && !IsCompatible(WidenLiteralType(expectedRetType), exprType))
+                    var (expectedValueType, returnedValueType) =
+                        arrow.IsAsync && expectedFuncType.ReturnType is TypeInfo.Promise
+                            ? (ResolveAwaitedType(expectedRetType), ResolveAwaitedType(exprType))
+                            : (expectedRetType, exprType);
+                    if (!discardsResult && !IsCompatible(WidenLiteralType(expectedValueType), returnedValueType))
                     {
                         throw new TypeCheckException(
                             $"Arrow function expression evaluates to '{exprType}', but its contextual return type is '{expectedRetType}'.",
@@ -1930,7 +1970,12 @@ public partial class TypeChecker
                         expectedRetType = promiseType.ValueType;
                     }
 
-                    if (!IsCompatible(expectedRetType, exprType))
+                    var (expectedValueType, returnedValueType) =
+                        arrow.IsAsync && returnType is TypeInfo.Promise
+                            ? (ResolveAwaitedType(expectedRetType), ResolveAwaitedType(exprType))
+                            : (expectedRetType, exprType);
+
+                    if (!IsCompatible(expectedValueType, returnedValueType))
                     {
                         throw new TypeCheckException($" Arrow function declared to return '{returnType}' but expression evaluates to '{exprType}'.", tsCode: "TS2322");
                     }
@@ -1946,7 +1991,7 @@ public partial class TypeChecker
                 // an arrow body (incl. IIFEs like `(function runInContext() {…})()`)
                 // resolve. Matches the behavior in CheckFunctionDeclaration.
                 HoistClassDeclarations(arrow.BlockBody);
-                HoistFunctionDeclarations(arrow.BlockBody);
+                HoistFunctionDeclarations(arrow.BlockBody, hoistBodyVars: true);
 
                 // Likewise hoist the body's own let/const (as `any`) so an inner function declared
                 // before a later block-scoped binding in the same body can forward-reference it (#533).
@@ -2010,7 +2055,14 @@ public partial class TypeChecker
             ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
             : new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
         RecordEditorExpressionType(arrow, completedType);
-        if (arrow.Name is { } sourceName) RegisterEditorSignature(completedType, arrow, sourceName);
+        if (arrow.Name is { } sourceName)
+        {
+            RegisterEditorSignature(completedType, arrow, sourceName);
+            if (completedDefaultSelfEditorEnvironment is { } defaultSelfEditorEnvironment &&
+                Bindings.GetSymbol(sourceName) is { } self)
+                RecordEditorBinding(defaultSelfEditorEnvironment, sourceName, self,
+                    BindingNamespace.Value, completedType, EditorFactAvailability.Available);
+        }
         else RegisterEditorAnonymousSignature(completedType, arrow);
         return completedType;
     }
@@ -2557,7 +2609,34 @@ public partial class TypeChecker
                 // the superclass so that `super(...)` calls inside this
                 // class body type-check as `any` instead of erroring with
                 // "does not have a superclass".
-                superclass = new TypeInfo.MutableClass("$AnySuperclass") { IsDynamicSuperclass = true };
+                bool isNativeFallback = !_hasDefaultLibraries &&
+                    classExpr.SuperclassExpr is Expr.Variable nativeBase &&
+                    nativeBase.Name.Lexeme is "Array" or "Promise" &&
+                    _environment.Get(nativeBase.Name.Lexeme) is null &&
+                    _currentMergedNamespace?.Values.ContainsKey(nativeBase.Name.Lexeme) != true;
+                var placeholder = new TypeInfo.MutableClass(isNativeFallback
+                    ? ((Expr.Variable)classExpr.SuperclassExpr).Name.Lexeme
+                    : "$AnySuperclass") { IsDynamicSuperclass = true };
+                if (isNativeFallback)
+                {
+                    // Match native-fallback declaration heritage without changing
+                    // the constructor policy of other Any-typed expression bases.
+                    using (new EnvironmentScope(this, classTypeEnv))
+                    {
+                        List<TypeInfo> arguments = classExpr.SuperclassTypeArgs is null ? []
+                            : classExpr.SuperclassTypeArgs.Select((_, index) => ResolveTypeArg(
+                                classExpr.SuperclassTypeArgs, classExpr.SuperclassTypeArgNodes, index)).ToList();
+                        placeholder.Methods["constructor"] = new TypeInfo.Function(
+                            [TypeInfo.Any.Shared], TypeInfo.Void.Shared, RequiredParams: 0, HasRestParam: true);
+                        if (placeholder.Name == "Array")
+                        {
+                            TypeInfo element = arguments.Count > 0 ? arguments[0] : TypeInfo.Any.Shared;
+                            placeholder.Methods["@@iterator"] = new TypeInfo.Function(
+                                [], new TypeInfo.Iterator(element), RequiredParams: 0, HasRestParam: false);
+                        }
+                    }
+                }
+                superclass = placeholder;
             }
             else
                 throw new TypeCheckException("Superclass must be a class", tsCode: "TS2507");
@@ -2582,7 +2661,7 @@ public partial class TypeChecker
         using (new EnvironmentScope(this, classTypeEnv))
         {
             CollectClassIndexSignatures(classExpr.IndexSignatures, mutableClass);
-            TypeInfo BuildMethodFuncType(Stmt.Function method) => BuildClassMethodSignature(method);
+            TypeInfo BuildMethodFuncType(Stmt.Function method) => BuildClassMethodSignature(method, validateDefaults: false);
 
             // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their
             // canonical @@name (@@iterator, …) so structural iterability sees them (#592). They carry the
@@ -2593,7 +2672,7 @@ public partial class TypeChecker
             {
                 if (TryGetWellKnownSymbolMemberName(method.ComputedKey) is not { } memberName)
                     continue;
-                var computedFunc = BuildClassMethodSignature(method, wrapGeneratorReturn: false);
+                var computedFunc = BuildClassMethodSignature(method, wrapGeneratorReturn: false, validateDefaults: false);
                 if (method.IsStatic)
                     mutableClass.StaticMethods[memberName] = computedFunc;
                 else
@@ -2663,6 +2742,8 @@ public partial class TypeChecker
                 string fieldName = GetFieldMemberName(field);
                 TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode, field)
                     ?? TypeInfo.Any.Shared;
+
+                ValidateClassFieldComputedKey(field);
 
                 if (field.IsPrivate)
                 {
@@ -2742,6 +2823,9 @@ public partial class TypeChecker
             _compatibilityCache = null;
             _identityCompatibilityCache = null;
         }
+
+        if (CheckClassMethodParameterDefaults(classExpr.Methods, mutableClass, classTypeEnv))
+            RevalidateClassFieldInitializers(classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams);
 
         // Freeze the mutable class after initializer inference so every body and
         // external expression result sees the same completed field metadata.
@@ -2869,7 +2953,9 @@ public partial class TypeChecker
                     }
                     else
                     {
-                        declaredMethodType = BuildClassMethodSignature(method, wrapGeneratorReturn: false);
+                        declaredMethodType = _classMethodSignatures.TryGetValue(method, out var signature)
+                            ? ClassMethodCallable(signature.Body, signature.Parameters)
+                            : BuildClassMethodSignature(method, wrapGeneratorReturn: false);
                     }
                 }
                 else
@@ -2936,7 +3022,7 @@ public partial class TypeChecker
                         // referenced earlier, so declarations and lexical bindings must be visible
                         // before the sequential pass.
                         HoistClassDeclarations(method.Body);
-                        HoistFunctionDeclarations(method.Body);
+                        HoistFunctionDeclarations(method.Body, hoistBodyVars: true);
                         HoistLexicalDeclarations(method.Body);
                         CheckStmtList(method.Body);
 

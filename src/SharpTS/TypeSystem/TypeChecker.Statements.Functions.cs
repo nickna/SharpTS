@@ -15,9 +15,16 @@ public partial class TypeChecker
     private readonly Dictionary<TypeEnvironment, HashSet<Stmt.Function>> _completedBodylessFunctions =
         new(ReferenceEqualityComparer.Instance);
 
+    // Loop-head vars belong to the module/function being hoisted, even through ordinary blocks.
+    private readonly Dictionary<Token, TypeEnvironment> _loopHeadVarOwners =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<(TypeEnvironment Environment, BindingSymbol Symbol)> _hoistedVarPlaceholders = [];
+
     private void ResetFunctionDeclarationTracking()
     {
         _completedBodylessFunctions.Clear();
+        _loopHeadVarOwners.Clear();
+        _hoistedVarPlaceholders.Clear();
         _forwardClassDeclarations.Clear();
         _forwardClassTypeShadows.Clear();
         _deferredClassDefaultFlows.Clear();
@@ -82,7 +89,7 @@ public partial class TypeChecker
     /// Hoists function declarations by registering their types before checking bodies.
     /// This enables functions to reference each other regardless of declaration order.
     /// </summary>
-    private void HoistFunctionDeclarations(IEnumerable<Stmt> statements)
+    private void HoistFunctionDeclarations(IEnumerable<Stmt> statements, bool hoistBodyVars = false)
     {
         // Materialized once: the two passes below each iterate the statements.
         var stmtList = statements as IReadOnlyList<Stmt> ?? statements.ToList();
@@ -108,6 +115,11 @@ public partial class TypeChecker
         // Hoist const/let/var declarations with function expressions
         // This enables mutual recursion like: const isEven = function(n) { return isOdd(n-1); };
         HoistConstFunctionExpressions(stmtList);
+
+        // Body vars must be available during nested return inference, while preserving the
+        // existing signature order (including `typeof` references to sibling functions).
+        if (hoistBodyVars)
+            HoistVarDeclarations(stmtList);
 
         // Pass 2: now that every sibling signature is registered, speculatively infer the return
         // type of un-annotated functions so calls appearing earlier in the same scope type
@@ -211,29 +223,106 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// Pre-registers top-level var declarations by defining them as 'any' in the type environment.
+    /// Pre-registers a scope's var declarations by defining them as 'any' in the type environment.
     /// This enables forward references to var-declared variables from within function bodies,
     /// matching JavaScript's var hoisting semantics. <c>let</c>/<c>const</c> are handled by the
-    /// sibling <see cref="HoistLexicalDeclarations"/>.
+    /// sibling <see cref="HoistLexicalDeclarations"/>. Register function-expression signatures
+    /// first so their precise callable types are preserved instead of replaced by placeholders.
     /// </summary>
     private void HoistVarDeclarations(IEnumerable<Stmt> statements)
     {
-        foreach (var stmt in statements)
+        var stmtList = statements as IReadOnlyList<Stmt> ?? statements.ToList();
+        foreach (var stmt in stmtList)
         {
             switch (stmt)
             {
+                case Stmt.Sequence sequence:
+                    // Comma declarations and destructuring lower to a sequence in the same scope.
+                    HoistVarDeclarations(sequence.Statements);
+                    break;
                 case Stmt.Var v when v.IsVar:
-                    RegisterValueDeclaration(v.Name, mergeWithLocal: true);
-                    if (!_environment.IsDefinedLocally(v.Name.Lexeme))
-                        _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
+                    HoistVarBinding(v.Name);
                     break;
                 case Stmt.Export { Declaration: Stmt.Var v } when v.IsVar:
-                    RegisterValueDeclaration(v.Name, mergeWithLocal: true);
-                    if (!_environment.IsDefinedLocally(v.Name.Lexeme))
-                        _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
+                    HoistVarBinding(v.Name);
                     break;
             }
         }
+        foreach (var stmt in stmtList)
+            HoistLoopHeadVars(stmt);
+    }
+
+    private void HoistVarBinding(Token name)
+    {
+        BindingSymbol symbol = RegisterValueDeclaration(name, mergeWithLocal: true);
+        if (!_environment.IsDefinedLocally(name.Lexeme))
+        {
+            _environment.Define(name.Lexeme, TypeInfo.Any.Shared);
+            _hoistedVarPlaceholders.Add((_environment, symbol));
+        }
+    }
+
+    private void HoistLoopHeadVars(Stmt statement)
+    {
+        switch (statement)
+        {
+            case Stmt.ForOf loop:
+                if (loop.IsDeclaration && loop.IsVar)
+                    HoistLoopHeadVar(loop.Variable);
+                HoistLoopHeadVars(loop.Body);
+                break;
+            case Stmt.ForIn loop:
+                if (loop.IsDeclaration && loop.IsVar)
+                    HoistLoopHeadVar(loop.Variable);
+                HoistLoopHeadVars(loop.Body);
+                break;
+            case Stmt.Block block:
+                foreach (var child in block.Statements) HoistLoopHeadVars(child);
+                break;
+            case Stmt.Sequence sequence:
+                foreach (var child in sequence.Statements) HoistLoopHeadVars(child);
+                break;
+            case Stmt.If conditional:
+                HoistLoopHeadVars(conditional.ThenBranch);
+                if (conditional.ElseBranch is { } alternative) HoistLoopHeadVars(alternative);
+                break;
+            case Stmt.While loop:
+                HoistLoopHeadVars(loop.Body);
+                break;
+            case Stmt.DoWhile loop:
+                HoistLoopHeadVars(loop.Body);
+                break;
+            case Stmt.For loop:
+                if (loop.Initializer is { } initializer) HoistLoopHeadVars(initializer);
+                HoistLoopHeadVars(loop.Body);
+                break;
+            case Stmt.LabeledStatement labeled:
+                HoistLoopHeadVars(labeled.Statement);
+                break;
+            case Stmt.Switch selection:
+                foreach (var arm in selection.Cases)
+                    foreach (var child in arm.Body) HoistLoopHeadVars(child);
+                if (selection.DefaultBody is { } defaultBody)
+                    foreach (var child in defaultBody) HoistLoopHeadVars(child);
+                break;
+            case Stmt.TryCatch guarded:
+                foreach (var child in guarded.TryBlock) HoistLoopHeadVars(child);
+                if (guarded.CatchBlock is { } catchBody)
+                    foreach (var child in catchBody) HoistLoopHeadVars(child);
+                if (guarded.FinallyBlock is { } finallyBody)
+                    foreach (var child in finallyBody) HoistLoopHeadVars(child);
+                break;
+            case Stmt.Export { Declaration: { } declaration }:
+                HoistLoopHeadVars(declaration);
+                break;
+            // Expressions, callables, classes and namespaces own separate bodies.
+        }
+    }
+
+    private void HoistLoopHeadVar(Token name)
+    {
+        HoistVarBinding(name);
+        _loopHeadVarOwners[name] = _environment;
     }
 
     /// <summary>
@@ -850,12 +939,10 @@ public partial class TypeChecker
                 // scope before any statement executes; the TypeChecker needs to
                 // mirror that to accept well-formed mutually-recursive inner fns.
                 HoistClassDeclarations(body);
-                HoistFunctionDeclarations(body);
+                HoistFunctionDeclarations(body, hoistBodyVars: true);
 
                 // Hoist the body's own let/const (as `any`) so an inner function declared before a
-                // later block-scoped binding in the SAME body can forward-reference it (#533). `var`
-                // is already lifted to the body top by the parse-time VarHoister, so it is not repeated
-                // here; let/const are not physically moved (TDZ), so they need this registration.
+                // later block-scoped binding in the SAME body can forward-reference it (#533).
                 HoistLexicalDeclarations(body);
 
                 CheckStmtList(body);

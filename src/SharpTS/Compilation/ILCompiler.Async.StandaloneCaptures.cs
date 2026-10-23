@@ -5,28 +5,27 @@ namespace SharpTS.Compilation;
 
 public partial class ILCompiler
 {
-    private IReadOnlySet<string>? GetDebugStaticCaptureNames(
+    private IReadOnlySet<string> GetStandaloneStaticCaptureNames(
         Expr.ArrowFunction arrow, IEnumerable<string> captures)
     {
-        if (!EmitDebugSymbols) return null;
         string? modulePath = _arrowToModule.TryGetValue(arrow, out string? owner)
             ? NormalizeToEmissionPath(owner) : null;
         var staticFields = BuildModuleMemberTopLevelStaticVarsForModule(modulePath);
         var capturedGlobals = BuildCapturedTopLevelVarsForModule(modulePath);
         var liftedBlocks = BuildLiftedBlockScopedTopLevelVarsForModule(modulePath);
-        HashSet<string> hidden = [];
+        HashSet<string> staticCaptures = [];
         foreach (string name in captures)
         {
             // Source provenance distinguishes an enclosing local from a same-named module
             // binding. Direct unlifted block captures still read their snapshot; other module
-            // captures read static storage, so their unused creation snapshots must stay hidden.
+            // captures read shared static storage without taking creation-time snapshots.
             if (_closures.Analyzer.GetCaptureSource(arrow, name) is not null) continue;
             if (_closures.Analyzer.IsDirectTopLevelBlockScopedCapture(arrow, name)
                 && liftedBlocks?.Contains(name) != true) continue;
             if (staticFields?.ContainsKey(name) == true || capturedGlobals?.Contains(name) == true)
-                hidden.Add(name);
+                staticCaptures.Add(name);
         }
-        return hidden;
+        return staticCaptures;
     }
 
     private Dictionary<string, FieldBuilder> GetStandaloneLiveCaptureFields(
@@ -41,6 +40,16 @@ public partial class ILCompiler
             if (_closures.Analyzer.TryGetLoopBodyCellCapture(arrow, name, out _)) continue;
             var source = _closures.Analyzer.GetCaptureSource(arrow, name);
             if (source is null) continue;
+            string storageName = _closures.ArrowFunctionDCFieldRenames.TryGetValue(arrow, out var renames)
+                && renames.TryGetValue(name, out var renamed) ? renamed : name;
+            if (source is Expr.ArrowFunction asyncOwner
+                && _closures.AsyncArrowDCKeys.TryGetValue(asyncOwner, out var asyncKey)
+                && _closures.FunctionDisplayClassFields.TryGetValue(asyncKey, out var asyncFields)
+                && asyncFields.TryGetValue(storageName, out var asyncField))
+            {
+                result[name] = asyncField;
+                continue;
+            }
             if (_closures.ArrowScopeDisplayClassFields.TryGetValue(source, out var scopeFields)
                 && scopeFields.TryGetValue(name, out var scopeField))
             {

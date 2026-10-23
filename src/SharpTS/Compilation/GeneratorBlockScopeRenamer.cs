@@ -33,16 +33,22 @@ namespace SharpTS.Compilation;
 /// Storage keys for block-scoped loop declarations. Read-only captures keep their per-iteration
 /// snapshot/cell storage even when a same-named ordinary binding belongs to the function display class.
 /// </param>
+/// <param name="AssignedStorageNames">
+/// Lexically resolved storage keys assigned directly by the state-machine body, excluding writes inside
+/// nested closures. A shadow's renamed key remains distinct from its enclosing same-named binding.
+/// </param>
 internal sealed record BlockScopeRenameResult(
     IReadOnlyDictionary<object, string> Renames,
     IReadOnlyDictionary<object, IReadOnlyDictionary<string, string>> CaptureRenames,
     IReadOnlyDictionary<object, IReadOnlyDictionary<string, string>> WriteCaptureRenames,
-    IReadOnlySet<string> PerIterationStorageNames)
+    IReadOnlySet<string> PerIterationStorageNames,
+    IReadOnlySet<string> AssignedStorageNames)
 {
     public static readonly BlockScopeRenameResult Empty = new(
         new Dictionary<object, string>(),
         new Dictionary<object, IReadOnlyDictionary<string, string>>(),
         new Dictionary<object, IReadOnlyDictionary<string, string>>(),
+        new HashSet<string>(),
         new HashSet<string>());
 }
 
@@ -126,7 +132,7 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
     private Expr.ArrowFunction? _currentTopArrow;
 
     /// <summary>
-    /// Returns the renames + capture-source pivot for <paramref name="func"/>; empty when nothing shadows.
+    /// Returns the renames, capture-source pivots, and resolved body assignments for <paramref name="func"/>.
     /// </summary>
     /// <param name="arrowReadCapturesShareStorage">
     /// When true, a binding merely READ by a nested arrow is also off-limits to renaming, because the
@@ -191,7 +197,8 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         renamer._loopBodyStorageNames.ExceptWith(renamer._relayedLoopBodyStorageNames);
         renamer._perIterationStorageNames.UnionWith(renamer._loopBodyStorageNames);
 
-        if (renamer._renames.Count == 0 && renamer._captureSources.Count == 0 && renamer._writeCaptureSources.Count == 0)
+        if (renamer._renames.Count == 0 && renamer._captureSources.Count == 0 && renamer._writeCaptureSources.Count == 0
+            && renamer._perIterationStorageNames.Count == 0 && renamer._assignedStorageNames.Count == 0)
             return BlockScopeRenameResult.Empty;
 
         var captures = new Dictionary<object, IReadOnlyDictionary<string, string>>(ReferenceEqualityComparer.Instance);
@@ -200,7 +207,8 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         var writeCaptures = new Dictionary<object, IReadOnlyDictionary<string, string>>(ReferenceEqualityComparer.Instance);
         foreach (var (arrow, names) in renamer._writeCaptureSources)
             writeCaptures[arrow] = names;
-        return new BlockScopeRenameResult(renamer._renames, captures, writeCaptures, renamer._perIterationStorageNames);
+        return new BlockScopeRenameResult(renamer._renames, captures, writeCaptures,
+            renamer._perIterationStorageNames, renamer._assignedStorageNames);
     }
 
     private Dictionary<string, string> CurrentScope => _scopes[^1];

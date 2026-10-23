@@ -38,6 +38,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct StringReplaceAllRegExpInputs(
         MethodBuilder CreateException,
+        MethodBuilder GetProperty,
         EmittedStringCoercionRuntime StringCoercion,
         MethodBuilder StringTryInvokeSymbolMethod,
         EmittedSymbolRuntime Symbols,
@@ -301,6 +302,7 @@ public partial class RuntimeEmitter
             regExp,
             new StringReplaceAllRegExpInputs(
                 inputs.CreateException,
+                inputs.GetProperty,
                 inputs.StringCoercion,
                 inputs.StringTryInvokeSymbolMethod,
                 inputs.Symbols,
@@ -473,17 +475,21 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "String.prototype.replaceAll called on null or undefined");
         il.MarkLabel(receiverDefinedLabel);
 
-        // IsRegExp(searchValue) requires a global RegExp before @@replace is
-        // retrieved. Preserve that observable ordering for native RegExp
-        // values, then use the shared Object-only GetMethod dispatch.
+        // Validate a native RegExp's observable flags before retrieving
+        // @@replace. Both Get(flags) and ToString(flags) may run user code
+        // or throw; the internal global bit cannot replace these steps.
         var symbolDispatchLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, regExp.Type);
         il.Emit(OpCodes.Stloc, regexpLocal);
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, symbolDispatchLabel);
-        il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, regExp.GlobalGetter);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "flags");
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Ldstr, "g");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.String));
         il.Emit(OpCodes.Brtrue, symbolDispatchLabel);
         GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "String.prototype.replaceAll called with a non-global RegExp argument");
         il.MarkLabel(symbolDispatchLabel);

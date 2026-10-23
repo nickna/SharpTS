@@ -12,11 +12,9 @@ public partial class AsyncGeneratorMoveNextEmitter
     // adds the generator-specific pieces below: its own protected-region depth, throw routing
     // (<>pendingException), the yield/await-aware try/catch body, and the return/throw terminals.
     //
-    // It coexists with the pre-existing external `generator.return()` path (the `__returnRequested`
-    // flag checked at each yield resume and after each finally — see EmitYield and
-    // EmitTryCatchWithSuspensions): the external path uses `__returnRequested` and is consulted before
-    // the dispatch, while in-body exits use `<>pendingExit` and are dispatched only when
-    // `__returnRequested` is clear.
+    // An external return enters the same pending-exit routing as a source return,
+    // preserving its value across cleanup suspensions. A yield* first gives its
+    // delegate the opportunity to handle that completion.
 
     protected override FieldBuilder DefineStateMachineField(string name, Type type) =>
         _builder.StateMachineType.DefineField(_builder.DebugScaffoldingName(name), type, FieldAttributes.Private);
@@ -29,6 +27,11 @@ public partial class AsyncGeneratorMoveNextEmitter
     // a `throw` in a try body is instead captured by its sync-segment mini try/catch (and so must not
     // be routed). Saved/restored around each region so nesting is handled correctly.
     private bool _inHandlerBody;
+
+    // A catch nested inside cleanup can handle an injected throw without replacing the completion
+    // that entered that cleanup. A catch outside it instead supersedes that pending completion.
+    private int _finallyBodyDepth;
+    private int _currentTryFinallyBodyDepth;
 
     // A protocol call or awaiter result cannot span a suspension. Capture
     // failures in a short protected segment and use the active guest handler.
@@ -101,12 +104,50 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.MarkLabel(normalResumeLabel);
     }
 
+    private void EmitInjectedYieldReturn()
+    {
+        var normalResumeLabel = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, _builder.ReturnRequestedField);
+        _il.Emit(OpCodes.Brfalse, normalResumeLabel);
+
+        // The incoming value is in Current. Consume the request before entering cleanup so a yield
+        // there can resume normally, or receive a newer return/throw that replaces this completion.
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Stfld, _builder.ReturnRequestedField);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4, -2);
+        _il.Emit(OpCodes.Stfld, _builder.StateField);
+
+        var chain = ActiveFinallyFrames();
+        if (chain.Count > 0)
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, _builder.CurrentField);
+            _il.Emit(OpCodes.Stfld, GetPendingReturnValueField());
+            RegisterReturnTerminal();
+            RouteThroughFinallys(chain, ExitCodeReturn, OpCodes.Br);
+        }
+        else
+        {
+            EmitReturnValueTaskBool(false);
+        }
+
+        _il.MarkLabel(normalResumeLabel);
+    }
+
     // `<>pendingException` (object): the value of a `throw` being routed through finally(s), held
     // across any suspension in those finallys until the terminal dispatch rethrows it.
     private FieldBuilder? _pendingExceptionField;
 
     private FieldBuilder GetPendingExceptionField() =>
         _pendingExceptionField ??= DefineStateMachineField("<>pendingException", typeof(object));
+
+    // Each catch-less try owns its exception state across suspending cleanup.
+    // Nested finally constructs must not overwrite an enclosing pending failure.
+    private int _finallyExceptionStateCount;
 
     // ---- Throw routing (generator-specific) -----------------------------------------------------
     // The loop-scope methods and break/continue (with their finally routing) are inherited from
@@ -169,6 +210,14 @@ public partial class AsyncGeneratorMoveNextEmitter
         if (chain.Count == 0)
         {
             // No intervening finally: store straight into the enclosing try and branch to its catch.
+            // Only a catch outside cleanup replaces its pending completion (#2787). A catch nested in that
+            // cleanup can handle the exception and let the original return continue afterward.
+            if (_finallyBodyDepth > 0 && _currentTryFinallyBodyDepth == 0)
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldc_I4_0);
+                _il.Emit(OpCodes.Stfld, GetPendingExitField());
+            }
             loadValue();
             _il.Emit(OpCodes.Stloc, enclException);
             _il.Emit(OpCodes.Ldc_I4_1);
@@ -276,25 +325,26 @@ public partial class AsyncGeneratorMoveNextEmitter
         var afterTryBodyLabel = _il.DefineLabel();
         var afterTryCatchLabel = _il.DefineLabel();
 
+        FieldBuilder? finallyExceptionField = null;
+        FieldBuilder? finallyExceptionPresentField = null;
+        if (t.CatchBlock == null && t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock))
+        {
+            int id = _finallyExceptionStateCount++;
+            finallyExceptionField = DefineStateMachineField($"<>finallyException{id}", typeof(object));
+            finallyExceptionPresentField = DefineStateMachineField($"<>finallyExceptionPresent{id}", typeof(bool));
+        }
+
         // No exception captured yet.
         _il.Emit(OpCodes.Ldnull);
         _il.Emit(OpCodes.Stloc, caughtExceptionLocal);
         _il.Emit(OpCodes.Ldc_I4_0);
         _il.Emit(OpCodes.Stloc, exceptionPresentLocal);
 
-        // Two finally-running mechanisms share `afterTryBodyLabel` as the cleanup entry:
-        //   1. External `generator.return()`: a suspended yield observes `__returnRequested` on resume
-        //      and jumps here to run the finally (see EmitYield). `_returnCleanupLabel` carries the
-        //      label down to those yields and is only meaningful while emitting *this* try's body.
-        //   2. In-body non-local exits (#559): break/continue/return/throw register a FinallyScope and
-        //      route through it; on those paths the exception flag is null, so the catch is skipped and
-        //      the finally runs.
-        // Without a finally there is nothing to run, so neither is set up and exits go directly.
-        var previousCleanupLabel = _returnCleanupLabel;
+        // Source exits and injected returns use the same cleanup entry. A routed return has no
+        // captured exception, so it skips catch and runs this finally before the outer ones.
         FinallyScope? frame = null;
         if (t.FinallyBlock != null)
         {
-            _returnCleanupLabel = afterTryBodyLabel;
             frame = new FinallyScope { CleanupLabel = afterTryBodyLabel };
             _exitScopes.Add(frame);
         }
@@ -311,19 +361,19 @@ public partial class AsyncGeneratorMoveNextEmitter
         var previousTryExceptionPresentLocal = _currentTryExceptionPresentLocal;
         var previousTryCleanupLabel = _currentTryCleanupLabel;
         var previousTryScopeDepth = _currentTryScopeDepth;
+        int previousTryFinallyBodyDepth = _currentTryFinallyBodyDepth;
         _currentTryExceptionLocal = caughtExceptionLocal;
         _currentTryExceptionPresentLocal = exceptionPresentLocal;
         _currentTryCleanupLabel = afterTryBodyLabel;
         _currentTryScopeDepth = _exitScopes.Count;
+        _currentTryFinallyBodyDepth = _finallyBodyDepth;
         EmitScopedTryBodyWithSuspensions(t.TryBlock, caughtExceptionLocal, exceptionPresentLocal, afterTryBodyLabel);
         _currentTryExceptionLocal = previousTryExceptionLocal;
         _currentTryExceptionPresentLocal = previousTryExceptionPresentLocal;
         _currentTryCleanupLabel = previousTryCleanupLabel;
         _currentTryScopeDepth = previousTryScopeDepth;
+        _currentTryFinallyBodyDepth = previousTryFinallyBodyDepth;
         _inHandlerBody = previousInHandler;
-
-        // Restore the enclosing try's cleanup label (its yields must route to it, not ours).
-        _returnCleanupLabel = previousCleanupLabel;
 
         _il.MarkLabel(afterTryBodyLabel);
 
@@ -370,30 +420,41 @@ public partial class AsyncGeneratorMoveNextEmitter
         // Finally: always runs — on normal completion, after a caught exception, or on a routed exit.
         if (t.FinallyBlock != null)
         {
+            // IL locals reset when cleanup yields or awaits. Preserve presence
+            // independently from the value so null/undefined failures survive too.
+            if (finallyExceptionField != null)
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldloc, caughtExceptionLocal);
+                _il.Emit(OpCodes.Stfld, finallyExceptionField);
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldloc, exceptionPresentLocal);
+                _il.Emit(OpCodes.Stfld, finallyExceptionPresentField!);
+            }
+
             _inHandlerBody = true;
+            _finallyBodyDepth++;
             EmitHandlerBodyWithCapture(t.FinallyBlock);
+            _finallyBodyDepth--;
             _inHandlerBody = previousInHandler;
+
+            // Only normal cleanup reaches here; a replacement return/throw has
+            // already taken its existing abrupt-exit route.
+            if (finallyExceptionField != null)
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, finallyExceptionField);
+                _il.Emit(OpCodes.Stloc, caughtExceptionLocal);
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, finallyExceptionPresentField!);
+                _il.Emit(OpCodes.Stloc, exceptionPresentLocal);
+            }
 
             // A real exception arising in the finally body itself was already routed out by
             // EmitHandlerBodyWithCapture (superseding any pending exit / external return), so the
             // mechanisms below run only on the finally's normal completion.
 
-            // External return() (mechanism 1): __returnRequested set → complete the generator now that
-            // the finally has run. Checked before the in-body dispatch because the two use different
-            // flags (__returnRequested vs <>pendingExit) and an external return never sets the latter.
-            var noReturnRequestedLabel = _il.DefineLabel();
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, _builder.ReturnRequestedField);
-            _il.Emit(OpCodes.Brfalse, noReturnRequestedLabel);
-
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldc_I4, -2);
-            _il.Emit(OpCodes.Stfld, _builder.StateField);
-            EmitReturnValueTaskBool(false);
-
-            _il.MarkLabel(noReturnRequestedLabel);
-
-            // In-body non-local exit (mechanism 2): dispatch any pending exit that routed through here.
+            // Dispatch either a source exit or an injected return that routed through here.
             EmitFinallyDispatch(frame!);
 
             // Propagate an uncaught exception once the finally has run (try/finally with no catch).

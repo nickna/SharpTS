@@ -52,6 +52,41 @@ public sealed class EmittedObjectKeysRuntime
         internal set => SetHandle(ref _symbols, value);
     }
 
+    private TypeBuilder? _classStaticPropertyType;
+    public TypeBuilder ClassStaticPropertyType
+    {
+        get => Require(_classStaticPropertyType);
+        internal set => SetHandle(ref _classStaticPropertyType, value);
+    }
+
+    private ConstructorBuilder? _classStaticPropertyConstructor;
+    public ConstructorBuilder ClassStaticPropertyConstructor
+    {
+        get => Require(_classStaticPropertyConstructor);
+        internal set => SetHandle(ref _classStaticPropertyConstructor, value);
+    }
+
+    private FieldBuilder? _classStaticPropertyName;
+    public FieldBuilder ClassStaticPropertyName
+    {
+        get => Require(_classStaticPropertyName);
+        internal set => SetHandle(ref _classStaticPropertyName, value);
+    }
+
+    private FieldBuilder? _classStaticPropertyEnumerable;
+    public FieldBuilder ClassStaticPropertyEnumerable
+    {
+        get => Require(_classStaticPropertyEnumerable);
+        internal set => SetHandle(ref _classStaticPropertyEnumerable, value);
+    }
+
+    private MethodBuilder? _constructorKeys;
+    public MethodBuilder ConstructorKeys
+    {
+        get => Require(_constructorKeys);
+        internal set => SetHandle(ref _constructorKeys, value);
+    }
+
     internal void MarkProxyCallbackBodiesEmitted()
     {
         EnsureMutable();
@@ -87,6 +122,11 @@ public sealed class EmittedObjectKeysRuntime
         _ = Ordinary;
         _ = CreateProxyList;
         _ = Symbols;
+        _ = ClassStaticPropertyType;
+        _ = ClassStaticPropertyConstructor;
+        _ = ClassStaticPropertyName;
+        _ = ClassStaticPropertyEnumerable;
+        _ = ConstructorKeys;
         if (!_proxyCallbackBodiesEmitted)
             throw new InvalidOperationException("Object key callback bodies have not been emitted.");
         IsComplete = true;

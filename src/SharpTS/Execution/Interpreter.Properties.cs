@@ -656,7 +656,7 @@ public partial class Interpreter
 
             // Native own statics remain visible before following a callable's parent.
             if (current is ArrayBufferConstructorImpl arrayBufferConstructor
-                && arrayBufferConstructor.GetProperty(name) is { } arrayBufferStatic)
+                && arrayBufferConstructor.GetProperty(name, this) is { } arrayBufferStatic)
                 return arrayBufferStatic;
 
             if (FunctionObjectProperties.TryGetExplicitPrototype(current, this, out var explicitPrototype))
@@ -1228,6 +1228,8 @@ public partial class Interpreter
         // them before namespace/category/built-in dispatch while retaining the
         // existing record helper's accessor, prototype, and callable rules.
         string directMemberName = get.Name.Lexeme;
+        if (obj is SharpTSArguments && directMemberName == "length")
+            return RuntimeValue.FromBoxed(GetPropertyValue(obj, directMemberName));
         if (obj is SharpTSArray directArray
             && directMemberName == "length")
         {
@@ -1674,6 +1676,8 @@ public partial class Interpreter
         if (obj is SharpTSArraySubclassInstance subclassArray)
             return RuntimeValue.FromBoxed(GetPropertyValue(subclassArray, memberName));
 
+        if (obj is SharpTSArguments && memberName == "length")
+            return RuntimeValue.FromBoxed(GetPropertyValue(obj, memberName));
         if (obj is SharpTSArray lengthArray && memberName == "length")
             return RuntimeValue.FromNumber(lengthArray.LongLength);
 
@@ -1693,9 +1697,7 @@ public partial class Interpreter
         // `Get(result, "0")`) rely on this — without it, numeric-string Get
         // returns undefined and the algorithm reads the wrong value.
         if (obj is SharpTSArray arrIdx
-            && long.TryParse(memberName, System.Globalization.NumberStyles.None,
-                System.Globalization.CultureInfo.InvariantCulture, out long idx)
-            && idx >= 0 && idx < arrIdx.Length
+            && PropertySemantics.TryGetArrayIndex(memberName, out uint idx)
             && arrIdx.HasIndex(idx))
         {
             return GetArrayIndexValue(arrIdx, idx);
@@ -2081,6 +2083,8 @@ public partial class Interpreter
                 return RuntimeValue.FromBoxed(GetPropertyValue(functionPrototype, memberName, simpleObj));
             if (current is SharpTSClassPrototype classPrototype)
                 return RuntimeValue.FromBoxed(GetPropertyValue(classPrototype, memberName, simpleObj));
+            if (current is SharpTSMath mathPrototype)
+                return RuntimeValue.FromBoxed(GetPropertyValue(mathPrototype, memberName, simpleObj));
             // `function Foo(){}; Foo.prototype = new Array(1,2,3)` — an array standing in as a
             // prototype. Instances must inherit both its own indexed/named data and the
             // Array.prototype methods, the latter applied to the *original* receiver so
@@ -2381,6 +2385,14 @@ public partial class Interpreter
 
     private bool NeedsLiveFunctionPrototypeRead(object? target, string name)
     {
+        // Absent synchronous metadata inherits from the default realm prototype too;
+        // the callable's arity/name fallback must not recreate its deleted own slot.
+        if ((target is SharpTSFunction or SharpTSArrowFunction) &&
+            name is "name" or "length" &&
+            FunctionObjectProperties.TryGetStorage(target, this, out var ownMetadata) &&
+            ownMetadata.GetOwnPropertyDescriptor(name) is null)
+            return true;
+
         if (target is not ISharpTSCallable || !GetFunctionPrototype().HasExplicitPrototype) return false;
         if (name is not ("name" or "length")) return true;
         if (target is SharpTSFunctionPrototype prototype) return !prototype.HasOwnProperty(name);
@@ -2390,14 +2402,6 @@ public partial class Interpreter
         // Legacy native wrappers expose their own metadata outside a property
         // bag. Do not recursively query Get to discover that virtual metadata.
         return false;
-    }
-
-    private void SetOrdinaryFunctionOwnProperty(
-        object function, SharpTSObject properties, string name, object? value, bool strictMode)
-    {
-        if (!TryAssignThroughDescriptor(
-                properties.GetOwnPropertyDescriptor(name), function, name, value, strictMode))
-            properties.SetPropertyStrict(name, value, strictMode);
     }
 
     private bool TrySetExplicitFunctionPrototypeProperty(
@@ -2815,20 +2819,6 @@ public partial class Interpreter
         bool strictMode = forceStrict || _environment.IsStrictMode;
         bool mutableFunctionPrototype = UsesMutableFunctionPrototype(obj);
 
-        bool hasWritableOwnLength = obj switch
-        {
-            SharpTSFunction function => function.GetOwnPropertyDescriptor("length") is { Writable: true },
-            SharpTSArrowFunction function => function.GetOwnPropertyDescriptor("length") is { Writable: true },
-            _ => false
-        };
-
-        if (!mutableFunctionPrototype && strictMode && set.Name.Lexeme == "length" && !hasWritableOwnLength
-            && obj is SharpTSFunction or SharpTSArrowFunction)
-        {
-            throw new ThrowException(new SharpTSTypeError(
-                "Cannot assign to read only property 'length' of function"));
-        }
-
         // Proxy interception - must be before any other dispatch
         if (obj is SharpTSProxy proxy)
         {
@@ -2869,14 +2859,12 @@ public partial class Interpreter
         }
         if (obj is SharpTSFunction userFn)
         {
-            SetOrdinaryFunctionOwnProperty(
-                userFn, userFn.OwnPropertyStorage, set.Name.Lexeme, value, strictMode);
+            SetOwnPropertyObjectValue(userFn, set.Name.Lexeme, value, strictMode);
             return value;
         }
         if (obj is SharpTSArrowFunction arrowFn)
         {
-            SetOrdinaryFunctionOwnProperty(
-                arrowFn, arrowFn.OwnPropertyStorage, set.Name.Lexeme, value, strictMode);
+            SetOwnPropertyObjectValue(arrowFn, set.Name.Lexeme, value, strictMode);
             return value;
         }
         if (obj is SharpTSObjectNamespace objectNamespace)
@@ -3035,7 +3023,7 @@ public partial class Interpreter
                 if (regex.TryGetAccessor(memberName, out _, out var userSetter)
                     && userSetter != null)
                 {
-                    userSetter.CallBoxed(this, [value]);
+                    FunctionBuiltIns.CallWithThis(this, userSetter, regex, [value]);
                     return value;
                 }
                 if (memberName == "lastIndex")
@@ -3087,6 +3075,11 @@ public partial class Interpreter
             case TypeCategory.Array when obj is SharpTSArray array:
                 if (memberName == "length")
                 {
+                    if (array is SharpTSArguments)
+                    {
+                        SetArrayNamedProperty(array, memberName, value, strictMode);
+                        return value;
+                    }
                     if (strictMode && (array.IsFrozen || !array.IsLengthWritable))
                     {
                         throw new ThrowException(new SharpTSTypeError(
@@ -3105,6 +3098,12 @@ public partial class Interpreter
                         out uint arrayIndex)
                     && arrayIndex < uint.MaxValue)
                 {
+                    if (array is not SharpTSArguments)
+                    {
+                        SetOwnPropertyObjectValue(array, arrayIndex.ToString(
+                            System.Globalization.CultureInfo.InvariantCulture), value, strictMode);
+                        return value;
+                    }
                     if (array.TryGetIndexAccessor(
                             arrayIndex, out _, out var ownSetter))
                     {
@@ -3179,7 +3178,7 @@ public partial class Interpreter
         // Bracket assignment (`array["length"] = value`) reaches the named-key
         // path, but length is still the array exotic's special own data
         // property. Keep it on the same ArraySetLength path as dot assignment.
-        if (name == "length")
+        if (name == "length" && array is not SharpTSArguments)
         {
             if (strictMode && (array.IsFrozen || !array.IsLengthWritable))
             {
@@ -3435,7 +3434,9 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/variable-declarations.html">TypeScript Variable Declarations</seealso>
     private RuntimeValue EvaluateAssign(Expr.Assign assign)
     {
-        RuntimeValue value = EvaluateRV(assign.Value);
+        RuntimeValue value = assign.IsVarRedeclaration
+            ? EvaluateVariableInitializerCore(_syncContext, assign.Value, assign.Name).GetAwaiter().GetResult()
+            : EvaluateRV(assign.Value);
 
         if (_locals.TryGetValue(assign, out int distance))
         {

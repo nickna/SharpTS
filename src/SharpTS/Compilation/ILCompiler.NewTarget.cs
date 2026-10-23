@@ -77,7 +77,8 @@ public partial class ILCompiler
     {
         // Reflect.construct supplies a distinct allocation constructor even
         // when the source never reads the new.target meta-property.
-        if (_features?.UsesNewTarget != true && _features?.UsesReflect != true) return entry;
+        if (_features?.UsesNewTarget != true && _features?.UsesReflect != true
+            && _features?.UsesClassPrototypeMutation != true) return entry;
         if (_newTargetConstructors.TryGetValue(entry, out var existing)) return existing;
         var owner = (TypeBuilder)entry.DeclaringType!;
         var parameters = entry.GetParameters();
@@ -115,7 +116,8 @@ public partial class ILCompiler
 
     private void EmitConstructedClassPrototype(CompilationContext context)
     {
-        if (_features?.UsesReflect != true || context.NewTargetParameterIndex is not { } argument)
+        if ((_features?.UsesReflect != true && _features?.UsesClassPrototypeMutation != true)
+            || context.NewTargetParameterIndex is not { } argument)
             return;
 
         var il = context.IL;

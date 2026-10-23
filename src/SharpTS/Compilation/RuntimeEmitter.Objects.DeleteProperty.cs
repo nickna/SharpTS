@@ -83,6 +83,7 @@ public partial class RuntimeEmitter
     )
     {
         EmitCompactDictionaryOrder(typeBuilder, objectDeletion);
+        EmitClassFieldDeletionHistory(typeBuilder.Module, objectDeletion);
         EmitDeletePropertyCore(
             typeBuilder,
             objectDeletion,
@@ -108,6 +109,56 @@ public partial class RuntimeEmitter
             ),
             strict: false
         );
+    }
+
+    private void EmitClassFieldDeletionHistory(Module module, EmittedObjectDeletionRuntime objectDeletion)
+    {
+        var owner = EmitTypeDefinitions.DefineType((ModuleBuilder)module, "$ClassFieldDeletionHistory",
+            TypeAttributes.NotPublic | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object);
+        var tableType = _types.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>),
+            _types.Object, _types.HashSetOfString);
+        var table = owner.DefineField("_deleted", tableType,
+            FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
+        var initialize = owner.DefineTypeInitializer().GetILGenerator();
+        initialize.Emit(OpCodes.Newobj, EmitterTypeHelpers.ResolveConstructor(tableType,
+            typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>).GetConstructor(Type.EmptyTypes)!));
+        initialize.Emit(OpCodes.Stsfld, table);
+        initialize.Emit(OpCodes.Ret);
+
+        var record = owner.DefineMethod("Record", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void, [_types.Object, _types.String]);
+        objectDeletion.RecordClassFieldDeletion = record;
+        var il = record.GetILGenerator();
+        il.Emit(OpCodes.Ldsfld, table);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, EmitterTypeHelpers.ResolveMethod(tableType,
+            typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>).GetMethod("GetOrCreateValue")!));
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.HashSetOfString, "Add", [_types.String])!);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+
+        var contains = owner.DefineMethod("Contains", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean, [_types.Object, _types.String]);
+        objectDeletion.WasClassFieldDeleted = contains;
+        il = contains.GetILGenerator();
+        var keys = il.DeclareLocal(_types.HashSetOfString);
+        var absent = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, table);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, keys);
+        il.Emit(OpCodes.Callvirt, EmitterTypeHelpers.ResolveMethod(tableType,
+            typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>).GetMethod("TryGetValue")!));
+        il.Emit(OpCodes.Brfalse, absent);
+        il.Emit(OpCodes.Ldloc, keys);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.HashSetOfString, "Contains", [_types.String])!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(absent);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        owner.CreateType();
     }
 
     private void EmitCompactDictionaryOrder(TypeBuilder typeBuilder, EmittedObjectDeletionRuntime objectDeletion)
@@ -189,9 +240,8 @@ public partial class RuntimeEmitter
     /// On a failed delete (frozen/sealed object, non-configurable property)
     /// the non-strict variant returns false; the strict variant throws a
     /// TypeError when strictMode is set, else returns false.
-    /// The strict variant's $TSFunction handler skips the frozen/sealed/PDS
-    /// configurability checks — preserved as-is from before the #1131 merge
-    /// (behavior-preserving refactor; see the epic notes for the drift list).
+    /// Strict callable deletion reuses ordinary deletion for storage cleanup
+    /// and applies strictness to its result.
     /// </summary>
     private void EmitDeletePropertyCore(
         TypeBuilder typeBuilder,
@@ -422,8 +472,7 @@ public partial class RuntimeEmitter
         if (strict)
         {
             // Reuse the ordinary bound [[Delete]] operation so both the PDS
-            // override and synthesized metadata are removed. The legacy
-            // strict TSFunction path below only records the deletion.
+            // override and synthesized metadata are removed.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, objectDeletion.Property);
@@ -705,13 +754,15 @@ public partial class RuntimeEmitter
         // Previously these objects fell straight through to true without
         // changing observable state, so verifyProperty incorrectly classified
         // configurable Error cause/message slots as non-configurable.
+        var fallbackFieldsLabel = il.DefineLabel();
         var fallbackDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        var deletedClassDescriptor = il.DeclareLocal(_types.Boolean);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, fallbackDescriptorLocal);
         il.Emit(OpCodes.Ldloc, fallbackDescriptorLocal);
-        il.Emit(OpCodes.Brfalse, trueLabel);
+        il.Emit(OpCodes.Brfalse, fallbackFieldsLabel);
         // Sealing/freezing makes every existing own property
         // non-configurable even though the stable stored descriptor retains
         // its original bit. Match gOPD's effective-configurability view.
@@ -730,21 +781,78 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
-        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Stloc, deletedClassDescriptor);
+
+        il.MarkLabel(fallbackFieldsLabel);
+        // Assignment-created class expandos live outside PDS. The public
+        // Fields view may be a snapshot containing declared fields; use the
+        // generated class's existing accessor for its actual dynamic store.
+        // Missing/inherited properties need no backing-store mutation.
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+        var dynamicStore = il.DeclareLocal(_types.MethodInfo);
+        var dynamicFields = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldstr, "$EnsureFields");
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        il.Emit(OpCodes.Stloc, dynamicStore);
+        il.Emit(OpCodes.Ldloc, dynamicStore);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+        il.Emit(OpCodes.Ldloc, dynamicStore);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Stloc, dynamicFields);
+        il.Emit(OpCodes.Ldloc, dynamicFields);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
+        var removedDynamicField = il.DeclareLocal(_types.Boolean);
+        il.Emit(OpCodes.Stloc, removedDynamicField);
+        il.Emit(OpCodes.Ldloc, removedDynamicField);
+        il.Emit(OpCodes.Ldloc, deletedClassDescriptor);
+        il.Emit(OpCodes.Or);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+        // The generated-class storage seam above proves this carrier owns its
+        // history. A computed field may have existed only in PDS, not the raw store.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, objectDeletion.RecordClassFieldDeletion);
+        il.Emit(OpCodes.Ldloc, removedDynamicField);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+        il.Emit(OpCodes.Ldloc, dynamicFields);
+        il.Emit(OpCodes.Call, objectDeletion.CompactDictionaryOrder);
         il.Emit(OpCodes.Br, trueLabel);
 
         // $TSFunction delete handler.
         il.MarkLabel(tsFunctionDelLabel);
+        // Integrity levels only restrict deletion of existing own properties.
+        // The complete descriptor includes synthesized metadata and PDS overrides;
+        // an inherited or previously deleted key is absent even when frozen/sealed.
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
         if (strict)
         {
-            // Strict variant: record the deletion only — it intentionally skips
-            // the frozen/sealed/PDS configurability checks the non-strict
-            // handler performs (preserved pre-#1131 behavior).
+            // Ordinary deletion removes actual descriptor storage as well as
+            // synthesized metadata. Recording only a tombstone leaves a live
+            // configurable PDS property observable after successful deletion.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, inputs.ObjectState.MarkBuiltinDeleted);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Ret);
+            il.Emit(OpCodes.Call, objectDeletion.Property);
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            EmitDeleteFail("' of function");
         }
         else
         {
@@ -945,6 +1053,14 @@ public partial class RuntimeEmitter
 
         // $TSObject - call the DeleteProperty / DeletePropertyStrict instance method
         il.MarkLabel(sharpTSObjectLabel);
+
+        // Integrity levels constrain existing own properties only. Reuse the
+        // complete descriptor so absent or inherited keys succeed when sealed.
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
 
         // SetIntegrityLevel makes every existing own property non-configurable.
         // The stable PDS descriptor intentionally retains its original bit, so

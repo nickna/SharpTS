@@ -332,6 +332,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 break;
 
             case Stmt.Sequence seq:
+                if (Ctx.InitializedParameterInitializers?.Contains(seq) == true) break;
                 foreach (var s in seq.Statements)
                     EmitStatement(s);
                 break;
@@ -1080,7 +1081,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         EnterLoop(endLabel, continueLabel);
 
         // Declare loop variable
-        var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme));
+        var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme), f.IsDeclaration && !f.IsVar);
 
         IL.MarkLabel(startLabel);
         EmitCancellationCheck();
@@ -1095,7 +1096,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         {
             loadEnumerator();
             IL.Emit(OpCodes.Callvirt, current);
-        });
+        }, f.IsDeclaration && !f.IsVar);
 
         // Emit body
         EmitStatement(f.Body);
@@ -1221,7 +1222,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         // DeclareLoopVariable/EmitStoreLoopVariable hooks so each emitter binds it correctly: a
         // hoisted state-machine field for async functions and async generators, or an
         // emitter-local for async arrows (whose resolver reads its own local map, not Ctx.Locals).
-        var loopVarLocal = DeclareLoopVariable(varName);
+        var loopVarLocal = DeclareLoopVariable(varName, f.IsDeclaration && !f.IsVar);
 
         // Try async iterator protocol: GetIteratorFunction(iterable, Symbol.asyncIterator)
         var asyncIteratorFnLocal = il.DeclareLocal(types.Object);
@@ -1329,7 +1330,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
             {
                 il.Emit(OpCodes.Ldloc, resultLocal);
                 il.Emit(OpCodes.Call, runtime.IteratorProtocol.Value);
-            });
+            }, f.IsDeclaration && !f.IsVar);
 
             EmitStatement(f.Body);
 
@@ -1465,7 +1466,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 il.Emit(OpCodes.Ldloc, genResultLocal);
                 il.Emit(OpCodes.Ldstr, "value");
                 il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
-            });
+            }, f.IsDeclaration && !f.IsVar);
 
             EmitStatement(f.Body);
 
@@ -1497,6 +1498,37 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         il.MarkLabel(afterLoopLabel);
     }
 
+    /// <summary>Skips a snapshotted key whose own enumerable property no longer exists.</summary>
+    protected void EmitForInKeyCheck(Action emitReceiver, Action emitKey, Label continueLabel)
+    {
+        emitReceiver();
+        emitKey();
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectOwnProperties.IsEnumerable);
+        IL.Emit(OpCodes.Brfalse, continueLabel);
+    }
+
+    protected readonly record struct ForInIterationState(
+        Action LoadReceiver, Action LoadKeys, Action LoadIndex, Action StoreIndex);
+
+    /// <summary>Consumes the boxed receiver and initializes a fresh key snapshot and cursor.</summary>
+    protected virtual ForInIterationState StoreForInIterationState(Stmt.ForIn loop)
+    {
+        var receiver = IL.DeclareLocal(Types.Object);
+        IL.Emit(OpCodes.Stloc, receiver);
+        IL.Emit(OpCodes.Ldloc, receiver);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectKeys.Keys);
+        var keys = IL.DeclareLocal(Types.ListOfObject);
+        IL.Emit(OpCodes.Stloc, keys);
+        var index = IL.DeclareLocal(Types.Int32);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, index);
+        return new ForInIterationState(
+            () => IL.Emit(OpCodes.Ldloc, receiver),
+            () => IL.Emit(OpCodes.Ldloc, keys),
+            () => IL.Emit(OpCodes.Ldloc, index),
+            () => IL.Emit(OpCodes.Stloc, index));
+    }
+
     /// <summary>
     /// Emits a for...in loop iterating over object keys.
     /// </summary>
@@ -1506,41 +1538,37 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         var endLabel = IL.DefineLabel();
         var continueLabel = IL.DefineLabel();
 
-        // Get keys from object
+        // Retain the receiver once; async functions can persist this iteration state.
         EmitExpression(f.Object);
         EnsureBoxed();
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectKeys.Keys);
-
-        var keysLocal = IL.DeclareLocal(Types.ListOfObject);
-        IL.Emit(OpCodes.Stloc, keysLocal);
-
-        // Index variable
-        var indexLocal = IL.DeclareLocal(Types.Int32);
-        IL.Emit(OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Stloc, indexLocal);
+        var state = StoreForInIterationState(f);
 
         EnterLoop(endLabel, continueLabel);
 
         // Loop variable
-        var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme));
+        var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme), f.IsDeclaration && !f.IsVar);
 
         IL.MarkLabel(startLabel);
         EmitCancellationCheck();
 
         // Check index < keys.Count
-        IL.Emit(OpCodes.Ldloc, indexLocal);
-        IL.Emit(OpCodes.Ldloc, keysLocal);
+        state.LoadIndex();
+        state.LoadKeys();
         IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Length);
         IL.Emit(OpCodes.Clt);
         IL.Emit(OpCodes.Brfalse, endLabel);
 
-        // Set loop variable from keys[index]
-        EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme), () =>
-        {
-            IL.Emit(OpCodes.Ldloc, keysLocal);
-            IL.Emit(OpCodes.Ldloc, indexLocal);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Element);
-        });
+        // Deleted/non-enumerable candidates do not assign the loop head.
+        var keyLocal = IL.DeclareLocal(Types.Object);
+        state.LoadKeys();
+        state.LoadIndex();
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Element);
+        IL.Emit(OpCodes.Stloc, keyLocal);
+        EmitForInKeyCheck(
+            state.LoadReceiver,
+            () => IL.Emit(OpCodes.Ldloc, keyLocal), continueLabel);
+        EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme),
+            () => IL.Emit(OpCodes.Ldloc, keyLocal), f.IsDeclaration && !f.IsVar);
 
         // Emit body
         EmitStatement(f.Body);
@@ -1548,10 +1576,10 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         IL.MarkLabel(continueLabel);
 
         // Increment index
-        IL.Emit(OpCodes.Ldloc, indexLocal);
+        state.LoadIndex();
         IL.Emit(OpCodes.Ldc_I4_1);
         IL.Emit(OpCodes.Add);
-        IL.Emit(OpCodes.Stloc, indexLocal);
+        state.StoreIndex();
 
         IL.Emit(OpCodes.Br, startLabel);
 
@@ -1842,8 +1870,9 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
     /// (detected via <see cref="GetHoistedVariableField"/>), returns null.
     /// Otherwise declares a local and registers it via <see cref="RegisterLoopLocal"/>.
     /// </summary>
-    protected virtual LocalBuilder? DeclareLoopVariable(string name)
+    protected virtual LocalBuilder? DeclareLoopVariable(string name, bool isDeclaration = true)
     {
+        if (!isDeclaration) return null;
         if (Ctx.LoopBodyCellDeclarations.ContainsKey(name)) return null;
         if (GetHoistedVariableField(name) != null)
             return null;
@@ -1866,12 +1895,20 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
     /// Stores a value into a loop variable. If the variable is hoisted to a state machine
     /// field, emits a safe store through a temp local to avoid stack ordering issues.
     /// </summary>
-    protected virtual void EmitStoreLoopVariable(LocalBuilder? local, string name, Action emitValue)
+    protected virtual void EmitStoreLoopVariable(LocalBuilder? local, string name, Action emitValue, bool isDeclaration = true)
     {
+        if (!isDeclaration)
+        {
+            emitValue();
+            SetStackUnknown();
+            EmitStoreAssignmentLoopVariable(name);
+            return;
+        }
         if (Ctx.LoopBodyCellDeclarations.TryGetValue(name, out var declaration))
         {
             emitValue();
-            TryInitializeLexicalCell(declaration, fresh: true);
+            TryInitializeLexicalCell(declaration,
+                fresh: Ctx.ClosureAnalyzer?.IsFunctionBodyVarDeclaration(declaration) != true);
             return;
         }
         var field = GetHoistedVariableField(name);
@@ -1892,6 +1929,15 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
             emitValue();
             IL.Emit(OpCodes.Stloc, local);
         }
+    }
+
+    /// <summary>Consumes one boxed iteration value as an assignment to an existing binding.</summary>
+    protected virtual void EmitStoreAssignmentLoopVariable(string name)
+    {
+        if (!Ctx.HasLoopBodyBindingAccess(name) && InCjsContext && name == "exports")
+            IL.Emit(OpCodes.Stsfld, Ctx.CurrentCjsExportsField!);
+        else
+            EmitStoreVariable(name);
     }
 
     #endregion

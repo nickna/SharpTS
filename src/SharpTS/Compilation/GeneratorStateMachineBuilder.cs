@@ -65,6 +65,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
     // display class (mirrors AsyncStateMachineBuilder.FunctionDCField). Null when the
     // generator has no such write-capture.
     public FieldBuilder? FunctionDCField { get; private set; }
+    public IReadOnlyDictionary<object, string> BlockScopeRenames { get; private set; } = new Dictionary<object, string>();
 
     // Delegated enumerator field for yield* expressions
     public FieldBuilder? DelegatedEnumeratorField { get; private set; }
@@ -118,6 +119,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         bool useNativeNumberCurrent = false)
     {
         _runtime = runtime;
+        BlockScopeRenames = analysis.BlockScopeRenames;
 
         // Build list of interfaces to implement
         var interfaces = new List<Type>

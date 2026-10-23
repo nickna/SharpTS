@@ -151,6 +151,7 @@ public partial class Interpreter
         {
             while (iterator.MoveNext())
             {
+                ThrowIfExecutionCancelled();
                 // CreateAsyncFromSyncIterator adopts each yielded value.
                 object? value = iterator.Current;
                 if (forOf.IsAsync)
@@ -162,14 +163,14 @@ public partial class Interpreter
                     disposeIterator = true;
                 }
 
-                var result = await ExecuteLoopBodyAsync(forOf.Variable, forOf.IsDeclaration, value, forOf.Body);
+                var result = await ExecuteLoopBodyAsync(forOf.Variable, forOf.IsDeclaration && !forOf.IsVar, value, forOf.Body);
                 preserveThrow = result.Type == ExecutionResult.ResultType.Throw;
                 var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
                 if (shouldBreak) return ExecutionResult.Success();
                 if (shouldContinue) continue;
                 if (abruptResult.HasValue) return abruptResult.Value;
 
-                ProcessPendingCallbacks();
+                ProcessPendingCallbacks(processMicrotasks: false);
             }
             return ExecutionResult.Success();
         }
@@ -218,6 +219,42 @@ public partial class Interpreter
         var completion = new TaskCompletionSource<object?>();
         PromiseBuiltIns.ResolveThenableIntoCapability(this, completion, promise);
         return completion.Task;
+    }
+
+    // External async-generator return arguments use intrinsic PromiseResolve,
+    // independently of ordinary body return/yield values.
+    internal async Task<object?> AwaitAsyncGeneratorReturnValue(object? value)
+    {
+        var saved = _environment;
+        var savedGen = CurrentAsyncGenerator;
+        try
+        {
+            Task<object?> task;
+            try
+            {
+                if (value is SharpTSPromise promise)
+                    task = NormalizePromiseForAwait(promise);
+                else if (value is Task<object?> nativeTask)
+                    task = nativeTask;
+                else
+                {
+                    var completion = new TaskCompletionSource<object?>();
+                    PromiseBuiltIns.ResolveThenableIntoCapability(this, completion, value);
+                    task = completion.Task;
+                }
+            }
+            catch (Exception error) { task = Task.FromException<object?>(error); }
+
+            // Even an available primitive resumes in a Promise job. This is
+            // request adoption, so do not toggle a possibly unrelated caller
+            // generator's running flag as a body await would.
+            return await QueuePromiseReaction(() => task);
+        }
+        finally
+        {
+            _environment = saved;
+            CurrentAsyncGenerator = savedGen;
+        }
     }
 
     private async Task<ExecutionResult> ExecuteLoopBodyAsync(Token variable, bool isDeclaration, object? value, Stmt body)
@@ -301,6 +338,7 @@ public partial class Interpreter
         RuntimeEnvironment hostEnv = _environment;
         while (true)
         {
+            ThrowIfExecutionCancelled();
             // Call iterator.next()
             var nextResult = CallMethodOnObject(asyncIterator, "next", []);
 
@@ -341,13 +379,13 @@ public partial class Interpreter
             ExecutionResult result;
             try
             {
-                result = await ExecuteLoopBodyAsync(forOf.Variable, forOf.IsDeclaration, value, forOf.Body);
+                result = await ExecuteLoopBodyAsync(forOf.Variable, forOf.IsDeclaration && !forOf.IsVar, value, forOf.Body);
             }
             catch
             {
                 // Binding initialization/assignment is part of the loop body
                 // completion and must close a real async iterator on failure.
-                await CloseAsyncIteratorOnEarlyExit(asyncIterator);
+                await CloseAsyncIteratorOnEarlyExit(asyncIterator, preserveThrow: true);
                 throw;
             }
             var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
@@ -358,54 +396,78 @@ public partial class Interpreter
             // break/continue that targets this for-await loop rather than escaping it.
             if (shouldBreak)
             {
-                await CloseAsyncIteratorOnEarlyExit(asyncIterator);
+                await CloseAsyncIteratorOnEarlyExit(asyncIterator, preserveThrow: false);
                 return ExecutionResult.Success();
             }
             if (shouldContinue) continue;
             if (abruptResult.HasValue)
             {
-                await CloseAsyncIteratorOnEarlyExit(asyncIterator);
+                await CloseAsyncIteratorOnEarlyExit(asyncIterator,
+                    preserveThrow: abruptResult.Value.Type == ExecutionResult.ResultType.Throw);
                 return abruptResult.Value;
             }
 
             // Process any pending timer callbacks
-            ProcessPendingCallbacks();
+            ProcessPendingCallbacks(processMicrotasks: false);
         }
 
         return ExecutionResult.Success();
     }
 
     /// <summary>
-    /// Closes an async iterator when a <c>for await…of</c> exits early (break, or a return/throw out of
-    /// the loop body) — ECMA-262 AsyncIteratorClose. Calls <c>return()</c> if the iterator provides one
-    /// and awaits it, so a suspended async generator runs its <c>finally</c> blocks before the loop
-    /// leaves. Cleanup is best-effort: a missing <c>return()</c> is skipped, and a rejection from the
-    /// <c>return()</c> itself is swallowed so the loop's own completion (the break / return / throw that
-    /// triggered the close) takes precedence.
+    /// AsyncIteratorClose preserves an existing throw after attempting cleanup.
+    /// For other early exits, a failed return lookup/call/await or a nonobject
+    /// result replaces the loop completion.
     /// </summary>
-    private async Task CloseAsyncIteratorOnEarlyExit(object asyncIterator)
+    private async Task CloseAsyncIteratorOnEarlyExit(object asyncIterator, bool preserveThrow)
     {
-        object? result;
+        var saved = _environment;
+        var savedGen = CurrentAsyncGenerator;
         try
         {
-            result = CallMethodOnObject(asyncIterator, "return", []);
-        }
-        catch
-        {
-            // No return() method (or it threw synchronously) — nothing to close.
-            return;
-        }
+            // GetMethod distinguishes an absent method from a failed lookup or
+            // a present noncallable. Read once and retain the iterator receiver.
+            object? returnMethod = GetPropertyValue(asyncIterator, "return");
+            if (returnMethod is null or SharpTSUndefined)
+                return;
+            if (returnMethod is not ISharpTSCallable callable)
+                throw new ThrowException(new SharpTSTypeError(
+                    "Async iterator.return must be a function."));
 
-        try
-        {
+            object? result = FunctionBuiltIns.CallWithThis(this, callable, asyncIterator, []);
+
+            // A delegate may eagerly repoint the ambient frame while starting
+            // its cleanup. Await and its continuation belong to the loop owner.
+            _environment = saved;
+            CurrentAsyncGenerator = savedGen;
+            Task<object?> task;
             if (result is SharpTSPromise promise)
-                await AwaitPreservingEnvironment(NormalizePromiseForAwait(promise));
-            else if (result is Task<object?> task)
-                await AwaitPreservingEnvironment(task);
+                task = NormalizePromiseForAwait(promise);
+            else if (result is Task<object?> nativeTask)
+                task = nativeTask;
+            else
+            {
+                var completion = new TaskCompletionSource<object?>();
+                PromiseBuiltIns.ResolveThenableIntoCapability(this, completion, result);
+                task = completion.Task;
+            }
+            _environment = saved;
+            CurrentAsyncGenerator = savedGen;
+            result = await AwaitPreservingEnvironment(QueueNativeAwait(task));
+
+            // An original throw wins even over a primitive cleanup result.
+            if (!preserveThrow && !RuntimeValue.FromBoxed(result).IsObject)
+                throw new ThrowException(new SharpTSTypeError(
+                    "Async iterator.return must return an object."));
         }
-        catch
+        catch when (preserveThrow)
         {
-            // The iterator's return() rejected during cleanup; the loop's own completion wins.
+            // Preserve the original body throw, including null/falsy values.
+        }
+        finally
+        {
+            _environment = saved;
+            CurrentAsyncGenerator = savedGen;
         }
     }
 
@@ -471,7 +533,8 @@ public partial class Interpreter
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.OwnEnumerableKeys(),
             // Own enumerable keys only, hiding boxed-primitive internal slots and
             // honoring enumerability — consistent with Object.keys (#475).
-            SharpTSObject o => o.OwnEnumerableKeys(),
+            // Snapshot candidates before the body; keep descriptor checks live.
+            SharpTSObject o => o.OwnVisibleStringKeys().ToArray().Where(o.IsOwnEnumerableProperty),
             SharpTSInstance inst => inst.GetFieldNames(),
             // for...in skips holes per ECMA-262.
             SharpTSArray arr => Enumerable.Range(0, arr.Length).Where(arr.HasIndex).Select(i => i.ToString()),
@@ -484,14 +547,15 @@ public partial class Interpreter
 
         foreach (var key in keys)
         {
-            var result = await ExecuteLoopBodyAsync(forIn.Variable, forIn.IsDeclaration, key, forIn.Body);
+            ThrowIfExecutionCancelled();
+            var result = await ExecuteLoopBodyAsync(forIn.Variable, forIn.IsDeclaration && !forIn.IsVar, key, forIn.Body);
             var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
             if (shouldBreak) return ExecutionResult.Success();
             if (shouldContinue) continue;
             if (abruptResult.HasValue) return abruptResult.Value;
 
             // Process any pending timer callbacks
-            ProcessPendingCallbacks();
+            ProcessPendingCallbacks(processMicrotasks: false);
         }
 
         return ExecutionResult.Success();
@@ -636,7 +700,7 @@ public partial class Interpreter
         object? value = SharpTSUndefined.Instance;
         if (varStmt.Initializer != null)
         {
-            value = (await EvaluateAsync(varStmt.Initializer)).ToObject();
+            value = (await EvaluateVariableInitializerCore(_asyncContext, varStmt.Initializer, varStmt.Name)).ToObject();
         }
         var target = varStmt.IsVar ? _environment.VarDeclarationTarget ?? _environment : _environment;
         if (varStmt.IsVar && varStmt.Initializer is null && target.IsDefinedLocally(varStmt.Name.Lexeme))
@@ -647,7 +711,7 @@ public partial class Interpreter
 
     internal async ValueTask<ExecutionResult> ExecuteConstAsyncVT(Stmt.Const constStmt)
     {
-        object? constValue = (await EvaluateAsync(constStmt.Initializer)).ToObject();
+        object? constValue = (await EvaluateVariableInitializerCore(_asyncContext, constStmt.Initializer, constStmt.Name)).ToObject();
         _environment.Define(constStmt.Name.Lexeme, constValue);
         return ExecutionResult.Success();
     }
@@ -691,9 +755,9 @@ public partial class Interpreter
                     bool equal = l == r;
                     return RuntimeValue.FromBoolean(eq.IsNegated ? !equal : equal);
                 case OperatorDescriptor.Bitwise or OperatorDescriptor.BitwiseShift:
-                    return RuntimeValue.FromNumber(EvaluateBitwise(binary.Operator.Type, (int)l, (int)r));
+                    return RuntimeValue.FromNumber(EvaluateBitwise(binary.Operator.Type, JsToInt32(l), JsToInt32(r)));
                 case OperatorDescriptor.UnsignedRightShift:
-                    return RuntimeValue.FromNumber((double)((uint)(int)l >> ((int)r & 0x1F)));
+                    return RuntimeValue.FromNumber((double)(JsToUint32(l) >> (JsToInt32(r) & 0x1F)));
             }
         }
 
@@ -719,13 +783,16 @@ public partial class Interpreter
 
     private async Task<RuntimeValue> EvaluateUnaryAsync(Expr.Unary unary)
     {
-        // typeof never throws on undeclared variables
-        if (unary.Operator.Type == TokenType.TYPEOF && unary.Right is Expr.Variable)
+        // Parentheses preserve an identifier Reference for typeof's unresolvable exemption.
+        if (unary.Operator.Type == TokenType.TYPEOF)
         {
-            RuntimeValue right;
-            try { right = await EvaluateAsync(unary.Right); }
-            catch (InterpreterException) { right = RuntimeValue.Undefined; }
-            return RuntimeValue.FromString(right.TypeofString());
+            Expr reference = unary.Right;
+            while (reference is Expr.Grouping grouping) reference = grouping.Expression;
+            if (reference is Expr.Variable variable)
+            {
+                var right = LookupVariableRV(variable.Name, variable, allowUnresolvable: true);
+                return RuntimeValue.FromString(right.TypeofString());
+            }
         }
 
         var rv = await EvaluateAsync(unary.Right);
@@ -734,7 +801,9 @@ public partial class Interpreter
 
     private async ValueTask<RuntimeValue> EvaluateAssignAsync(Expr.Assign assign)
     {
-        var rv = await EvaluateAsync(assign.Value);
+        var rv = assign.IsVarRedeclaration
+            ? await EvaluateVariableInitializerCore(_asyncContext, assign.Value, assign.Name)
+            : await EvaluateAsync(assign.Value);
         object? value = rv.ToObject();
 
         if (_locals.TryGetValue(assign, out int distance))

@@ -222,6 +222,7 @@ internal static class ExactCompactRecordFunctionAnalyzer
                 if (!JsonSerializationShapeAnalyzer.TryAnalyzeCompactObjectLiteral(
                         literal, typeMap, features.CompactObjectRecordShapes.Values,
                         out var literalShape) ||
+                    !HasSupportedCompactLiteralShape(literalShape) ||
                     JsonSerializationShapeAnalyzer.Fingerprint(literalShape) != fingerprint)
                     return false;
                 for (int index = 0; index < literal.Properties.Count; index++)
@@ -278,7 +279,8 @@ internal static class ExactCompactRecordFunctionAnalyzer
             if (unwrapped is not Expr.ObjectLiteral literal ||
                 !JsonSerializationShapeAnalyzer.TryAnalyzeCompactObjectLiteral(
                     literal, typeMap, features.CompactObjectRecordShapes.Values,
-                    out var shape))
+                    out var shape) ||
+                !HasSupportedCompactLiteralShape(shape))
             {
                 fingerprint = "";
                 return false;
@@ -295,6 +297,25 @@ internal static class ExactCompactRecordFunctionAnalyzer
         }
         fingerprint = inferred ?? "";
         return !collector.HasBareReturn && inferred is not null;
+    }
+
+    // Exact signatures require an emitted compact carrier, not just an inferred record shape.
+    // Mirror TryEmitCompactObjectRecordLiteral's key guards; shape analysis already rejects
+    // computed keys, spreads and accessors before reaching either literal proof above.
+    private static bool HasSupportedCompactLiteralShape(JsonSerializationShape.Record shape)
+    {
+        if (shape.Fields.Count is < 1 or > 4)
+            return false;
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (key, _) in shape.Fields)
+        {
+            if (key is "toJSON" or "valueOf" or "toString" || !names.Add(key) ||
+                uint.TryParse(key, System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out _))
+                return false;
+        }
+        return true;
     }
 
     private static Expr Unwrap(Expr expression) => expression switch

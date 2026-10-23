@@ -97,6 +97,7 @@ public partial class Interpreter
     internal RuntimeValue VisitTemplateLiteral(Expr.TemplateLiteral template) => EvaluateTemplateLiteral(template);
     internal RuntimeValue VisitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral tagged) => EvaluateTaggedTemplateLiteral(tagged);
     internal RuntimeValue VisitSpread(Expr.Spread spread) => EvaluateRV(spread.Expression);
+    internal RuntimeValue VisitInstantiation(Expr.Instantiation expression) => EvaluateRV(expression.Expression);
     internal RuntimeValue VisitTypeAssertion(Expr.TypeAssertion ta) => EvaluateRV(ta.Expression);
     internal RuntimeValue VisitSatisfies(Expr.Satisfies sat) => EvaluateRV(sat.Expression);
     internal RuntimeValue VisitNonNullAssertion(Expr.NonNullAssertion nna) => EvaluateRV(nna.Expression);
@@ -183,6 +184,7 @@ public partial class Interpreter
     internal ValueTask<RuntimeValue> VisitTaggedTemplateLiteralAsync(Expr.TaggedTemplateLiteral tagged) => new(EvaluateTaggedTemplateLiteralAsync(tagged));
     internal ValueTask<RuntimeValue> VisitSpreadAsync(Expr.Spread spread) => EvaluateAsync(spread.Expression);
     internal ValueTask<RuntimeValue> VisitAssertedAssignmentAsync(Expr.AssertedAssignment assignment) => EvaluateAssertedAssignmentCore(_asyncContext, assignment);
+    internal ValueTask<RuntimeValue> VisitInstantiationAsync(Expr.Instantiation expression) => EvaluateAsync(expression.Expression);
     internal ValueTask<RuntimeValue> VisitTypeAssertionAsync(Expr.TypeAssertion ta) => EvaluateAsync(ta.Expression);
     internal ValueTask<RuntimeValue> VisitSatisfiesAsync(Expr.Satisfies sat) => EvaluateAsync(sat.Expression);
     internal ValueTask<RuntimeValue> VisitNonNullAssertionAsync(Expr.NonNullAssertion nna) => EvaluateAsync(nna.Expression);
@@ -262,7 +264,7 @@ public partial class Interpreter
         // intrinsic Promise identity; subclass promises otherwise assimilate.
         if (value is SharpTSPromise promise)
         {
-            return RuntimeValue.FromBoxed(await AwaitPreservingEnvironment(NormalizePromiseForAwait(promise)));
+            return RuntimeValue.FromBoxed(await AwaitPreservingEnvironment(QueueNativeAwait(NormalizePromiseForAwait(promise))));
         }
 
         // Raw Task<object?> — returned by runtime methods (e.g., Web Streams
@@ -273,7 +275,7 @@ public partial class Interpreter
         // not unwrap).
         if (value is Task<object?> task)
         {
-            return RuntimeValue.FromBoxed(await AwaitPreservingEnvironment(task));
+            return RuntimeValue.FromBoxed(await AwaitPreservingEnvironment(QueueNativeAwait(task)));
         }
 
         // Thenable adoption (ECMA-262 await → PromiseResolve, §25.6.4.5 step 8 /
@@ -287,8 +289,29 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(await AwaitPreservingEnvironment(AdoptThenable(value!, thenFn)));
         }
 
-        // Await on non-Promise returns the value (TypeScript behavior)
-        return RuntimeValue.FromBoxed(value);
+        // Even an already available value resumes Await in a Promise job.
+        // Preserve the async frame's environment and generator state through
+        // the same suspension path as a genuinely pending guest promise.
+        var completion = new TaskCompletionSource<object?>();
+        EnqueuePromiseJob(() => completion.TrySetResult(value));
+        return RuntimeValue.FromBoxed(await AwaitPreservingEnvironment(completion.Task));
+    }
+
+    private Task<object?> QueueNativeAwait(Task<object?> task)
+    {
+        // A native Await reaction becomes eligible only when its input settles.
+        // Queue it behind existing jobs even when settlement happens inside a
+        // different Await job. Resume inline within this one queued reaction.
+        var completion = new TaskCompletionSource<object?>();
+        if (task.IsCompleted)
+            EnqueuePromiseJob(() => TransferCompletion(task, completion));
+        else
+            _ = task.ContinueWith(
+                settled => EnqueuePromiseJob(() => TransferCompletion(settled, completion)),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        return completion.Task;
     }
 
     /// <summary>
@@ -873,6 +896,18 @@ public partial class Interpreter
                 (symbolFields ??= [])[symbol] = GetSymbolPropertyValue(spreadObj, symbol);
             }
         }
+        else if (spreadValue is SharpTSClassPrototype prototype)
+        {
+            foreach (var key in ObjectBuiltIns.GetClassPrototypeOwnKeys(prototype))
+            {
+                if (ObjectBuiltIns.GetClassPrototypeOwnDescriptor(prototype, key)?.Enumerable != true)
+                    continue;
+                if (key is SharpTSSymbol symbol)
+                    (symbolFields ??= [])[symbol] = GetSymbolPropertyValue(prototype, symbol);
+                else
+                    stringFields[(string)key] = GetPropertyValue(prototype, (string)key);
+            }
+        }
         else if (spreadValue is SharpTSInstance inst)
         {
             var stringKeys = inst.GetFieldNames().ToList();
@@ -1049,6 +1084,14 @@ public partial class Interpreter
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue EvaluateGetIndex(Expr.GetIndex getIndex)
     {
+        if (getIndex.Object is Expr.Super { Method: null } super)
+        {
+            var environment = _environment;
+            environment.TryGetThis(out var receiver);
+            object? key = EvaluateRV(getIndex.Index).ToObject();
+            return EvaluateComputedSuperProperty(super, environment, key, receiver.ToObject());
+        }
+
         // Avoid an async state machine for synchronous indexed reads. This is
         // the inner path for record-array traversal such as back[i].value.
         RuntimeValue objectValue = EvaluateRV(getIndex.Object);
@@ -1086,6 +1129,14 @@ public partial class Interpreter
     /// </summary>
     private async ValueTask<RuntimeValue> EvaluateGetIndexCore(IEvaluationContext ctx, Expr.GetIndex getIndex)
     {
+        if (getIndex.Object is Expr.Super { Method: null } super)
+        {
+            var environment = ctx.Environment;
+            environment.TryGetThis(out var receiver);
+            object? key = (await ctx.EvaluateExprAsync(getIndex.Index)).ToObject();
+            return EvaluateComputedSuperProperty(super, environment, key, receiver.ToObject());
+        }
+
         RuntimeValue objectValue = await ctx.EvaluateExprAsync(getIndex.Object);
         object? obj = objectValue.ToObject();
 
@@ -1115,6 +1166,25 @@ public partial class Interpreter
             getIndex.Object,
             obj,
             indexValue.ToObject());
+    }
+
+    private RuntimeValue EvaluateComputedSuperProperty(
+        Expr.Super super, RuntimeEnvironment environment, object? key, object? receiver)
+    {
+        // Convert before reading the live home prototype: key conversion may
+        // run guest code, but must not replace the captured this receiver.
+        object propertyKey = ToPropertyKey(key);
+        var superclass = environment.Get(super.Keyword).AsObject<SharpTSClass>()!;
+        object? superBase = environment.StaticSuper
+            ? environment.PrivateClass is { } staticOwner
+                ? ObjectBuiltIns.PrototypeOf(this, staticOwner) : superclass
+            : environment.PrivateClass is { } owner
+                ? ObjectBuiltIns.PrototypeOf(this, owner.Prototype) : superclass.Prototype;
+        if (superBase is null)
+            ThrowCannotReadProperty(superBase, propertyKey.ToString()!);
+        return RuntimeValue.FromBoxed(propertyKey is SharpTSSymbol symbol
+            ? GetSymbolPropertyValue(superBase!, symbol, receiver!)
+            : GetPropertyValueFromChain(superBase, (string)propertyKey, receiver));
     }
 
     /// <summary>
@@ -1394,9 +1464,11 @@ public partial class Interpreter
             IndexTarget.GlobalThis t => ResolveGlobalThisRead(t.Target, t.Key),
             IndexTarget.BuiltInPrototypeString t => ReadBuiltInPrototypeIndex(t.Target, t.Key),
             IndexTarget.HeadersString t => (object?)t.Target.Get(t.Key) ?? SharpTSUndefined.Instance,
-            IndexTarget.StringChar t => (t.Index >= 0 && t.Index < t.Target.Length)
+            IndexTarget.StringChar t when t.Index >= 0 => t.Index < t.Target.Length
                 ? (object)t.Target[t.Index].ToString()
-                : SharpTSUndefined.Instance,
+                : GetPropertyValue(t.Target, t.Index.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)),
+            IndexTarget.StringChar => SharpTSUndefined.Instance,
             IndexTarget.Unsupported => throw new InterpreterException("Index access not supported on this type."),
             _ => throw new InterpreterException("Index access not supported on this type.")
         });
@@ -1653,14 +1725,12 @@ public partial class Interpreter
         }
         if (obj is SharpTSFunction fn)
         {
-            SetOrdinaryFunctionOwnProperty(
-                fn, fn.OwnPropertyStorage, index?.ToString() ?? "", value, strictMode);
+            SetOwnPropertyObjectValue(fn, index?.ToString() ?? "", value, strictMode);
             return RuntimeValue.FromBoxed(value);
         }
         if (obj is SharpTSArrowFunction afn)
         {
-            SetOrdinaryFunctionOwnProperty(
-                afn, afn.OwnPropertyStorage, index?.ToString() ?? "", value, strictMode);
+            SetOwnPropertyObjectValue(afn, index?.ToString() ?? "", value, strictMode);
             return RuntimeValue.FromBoxed(value);
         }
 
@@ -1739,8 +1809,12 @@ public partial class Interpreter
         }
         if (obj is SharpTSRegExp regexStringSet)
         {
-            regexStringSet.SetProperty(
-                PropertyKeyConverter.ToPropertyKeyString(index), value);
+            string key = PropertyKeyConverter.ToPropertyKeyString(index);
+            var ownDescriptor = regexStringSet.GetOwnPropertyDescriptor(key);
+            if (ownDescriptor is { HasGet: true } or { HasSet: true }
+                && TryAssignThroughDescriptor(ownDescriptor, regexStringSet, key, value, strictMode))
+                return RuntimeValue.FromBoxed(value);
+            regexStringSet.SetProperty(key, value);
             return RuntimeValue.FromBoxed(value);
         }
 
@@ -1751,7 +1825,8 @@ public partial class Interpreter
         // writability. Other keys on a callable (user-stored fn[k] = v) aren't
         // supported here either; let them fall through to the spec-conformant
         // error.
-        if (obj is ISharpTSCallable && obj is not (SharpTSFunction or ISharpTSPrimitiveConstructor)
+        // Class metadata follows the descriptor-aware ClassString path below.
+        if (obj is ISharpTSCallable && obj is not (SharpTSFunction or ISharpTSPrimitiveConstructor or SharpTSClass)
             && index?.ToString() is "name" or "length")
         {
             if (strictMode)
@@ -1783,6 +1858,15 @@ public partial class Interpreter
         switch (target)
         {
             case IndexTarget.Array t:
+                if (t.Target is not SharpTSArguments)
+                {
+                    // Simple writes share compound assignment's OrdinarySet
+                    // policy, including present-but-undefined accessors.
+                    string key = t.Index.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    SetOwnPropertyObjectValue(t.Target, key, value, strictMode);
+                    break;
+                }
                 if (t.Target is SharpTSArguments && t.Index >= t.Target.LongLength)
                 {
                     t.Target.SetNamedProperty(t.Index.ToString(
@@ -1909,6 +1993,12 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.InstanceString t:
+                // Installed own accessors take precedence without changing the declared or
+                // raw-data paths below. The descriptor lookup never invokes its getter.
+                var ownDescriptor = t.Target.GetOwnPropertyDescriptor(t.Key);
+                if (ownDescriptor is { HasGet: true } or { HasSet: true }
+                    && TryAssignThroughDescriptor(ownDescriptor, t.Target, t.Key, value, strictMode))
+                    break;
                 // Bracket assignment must invoke a declared setter / auto-accessor, mirroring
                 // dot assignment (SharpTSInstance.Set) and JS [[Set]] semantics. Without this the
                 // write lands in _fields while reads keep hitting the getter, silently
@@ -2128,6 +2218,25 @@ public partial class Interpreter
     // Counter for generating unique anonymous class expression names
     private int _classExprCounter = 0;
 
+    private ValueTask<RuntimeValue> EvaluateVariableInitializerCore(
+        IEvaluationContext ctx, Expr initializer, Token name)
+    {
+        // Destructuring lowering also uses variable statements, but its temporary
+        // tokens do not denote source bindings that participate in named evaluation.
+        if (name.Start < 0)
+            return ctx.EvaluateExprAsync(initializer);
+
+        Expr expression = initializer;
+        while (expression is Expr.Grouping grouping)
+            expression = grouping.Expression;
+
+        // Named evaluation belongs to this initializer only. Passing it explicitly
+        // keeps nested class expressions in heritage, keys and static fields independent.
+        return expression is Expr.ClassExpr { Name: null } classExpr
+            ? EvaluateClassExpressionCore(ctx, classExpr, name.Lexeme)
+            : ctx.EvaluateExprAsync(initializer);
+    }
+
     /// <summary>
     /// Evaluates a class expression and returns the SharpTSClass object.
     /// Unlike class declarations, the class is not added to the environment.
@@ -2135,7 +2244,8 @@ public partial class Interpreter
     private RuntimeValue EvaluateClassExpression(Expr.ClassExpr classExpr) =>
         EvaluateClassExpressionCore(_syncContext, classExpr).GetAwaiter().GetResult();
 
-    private async ValueTask<RuntimeValue> EvaluateClassExpressionCore(IEvaluationContext ctx, Expr.ClassExpr classExpr)
+    private async ValueTask<RuntimeValue> EvaluateClassExpressionCore(
+        IEvaluationContext ctx, Expr.ClassExpr classExpr, string? inferredName = null)
     {
         // Generate name for anonymous classes
         string className = classExpr.Name?.Lexeme ?? $"$ClassExpr_{++_classExprCounter}";
@@ -2416,6 +2526,9 @@ public partial class Interpreter
                     staticGetters: staticGetters.Count > 0 ? staticGetters : null,
                     staticSetters: staticSetters.Count > 0 ? staticSetters : null, instancePrivateFields: instancePrivateFields, privateMethods: privateMethods, staticPrivateFields: staticPrivateFields, staticPrivateMethods: staticPrivateMethods);
 
+            // Public name inference is available before static initialization,
+            // while className remains the unique internal identity.
+            klass.SetInferredName(inferredName);
             klass.BindPrivateMemberOwners();
             klass.InitializerEnvironment = classEnv;
             klass.OrderedInstanceFields = classExpr.Fields.Where(field => !field.IsStatic && !field.IsDeclare)
@@ -2470,19 +2583,7 @@ public partial class Interpreter
                                 break;
 
                             case Stmt.StaticBlock block:
-                                foreach (var blockStmt in block.Body)
-                                {
-                                    var result = Execute(blockStmt);
-                                    if (result.IsAbrupt)
-                                    {
-                                        // Handle throw from static block
-                                        if (result.Type == ExecutionResult.ResultType.Throw)
-                                        {
-                                            throw new InterpreterException($"Error in static block: {Stringify(result.Value.ToObject())}");
-                                        }
-                                        // Return, break, continue are not allowed (validated by type checker)
-                                    }
-                                }
+                                ExecuteClassStaticBlock(block);
                                 break;
                         }
                     }

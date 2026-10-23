@@ -26,6 +26,14 @@ public sealed class EmittedGlobalObjectRuntime
         internal set => SetDeclaration(ref _getProperty, value);
     }
 
+    private MethodBuilder? _getBinding;
+    /// <summary>Reads a present global identifier, throwing ReferenceError for a missing binding.</summary>
+    public MethodBuilder GetBinding
+    {
+        get => Require(_getBinding);
+        internal set => SetDeclaration(ref _getBinding, value);
+    }
+
     private MethodBuilder? _setProperty;
     public MethodBuilder SetProperty
     {
@@ -92,6 +100,7 @@ public sealed class EmittedGlobalObjectRuntime
             throw new InvalidOperationException("Global object declarations are already complete.");
         _ = SingletonField;
         _ = GetProperty;
+        _ = GetBinding;
         _ = SetProperty;
         _ = Properties;
         IsDeclared = true;

@@ -95,19 +95,15 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var listType = _types.ListOfObject;
         var keysLocal = il.DeclareLocal(listType);
-        var symbolKeysLocal = il.DeclareLocal(listType);
         var indexLocal = il.DeclareLocal(_types.Int32);
         var keyLocal = il.DeclareLocal(_types.Object);
         var descriptorLocal = il.DeclareLocal(_types.Object);
-        var sourceIsProxyLocal = il.DeclareLocal(_types.Boolean);
         var proxySource = il.DefineLabel();
         var ordinarySource = il.DefineLabel();
         var keysReady = il.DefineLabel();
         var loopStart = il.DefineLabel();
         var nextKey = il.DefineLabel();
         var returnLabel = il.DefineLabel();
-        var ordinaryEnumerableCheck = il.DefineLabel();
-        var enumerableCheckDone = il.DefineLabel();
 
         // CopyDataProperties silently ignores null and undefined sources.
         il.Emit(OpCodes.Ldarg_1);
@@ -125,39 +121,22 @@ public partial class RuntimeEmitter
         );
         il.MarkLabel(generalCopy);
 
-        // Snapshot the complete mixed [[OwnPropertyKeys]] list once. Proxy ownKeys must be invoked
-        // exactly once; ordinary carriers reuse GetKeys' mature enumerable-string ordering and append
-        // Symbols for per-key descriptor filtering.
+        // Snapshot every own string and Symbol key once, including initially hidden keys.
+        // Proxy ownKeys remains observable exactly once; each descriptor is checked live below.
         if (inputs.ProxySelected)
         {
             EmitProxyTypeCheck(
                 il, () => il.Emit(OpCodes.Ldarg_1), proxySource, ordinarySource);
             il.MarkLabel(proxySource);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Stloc, sourceIsProxyLocal);
             EmitProxyOwnKeysCompiledCall(il, inputs.ProxyOwnKeys, () => il.Emit(OpCodes.Ldarg_1));
             il.Emit(OpCodes.Stloc, keysLocal);
             il.Emit(OpCodes.Br, keysReady);
         }
 
         il.MarkLabel(ordinarySource);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, sourceIsProxyLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, inputs.ObjectKeys.Keys);
+        il.Emit(OpCodes.Call, inputs.ObjectKeys.Ordinary);
         il.Emit(OpCodes.Stloc, keysLocal);
-        // No symbols means no temporary symbol list (and no attached symbol storage).
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, inputs.Symbols.TryGetStorage);
-        il.Emit(OpCodes.Brfalse, keysReady);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, inputs.ObjectKeys.Symbols);
-        il.Emit(OpCodes.Castclass, listType);
-        il.Emit(OpCodes.Stloc, symbolKeysLocal);
-        il.Emit(OpCodes.Ldloc, keysLocal);
-        il.Emit(OpCodes.Ldloc, symbolKeysLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(
-            listType, "AddRange", [_types.IEnumerableOfObject])!);
         il.MarkLabel(keysReady);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
@@ -172,9 +151,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, keyLocal);
 
-        // Proxy [[GetOwnProperty]] is observable and may report that a snapshotted key disappeared.
-        il.Emit(OpCodes.Ldloc, sourceIsProxyLocal);
-        il.Emit(OpCodes.Brfalse, ordinaryEnumerableCheck);
+        // Recheck presence and enumerability after earlier getters have run. A deleted or
+        // newly hidden key is skipped; an initially hidden key may now be enumerable.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
@@ -189,18 +167,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, nextKey);
-        il.Emit(OpCodes.Br, enumerableCheckDone);
-
-        // GetKeys already filtered ordinary string keys. Symbols need their descriptor bit checked.
-        il.MarkLabel(ordinaryEnumerableCheck);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
-        il.Emit(OpCodes.Brfalse, enumerableCheckDone);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, inputs.ObjectOwnProperties.IsEnumerable);
-        il.Emit(OpCodes.Brfalse, nextKey);
-        il.MarkLabel(enumerableCheckDone);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, keyLocal);

@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Reflection;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
@@ -90,7 +91,7 @@ public static class BigIntOperatorHelper
             TokenType.STAR => new SharpTSBigInt(left * right),
             TokenType.SLASH => new SharpTSBigInt(BigInteger.Divide(left, right)),
             TokenType.PERCENT => new SharpTSBigInt(BigInteger.Remainder(left, right)),
-            TokenType.STAR_STAR => SharpTSBigInt.Pow(new SharpTSBigInt(left), new SharpTSBigInt(right)),
+            TokenType.STAR_STAR => new SharpTSBigInt(EvaluatePower(left, right)),
 
             // Comparison
             TokenType.GREATER => left > right,
@@ -106,8 +107,8 @@ public static class BigIntOperatorHelper
             TokenType.AMPERSAND => new SharpTSBigInt(left & right),
             TokenType.PIPE => new SharpTSBigInt(left | right),
             TokenType.CARET => new SharpTSBigInt(left ^ right),
-            TokenType.LESS_LESS => new SharpTSBigInt(left << (int)right),
-            TokenType.GREATER_GREATER => new SharpTSBigInt(left >> (int)right),
+            TokenType.LESS_LESS => new SharpTSBigInt(EvaluateShift(left, right, leftShift: true)),
+            TokenType.GREATER_GREATER => new SharpTSBigInt(EvaluateShift(left, right, leftShift: false)),
             TokenType.GREATER_GREATER_GREATER => throw new Exception(
                 "Runtime Error: Unsigned right shift (>>>) is not supported for bigint."),
 
@@ -128,7 +129,7 @@ public static class BigIntOperatorHelper
             TokenType.STAR => RuntimeValue.FromBigInt(new SharpTSBigInt(left * right)),
             TokenType.SLASH => RuntimeValue.FromBigInt(new SharpTSBigInt(BigInteger.Divide(left, right))),
             TokenType.PERCENT => RuntimeValue.FromBigInt(new SharpTSBigInt(BigInteger.Remainder(left, right))),
-            TokenType.STAR_STAR => RuntimeValue.FromBigInt(SharpTSBigInt.Pow(new SharpTSBigInt(left), new SharpTSBigInt(right))),
+            TokenType.STAR_STAR => RuntimeValue.FromBigInt(new SharpTSBigInt(EvaluatePower(left, right))),
 
             // Comparison → bool (no boxing)
             TokenType.GREATER => RuntimeValue.FromBoolean(left > right),
@@ -144,13 +145,43 @@ public static class BigIntOperatorHelper
             TokenType.AMPERSAND => RuntimeValue.FromBigInt(new SharpTSBigInt(left & right)),
             TokenType.PIPE => RuntimeValue.FromBigInt(new SharpTSBigInt(left | right)),
             TokenType.CARET => RuntimeValue.FromBigInt(new SharpTSBigInt(left ^ right)),
-            TokenType.LESS_LESS => RuntimeValue.FromBigInt(new SharpTSBigInt(left << (int)right)),
-            TokenType.GREATER_GREATER => RuntimeValue.FromBigInt(new SharpTSBigInt(left >> (int)right)),
+            TokenType.LESS_LESS => RuntimeValue.FromBigInt(new SharpTSBigInt(EvaluateShift(left, right, leftShift: true))),
+            TokenType.GREATER_GREATER => RuntimeValue.FromBigInt(new SharpTSBigInt(EvaluateShift(left, right, leftShift: false))),
             TokenType.GREATER_GREATER_GREATER => throw new Exception(
                 "Runtime Error: Unsigned right shift (>>>) is not supported for bigint."),
 
             _ => throw new Exception($"Runtime Error: Operator {op} not supported for bigint.")
         };
+    }
+
+    // BigInteger's count APIs take Int32. Resolve bounded huge-count results
+    // before casting, without changing ordinary count behavior or allocating
+    // an unsupported expanding result.
+    private static BigInteger EvaluatePower(BigInteger value, BigInteger exponent)
+    {
+        if (exponent.Sign < 0)
+            throw new ThrowException(new SharpTSRangeError("BigInt exponent must be non-negative"));
+        if (exponent > int.MaxValue)
+        {
+            if (value.IsZero || value.IsOne) return value;
+            if (value == BigInteger.MinusOne)
+                return exponent.IsEven ? BigInteger.One : BigInteger.MinusOne;
+            throw new ThrowException(new SharpTSRangeError("Maximum BigInt size exceeded"));
+        }
+        return BigInteger.Pow(value, (int)exponent);
+    }
+
+    private static BigInteger EvaluateShift(BigInteger value, BigInteger count, bool leftShift)
+    {
+        if (count > int.MaxValue || count < -int.MaxValue)
+        {
+            bool shrinking = leftShift ? count.Sign < 0 : count.Sign > 0;
+            if (shrinking)
+                return value.Sign < 0 ? BigInteger.MinusOne : BigInteger.Zero;
+            if (value.IsZero) return BigInteger.Zero;
+            throw new ThrowException(new SharpTSRangeError("Maximum BigInt size exceeded"));
+        }
+        return leftShift ? value << (int)count : value >> (int)count;
     }
 
     /// <summary>

@@ -117,6 +117,7 @@ public partial class Interpreter
             using (PushModuleContext(moduleEnvironment, module, moduleInstance))
             {
                 HoistFunctionDeclarations(module.Statements);
+                HoistLocalLoopVarDeclarations(module.Statements);
                 foreach (Stmt statement in module.Statements)
                 {
                     ExecutionResult result = statement is Stmt.Export export
@@ -194,14 +195,50 @@ public partial class Interpreter
                 throw new OperationCanceledException(
                     "Hosted module initialization was cancelled.", ShutdownToken);
             }
-            await ExecuteHostedModuleAsync(module, isEntryModule: false);
-            // A dynamically discovered dependency is still a distinct module
-            // job. Complete its guest microtask checkpoint before evaluating
-            // the next dependency or resuming the importing module.
-            ProcessMicrotasks();
+            Task execution = ExecuteHostedModuleAsync(module, isEntryModule: false);
+            bool suspended = !execution.IsCompleted;
+            await execution;
+            if (suspended)
+            {
+                // Resume behind jobs queued by this completed module, without
+                // draining nested jobs ahead of synchronous dependent modules.
+                await WaitForHostedModuleJobAsync();
+            }
+            else
+            {
+                ProcessMicrotasks();
+            }
+            if (!_hostedAcceptingWork)
+            {
+                throw new OperationCanceledException(
+                    "Hosted module initialization was cancelled.", ShutdownToken);
+            }
         }
 
+        // Publish the graph's namespace in a later job, after reactions queued
+        // while its synchronous dependents were finishing.
+        await WaitForHostedModuleJobAsync();
+        if (!_hostedAcceptingWork)
+        {
+            throw new OperationCanceledException(
+                "Hosted module initialization was cancelled.", ShutdownToken);
+        }
         return _loadedModules[requestedModule.Path].ExportsAsObject();
+    }
+
+    private Task WaitForHostedModuleJobAsync()
+    {
+        AssertHostedOwnerThread();
+        CancellationToken shutdownToken = ShutdownToken;
+        if (!_hostedAcceptingWork)
+        {
+            throw new OperationCanceledException(
+                "Hosted module initialization was cancelled.", shutdownToken);
+        }
+
+        var completion = new TaskCompletionSource<object?>();
+        EnqueuePromiseJob(() => completion.TrySetResult(null));
+        return completion.Task.WaitAsync(shutdownToken);
     }
 
     internal bool TryGetHostedDynamicImport(string path, out Task<object?> task) =>

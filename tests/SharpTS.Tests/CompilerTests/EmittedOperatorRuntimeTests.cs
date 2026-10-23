@@ -35,7 +35,7 @@ public sealed class EmittedOperatorRuntimeTests
         var first = new EmittedRuntime(); var second = new EmittedRuntime();
         Assert.NotSame(first.Operators, second.Operators);
         Assert.False(first.Operators.IsComplete); Assert.False(second.Operators.IsComplete);
-        Assert.Equal(12, Handles(typeof(EmittedOperatorRuntime)).Length);
+        Assert.Equal(13, Handles(typeof(EmittedOperatorRuntime)).Length);
         Assert.Null(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.Operators))!.SetMethod);
     }
 

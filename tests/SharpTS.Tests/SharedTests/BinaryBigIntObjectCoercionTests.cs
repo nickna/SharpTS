@@ -3,8 +3,61 @@ using Xunit;
 
 namespace SharpTS.Tests.SharedTests;
 
+[Collection("CompilationService")]
 public sealed class BinaryBigIntObjectCoercionTests
 {
+    public const string StateMachineSource = """
+        const events: string[] = [], marker = {};
+        const left: any = { valueOf() { events.push('left'); return 8n; } };
+        const right: any = { valueOf() { events.push('right'); return 2n; } };
+        const throwing: any = { valueOf() { events.push('throw'); throw marker; } };
+        function lhs(): any { events.push('lhs'); return left; }
+        function rhs(): any { events.push('rhs'); return right; }
+        function failingRhs(): any { events.push('rhs'); return throwing; }
+        function checkpoint(): string { events.push('yield'); return 'ready'; }
+        function* bits(): Generator<any, any, any> { return lhs() & (yield checkpoint()); }
+        async function run() {
+            console.log(String(lhs() * await Promise.resolve(rhs())), events.join(','));
+            events.length = 0;
+            try { console.log(lhs() * await Promise.resolve(failingRhs())); }
+            catch (error) { console.log(error === marker, events.join(',')); }
+            events.length = 0;
+            const iterator = bits();
+            console.log(iterator.next().value, events.join(','));
+            console.log(String(iterator.next(right).value), events.join(','));
+            events.length = 0;
+            const failing = bits();
+            failing.next();
+            try { failing.next(throwing); }
+            catch (error) { console.log(error === marker, events.join(',')); }
+        }
+        run().catch((error: any) => console.log('unexpected', error.name, error.message));
+        """;
+
+    public const string LargeCountSource = """
+        let trace = '', base = 8n, count = 2147483648n;
+        const left: any = { valueOf() { trace += 'l'; return base; } };
+        const right: any = { valueOf() { trace += 'r'; return count; } };
+        function result(value: any) { console.log(String(value), trace); trace = ''; }
+        result(left >> right);
+        base = -8n; result(left >> right);
+        base = 8n; count = -2147483648n; result(left << right);
+        base = -8n; result(left << right);
+        base = 0n; count = 2147483648n; result(left ** right);
+        base = 1n; result(left ** right);
+        base = -1n; result(left ** right);
+        count = 2147483649n; result(left ** right);
+        base = 8n; count = 2147483648n;
+        try { result(left << right); }
+        catch (error) { console.log(error instanceof RangeError, trace); trace = ''; }
+        count = -2147483648n;
+        try { result(left >> right); }
+        catch (error) { console.log(error instanceof RangeError, trace); trace = ''; }
+        base = 2n; count = 2147483648n;
+        try { result(left ** right); }
+        catch (error) { console.log(error instanceof RangeError, trace); }
+        """;
+
     public static IEnumerable<object[]> Cases()
     {
         yield return ["issue", """
@@ -127,15 +180,38 @@ public sealed class BinaryBigIntObjectCoercionTests
             """, "string true\n"];
     }
 
+    public static IEnumerable<object[]> OperatorCases()
+    {
+        foreach (var (name, op, expected) in new[]
+        {
+            ("subtraction", "-", "6"), ("multiplication", "*", "16"), ("division", "/", "4"),
+            ("remainder", "%", "0"), ("power", "**", "64"), ("and", "&", "0"),
+            ("or", "|", "10"), ("xor", "^", "10"), ("left-shift", "<<", "32"), ("right-shift", ">>", "2")
+        })
+        {
+            yield return [$"independent-{name}-converts-both-operands-once", $$"""
+                let trace = '';
+                const left: any = { valueOf() { trace += 'l'; return 8n; } };
+                const right: any = { valueOf() { trace += 'r'; return 2n; } };
+                function lhs(): any { trace += 'L'; return left; }
+                function rhs(): any { trace += 'R'; return right; }
+                console.log(String(lhs() {{op}} rhs()), trace);
+                """, $"{expected} LRlr\n"];
+        }
+        yield return ["await-and-yield-rhs-retain-operands-conversion-order-and-abrupt-marker", StateMachineSource,
+            "16 lhs,rhs,left,right\ntrue lhs,rhs,left,throw\nready lhs,yield\n0 lhs,yield,left,right\ntrue lhs,yield,left,throw\n"];
+        yield return ["converted-object-bigint-counts-preserve-finite-results-and-range-errors", LargeCountSource,
+            "0 lr\n-1 lr\n0 lr\n-1 lr\n0 lr\n1 lr\n1 lr\n-1 lr\ntrue lr\ntrue lr\ntrue lr\n"];
+    }
+
+    public static IEnumerable<object[]> AllCases() => Cases().Concat(OperatorCases());
+
     public static IEnumerable<object[]> ModeCases()
     {
-        foreach (var row in Cases())
+        foreach (var row in AllCases())
         {
             yield return [row[0], row[1], row[2], ExecutionMode.Interpreted];
-            // Saved verified compiler outputs reject object-derived BigInts in numeric binary operations (#2686).
-            if ((string)row[0] is "addition-object-bigint-and-default-hint" or
-                "number-addition-comparison-and-unary-controls" or "native-date-addition-control")
-                yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
+            yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
         }
     }
 

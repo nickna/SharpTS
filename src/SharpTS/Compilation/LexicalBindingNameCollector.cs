@@ -38,5 +38,14 @@ internal sealed class LexicalBindingNameCollector : AstVisitorBase
     {
         _names.Add(stmt.Name.Lexeme);
         base.VisitClass(stmt);
+        foreach (var block in (stmt.StaticInitializers ?? []).OfType<Stmt.StaticBlock>())
+            Visit(block);
+    }
+
+    protected override void VisitClassExpr(Expr.ClassExpr expr)
+    {
+        base.VisitClassExpr(expr);
+        foreach (var block in (expr.StaticInitializers ?? []).OfType<Stmt.StaticBlock>())
+            Visit(block);
     }
 }

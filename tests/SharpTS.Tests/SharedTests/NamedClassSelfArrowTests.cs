@@ -203,8 +203,10 @@ public sealed class NamedClassSelfArrowTests
     [Fact]
     public void HoistedStaticBlockVarPreservesItsActualCapturedBinding()
     {
-        // Compiled capture of static-block vars remains tracked by #2454.
         Assert.Equal("block-var\n", RunResolvedInterpreter(HoistedStaticBlockVarSource));
+        var (errors, output) = TestHarness.CompileVerifyAndRun(HoistedStaticBlockVarSource);
+        Assert.Empty(errors);
+        Assert.Equal("block-var\n", output);
     }
 
     private static string RunResolvedInterpreter(string source)

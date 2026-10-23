@@ -80,6 +80,7 @@ internal static class DotNetOperatorResolver
         TokenType.PLUS_EQUAL => TokenType.PLUS,
         TokenType.MINUS_EQUAL => TokenType.MINUS,
         TokenType.STAR_EQUAL => TokenType.STAR,
+        TokenType.STAR_STAR_EQUAL => TokenType.STAR_STAR,
         TokenType.SLASH_EQUAL => TokenType.SLASH,
         TokenType.PERCENT_EQUAL => TokenType.PERCENT,
         TokenType.AMPERSAND_EQUAL => TokenType.AMPERSAND,

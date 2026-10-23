@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -36,6 +37,30 @@ public partial class AsyncGeneratorMoveNextEmitter
         var asyncSetupLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();
         var completionValue = _il.DeclareLocal(typeof(object));
+        // The operation kind survives the delegated await, but the injected request
+        // is consumed before invoking guest code so a rejection cannot leak it into
+        // a later ordinary yield in an enclosing catch.
+        var delegatedReturn = _builder.StateMachineType.DefineField(
+            _builder.DebugScaffoldingName($"<>yieldStarReturn{stateNumber}"),
+            _types.Boolean, FieldAttributes.Private);
+
+        void ConsumeReturnRequest()
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, _builder.ReturnRequestedField);
+            _il.Emit(OpCodes.Stfld, delegatedReturn);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Stfld, _builder.ReturnRequestedField);
+        }
+
+        void ClearReturnOperation()
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Stfld, delegatedReturn);
+        }
 
         // === First entry path: evaluate and check type ===
         EmitExpression(y.Value!);
@@ -114,6 +139,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         // === Sync loop ===
         var syncLoopEnd = _il.DefineLabel();
         _il.MarkLabel(syncLoopLabel);
+        ConsumeReturnRequest();
         var moveNext = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
         var current = typeof(System.Collections.IEnumerator).GetProperty("Current")!.GetGetMethod()!;
 
@@ -127,12 +153,45 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Brfalse, plainSyncLoopLabel);
         EmitCaptureTryOperation(() =>
         {
+            var nextLabel = _il.DefineLabel();
+            var returnOrNextLabel = _il.DefineLabel();
+            var resultLabel = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, _builder.ThrowRequestedField);
+            _il.Emit(OpCodes.Brfalse, returnOrNextLabel);
+            // Consume before the synchronous protocol call can throw. Its
+            // handled result is a normal yield* step, not an outer return.
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Stfld, _builder.ThrowRequestedField);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedField);
+            _il.Emit(OpCodes.Castclass, _ctx.Runtime.Generators.Type);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, _builder.ThrowValueField);
+            _il.Emit(OpCodes.Callvirt, _ctx.Runtime.Generators.Throw);
+            _il.Emit(OpCodes.Br, resultLabel);
+
+            _il.MarkLabel(returnOrNextLabel);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedReturn);
+            _il.Emit(OpCodes.Brfalse, nextLabel);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedField);
+            _il.Emit(OpCodes.Castclass, _ctx.Runtime.Generators.Type);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, _builder.CurrentField);
+            _il.Emit(OpCodes.Callvirt, _ctx.Runtime.Generators.Return);
+            _il.Emit(OpCodes.Br, resultLabel);
+
+            _il.MarkLabel(nextLabel);
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, delegatedField);
             _il.Emit(OpCodes.Castclass, _ctx.Runtime.Generators.Type);
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, _builder.SentField);
             _il.Emit(OpCodes.Callvirt, _ctx.Runtime.Generators.Next);
+            _il.MarkLabel(resultLabel);
             _il.Emit(OpCodes.Stloc, syncResult);
         });
         _il.Emit(OpCodes.Ldloc, syncResult);
@@ -143,6 +202,18 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Br, syncHaveValueLabel);
 
         _il.MarkLabel(plainSyncLoopLabel);
+
+        // An ordinary enumerable has no guest return method. End delegation
+        // without advancing it, retaining the caller's return value.
+        var advancePlainSync = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, delegatedReturn);
+        _il.Emit(OpCodes.Brfalse, advancePlainSync);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, _builder.CurrentField);
+        _il.Emit(OpCodes.Stloc, completionValue);
+        _il.Emit(OpCodes.Br, endLabel);
+        _il.MarkLabel(advancePlainSync);
 
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldfld, delegatedField);
@@ -163,6 +234,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldloc, syncValueTemp);
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
+        ClearReturnOperation();
 
         // Set state and return
         _il.Emit(OpCodes.Ldarg_0);
@@ -191,16 +263,55 @@ public partial class AsyncGeneratorMoveNextEmitter
         // $IAsyncGenerator (#688).
         var asyncLoopEnd = _il.DefineLabel();
         _il.MarkLabel(asyncLoopLabel);
+        ConsumeReturnRequest();
 
-        // result = await delegated.next(SentField) — forward the outer sent value to the inner generator
-        // (#473). The inner generator ignores the argument on its first call (per spec), so passing
-        // SentField on initial entry (which holds undefined or the outer first-next value) is safe.
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, delegatedField);
-        _il.Emit(OpCodes.Castclass, _ctx!.Runtime!.RequireAsyncGenerators().Type);
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, _builder.SentField);
-        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Next);
+        // Await exactly one protocol result, using the existing suspension state.
+        // Both invocation failures and rejected results enter the enclosing handler.
+        var delegatedTask = _il.DeclareLocal(typeof(object));
+        EmitCaptureTryOperation(() =>
+        {
+            var nextLabel = _il.DefineLabel();
+            var returnOrNextLabel = _il.DefineLabel();
+            var resultLabel = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, _builder.ThrowRequestedField);
+            _il.Emit(OpCodes.Brfalse, returnOrNextLabel);
+            // Consume before the protocol call or its await can fail. A handled
+            // throw result completes normally or re-yields, unlike return().
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Stfld, _builder.ThrowRequestedField);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedField);
+            _il.Emit(OpCodes.Castclass, _ctx!.Runtime!.RequireAsyncGenerators().Type);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, _builder.ThrowValueField);
+            _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Throw);
+            _il.Emit(OpCodes.Br, resultLabel);
+
+            _il.MarkLabel(returnOrNextLabel);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedReturn);
+            _il.Emit(OpCodes.Brfalse, nextLabel);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedField);
+            _il.Emit(OpCodes.Castclass, _ctx!.Runtime!.RequireAsyncGenerators().Type);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, _builder.CurrentField);
+            _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Return);
+            _il.Emit(OpCodes.Br, resultLabel);
+
+            _il.MarkLabel(nextLabel);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedField);
+            _il.Emit(OpCodes.Castclass, _ctx.Runtime.RequireAsyncGenerators().Type);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, _builder.SentField);
+            _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Next);
+            _il.MarkLabel(resultLabel);
+            _il.Emit(OpCodes.Stloc, delegatedTask);
+        });
+        _il.Emit(OpCodes.Ldloc, delegatedTask);
         SetStackUnknown();
         EmitAwaitFromValueOnStack(awaitState);
         var asyncResultLocal = _il.DeclareLocal(typeof(object));
@@ -216,6 +327,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldloc, asyncResultLocal);
         _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
+        ClearReturnOperation();
 
         // Re-yield the delegated value to our own consumer: suspend at the re-yield state and return true.
         _il.Emit(OpCodes.Ldarg_0);
@@ -233,6 +345,23 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldnull);
         _il.Emit(OpCodes.Stfld, delegatedField);
+
+        // Only an immediately completed return operation is an abrupt outer
+        // return. A done:false cleanup yield consumed that request already;
+        // its later next() completion remains a normal yield* expression value.
+        var normalCompletion = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, delegatedReturn);
+        _il.Emit(OpCodes.Brfalse, normalCompletion);
+        ClearReturnOperation();
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldloc, completionValue);
+        _il.Emit(OpCodes.Stfld, _builder.CurrentField);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4_1);
+        _il.Emit(OpCodes.Stfld, _builder.ReturnRequestedField);
+        EmitInjectedYieldReturn();
+        _il.MarkLabel(normalCompletion);
 
         _il.Emit(OpCodes.Ldloc, completionValue);
         SetStackUnknown();

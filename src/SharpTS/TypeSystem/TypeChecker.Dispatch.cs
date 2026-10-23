@@ -32,6 +32,7 @@ public partial class TypeChecker
         Expr.Assign e => VisitAssign(e),
         Expr.AssertedAssignment e => VisitAssertedAssignment(e),
         Expr.Call e => VisitCall(e),
+        Expr.Instantiation e => VisitInstantiation(e),
         Expr.Get e => VisitGet(e),
         Expr.Set e => VisitSet(e),
         Expr.GetPrivate e => VisitGetPrivate(e),

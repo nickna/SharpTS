@@ -68,6 +68,15 @@ public class SharpTSJSON : ISharpTSSymbolPropertyBag
         return true;
     }
     internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    internal IEnumerable<string> OwnStringKeys()
+        => BuiltIns.JSONBuiltIns.MemberNames.Where(name => !_deletedBuiltIns.Contains(name))
+            .Concat(_extras.OwnVisibleStringKeys())
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => PropertySemantics.TryGetArrayIndex(name, out uint index)
+                ? (long)index : long.MaxValue);
+
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
+        => _extras.GetSymbolPropertyNames();
 
     internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
         => _extras.DefineProperty(symbol, descriptor);

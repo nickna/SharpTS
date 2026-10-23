@@ -38,6 +38,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter : StateMachineExitRou
     // a rejected await (the try-exit, so the remaining try body is abandoned). Both are set together by
     // EmitTryBodyWithAwaits and consulted by the await emission via EmitAwaitGetResult.
     protected LocalBuilder? _currentTryCatchExceptionLocal = null;
+    protected LocalBuilder? _currentTryCatchExceptionPresentLocal = null;
     protected Label? _currentTryCatchSkipLabel = null;
 
     private bool _returnMayNeedAdoption;
@@ -70,6 +71,8 @@ public abstract partial class AsyncFunctionMoveNextEmitter : StateMachineExitRou
             IL.BeginCatchBlock(typeof(Exception));
             IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.WrapException);
             IL.Emit(OpCodes.Stloc, _currentTryCatchExceptionLocal);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Stloc, _currentTryCatchExceptionPresentLocal!);
             IL.Emit(OpCodes.Ldnull);
             IL.Emit(OpCodes.Stloc, resultTemp);
             IL.Emit(OpCodes.Leave, exceptionCaughtLabel);

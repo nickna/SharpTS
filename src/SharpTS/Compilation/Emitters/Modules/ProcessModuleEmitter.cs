@@ -323,7 +323,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
 
     /// <summary>
     /// Emits: process.nextTick(callback, ...args)
-    /// Implemented as setTimeout(callback, 0, ...args) - runs as soon as possible.
+    /// Queues the callback before due timers.
     /// Throws if callback is absent or null, matching the interpreter and Node.
     /// </summary>
     private static bool EmitNextTick(IEmitterContext emitter, List<Expr> arguments)
@@ -363,20 +363,15 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Throw);
         il.MarkLabel(callbackOkLabel);
 
-        // Push validated callback for SetTimeout.
+        // Push the validated callback for the shared job adapter.
         il.Emit(OpCodes.Ldloc, cbLocal);
-
-        // Delay is always 0 for nextTick
-        il.Emit(OpCodes.Ldc_R8, 0.0);
 
         // Emit args array - remaining arguments (starting from index 1)
         EmitArgsArray(emitter, arguments, 1);
 
-        // Call $Runtime.SetTimeout(callback, 0, args)
-        il.Emit(OpCodes.Call, ctx.Runtime!.Timers.SetTimeout);
+        il.Emit(OpCodes.Call, ctx.Runtime!.Process.QueueNextTick);
 
-        // nextTick returns undefined, so pop the result and push null
-        il.Emit(OpCodes.Pop);
+        // nextTick has no result, retaining its existing undefined representation.
         il.Emit(OpCodes.Ldnull);
 
         return true;

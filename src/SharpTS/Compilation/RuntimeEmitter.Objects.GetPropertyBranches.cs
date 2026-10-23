@@ -354,36 +354,37 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notSharpTSArrayLengthLabel);
-        // Numeric-string index — same purpose as the list branch above:
-        // proto-chain walks (`f.__proto__ === [1,2,3]; f[0]`) bottom out here
-        // when the prototype is a $Array. Without this, GetListProperty returns
-        // null for any digit-string name and the array element is invisible.
-        var tsArrIdxLocal = il.DeclareLocal(_types.Int32);
+        // Array indices retain their full uint32 range in both indexed and
+        // named Get paths, including sparse storage and prototype-chain reads.
+        var tsArrIdxLocal = il.DeclareLocal(_types.UInt32);
         var tsArrayPrototypeFallback = il.DefineLabel();
         var readArrayPrototype = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, tsArrIdxLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
         var tsArrNotIndexLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, tsArrNotIndexLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, tsArrIdxLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, tsArrNotIndexLabel);
         il.Emit(OpCodes.Ldloc, tsArrIdxLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, tsArrNotIndexLabel);
-        il.Emit(OpCodes.Ldloc, tsArrIdxLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Beq, tsArrNotIndexLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, tsArrayPrototypeFallback);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, tsArrIdxLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        var tsArrayIndexPresent = il.DefineLabel();
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.HoleType);
-        il.Emit(OpCodes.Brfalse, tsArrayIndexPresent);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Br, tsArrayPrototypeFallback);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.HasIndex);
+        il.Emit(OpCodes.Brfalse, tsArrayPrototypeFallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Ldloc, tsArrIdxLocal);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.GetLong);
+        il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayPrototypeFallback);
         var tsArrayNoDescriptorFallback = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
@@ -393,8 +394,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayNoDescriptorFallback);
         il.Emit(OpCodes.Br, readArrayPrototype);
-        il.MarkLabel(tsArrayIndexPresent);
-        il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrNotIndexLabel);
 
         // An explicit prototype replaces the inherited Array surface while
@@ -727,10 +726,10 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// String arm: "length" → boxed double; "constructor" → typeof(string); numeric-string keys
-    /// return the single-char string in-bounds; anything else walks String.prototype (recursing
-    /// through <paramref name="method"/>) for borrowed methods (valueOf/toLowerCase/...).
+    /// return the single-char string in-bounds; anything else walks String.prototype through
+    /// receiver-aware <paramref name="reflectGet"/> for accessors and borrowed methods.
     /// </summary>
-    private void EmitStringGetBranch(ILGenerator il, EmittedStringRuntime strings, MethodBuilder method, Label notMatch)
+    private void EmitStringGetBranch(ILGenerator il, EmittedStringRuntime strings, MethodBuilder reflectGet, Label notMatch)
     {
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
@@ -797,16 +796,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, strings.PrototypePopulateMethod);
         il.Emit(OpCodes.Ldsfld, strings.PrototypeField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, reflectGet);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// $Object arm: obj.GetProperty(name) (honouring getters), then an own PDS descriptor,
-    /// then a prototype-chain walk (recursing through <paramref name="method"/>), finally the
-    /// Object.prototype singleton. Falls through to <paramref name="notMatch"/> on a miss.
+    /// then a receiver-preserving prototype-chain walk through <paramref name="reflectGet"/>, finally
+    /// the Object.prototype singleton. Falls through to <paramref name="notMatch"/> on a miss.
     /// </summary>
-    private void EmitTSObjectGetBranch(ILGenerator il, TSObjectGetBranchInputs inputs, MethodBuilder method, Label notMatch)
+    private void EmitTSObjectGetBranch(ILGenerator il, TSObjectGetBranchInputs inputs, MethodBuilder reflectGet, Label notMatch)
     {
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
@@ -932,10 +932,11 @@ public partial class RuntimeEmitter
         var tsObjectNoProto = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsObjectProtoLocal);
         il.Emit(OpCodes.Brfalse, tsObjectNoProto);
-        // Recursively call GetProperty(prototype, name)
+        // Continue [[Get]] on the stored prototype with the original instance as Receiver.
         il.Emit(OpCodes.Ldloc, tsObjectProtoLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
+        il.Emit(OpCodes.Call, reflectGet);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsObjectNoProto);
         // An explicit null prototype is different from having no prototype
@@ -1004,12 +1005,18 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, noPdsDescLabel);
             // Accessor descriptor? Getter != null → invoke fn(thisArg=rx).
             var dataDescLabel = il.DefineLabel();
+            var noGetterLabel = il.DefineLabel();
+            var undefinedGetterLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, pdsDescLocal);
             il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
             var regexpGetterLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Stloc, regexpGetterLocal);
             il.Emit(OpCodes.Ldloc, regexpGetterLocal);
-            il.Emit(OpCodes.Brfalse, dataDescLabel);
+            il.Emit(OpCodes.Brfalse, noGetterLabel);
+            // An explicit undefined getter remains an accessor and masks native slots.
+            il.Emit(OpCodes.Ldloc, regexpGetterLocal);
+            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+            il.Emit(OpCodes.Beq, undefinedGetterLabel);
             // Cast getter to $TSFunction and InvokeWithThis(rx). If the
             // descriptor's getter slot isn't a $TSFunction (shouldn't
             // happen normally), fall through to the data path.
@@ -1024,8 +1031,16 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.GetMethod(typeof(System.Array), "Empty"), _types.Object));
             il.Emit(OpCodes.Callvirt, inputs.TSFunctionInvokeWithThis);
             il.Emit(OpCodes.Ret);
+            il.MarkLabel(noGetterLabel);
+            // A setter-only descriptor has no data value; its own read is undefined.
+            il.Emit(OpCodes.Ldloc, pdsDescLocal);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, dataDescLabel);
+            il.MarkLabel(undefinedGetterLabel);
+            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+            il.Emit(OpCodes.Ret);
             il.MarkLabel(dataDescLabel);
-            // Data descriptor — return descriptor.Value.
+            // Data descriptor — return descriptor.Value, including null or undefined.
             il.Emit(OpCodes.Ldloc, pdsDescLocal);
             il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
             il.Emit(OpCodes.Ret);

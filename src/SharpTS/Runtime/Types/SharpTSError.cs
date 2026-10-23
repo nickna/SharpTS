@@ -84,6 +84,7 @@ public class SharpTSError : ITypeCategorized
     public bool HasCause { get; internal set; }
 
     internal IEnumerable<string> OwnEnumerableKeys() => _properties.OwnEnumerableKeys();
+    internal IEnumerable<string> OwnStringKeys() => _properties.OwnVisibleStringKeys();
     internal IEnumerable<string> OwnPropertyNames => _properties.PropertyNames;
     internal bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
         => _properties.DefineProperty(name, descriptor);

@@ -110,6 +110,11 @@ public partial class AsyncGeneratorStateAnalyzer : AstVisitorBase
     // Reusable visitor for analyzing captures
     private readonly CaptureAnalysisVisitor _captureVisitor = new();
 
+    // Declaration closure ownership is already resolved by the compiler before state analysis.
+    // Keep it separate from nested-body traversal so captures do not add suspension points.
+    private ClosureAnalyzer? _closureAnalyzer;
+    private Stmt.Function? _captureOwner;
+
     // Block-scope shadow renames for this function (#766). Maps a declaration/reference AST node to the
     // disambiguated storage name its binding uses; nodes absent from the map keep their source lexeme.
     private IReadOnlyDictionary<object, string> _renames = new Dictionary<object, string>();
@@ -128,9 +133,11 @@ public partial class AsyncGeneratorStateAnalyzer : AstVisitorBase
     /// Analyzes an async generator function to determine suspension points and hoisted variables.
     /// </summary>
     public AsyncGeneratorFunctionAnalysis Analyze(Stmt.Function func, bool preserveDebugBindings = false,
-        IEnumerable<string>? outerCaptureNames = null)
+        IEnumerable<string>? outerCaptureNames = null, ClosureAnalyzer? closureAnalyzer = null)
     {
         Reset();
+        _closureAnalyzer = closureAnalyzer;
+        _captureOwner = func;
 
         // Disambiguate block-scoped let/const declarations that shadow an enclosing binding so the
         // hoisting decision below is made per-binding rather than per-name (#766, async analog of #711).
@@ -146,6 +153,13 @@ public partial class AsyncGeneratorStateAnalyzer : AstVisitorBase
             parameters.Add(param.Name.Lexeme);
             _declaredVariables.Add(param.Name.Lexeme);
             _variablesDeclaredBeforeSuspension.Add(param.Name.Lexeme);
+        }
+        foreach (var (declaration, name) in ParameterPatternBindings.Declarations(func.Body))
+        {
+            string storageName = StorageName(declaration, name.Lexeme);
+            parameters.Add(storageName);
+            _declaredVariables.Add(storageName);
+            _variablesDeclaredBeforeSuspension.Add(storageName);
         }
 
         bool usesArguments = ArgumentsRefScanner.Contains(func.Parameters, func.Body,
@@ -219,6 +233,8 @@ public partial class AsyncGeneratorStateAnalyzer : AstVisitorBase
 
     private void Reset()
     {
+        _closureAnalyzer = null;
+        _captureOwner = null;
         _suspensionPoints.Clear();
         _declaredVariables.Clear();
         _variablesUsedAfterSuspension.Clear();

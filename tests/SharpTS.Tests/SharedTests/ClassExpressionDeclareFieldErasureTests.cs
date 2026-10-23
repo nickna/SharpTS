@@ -103,13 +103,10 @@ public sealed class ClassExpressionDeclareFieldErasureTests
             """, "false false\n17 false true\n17 true true true\n"];
     }
 
-    // Compiler gaps: inherited field presence (#2374), erased static reads (#2711),
-    // and native Promise species construction (#2709).
-    // Immutable full-IL controls confirm the other five rows also pass compiled mode.
+    // Compiler gaps: inherited field presence (#2374) and erased static reads (#2711).
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
         ((string)row[0] is "inherited-data-and-accessors-remain-visible"
             or "static-declarations-erase-before-live-writes"
-            or "native-promise-subclass-preserves-state"
             ? new[] { ExecutionMode.Interpreted }
             : new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled })
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));

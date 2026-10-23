@@ -157,11 +157,23 @@ public class ClosureAnalyzer : AstVisitorBase
     private readonly LoopBodyCellAnalyzer _bodyCells = new();
 
     internal bool IsLoopBodyCellDeclaration(Token declaration) => _bodyCells.IsCellDeclaration(declaration);
+    internal object? GetLoopBodyCellOwner(Token declaration) => _bodyCells.GetCellOwner(declaration);
     internal bool IsOrdinaryBlockShadowDeclaration(Token declaration) => _bodyCells.IsOrdinaryBlockShadowDeclaration(declaration);
+    internal bool IsFunctionBodyVarDeclaration(Token declaration) => _bodyCells.IsFunctionBodyVarDeclaration(declaration);
+    internal Token? GetFunctionBodyVarDeclaration(Token declaration) => _bodyCells.GetFunctionBodyVarDeclaration(declaration);
+    internal IReadOnlyList<(Token Declaration, Token Parameter)> GetParameterBodyCopies(List<Stmt> body) =>
+        _bodyCells.GetParameterBodyCopies(body);
+    internal IReadOnlyList<Token> GetUndefinedBodyVars(List<Stmt> body) => _bodyCells.GetUndefinedBodyVars(body);
+    internal IReadOnlyList<Token> GetClassStaticBlockVars(List<Stmt> body) => _bodyCells.GetClassStaticBlockVars(body);
+    internal HashSet<string> GetCellOnlyCapturedLocalNames(object owner) => _bodyCells.GetCellOnlyCapturedNames(owner);
     internal bool TryGetLoopBodyCellCapture(object closure, string name, out Token declaration) =>
         _bodyCells.TryGetCaptureDeclaration(closure, name, out declaration);
     internal IReadOnlyDictionary<string, Token>? GetLoopBodyCellCaptures(object closure) =>
         _bodyCells.ClosureCaptures.GetValueOrDefault(closure);
+    internal bool IsReferenceToDeclaration(Expr.Variable reference, Token declaration) =>
+        _bodyCells.IsReferenceToDeclaration(reference, declaration);
+    internal bool TryGetPrivateSelfCapture(object closure, string name, out Token declaration) =>
+        _bodyCells.TryGetPrivateSelfCapture(closure, name, out declaration);
     internal bool TryGetClassSelfOwner(Expr.Variable reference, out Expr.ClassExpr owner)
     {
         if (_bodyCells.CanTransportClassSelf(reference))
@@ -315,7 +327,8 @@ public class ClosureAnalyzer : AstVisitorBase
         // Resolve lexical declaration identities before ordinary capture discovery.
         // A named class expression's immutable self is carried by its evaluated
         // definition, independently of any same-spelled outer variable storage.
-        _bodyCells.Analyze(statements, moduleOwners);
+        _bodyCells.Analyze(statements, moduleOwners, _runtimeClassDeclarations);
+        if (checkedTypes != null) _bodyCells.MarkUndefinedBodyVarReferences(checkedTypes);
         _checkedTypes = checkedTypes;
         _scopeStack.Push([]);
         HoistFunctionDeclarations(statements, hoistOwnedVars: true);
@@ -451,8 +464,13 @@ public class ClosureAnalyzer : AstVisitorBase
     {
         if (_currentFunction == null) return;
 
-        // Skip built-ins
-        if (name is "console.log" or "Math" or "console" or "undefined" or "NaN" or "Infinity" or "Symbol")
+        // The intrinsic Math object needs no capture, but a lexical declaration with that name
+        // must reach the ordinary self/local/outer ownership checks below.
+        if (name == "Math" && !_scopeStack.Any(scope => scope.Contains(name)))
+            return;
+
+        // Skip other built-ins.
+        if (name is "console.log" or "console" or "undefined" or "NaN" or "Infinity" or "Symbol")
             return;
 
         // Check for self-reference in named function expressions
@@ -769,6 +787,10 @@ public class ClosureAnalyzer : AstVisitorBase
             .Concat((stmt.AutoAccessors ?? []).Where(accessor => accessor.Initializer != null)
                 .Select(accessor => (Stmt)new Stmt.Expression(accessor.Initializer!)))
             .ToList());
+        // Nominal static blocks are independent invocation scopes. Their arrows
+        // need both local capture discovery and the lexical class receiver.
+        foreach (var block in (stmt.StaticInitializers ?? []).OfType<Stmt.StaticBlock>())
+            AnalyzeFunctionBody(block, [], block.Body);
         foreach (var method in stmt.Methods)
         {
             // Skip overload signatures (no body)
@@ -798,8 +820,9 @@ public class ClosureAnalyzer : AstVisitorBase
         // Analyze field initializers for captured variables
         AnalyzeFunctionBody(expr, [], expr.Fields.Where(field => field.Initializer != null)
             .Select(field => (Stmt)new Stmt.Expression(field.Initializer!))
-            .Concat((expr.StaticInitializers ?? []).OfType<Stmt.StaticBlock>().SelectMany(block => block.Body))
             .ToList());
+        foreach (var block in (expr.StaticInitializers ?? []).OfType<Stmt.StaticBlock>())
+            AnalyzeFunctionBody(block, [], block.Body);
 
         // Analyze methods
         foreach (var method in expr.Methods)
@@ -838,10 +861,16 @@ public class ClosureAnalyzer : AstVisitorBase
         // Visit iterable BEFORE creating loop scope - matches interpreter/resolver behavior
         Visit(stmt.Iterable);
         EnterScope();
-        // The loop variable and body declarations are per-iteration bindings (#1223):
+        // Only lexical heads create per-iteration bindings; var reuses its hoisted owner.
         // depth is bumped before the variable's declare so it lands in the loop-body set.
         _loopBodyDepth++;
-        DeclareVariable(stmt.Variable.Lexeme, isPerIterationBinding: true);
+        if (stmt.IsDeclaration && !stmt.IsVar)
+            DeclareVariable(stmt.Variable.Lexeme, isPerIterationBinding: true);
+        else
+        {
+            ReferenceVariable(stmt.Variable.Lexeme);
+            _assignedNames.Add(stmt.Variable.Lexeme);
+        }
         Visit(stmt.Body);
         _loopBodyDepth--;
         ExitScope();
@@ -853,7 +882,13 @@ public class ClosureAnalyzer : AstVisitorBase
         Visit(stmt.Object);
         EnterScope();
         _loopBodyDepth++;
-        DeclareVariable(stmt.Variable.Lexeme, isPerIterationBinding: true);
+        if (stmt.IsDeclaration && !stmt.IsVar)
+            DeclareVariable(stmt.Variable.Lexeme, isPerIterationBinding: true);
+        else
+        {
+            ReferenceVariable(stmt.Variable.Lexeme);
+            _assignedNames.Add(stmt.Variable.Lexeme);
+        }
         Visit(stmt.Body);
         _loopBodyDepth--;
         ExitScope();
@@ -1130,11 +1165,17 @@ public class ClosureAnalyzer : AstVisitorBase
         // Defaults may create arrows that capture this call's arguments object.
         if (ArgumentsRefScanner.Contains(parameters, body, treatEvalReferenceAsUse: true))
             DeclareVariable("arguments");
+        var parameterInitializers = Runtime.ParameterBinder.ParameterInitializers(body);
+        foreach (var initializer in parameterInitializers?.Values.AsEnumerable() ?? [])
+            foreach (var name in LexicalDeclarationBindings.Collect(initializer.Statements))
+                DeclareVariable(name.Lexeme);
         foreach (var param in parameters)
         {
             DeclareVariable(param.Name.Lexeme);
             if (param.DefaultValue != null)
                 Visit(param.DefaultValue);
+            if (parameterInitializers?.TryGetValue(param.Name.Lexeme, out var initializer) == true)
+                Visit(initializer);
         }
 
         // Hoist sibling function declarations so forward references in one sibling's
@@ -1142,7 +1183,7 @@ public class ClosureAnalyzer : AstVisitorBase
         HoistFunctionDeclarations(body, hoistOwnedVars: true);
 
         // Analyze body
-        foreach (var stmt in body)
+        foreach (var stmt in Runtime.ParameterBinder.BodyStatements(body))
             Visit(stmt);
 
         ExitScope();
@@ -1207,12 +1248,19 @@ public class ClosureAnalyzer : AstVisitorBase
                 af.ExpressionBody, treatEvalReferenceAsUse: true))
             DeclareVariable("arguments");
 
+        var parameterInitializers = Runtime.ParameterBinder.ParameterInitializers(af.BlockBody);
+        foreach (var initializer in parameterInitializers?.Values.AsEnumerable() ?? [])
+            foreach (var name in LexicalDeclarationBindings.Collect(initializer.Statements))
+                DeclareVariable(name.Lexeme);
+
         // Declare parameters (may shadow function name if same identifier)
         foreach (var param in af.Parameters)
         {
             DeclareVariable(param.Name.Lexeme);
             if (param.DefaultValue != null)
                 Visit(param.DefaultValue);
+            if (parameterInitializers?.TryGetValue(param.Name.Lexeme, out var initializer) == true)
+                Visit(initializer);
         }
 
         // Analyze body
@@ -1221,7 +1269,7 @@ public class ClosureAnalyzer : AstVisitorBase
         else if (af.BlockBody != null)
         {
             HoistFunctionDeclarations(af.BlockBody, hoistOwnedVars: true);
-            foreach (var stmt in af.BlockBody)
+            foreach (var stmt in Runtime.ParameterBinder.BodyStatements(af.BlockBody))
                 Visit(stmt);
         }
 

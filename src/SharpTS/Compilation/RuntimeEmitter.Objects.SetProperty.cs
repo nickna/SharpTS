@@ -121,8 +121,14 @@ public partial class RuntimeEmitter
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
+        MethodBuilder InvokeMethodUnwrapped,
         MethodBuilder InvokeMethodValue,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedObjectReadRuntime ObjectRead,
         EmittedObjectStateRuntime ObjectState,
+        bool ProxySelected,
+        EmittedReflectAssignment? ReflectAssignment,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
         Type UndefinedType
@@ -158,14 +164,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, endLabel);
 
-        // Check if frozen: _frozenObjects.TryGetValue(obj, out _)
-        // If frozen, silently return (non-strict mode behavior)
-        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, frozenCheckLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
-        il.Emit(OpCodes.Brtrue, endLabel); // Frozen - silently return
-
         // Honor any own descriptor before receiver-specific storage. This is
         // the common OrdinarySet path for CLR-backed JS objects (Date, Error,
         // RegExp, Promise, and other host carriers): accessors invoke their
@@ -182,6 +180,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noExistingPdsSetterLabel);
         EmitInvokePdsSetterWithValueAndReturn(il, inputs.InvokeMethodValue, existingPdsSetterLocal);
         il.MarkLabel(noExistingPdsSetterLabel);
+
+        // Freeze preserves an existing accessor setter. Only data writes and
+        // property creation reach this frozen-receiver rejection.
+        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, frozenCheckLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brtrue, endLabel); // Frozen - silently return
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -500,7 +506,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, endLabel);
 
-        // Check if frozen: _frozenObjects.TryGetValue(obj, out _)
+        // Honor own descriptors before receiver-specific storage. Generic
+        // Array mutators use this helper with Throw=true, so callable setters
+        // must run and getter-only/non-writable descriptors must reject the
+        // write even when the receiver is a compact IHasFields carrier.
+        var strictExistingDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        var strictExistingSetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, strictExistingSetterLocal);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.TryGetSetter);
+        var noStrictExistingSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, noStrictExistingSetterLabel);
+        EmitInvokePdsSetterWithValueAndReturn(il, inputs.InvokeMethodValue, strictExistingSetterLocal);
+        il.MarkLabel(noStrictExistingSetterLabel);
+
+        // Freeze preserves an existing accessor setter even in strict mode.
+        // Data writes and property creation keep their original refusal policy.
         il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, frozenCheckLocal);
@@ -516,21 +538,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret); // Silently return in non-strict mode
 
         il.MarkLabel(notFrozenLabel);
-
-        // Honor own descriptors before receiver-specific storage. Generic
-        // Array mutators use this helper with Throw=true, so callable setters
-        // must run and getter-only/non-writable descriptors must reject the
-        // write even when the receiver is a compact IHasFields carrier.
-        var strictExistingDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
-        var strictExistingSetterLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloca, strictExistingSetterLocal);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.TryGetSetter);
-        var noStrictExistingSetterLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, noStrictExistingSetterLabel);
-        EmitInvokePdsSetterWithValueAndReturn(il, inputs.InvokeMethodValue, strictExistingSetterLocal);
-        il.MarkLabel(noStrictExistingSetterLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -785,6 +792,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.Object, _types.String, _types.Object]);
+        objectWrite.PropertyStrict = typeBuilder.DefineMethod(
+            "SetPropertyStrict",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object, _types.String, _types.Object, _types.Boolean]);
     }
 
     private void EmitSetProperty(EmittedObjectWriteRuntime objectWrite, SetPropertyInputs inputs)
@@ -1264,6 +1276,24 @@ public partial class RuntimeEmitter
         // resolution, so writes become visible as reads.
         il.MarkLabel(typeSetLabel);
         {
+            // Source constructor writes share one descriptor lookup in both
+            // language modes. The strictness argument only controls whether a
+            // rejected write throws; native constructor handling stays below.
+            var nativeConstructor = il.DefineLabel();
+            il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.Type);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+            il.Emit(OpCodes.Brfalse, nativeConstructor);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, objectWrite.PropertyStrict);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(nativeConstructor);
+
             // Per ECMA-262 §17, constructor static "prototype"/"name"/"length"
             // are non-writable; non-strict writes silently no-op. Same for
             // Number constants (MAX_VALUE etc.) which are W:F,E:F,C:F.
@@ -1634,7 +1664,13 @@ public partial class RuntimeEmitter
             // Function `name` and `length` are intrinsic own data properties with
             // [[Writable]] false. It is synthesized by Get/descriptor helpers
             // rather than stored in PDS, so an absent PDS entry must not be
-            // mistaken for permission to create a writable shadow.
+            // mistaken for permission to create a writable shadow. Deletion
+            // removes that authority; the inherited walk above then decides.
+            var tsFnIntrinsicMetadataAbsentLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
+            il.Emit(OpCodes.Brtrue, tsFnIntrinsicMetadataAbsentLabel);
             var tsFnNotIntrinsicLengthLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, "length");
@@ -1649,6 +1685,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, tsFnNotIntrinsicNameLabel);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(tsFnNotIntrinsicNameLabel);
+            il.MarkLabel(tsFnIntrinsicMetadataAbsentLabel);
             var tsFnDoSetLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
@@ -2210,16 +2247,28 @@ public partial class RuntimeEmitter
         }
 
         il.MarkLabel(next);
+        var selectedPrototype = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, walk);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "BaseType").GetGetMethod()!);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, selectedPrototype);
+        il.Emit(OpCodes.Ldloc, selectedPrototype);
+        il.Emit(OpCodes.Isinst, _types.Type);
         il.Emit(OpCodes.Stloc, walk);
+        var ordinaryPrototype = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, walk);
+        il.Emit(OpCodes.Brfalse, ordinaryPrototype);
+        il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldloc, walk);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
         il.Emit(OpCodes.Brtrue, loop);
 
-        // CLR inheritance ends before the guest prototype chain.
-        il.Emit(OpCodes.Call, inputs.FunctionPrototypes.Populate);
+        // Only constructors on the live guest chain participate. Retain the
+        // source-identity probes above at user-class hops, and let the ordinary
+        // descriptor walk handle selected objects and native prototypes.
+        il.MarkLabel(ordinaryPrototype);
         EmitConstructorPrototypeSetGuard(il, inputs,
-            () => il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypes.Prototype), create, reject);
+            () => il.Emit(OpCodes.Ldloc, selectedPrototype), create, reject);
 
         il.MarkLabel(create);
         il.Emit(OpCodes.Ldarg_0);
@@ -2447,6 +2496,112 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loop);
     }
 
+    private readonly record struct ArrayIndexPrototypeSetInputs(
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        MethodBuilder InvokeMethodUnwrapped,
+        MethodBuilder InvokeMethodValue,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedObjectReadRuntime ObjectRead,
+        bool ProxySelected,
+        EmittedReflectAssignment? ReflectAssignment,
+        Type UndefinedType
+    );
+
+    // Empty stack on entry and every branch. A successful inherited setter or
+    // Proxy returns from SetIndex; data continues to the existing storage path
+    // after the nearest descriptor has claimed the key.
+    private void EmitArrayIndexPrototypeSetPolicy(
+        ILGenerator il, ArrayIndexPrototypeSetInputs inputs, Action loadKey,
+        Label writableData, Label reject)
+    {
+        var prototype = il.DeclareLocal(_types.Object);
+        var descriptor = il.DeclareLocal(_types.Object);
+        var setter = il.DeclareLocal(_types.Object);
+        var writable = il.DeclareLocal(_types.Object);
+        var loop = il.DefineLabel();
+        var next = il.DefineLabel();
+        var data = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, prototype);
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Brfalse, writableData);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, writableData);
+
+        // A Proxy supplies [[Set]] itself. Do not replace it with observable
+        // descriptor/prototype probes or lose the original array receiver.
+        if (inputs.ProxySelected)
+        {
+            var proxy = il.DefineLabel();
+            var notProxy = il.DefineLabel();
+            EmitProxyTypeCheck(il, () => il.Emit(OpCodes.Ldloc, prototype), proxy, notProxy);
+            il.MarkLabel(proxy);
+            EmitProxySetCompiledCall(
+                il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set,
+                    inputs.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped),
+                () => il.Emit(OpCodes.Ldloc, prototype), loadKey,
+                () => il.Emit(OpCodes.Ldarg_2), () => il.Emit(OpCodes.Ldarg_0));
+            il.Emit(OpCodes.Brfalse, reject);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notProxy);
+        }
+
+        il.Emit(OpCodes.Ldloc, prototype);
+        loadKey();
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Brfalse, next);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, next);
+
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Ldloca, setter);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
+        il.Emit(OpCodes.Brfalse, data);
+        il.Emit(OpCodes.Ldloc, setter);
+        il.Emit(OpCodes.Brfalse, data);
+        il.Emit(OpCodes.Ldloc, setter);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, data);
+        EmitInvokePdsSetterWithValueAndReturn(il, inputs.InvokeMethodValue, setter);
+
+        il.MarkLabel(data);
+        // Complete own data descriptors have a Boolean writable field;
+        // setterless accessors have none and must refuse rather than walking on.
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "writable");
+        il.Emit(OpCodes.Ldloca, writable);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
+        il.Emit(OpCodes.Brfalse, reject);
+        il.Emit(OpCodes.Ldloc, writable);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brfalse, reject);
+        il.Emit(OpCodes.Ldloc, writable);
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Brfalse, reject);
+        il.Emit(OpCodes.Ldloc, prototype);
+        loadKey();
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsWritable);
+        il.Emit(OpCodes.Brfalse, reject);
+        il.Emit(OpCodes.Br, writableData);
+
+        il.MarkLabel(next);
+        il.Emit(OpCodes.Ldloc, prototype);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, prototype);
+        il.Emit(OpCodes.Br, loop);
+    }
+
     /// <summary>
     /// Emits SetPropertyStrict(object obj, string name, object value, bool strictMode) -> void
     /// In strict mode, throws TypeError for modifications to frozen objects or new properties on sealed objects.
@@ -2457,13 +2612,7 @@ public partial class RuntimeEmitter
         SetPropertyStrictInputs inputs
     )
     {
-        var method = typeBuilder.DefineMethod(
-            "SetPropertyStrict",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Void,
-            [_types.Object, _types.String, _types.Object, _types.Boolean]
-        );
-        objectWrite.PropertyStrict = method;
+        var method = (MethodBuilder)objectWrite.PropertyStrict;
 
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
@@ -2652,10 +2801,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, nullLabel);
         EmitThrowTypeErrorWithName(il, inputs.Errors, "Cannot assign to read only property '", "' of class");
         il.MarkLabel(storeGenericField);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
+        // Store the resolved own field here. Reentering the sloppy property
+        // dispatcher would route this source constructor back to this helper.
+        il.Emit(OpCodes.Ldloc, genericField);
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, objectWrite.Property);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(FieldInfo), "SetValue", _types.Object, _types.Object));
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGenericStaticField);
 
@@ -2856,21 +3007,21 @@ public partial class RuntimeEmitter
             il.MarkLabel(tsFnStrictNewPropertyLabel);
             var tsFnStrictCheckCanAddLabel = il.DefineLabel();
             var tsFnStrictSyntheticMetadataLabel = il.DefineLabel();
+            var tsFnStrictInheritedDescriptorLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
             il.Emit(OpCodes.Brfalse, tsFnStrictSyntheticMetadataLabel);
             // Evaluated class definitions materialize their metadata in PDS.
             // Once an own slot is deleted, its actual prototype chain decides
             // whether ordinary assignment may create that slot again.
-            EmitConstructorPrototypeSetGuard(il, inputs, () =>
-            {
-                il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
-            }, tsFnStrictCheckCanAddLabel, tsFnStrictRejectLabel);
+            il.Emit(OpCodes.Br, tsFnStrictInheritedDescriptorLabel);
             il.MarkLabel(tsFnStrictSyntheticMetadataLabel);
             // The synthesized intrinsic function `name` and `length` properties are
-            // non-writable even though it has no backing PDS entry. A strict
-            // Set must reject it instead of defining a writable shadow.
+            // non-writable until deleted, even without a backing PDS entry.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
+            il.Emit(OpCodes.Brtrue, tsFnStrictInheritedDescriptorLabel);
             var tsFnStrictNotIntrinsicLengthLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, "length");
@@ -2889,6 +3040,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, nullLabel);
             EmitThrowTypeErrorWithName(il, inputs.Errors, "Cannot assign to read only property '", "' of function");
             il.MarkLabel(tsFnStrictNotIntrinsicNameLabel);
+            il.MarkLabel(tsFnStrictInheritedDescriptorLabel);
+            EmitConstructorPrototypeSetGuard(il, inputs, () =>
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+            }, tsFnStrictCheckCanAddLabel, tsFnStrictRejectLabel);
             il.MarkLabel(tsFnStrictCheckCanAddLabel);
             var tsFnStrictCanAddLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -3265,6 +3422,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, strictArrayKeyLocal);
+
+        // Negative integer keys are ordinary named properties. Match the
+        // non-strict SetIndex route without sending them to SetStrictLong,
+        // whose bounds/length policy applies only to array storage indices.
+        var strictArrayParsedIndexLocal = il.DeclareLocal(_types.Int64);
+        var strictArrayIndexedKeyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, strictArrayKeyLocal);
+        il.Emit(OpCodes.Ldloca, strictArrayParsedIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Int64, "TryParse", _types.String, _types.Int64.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, strictArrayIndexedKeyLabel);
+        il.Emit(OpCodes.Ldloc, strictArrayParsedIndexLocal);
+        il.Emit(OpCodes.Ldc_I8, 0L);
+        il.Emit(OpCodes.Bge, strictArrayIndexedKeyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, strictArrayKeyLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Call, objectWrite.PropertyStrict);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(strictArrayIndexedKeyLabel);
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, strictArrayKeyLocal);
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
@@ -3297,9 +3476,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt64", _types.Object));
         il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brtrue, strictArrayNoInheritedSetterLabel);
-        EmitInheritedArrayIndexSetPolicy(
-            il, inputs.DescriptorStorage, inputs.UndefinedType, inputs.InvokeMethodValue,
-            inputs.ArrayOperations.PrototypeField, () => il.Emit(OpCodes.Ldloc, strictArrayKeyLocal),
+        EmitArrayIndexPrototypeSetPolicy(
+            il, new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage,
+                inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue, inputs.ObjectDescriptors,
+                inputs.ObjectPrototypes, inputs.ObjectRead, inputs.ProxySelected,
+                inputs.ReflectAssignment, inputs.UndefinedType),
+            () => il.Emit(OpCodes.Ldloc, strictArrayKeyLocal),
             strictArrayNoInheritedSetterLabel, strictArrayRejectLabel);
 
         il.MarkLabel(strictArrayNoInheritedSetterLabel);

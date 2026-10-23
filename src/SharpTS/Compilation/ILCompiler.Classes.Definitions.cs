@@ -23,7 +23,18 @@ public partial class ILCompiler
         var il = method.GetILGenerator();
         var sourceParameters = ResolveClassExpressionConstructorSourceParameters(expression);
         var emitter = new ILEmitter(CreateModuleMemberContext(il, method));
-        if (HasRuntimeParent(expression))
+        if (UsesLiveSuperConstruction(ClassExpressionDeclaration(expression)) && !builder.IsGenericTypeDefinition
+            && !_classes.ErrorSubclasses.Contains(_classExprs.Names[expression])
+            && !_classes.PromiseSubclasses.Contains(_classExprs.Names[expression]))
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, _runtime.ClassDefinitions.InitializeReceiver);
+            il.Emit(OpCodes.Ret);
+        }
+        else if (HasRuntimeParent(expression))
         {
             var receiver = il.DeclareLocal(template);
             ConstructorInfo allocation = _classes.PrototypeConstructors[builder];
@@ -111,6 +122,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ret);
         }
         string name = expression.Name?.Lexeme
+            ?? _classExprs.InferredNames.GetValueOrDefault(expression)
             ?? _classExprs.VarToClassExpr.FirstOrDefault(entry => ReferenceEquals(entry.Value, expression)).Key
             ?? "";
         var initializer = _programType.DefineMethod("$Initialize_" + _classExprs.Names[expression],

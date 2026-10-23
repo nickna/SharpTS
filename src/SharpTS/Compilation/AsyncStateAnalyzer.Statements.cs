@@ -11,7 +11,8 @@ public partial class AsyncStateAnalyzer
     {
         // Track variable declaration under its (possibly disambiguated) storage name (#766).
         var name = StorageName(stmt, stmt.Name.Lexeme);
-        _declaredVariables.Add(name);
+        if (_closureAnalyzer?.IsLoopBodyCellDeclaration(stmt.Name) != true)
+            _declaredVariables.Add(name);
 
         base.VisitVar(stmt);
     }
@@ -20,7 +21,8 @@ public partial class AsyncStateAnalyzer
     {
         // Track const variable declaration under its (possibly disambiguated) storage name (#766).
         var name = StorageName(stmt, stmt.Name.Lexeme);
-        _declaredVariables.Add(name);
+        if (_closureAnalyzer?.IsLoopBodyCellDeclaration(stmt.Name) != true)
+            _declaredVariables.Add(name);
 
         base.VisitConst(stmt);
     }

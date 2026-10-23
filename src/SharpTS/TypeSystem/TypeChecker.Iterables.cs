@@ -133,8 +133,12 @@ public partial class TypeChecker
     {
         elementType = null!;
         TypeInfo? current = instance.ResolvedClassType;
+        Dictionary<string, TypeInfo> substitutions = [];
         for (int guard = 0; current != null && guard < 64; guard++)
         {
+            // Compose each owner's arguments in the incoming instance scope before
+            // reading its native-placeholder signature; never mutate the shared class.
+            substitutions = ComposeInheritedFieldReadSubstitutions(current, substitutions);
             TypeInfo? iteratorFactory = current is TypeInfo.MutableClass mc
                 ? (mc.Methods.TryGetValue("@@iterator", out var m) ? m : null)
                 : GetMethods(current)?.GetValueOrDefault("@@iterator");
@@ -142,7 +146,11 @@ public partial class TypeChecker
             {
                 TypeInfo? iterator = GetCallableReturnType(iteratorFactory);
                 if (iterator is null) { elementType = TypeInfo.Any.Shared; return true; }
-                return TryGetIteratorElementFromReturn(iterator, out elementType);
+                if (!TryGetIteratorElementFromReturn(iterator, out elementType)) return false;
+                // Substitute the extracted element: the generic substitution switch
+                // deliberately does not rebuild the native Iterator/Generator wrappers.
+                elementType = SubstituteConstructorMember(elementType, substitutions);
+                return true;
             }
             current = GetSuperclass(current);
         }

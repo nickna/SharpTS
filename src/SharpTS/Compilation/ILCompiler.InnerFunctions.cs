@@ -22,9 +22,9 @@ public partial class ILCompiler
     private readonly Dictionary<Stmt.Function, string> _innerFunctionEnclosingClassNames = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, FieldBuilder> _innerFunctionEntryPointDCFields = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, FieldBuilder> _innerFunctionFunctionDCFields = new(ReferenceEqualityComparer.Instance);
-    // A method environment can be needed only to create a descendant closure.
+    // An enclosing function environment can be needed only to create a descendant closure.
     // Keep that reference requirement separate from the function's semantic captures.
-    private readonly Dictionary<Stmt.Function, string> _innerFunctionMethodDCSources = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Stmt.Function, string> _innerFunctionRelayDCSources = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, Type[]> _innerFunctionParamTypes = new(ReferenceEqualityComparer.Instance);
 
     // #307: inner function declarations that capture variables living on an
@@ -110,7 +110,7 @@ public partial class ILCompiler
         return visitor.UsesDefinition;
     }
 
-    private void ResolveInnerFunctionMethodDCSources()
+    private void ResolveInnerFunctionRelayDCSources()
     {
         var collected = new HashSet<Stmt.Function>(
             _collectedInnerFunctions.Select(entry => entry.Func), ReferenceEqualityComparer.Instance);
@@ -120,6 +120,26 @@ public partial class ILCompiler
                 || owner == null)
                 continue;
 
+            Relay(function, owner, key!);
+        }
+
+        // A parameter-default arrow can need an ancestor's environment even when
+        // its immediately enclosing declaration reads none of that ancestor's
+        // variables itself. Relay the already resolved, typed owner reference;
+        // adding a same-named semantic capture would hide the declaration's body var.
+        foreach (var (arrow, key) in _closures.ArrowFunctionDCSource)
+        {
+            if (!_closures.FunctionAstNodes.TryGetValue(key, out var owner)
+                || owner is not Stmt.Function functionOwner
+                || !_arrowEnclosingCallable.TryGetValue(arrow, out var enclosing)
+                || enclosing is not Stmt.Function function)
+                continue;
+
+            Relay(function, functionOwner, key);
+        }
+
+        void Relay(Stmt.Function function, Stmt.Function owner, string key)
+        {
             var path = new List<Stmt.Function>();
             object? node = function;
             int guard = 0;
@@ -130,7 +150,7 @@ public partial class ILCompiler
                 if (++guard > 256 || node is not Stmt.Function intermediate
                     || !collected.Contains(intermediate)
                     || intermediate.IsAsync || intermediate.IsGenerator
-                    || (_innerFunctionMethodDCSources.TryGetValue(intermediate, out var existing)
+                    || (_innerFunctionRelayDCSources.TryGetValue(intermediate, out var existing)
                         && existing != key)
                     || !TryResolveMethodDCOwner(intermediate,
                         _closures.Analyzer.GetCaptures(intermediate), out var directOwner, out _)
@@ -145,7 +165,7 @@ public partial class ILCompiler
             // An empty intermediate carries its environment, not invented capture names.
             if (ReferenceEquals(node, owner))
                 foreach (var intermediate in path)
-                    _innerFunctionMethodDCSources[intermediate] = key!;
+                    _innerFunctionRelayDCSources[intermediate] = key;
         }
     }
 
@@ -343,7 +363,7 @@ public partial class ILCompiler
             Type returnType = _types.Object;
 
             // Check if this inner function captures function-level variables
-            bool needsFunctionDC = _innerFunctionMethodDCSources.ContainsKey(func);
+            bool needsFunctionDC = _innerFunctionRelayDCSources.ContainsKey(func);
             string? sourceFunctionForDC = needsFunctionDC ? enclosingFuncName : null;
             if (_closures.FunctionDisplayClassFields.TryGetValue(enclosingFuncName, out var enclosingFuncDCFields))
             {
@@ -437,6 +457,12 @@ public partial class ILCompiler
 
                 foreach (var capturedVar in captures)
                 {
+                    if (_closures.Analyzer.TryGetLoopBodyCellCapture(func, capturedVar, out _))
+                    {
+                        fieldMap[capturedVar] = displayClass.DefineField(
+                            capturedVar, _types.Object, FieldAttributes.Public);
+                        continue;
+                    }
                     // Skip top-level captured vars - accessed through $entryPointDC
                     if (_closures.CapturedTopLevelVars.Contains(capturedVar))
                         continue;
@@ -592,6 +618,8 @@ public partial class ILCompiler
                 else
                     ctx.CapturedFields = [];
 
+                ctx.LoopBodyCellCaptures = _closures.Analyzer.GetLoopBodyCellCaptures(func);
+
                 // Set $entryPointDC field
                 if (_innerFunctionEntryPointDCFields.TryGetValue(func, out var epDCField))
                     ctx.CurrentArrowEntryPointDCField = epDCField;
@@ -698,16 +726,16 @@ public partial class ILCompiler
                 environmentParamTypes,
                 argumentOffset: hasDisplayClass ? 1 : 0);
 
-            // Initialize captured parameters into the scope display class (mirrors
-            // EmitArrowBody). Runs AFTER EmitDefaultParameters (which writes defaults
-            // via Starg) so the DC fields see defaulted values. Later reassignments
-            // dual-write DC + arg slot via LocalVariableResolver store path 1b.
+            // Preserve values already published during defaults, including writes
+            // through closures whose owner's CLR argument slot is now stale.
             if (ctx.ArrowScopeDisplayClassLocal != null)
             {
                 int paramArgBase = hasDisplayClass ? 1 : 0;
                 for (int i = 0; i < func.Parameters.Count; i++)
                 {
                     var paramName = func.Parameters[i].Name.Lexeme;
+                    if (ctx.PublishedCapturedParameterNames?.Contains(paramName) == true)
+                        continue;
                     if (ctx.CapturedArrowLocals!.Contains(paramName) &&
                         ctx.ArrowScopeDisplayClassFields!.TryGetValue(paramName, out var scopeDCField))
                     {
@@ -756,8 +784,8 @@ public partial class ILCompiler
     private string ResolveInnerFunctionEnclosingFunctionName(
         Stmt.Function function, HashSet<string> captures, string collectedName)
     {
-        if (_innerFunctionMethodDCSources.TryGetValue(function, out var methodSource))
-            return methodSource;
+        if (_innerFunctionRelayDCSources.TryGetValue(function, out var relaySource))
+            return relaySource;
 
         // Method display classes use class-qualified keys, whereas collection's
         // enclosing-name cursor describes free functions. Resolve the storage
@@ -1150,6 +1178,7 @@ public partial class ILCompiler
                 if (!new ILEmitter(ctx).TryEmitOwnedClassDefinition())
                     throw new InvalidOperationException("Inner function has no lexical class evaluation owner.");
             }
+            else if (LexicalEnvironmentCellAccess.TryEmitCaptureReference(il, ctx, funcStmt, capturedVar)) { }
             else if (ctx.TryGetParameter(capturedVar, out var argIndex))
             {
                 il.Emit(OpCodes.Ldarg, argIndex);

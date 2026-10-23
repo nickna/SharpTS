@@ -105,8 +105,6 @@ public partial class ILEmitter
 
     private void EmitAsyncArrowFunction(Expr.ArrowFunction af, AsyncArrowStateMachineBuilder arrowBuilder)
     {
-        var stubMethod = arrowBuilder.StubMethod;
-
         // For standalone async arrows with captures, TSFunction's "static method with target"
         // mechanism prepends the single target to the args. Pack EVERY captured value into one
         // object[] and pass it as that target; the stub unpacks each into its own field. One
@@ -150,13 +148,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldnull);
         }
 
-        // Load method info for the stub method
-        IL.Emit(OpCodes.Ldtoken, stubMethod);
-        IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
-        IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-
-        // Create TSFunction
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
+        EmitAsyncFunctionValue(arrowBuilder);
     }
 
     private void EmitNonCapturingArrowFunction(Expr.ArrowFunction af, MethodBuilder method)
@@ -394,7 +386,7 @@ public partial class ILEmitter
             else if (capturedVar == CompilationContext.SuperOwnerCaptureName)
             {
                 if (!TryEmitOwnedClassDefinition())
-                    throw new InvalidOperationException("A static super closure requires its lexical class definition.");
+                    throw new InvalidOperationException("A super closure requires its lexical class definition.");
             }
             else if (capturedVar == "this")
             {
@@ -413,7 +405,12 @@ public partial class ILEmitter
                 // Routing through LoadThis() also picks up the minimatch
                 // `.map(s => s.map(ss => this.parse(ss)))` chain (case 1 fires for the
                 // parent arrow; class-method arg0 for the outermost).
-                if (!_resolver.TryLoadThisBindingCell()) _resolver.LoadThis();
+                if (!_resolver.TryLoadThisBindingCell())
+                {
+                    if (_ctx.ClassDefinitionThisParameterIndex is { } parameter)
+                        IL.Emit(OpCodes.Ldarg, parameter);
+                    else _resolver.LoadThis();
+                }
             }
             else if (LexicalEnvironmentCellAccess.TryEmitCaptureReference(IL, _ctx, af, capturedVar)) { }
             else if (_ctx.CellBindingLocals.TryGetValue(capturedVar, out var cellLocal))

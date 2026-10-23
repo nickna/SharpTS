@@ -7,6 +7,7 @@ public partial class RuntimeEmitter
 {
     private readonly record struct SetIndexInputs(
         EmittedClassDefinitionRuntime ClassDefinitions,
+        EmittedClassPrototypeRuntime ClassPrototypes,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedBufferRuntime? Buffer,
@@ -832,30 +833,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayIndexIsPrimitiveLabel);
 
-        // Non-numeric string index → route as named-property get (ECMA-262
-        // §23.1.5). Convert.ToInt64("foo") throws FormatException — pre-fix
-        // the array would crash when verifyProperty did `arr["foo"]` on a
-        // PDS-installed named property.
-        var tsArrayStringIdxLabel = il.DefineLabel();
-        var tsArrayProceedToInt64Label = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brtrue, tsArrayStringIdxLabel);
-        il.Emit(OpCodes.Br, tsArrayProceedToInt64Label);
-        il.MarkLabel(tsArrayStringIdxLabel);
-        var tsArrayStrIdxParsed = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Ldloca, tsArrayStrIdxParsed);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
-        il.Emit(OpCodes.Brtrue, tsArrayProceedToInt64Label);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Call, objectRead.Property);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(tsArrayProceedToInt64Label);
-
         // ECMA-262 6.1.7: array indexes are uint32 < 2^32-1. Indexes ≥ 2^32-1
         // (or negative) are NOT array indexes — they're regular named
         // properties. Route those via GetProperty(arr, idx.ToString()) so
@@ -1192,6 +1169,7 @@ public partial class RuntimeEmitter
         var idxFromStringLabel = il.DefineLabel();
         var idxParseDoneLabel = il.DefineLabel();
         var strNamedPropertyLabel = il.DefineLabel();
+        var strPrototypePropertyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brtrue, idxFromDoubleLabel);
@@ -1231,22 +1209,42 @@ public partial class RuntimeEmitter
         // A non-canonical/non-integer string is a named property (for example
         // "charAt"), so let String.prototype participate in the lookup.
         il.Emit(OpCodes.Brfalse, strNamedPropertyLabel);
+        // Integer-like property names are virtual own characters only when
+        // their exact spelling is canonical. Keep "-0", "01" and "+1" as names.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Ldloca, intIdxLocal);
+        il.Emit(OpCodes.Call, _types.GetProperty(typeof(System.Globalization.CultureInfo), "InvariantCulture").GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", typeof(IFormatProvider)));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, strPrototypePropertyLabel);
 
         il.MarkLabel(idxParseDoneLabel);
-        // Bounds check: if idx < 0 || idx >= length, return undefined (JS semantics)
+        // A present virtual own character wins. An absent canonical index
+        // continues through ordinary lookup with the original primitive receiver.
         il.Emit(OpCodes.Ldloc, intIdxLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, strOobLabel);
         il.Emit(OpCodes.Ldloc, intIdxLocal);
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.String, "get_Length"));
-        il.Emit(OpCodes.Bge, strOobLabel);
+        il.Emit(OpCodes.Bge, strNamedPropertyLabel);
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldloc, intIdxLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
         il.Emit(OpCodes.Stloc, charLocal);
         il.Emit(OpCodes.Ldloca, charLocal);
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Char, "ToString"));
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(strPrototypePropertyLabel);
+        // These names cannot be virtual own characters. Do not pass them to
+        // GetProperty's character parser again; retain the key and receiver.
+        il.Emit(OpCodes.Call, inputs.Strings.PrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, inputs.Strings.PrototypeField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.ReflectGet);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(strNamedPropertyLabel);
@@ -1518,6 +1516,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, tsFunctionIdxSetLabel);
 
+        if (_features.UsesUserClasses)
+        {
+            // Registered class prototypes need ordinary inherited descriptor
+            // resolution before an indexed write creates any own storage.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.ClassPrototypes.IsPrototype);
+            il.Emit(OpCodes.Brtrue, tsObjectIdxSetLabel);
+        }
+
         // Class instance / unknown receiver fallback: route to SetFieldsProperty
         // with index coerced to string. SetFieldsProperty's own scoped PDS-store
         // fallback handles ad-hoc indexed writes on Date/RegExp/Promise; other
@@ -1649,20 +1656,11 @@ public partial class RuntimeEmitter
         //   - sparse transition past SparseThreshold
         //   - internal _isFrozen check (silently no-ops on frozen arrays;
         //     strict-mode wraps via SetIndexStrict)
-        // Legacy FrozenObjectsField check kept for pre-M2 paths that froze
-        // the $Array via the global weak table instead of arr.Freeze().
         // Per ECMA-262 6.1.7: array indexes are uint32 < 2^32-1. Indexes ≥
         // 2^32-1 are NOT array indexes — they're regular named properties.
         // Route those via SetProperty(arr, idx.ToString(), value) so the
         // $Array PDS-data-store fallback picks them up. Without this, $Array.Set
         // throws RangeError for `a[4294967295] = X`.
-        var tsArrayFrozenLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, tsArrayFrozenLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
-        il.Emit(OpCodes.Brtrue, nullLabel); // Frozen — silently return
-
         var tsArraySetKeyLocal = il.DeclareLocal(_types.String);
         var idxLong = il.DeclareLocal(_types.Int64);
         il.Emit(OpCodes.Ldarg_1);
@@ -1675,22 +1673,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.Int64, "TryParse", _types.String, _types.Int64.MakeByRefType()));
         il.Emit(OpCodes.Brfalse, routeAsNamedLabel);
-
-        // Non-extensible check: spec ECMA-262 §10.4.2 Array exotic [[Set]]
-        // delegates to OrdinarySet which rejects new-property additions on
-        // non-extensible receivers. For arrays, "new" means index >= length.
-        var tsArrayExtensibleLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsExtensible);
-        il.Emit(OpCodes.Brtrue, tsArrayExtensibleLabel);
-        // Non-extensible: silently return if idx >= length (new index).
-        il.Emit(OpCodes.Ldloc, idxLong);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Bge, nullLabel);
-        il.MarkLabel(tsArrayExtensibleLabel);
 
         // If idx < 0 OR idx >= 2^32-1, route to SetProperty (named property).
         var doArraySetLabel = il.DefineLabel();
@@ -1715,41 +1697,55 @@ public partial class RuntimeEmitter
         // Indexed descriptors participate in [[Set]] before array storage.
         var tsArraySetDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         var tsArraySetRawStorage = il.DefineLabel();
+        var tsArraySetNoOwnDescriptor = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, tsArraySetKeyLocal);
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, tsArraySetDescriptorLocal);
         il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
-        il.Emit(OpCodes.Brfalse, tsArraySetRawStorage);
-        var tsArraySetterLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, tsArraySetterLocal);
-        var tsArrayNoSetter = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, tsArraySetterLocal);
-        il.Emit(OpCodes.Brfalse, tsArrayNoSetter);
-        il.Emit(OpCodes.Ldloc, tsArraySetterLocal);
-        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
-        il.Emit(OpCodes.Brtrue, nullLabel);
+        il.Emit(OpCodes.Brfalse, tsArraySetNoOwnDescriptor);
+        EmitArrayDescriptorSetPolicy(
+            il, inputs.DescriptorStorage, inputs.UndefinedType, inputs.InvokeMethodValue,
+            tsArraySetDescriptorLocal, tsArraySetRawStorage, nullLabel);
+
+        il.MarkLabel(tsArraySetNoOwnDescriptor);
+        // A dense own element claims the key just like an own descriptor.
+        // Only a hole can dispatch through the current prototype chain.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, tsArraySetterLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(tsArrayNoSetter);
-        il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, nullLabel); // getter-only accessor
-        il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, nullLabel);
+        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Ldloc, idxLong);
+        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.HasIndex);
+        il.Emit(OpCodes.Brtrue, tsArraySetRawStorage);
+        EmitArrayIndexPrototypeSetPolicy(
+            il, new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage,
+                inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue, inputs.ObjectDescriptors,
+                inputs.ObjectPrototypes, inputs.ObjectRead, inputs.ProxySelected,
+                inputs.ReflectAssignment, inputs.UndefinedType),
+            () => il.Emit(OpCodes.Ldloc, tsArraySetKeyLocal),
+            tsArraySetRawStorage, nullLabel);
+
         il.MarkLabel(tsArraySetRawStorage);
+        // Receiver integrity applies to data storage, after inherited setters
+        // have had the opportunity to handle the write without adding a slot.
+        var tsArrayFrozenLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, tsArrayFrozenLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brtrue, nullLabel);
+
+        var tsArrayExtensibleLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsExtensible);
+        il.Emit(OpCodes.Brtrue, tsArrayExtensibleLabel);
+        il.Emit(OpCodes.Ldloc, idxLong);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Bge, nullLabel);
+        il.MarkLabel(tsArrayExtensibleLabel);
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Ldloc, idxLong);
@@ -1992,20 +1988,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
         il.Emit(OpCodes.Stloc, symDictLocal);
 
-        // Frozen objects reject writes to existing symbol properties too.
-        // (Sealed/non-extensible objects may still update an existing
-        // writable property, so only the frozen table is checked here.)
+        // Frozen state restricts data stores, not calling an existing accessor setter.
+        // Keep the guard on both descriptor-value and raw side-table mutations.
         var symFrozenStateLocal = il.DeclareLocal(_types.Object);
-        var symReceiverNotFrozenLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, symFrozenStateLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(
-            _types.ConditionalWeakTable, "TryGetValue",
-            _types.Object, _types.Object.MakeByRefType()));
-        il.Emit(OpCodes.Brfalse, symReceiverNotFrozenLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(symReceiverNotFrozenLabel);
+        void EmitFrozenSymbolDataWriteGuard()
+        {
+            var notFrozen = il.DefineLabel();
+            il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloca, symFrozenStateLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.ConditionalWeakTable, "TryGetValue",
+                _types.Object, _types.Object.MakeByRefType()));
+            il.Emit(OpCodes.Brfalse, notFrozen);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notFrozen);
+        }
 
         // Existing descriptor entries apply ordinary setter/writable
         // semantics while preserving their attributes.
@@ -2061,6 +2059,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, symReturnWithoutSetLabel);
+        EmitFrozenSymbolDataWriteGuard();
         il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
@@ -2103,6 +2102,7 @@ public partial class RuntimeEmitter
         // supplies writable/enumerable/configurable = true.
         il.Emit(OpCodes.Br, symCreateLabel);
         il.MarkLabel(symRawSetLabel);
+        EmitFrozenSymbolDataWriteGuard();
         il.Emit(OpCodes.Ldloc, symDictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
@@ -2303,8 +2303,9 @@ public partial class RuntimeEmitter
     /// DeleteIndexStrict(object obj, object key, bool strictMode) -> bool.
     /// Handles both symbol keys and string keys. On a frozen/sealed dictionary
     /// receiver the non-strict variant returns false; the strict variant throws
-    /// a TypeError when strictMode is set, else returns false. All other
-    /// branches ($TSFunction, $Array, symbol keys, System.Type, PDS
+    /// a TypeError when strictMode is set, else returns false. Callable
+    /// deletion likewise applies strictness to the ordinary deletion result.
+    /// Other branches ($Array, symbol keys, System.Type, PDS
     /// configurability, Math/JSON singletons) are identical in both variants.
     /// </summary>
     private void EmitDeleteIndexCore(
@@ -2327,7 +2328,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Emits the failed-delete path for the dict receiver: strict mode
+        // Emits the failed-delete path: strict mode
         // (arg 2 set) throws TypeError, otherwise returns false.
         void EmitDeleteIndexFail(string message)
         {
@@ -2357,17 +2358,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
-        // Function-like runtime wrappers — `delete fn.name` / `delete
-        // fn.length` records the
-        // deletion in the per-instance set so HasOwnPropertyHelper /
-        // GetFunctionMethod / ObjectGetOwnPropertyDescriptor stop reporting
-        // the synthetic value. ECMA-262 §17 declares these as configurable;
-        // pre-fix this fell through to trueLabel without recording, so
-        // verifyProperty's isConfigurable (delete + re-check hasOwn) failed.
+        // User function wrappers share the complete named-property deletion
+        // checks, including absent keys and synthesized own metadata.
+        var tsFunctionNamedDeleteIdxLabel = il.DefineLabel();
         var tsFunctionDeleteIdxLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
-        il.Emit(OpCodes.Brtrue, tsFunctionDeleteIdxLabel);
+        il.Emit(OpCodes.Brtrue, tsFunctionNamedDeleteIdxLabel);
         if (inputs.Promise is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
@@ -2435,10 +2432,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, objectDeletion.Property);
         il.Emit(OpCodes.Ret);
 
-        // $TSFunction handler: honor frozen/sealed + PDS configurability before
-        // recording the deletion. Mirrors DeleteProperty's $TSFunction path so
-        // bracket-form delete on a sealed function (verifyProperty's
-        // isConfigurable check) returns false instead of silently removing.
+        // Property owns complete own-descriptor checks and actual PDS removal.
+        // Apply strictness to its boolean result without bypassing that cleanup.
+        il.MarkLabel(tsFunctionNamedDeleteIdxLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Call, objectDeletion.Property);
+        if (strict)
+        {
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            EmitDeleteIndexFail("Cannot delete property of function");
+        }
+        else
+        {
+            il.Emit(OpCodes.Ret);
+        }
+
+        // Promise callback wrappers retain their existing PDS/metadata path.
         il.MarkLabel(tsFunctionDeleteIdxLabel);
         {
             var tsFnIdxKeyStr = il.DeclareLocal(_types.String);

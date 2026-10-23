@@ -601,8 +601,7 @@ public static partial class ProcessBuiltIns
     /// process.nextTick(callback, ...args) - schedules callback to run after the current operation.
     /// </summary>
     /// <remarks>
-    /// In Node.js, nextTick callbacks run before any I/O events. Since SharpTS uses a simplified
-    /// event loop, we implement this as a timer with 0 delay (similar to setImmediate).
+    /// The shared job checkpoint drains these callbacks before due timers.
     /// </remarks>
     private static object? NextTick(Interpreter interpreter, object? receiver, List<object?> args)
     {
@@ -616,8 +615,7 @@ public static partial class ProcessBuiltIns
             ? args.Skip(1).ToList()
             : new List<object?>();
 
-        // Schedule as a timer with 0 delay (runs as soon as possible)
-        TimerBuiltIns.SetTimeout(interpreter, callback, 0, callbackArgs);
+        interpreter.EnqueuePromiseJob(() => interpreter.InvokeGuestCallback(callback, callbackArgs));
 
         // nextTick returns undefined (void)
         return null;

@@ -143,10 +143,11 @@ public class EmittedProcessRuntimeTests
         Assert.Equal(streams, process.Streams is not null);
         Assert.Equal(hosted, process.Hosted is not null);
         AssertAllFrozen(process);
-        Assert.Equal(70, Handles(typeof(EmittedProcessRuntime)).Count());
+        Assert.Equal(71, Handles(typeof(EmittedProcessRuntime)).Count());
         Assert.Equal(6, Handles(typeof(EmittedProcessStreamRuntime)).Count());
         Assert.Equal(2, Handles(typeof(EmittedHostedProcessRuntime)).Count());
         Assert.Same(runtime.RuntimeClass.Type, process.GetObject.DeclaringType);
+        Assert.Same(runtime.RuntimeClass.Type, process.QueueNextTick.DeclaringType);
         Assert.Same(runtime.RuntimeClass.Type, process.UptimeBaselineField.DeclaringType);
         Assert.Equal("$Process", process.GetInstance.DeclaringType!.Name);
         Assert.Same(process.GetInstance.DeclaringType, process.FieldsField.DeclaringType);
@@ -164,7 +165,9 @@ public class EmittedProcessRuntimeTests
         var types = reader.TypeDefinitions.Select(handle => reader.GetString(reader.GetTypeDefinition(handle).Name)).ToArray();
         Assert.Contains("$Process", types);
         Assert.Contains("$ProcessEmitClosure", types);
+        Assert.Contains("$NextTickCallback", types);
         var methods = reader.MethodDefinitions.Select(handle => reader.GetString(reader.GetMethodDefinition(handle).Name)).ToArray();
+        Assert.Contains("QueueNextTick", methods);
         foreach (var name in new[] { "GetStdout", "GetStderr", "GetStdin" }) Assert.Equal(streams, methods.Contains(name));
         foreach (var name in new[] { "ProcessEmitHostedBeforeExit", "ProcessEmitHostedExit" }) Assert.Equal(hosted, methods.Contains(name));
         var fields = reader.FieldDefinitions.Select(handle => reader.GetString(reader.GetFieldDefinition(handle).Name)).ToArray();

@@ -1417,7 +1417,7 @@ public static class PromiseBuiltIns
 
         // PromiseResolveThenableJob is a job, so the thenable's `then` runs
         // after the current executor/call has returned.
-        interpreter.EnqueueCallback(() =>
+        interpreter.EnqueuePromiseJob(() =>
         {
             bool alreadyResolved = false;
             var resolve = new PromiseResolveCallback(value =>

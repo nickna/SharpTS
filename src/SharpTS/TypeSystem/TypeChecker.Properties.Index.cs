@@ -32,6 +32,19 @@ public partial class TypeChecker
 
     private TypeInfo CheckGetIndex(Expr.GetIndex getIndex)
     {
+        // Validate the ordinary indexed read before applying a stable path refinement.
+        TypeInfo result = CheckGetIndexCore(getIndex);
+        var path = Narrowing.NarrowingPathExtractor.TryExtract(getIndex);
+        return path is not null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path)
+            ? GetNarrowing(path) ?? result
+            : result;
+    }
+
+    private TypeInfo CheckGetIndexCore(Expr.GetIndex getIndex)
+    {
+        if (getIndex.Object is Expr.Super { Method: null } super)
+            return CheckComputedSuperIndex(super, getIndex.Index);
+
         TypeInfo objType = CheckExpr(getIndex.Object);
         TypeInfo indexType = CheckExpr(getIndex.Index);
         if (_fieldGetterScope is not null)
@@ -384,6 +397,21 @@ public partial class TypeChecker
             return WithUncheckedUndefined(domainIndex);
         }
 
+        // Numeric string literal keys use String's number index signature.
+        if ((objType is TypeInfo.String or TypeInfo.StringLiteral) &&
+            (indexType is TypeInfo.StringLiteral && IsNumericConstructorIndex(indexType) ||
+             indexType is TypeInfo.Union numericStringKeyUnion &&
+                numericStringKeyUnion.FlattenedTypes.Count > 0 &&
+                numericStringKeyUnion.FlattenedTypes.All(key =>
+                    key is TypeInfo.StringLiteral && IsNumericConstructorIndex(key))))
+            return WithUncheckedUndefined(TypeInfo.String.Shared);
+
+        // Canonical numeric string literals address Array elements with the same read type.
+        if (objType is TypeInfo.Array stringIndexedArray &&
+            TryGetStringLiteralKeys(indexType, out var arrayStringKeys) &&
+            arrayStringKeys.All(key => Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _)))
+            return WithUncheckedUndefined(stringIndexedArray.ElementType);
+
         // Handle string index on objects/interfaces
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
         {
@@ -542,6 +570,13 @@ public partial class TypeChecker
             if (IsSymbolIndexableObject(objType))
                 return TypeInfo.Any.Shared;
         }
+
+        // Valid canonical string keys have already retained the array element
+        // type above. Other string keys remain rejected with the array diagnostic.
+        if (objType is TypeInfo.Array && IsString(indexType))
+            throw new TypeCheckException(
+                "Element implicitly has an 'any' type because index expression is not of type 'number'.",
+                TryGetExprLine(getIndex.Index) ?? TryGetExprLine(getIndex.Object), tsCode: "TS7015");
 
         throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing '{objType}'.", tsCode: "TS7053");
     }
@@ -1114,6 +1149,36 @@ public partial class TypeChecker
             TryGetStructuralIterableElement(result, out _)
     };
 
+    private TypeInfo CheckComputedSuperIndex(Expr.Super super, Expr index)
+    {
+        CaptureEditorSuperReceiver(super);
+        if (_currentClass == null)
+            throw new TypeCheckException("Cannot use 'super' outside of a class.", tsCode: "TS2335");
+        if (_currentClass.Superclass == null)
+            throw new TypeCheckException($" Class '{_currentClass.Name}' does not have a superclass.", tsCode: "TS2335");
+
+        // Check the key once, without checking the marker as a super() call.
+        TypeInfo indexType = CheckExpr(index);
+        List<string> keys;
+        if (index is Expr.Literal { Value: string name })
+            keys = [name];
+        else if (!TryGetStringLiteralKeys(indexType, out keys))
+        {
+            if (indexType is TypeInfo.Function or TypeInfo.OverloadedFunction)
+                throw new TypeCheckException($" Type '{indexType}' cannot be used as an index type.",
+                    line: TryGetExprLine(index), tsCode: "TS2538");
+            // Retain the existing permissive recovery for an unknown key domain.
+            return TypeInfo.Any.Shared;
+        }
+
+        // Reuse named-super selection for every known key, including generic
+        // substitution and access checks, instead of losing its type to Any.
+        int line = TryGetExprLine(index) ?? super.Keyword.Line;
+        return keys.Select(key => CheckSuperCore(new Expr.Super(super.Keyword,
+                new Token(TokenType.IDENTIFIER, key, null, line))))
+            .Aggregate(CreateUnion);
+    }
+
     private static bool TryGetStringLiteralKeys(TypeInfo indexType, out List<string> keys)
     {
         keys = [];
@@ -1338,6 +1403,21 @@ public partial class TypeChecker
                     TryGetExprLine(getIndex.Object) ?? _currentStatementLine ?? 0));
             return WithUncheckedUndefined(domainIndex);
         }
+
+        // Numeric string literal keys use String's number index signature.
+        if ((objType is TypeInfo.String or TypeInfo.StringLiteral) &&
+            (indexType is TypeInfo.StringLiteral && IsNumericConstructorIndex(indexType) ||
+             indexType is TypeInfo.Union numericStringKeyUnion &&
+                numericStringKeyUnion.FlattenedTypes.Count > 0 &&
+                numericStringKeyUnion.FlattenedTypes.All(key =>
+                    key is TypeInfo.StringLiteral && IsNumericConstructorIndex(key))))
+            return WithUncheckedUndefined(TypeInfo.String.Shared);
+
+        // Canonical numeric string literals address Array elements with the same read type.
+        if (objType is TypeInfo.Array stringIndexedArray &&
+            TryGetStringLiteralKeys(indexType, out var arrayStringKeys) &&
+            arrayStringKeys.All(key => Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _)))
+            return WithUncheckedUndefined(stringIndexedArray.ElementType);
 
         // Handle string index
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)

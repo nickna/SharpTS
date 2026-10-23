@@ -292,7 +292,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     }
 
     /// <summary>
-    /// Writes the common ordinary dense-array case without property-key
+    /// Writes a present ordinary dense-array index without property-key
     /// conversion or descriptor lookup. Returns false when any observable array
     /// exotic behavior requires the full interpreter property path.
     /// </summary>
@@ -305,7 +305,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             || _descriptors is not null
             || _indexAccessors is not null
             || index < 0
-            || index > MaxWriteIndex)
+            || index >= _length)
         {
             return false;
         }
@@ -323,51 +323,14 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                 _numericStore[(int)index] = value.AsNumberUnsafe();
                 return true;
             }
-            if (index != _numericCount
-                || !_lengthWritable
-                || !IsExtensible
-                || HasExplicitPrototype)
-            {
-                return false;
-            }
-
-            EnsureNumericCapacity(_numericCount + 1);
-            _numericStore[_numericCount++] = value.AsNumberUnsafe();
-            _length = _numericCount;
-            return true;
-        }
-
-        // An existing ordinary data property always shadows the prototype.
-        if (index < _length)
-        {
-            if (index >= _dense.Count || _dense[(int)index] is ArrayHole)
-                return false;
-            _dense[(int)index] = value.ToObject();
-            return true;
-        }
-
-        // Sequential growth is the Num Write hot path. Decline gaps and custom
-        // prototypes so inherited indexed behavior stays on the generic path.
-        if (index != _length
-            || index >= int.MaxValue
-            || !_lengthWritable
-            || !IsExtensible
-            || HasExplicitPrototype)
-        {
             return false;
         }
 
-        if (_length == 0 && _ownsDenseStorage && value.Kind == ValueKind.Number)
-        {
-            EnsureNumericCapacity(1);
-            _numericStore![_numericCount++] = value.AsNumberUnsafe();
-            _length = _numericCount;
-        }
-        else
-        {
-            _dense.Add(value.ToObject());
-            _length = _dense.Count;
-        }
+        // An existing ordinary data property always shadows the prototype.
+        // Holes and new indices must consult the actual prototype chain.
+        if (index >= _dense.Count || _dense[(int)index] is ArrayHole)
+            return false;
+        _dense[(int)index] = value.ToObject();
         return true;
     }
 
@@ -1222,6 +1185,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
 
     private Dictionary<string, object?>? _namedProperties;
     private Dictionary<string, (ISharpTSCallable? Get, ISharpTSCallable? Set)>? _namedAccessors;
+    // Data and accessor storage share one creation order for named own keys.
+    private List<string>? _namedPropertyOrder;
     private Dictionary<string, PropertyDescriptorFlags>? _descriptors;
     private Dictionary<uint, (ISharpTSCallable? Get, ISharpTSCallable? Set)>? _indexAccessors;
     private SharpTSObject? _symbolProperties;
@@ -1331,12 +1296,14 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         get
         {
-            if (_namedProperties is not null)
-                foreach (string key in _namedProperties.Keys)
-                    yield return key;
-            if (_namedAccessors is not null)
-                foreach (string key in _namedAccessors.Keys)
-                    yield return key;
+            if (_namedPropertyOrder is not null)
+            {
+                // A for-in body may delete or recreate names while this iterator
+                // is suspended. Snapshot candidates, then check current presence.
+                foreach (string key in _namedPropertyOrder.ToArray())
+                    if (HasNamedProperty(key))
+                        yield return key;
+            }
         }
     }
 
@@ -1346,7 +1313,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     internal bool HasOwnProperty(string name)
     {
-        if (name == "length") return true;
+        if (name == "length" && this is not SharpTSArguments) return true;
         if (PropertySemantics.TryGetArrayIndex(name, out uint index))
             return HasIndex(index)
                 || (_indexAccessors?.ContainsKey(index) ?? false)
@@ -1362,7 +1329,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         foreach (string key in OwnStringKeys())
         {
-            if (key == "length") continue;
+            if (key == "length" && this is not SharpTSArguments) continue;
             if (_descriptors?.TryGetValue(key, out var flags) != true || flags.Enumerable)
                 yield return key;
         }
@@ -1404,13 +1371,14 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                     System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        yield return "length";
+        if (this is not SharpTSArguments)
+            yield return "length";
         foreach (string key in NamedPropertyNames)
             yield return key;
     }
 
     internal bool IsPropertyEnumerable(string name)
-        => name != "length" && HasOwnProperty(name)
+        => (name != "length" || this is SharpTSArguments) && HasOwnProperty(name)
             && (_descriptors?.TryGetValue(name, out var flags) != true || flags.Enumerable);
 
     /// <summary>
@@ -1419,8 +1387,11 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     public void SetNamedProperty(string name, object? value)
     {
         if (IsFrozen) return;
-        if (!IsExtensible && !HasNamedProperty(name)) return;
+        bool hasNamedProperty = HasNamedProperty(name);
+        if (!IsExtensible && !hasNamedProperty) return;
 
+        if (!hasNamedProperty)
+            (_namedPropertyOrder ??= []).Add(name);
         _namedProperties ??= new Dictionary<string, object?>();
         _namedProperties[name] = value;
     }
@@ -1451,6 +1422,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         {
             _namedProperties?.Remove(name);
             _namedAccessors?.Remove(name);
+            _namedPropertyOrder?.Remove(name);
         }
         _descriptors?.Remove(name);
         return true;
@@ -1488,7 +1460,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         // ArraySetLength (ECMA-262 §10.4.2.4). The length property is a
         // non-enumerable, non-configurable data property whose value controls
         // the array's indexed storage rather than an ordinary named expando.
-        if (name == "length")
+        if (name == "length" && this is not SharpTSArguments)
         {
             if (descriptor.HasGet || descriptor.HasSet
                 || (descriptor.HasEnumerable && descriptor.Enumerable)
@@ -1524,6 +1496,10 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         if (PropertySemantics.TryGetArrayIndex(name, out uint uindex))
         {
             long index = uindex;
+            // Array [[DefineOwnProperty]] cannot create an index that would
+            // grow a non-writable length, including an accessor-only index.
+            if (this is not SharpTSArguments && index >= _length && !_lengthWritable)
+                return false;
             bool hasExisting = HasIndex(index);
             bool existingIsAccessor = TryGetIndexAccessor(index, out var existingGetter, out var existingSetter);
             bool descriptorIsAccessor = descriptor.HasGet || descriptor.HasSet;
@@ -1680,6 +1656,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         if (!IsExtensible && !hasNamedProperty)
             return false;
 
+        if (!hasNamedProperty)
+            (_namedPropertyOrder ??= []).Add(name);
+
         bool preservesNamedKind = hasNamedProperty
             && (!namedDescriptorIsAccessor && !namedDescriptorIsData
                 || namedDescriptorIsAccessor == hasNamedAccessor);
@@ -1720,7 +1699,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
     {
-        if (name == "length")
+        if (name == "length" && this is not SharpTSArguments)
         {
             return new SharpTSPropertyDescriptor
             {

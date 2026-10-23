@@ -150,12 +150,8 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    var left = SpillBoxed(b.Left);
-                    var right = SpillBoxed(b.Right);
-                    IL.Emit(OpCodes.Ldloc, left);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ToNumber);
-                    IL.Emit(OpCodes.Ldloc, right);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ToNumber);
+                    EmitDynamicNumericBinary(b);
+                    return;
                 }
                 IL.Emit(arith.Opcode);
                 SetStackType(StackType.Double);
@@ -346,12 +342,8 @@ public partial class ILEmitter
         }
         else
         {
-            var left = SpillBoxed(b.Left);
-            var right = SpillBoxed(b.Right);
-            IL.Emit(OpCodes.Ldloc, left);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ToNumber);
-            IL.Emit(OpCodes.Ldloc, right);
-            IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ToNumber);
+            EmitDynamicNumericBinary(b);
+            return;
         }
         IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Math, "Pow", _ctx.Types.Double, _ctx.Types.Double));
         SetStackType(StackType.Double);
@@ -449,51 +441,7 @@ public partial class ILEmitter
             return;
         }
 
-        // GetValue both operands before ToNumeric either operand.  Besides
-        // preserving observable coercion order, this prevents a throwing RHS
-        // from being masked by an eager LHS valueOf call.
-        var left = SpillBoxed(b.Left);
-        var right = SpillBoxed(b.Right);
-        IL.Emit(OpCodes.Ldloc, left);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.JsToInt32);
-        IL.Emit(OpCodes.Ldloc, right);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.JsToInt32);
-
-        switch (b.Operator.Type)
-        {
-            case TokenType.AMPERSAND:
-                IL.Emit(OpCodes.And);
-                break;
-            case TokenType.PIPE:
-                IL.Emit(OpCodes.Or);
-                break;
-            case TokenType.CARET:
-                IL.Emit(OpCodes.Xor);
-                break;
-            case TokenType.LESS_LESS:
-                IL.Emit(OpCodes.Ldc_I4, 0x1F);
-                IL.Emit(OpCodes.And);  // Mask shift amount to 5 bits
-                IL.Emit(OpCodes.Shl);
-                break;
-            case TokenType.GREATER_GREATER:
-                IL.Emit(OpCodes.Ldc_I4, 0x1F);
-                IL.Emit(OpCodes.And);
-                IL.Emit(OpCodes.Shr);
-                break;
-            case TokenType.GREATER_GREATER_GREATER:
-                // Unsigned right shift - requires special handling for signed-to-unsigned conversion
-                IL.Emit(OpCodes.Ldc_I4, 0x1F);
-                IL.Emit(OpCodes.And);
-                IL.Emit(OpCodes.Shr_Un);
-                // Convert result as unsigned to double:
-                // Extend to unsigned int64 (zero-extend), then convert to double
-                IL.Emit(OpCodes.Conv_U8);
-                EmitConvR8AndBox();
-                return;
-        }
-
-        // Convert back to double (for signed operations)
-        EmitConvR8AndBox();
+        EmitDynamicNumericBinary(b);
     }
 
     /// <summary>
@@ -613,6 +561,12 @@ public partial class ILEmitter
 
     protected override void EmitUnary(Expr.Unary u)
     {
+        if (u.Operator.Type == TokenType.INTERNAL_TO_PROPERTY_KEY)
+        {
+            base.EmitUnary(u);
+            return;
+        }
+
         // Try constant folding first
         if (ConstantFolder.TryFoldUnary(u, out var result))
         {
@@ -684,7 +638,11 @@ public partial class ILEmitter
 
             case TokenType.TYPEOF:
                 // typeof never throws on undeclared variables - returns "undefined"
-                if (u.Right is Expr.Variable { Name.Lexeme: "Proxy" })
+                if (TryEmitGlobalParseIntTypeOf(u.Right))
+                {
+                    break;
+                }
+                else if (u.Right is Expr.Variable { Name.Lexeme: "Proxy" })
                 {
                     IL.Emit(OpCodes.Ldstr, "function");
                 }
@@ -3826,14 +3784,6 @@ public partial class ILEmitter
         if (varName == "globalThis")
             return false;
 
-        // If the type checker resolved this expression as a function type, it's a method
-        if (_ctx.TypeMap != null)
-        {
-            var memberType = _ctx.TypeMap.Get(expr);
-            if (memberType is TypeSystem.TypeInfo.Function)
-                return true;
-        }
-
         var memberName = g.Name.Lexeme;
 
         // Check module namespace methods (util.format, readline.questionSync, etc.)
@@ -3850,7 +3800,10 @@ public partial class ILEmitter
         // Check static type methods (Math.floor, JSON.parse, etc.)
         // Exclude known static properties (Math.PI, Symbol.iterator, Number.MAX_VALUE, etc.)
         // which are not functions.
-        if (_ctx.TypeEmitterRegistry != null)
+        // A local/captured value with a native type's spelling is still an ordinary receiver.
+        // Keep the same strategy policy as property emission, after excluding real value bindings.
+        if (_ctx.TypeEmitterRegistry != null && CanUseStaticTypeStrategy(varName) &&
+            !Resolver.HasVariable(varName) && !_ctx.HasVisibleValueBinding(varName))
         {
             var staticStrategy = _ctx.TypeEmitterRegistry.GetStaticStrategy(varName);
             if (staticStrategy != null && !staticStrategy.HasStaticProperty(memberName))

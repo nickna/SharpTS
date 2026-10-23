@@ -10,9 +10,15 @@ namespace SharpTS.Runtime.Types;
 /// retaining the distinct ECMAScript identity needed by Object.prototype.toString,
 /// Array.isArray, and instanceof Array.
 /// </remarks>
-public sealed class SharpTSArguments(IEnumerable<object?> arguments)
-    : SharpTSArray(arguments)
+public sealed class SharpTSArguments : SharpTSArray
 {
+    public SharpTSArguments(IEnumerable<object?> arguments) : base(arguments)
+    {
+        // Arguments length is an ordinary own property, independent of indexed storage.
+        DefineProperty("length", new SharpTSPropertyDescriptor(
+            (double)LongLength, writable: true, enumerable: false, configurable: true));
+    }
+
     internal static SharpTSArguments Create(IEnumerable<object?> arguments, Interpreter interpreter)
     {
         var result = new SharpTSArguments(arguments);

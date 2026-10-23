@@ -58,18 +58,28 @@ public partial class ILEmitter
     /// environment prologue. Unlike the compatibility overload, this directly
     /// describes the emitted signature and therefore also covers display-class
     /// and explicit-<c>this</c> prefixes without reconstructing their shape.
+    /// The synchronous environment prologue opts into incremental capture
+    /// publication; direct iterator callers retain their own transfer policy.
     /// </summary>
     internal void EmitDefaultParameters(
         List<Stmt.Parameter> parameters,
         int argumentOffset,
-        Type[]? paramTypes = null)
+        Type[]? paramTypes = null,
+        List<Stmt>? body = null,
+        bool publishCapturedParameters = false)
     {
         var builder = _ctx.ILBuilder;
+        var initializers = PrepareParameterBindingInitializers(body);
 
         for (int i = 0; i < parameters.Count; i++)
         {
             var param = parameters[i];
-            if (param.DefaultValue == null) continue;
+            if (param.DefaultValue == null || paramTypes != null && paramTypes[i].IsValueType)
+            {
+                EmitParameterBindingInitializer(param, initializers, ParameterTdzNames(parameters.Skip(i + 1), initializers));
+                if (publishCapturedParameters) PublishCapturedParameter(param);
+                continue;
+            }
 
             // Skip value-type parameters when we know the resolved types: `ldarg; brtrue`
             // is meaningless on a double/bool, which can't hold the `$Undefined` sentinel.
@@ -77,8 +87,6 @@ public partial class ILEmitter
             // WidenDefaultedParamsToObject / WidenValueTypeDefaultedMethodParams), so it does NOT
             // hit this guard — its default fires for direct AND $TSFunction.Invoke callers (#925).
             // This only defends a genuinely value-typed slot that reached here without that widening.
-            if (paramTypes != null && paramTypes[i].IsValueType) continue;
-
             int argIndex = i + argumentOffset;
 
             // JS spec: defaults fire only when the argument is `undefined` — missing
@@ -97,16 +105,255 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Br, skipDefault);
 
             builder.MarkLabel(fireDefault);
-            _ctx.DefaultParameterTdzNames = parameters
-                .Skip(i)
-                .Select(p => p.Name.Lexeme)
-                .ToHashSet(StringComparer.Ordinal);
-            EmitExpression(param.DefaultValue);
-            _ctx.DefaultParameterTdzNames = null;
+            EmitDefaultParameterExpression(param.DefaultValue, ParameterTdzNames(parameters.Skip(i), initializers));
             EmitBoxIfNeeded(param.DefaultValue);
             IL.Emit(OpCodes.Starg, argIndex);
 
             builder.MarkLabel(skipDefault);
+            EmitParameterBindingInitializer(param, initializers, ParameterTdzNames(parameters.Skip(i + 1), initializers));
+            if (publishCapturedParameters) PublishCapturedParameter(param);
+        }
+    }
+
+    private void PublishCapturedParameter(Stmt.Parameter parameter)
+    {
+        string name = parameter.Name.Lexeme;
+        LocalBuilder? displayClass = null;
+        FieldBuilder? field = null;
+        if (_ctx.FunctionDisplayClassLocal is { } functionDisplayClass
+            && _ctx.CapturedFunctionLocals?.Contains(name) == true
+            && _ctx.FunctionDisplayClassFields?.TryGetValue(name, out var functionField) == true)
+        {
+            displayClass = functionDisplayClass;
+            field = functionField;
+        }
+        else if (_ctx.ArrowScopeDisplayClassLocal is { } scopeDisplayClass
+            && _ctx.CapturedArrowLocals?.Contains(name) == true
+            && _ctx.ArrowScopeDisplayClassFields?.TryGetValue(name, out var scopeField) == true)
+        {
+            displayClass = scopeDisplayClass;
+            field = scopeField;
+        }
+        if (displayClass is null || field is null || !_ctx.TryGetParameter(name, out int argument)) return;
+
+        // A later default can invoke or mutate this binding through a closure.
+        // Publish once at initialization, rather than reseeding from a stale arg
+        // after all defaults have finished.
+        Type parameterType = _ctx.TryGetParameterType(name, out var type) ? type ?? _ctx.Types.Object : _ctx.Types.Object;
+        IL.Emit(OpCodes.Ldloc, displayClass);
+        IL.Emit(OpCodes.Ldarg, argument);
+        if (field.FieldType == _ctx.Types.Double && parameterType != _ctx.Types.Double)
+        {
+            if (parameterType.IsValueType) IL.Emit(OpCodes.Box, parameterType);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ConvertToNumber);
+        }
+        else if (field.FieldType == _ctx.Types.Object && parameterType.IsValueType)
+            IL.Emit(OpCodes.Box, parameterType);
+        IL.Emit(OpCodes.Stfld, field);
+        (_ctx.PublishedCapturedParameterNames ??= new(StringComparer.Ordinal)).Add(name);
+        _ctx.UseOwnedCapturedParameterStorage = true;
+    }
+
+    internal void EmitDefaultParameterExpression(Expr expression, IEnumerable<string> tdzNames)
+        => EmitInParameterEnvironment(tdzNames, () => EmitExpression(expression));
+
+    internal Dictionary<Token, Stmt.Sequence>? PrepareParameterBindingInitializers(List<Stmt>? body)
+    {
+        if (body is null) return null;
+        Dictionary<Token, Stmt.Sequence>? initializers = null;
+        foreach (var statement in body)
+        {
+            if (statement is not Stmt.Sequence { ParameterName: { } parameter } initializer) continue;
+            (initializers ??= new(ReferenceEqualityComparer.Instance)).Add(parameter, initializer);
+            // Captured parameter bindings own their cells before any default can create a closure.
+            EnterLoopBodyCellScope(initializer.Statements, []);
+        }
+        return initializers;
+    }
+
+    internal static IEnumerable<string> ParameterTdzNames(IEnumerable<Stmt.Parameter> parameters,
+        IReadOnlyDictionary<Token, Stmt.Sequence>? initializers)
+    {
+        foreach (var parameter in parameters)
+        {
+            yield return parameter.Name.Lexeme;
+            if (initializers?.TryGetValue(parameter.Name, out var initializer) == true)
+                foreach (var name in LexicalDeclarationBindings.Collect(initializer.Statements))
+                    yield return name.Lexeme;
+        }
+    }
+
+    internal void EmitParameterBindingInitializer(Stmt.Parameter parameter,
+        IReadOnlyDictionary<Token, Stmt.Sequence>? initializers, IEnumerable<string> laterTdzNames)
+    {
+        if (initializers is null || !initializers.TryGetValue(parameter.Name, out var initializer)) return;
+        var tdzNames = laterTdzNames.Concat(LexicalDeclarationBindings.Collect(initializer.Statements)
+            .Select(name => name.Lexeme)).ToHashSet(StringComparer.Ordinal);
+        var capturedFunctionLocals = _ctx.CapturedFunctionLocals;
+        var capturedArrowLocals = _ctx.CapturedArrowLocals;
+        EmitInParameterEnvironment(tdzNames, () => EmitBindingStatements(initializer.Statements));
+        (_ctx.InitializedParameterInitializers ??= new(ReferenceEqualityComparer.Instance)).Add(initializer);
+
+        void EmitBindingStatements(IEnumerable<Stmt> statements)
+        {
+            foreach (var statement in statements)
+            {
+                if (statement is Stmt.Sequence sequence) EmitBindingStatements(sequence.Statements);
+                else
+                {
+                    string? name = statement switch
+                    {
+                        Stmt.Var variable => variable.Name.Lexeme,
+                        Stmt.Const constant => constant.Name.Lexeme,
+                        _ => null,
+                    };
+                    if (name is not null)
+                    {
+                        (_ctx.InitializedParameterBindingNames ??= new(StringComparer.Ordinal)).Add(name);
+                        if (capturedFunctionLocals?.Contains(name) == true) _ctx.CapturedFunctionLocals?.Add(name);
+                        if (capturedArrowLocals?.Contains(name) == true) _ctx.CapturedArrowLocals?.Add(name);
+                    }
+                    EmitStatement(statement);
+                    if (name is not null) tdzNames.Remove(name);
+                }
+            }
+        }
+    }
+
+    private void EmitInParameterEnvironment(IEnumerable<string> tdzNames, Action emit)
+    {
+        var capturedFunctionLocals = _ctx.CapturedFunctionLocals;
+        var capturedArrowLocals = _ctx.CapturedArrowLocals;
+        var parameterTdzNames = _ctx.DefaultParameterTdzNames;
+        _ctx.DefaultParameterTdzNames = tdzNames as IReadOnlySet<string>
+            ?? tdzNames.ToHashSet(StringComparer.Ordinal);
+        try
+        {
+            // Defaults run outside this callable's body environment. Its
+            // capture storage is allocated already so closures can retain
+            // the shared instance, but body bindings must not hide outer
+            // bindings while evaluating a default. Keep inherited capture
+            // paths and the incoming parameter slots available.
+            if (_ctx.FunctionDisplayClassLocal != null)
+                _ctx.CapturedFunctionLocals = capturedFunctionLocals is null ? null
+                    : capturedFunctionLocals.Where(name => _ctx.InitializedParameterBindingNames?.Contains(name) == true
+                        || _ctx.PublishedCapturedParameterNames?.Contains(name) == true)
+                        .ToHashSet(StringComparer.Ordinal);
+            if (_ctx.ArrowScopeDisplayClassLocal != null)
+                _ctx.CapturedArrowLocals = capturedArrowLocals is null ? null
+                    : capturedArrowLocals.Where(name => _ctx.InitializedParameterBindingNames?.Contains(name) == true
+                        || _ctx.PublishedCapturedParameterNames?.Contains(name) == true)
+                        .ToHashSet(StringComparer.Ordinal);
+            emit();
+        }
+        finally
+        {
+            _ctx.CapturedFunctionLocals = capturedFunctionLocals;
+            _ctx.CapturedArrowLocals = capturedArrowLocals;
+            _ctx.DefaultParameterTdzNames = parameterTdzNames;
+        }
+    }
+
+    /// <summary>
+    /// Instantiates selected function-body var bindings before body evaluation.
+    /// Parameter copies retain their final value; forward vars begin undefined.
+    /// Default-created closures retain the parameter environment's existing slots.
+    /// </summary>
+    internal void InitializeFunctionBodyVarBindings(List<Stmt>? body)
+    {
+        if (body is null) return;
+        var analyzer = _ctx.ClosureAnalyzer;
+        foreach (var (declaration, parameter) in analyzer?.GetParameterBodyCopies(body) ?? [])
+        {
+            CreateCell(declaration, () =>
+            {
+                var parameterType = _resolver.TryLoadVariable(parameter.Lexeme)
+                    ?? throw new InvalidOperationException($"Parameter binding '{parameter.Lexeme}' is unavailable.");
+                SetStackType(parameterType);
+                EnsureBoxed();
+            });
+        }
+        foreach (var declaration in analyzer?.GetUndefinedBodyVars(body) ?? [])
+            CreateCell(declaration, () => IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance));
+        InitializeVarLoopHeadBindings(body);
+
+        void CreateCell(Token declaration, Action emitValue)
+        {
+            string name = declaration.Lexeme;
+            if (_ctx.LoopBodyCellDeclarations.TryGetValue(name, out var existing)
+                && ReferenceEquals(existing, declaration)) return;
+            emitValue();
+            IL.Emit(OpCodes.Newobj, _ctx.Types.StrongBoxOfObjectCtor);
+            var cell = IL.DeclareLocal(_ctx.Types.StrongBoxOfObject);
+            IL.Emit(OpCodes.Stloc, cell);
+            _ctx.CellBindingLocals[name] = cell;
+            _ctx.LoopBodyCellDeclarations[name] = declaration;
+            _ctx.LexicalCellStorageNames[declaration] = name;
+        }
+    }
+
+    private HashSet<string>? _ownedVarLoopHeadNames;
+
+    /// <summary>Creates containing-callable homes for var loop heads before body evaluation.</summary>
+    private void InitializeVarLoopHeadBindings(List<Stmt> body)
+    {
+        var heads = SharpTS.Execution.InterpreterVarDeclarations.CollectLoopHeads(body);
+        if (heads.Count == 0) return;
+        _ownedVarLoopHeadNames = heads.Select(head => head.Lexeme).ToHashSet(StringComparer.Ordinal);
+        var functionNames = SharpTS.Runtime.ParameterBinder.BodyVarDeclarations(body)
+            .Where(declaration => declaration.IsFunction)
+            .Select(declaration => declaration.Name.Lexeme).ToHashSet(StringComparer.Ordinal);
+        foreach (var head in heads)
+        {
+            string name = head.Lexeme;
+            if (_ctx.HasLoopBodyBindingAccess(name) || _ctx.TryGetParameter(name, out _)
+                || _ctx.InitializedParameterNames?.Contains(name) == true || functionNames.Contains(name))
+                continue;
+            if (_ctx.CapturedFunctionLocals?.Contains(name) == true
+                && _ctx.FunctionDisplayClassFields?.TryGetValue(name, out var functionField) == true
+                && _ctx.FunctionDisplayClassLocal != null)
+            {
+                // A proven numeric capture cannot be observed before its initializer.
+                if (functionField.FieldType == _ctx.Types.Object)
+                {
+                    IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+                    IL.Emit(OpCodes.Stfld, functionField);
+                }
+                continue;
+            }
+            if (_ctx.CapturedArrowLocals?.Contains(name) == true
+                && _ctx.ArrowScopeDisplayClassFields?.TryGetValue(name, out var arrowField) == true
+                && _ctx.ArrowScopeDisplayClassLocal != null)
+            {
+                IL.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+                IL.Emit(OpCodes.Stfld, arrowField);
+                continue;
+            }
+            if (_ctx.Locals.HasLocal(name)) continue;
+            var local = _ctx.Locals.DeclareLocal(name, _ctx.Types.Object, head);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+            IL.Emit(OpCodes.Stloc, local);
+        }
+    }
+
+    /// <summary>Enters one evaluated class-expression static block activation.</summary>
+    internal void EmitClassExpressionStaticBlock(Stmt.StaticBlock block)
+    {
+        _ctx.Locals.EnterScope();
+        List<LoopBodyCellScopeEntry> vars = [];
+        try
+        {
+            // Every owned var masks outer storage; only selected captures share a box.
+            foreach (var declaration in _ctx.ClosureAnalyzer?.GetClassStaticBlockVars(block.Body) ?? [])
+                EnterLexicalCellBinding(declaration, declaration, vars, classStaticBlockVar: true);
+            EmitStatement(new Stmt.Block(block.Body));
+        }
+        finally
+        {
+            ExitLoopBodyCellScope(vars);
+            _ctx.Locals.ExitScope();
         }
     }
 

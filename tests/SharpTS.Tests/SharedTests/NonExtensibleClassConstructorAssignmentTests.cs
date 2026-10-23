@@ -151,8 +151,8 @@ public sealed class NonExtensibleClassConstructorAssignmentTests
         try { freshStrictWrite(strictKey); console.log(false); }
         catch (error) { console.log(error instanceof TypeError, freshEffects.order); }
         console.log(freshEffects.calls, Object.hasOwn(freshOwner, strictKey), freshOwner[strictKey] === undefined, Object.isExtensible(freshOwner));
-        const fieldKey: unique symbol = Symbol('field');
-        const methodKey: unique symbol = Symbol('method');
+        const fieldKey = Symbol('field');
+        const methodKey = Symbol('method');
         const expandoKey = Symbol('expando');
         class OwnSlots { static [fieldKey] = 1; static [methodKey]() { return 2; } }
         const ownOwner: any = OwnSlots;

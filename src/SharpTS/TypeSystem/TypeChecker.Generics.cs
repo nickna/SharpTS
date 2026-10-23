@@ -461,7 +461,7 @@ public partial class TypeChecker
     /// Instantiates a generic function with concrete type arguments.
     /// Supports default type parameters - missing arguments are filled with defaults.
     /// </summary>
-    private TypeInfo InstantiateGenericFunction(TypeInfo.GenericFunction generic, List<TypeInfo> typeArgs)
+    private TypeInfo InstantiateGenericFunction(TypeInfo.GenericFunction generic, List<TypeInfo> typeArgs, bool preserveCallableMetadata = false)
     {
         // Fill in defaults for missing type arguments
         var resolvedTypeArgs = ResolveTypeArgumentsWithDefaults(generic.TypeParams, typeArgs, "function");
@@ -493,7 +493,9 @@ public partial class TypeChecker
         var substitutedReturn = SubstitutePreservingSignatures(generic.ReturnType, substitutions);
 
         return CopyEditorSignatureMetadata(generic,
-            new TypeInfo.Function(substitutedParams, substitutedReturn, generic.RequiredParams, generic.HasRestParam));
+            new TypeInfo.Function(substitutedParams, substitutedReturn, generic.RequiredParams, generic.HasRestParam,
+                preserveCallableMetadata && generic.ThisType is not null ? SubstitutePreservingSignatures(generic.ThisType, substitutions) : null,
+                preserveCallableMetadata ? generic.ParamNames : null));
     }
 
     /// <summary>

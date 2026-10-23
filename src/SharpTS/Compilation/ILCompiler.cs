@@ -60,7 +60,6 @@ public partial class ILCompiler
     private readonly Dictionary<string, Dictionary<string, (string ModuleName, string MethodName)>> _builtInModuleMethodBindingsByModule = [];
     private static readonly Dictionary<string, (string ModuleName, string MethodName)> _emptyBindings = [];
     private readonly HashSet<string> _importedNames = [];  // Every named / default / namespace import, any module source. Used to shadow global call handlers.
-    private readonly HashSet<string> _promiseBindingScopes = new(StringComparer.Ordinal);
 
     // Function AST nodes whose top-level binding is never reassigned in their owning module.
     // The emitter uses this only for recursive self-calls and keys the exception to the exact
@@ -664,6 +663,10 @@ public partial class ILCompiler
 
     private void AnalyzeClosuresAndPromotions(List<Stmt> statements, IReadOnlyList<ParsedModule>? modules = null)
     {
+        foreach (var (declaration, type) in _typeMap.ClassDeclarations)
+            RegisterLiveSuperConstruction(declaration, type);
+        foreach (var (expression, type) in _typeMap.ClassExpressions)
+            RegisterLiveSuperConstruction(ClassExpressionDeclaration(expression), type);
         PrepareRepeatingClassDeclarations(statements);
         Phase2_AnalyzeClosures(statements, modules);
         _closures.ConstArrowBindings = ConstArrowBindingAnalyzer.Collect(statements);
@@ -716,7 +719,6 @@ public partial class ILCompiler
     private void AnalyzeSingleModuleBindings(List<Stmt> statements)
     {
         PreScanBuiltInModuleImports(statements);
-        RegisterPromiseBindingScope(statements, modulePath: null);
         StableFunctionBindingAnalyzer.Analyze(statements, _stableSelfCallFunctions);
         StableNumericRestFunctionAnalyzer.Analyze(
             statements, _typeMap, _stableSelfCallFunctions, _closures.Analyzer,
@@ -958,7 +960,7 @@ public partial class ILCompiler
 
     private void RegisterTopLevelClassExpressions(IEnumerable<Stmt> statements)
     {
-        var collector = new ClassExpressionTemplateCollector(CollectClassExpression);
+        var collector = new ClassExpressionTemplateCollector(CollectClassExpression, _classExprs.InferredNames);
         foreach (var statement in statements) collector.Visit(statement);
         foreach (var stmt in statements)
         {
@@ -978,8 +980,37 @@ public partial class ILCompiler
         _ => null
     };
 
-    private sealed class ClassExpressionTemplateCollector(Action<Expr.ClassExpr> collect) : Parsing.Visitors.AstVisitorBase
+    private sealed class ClassExpressionTemplateCollector(Action<Expr.ClassExpr> collect,
+        Dictionary<Expr.ClassExpr, string> inferredNames) : Parsing.Visitors.AstVisitorBase
     {
+        private void RecordInitializerName(string name, Expr? initializer)
+        {
+            while (initializer is Expr.Grouping grouping) initializer = grouping.Expression;
+            if (initializer is Expr.ClassExpr { Name: null } expression)
+                inferredNames.TryAdd(expression, name);
+        }
+
+        protected override void VisitVar(Stmt.Var statement)
+        {
+            RecordInitializerName(statement.Name.Lexeme, statement.Initializer);
+            base.VisitVar(statement);
+        }
+
+        protected override void VisitConst(Stmt.Const statement)
+        {
+            RecordInitializerName(statement.Name.Lexeme, statement.Initializer);
+            base.VisitConst(statement);
+        }
+
+        protected override void VisitAssign(Expr.Assign expression)
+        {
+            // VarHoister retains the declaration's source name on lowered
+            // initializations. Ordinary assignments have no initializer name here.
+            if (expression.IsVarRedeclaration)
+                RecordInitializerName(expression.Name.Lexeme, expression.Value);
+            base.VisitAssign(expression);
+        }
+
         protected override void VisitClassExpr(Expr.ClassExpr expression)
         {
             collect(expression);
@@ -1152,6 +1183,8 @@ public partial class ILCompiler
         // Finalize generated object-literal shape structs (#862) before any type that uses them.
         foreach (var info in _closures.ObjectShapes.ByKey.Values)
             ((TypeBuilder)info.ClrType).CreateType();
+
+        FinalizeDebugLexicalCellTypes();
 
         // Finalize entry-point display class first (needed by closures)
         _closures.EntryPointDisplayClass?.CreateType();
@@ -1335,8 +1368,6 @@ public partial class ILCompiler
         foreach (var m in modules)
         {
             PreScanBuiltInModuleImports(m.Statements, m.Path);
-            RegisterPromiseBindingScope(
-                m.Statements, m.IsScript ? null : m.Path);
             StableFunctionBindingAnalyzer.Analyze(m.Statements, _stableSelfCallFunctions);
             StableNumericRestFunctionAnalyzer.Analyze(
                 m.Statements, _typeMap, _stableSelfCallFunctions, _closures.Analyzer,
@@ -1394,6 +1425,16 @@ public partial class ILCompiler
     /// </summary>
     private void ModulePhase5_DefineDeclarations(List<ParsedModule> modules)
     {
+        // Register expression identities and initializer names before any declaration
+        // resolves its checked parent. This adds no aliases or guest evaluation.
+        var expressions = new ClassExpressionTemplateCollector(CollectClassExpression, _classExprs.InferredNames);
+        foreach (var module in modules)
+        {
+            _modules.CurrentPath = NormalizeToEmissionPath(module.Path);
+            _modules.CurrentDotNetNamespace = _modules.Namespaces.GetValueOrDefault(module.Path);
+            foreach (var statement in module.Statements) expressions.Visit(statement);
+        }
+
         foreach (var module in modules)
         {
             // NormalizeToEmissionPath, not module.Path: a script-like module's top-level
@@ -1776,6 +1817,8 @@ public partial class ILCompiler
         foreach (var info in _closures.ObjectShapes.ByKey.Values)
             ((TypeBuilder)info.ClrType).CreateType();
 
+        FinalizeDebugLexicalCellTypes();
+
         // Finalize entry-point display class first (needed by closures)
         _closures.EntryPointDisplayClass?.CreateType();
 
@@ -2101,6 +2144,8 @@ public partial class ILCompiler
         {
             RegisterCapturedStmt(stmt, key, modulePath, ref moduleVars, ref moduleFields);
         }
+        foreach (var head in GetVarLoopHeadDeclarations(statements))
+            RegisterCapturedStmt(head, key, modulePath, ref moduleVars, ref moduleFields);
 
         RegisterLiftableBlockScopedVars(statements, key, modulePath, declaredNameCounts, ref moduleVars, ref moduleFields);
 
@@ -2486,6 +2531,15 @@ public partial class ILCompiler
         foreach (var stmt in statements)
         {
             DefineModuleScopedTopLevelStaticField(stmt, modulePath, moduleDict);
+        }
+        foreach (var head in GetVarLoopHeadDeclarations(statements))
+        {
+            // Ordinary declarations may already have registered this exact var owner.
+            bool registered = modulePath == null
+                ? _topLevelStaticVars.ContainsKey(head.Name.Lexeme)
+                : moduleDict?.ContainsKey(head.Name.Lexeme) == true;
+            if (!registered)
+                DefineModuleScopedTopLevelStaticField(head, modulePath, moduleDict);
         }
     }
 

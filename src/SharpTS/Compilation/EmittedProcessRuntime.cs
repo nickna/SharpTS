@@ -63,6 +63,14 @@ public sealed class EmittedProcessRuntime
         internal set => Set(ref _getNextTick, value);
     }
 
+    private MethodBuilder? _queueNextTick;
+    /// <summary>Queues a callback and its captured arguments before due timers.</summary>
+    public MethodBuilder QueueNextTick
+    {
+        get => Require(_queueNextTick);
+        internal set => Set(ref _queueNextTick, value);
+    }
+
     private MethodBuilder? _getEventEmitter;
     public MethodBuilder GetEventEmitter
     {
@@ -555,6 +563,7 @@ public sealed class EmittedProcessRuntime
         _ = UptimeBaselineField;
         _ = MemoryUsage;
         _ = GetNextTick;
+        _ = QueueNextTick;
         _ = GetEventEmitter;
         _ = GetObject;
         _ = Exit;

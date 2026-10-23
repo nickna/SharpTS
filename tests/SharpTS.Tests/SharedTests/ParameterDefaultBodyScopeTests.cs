@@ -160,22 +160,6 @@ public sealed class ParameterDefaultBodyScopeTests
 
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
         new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
-            .Where(mode => mode == ExecutionMode.Interpreted || (string)row[0] switch
-            {
-                // #2658: compiled defaults share a same-named body var's storage.
-                "parameter-var-copy-and-simple-sharing" => false,
-                // #2661: an async expression default captures future body var storage and rejects.
-                "async-and-generator-default-outer-binding" => false,
-                // #2659: a compiled forward body var read resolves the outer binding.
-                "body-lexical-tdz-and-hoisted-declarations" => false,
-                // #2662: compiled async no-initializer var resets an initialized parameter.
-                "async-uninitialized-var-preserves-parameter" => false,
-                // #2663: compiled nested defaults lose enclosing local capture storage.
-                "enclosing-local-default-outer-binding" => false,
-                // #2660: the checker cannot resolve earlier pattern bindings in later defaults.
-                "destructured-defaults-copy-and-order" => false,
-                _ => true
-            })
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ModeCases))]
@@ -188,11 +172,6 @@ public sealed class ParameterDefaultBodyScopeTests
             Assert.Empty(errors);
             Assert.Equal(expected, output);
         }
-        else if (name == "destructured-defaults-copy-and-order")
-        {
-            // #2660 owns checking; retain the complete runtime parameter-order source.
-            Assert.Equal(expected, RunWithoutChecker(source, resolved: false));
-        }
         else
         {
             Assert.Equal(expected, TestHarness.Run(source, mode));
@@ -203,12 +182,6 @@ public sealed class ParameterDefaultBodyScopeTests
     public void ResolvedDefaultsAndBodiesMatchRawInterpretation(string name, string source, string expected)
     {
         Assert.NotEmpty(name);
-        if (name == "destructured-defaults-copy-and-order")
-        {
-            // #2660 owns checking; independently exercise resolved runtime distances.
-            Assert.Equal(expected, RunWithoutChecker(source, resolved: true));
-            return;
-        }
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
         var typeMap = new TypeChecker().Check(statements);
         using var output = new StringWriter();
@@ -219,14 +192,4 @@ public sealed class ParameterDefaultBodyScopeTests
         Assert.Equal(expected, output.ToString().Replace("\r\n", "\n"));
     }
 
-    private static string RunWithoutChecker(string source, bool resolved)
-    {
-        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
-        using var output = new StringWriter();
-        using var interpreter = new Interpreter(stdout: output, stderr: TextWriter.Null);
-        if (resolved) new VariableResolver(interpreter).Resolve(statements);
-        interpreter.Interpret(statements);
-        Assert.Null(interpreter.LastUncaughtError);
-        return output.ToString().Replace("\r\n", "\n");
-    }
 }

@@ -296,19 +296,21 @@ public partial class TypeChecker
         }
     }
 
-    // Check each initializer once before publishing the class used by member bodies.
+    // Infer each initializer before publishing the class used by member bodies.
     // Instance initializers are hypothetical here; static initializers retain outer flow.
     private bool CheckClassFieldInitializers(
         object sourceOwner,
         IReadOnlyList<Stmt.Field> fields,
         TypeInfo.MutableClass mutableClass,
         TypeEnvironment instanceEnvironment,
-        List<TypeInfo.TypeParameter>? classTypeParameters)
+        List<TypeInfo.TypeParameter>? classTypeParameters,
+        bool validationOnly = false)
     {
         bool anyInferredFieldTypeResolved = false;
         TypeEnvironment outerEnvironment = _environment;
         TypeEnvironment staticEnvironment = new(outerEnvironment);
-        RegisterEditorScope(sourceOwner, staticEnvironment, EditorScopeKind.Class, EditorSyntaxRole.Whole);
+        if (!validationOnly)
+            RegisterEditorScope(sourceOwner, staticEnvironment, EditorScopeKind.Class, EditorSyntaxRole.Whole);
         string? selfName = sourceOwner switch
         {
             Stmt.Class declaration => declaration.Name.Lexeme,
@@ -349,7 +351,10 @@ public partial class TypeChecker
                 if (!field.IsStatic) PushEmptyNarrowingScope();
                 try
                 {
-                    anyInferredFieldTypeResolved |= CheckAndInferClassFieldInitializer(field, mutableClass);
+                    if (validationOnly)
+                        CheckExpr(field.Initializer);
+                    else
+                        anyInferredFieldTypeResolved |= CheckAndInferClassFieldInitializer(field, mutableClass);
                     getterScope.PendingFields.Remove((field.IsStatic, GetFieldMemberName(field)));
                 }
                 finally
@@ -390,8 +395,42 @@ public partial class TypeChecker
             instanceEnvironment.DefineType(selfName, constructorType);
             staticEnvironment.Define(selfName, constructorType);
             staticEnvironment.DefineType(selfName, constructorType);
-            BindEditorClassSelf(sourceOwner, instanceEnvironment, constructorType);
-            BindEditorClassSelf(sourceOwner, staticEnvironment, constructorType);
+            if (!validationOnly)
+            {
+                BindEditorClassSelf(sourceOwner, instanceEnvironment, constructorType);
+                BindEditorClassSelf(sourceOwner, staticEnvironment, constructorType);
+            }
+        }
+    }
+
+    // Defaults that need completed private/super metadata can refine parameter types
+    // after field inference. Recheck arguments without changing the inferred fields
+    // or applying static initializer flow effects a second time.
+    private void RevalidateClassFieldInitializers(object sourceOwner, IReadOnlyList<Stmt.Field> fields,
+        TypeInfo.MutableClass owner, TypeEnvironment classEnvironment,
+        List<TypeInfo.TypeParameter>? typeParameters)
+    {
+        var assignmentState = SnapshotDefiniteAssignmentState();
+        var aliases = new Dictionary<string, string>(_variableAliases, StringComparer.Ordinal);
+        var environments = new Dictionary<TypeEnvironment, Dictionary<string, TypeInfo>?>(ReferenceEqualityComparer.Instance);
+        foreach (var root in new[] { _environment, classEnvironment })
+            for (TypeEnvironment? environment = root; environment is not null && !environments.ContainsKey(environment);
+                 environment = environment.Enclosing)
+                environments.Add(environment, environment.SnapshotLocalValueTypes());
+
+        PushNarrowingScope();
+        try
+        {
+            CheckClassFieldInitializers(sourceOwner, fields, owner, classEnvironment, typeParameters,
+                validationOnly: true);
+        }
+        finally
+        {
+            PopNarrowingScope();
+            RestoreDefiniteAssignmentState(assignmentState);
+            _variableAliases.Clear();
+            foreach (var (name, alias) in aliases) _variableAliases.Add(name, alias);
+            foreach (var (environment, values) in environments) environment.RestoreLocalValueTypes(values);
         }
     }
 

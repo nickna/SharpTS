@@ -768,6 +768,11 @@ internal sealed class GeneratorArrowLifter
                 var inner = RewriteExpr(sp2.Expression);
                 return ReferenceEquals(inner, sp2.Expression) ? sp2 : new Expr.Spread(inner);
             }
+            case Expr.Instantiation instantiation:
+            {
+                var inner = RewriteExpr(instantiation.Expression);
+                return ReferenceEquals(inner, instantiation.Expression) ? instantiation : instantiation with { Expression = inner };
+            }
             case Expr.TypeAssertion ta:
             {
                 var inner = RewriteExpr(ta.Expression);

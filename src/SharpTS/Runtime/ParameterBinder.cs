@@ -32,6 +32,8 @@ internal static class ParameterBinder
             Statements = Initializers is null ? body
                 : body.Where(statement => statement is not Stmt.Sequence { ParameterName: not null }).ToList();
             Declarations = BodyVarDeclarations(Statements).ToList();
+            Declarations.AddRange(InterpreterVarDeclarations.CollectLoopHeads(Statements)
+                .Select(name => (name, false)));
             FunctionNames = Declarations.Where(declaration => declaration.IsFunction)
                 .Select(declaration => declaration.Name.Lexeme).ToHashSet(StringComparer.Ordinal);
             DestructuredNames = Initializers is null ? []
@@ -268,14 +270,18 @@ internal static class ParameterBinder
         }
     }
 
+    internal static IEnumerable<(Token Name, bool IsFunction)> InterpreterBodyVarDeclarations(List<Stmt> body)
+        => GetBodyBindings(body).Declarations;
+
     internal static (List<Stmt> Statements, RuntimeEnvironment Environment) PrepareBody(
         List<Stmt.Parameter> parameters, List<Stmt>? body, RuntimeEnvironment parameterEnvironment)
     {
         var bindings = GetBodyBindings(body);
         var statements = bindings.Statements;
-        if (!HasParameterExpressions(parameters)) return (statements, parameterEnvironment);
-
-        var environment = new RuntimeEnvironment(parameterEnvironment);
+        bool separateBody = HasParameterExpressions(parameters);
+        var environment = separateBody
+            ? new RuntimeEnvironment(parameterEnvironment)
+            : parameterEnvironment;
         if (bindings.Declarations.Count == 0) return (statements, environment);
         var parameterNames = parameters.Select(parameter => parameter.Name.Lexeme).ToHashSet(StringComparer.Ordinal);
         if (parameterEnvironment.IsDefinedLocally("arguments")) parameterNames.Add("arguments");

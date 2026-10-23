@@ -90,7 +90,7 @@ public partial class ILCompiler
                 StoreDescriptor(owner, key, descriptor);
             }
             else if (initializer is Stmt.StaticBlock block)
-                foreach (var statement in block.Body) emitter.EmitStatement(statement);
+                emitter.EmitClassExpressionStaticBlock(block);
         }
         il.Emit(OpCodes.Ret);
 

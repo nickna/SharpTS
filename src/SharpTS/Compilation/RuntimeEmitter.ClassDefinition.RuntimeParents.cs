@@ -136,7 +136,17 @@ public partial class RuntimeEmitter
         il = definitions.ReadSuper.GetILGenerator();
         var instanceSuper = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Brfalse, instanceSuper);
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, definitions.GetParent); il.Emit(OpCodes.Ldarg_2);
+        // The home constructor is lexical, while its internal prototype is
+        // live. The separately supplied receiver remains the getter's this.
+        var staticSuperBase = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, staticSuperBase);
+        var hasStaticSuperBase = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, staticSuperBase); il.Emit(OpCodes.Brtrue, hasStaticSuperBase);
+        GuestErrorEmitter.ThrowError(il, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
+            "Cannot read properties of null super prototype");
+        il.MarkLabel(hasStaticSuperBase);
+        il.Emit(OpCodes.Ldloc, staticSuperBase); il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Call, runtime.Reflect.Get); il.Emit(OpCodes.Ret);
         il.MarkLabel(instanceSuper);
         var superBase = il.DeclareLocal(_types.Object);
@@ -149,7 +159,15 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowError(il, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
             "Cannot read properties of null super prototype");
         il.MarkLabel(hasSuperBase);
+        var symbolSuper = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Isinst, _types.String); il.Emit(OpCodes.Brfalse, symbolSuper);
+        // String lookup retains the nominal prototype/instance-field boundary;
+        // Symbol keys use the existing receiver-aware ordinary Get protocol.
         il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldloc, superBase);
-        il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Call, definitions.ReadPrototypeProperty); il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, definitions.ReadPrototypeProperty); il.Emit(OpCodes.Ret);
+        il.MarkLabel(symbolSuper);
+        il.Emit(OpCodes.Ldloc, superBase); il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Call, runtime.Reflect.Get); il.Emit(OpCodes.Ret);
     }
 }

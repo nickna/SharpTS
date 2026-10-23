@@ -249,14 +249,21 @@ public partial class GeneratorMoveNextEmitter
             return;
         }
         var indexField = _builder.GetForInIndexField(f)!;
+        var sourceField = DefineStateMachineField($"{keysField.Name}_source", _types.Object);
 
         var startLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();
         var continueLabel = _il.DefineLabel();
 
-        // Get keys from the object and stash them in the hoisted field (need a temp for the swap).
+        // The original receiver must survive the same yields as the key snapshot.
         EmitExpression(f.Object);
         EnsureBoxed();
+        var sourceTemp = _il.DeclareLocal(_types.Object);
+        _il.Emit(OpCodes.Stloc, sourceTemp);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldloc, sourceTemp);
+        _il.Emit(OpCodes.Stfld, sourceField);
+        _il.Emit(OpCodes.Ldloc, sourceTemp);
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectKeys.Keys);
         var keysTemp = _il.DeclareLocal(_types.ListOfObject);
         _il.Emit(OpCodes.Stloc, keysTemp);
@@ -285,15 +292,21 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Clt);
         _il.Emit(OpCodes.Brfalse, endLabel);
 
-        // loopVar = keys[index]
-        EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme), () =>
+        // Recheck the candidate against the receiver retained across suspension.
+        var keyLocal = _il.DeclareLocal(_types.Object);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, keysField);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, indexField);
+        _il.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Element);
+        _il.Emit(OpCodes.Stloc, keyLocal);
+        EmitForInKeyCheck(() =>
         {
             _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, keysField);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, indexField);
-            _il.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Element);
-        });
+            _il.Emit(OpCodes.Ldfld, sourceField);
+        }, () => _il.Emit(OpCodes.Ldloc, keyLocal), continueLabel);
+        EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme),
+            () => _il.Emit(OpCodes.Ldloc, keyLocal));
 
         EmitStatement(f.Body);
 

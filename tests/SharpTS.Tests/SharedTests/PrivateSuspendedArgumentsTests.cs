@@ -191,6 +191,49 @@ public sealed class PrivateSuspendedArgumentsTests
         run().catch((error: any) => console.log("unexpected", error.name, error.message));
         """;
 
+    public const string OrdinaryOwnPendingSource = """
+        let release: any;
+        const gate: Promise<number> = new Promise<number>(resolve => { release = resolve; });
+
+        async function outer(...unused: any[]): Promise<string> {
+            const lexical = () => arguments[0];
+            const own: any = async function(...inner: any[]): Promise<string> {
+                await gate;
+                const read = () => arguments[0];
+                return [arguments[0], read(), arguments.length].join("|");
+            };
+            const pending: Promise<string> = own("inner", "tail");
+            const before = lexical();
+            const value = await pending;
+            return before + "|" + value;
+        }
+
+        const task = outer("outer");
+        console.log("waiting");
+        release(0);
+        task.then((value: string) => console.log(value),
+            (error: any) => console.log("unexpected", error.name, error.message));
+        """ + "\n";
+
+    public const string LexicalArrowPendingSource = """
+        let release: any;
+        const gate: Promise<number> = new Promise<number>(resolve => { release = resolve; });
+
+        async function owner(...values: any[]): Promise<string> {
+            const read = async (): Promise<string> => {
+                await gate;
+                return [arguments[0], arguments.length].join("|");
+            };
+            return await read();
+        }
+
+        const task = owner("lexical", "tail");
+        console.log("waiting");
+        release(0);
+        task.then((value: string) => console.log(value),
+            (error: any) => console.log("unexpected", error.name, error.message));
+        """ + "\n";
+
     public static IEnumerable<object[]> Cases()
     {
         yield return ["issue", IssueSource, "async 2\ngenerator 2\nasync-generator 2\n"];
@@ -199,6 +242,8 @@ public sealed class PrivateSuspendedArgumentsTests
         yield return ["snapshots", SnapshotsSource, "3\nleft! right! 2 true\nfirst second true\nfirst! second! true true\none two 2 true\none! two! true true\n"];
         yield return ["pending-snapshots", PendingSnapshotsSource, "3\nleft! right! 2 true\nfirst second true\nfirst! second! true true\none two 2 true\none! two! true true\n"];
         yield return ["expression-controls", ExpressionControlsSource, "1 1 1 1\nouter|inner\np|1|a\n"];
+        yield return ["ordinary-own-pending", OrdinaryOwnPendingSource, "waiting\nouter|inner|inner|2\n"];
+        yield return ["lexical-arrow-pending", LexicalArrowPendingSource, "waiting\nlexical|2\n"];
     }
 
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>

@@ -728,7 +728,7 @@ public partial class Interpreter
         IEnumerable<object?>? customIterator = TryGetSymbolIterator(iterable);
         if (customIterator != null)
         {
-            return IterateWithBreakContinue(customIterator, forOf.Variable, forOf.IsDeclaration, forOf.Body, labels);
+            return IterateWithBreakContinue(customIterator, forOf.Variable, forOf.IsDeclaration && !forOf.IsVar, forOf.Body, labels);
         }
 
         // Get elements based on iterable type.
@@ -752,7 +752,7 @@ public partial class Interpreter
                 "for...of requires an iterable (array, Map, Set, or iterator)."))
         };
 
-        return IterateWithBreakContinue(elements, forOf.Variable, forOf.IsDeclaration, forOf.Body, labels);
+        return IterateWithBreakContinue(elements, forOf.Variable, forOf.IsDeclaration && !forOf.IsVar, forOf.Body, labels);
     }
 
     /// <summary>
@@ -775,7 +775,8 @@ public partial class Interpreter
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.OwnEnumerableKeys(),
             // Own enumerable keys only, hiding boxed-primitive internal slots and
             // honoring enumerability — consistent with Object.keys (#475).
-            SharpTSObject o => o.OwnEnumerableKeys(),
+            // Snapshot candidates before the body; keep descriptor checks live.
+            SharpTSObject o => o.OwnVisibleStringKeys().ToArray().Where(o.IsOwnEnumerableProperty),
             SharpTSInstance i => i.GetFieldNames(),
             // for...in skips holes per ECMA-262 (only own enumerable index properties
             // that actually exist — holes don't).
@@ -807,7 +808,7 @@ public partial class Interpreter
             _ => throw new InterpreterException("for...in requires an object.")
         };
 
-        return IterateWithBreakContinue(keys.Cast<object?>(), forIn.Variable, forIn.IsDeclaration, forIn.Body, labels);
+        return IterateWithBreakContinue(keys.Cast<object?>(), forIn.Variable, forIn.IsDeclaration && !forIn.IsVar, forIn.Body, labels);
     }
 
     /// <summary>
@@ -1347,6 +1348,7 @@ public partial class Interpreter
         {
             while (iterator.MoveNext())
             {
+                ThrowIfExecutionCancelled();
                 var loopEnv = CreateIterationEnvironment(variable, isDeclaration, iterator.Current);
 
                 using (PushScope(loopEnv))
@@ -1359,7 +1361,7 @@ public partial class Interpreter
                     if (abruptResult.HasValue) return abruptResult.Value;
 
                     // Process any pending timer callbacks
-                    ProcessPendingCallbacks();
+                    ProcessPendingCallbacks(processMicrotasks: false);
                 }
             }
             return ExecutionResult.Success();
@@ -1404,7 +1406,7 @@ public partial class Interpreter
 
             // Process any pending timer callbacks. Timer threads enqueue callbacks
             // and we execute them here, avoiding thread scheduling issues on macOS.
-            ProcessPendingCallbacks();
+            ProcessPendingCallbacks(processMicrotasks: false);
         }
         return ExecutionResult.Success();
     }
@@ -1420,13 +1422,14 @@ public partial class Interpreter
     {
         do
         {
+            ThrowIfExecutionCancelled();
             var result = await ctx.ExecuteStmtAsync(doWhileStmt.Body);
             var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
             if (shouldBreak) return ExecutionResult.Success();
             if (shouldContinue) continue;
             if (abruptResult.HasValue) return abruptResult.Value;
             // Process any pending timer callbacks
-            ProcessPendingCallbacks();
+            ProcessPendingCallbacks(processMicrotasks: false);
         } while ((await ctx.EvaluateExprAsync(doWhileStmt.Condition)).IsTruthy());
         return ExecutionResult.Success();
     }
@@ -1872,6 +1875,7 @@ public partial class Interpreter
             while (forStmt.Condition is null
                 || EvaluateRV(forStmt.Condition).IsTruthy())
             {
+                ThrowIfExecutionCancelled();
                 ExecutionResult result = Execute(forStmt.Body);
                 var (shouldBreak, shouldContinue, abruptResult) =
                     HandleLoopResult(result, labels);
@@ -1885,8 +1889,8 @@ public partial class Interpreter
                             loopEnv, perIterationNames);
                     if (forStmt.Increment is not null)
                         EvaluateRV(forStmt.Increment);
-                    if (HasPendingCallbacks)
-                        ProcessPendingCallbacks();
+                    if (HasPendingLoopCallbacks)
+                        ProcessPendingCallbacks(processMicrotasks: false);
                     continue;
                 }
 
@@ -1897,8 +1901,8 @@ public partial class Interpreter
                     CreatePerIterationEnvironment(loopEnv, perIterationNames);
                 if (forStmt.Increment is not null)
                     EvaluateRV(forStmt.Increment);
-                if (HasPendingCallbacks)
-                    ProcessPendingCallbacks();
+                if (HasPendingLoopCallbacks)
+                    ProcessPendingCallbacks(processMicrotasks: false);
             }
 
             return ExecutionResult.Success();
@@ -1907,8 +1911,7 @@ public partial class Interpreter
 
     /// <summary>
     /// Core C-style for-loop execution logic shared by the sync and async evaluators. The evaluation
-    /// context supplies the per-clause evaluation strategy and the between-iteration scheduler yield
-    /// (<see cref="IEvaluationContext.YieldToSchedulerAsync"/>), so a single body serves both paths.
+    /// context supplies the per-clause evaluation strategy, so a single body serves both paths.
     /// </summary>
     private async ValueTask<ExecutionResult> ExecuteForCore(IEvaluationContext ctx, Stmt.For forStmt, IReadOnlyList<string>? labels)
     {
@@ -1934,6 +1937,7 @@ public partial class Interpreter
             // Loop with proper continue handling - increment always runs
             while (forStmt.Condition == null || (await ctx.EvaluateExprAsync(forStmt.Condition)).IsTruthy())
             {
+                ThrowIfExecutionCancelled();
                 var result = await ctx.ExecuteStmtAsync(forStmt.Body);
                 var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
                 if (shouldBreak) break;
@@ -1944,8 +1948,8 @@ public partial class Interpreter
                         CreatePerIterationEnvironment(loopEnv, perIterationNames);
                     if (forStmt.Increment != null)
                         await ctx.EvaluateExprAsync(forStmt.Increment);
-                    // Yield to allow timer callbacks and other threads to execute
-                    await ctx.YieldToSchedulerAsync();
+                    if (HasPendingLoopCallbacks)
+                        ProcessPendingCallbacks(processMicrotasks: false);
                     continue;
                 }
                 if (abruptResult.HasValue) return abruptResult.Value;
@@ -1955,8 +1959,8 @@ public partial class Interpreter
                 if (forStmt.Increment != null)
                     await ctx.EvaluateExprAsync(forStmt.Increment);
                 // Process any pending timer callbacks
-                if (HasPendingCallbacks)
-                    ProcessPendingCallbacks();
+                if (HasPendingLoopCallbacks)
+                    ProcessPendingCallbacks(processMicrotasks: false);
             }
             return ExecutionResult.Success();
         }
@@ -2028,7 +2032,8 @@ public partial class Interpreter
         object? value = SharpTSUndefined.Instance;
         if (varStmt.Initializer != null)
         {
-            value = Evaluate(varStmt.Initializer);
+            value = EvaluateVariableInitializerCore(_syncContext, varStmt.Initializer, varStmt.Name)
+                .GetAwaiter().GetResult().ToObject();
         }
         var target = varStmt.IsVar ? _environment.VarDeclarationTarget ?? _environment : _environment;
         if (varStmt.IsVar && varStmt.Initializer is null && target.IsDefinedLocally(varStmt.Name.Lexeme))
@@ -2044,7 +2049,8 @@ public partial class Interpreter
     internal ExecutionResult VisitConst(Stmt.Const constStmt)
     {
         // Const declarations always have an initializer (enforced by parser)
-        object? constValue = Evaluate(constStmt.Initializer);
+        object? constValue = EvaluateVariableInitializerCore(_syncContext, constStmt.Initializer, constStmt.Name)
+            .GetAwaiter().GetResult().ToObject();
         _environment.Define(constStmt.Name.Lexeme, constValue);
         return ExecutionResult.Success();
     }
@@ -2485,19 +2491,7 @@ public partial class Interpreter
                             break;
 
                         case Stmt.StaticBlock block:
-                            foreach (var blockStmt in block.Body)
-                            {
-                                var result = Execute(blockStmt);
-                                if (result.IsAbrupt)
-                                {
-                                    // Handle throw from static block
-                                    if (result.Type == ExecutionResult.ResultType.Throw)
-                                    {
-                                        throw new InterpreterException($"Error in static block: {Stringify(result.Value.ToObject())}");
-                                    }
-                                    // Return, break, continue are not allowed (validated by type checker)
-                                }
-                            }
+                            ExecuteClassStaticBlock(block);
                             break;
                     }
                 }
@@ -2518,6 +2512,33 @@ public partial class Interpreter
 
         _environment.Assign(classStmt.Name, klass);
         return ExecutionResult.Success();
+    }
+
+    private void ExecuteClassStaticBlock(Stmt.StaticBlock block)
+    {
+        // Every static block owns its lexical scope, even without a var loop head.
+        // Reserve before creating closures so outer bindings cannot bypass its TDZ.
+        bool ownsLoopVars = InterpreterVarDeclarations.CollectLoopHeads(block.Body).Count != 0;
+        using ScopedEnvironment scope = PushScope(new RuntimeEnvironment(_environment));
+        ReserveLexicalDeclarations(block.Body);
+        // Static bodies are not parser-hoisted. Give direct var/loop bindings
+        // their own initialized slots before closures can resolve a class self.
+        foreach (var (name, isFunction) in ParameterBinder.InterpreterBodyVarDeclarations(block.Body))
+            if (!isFunction && !_environment.IsDefinedLocally(name.Lexeme))
+                _environment.Define(name.Lexeme, RuntimeValue.Undefined);
+        if (ownsLoopVars)
+        {
+            HoistFunctionDeclarations(block.Body);
+            HoistLocalLoopVarDeclarations(block.Body);
+        }
+
+        foreach (var statement in block.Body)
+        {
+            var result = Execute(statement);
+            if (result.Type == ExecutionResult.ResultType.Throw)
+                throw new InterpreterException($"Error in static block: {Stringify(result.Value.ToObject())}");
+            // Return, break, continue are not allowed (validated by type checker).
+        }
     }
 
     internal ExecutionResult VisitTypeAlias(Stmt.TypeAlias typeAlias) =>

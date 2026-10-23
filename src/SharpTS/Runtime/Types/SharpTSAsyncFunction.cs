@@ -42,7 +42,11 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ISharpTSFunctionObjec
     internal bool IsStaticMethod => _declaration.IsStatic;
     internal SharpTSClass? PrivateOwner { get; set; }
     private readonly bool _receiverBound;
-    internal bool HasBoundReceiver => _receiverBound;
+    // Ordinary functions bind this in their existing activation so lexical distances
+    // stay unchanged. Class methods retain their resolver-counted receiver scope.
+    private readonly object? _boundThis;
+    private readonly bool _hasBoundThis;
+    internal bool HasBoundReceiver => _receiverBound || _hasBoundThis;
     // Receiver views retain one descriptor-backed function object, including
     // the absence of configurable metadata after deletion.
     private SharpTSObject _properties;
@@ -64,6 +68,17 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ISharpTSFunctionObjec
         _closure = closure;
         _arity = source._arity;
         _receiverBound = true;
+        _properties = source._properties;
+        PrivateOwner = source.PrivateOwner;
+    }
+
+    private SharpTSAsyncFunction(SharpTSAsyncFunction source, object? receiver)
+    {
+        _declaration = source._declaration;
+        _closure = source._closure;
+        _arity = source._arity;
+        _boundThis = receiver;
+        _hasBoundThis = true;
         _properties = source._properties;
         PrivateOwner = source.PrivateOwner;
     }
@@ -162,7 +177,9 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ISharpTSFunctionObjec
             { PrivateClass = PrivateOwner, StaticSuper = _declaration.IsStatic };
         environment.NewTarget = RuntimeValue.Undefined;
         environment.ConstructionFrame = null;
-        if (isClassMethod || _declaration.IsPrivate)
+        if (_hasBoundThis)
+            environment.Define("this", _boundThis);
+        else if (isClassMethod || _declaration.IsPrivate)
         {
             environment.Define("this", _receiverBound && _closure.TryGet("this", out var receiver)
                 ? receiver.ToObject() : SharpTSUndefined.Instance);
@@ -226,6 +243,9 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ISharpTSFunctionObjec
     /// </summary>
     public SharpTSAsyncFunction BindThisValue(object? thisObject)
     {
+        if (PrivateOwner is null && !_declaration.IsStatic)
+            return new SharpTSAsyncFunction(this, thisObject);
+
         RuntimeEnvironment closure = _receiverBound ? _closure.Enclosing! : _closure;
         RuntimeEnvironment environment = new(closure);
         environment.Define("this", thisObject);

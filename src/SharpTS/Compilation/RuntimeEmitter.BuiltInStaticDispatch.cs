@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
         Type SymbolType, MethodInfo SymbolFor, MethodInfo SymbolKeyFor,
         EmittedBigIntImplementation? BigInt, EmittedPromiseRuntime? Promise,
         Type ErrorType, MethodInfo ErrorIsError, EmittedDateImplementation? Dates,
-        EmittedMapRuntime? Map);
+        EmittedMapRuntime? Map, EmittedArrayBufferRuntime? ArrayBuffer);
 
     /// <summary>
     /// Defines the <c>LookupBuiltInStaticMember</c> <see cref="MethodBuilder"/>
@@ -107,6 +107,9 @@ public partial class RuntimeEmitter
 
         // Array.* — stored-as-value Array reference accessing static members.
         EmitLookup(_types.IListOfObject, "isArray", inputs.IsArray, 1);
+
+        if (inputs.ArrayBuffer is { } arrayBuffer)
+            EmitLookup(arrayBuffer.Type, "isView", arrayBuffer.IsView, 1);
 
         if (inputs.Map is { } map)
             EmitLookup(_types.DictionaryObjectObject, "groupBy", map.GroupBy, 2);

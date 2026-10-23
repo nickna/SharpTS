@@ -95,11 +95,7 @@ public sealed class AsyncFunctionExpressionCaptureTests
         Assert.Equal(expected, TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
-    [Fact]
-    public void ReceiverViewsKeepCanonicalNamedSelfAndFunctionState()
-    {
-        // #2679 owns compiled named async expression creation; retain the full runtime preservation control.
-        const string source = """
+    public const string ReceiverViewsSource = """
             const target: any = async function self(this: any) {
                 await Promise.resolve(0);
                 return [self === target, (self as any).tag, Object.getPrototypeOf(self) === selectedPrototype, this.tag];
@@ -116,11 +112,26 @@ public sealed class AsyncFunctionExpressionCaptureTests
             }
             run().catch(error => console.log(String(error)));
             """;
-        const string expected = "true 7 true owner\ntrue true true explicit\n";
+
+    public const string ReceiverViewsExpected = "true 7 true owner\ntrue true true explicit\n";
+
+    [Fact]
+    public void ReceiverViewsKeepCanonicalNamedSelfAndFunctionState()
+    {
+        const string source = ReceiverViewsSource;
+        const string expected = ReceiverViewsExpected;
         var result = SourceExecutionService.Interpret(source);
         Assert.True(result.Success, string.Join("\n", result.Errors) + result.Output);
         Assert.Empty(result.Errors);
         Assert.Equal(expected, result.Output.Replace("\r\n", "\n"));
         Assert.Equal(expected, TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
+    [Fact]
+    public void CompiledReceiverViewsKeepCanonicalNamedSelfAndFunctionState()
+    {
+        var (errors, output) = TestHarness.CompileVerifyAndRun(ReceiverViewsSource);
+        Assert.Empty(errors);
+        Assert.Equal(ReceiverViewsExpected, output);
     }
 }

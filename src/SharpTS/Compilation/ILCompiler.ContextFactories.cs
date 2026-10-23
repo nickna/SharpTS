@@ -43,6 +43,7 @@ public partial class ILCompiler
         {
             // Closure analysis registries
             ClosureAnalyzer = _closures.Analyzer,
+            DebugLexicalCellStorages = _debugLexicalCellStorages,
             ArrowMethods = _closures.ArrowMethods,
             GeneratorExpressions = _closures.GeneratorExpressions,
             ConstArrowBindings = _closures.ConstArrowBindings,
@@ -177,6 +178,7 @@ public partial class ILCompiler
         ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
         ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
         ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: true);
+        ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
         AttachLocalSymbols(ctx);
         return ctx;
     }
@@ -275,6 +277,7 @@ public partial class ILCompiler
             RuntimeFeatures = parentCtx.RuntimeFeatures,
             StaticDirectEvalStatements = parentCtx.StaticDirectEvalStatements,
             ClosureAnalyzer = parentCtx.ClosureAnalyzer,
+            DebugLexicalCellStorages = parentCtx.DebugLexicalCellStorages,
             ArrowMethods = parentCtx.ArrowMethods,
             GeneratorExpressions = parentCtx.GeneratorExpressions,
             LexicalTdzNames = parentCtx.LexicalTdzNames,
@@ -335,6 +338,7 @@ public partial class ILCompiler
             EntryPointDisplayClassFields = parentCtx.EntryPointDisplayClassFields,
             CapturedTopLevelVars = parentCtx.CapturedTopLevelVars,
             EntryPointDisplayClassStaticField = parentCtx.EntryPointDisplayClassStaticField,
+            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
             TopLevelLexicalInitFields = parentCtx.TopLevelLexicalInitFields,
             // Captured locals promoted into the enclosing function's display class (#625): the
             // arrow reads/writes them through `outer.functionDC.field` rather than mutating the

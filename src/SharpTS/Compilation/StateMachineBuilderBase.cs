@@ -28,6 +28,7 @@ public abstract class StateMachineBuilderBase
     private string? _debugKickoffName;
 
     internal StateMachineDebugSymbols? DebugSymbols { get; set; }
+    internal IReadOnlyDictionary<SharpTS.Parsing.Token, LexicalCellStorage>? DebugLexicalCellStorages { get; set; }
 
     internal void AttachDebugSymbols(CompilationContext context)
     {

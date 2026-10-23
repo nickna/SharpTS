@@ -14,6 +14,9 @@ internal static class ExpressionUnwrapper
                 case Expr.Grouping grouping:
                     expression = grouping.Expression;
                     continue;
+                case Expr.Instantiation instantiation:
+                    expression = instantiation.Expression;
+                    continue;
                 case Expr.TypeAssertion assertion:
                     expression = assertion.Expression;
                     continue;

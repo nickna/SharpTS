@@ -13,6 +13,11 @@ internal sealed class PrototypePropertyOverlay(
     // and presence remain authoritative in the existing overlay/tombstones.
     private readonly List<string>? _stringKeyOrder = initialStringKeys?.Distinct(StringComparer.Ordinal).ToList();
 
+    public bool IsExtensible => _extras.IsExtensible;
+    public void Freeze() => _extras.Freeze();
+    public void Seal() => _extras.Seal();
+    public void PreventExtensions() => _extras.PreventExtensions();
+
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? GetProperty(string name) => _extras.GetProperty(name);
 
@@ -31,10 +36,15 @@ internal sealed class PrototypePropertyOverlay(
 
     public void SetProperty(string name, object? value)
     {
+        // A live virtual constructor retains its intrinsic attributes. Once
+        // deleted, assignment creates an ordinary property instead. Existing
+        // explicit descriptors remain authoritative in the extra store.
+        bool preserveAttributes = (name == "constructor" || preserveBuiltInAssignmentAttributes)
+            && !HasExtra(name)
+            && !_deletedBuiltIns.Contains(name)
+            && isBuiltIn(name);
         _deletedBuiltIns.Remove(name);
-        // BigInt/Symbol preserve these attributes even after delete + assignment.
-        // Other prototypes retain their existing ordinary expando assignment policy.
-        if (preserveBuiltInAssignmentAttributes && isBuiltIn(name) && !HasExtra(name))
+        if (preserveAttributes)
         {
             _extras.DefineProperty(name, new SharpTSPropertyDescriptor
             {

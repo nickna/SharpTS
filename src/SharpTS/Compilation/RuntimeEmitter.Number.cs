@@ -22,6 +22,7 @@ public partial class RuntimeEmitter
         ConstructorInfo TypeErrorCtor,
         ConstructorInfo RangeErrorCtor,
         MethodInfo ToNumber,
+        MethodInfo JsToInt32,
         ConstructorBuilder PadUndefinedCtor);
 
     private void DefineNumberFixedFormattingInfrastructure(
@@ -167,7 +168,7 @@ public partial class RuntimeEmitter
         EmitGetDigitValue(typeBuilder, numbers);
         EmitParseIntDecimalStringHelper(typeBuilder, numbers);
         EmitParseIntStringHelper(typeBuilder, numbers);
-        EmitParseIntHelper(typeBuilder, numbers, stringCoercion);
+        EmitParseIntHelper(typeBuilder, numbers, stringCoercion, peers.JsToInt32);
         EmitConvertIntToRadix(typeBuilder, numbers);
         EmitGetValidFloatPart(typeBuilder, numbers);
 
@@ -694,7 +695,7 @@ public partial class RuntimeEmitter
     }
 
     private void EmitParseIntHelper(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
-        EmittedStringCoercionRuntime stringCoercion)
+        EmittedStringCoercionRuntime stringCoercion, MethodInfo jsToInt32)
     {
         // Helper method that implements parseInt logic
         var method = typeBuilder.DefineMethod(
@@ -713,10 +714,6 @@ public partial class RuntimeEmitter
         var startIndexLocal = il.DeclareLocal(_types.Int32);
         var resultLocal = il.DeclareLocal(_types.Int64);
 
-        var getRadixLabel = il.DefineLabel();
-        var radixFromDoubleLabel = il.DefineLabel();
-        var radixFromIntLabel = il.DefineLabel();
-        var afterRadixLabel = il.DefineLabel();
         var checkHexLabel = il.DefineLabel();
         var noHexPrefixLabel = il.DefineLabel();
         var validateRadixLabel = il.DefineLabel();
@@ -734,6 +731,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, rawStrLocal);
         EmitParseIntTrimStart(il, () => il.Emit(OpCodes.Ldloc, rawStrLocal));
         il.Emit(OpCodes.Stloc, strLocal);
+
+        // ToInt32(radix) follows input ToString even when parsing will find no digits.
+        // Reuse ToNumber/ToPrimitive and the finite, truncating modulo-2^32 conversion.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, jsToInt32);
+        il.Emit(OpCodes.Stloc, radixLocal);
 
         // Check for empty string
         il.Emit(OpCodes.Ldloc, strLocal);
@@ -762,7 +765,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, signLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, startIndexLocal);
-        il.Emit(OpCodes.Br, getRadixLabel);
+        il.Emit(OpCodes.Br, checkHexLabel);
 
         il.MarkLabel(notMinusLabel);
         il.Emit(OpCodes.Ldloc, strLocal);
@@ -775,42 +778,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, startIndexLocal);
 
         il.MarkLabel(notPlusLabel);
-
-        // Omitted and non-finite radices infer the base from the input prefix.
-        il.MarkLabel(getRadixLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, afterRadixLabel); // null -> check for hex prefix
-
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brtrue, radixFromDoubleLabel);
-
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.Int32);
-        il.Emit(OpCodes.Brtrue, radixFromIntLabel);
-
-        il.Emit(OpCodes.Br, afterRadixLabel);
-
-        il.MarkLabel(radixFromDoubleLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
-        il.Emit(OpCodes.Brfalse, afterRadixLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, radixLocal);
-        il.Emit(OpCodes.Br, checkHexLabel);
-
-        il.MarkLabel(radixFromIntLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Unbox_Any, _types.Int32);
-        il.Emit(OpCodes.Stloc, radixLocal);
-        il.Emit(OpCodes.Br, checkHexLabel);
-
-        il.MarkLabel(afterRadixLabel);
-        il.Emit(OpCodes.Ldc_I4_0); // radix 0 means auto-detect
-        il.Emit(OpCodes.Stloc, radixLocal);
 
         // Check for 0x prefix (only if radix is 0 or 16)
         il.MarkLabel(checkHexLabel);

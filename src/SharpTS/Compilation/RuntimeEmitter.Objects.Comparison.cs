@@ -11,6 +11,7 @@ public partial class RuntimeEmitter
         EmittedBoxedPrimitiveRuntime BoxedPrimitives,
         EmittedErrorRuntime Errors,
         MethodBuilder GetIndex,
+        MethodBuilder ReflectGet,
         MethodBuilder GetProperty,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectKeysRuntime ObjectKeys,
@@ -250,6 +251,7 @@ public partial class RuntimeEmitter
         var listType = _types.ListOfObject;
         var target = il.DeclareLocal(_types.Object);
         var source = il.DeclareLocal(_types.Object);
+        var sourceValue = il.DeclareLocal(_types.Object);
         var keys = il.DeclareLocal(listType);
         var sourceIndex = il.DeclareLocal(_types.Int32);
         var keyIndex = il.DeclareLocal(_types.Int32);
@@ -275,6 +277,8 @@ public partial class RuntimeEmitter
         var ordinaryEnumerableCheck = il.DefineLabel();
         var ordinaryStringEnumerable = il.DefineLabel();
         var enumerableCheckDone = il.DefineLabel();
+        var ordinarySourceGet = il.DefineLabel();
+        var sourceValueReady = il.DefineLabel();
 
         // 1. Let to be ? ToObject(target).
         il.Emit(OpCodes.Ldarg_0);
@@ -388,15 +392,29 @@ public partial class RuntimeEmitter
         il.MarkLabel(ordinaryStringEnumerable);
         il.MarkLabel(enumerableCheckDone);
 
+        // A trapless Proxy must preserve the source proxy as the accessor
+        // receiver, just as the receiver-aware values/entries path does.
+        il.Emit(OpCodes.Ldloc, sourceIsProxy);
+        il.Emit(OpCodes.Brfalse, ordinarySourceGet);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Call, inputs.ReflectGet);
+        il.Emit(OpCodes.Br, sourceValueReady);
+        il.MarkLabel(ordinarySourceGet);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, inputs.GetIndex);
+        il.MarkLabel(sourceValueReady);
+        il.Emit(OpCodes.Stloc, sourceValue);
+
         il.Emit(OpCodes.Ldloc, key);
         il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolSet);
         il.Emit(OpCodes.Ldloc, target);
         il.Emit(OpCodes.Ldloc, key);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Ldloc, source);
-        il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, inputs.GetIndex);
+        il.Emit(OpCodes.Ldloc, sourceValue);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, inputs.SetPropertyStrict);
         il.Emit(OpCodes.Br, keySetDone);
@@ -404,9 +422,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(symbolSet);
         il.Emit(OpCodes.Ldloc, target);
         il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Ldloc, source);
-        il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, inputs.GetIndex);
+        il.Emit(OpCodes.Ldloc, sourceValue);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, inputs.SetIndexStrict);
         il.MarkLabel(keySetDone);

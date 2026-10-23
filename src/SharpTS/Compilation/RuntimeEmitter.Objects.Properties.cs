@@ -223,8 +223,37 @@ public partial class RuntimeEmitter
     private void EmitCloseOpenGenericOwner(ILGenerator il, LocalBuilder owner) =>
         GenericTypeClosingEmitter.Emit(il, _types, owner);
 
+    private LocalBuilder EmitDeferredStaticFieldStorageOwner(ILGenerator il, LocalBuilder owner,
+        Type userClassInterface, ConstructorBuilder policyAttribute)
+    {
+        // Only a deferred generic definition initializes all source statics in
+        // canonical storage. Ordinary closed generic parents keep their own .cctor storage.
+        var storageOwner = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Ldloc, owner);
+        il.Emit(OpCodes.Stloc, storageOwner);
+        var ready = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, storageOwner);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsGenericType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, ready);
+        il.Emit(OpCodes.Ldtoken, userClassInterface);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldloc, storageOwner);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+        il.Emit(OpCodes.Brfalse, ready);
+        il.Emit(OpCodes.Ldloc, storageOwner);
+        il.Emit(OpCodes.Ldtoken, policyAttribute.DeclaringType!);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsDefined", _types.Type, _types.Boolean));
+        il.Emit(OpCodes.Brfalse, ready);
+        GenericTypeClosingEmitter.Emit(il, _types, storageOwner);
+        il.MarkLabel(ready);
+        return storageOwner;
+    }
+
     private readonly record struct GetPropertyInputs(
         EmittedClassDefinitionRuntime ClassDefinitions,
+        EmittedClassInitializationRuntime ClassInitialization,
         EmittedAbortRuntime? Abort,
         FieldBuilder ArgumentsLengthField,
         TypeBuilder ArgumentsType,
@@ -1539,12 +1568,9 @@ public partial class RuntimeEmitter
         // replicating the dispatch in every object-specific branch. Without
         // this, `{}.__proto__` returns undefined and breaks spec idioms.
         //
-        // CAVEAT: ECMA-262 also allows defining an own "__proto__" data
-        // property that shadows the inherited accessor. JSON.parse creates
-        // such own data properties (CreateDataProperty). For Dict receivers,
-        // check ContainsKey first and fall through to the regular dict path
-        // when the key is present — preserves JSON.parse semantics for the
-        // `{"__proto__":...}` corner.
+        // Dictionary entries retain their ordinary live-value/accessor dispatch.
+        // Other actual own descriptors shadow the inherited accessor, including
+        // undefined data values and accessors without getters.
         var notProtoNameTopLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "__proto__");
@@ -1563,6 +1589,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
         il.Emit(OpCodes.Brtrue, notProtoNameTopLabel);
         il.MarkLabel(noOwnProtoLabel);
+        var ownProtoDescriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        var noOwnProtoDescriptor = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, ownProtoDescriptor);
+        il.Emit(OpCodes.Ldloc, ownProtoDescriptor);
+        il.Emit(OpCodes.Brfalse, noOwnProtoDescriptor);
+        EmitDescriptorReadAndReturn(il, inputs.DescriptorStorage, ownProtoDescriptor,
+            () => il.Emit(OpCodes.Ldarg_0), inputs.InvokeMethodValue, inputs.UndefinedInstance, inputs.UndefinedType);
+        il.MarkLabel(noOwnProtoDescriptor);
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
         il.Emit(OpCodes.Ret);
@@ -1609,7 +1647,7 @@ public partial class RuntimeEmitter
                 inputs.TSFunctionCtor,
                 inputs.UndefinedInstance
             ),
-            method,
+            inputs.Reflect.Get,
             notTSObjectLabel
         );
         il.MarkLabel(notTSObjectLabel);
@@ -1849,7 +1887,7 @@ public partial class RuntimeEmitter
 
         // String - "length"/"constructor"/index/String.prototype methods.
         var notStringArmLabel = il.DefineLabel();
-        EmitStringGetBranch(il, inputs.Strings, method, notStringArmLabel);
+        EmitStringGetBranch(il, inputs.Strings, inputs.Reflect.Get, notStringArmLabel);
         il.MarkLabel(notStringArmLabel);
 
         // $Buffer - "length" and "toString". Only meaningful when some feature
@@ -2412,6 +2450,18 @@ public partial class RuntimeEmitter
                 il.MarkLabel(notRegExpLabel);
             }
 
+            if (inputs.ArrayBuffer is { } arrayBufferPrototype)
+            {
+                var notArrayBufferPrototype = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldtoken, arrayBufferPrototype.Type);
+                il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+                il.Emit(OpCodes.Bne_Un, notArrayBufferPrototype);
+                il.Emit(OpCodes.Ldsfld, arrayBufferPrototype.PrototypeField);
+                il.Emit(OpCodes.Ret);
+                il.MarkLabel(notArrayBufferPrototype);
+            }
+
             // Emitted user classes implement $IHasFields. Their prototype is
             // a stable constructor-free instance whose normal GetProperty
             // implementation exposes declared methods/accessors.
@@ -2451,7 +2501,7 @@ public partial class RuntimeEmitter
             var computedStaticGetterLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindGetter);
+            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindOwnGetter);
             il.Emit(OpCodes.Stloc, computedStaticGetterLocal);
             il.Emit(OpCodes.Ldloc, computedStaticGetterLocal);
             il.Emit(OpCodes.Brfalse, noComputedStaticGetterLabel);
@@ -2476,7 +2526,7 @@ public partial class RuntimeEmitter
                 var computedStaticMethodLocal = il.DeclareLocal(_types.Object);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindMethod);
+                il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindOwnMethod);
                 il.Emit(OpCodes.Stloc, computedStaticMethodLocal);
                 il.Emit(OpCodes.Ldloc, computedStaticMethodLocal);
                 il.Emit(OpCodes.Brfalse, noComputedStaticMethodLabel);
@@ -2581,23 +2631,6 @@ public partial class RuntimeEmitter
             il.MarkLabel(notBigIntLengthLabel);
             il.MarkLabel(notTypeLengthLabel);
 
-            // hasOwnProperty — return a $TSFunction wrapping HasOwnPropertyHelper,
-            // bound to this Type as the receiver. Test262 patterns like
-            // `Number.hasOwnProperty("prototype")` must dispatch through this.
-            // Without this arm the lookup falls through to the .NET reflection
-            // tail and finds nothing (or accidentally finds a CLR member by
-            // case-insensitive matching).
-            var notHasOwnLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "hasOwnProperty");
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            il.Emit(OpCodes.Brfalse, notHasOwnLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, inputs.ObjectOwnProperties.HasOwnProperty);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notHasOwnLabel);
-
             // Cache the casted Type reference for the three reflection probes below.
             var typeLocal = il.DeclareLocal(_types.Type);
             il.Emit(OpCodes.Ldarg_0);
@@ -2629,9 +2662,13 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(noStaticMethodLabel);
 
+            // A live constructor-prototype read reenters here on its closed
+            // generic parent. Select deferred storage without changing that parent identity.
+            var fieldOwnerLocal = EmitDeferredStaticFieldStorageOwner(il, methodOwnerLocal,
+                inputs.IHasFieldsInterface, inputs.ClassInitialization.CanonicalStaticStorageAttributeConstructor);
             // Static field: type.GetField(name, Public|Static).
             var staticFieldLocal = il.DeclareLocal(typeof(FieldInfo));
-            il.Emit(OpCodes.Ldloc, methodOwnerLocal);
+            il.Emit(OpCodes.Ldloc, fieldOwnerLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)staticPublic);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
@@ -2697,6 +2734,33 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notClassNameLabel);
+
+            if (_features.UsesUserClasses)
+            {
+                // Own slots have been exhausted. Inherited reads must follow
+                // the live guest prototype rather than the CLR BaseType chain.
+                var notUserClass = il.DefineLabel();
+                il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
+                il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+                il.Emit(OpCodes.Ldloc, typeLocal);
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+                il.Emit(OpCodes.Brfalse, notUserClass);
+                EmitTypePrototypeReadAndReturn(il, inputs);
+                il.MarkLabel(notUserClass);
+            }
+
+            // Built-in constructor Types retain their inherited helper surface.
+            // User classes reached the live prototype lookup above instead.
+            var notHasOwnLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "hasOwnProperty");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, notHasOwnLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            _types.EmitLoadMethodInfo(il, inputs.ObjectOwnProperties.HasOwnProperty);
+            il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notHasOwnLabel);
 
             // ECMA-262 §20.2.3: every Function instance inherits from
             // %Function.prototype%. Constructors (System.Type tokens) are
@@ -2854,8 +2918,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noBaseStaticMethodLabel);
 
+            // Keep the ancestor's guest identity for descriptors/deletion above;
+            // only deferred generic field storage uses the canonical closed owner.
+            var baseFieldOwner = EmitDeferredStaticFieldStorageOwner(il, baseMethodOwner,
+                inputs.IHasFieldsInterface, inputs.ClassInitialization.CanonicalStaticStorageAttributeConstructor);
             // declared static field → field.GetValue(null)
-            il.Emit(OpCodes.Ldloc, baseMethodOwner);
+            il.Emit(OpCodes.Ldloc, baseFieldOwner);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)declaredStaticPublic);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
@@ -3245,8 +3313,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notPromiseCtorLabel);
 
-        // Unknown promise property - return null
-        il.Emit(OpCodes.Ldnull);
+        // An absent Promise property reads as JavaScript undefined.
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         }
 

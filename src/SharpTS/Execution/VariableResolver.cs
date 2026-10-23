@@ -216,14 +216,14 @@ public class VariableResolver : AstVisitorBase
 
     private bool BeginParameterBodyScope(List<Stmt.Parameter> parameters, List<Stmt> body)
     {
-        if (!ParameterBinder.HasParameterExpressions(parameters)) return false;
-        BeginScope();
-        foreach (var (name, _) in ParameterBinder.BodyVarDeclarations(body))
+        bool separateBody = ParameterBinder.HasParameterExpressions(parameters);
+        if (separateBody) BeginScope();
+        foreach (var (name, _) in ParameterBinder.InterpreterBodyVarDeclarations(body))
         {
             Declare(name.Lexeme);
             Define(name.Lexeme);
         }
-        return true;
+        return separateBody;
     }
 
     protected override void VisitClass(Stmt.Class stmt)
@@ -325,7 +325,7 @@ public class VariableResolver : AstVisitorBase
         Visit(stmt.Iterable);
 
         BeginScope();
-        if (stmt.IsDeclaration)
+        if (stmt.IsDeclaration && !stmt.IsVar)
         {
             Declare(stmt.Variable.Lexeme);
             Define(stmt.Variable.Lexeme);
@@ -341,7 +341,7 @@ public class VariableResolver : AstVisitorBase
         Visit(stmt.Object);
 
         BeginScope();
-        if (stmt.IsDeclaration)
+        if (stmt.IsDeclaration && !stmt.IsVar)
         {
             Declare(stmt.Variable.Lexeme);
             Define(stmt.Variable.Lexeme);
@@ -425,6 +425,7 @@ public class VariableResolver : AstVisitorBase
         Define(stmt.Name.Lexeme);
 
         BeginScope();
+        PredeclareLoopVarBindings(stmt.Members);
         foreach (var member in stmt.Members)
             Visit(member);
         EndScope();
@@ -445,6 +446,39 @@ public class VariableResolver : AstVisitorBase
             {
                 Define(binding.Name.Lexeme);
             }
+        }
+    }
+
+    private void PredeclareLoopVarBindings(IEnumerable<Stmt> statements)
+    {
+        foreach (var name in InterpreterVarDeclarations.CollectLoopHeads(statements))
+        {
+            Declare(name.Lexeme);
+            Define(name.Lexeme);
+        }
+    }
+
+    protected override void VisitStaticBlock(Stmt.StaticBlock stmt)
+    {
+        // Match the runtime's block environment independently of var loop heads.
+        BeginScope();
+        try
+        {
+            // Use the same direct var/loop declarations as runtime block entry;
+            // function declarations retain their existing handling.
+            foreach (var (name, isFunction) in ParameterBinder.InterpreterBodyVarDeclarations(stmt.Body))
+            {
+                if (isFunction) continue;
+                Declare(name.Lexeme);
+                Define(name.Lexeme);
+            }
+            PredeclareLexicalBindings(stmt.Body);
+            foreach (var statement in stmt.Body)
+                Visit(statement);
+        }
+        finally
+        {
+            EndScope();
         }
     }
 
@@ -593,6 +627,13 @@ public class VariableResolver : AstVisitorBase
                     : new List<Stmt.Parameter>();
                 ResolveFunction(parameters, accessor.Body, FunctionType.Method);
             }
+        }
+
+        // Every static block has its own runtime environment, including expressions.
+        if (expr.StaticInitializers != null)
+        {
+            foreach (var block in expr.StaticInitializers.OfType<Stmt.StaticBlock>())
+                Visit(block);
         }
 
         EndScope(); // 'this' scope

@@ -337,7 +337,22 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 break;
             case Expr.ArrowFunction af:
                 if (af.IsGenerator) EmitGeneratorExpression(af);
-                else EmitArrowFunction(af);
+                else
+                {
+                    EmitArrowFunction(af);
+                    if (af.IsAsync && af.HasOwnThis && af.RuntimeName != null)
+                    {
+                        // Lowered declarations own properties and integrity state per activation.
+                        var function = IL.DeclareLocal(Ctx.Runtime!.FunctionValues.Type);
+                        IL.Emit(OpCodes.Castclass, Ctx.Runtime.FunctionValues.Type);
+                        IL.Emit(OpCodes.Stloc, function);
+                        IL.Emit(OpCodes.Ldloc, function);
+                        IL.Emit(OpCodes.Ldloc, function);
+                        IL.Emit(OpCodes.Stfld, Ctx.Runtime.FunctionValues.PropertyIdentityField);
+                        IL.Emit(OpCodes.Ldloc, function);
+                        SetStackUnknown();
+                    }
+                }
                 break;
             case Expr.RegexLiteral re:
                 EmitRegexLiteral(re);
@@ -350,6 +365,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 break;
             case Expr.Grouping g:
                 EmitGrouping(g);
+                break;
+            case Expr.Instantiation instantiation:
+                EmitExpression(instantiation.Expression);
                 break;
             case Expr.TypeAssertion ta:
                 EmitTypeAssertion(ta);
@@ -460,10 +478,11 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (TryEmitStableNumericLocalComparison(b))
             return;
 
-        // Bitwise and shift operators need int32 coercion of both operands per ECMA-262 ToInt32.
-        if (IsBitwiseOrShiftOp(b.Operator.Type))
+        // Numeric binary operations select Number or BigInt only after both
+        // values are evaluated and each ordered ToNumeric completes.
+        if (IsNumericBinaryOp(b.Operator.Type))
         {
-            EmitBitwiseOrShiftBinary(b);
+            EmitDynamicNumericBinary(b);
             return;
         }
 
@@ -553,62 +572,23 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
         or TypeSystem.TypeInfo.NumberLiteral;
 
-    private static bool IsBitwiseOrShiftOp(TokenType op) => op is
+    private static bool IsNumericBinaryOp(TokenType op) => op is
+        TokenType.MINUS or TokenType.STAR or TokenType.SLASH or TokenType.PERCENT or TokenType.STAR_STAR or
         TokenType.AMPERSAND or TokenType.PIPE or TokenType.CARET or
         TokenType.LESS_LESS or TokenType.GREATER_GREATER or TokenType.GREATER_GREATER_GREATER;
 
     /// <summary>
-    /// Emits a bitwise (&amp;, |, ^) or shift (&lt;&lt;, &gt;&gt;, &gt;&gt;&gt;) binary operator.
-    /// Per ECMA-262 ToInt32, both operands are coerced to int32, then the op applies.
-    /// Mirrors ILEmitter.EmitBitwiseBinary but without stack-type tracking.
+    /// Evaluates both operands before ordered numeric conversion, preserving
+    /// spilled values when a state-machine RHS suspends.
     /// </summary>
-    private void EmitBitwiseOrShiftBinary(Expr.Binary b)
+    protected void EmitDynamicNumericBinary(Expr.Binary b)
     {
-        // Spill the coerced left operand so an await inside Right suspends with an empty stack.
-        EmitExpression(b.Left);
-        EnsureBoxed();
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.NumericCoercion.JsToInt32);
-        var leftLocal = IL.DeclareLocal(typeof(int));
-        IL.Emit(OpCodes.Stloc, leftLocal);
-
-        EmitExpression(b.Right);
-        EnsureBoxed();
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.NumericCoercion.JsToInt32);
-        var rightLocal = IL.DeclareLocal(typeof(int));
-        IL.Emit(OpCodes.Stloc, rightLocal);
-
+        var leftLocal = SpillBoxed(b.Left);
+        var rightLocal = SpillBoxed(b.Right);
         IL.Emit(OpCodes.Ldloc, leftLocal);
         IL.Emit(OpCodes.Ldloc, rightLocal);
-
-        switch (b.Operator.Type)
-        {
-            case TokenType.AMPERSAND: IL.Emit(OpCodes.And); break;
-            case TokenType.PIPE: IL.Emit(OpCodes.Or); break;
-            case TokenType.CARET: IL.Emit(OpCodes.Xor); break;
-            case TokenType.LESS_LESS:
-                IL.Emit(OpCodes.Ldc_I4, 0x1F);
-                IL.Emit(OpCodes.And);
-                IL.Emit(OpCodes.Shl);
-                break;
-            case TokenType.GREATER_GREATER:
-                IL.Emit(OpCodes.Ldc_I4, 0x1F);
-                IL.Emit(OpCodes.And);
-                IL.Emit(OpCodes.Shr);
-                break;
-            case TokenType.GREATER_GREATER_GREATER:
-                IL.Emit(OpCodes.Ldc_I4, 0x1F);
-                IL.Emit(OpCodes.And);
-                IL.Emit(OpCodes.Shr_Un);
-                IL.Emit(OpCodes.Conv_U8);
-                IL.Emit(OpCodes.Conv_R8);
-                IL.Emit(OpCodes.Box, typeof(double));
-                SetStackUnknown();
-                return;
-        }
-
-        // Integer-result ops: convert int32 result back to double and box to match JS number semantics.
-        IL.Emit(OpCodes.Conv_R8);
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Ldc_I4, (int)b.Operator.Type);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.NumericBinary);
         SetStackUnknown();
     }
 
@@ -618,6 +598,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitGetIndex(Expr.GetIndex gi)
     {
+        if (gi.Object is Expr.Super { Method: null })
+        {
+            EmitComputedSuperGet(gi);
+            return;
+        }
+
         // Stable primitive Promise.all result: the analyzer proved this local
         // cannot escape and is observed only through numeric index reads and
         // length, so PromiseAllPrimitive returns an internal List<double>.
@@ -673,7 +659,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
 
         // globalThis[key] → GlobalThisGetProperty(key)
-        if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis")
+        if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis"
+            && CanUseStaticTypeStrategy(gtGetIdx.Name.Lexeme))
         {
             if (gi.Index is not Expr.Literal { Value: string key } || key == "eval")
                 Ctx.Runtime!.Deployment.Require("indirect eval");
@@ -1456,6 +1443,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // that boundary while following type-only wrappers on the chain itself.
         return expression switch
         {
+            Expr.Instantiation instantiation => ReferenceHasOptionalLink(instantiation.Expression),
             Expr.TypeAssertion assertion => ReferenceHasOptionalLink(assertion.Expression),
             Expr.Satisfies satisfies => ReferenceHasOptionalLink(satisfies.Expression),
             Expr.NonNullAssertion assertion => ReferenceHasOptionalLink(assertion.Expression),
@@ -1724,6 +1712,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitNew(Expr.New n)
     {
+        if (Ctx.RuntimeFeatures?.UsesClassPrototypeMutation == true
+            && Ctx.TypeMapper.IsDynamicClassInstance(Ctx.TypeMap?.Get(n)))
+        {
+            EmitDynamicConstruction(n);
+            return;
+        }
         if (Ctx.TypeMapper.HeldClassConstructions?.RequiresValueConstruction(n) == true)
         {
             EmitDynamicConstruction(n);
@@ -2085,6 +2079,18 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             else IL.Emit(OpCodes.Pop);
         }
 
+        // Iterator expressions keep their per-invocation arrow scope in the state machine's
+        // function-DC slot. A body closure must retain that same scope, not snapshot its values.
+        if (Ctx.ArrowScopeDCFields?.TryGetValue(af, out var arrowScopeDCField) == true &&
+            GetFunctionDCField() is FieldBuilder stateMachineArrowScope &&
+            stateMachineArrowScope.FieldType == arrowScopeDCField.FieldType)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldfld, stateMachineArrowScope);
+            IL.Emit(OpCodes.Stfld, arrowScopeDCField);
+        }
+
         if (Ctx.DisplayClassFields?.TryGetValue(af, out var fieldMap) == true)
         {
             foreach (var (capturedVar, field) in fieldMap)
@@ -2304,7 +2310,49 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // including state-machine bodies; direct static eval keeps its own lowering.
         if (TryEmitIndirectEvalValue(name)) return true;
 
+        if (name == "parseInt")
+        {
+            EmitGlobalParseIntRead(IL, Ctx);
+            SetStackUnknown();
+            return true;
+        }
+
+        // Match the synchronous emitter's last-resort constructor value lookup.
+        // Real bindings and built-in Type tokens above keep their precedence.
+        if (name is "Object" or "Function" or "Number" or "String" or "Boolean")
+        {
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetProperty);
+            SetStackUnknown();
+            return true;
+        }
+
         return false;
+    }
+
+    // A global identifier read must distinguish a missing binding from a present
+    // property whose value is undefined. Qualified property reads remain unchecked.
+    internal static void EmitGlobalParseIntRead(
+        ILGenerator il, CompilationContext ctx, bool allowMissing = false)
+    {
+        il.Emit(OpCodes.Ldstr, "parseInt");
+        il.Emit(OpCodes.Call, allowMissing
+            ? ctx.Runtime!.GlobalObject.GetProperty
+            : ctx.Runtime!.GlobalObject.GetBinding);
+    }
+
+    protected bool TryEmitGlobalParseIntTypeOf(Expr operand)
+    {
+        if (ExpressionUnwrapper.Unwrap(operand) is not Expr.Variable { Name.Lexeme: "parseInt" }
+            || Resolver.HasVariable("parseInt") || Ctx.HasVisibleValueBinding("parseInt"))
+            return false;
+
+        // Parentheses preserve an identifier reference's typeof exemption.
+        // Still perform the property read so present accessors run normally.
+        EmitGlobalParseIntRead(IL, Ctx, allowMissing: true);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.TypeOf);
+        SetStackType(StackType.String);
+        return true;
     }
 
     protected bool TryEmitIndirectEvalValue(string name)
@@ -2616,11 +2664,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// <summary>
     /// Loads a static data field read through <paramref name="resolvedClassName"/>. For a field the
     /// class declares itself this is a plain <c>Ldsfld</c>. For an <em>inherited</em> static field
-    /// (declared on a base, resolved via the superclass walk) a subclass write creates a per-subclass
-    /// own shadow in $PropertyDescriptorStore keyed by the subclass Type — so the read first consults
-    /// that store (walking the Type chain) and only falls back to the declaring base's field when no
-    /// shadow exists. This matches interpreter / JS own-shadow semantics (issue #339). The shadow probe
-    /// is emitted only on the inherited path, leaving own-field reads a single load.
+    /// (declared on a base, resolved via the superclass walk), the runtime lookup respects own
+    /// shadows and the constructor's current internal prototype. Own-field reads remain a single load.
     /// </summary>
     protected void EmitStaticFieldLoadWithShadow(string resolvedClassName, System.Reflection.Emit.TypeBuilder classBuilder, string fieldName, System.Reflection.FieldInfo resolvedField)
     {
@@ -2632,27 +2677,11 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return;
         }
 
-        // Inherited field: probe for a runtime own-shadow on the subclass (or a nearer ancestor) first.
-        var shadowLocal = IL.DeclareLocal(Ctx.Runtime!.DescriptorStorage.DescriptorType);
-        var noShadowLabel = IL.DefineLabel();
-        var doneLabel = IL.DefineLabel();
-
+        // The selected prototype can differ from the statically resolved base.
         IL.Emit(OpCodes.Ldtoken, classBuilder);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         IL.Emit(OpCodes.Ldstr, fieldName);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.DescriptorStorage.GetStaticShadow);
-        IL.Emit(OpCodes.Stloc, shadowLocal);
-
-        IL.Emit(OpCodes.Ldloc, shadowLocal);
-        IL.Emit(OpCodes.Brfalse, noShadowLabel);
-        IL.Emit(OpCodes.Ldloc, shadowLocal);
-        IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.DescriptorStorage.DescriptorValue.GetGetMethod()!);
-        IL.Emit(OpCodes.Br, doneLabel);
-
-        IL.MarkLabel(noShadowLabel);
-        IL.Emit(OpCodes.Ldsfld, resolvedField);
-
-        IL.MarkLabel(doneLabel);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
         SetStackUnknown();
     }
 
@@ -2814,6 +2843,25 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitUnary(Expr.Unary u)
     {
+        if (u.Operator.Type == TokenType.INTERNAL_TO_PROPERTY_KEY)
+        {
+            EmitExpression(u.Right);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Reflect.ToPropertyKey);
+            if (Ctx.TypeMap?.Get(u) is TypeSystem.TypeInfo.String or TypeSystem.TypeInfo.StringLiteral
+                or TypeSystem.TypeInfo.TemplateLiteralType
+                or TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_STRING })
+            {
+                IL.Emit(OpCodes.Castclass, Types.String);
+                SetStackType(StackType.String);
+            }
+            else
+            {
+                SetStackUnknown();
+            }
+            return;
+        }
+
         if (u.Operator.Type == TokenType.MINUS && u.Right is Expr.Literal { Value: System.Numerics.BigInteger value })
         {
             EmitBigIntConstant(-value);
@@ -2833,7 +2881,11 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 break;
             case TokenType.TYPEOF:
                 // typeof never throws on undeclared variables - returns "undefined"
-                if (u.Right is Expr.Variable { Name.Lexeme: "Proxy" })
+                if (TryEmitGlobalParseIntTypeOf(u.Right))
+                {
+                    break;
+                }
+                else if (u.Right is Expr.Variable { Name.Lexeme: "Proxy" })
                 {
                     _helpers.IL.Emit(OpCodes.Ldstr, "function");
                     _helpers.SetStackUnknown();
@@ -3165,12 +3217,16 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     /// <summary>
     /// Returns whether a bare built-in name may use its registry-backed static
-    /// property representation. Promise is special because primitive-await
+    /// property representation. Lexical Number/Math/ArrayBuffer/globalThis/Reflect bindings require ordinary member reads.
+    /// Promise additionally checks mutation because primitive-await
     /// lowering must preserve a shadowed or mutated <c>Promise.resolve</c> call
     /// all the way through method materialization and receiver binding.
     /// </summary>
     protected bool CanUseStaticTypeStrategy(string name)
     {
+        if (name is "Number" or "Math" or "ArrayBuffer" or "globalThis" or "Reflect")
+            return !Resolver.HasVariable(name) && !Ctx.HasVisibleValueBinding(name);
+
         return name != "Promise"
             || (Ctx.RuntimeFeatures?.UsesPromisePrototypeMutation != true
                 && !Resolver.HasVariable(name)

@@ -1008,9 +1008,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, removeMethod);
-        // Pop the bool result; always return true (matches existing
-        // DeleteProperty contract: "true on success or absent").
+        var unchangedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, unchangedLabel);
+
+        // Dictionary reuses removed entry slots. Compact only after a real
+        // deletion so a recreated property receives a new creation position,
+        // preserving surviving descriptor instances and their current order.
+        var dictionaryInterface = _types.MakeGenericType(typeof(IDictionary<,>),
+            typeof(Dictionary<,>).GetGenericArguments());
+        // Persisted emission retains the descriptor TypeBuilder; in-memory
+        // emission has baked it and requires the closed interface signature.
+        var copyConstructor = storage.DescriptorType is TypeBuilder
+            ? EmitterTypeHelpers.ResolveConstructor(descriptorsDictType,
+                typeof(Dictionary<,>).GetConstructor([dictionaryInterface])!)
+            : _types.GetConstructor(descriptorsDictType,
+                _types.MakeGenericType(typeof(IDictionary<,>), _types.String, storage.DescriptorType));
+        var weakTableArguments = typeof(ConditionalWeakTable<,>).GetGenericArguments();
+        var compactLocal = il.DeclareLocal(descriptorsDictType);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Newobj, copyConstructor);
+        il.Emit(OpCodes.Stloc, compactLocal);
+        il.Emit(OpCodes.Ldsfld, descriptorsField);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Callvirt, EmitterTypeHelpers.ResolveMethod(descriptorsField.FieldType,
+            typeof(ConditionalWeakTable<,>).GetMethod("Remove", [weakTableArguments[0]])!));
         il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldsfld, descriptorsField);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Ldloc, compactLocal);
+        il.Emit(OpCodes.Callvirt, EmitterTypeHelpers.ResolveMethod(descriptorsField.FieldType,
+            typeof(ConditionalWeakTable<,>).GetMethod("Add", weakTableArguments)!));
+
+        il.MarkLabel(unchangedLabel);
+        // DeleteProperty returns true on success or absence.
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
     }

@@ -1290,15 +1290,44 @@ public class SharpTSProxy : ISharpTSCallable
         Func<object, bool> ordinaryIsExtensible,
         Func<object, string, object?> ordinaryGet,
         Func<object, string, bool> ordinaryHasOwn)
+        => TrapDefinePropertyCompiledCore(prop, descriptor, ordinaryDefine,
+            ordinaryGetOwnPropertyDescriptor, ordinaryIsExtensible,
+            ordinaryGet, ordinaryHasOwn, converted: false);
+
+    /// <summary>
+    /// Defines from a compiler-normalized partial descriptor. Forwarding keeps
+    /// that record private; a user trap receives its ordinary public copy.
+    /// </summary>
+    public bool TrapDefineConvertedPropertyCompiled(
+        object prop,
+        object descriptor,
+        Func<object, object, object, object?> ordinaryDefine,
+        Func<object, object, object?> ordinaryGetOwnPropertyDescriptor,
+        Func<object, bool> ordinaryIsExtensible,
+        Func<object, string, object?> ordinaryGet,
+        Func<object, string, bool> ordinaryHasOwn)
+        => TrapDefinePropertyCompiledCore(prop, descriptor, ordinaryDefine,
+            ordinaryGetOwnPropertyDescriptor, ordinaryIsExtensible,
+            ordinaryGet, ordinaryHasOwn, converted: true);
+
+    private bool TrapDefinePropertyCompiledCore(
+        object prop,
+        object descriptor,
+        Func<object, object, object, object?> ordinaryDefine,
+        Func<object, object, object?> ordinaryGetOwnPropertyDescriptor,
+        Func<object, bool> ordinaryIsExtensible,
+        Func<object, string, object?> ordinaryGet,
+        Func<object, string, bool> ordinaryHasOwn,
+        bool converted)
     {
         var trap = GetTrapCallableCompiled("defineProperty", ordinaryGet);
         if (trap == null)
         {
             if (_target is SharpTSProxy proxy)
-                return proxy.TrapDefinePropertyCompiled(
+                return proxy.TrapDefinePropertyCompiledCore(
                     prop, descriptor, ordinaryDefine,
                     ordinaryGetOwnPropertyDescriptor, ordinaryIsExtensible,
-                    ordinaryGet, ordinaryHasOwn);
+                    ordinaryGet, ordinaryHasOwn, converted);
             object? result = ordinaryDefine(_target, prop, descriptor);
             // Object.defineProperty's callback returns the target object and
             // therefore denotes success. Reflect.defineProperty's callback
@@ -1307,8 +1336,19 @@ public class SharpTSProxy : ISharpTSCallable
             return result is bool status ? status : true;
         }
 
+        object trapDescriptor = descriptor;
+        if (converted)
+        {
+            // These records were already validated and have only own data
+            // fields. Do not re-read guest getters or expose their null root.
+            var fields = (Dictionary<string, object?>)descriptor;
+            var publicDescriptor = new Dictionary<string, object?>();
+            foreach (string field in new[] { "value", "writable", "get", "set", "enumerable", "configurable" })
+                if (fields.TryGetValue(field, out var value)) publicDescriptor.Add(field, value);
+            trapDescriptor = publicDescriptor;
+        }
         bool trapResult = ToBoolean(InvokeTrap(
-            trap, null, [_target, prop, descriptor]));
+            trap, null, [_target, prop, trapDescriptor]));
         if (!trapResult) return false;
 
         object? targetDescriptor = _target is SharpTSProxy targetProxy

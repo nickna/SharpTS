@@ -64,12 +64,19 @@ public sealed class SharpTSClassPrototype : ISharpTSMutableBuiltIn
     public void SetExtra(string name, object? value)
     {
         bool existed = HasOwnProperty(name);
+        // A refused addition must not clear a deleted virtual member's tombstone.
+        if (!existed && !_overlay.IsExtensible) return;
         _overlay.SetProperty(name, value);
         if (HasOwnProperty(name)) RecordWrittenKey(name, existed);
     }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
         bool existed = HasOwnProperty(name);
+        if (!existed && !_overlay.IsExtensible) return false;
+        // Declared string methods (and constructor) remain virtual until an
+        // override is needed. Seed their complete descriptor so ordinary
+        // partial-descriptor merging retains omitted values and attributes.
+        if (existed) MaterializeOwnVirtualProperty(name);
         if (!_overlay.DefineProperty(name, descriptor)) return false;
         RecordWrittenKey(name, existed);
         return true;
@@ -90,6 +97,34 @@ public sealed class SharpTSClassPrototype : ISharpTSMutableBuiltIn
 
     public bool HasOwnProperty(string name) => _overlay.HasOwnProperty(name);
     public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
+
+    internal void FreezeOwnProperties()
+    {
+        MaterializeOwnVirtualPropertiesForIntegrity();
+        _overlay.Freeze();
+    }
+
+    internal void SealOwnProperties()
+    {
+        MaterializeOwnVirtualPropertiesForIntegrity();
+        _overlay.Seal();
+    }
+
+    private void MaterializeOwnVirtualPropertiesForIntegrity()
+    {
+        // Only present own methods and constructor are virtual. Accessors and
+        // symbols already have canonical descriptors; never evaluate a getter.
+        foreach (var name in OwnStringKeys().ToArray())
+            MaterializeOwnVirtualProperty(name);
+    }
+
+    private void MaterializeOwnVirtualProperty(string name)
+    {
+        if (_overlay.GetOwnPropertyDescriptor(name) == null
+            && TryGetOwnMember(name, out var member))
+            _overlay.DefineProperty(name, new SharpTSPropertyDescriptor(
+                member, writable: true, enumerable: false, configurable: true));
+    }
 
     internal void InitializeOwnKeyOrder(IEnumerable<object> keys)
     {

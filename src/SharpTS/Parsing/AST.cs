@@ -112,11 +112,14 @@ public abstract record Expr
         /// </summary>
         public JsxCallInfo? JsxOrigin { get; init; } = null;
     }
+    /// <summary>A type-only specialization of a callable value; evaluating it does not call the operand.</summary>
+    public record Instantiation(Expr Expression, Token LessThan, List<string> TypeArgs, List<TypeNode?>? TypeArgNodes = null) : Expr;
     // Defaulted: this property read was synthesized by destructuring desugaring and is covered
     // by a default (its own, or a default on an enclosing pattern). The type checker treats a
     // missing property as `undefined` for such reads instead of reporting TS2339, since the
     // wrapping `=== undefined ? default : read` ternary (or an enclosing default) supplies the
     // value. A non-defaulted read stays strict (`const { a } = {}` is still an error). See #796.
+    // Numeric read specializations must preserve a missing value until that default test.
     public record Get(Expr Object, Token Name, bool Optional = false, bool Defaulted = false) : Expr;
     public record Set(Expr Object, Token Name, Expr Value) : Expr;
     /// <summary>Private field access: obj.#field</summary>
@@ -191,7 +194,8 @@ public abstract record Expr
         bool IsShorthandDefault = false);
     public record GetIndex(Expr Object, Expr Index, bool Optional = false) : Expr;
     public record SetIndex(Expr Object, Expr Index, Expr Value) : Expr;
-    public record Super(Token Keyword, Token? Method) : Expr;  // Method is null for super() constructor calls
+    // Method is null for super() and for the lexical-home marker in GetIndex(super, key).
+    public record Super(Token Keyword, Token? Method) : Expr;
     public record SetSuper(Super Target, Expr Value) : Expr;
     // Compound assignment
     public record CompoundAssign(Token Name, Token Operator, Expr Value) : Expr;
@@ -361,7 +365,14 @@ public abstract record Stmt
     /// inferred type is still kept). Set by the destructuring desugarer to carry the binding pattern's
     /// shape so a mixed array literal source infers as a tuple instead of an array (#783). Erased at
     /// runtime (interpreter and IL compiler ignore it).</param>
-    public record Var(Token Name, string? TypeAnnotation, Expr? Initializer, bool HasDefiniteAssignmentAssertion = false, bool IsVar = false, TypeNode? TypeAnnotationNode = null, Expr? HoistTypeInferenceInitializer = null, TypeNode? InitializerContext = null, bool IsDeclare = false, DestructuringSourceKind DestructuringSource = DestructuringSourceKind.None) : Stmt;
+    public record Var(Token Name, string? TypeAnnotation, Expr? Initializer, bool HasDefiniteAssignmentAssertion = false, bool IsVar = false, TypeNode? TypeAnnotationNode = null, Expr? HoistTypeInferenceInitializer = null, TypeNode? InitializerContext = null, bool IsDeclare = false, DestructuringSourceKind DestructuringSource = DestructuringSourceKind.None) : Stmt
+    {
+        /// <summary>
+        /// A synthetic matched-value spill awaiting an undefined-only destructuring default. Keep its
+        /// guest value in object storage even when the initializer is statically numeric (#2752).
+        /// </summary>
+        public bool PreserveRawInitializerValue { get; init; }
+    }
     /// <summary>
     /// Const variable declaration. Separate from Var for cleaner const-specific handling (e.g., unique symbol).
     /// Initializer is non-nullable since const always requires initialization.

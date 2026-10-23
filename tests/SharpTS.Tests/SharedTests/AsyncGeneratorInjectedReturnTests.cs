@@ -3,6 +3,7 @@ using Xunit;
 
 namespace SharpTS.Tests.SharedTests;
 
+[Collection("CompilationService")]
 public sealed class AsyncGeneratorInjectedReturnTests
 {
     public static IEnumerable<object[]> Cases()
@@ -210,20 +211,125 @@ public sealed class AsyncGeneratorInjectedReturnTests
             }
             run().catch((error: any) => console.log("unexpected", error && error.name));
             """, "1\n7\nfinally\n9 true\ntrue\n8 false\nfinally\n9 true\n"];
+        yield return ["throw-at-cleanup-yield-overrides-return-and-runs-outer-finally", """
+            const events: string[] = [], token = {};
+            async function* values(): any {
+                try {
+                    try { yield 1; }
+                    finally {
+                        events.push('inner');
+                        yield 2;
+                        events.push('after-yield');
+                    }
+                } finally { events.push('outer'); }
+                events.push('after');
+            }
+            async function run() {
+                const iterator: any = values();
+                await iterator.next();
+                const suspended: any = await iterator.return(7);
+                console.log(suspended.value, suspended.done, events.join(','));
+                try { await iterator.throw(token); console.log('unexpected'); }
+                catch (error) { console.log(error === token, events.join(',')); }
+                const end: any = await iterator.next();
+                console.log(end.value === undefined, end.done, events.join(','));
+            }
+            run().catch((error: any) => console.log('unexpected', error && error.name));
+            """, "2 false inner\ntrue inner,outer\ntrue true inner,outer\n"];
+        yield return ["timer-await-then-cleanup-yield-preserves-return-through-outer-finally", """
+            const events: string[] = [];
+            async function* values(): any {
+                try {
+                    try { yield 1; }
+                    finally {
+                        events.push('before');
+                        const value = await new Promise<number>(resolve => {
+                            setTimeout(() => { events.push('timer'); resolve(3); }, 0);
+                        });
+                        events.push('after:' + value);
+                        yield 2;
+                        events.push('resumed');
+                    }
+                } finally { events.push('outer'); }
+                events.push('after-body');
+            }
+            async function run() {
+                const iterator: any = values();
+                await iterator.next();
+                const suspended: any = await iterator.return(7);
+                console.log(suspended.value, suspended.done, events.join(','));
+                const end: any = await iterator.next();
+                console.log(end.value, end.done, events.join(','));
+                console.log((await iterator.next()).done, events.join(','));
+            }
+            run().catch((error: any) => console.log('unexpected', error && error.name));
+            """, "2 false before,timer,after:3\n7 true before,timer,after:3,resumed,outer\ntrue before,timer,after:3,resumed,outer\n"];
+        yield return ["source-return-survives-throw-caught-inside-yielding-finally", """
+            const events: string[] = [];
+            async function* values(): any {
+                try { yield 1; return 7; }
+                finally {
+                    events.push('before');
+                    try { yield 2; } catch (error) { events.push(error === 'boom' ? 'caught' : 'wrong'); }
+                    events.push('after');
+                }
+            }
+            async function run() {
+                const iterator: any = values();
+                console.log((await iterator.next()).value, events.join(','));
+                console.log((await iterator.next()).value, events.join(','));
+                const result: any = await iterator.throw('boom');
+                console.log(result.value, result.done, events.join(','));
+                console.log((await iterator.next()).done, events.join(','));
+            }
+            run().catch((error: any) => console.log('unexpected', error && error.name));
+            """, "1 \n2 before\n7 true before,caught,after\ntrue before,caught,after\n"];
+        yield return ["external-return-survives-throw-caught-inside-yielding-finally", """
+            const events: string[] = [];
+            async function* values(): any {
+                try { yield 1; }
+                finally {
+                    events.push('before');
+                    try { yield 2; } catch (error) { events.push(error === 'boom' ? 'caught' : 'wrong'); }
+                    events.push('after');
+                }
+            }
+            async function run() {
+                const iterator: any = values();
+                console.log((await iterator.next()).value, events.join(','));
+                console.log((await iterator.return(7)).value, events.join(','));
+                const result: any = await iterator.throw('boom');
+                console.log(result.value, result.done, events.join(','));
+                console.log((await iterator.next()).done, events.join(','));
+            }
+            run().catch((error: any) => console.log('unexpected', error && error.name));
+            """, "1 \n2 before\n7 true before,caught,after\ntrue before,caught,after\n"];
+        // #2787: a throw caught outside cleanup cancels the pending source return.
+        yield return ["source-return-throw-caught-outside-finally-cancels-pending-return-issue2787", """
+            const events: string[] = [];
+            async function* values(): any {
+                try {
+                    try { yield 1; return 7; }
+                    finally { events.push('inner-before'); yield 2; events.push('inner-after'); }
+                } catch (error) { events.push(error === 'boom' ? 'caught' : 'wrong'); }
+                finally { events.push('outer'); }
+                events.push('after'); return 11;
+            }
+            async function run() {
+                const iterator: any = values();
+                console.log((await iterator.next()).value, events.join(','));
+                console.log((await iterator.next()).value, events.join(','));
+                const result: any = await iterator.throw('boom');
+                console.log(result.value, result.done, events.join(','));
+                console.log((await iterator.next()).done, events.join(','));
+            }
+            run().catch((error: any) => console.log('unexpected', error && error.name));
+            """, "1 \n2 inner-before\n11 true inner-before,caught,outer,after\ntrue inner-before,caught,outer,after\n"];
     }
 
-    public static IEnumerable<object[]> ModeCases()
-    {
-        foreach (var row in Cases())
-        {
-            yield return [row[0], row[1], row[2], ExecutionMode.Interpreted];
-            // #2688: verified compiler outputs mishandle richer injected-return cleanup.
-            if ((string)row[0] is "issue" or "primitive-return-bypasses-catch" or
-                "awaiting-finally-preserves-caller-locals" or "no-finally-and-not-started-controls" or
-                "normal-next-and-injected-throw-controls")
-                yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
-        }
-    }
+    public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
+        new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
+            .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ModeCases))]
     public void InjectedReturnsRunFinallyAndPreserveThePendingCompletion(

@@ -126,10 +126,6 @@ public class PrototypeOverlayTests
             console.log(Object.prototype.hasOwnProperty.call(values, "overlayAccessor"));
             delete (Number.prototype as any).overlayAccessor;
             """;
-        // Baseline difference: compiled Number getters do not retain boxed receiver
-        // identity. The interpreter uses the boxed instance for both accessors.
-        Assert.Equal(mode == ExecutionMode.Interpreted
-            ? "42\ntrue true 17\nfalse\n"
-            : "42\nfalse true 17\nfalse\n", TestHarness.Run(source, mode));
+        Assert.Equal("42\ntrue true 17\nfalse\n", TestHarness.Run(source, mode));
     }
 }

@@ -117,13 +117,8 @@ public static class StringBuiltIns
             return false;
         }
 
-        if (requireGlobalRegExp
-            && searchValue is SharpTSRegExp regex
-            && !regex.Global)
-        {
-            throw new ThrowException(new SharpTSTypeError(
-                "String.prototype.replaceAll called with a non-global RegExp argument"));
-        }
+        if (requireGlobalRegExp)
+            ValidateReplaceAllRegExpFlags(interpreter, searchValue);
 
         object? replaceMethod = interpreter.GetSymbolPropertyValue(
             searchValue, SharpTSSymbol.Replace);
@@ -996,15 +991,7 @@ public static class StringBuiltIns
         object? searchValue = args[0].ToObject();
         object? replaceValue = args[1].ToObject();
 
-        if (searchValue is SharpTSRegExp regex)
-        {
-            // String.prototype.replaceAll requires a global RegExp (spec §22.1.3.18).
-            string flags = interpreter.ToStringForBuiltInArgument(
-                interpreter.GetProperty(searchValue, "flags"));
-            if (!flags.Contains('g'))
-                throw new ThrowException(new SharpTSTypeError(
-                    "String.prototype.replaceAll called with a non-global RegExp argument"));
-        }
+        ValidateReplaceAllRegExpFlags(interpreter, searchValue);
 
         if (searchValue is not (null or SharpTSUndefined))
         {
@@ -1022,6 +1009,26 @@ public static class StringBuiltIns
             }
         }
 
+        return ReplaceAllWithoutSymbolDispatch(interpreter, str, searchValue, replaceValue);
+    }
+
+    private static void ValidateReplaceAllRegExpFlags(Interpreter interpreter, object? searchValue)
+    {
+        if (searchValue is not SharpTSRegExp)
+            return;
+
+        // Validation observes flags before resolving @@replace or coercing a borrowed receiver.
+        string flags = interpreter.ToStringForBuiltInArgument(
+            interpreter.GetProperty(searchValue, "flags"));
+        if (!flags.Contains('g'))
+            throw new ThrowException(new SharpTSTypeError(
+                "String.prototype.replaceAll called with a non-global RegExp argument"));
+    }
+
+    // Borrowed calls already validated flags and resolved @@replace with the original receiver.
+    internal static RuntimeValue ReplaceAllWithoutSymbolDispatch(
+        Interpreter interpreter, string str, object? searchValue, object? replaceValue)
+    {
         string search = interpreter.ToStringForBuiltInArgument(searchValue);
         bool functionalReplace = replaceValue is ISharpTSCallable;
         string? replacementText = functionalReplace

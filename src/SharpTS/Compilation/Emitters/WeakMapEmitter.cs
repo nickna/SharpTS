@@ -14,6 +14,9 @@ public sealed class WeakMapEmitter : ITypeEmitterStrategy
     /// </summary>
     public bool TryEmitMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)
     {
+        if (methodName is not ("get" or "set" or "has" or "delete"))
+            return false;
+
         var ctx = emitter.Context;
         var il = ctx.IL;
 
@@ -21,27 +24,38 @@ public sealed class WeakMapEmitter : ITypeEmitterStrategy
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
 
+        // Registered spills keep the receiver and earlier arguments across MoveNext re-entry.
+        LocalBuilder[]? argumentLocals = null;
+        if (emitter.ArgsContainSuspension(arguments))
+        {
+            var receiverLocal = emitter.SpillStackToObjectLocal();
+            argumentLocals = new LocalBuilder[arguments.Count];
+            for (int i = 0; i < arguments.Count; i++)
+                argumentLocals[i] = emitter.SpillBoxedArg(arguments[i]);
+            il.Emit(OpCodes.Ldloc, receiverLocal);
+        }
+
         switch (methodName)
         {
             case "get":
-                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argumentLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakMap().Get);
                 return true;
 
             case "set":
-                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argumentLocals);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1, argumentLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakMap().Set);
                 return true;
 
             case "has":
-                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argumentLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakMap().Has);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "delete":
-                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argumentLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireWeakMap().Delete);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;

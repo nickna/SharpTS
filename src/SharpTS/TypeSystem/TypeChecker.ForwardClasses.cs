@@ -109,11 +109,14 @@ public partial class TypeChecker
         return use.Start >= 0 && declaration.Start >= 0 && use.Start < declaration.Start;
     }
 
-    private TypeInfo CheckDeferredClassDefault(Expr expression)
+    private TypeInfo CheckDeferredClassDefault(Expr expression, TypeInfo? contextualType = null)
     {
         _definiteAssignmentStack.TryPeek(out var currentFlow);
         _deferredClassDefaultFlows.Push(currentFlow);
-        try { return CheckExpr(expression); }
+        try
+        {
+            return contextualType is null ? CheckExpr(expression) : CheckExprWithContext(expression, contextualType);
+        }
         finally { _deferredClassDefaultFlows.Pop(); }
     }
 

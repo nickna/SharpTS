@@ -214,7 +214,8 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
         // This checks if hoisted parameters are undefined and assigns default values
         if (parameters != null)
         {
-            EmitDefaultParametersWithResumeGuard(parameters);
+            EmitDefaultParametersWithResumeGuard(parameters, body);
+            RegisterInitializedParameterNames(parameters, body);
         }
 
         // Emit the function body (will emit await points inline)
@@ -298,9 +299,10 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
     /// StateMachineExitRoutingEmitter core, wrapped in the DefaultsAppliedField guard so a state
     /// machine resume does not re-evaluate defaults.
     /// </summary>
-    private void EmitDefaultParametersWithResumeGuard(List<Stmt.Parameter> parameters)
+    private void EmitDefaultParametersWithResumeGuard(List<Stmt.Parameter> parameters, List<Stmt> body)
     {
-        if (!parameters.Any(p => p.DefaultValue != null)) return;
+        if (!parameters.Any(p => p.DefaultValue != null)
+            && !body.Any(statement => statement is Stmt.Sequence { ParameterName: not null })) return;
 
         // Check if defaults have already been applied (skip on resume)
         var skipAllDefaults = _il.DefineLabel();
@@ -308,7 +310,7 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
         _il.Emit(OpCodes.Ldfld, _builder.DefaultsAppliedField!);
         _il.Emit(OpCodes.Brtrue, skipAllDefaults);
 
-        EmitDefaultParameters(parameters);
+        EmitDefaultParameters(parameters, body);
 
         // Mark defaults as applied
         _il.Emit(OpCodes.Ldarg_0);

@@ -143,6 +143,38 @@ public sealed class SharpTSFunctionPrototype : ISharpTSMutableBuiltIn, ISharpTSS
 
     internal IEnumerable<string> OwnStringKeys() => _overlay.OwnVisibleStringKeys();
 
+    internal void PreventExtensionsOwnProperties()
+    {
+        MaterializeOwnVirtualPropertiesForIntegrity();
+        _overlay.PreventExtensions();
+    }
+
+    internal void FreezeOwnProperties()
+    {
+        MaterializeOwnVirtualPropertiesForIntegrity();
+        _overlay.Freeze();
+    }
+
+    internal void SealOwnProperties()
+    {
+        MaterializeOwnVirtualPropertiesForIntegrity();
+        _overlay.Seal();
+    }
+
+    private void MaterializeOwnVirtualPropertiesForIntegrity()
+    {
+        // Existing descriptors, including accessors and symbols, already live
+        // in the overlay. Seed only present virtual own methods and constructor;
+        // deleted entries stay absent and no guest getter is evaluated.
+        foreach (var name in OwnStringKeys().ToArray())
+        {
+            if (_overlay.GetOwnPropertyDescriptor(name) is null
+                && HasOwnProperty(name)
+                && GetMember(name) is ISharpTSCallable builtIn)
+                _overlay.DefineProperty(name, SharpTSPropertyDescriptor.ForMethod(builtIn));
+        }
+    }
+
     public object? GetMember(string name)
     {
         if (_overlay.TryGetOverride(name, out var value)) return value;

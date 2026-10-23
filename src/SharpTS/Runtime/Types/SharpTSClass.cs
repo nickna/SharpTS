@@ -44,6 +44,12 @@ public partial class SharpTSClass(
     public TypeCategory RuntimeCategory => TypeCategory.Class;
 
     public string Name { get; } = name;
+    private string? _inferredName;
+
+    // Named evaluation changes the intrinsic guest metadata, not the class's
+    // internal identity or any declared static member named "name".
+    internal void SetInferredName(string? inferredName) => _inferredName = inferredName;
+
     public SharpTSClass? Superclass { get; } = superclass;
     internal bool HasExplicitPrototype { get; private set; }
     internal object? ExplicitPrototype { get; private set; }
@@ -207,10 +213,13 @@ public partial class SharpTSClass(
             parent = SharpTSArrayClass.ArrayBase;
         if (reuseAllocation && parent is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise })
             parent = SharpTSPromiseClass.PromiseBase;
-        if (!reuseAllocation) return interpreter.Construct(parent, arguments, newTarget);
-        return parent is SharpTSClass klass
-            ? klass.ExecuteConstructorLevel(interpreter, allocation, arguments, newTarget)
-            : interpreter.Construct(parent, arguments, newTarget);
+        // Super executes the selected class with the existing concrete newTarget;
+        // it does not directly instantiate an abstract superclass.
+        if (parent is SharpTSClass klass)
+            return reuseAllocation
+                ? klass.ExecuteConstructorLevel(interpreter, allocation, arguments, newTarget)
+                : klass.Construct(interpreter, arguments, newTarget);
+        return interpreter.Construct(parent, arguments, newTarget);
     }
 
     // Built-in-backed bridge roots initialize the existing native allocation;
@@ -311,7 +320,7 @@ public partial class SharpTSClass(
         {
             object? value = field.Initializer != null
                 ? interpreter.EvaluateClassInitializer(this, instance, field.Initializer)
-                : field.ComputedKey != null ? SharpTSUndefined.Instance : null;
+                : SharpTSUndefined.Instance;
 
             // Check if this is a computed property name
             if (field.ComputedKey != null)
@@ -355,7 +364,7 @@ public partial class SharpTSClass(
         {
             object? value = field.Initializer != null
                 ? interpreter.EvaluateClassInitializer(this, receiver, field.Initializer)
-                : field.ComputedKey != null || field.IsPrivate ? SharpTSUndefined.Instance : null;
+                : SharpTSUndefined.Instance;
             if (field.IsPrivate)
             {
                 if (!privateFields!.TryAdd(field.Name.Lexeme, value))
@@ -490,7 +499,7 @@ public partial class SharpTSClass(
         // Keep intrinsic metadata virtual until a definition or integrity
         // operation needs ordinary storage. Tombstones prevent resurrection.
         return name is "name" or "length" && !_staticAutoAccessorStorage.ContainsKey(name)
-            ? new SharpTSPropertyDescriptor(name == "name" ? Name : (object)(double)Arity(),
+            ? new SharpTSPropertyDescriptor(name == "name" ? _inferredName ?? Name : (object)(double)Arity(),
                 writable: false, enumerable: false, configurable: true) { HasValue = true }
             : null;
     }

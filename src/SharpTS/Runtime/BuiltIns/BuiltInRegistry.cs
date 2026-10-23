@@ -568,10 +568,12 @@ public sealed class BuiltInRegistry
     {
         registry.RegisterNamespace(new BuiltInNamespace(
             Name: "Reflect",
-            IsSingleton: false,
-            SingletonFactory: null,
+            IsSingleton: true,
+            SingletonFactory: () => Types.SharpTSReflect.Instance,
             GetMethod: name => ReflectBuiltIns.GetStaticMethod(name)
         ));
+        registry.RegisterInstanceType(typeof(Types.SharpTSReflect), (_, name) =>
+            ReflectBuiltIns.GetStaticMethod(name));
     }
 
     private static void RegisterMapNamespace(BuiltInRegistry registry)

@@ -216,15 +216,8 @@ public sealed class ClassConstructorPrototypeMutationTests
         {
             yield return [row[0], row[1], row[2], ExecutionMode.Interpreted];
 
-            // #2648: ordinary derived/local class reads ignore selected prototype descriptors.
-            // The derived null-prototype Reflect.get control also remains covered by #2563.
-            if ((string)row[0] is "derived-descendant-live-constructor-chain"
-                or "async-locals-and-evaluated-references"
-                or "selected-accessor-abrupt-and-getterless-masks")
-                continue;
-
-            // #2650: strict writes still consult readonly descriptors on the replaced parent.
-            if ((string)row[0] == "writes-follow-selected-descriptors")
+            // #2563: the derived null-prototype Reflect.get control remains unsupported.
+            if ((string)row[0] == "derived-descendant-live-constructor-chain")
                 continue;
 
             yield return [row[0], row[1], row[2], ExecutionMode.Compiled];

@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
         EmitReadableStreamTerminateAlias(streamBuilder, closeMethod);
         var errorMethod = EmitReadableStreamErrorMethod(construction, runtime.RequireWebStreams(), streamBuilder);
         var desiredSizeMethod = EmitReadableStreamDesiredSizeProperty(construction, runtime.RequireWebStreams(), streamBuilder);
-        var readMethod = EmitReadableStreamRead(construction, streamBuilder, runtime);
+        var readMethod = EmitReadableStreamRead(construction, streamBuilder, errorMethod, runtime);
         runtime.RequireWebStreams().ReadableDrainQueuedChunks = EmitReadableStreamDrainQueuedChunks(construction, runtime.RequireWebStreams(), streamBuilder);
         EmitReadableStreamGetReader(runtime.RequireWebStreams(), streamBuilder, readerCtor);
         var cancelMethod = EmitReadableStreamCancel(construction, streamBuilder, runtime);
@@ -629,8 +629,24 @@ public partial class RuntimeEmitter
         return getter;
     }
 
-    private MethodBuilder EmitReadableStreamRead(ReadableStreamConstruction construction, TypeBuilder t, EmittedRuntime runtime)
+    private MethodBuilder EmitReadableStreamRead(
+        ReadableStreamConstruction construction, TypeBuilder t, MethodBuilder errorMethod, EmittedRuntime runtime)
     {
+        // A rejected asynchronous pull errors a still-readable stream without blocking Read().
+        var pullRejected = t.DefineMethod("PullRejected", MethodAttributes.Private,
+            _types.Object, [_types.Object]);
+        var rejectedIl = pullRejected.GetILGenerator();
+        var rejectDone = rejectedIl.DefineLabel();
+        rejectedIl.Emit(OpCodes.Ldarg_0);
+        rejectedIl.Emit(OpCodes.Ldfld, runtime.RequireWebStreams().ReadableStateField);
+        rejectedIl.Emit(OpCodes.Brtrue, rejectDone);
+        rejectedIl.Emit(OpCodes.Ldarg_0);
+        rejectedIl.Emit(OpCodes.Ldarg_1);
+        rejectedIl.Emit(OpCodes.Call, errorMethod);
+        rejectedIl.MarkLabel(rejectDone);
+        rejectedIl.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        rejectedIl.Emit(OpCodes.Ret);
+
         // public Task<object> Read()
         // Flow:
         //   1. If queue has chunks: pop, return Task.FromResult({value, done:false})
@@ -714,12 +730,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Call, runtime.Invocation.Method);
 
-        // Stack: [pullResult]. If the pull callback was async (returned a
-        // Task<object> or $Promise), synchronously await it before retrying
-        // the flow so the enqueued chunks are visible. For sync pulls the
-        // result is ignored. This blocks the calling thread but matches
-        // PipeTo's sync-pump strategy (spec-wise pull resolution should
-        // re-trigger read() resolution, which we approximate via blocking).
+        // Observe asynchronous pull rejection through the existing Promise-job
+        // machinery, then retry or park this read. The pull's enqueue/close/error
+        // operations already settle pending reads; Read must return before jobs
+        // run rather than blocking the owner thread on the pull task.
         var pullResultLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, pullResultLocal);
 
@@ -727,31 +741,43 @@ public partial class RuntimeEmitter
         var pullNotPromiseLabel = il.DefineLabel();
         var pullAwaitDoneLabel = il.DefineLabel();
 
-        // if (pullResult is Task<object> t) t.GetAwaiter().GetResult()
+        // Observe a Task<object> without synchronously waiting for it.
         il.Emit(OpCodes.Ldloc, pullResultLocal);
         il.Emit(OpCodes.Isinst, _types.TaskOfObject);
         il.Emit(OpCodes.Brfalse, pullNotTaskLabel);
         il.Emit(OpCodes.Ldloc, pullResultLocal);
         il.Emit(OpCodes.Castclass, _types.TaskOfObject);
-        var pullAwaiterLocal = il.DeclareLocal(_types.TaskAwaiterOfObject);
-        EmitSyncAwaitTaskOfObject(il, pullAwaiterLocal);
-        il.Emit(OpCodes.Pop);
+        ObservePullTask();
         il.Emit(OpCodes.Br, pullAwaitDoneLabel);
 
         il.MarkLabel(pullNotTaskLabel);
-        // if (pullResult is $Promise p) p.GetValueAsync().GetAwaiter().GetResult()
+        // Observe the backing task of an emitted $Promise in the same way.
         il.Emit(OpCodes.Ldloc, pullResultLocal);
         il.Emit(OpCodes.Isinst, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Brfalse, pullNotPromiseLabel);
         il.Emit(OpCodes.Ldloc, pullResultLocal);
         il.Emit(OpCodes.Castclass, runtime.RequirePromise().Type);
         il.Emit(OpCodes.Callvirt, runtime.RequirePromise().TaskGetter);
-        EmitSyncAwaitTaskOfObject(il, pullAwaiterLocal);
-        il.Emit(OpCodes.Pop);
+        ObservePullTask();
         il.Emit(OpCodes.Br, pullAwaitDoneLabel);
 
         il.MarkLabel(pullNotPromiseLabel);
         // Not a task/promise — sync pull; nothing to await.
+
+        // Stack on entry: [Task<object>]. Handler capture belongs to this stream.
+        void ObservePullTask()
+        {
+            il.Emit(OpCodes.Ldnull); // no fulfillment handler
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, pullRejected);
+            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
+            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            il.Emit(OpCodes.Ldstr, "pullRejected");
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
+            il.Emit(OpCodes.Call, runtime.RequirePromise().Then);
+            il.Emit(OpCodes.Pop);
+        }
 
         il.MarkLabel(pullAwaitDoneLabel);
         // Retry the whole flow (queue may be populated, or close requested).

@@ -15,7 +15,8 @@ internal sealed record GuestDataField(
     MethodBuilder GuestGetter, MethodBuilder GuestSetter, MethodBuilder HasRawOverride)
 {
     internal string SourceName => Source.Name.Lexeme;
-    internal bool IsPrimitive => BackingField != null && (NativeType == typeof(double) || NativeType == typeof(bool));
+    internal bool IsPrimitive => BackingField != null &&
+        (NativeType == typeof(double) || NativeType == typeof(bool) || NativeType == typeof(string));
     internal PrimitiveGuestField Primitive => new(Source, SourceName, DeclaringType, NativeType,
         BackingField!, NativeGetter!, NativeSetter!, GuestGetter, GuestSetter, HasRawOverride);
 }

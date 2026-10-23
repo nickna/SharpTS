@@ -168,19 +168,9 @@ public sealed class IntrinsicStaticCallBindingTests
             """, "true true true 2\n"];
     }
 
-    public static IEnumerable<object[]> ModeCases()
-    {
-        foreach (var row in Cases())
-        {
-            yield return [row[0], row[1], row[2], ExecutionMode.Interpreted];
-            // #2689: Number alias reads; #2690: captured/async shadowing;
-            // #2691: receiver retained across an awaited argument.
-            if ((string)row[0] is "issue" or "math-parameter-shadow" or
-                "getter-before-arguments-and-original-receiver" or "throwing-lookup-suppresses-arguments" or
-                "noncallable-lookup-retained-through-arguments" or "math-alias-and-explicit-reflect-receiver")
-                yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
-        }
-    }
+    public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
+        new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
+            .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ModeCases))]
     public void CallsRespectTheResolvedBindingAndLiveMemberBeforeArguments(

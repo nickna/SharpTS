@@ -197,13 +197,7 @@ public partial class AsyncMoveNextEmitter
 
         EmitExpression(f.Object);
         EnsureBoxed();
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectKeys.Keys);
-        var keysLocal = _il.DeclareLocal(typeof(List<object>));
-        _il.Emit(OpCodes.Stloc, keysLocal);
-
-        var indexLocal = _il.DeclareLocal(typeof(int));
-        _il.Emit(OpCodes.Ldc_I4_0);
-        _il.Emit(OpCodes.Stloc, indexLocal);
+        var state = StoreForInIterationState(f);
 
         LocalBuilder? loopVar = null;
         if (varField == null)
@@ -216,15 +210,21 @@ public partial class AsyncMoveNextEmitter
 
         _il.MarkLabel(startLabel);
 
-        _il.Emit(OpCodes.Ldloc, indexLocal);
-        _il.Emit(OpCodes.Ldloc, keysLocal);
+        state.LoadIndex();
+        state.LoadKeys();
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectRead.Length);
         _il.Emit(OpCodes.Clt);
         _il.Emit(OpCodes.Brfalse, outerBreakLabel);
 
-        _il.Emit(OpCodes.Ldloc, keysLocal);
-        _il.Emit(OpCodes.Ldloc, indexLocal);
+        var currentKey = _il.DeclareLocal(_types.Object);
+        state.LoadKeys();
+        state.LoadIndex();
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectRead.Element);
+        _il.Emit(OpCodes.Stloc, currentKey);
+        EmitForInKeyCheck(
+            state.LoadReceiver,
+            () => _il.Emit(OpCodes.Ldloc, currentKey), continueLabel);
+        _il.Emit(OpCodes.Ldloc, currentKey);
 
         if (varField != null)
         {
@@ -243,10 +243,10 @@ public partial class AsyncMoveNextEmitter
 
         _il.MarkLabel(continueLabel);
 
-        _il.Emit(OpCodes.Ldloc, indexLocal);
+        state.LoadIndex();
         _il.Emit(OpCodes.Ldc_I4_1);
         _il.Emit(OpCodes.Add);
-        _il.Emit(OpCodes.Stloc, indexLocal);
+        state.StoreIndex();
 
         _il.Emit(OpCodes.Br, startLabel);
 

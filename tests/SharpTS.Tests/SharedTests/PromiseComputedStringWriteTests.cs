@@ -124,15 +124,55 @@ public sealed class PromiseComputedStringWriteTests
             }
             run().catch((error: any) => console.log("unexpected", error && error.name));
             """, "receiver,key-expression\n7 7 false receiver,key-expression,key:string\n1 2\n"];
+        yield return ["own-setter-dot-computed-and-flags-before-and-after-freeze", """
+            class P extends Promise<number> {}
+            for (const target of [Promise.resolve(1), new P(resolve => resolve(2)), {}] as any[]) {
+                let stored = 0, calls = 0, reads = 0, receiver = false;
+                const getter = function(this: any) { reads++; return stored; };
+                const setter = function(this: any, value: number) { calls++; stored = value; receiver = this === target; };
+                Object.defineProperty(target, "value", { get: getter, set: setter, enumerable: true, configurable: true });
+                const key: string = "value";
+                console.log("open", target.value = 3, target[key] = 4, target.value, calls, receiver, Object.isFrozen(target));
+                Object.freeze(target);
+                const descriptor = Object.getOwnPropertyDescriptor(target, key)!;
+                console.log("frozen", target.value = 7, target[key] = 8, target[key], calls, receiver,
+                    Object.isFrozen(target), descriptor.get === getter, descriptor.set === setter,
+                    descriptor.enumerable, descriptor.configurable, Object.hasOwn(descriptor, "writable"), reads);
+            }
+            """, "open 3 4 4 2 true false\nfrozen 7 8 8 4 true true true true true false false 2\nopen 3 4 4 2 true false\nfrozen 7 8 8 4 true true true true true false false 2\nopen 3 4 4 2 true false\nfrozen 7 8 8 4 true true true true true false false 2\n"];
+        yield return ["frozen-setter-abrupt-identity-and-no-getter-evaluation", """
+            class P extends Promise<number> {}
+            function dot(target: any) { "use strict"; return target.value = 7; }
+            function indexed(target: any, key: string) { "use strict"; return target[key] = 8; }
+            for (const target of [Promise.resolve(1), new P(resolve => resolve(2)), {}] as any[]) {
+                const token = {}, events: string[] = [];
+                Object.defineProperty(target, "value", {
+                    get() { events.push("get"); return 0; },
+                    set(value: number) { events.push("set:" + value + ":" + (this === target)); throw token; },
+                    enumerable: true, configurable: true
+                });
+                Object.freeze(target);
+                try { dot(target); } catch (error) { console.log(error === token, events.join(",")); }
+                events.length = 0;
+                try { indexed(target, "value"); } catch (error) { console.log(error === token, events.join(",")); }
+                const descriptor = Object.getOwnPropertyDescriptor(target, "value")!;
+                console.log(descriptor.enumerable, descriptor.configurable, typeof descriptor.set, Object.isFrozen(target));
+            }
+            """, "true set:7:true\ntrue set:8:true\ntrue false function true\ntrue set:7:true\ntrue set:8:true\ntrue false function true\ntrue set:7:true\ntrue set:8:true\ntrue false function true\n"];
     }
+
+    public static IEnumerable<object[]> FrozenSetterCases() => Cases().Where(row =>
+        (string)row[0] is "frozen-accessor-setter-still-runs" or
+            "own-setter-dot-computed-and-flags-before-and-after-freeze" or
+            "frozen-setter-abrupt-identity-and-no-getter-evaluation");
 
     public static IEnumerable<object[]> ModeCases()
     {
         foreach (var row in Cases())
         {
             yield return [row[0], row[1], row[2], ExecutionMode.Interpreted];
-            // Getterless compiled Promise reads remain #2436; frozen setters are #2705.
-            if ((string)row[0] is not ("own-accessors-and-getterless-reads" or "frozen-accessor-setter-still-runs"))
+            // Getterless compiled Promise reads remain #2436.
+            if ((string)row[0] != "own-accessors-and-getterless-reads")
                 yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
         }
     }

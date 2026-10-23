@@ -114,8 +114,6 @@ public sealed class FunctionBracketPropertyTests
         => Cases().SelectMany(row => new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
             .Where(mode => mode == ExecutionMode.Interpreted || (string)row[0] switch
             {
-                // #2359: compiled reads ignore an explicitly changed function prototype.
-                "custom-null-restored-prototype" => false,
                 // #2624: compiled helpers bypass the canonical Function.prototype descriptors.
                 "canonical-helper-identity" or "inherited-function-prototype-descriptors" => false,
                 // #2625: compiled bracket reads stringify object keys that produce Symbols.

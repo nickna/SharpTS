@@ -100,7 +100,7 @@ public sealed class EmittedGlobalObjectRuntimeTests
     [Fact]
     public void HelpersReceiveScopedInputsAndOwnerBelongsToOneCompilation()
     {
-        Assert.Equal(4, Declarations.Length);
+        Assert.Equal(5, Declarations.Length);
         Assert.NotSame(new EmittedRuntime().GlobalObject, new EmittedRuntime().GlobalObject);
         Assert.Null(typeof(EmittedRuntime).GetProperty("GlobalObject")!.SetMethod);
         foreach (var old in new[] { "GlobalThisSingletonField", "GlobalThisGetProperty", "GlobalThisSetProperty", "GlobalThisProperties", "EvalIndirect" })
@@ -110,7 +110,7 @@ public sealed class EmittedGlobalObjectRuntimeTests
         foreach (var name in new[] { "EmitGlobalThisGetProperty", "EmitGlobalThisSetProperty", "EmitCachedTSFunction" })
             Assert.DoesNotContain(typeof(RuntimeEmitter).GetMethod(name, Members)!.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime));
         var optional = typeof(RuntimeEmitter).GetNestedType("GlobalPropertyOptionalInputs", BindingFlags.NonPublic)!;
-        Assert.Equal(new[] { "DateType", "RegExpType", "ReflectSingleton", "BufferType", "EncoderType", "DecoderType", "GetCryptoObject", "FetchInvoke", "GetAbortControllerConstructor" },
+        Assert.Equal(new[] { "DateType", "RegExpType", "ReflectSingleton", "PopulateReflectSingleton", "BufferType", "EncoderType", "DecoderType", "GetCryptoObject", "FetchInvoke", "GetAbortControllerConstructor" },
             optional.GetProperties().Select(p => p.Name));
         foreach (var name in new[] { "GlobalPropertyReadInputs", "GlobalPropertyWriteInputs", "GlobalPropertyOptionalInputs" })
             Assert.DoesNotContain(typeof(RuntimeEmitter).GetNestedType(name, BindingFlags.NonPublic)!.GetProperties(),

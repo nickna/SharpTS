@@ -834,7 +834,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
 
+        // Inherited Function.prototype.call/apply reach this shared route instead
+        // of the legacy wrappers. Preserve the decoder's explicit receiver check.
+        var tsFunction = il.DeclareLocal(inputs.FunctionValues.Type);
+        il.Emit(OpCodes.Stloc, tsFunction);
+        if (inputs.UsesTextEncoding)
+        {
+            EmitTextDecoderWrapperCall(il, inputs.FunctionValues, inputs.TextEncoding, inputs.Errors,
+                () => il.Emit(OpCodes.Ldloc, tsFunction),
+                () => il.Emit(OpCodes.Ldarg_0),
+                () => il.Emit(OpCodes.Ldarg_2));
+        }
+
         // return tsFunc.InvokeWithThis(receiver, args)
+        il.Emit(OpCodes.Ldloc, tsFunction);
         il.Emit(OpCodes.Ldarg_0);  // receiver
         il.Emit(OpCodes.Ldarg_2);  // args
         il.Emit(OpCodes.Callvirt, inputs.FunctionValues.InvokeWithThis);

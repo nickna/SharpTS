@@ -22,6 +22,8 @@ public class GlobalThisChainHandler : ICallHandler
         }
 
         var ctx = emitter.Context;
+        if (emitter.HasVariable("globalThis") || ctx.HasVisibleValueBinding("globalThis"))
+            return false;
         if (ctx.TypeEmitterRegistry == null)
             return false;
 

@@ -231,9 +231,14 @@ public sealed class StablePrimitiveClassMethodTests
                 return counter.step();
             }
             """);
-        Assert.Contains(ReadInstructions(FindFunction(prototypeAssembly, "exact")), instruction =>
-            instruction.Operand is MethodInfo { Name: "step" } method
+        var prototypeCalls = ReadInstructions(FindFunction(prototypeAssembly, "exact")).ToArray();
+        Assert.Contains(prototypeCalls, instruction =>
+            instruction.Operand is MethodInfo { Name: "InvokeMethodValue" } method
             && method.ReturnType == typeof(object));
+        Assert.DoesNotContain(prototypeCalls, instruction =>
+            instruction.Operand is MethodInfo method
+            && method.Name.StartsWith("$typed$step$", StringComparison.Ordinal));
+        Assert.Equal(typeof(object), prototypeAssembly.GetType("Base")!.GetMethod("step")!.ReturnType);
     }
 
     [Fact]
@@ -291,7 +296,7 @@ public sealed class StablePrimitiveClassMethodTests
             console.log(model.getValue());
             """;
 
-        Assert.Equal("null\n", TestHarness.RunCompiled(source));
+        Assert.Equal("undefined\n", TestHarness.RunCompiled(source));
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
 
         Assembly assembly = Compile(source);

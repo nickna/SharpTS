@@ -146,6 +146,28 @@ public partial class ILEmitter
         }
 
         if (TryInitializeLoopBodyBinding(v)) return;
+        if (v.IsVar && _ownedVarLoopHeadNames?.Contains(v.Name.Lexeme) == true)
+        {
+            // The containing-body prologue already created this binding. A var
+            // redeclaration without an initializer must not reset the shared home.
+            if (v.Initializer != null)
+            {
+                EmitExpression(v.Initializer);
+                EmitBoxIfNeeded(v.Initializer);
+                EmitStoreAssignmentLoopVariable(v.Name.Lexeme);
+            }
+            return;
+        }
+        if (v.IsVar && v.Initializer is null
+            && _ctx.InitializedParameterNames?.Contains(v.Name.Lexeme) == true)
+            return;
+        // The callable-body hoisting pass already initialized this shared
+        // binding. A declaration without an initializer performs no assignment.
+        if (v.IsVar && v.Initializer is null
+            && _ctx.HoistedInnerFunctions?.Any(function => function.Body != null
+                && function.Name.Lexeme == v.Name.Lexeme
+                && _ctx.InnerFunctionMethods?.ContainsKey(function) == true) == true)
+            return;
 
         // Module-level storage (static field / entry-point display class) is only the right
         // target when this declaration IS a module-level binding: we are emitting the module
@@ -796,6 +818,9 @@ public partial class ILEmitter
     /// </summary>
     private bool CanUseUnboxedLocal(Stmt.Var v)
     {
+        // The undefined-only fallback must inspect the original matched value before ToNumber.
+        if (v.PreserveRawInitializerValue)
+            return false;
         if (_ctx.TypeMap?.IsAssertedAssignmentStorage(v.Name) == true)
             return false;
         if (_ctx.TypeMap?.IsRawCallStorage(v.Name) == true)
@@ -930,16 +955,20 @@ public partial class ILEmitter
     {
         var savedStringSnapshots = _stringScanSnapshots;
         _stringScanSnapshots = new(savedStringSnapshots);
-        // Analyze the loop to see if we can use an unboxed counter
+        Stmt[] header = f.Initializer is { } initializer ? [initializer] : [];
+        bool needsHeaderScope = NeedsLexicalCellScope(header, ordinaryHandler: true);
+        List<LoopBodyCellScopeEntry> headerCells = [];
+        bool enteredLoopScope = false;
+        // A masked header uses its own object/cell storage, not the outer capture's slot.
         var analysis = ForLoopAnalyzer.Analyze(f, _ctx.ClosureAnalyzer);
 
-        if (analysis.CanUseUnboxedCounter && analysis.VariableName != null)
+        if (!needsHeaderScope && analysis.CanUseUnboxedCounter && analysis.VariableName != null)
             _optimizedLoopCounterName = analysis.VariableName;
 
         // Integer loop-counter prototype (#928): when gated on, back a provably-integer monotonic
         // counter with a native Int64 slot. Save/restore the field so nested loops don't clobber it.
         var savedIntCounterName = _integerLoopCounterName;
-        string? activeIntCounter = ForLoopAnalyzer.IntegerCounterEnabled
+        string? activeIntCounter = !needsHeaderScope && ForLoopAnalyzer.IntegerCounterEnabled
             ? ForLoopAnalyzer.AnalyzeIntegerCounter(
                 f, _ctx.ClosureAnalyzer, _ctx.IntegerCounterLocals)
             : null;
@@ -967,6 +996,8 @@ public partial class ILEmitter
             // Inline base.EmitFor to insert array hoist preamble between
             // initializer and loop start.
             _ctx.Locals.EnterScope();
+            enteredLoopScope = true;
+            EnterLoopBodyCellScope(header, headerCells, ordinaryHandler: true, preserveActiveDeclarations: true);
 
             // Emit initializer (declares loop variable in current scope)
             if (f.Initializer != null)
@@ -1069,10 +1100,14 @@ public partial class ILEmitter
             if (promotedFillComplete.HasValue)
                 builder.MarkLabel(promotedFillComplete.Value);
 
-            _ctx.Locals.ExitScope();
         }
         finally
         {
+            if (enteredLoopScope)
+            {
+                ExitLoopBodyCellScope(headerCells);
+                _ctx.Locals.ExitScope();
+            }
             _optimizedLoopCounterName = null;
             // The counter's Int64 slot/membership is loop-scoped: drop it so any later same-named
             // local in an enclosing scope is not mistaken for an integer counter.
@@ -2172,7 +2207,7 @@ public partial class ILEmitter
             return;
         }
 
-        if (iterableType is TypeInfo.Map
+        if (f.IsDeclaration && !f.IsVar && iterableType is TypeInfo.Map
             && _ctx.TypeMap?.IsStableNumericMapIteration(f) == true)
         {
             // The analyzer proved that the receiver is a fresh, non-escaping
@@ -2385,7 +2420,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stloc, nextMethodLocal);
 
             // Loop variable
-            var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
+            var loopVar = DeclareIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, _ctx.Types.Object);
             var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
             var closeNeeded = IL.DeclareLocal(_ctx.Types.Boolean);
             var throwing = IL.DeclareLocal(_ctx.Types.Boolean);
@@ -2430,7 +2465,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, resultLocal);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorProtocol.Value);
             IL.Emit(OpCodes.Stloc, loopVar);
-            InitializeGeneratorLoopLocal(f.Variable, loopVar);
+            InitializeIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, loopVar);
 
             _iteratorLoopCompletionScopes.Push(new IteratorLoopCompletionScope(
                 closeNeeded, iterContinueLabel, escapingTargets));
@@ -2488,7 +2523,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stloc, indexLocal);
 
             // Loop variable
-            var indexLoopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
+            var indexLoopVar = DeclareIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, _ctx.Types.Object);
 
             builder.MarkLabel(startLabel);
             EmitCancellationCheck();
@@ -2505,6 +2540,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, indexLocal);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Element);
             IL.Emit(OpCodes.Stloc, indexLoopVar);
+            InitializeIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, indexLoopVar);
 
             // Emit body
             EmitStatement(f.Body);
@@ -2678,8 +2714,8 @@ public partial class ILEmitter
         var body = builder.DefineLabel("forof_stable_iterator_body");
         var cont = builder.DefineLabel("forof_stable_iterator_continue");
         var result = IL.DeclareLocal(resultType);
-        var loopVar = _ctx.Locals.DeclareLocal(
-            loop.Variable.Lexeme, _ctx.Types.Double);
+        var loopVar = DeclareIdentifierLoopHead(
+            loop.Variable, loop.IsDeclaration && !loop.IsVar, _ctx.Types.Double);
         var closeNeeded = IL.DeclareLocal(_ctx.Types.Boolean);
         var throwing = IL.DeclareLocal(_ctx.Types.Boolean);
 
@@ -2716,7 +2752,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, result);
         IL.Emit(OpCodes.Ldfld, valueField);
         IL.Emit(OpCodes.Stloc, loopVar);
-        InitializeGeneratorLoopLocal(loop.Variable, loopVar);
+        InitializeIdentifierLoopHead(loop.Variable, loop.IsDeclaration && !loop.IsVar, loopVar);
 
         _iteratorLoopCompletionScopes.Push(new IteratorLoopCompletionScope(
             closeNeeded, cont, escapingTargets));
@@ -2844,7 +2880,7 @@ public partial class ILEmitter
         // benchmark's `any[]` case it's _types.Object so the loop var
         // matches the existing slow path's binding.
         var elementType = desc.GetElementType(_ctx.Types);
-        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, elementType);
+        var loopVar = DeclareIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, elementType);
 
         builder.MarkLabel(startLabel);
         EmitCancellationCheck();
@@ -2874,7 +2910,7 @@ public partial class ILEmitter
             builder.MarkLabel(unholedLabel);
         }
         IL.Emit(OpCodes.Stloc, loopVar);
-        InitializeGeneratorLoopLocal(f.Variable, loopVar);
+        InitializeIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, loopVar);
 
         // Body
         EmitStatement(f.Body);
@@ -2904,7 +2940,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, generatorLocal);
 
         // Loop variable
-        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
+        var loopVar = DeclareIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, _ctx.Types.Object);
         var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
         var closeNeeded = IL.DeclareLocal(_ctx.Types.Boolean);
         var throwing = IL.DeclareLocal(_ctx.Types.Boolean);
@@ -2938,7 +2974,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, resultLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
         IL.Emit(OpCodes.Stloc, loopVar);
-        InitializeGeneratorLoopLocal(f.Variable, loopVar);
+        InitializeIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, loopVar);
 
         _iteratorLoopCompletionScopes.Push(new IteratorLoopCompletionScope(
             closeNeeded, continueLabel, escapingTargets));
@@ -3049,8 +3085,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Castclass, _ctx.Runtime.Generators.NumericType);
         IL.Emit(OpCodes.Stloc, generatorLocal);
 
-        var loopVar = _ctx.Locals.DeclareLocal(
-            f.Variable.Lexeme, _ctx.Types.Double);
+        var loopVar = DeclareIdentifierLoopHead(
+            f.Variable, f.IsDeclaration && !f.IsVar, _ctx.Types.Double);
         var closeNeeded = IL.DeclareLocal(_ctx.Types.Boolean);
         var throwing = IL.DeclareLocal(_ctx.Types.Boolean);
 
@@ -3081,7 +3117,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Callvirt,
             _ctx.Runtime.Generators.NumericCurrent);
         IL.Emit(OpCodes.Stloc, loopVar);
-        InitializeGeneratorLoopLocal(f.Variable, loopVar);
+        InitializeIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, loopVar);
 
         _iteratorLoopCompletionScopes.Push(new IteratorLoopCompletionScope(
             closeNeeded, continueLabel, escapingTargets));
@@ -3137,7 +3173,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, enumLocal);
 
         // Loop variable
-        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
+        var loopVar = DeclareIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, _ctx.Types.Object);
 
         builder.MarkLabel(startLabel);
         EmitCancellationCheck();
@@ -3149,7 +3185,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, enumLocal);
         IL.Emit(OpCodes.Callvirt, current);
         IL.Emit(OpCodes.Stloc, loopVar);
-        InitializeGeneratorLoopLocal(f.Variable, loopVar);
+        InitializeIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, loopVar);
 
         EmitStatement(f.Body);
 
@@ -3159,6 +3195,24 @@ public partial class ILEmitter
         builder.MarkLabel(endLabel);
         _ctx.Locals.ExitScope();
         _ctx.ExitLoop();
+    }
+
+    private LocalBuilder DeclareIdentifierLoopHead(Token variable, bool isDeclaration, Type storageType) =>
+        isDeclaration
+            ? _ctx.Locals.DeclareLocal(variable.Lexeme, storageType)
+            : IL.DeclareLocal(storageType);
+
+    private void InitializeIdentifierLoopHead(Token variable, bool isDeclaration, LocalBuilder value)
+    {
+        if (isDeclaration)
+        {
+            InitializeGeneratorLoopLocal(variable, value);
+            return;
+        }
+        IL.Emit(OpCodes.Ldloc, value);
+        if (value.LocalType.IsValueType) IL.Emit(OpCodes.Box, value.LocalType);
+        SetStackUnknown();
+        EmitStoreAssignmentLoopVariable(variable.Lexeme);
     }
 
     protected override void EmitForIn(Stmt.ForIn f)
@@ -3171,8 +3225,12 @@ public partial class ILEmitter
         _ctx.EnterLoop(endLabel, continueLabel);
         _ctx.Locals.EnterScope();
 
-        // Evaluate object and get keys
+        // Evaluate the receiver once and retain it alongside the key snapshot.
         EmitExpression(f.Object);
+        EnsureBoxed();
+        var sourceLocal = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, sourceLocal);
+        IL.Emit(OpCodes.Ldloc, sourceLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectKeys.Keys);
         var keysLocal = IL.DeclareLocal(_ctx.Types.ListOfObject);
         IL.Emit(OpCodes.Stloc, keysLocal);
@@ -3183,7 +3241,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, indexLocal);
 
         // Loop variable (holds current key)
-        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
+        var loopVar = DeclareIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, _ctx.Types.Object);
 
         builder.MarkLabel(startLabel);
         EmitCancellationCheck();
@@ -3195,12 +3253,18 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Clt);
         builder.Emit_Brfalse(endLabel);
 
-        // Get current key: keys[index]
+        // Recheck before assigning the head: the body may have deleted this key.
+        var keyLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Ldloc, keysLocal);
         IL.Emit(OpCodes.Ldloc, indexLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Element);
+        IL.Emit(OpCodes.Stloc, keyLocal);
+        EmitForInKeyCheck(
+            () => IL.Emit(OpCodes.Ldloc, sourceLocal),
+            () => IL.Emit(OpCodes.Ldloc, keyLocal), continueLabel);
+        IL.Emit(OpCodes.Ldloc, keyLocal);
         IL.Emit(OpCodes.Stloc, loopVar);
-        InitializeGeneratorLoopLocal(f.Variable, loopVar);
+        InitializeIdentifierLoopHead(f.Variable, f.IsDeclaration && !f.IsVar, loopVar);
 
         // Emit body
         EmitStatement(f.Body);
@@ -3255,6 +3319,10 @@ public partial class ILEmitter
         {
             if (_ctx.BlockScopedClassBuilders?.ContainsKey(classStmt) != true)
                 continue;
+
+            if (_ctx.LoopBodyCellShadows.TryGetValue(classStmt.Name.Lexeme, out var shadow)
+                && ReferenceEquals(shadow, classStmt.Name))
+                continue; // The selected outer-cell mask already entered this binding's TDZ.
 
             var local = _ctx.Locals.GetCurrentScopeLocal(classStmt.Name.Lexeme)
                 ?? _ctx.Locals.DeclareLocal(classStmt.Name.Lexeme, _ctx.Types.Object, classStmt);

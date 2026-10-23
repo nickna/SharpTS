@@ -413,6 +413,103 @@ public sealed class HostedInterpreterRuntimeTests
     }
 
     [Fact]
+    public void HostedDynamicImport_PreservesNestedJobOrderAcrossSuccessiveModules()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                console.log('main-start');
+                const loaded = await import('./last');
+                console.log(`main-${loaded.value}`);
+                export {};
+                """,
+            ["first.ts"] = """
+                console.log('first-start');
+                export const first = await Promise.resolve(1);
+                queueMicrotask(() => {
+                    console.log('first-microtask');
+                    queueMicrotask(() => console.log('first-nested'));
+                });
+                """,
+            ["middle.ts"] = """
+                import { first } from './first';
+                console.log('middle-start');
+                export const middle = first + 1;
+                queueMicrotask(() => {
+                    console.log('middle-microtask');
+                    queueMicrotask(() => console.log('middle-nested'));
+                });
+                """,
+            ["last.ts"] = """
+                import { middle } from './middle';
+                console.log('last-start');
+                export const value = middle + 1;
+                queueMicrotask(() => console.log('last-microtask'));
+                """,
+        };
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = new StringWriter();
+        using var runtime = new HostedInterpreterRuntime(
+            dispatcher, new RecordingLifetime(), new RecordingErrorSink(),
+            CreateProgram(files, "main.ts"), output, output);
+
+        RunInitialization(runtime, dispatcher);
+
+        Assert.Equal(
+            [
+                "main-start", "first-start", "first-microtask",
+                "middle-start", "last-start", "first-nested",
+                "middle-microtask", "last-microtask", "middle-nested", "main-3"
+            ],
+            Lines(output));
+    }
+
+    [Fact]
+    public void Shutdown_CancelsPendingDynamicImportCheckpointWithoutLateModuleWork()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                console.log('main-start');
+                const loaded = await import('./dependency');
+                console.log(`unexpected-${loaded.value}`);
+                export {};
+                """,
+            ["dependency.ts"] = """
+                export const value = await Promise.resolve(1);
+                queueMicrotask(() => console.log('checkpoint-cancel'));
+                """,
+        };
+        var dispatcher = new DeterministicHostDispatcher();
+        var errors = new RecordingErrorSink();
+        HostedInterpreterRuntime? runtime = null;
+        Task? shutdown = null;
+        using var output = new CallbackTextWriter(line =>
+        {
+            if (line == "checkpoint-cancel")
+                shutdown = runtime!.ShutdownAsync();
+        });
+        using var runtimeInstance = new HostedInterpreterRuntime(
+            dispatcher, new RecordingLifetime(), errors,
+            CreateProgram(files, "main.ts"), output, output);
+        runtime = runtimeInstance;
+        int cleanups = 0;
+        runtimeInstance.RegisterCleanup(() => cleanups++);
+
+        Task initialization = runtimeInstance.InitializeAsync();
+        dispatcher.RunUntil(() => shutdown?.IsCompleted == true);
+        Assert.NotNull(shutdown);
+        shutdown.GetAwaiter().GetResult();
+        dispatcher.RunUntilIdle();
+
+        Assert.True(initialization.IsFaulted);
+        Assert.Equal(SharpTSHostedRuntimeState.Stopped, runtimeInstance.State);
+        Assert.Equal(1, cleanups);
+        Assert.Equal(["main-start", "checkpoint-cancel"], Lines(output));
+        Assert.Empty(errors.Errors);
+    }
+
+    [Fact]
     public void CompiledHostedDynamicImport_InitializesDiscoveredModuleOnDemand()
     {
         var files = new Dictionary<string, string>

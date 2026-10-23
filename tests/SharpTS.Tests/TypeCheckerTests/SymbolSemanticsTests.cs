@@ -74,7 +74,7 @@ public class SymbolSemanticsTests
             """);
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.TsCode == "TS2367" && diagnostic.Line == 2);
-        AssertCodeAtLine(diagnostics, "TS2367", 3);
+        AssertNoCode(diagnostics, "TS2367");
     }
 
     [Fact]

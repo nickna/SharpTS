@@ -11,9 +11,7 @@ public class DeclareFieldTests
 {
     #region Instance Declare Fields
 
-    // #2707: compiler class declarations still materialize erased fields.
-    // Assignment controls below retain their passing compiled coverage.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void DeclareField_Instance_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -67,7 +65,7 @@ public class DeclareFieldTests
 
     #region Static Declare Fields
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void DeclareField_Static_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -100,7 +98,7 @@ public class DeclareFieldTests
 
     #region Mixed Fields
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void DeclareField_MixedWithRegularFields(ExecutionMode mode)
     {
         var source = """
@@ -117,7 +115,7 @@ public class DeclareFieldTests
         Assert.Equal("undefined\ndefault\n", output);
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void DeclareField_StaticWithOtherStaticFields(ExecutionMode mode)
     {
         var source = """
@@ -141,7 +139,7 @@ public class DeclareFieldTests
 
     #region Access Modifiers
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void DeclareField_WithReadonly_AccessUninitialized(ExecutionMode mode)
     {
         // Readonly is a type-system restriction; the declare field is erased.
@@ -157,7 +155,7 @@ public class DeclareFieldTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void DeclareField_WithPrivateAccess(ExecutionMode mode)
     {
         var source = """

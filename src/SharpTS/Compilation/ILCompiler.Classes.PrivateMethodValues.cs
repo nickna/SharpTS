@@ -8,9 +8,10 @@ namespace SharpTS.Compilation;
 public partial class ILCompiler
 {
     private Stmt.Class ClassExpressionDeclaration(Expr.ClassExpr expression) => new(
-        new Token(TokenType.IDENTIFIER, _classExprs.Names[expression], null, 0), expression.TypeParams,
+        new Token(TokenType.IDENTIFIER, _classExprs.Names.GetValueOrDefault(expression)
+            ?? expression.Name?.Lexeme ?? "<anonymous>", null, 0), expression.TypeParams,
         expression.SuperclassExpr, expression.SuperclassTypeArgs, expression.Methods, expression.Fields,
-        expression.Accessors, StaticInitializers: expression.StaticInitializers);
+        expression.Accessors, AutoAccessors: expression.AutoAccessors, StaticInitializers: expression.StaticInitializers);
 
     private void EmitClassExpressionPrivateMethodBodies(Expr.ClassExpr expression, TypeBuilder template)
     {

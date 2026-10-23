@@ -29,11 +29,43 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         switch (methodName)
         {
             case "parseInt":
-                if (arguments.Count > 0) { emitter.EmitExpression(arguments[0]); emitter.EmitBoxIfNeeded(arguments[0]); } else { il.Emit(OpCodes.Ldnull); }
-                if (arguments.Count > 1) { emitter.EmitExpression(arguments[1]); emitter.EmitBoxIfNeeded(arguments[1]); } else { il.Emit(OpCodes.Ldc_I4, 10); il.Emit(OpCodes.Box, ctx.Types.Int32); }
+            {
+                if (ctx.RuntimeFeatures?.UsesGlobalParseIntMutation == true)
+                {
+                    // Qualified calls keep the live property and global receiver. Resolve
+                    // before arguments, with a persistent spill while later arguments await.
+                    ExpressionEmitterBase.EmitGlobalParseIntRead(il, ctx, allowMissing: true);
+                    var callee = emitter.SpillStackToObjectLocal();
+                    emitter.EmitArgsArrayWithSpread(arguments);
+                    var argumentValues = il.DeclareLocal(ctx.Types.ObjectArray);
+                    il.Emit(OpCodes.Stloc, argumentValues);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.GlobalObject.SingletonField);
+                    il.Emit(OpCodes.Ldloc, callee);
+                    il.Emit(OpCodes.Ldloc, argumentValues);
+                    il.Emit(OpCodes.Call, ctx.Runtime.Invocation.Method);
+                    emitter.SetStackUnknown();
+                    return true;
+                }
+
+                // Finish every argument before builtin coercion, retaining the first two
+                // values in await-safe spills while ignored expressions may throw or suspend.
+                var input = arguments.Count > 0 ? emitter.SpillBoxedArg(arguments[0]) : null;
+                var radix = arguments.Count > 1 ? emitter.SpillBoxedArg(arguments[1]) : null;
+                for (int index = 2; index < arguments.Count; index++)
+                {
+                    emitter.EmitExpression(arguments[index]);
+                    emitter.EmitBoxIfNeeded(arguments[index]);
+                    il.Emit(OpCodes.Pop);
+                }
+
+                if (input != null) il.Emit(OpCodes.Ldloc, input);
+                else il.Emit(OpCodes.Ldnull);
+                if (radix != null) il.Emit(OpCodes.Ldloc, radix);
+                else il.Emit(OpCodes.Ldnull); // Let the runtime infer an omitted radix.
                 il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.ParseInt);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
+            }
 
             case "parseFloat":
                 if (arguments.Count > 0) { emitter.EmitExpression(arguments[0]); emitter.EmitBoxIfNeeded(arguments[0]); } else { il.Emit(OpCodes.Ldnull); }
@@ -85,7 +117,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         if (TryEmitBuiltInClassType(il, ctx, propertyName))
             return true;
 
-        if (propertyName == "Math")
+        if (propertyName is "Math" or "Reflect")
         {
             il.Emit(OpCodes.Ldstr, propertyName);
             il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
@@ -108,7 +140,6 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
             case "console":
             case "Object":
             case "Error":
-            case "Reflect":
                 // These are accessed through property access chains
                 il.Emit(OpCodes.Ldnull);
                 return true;

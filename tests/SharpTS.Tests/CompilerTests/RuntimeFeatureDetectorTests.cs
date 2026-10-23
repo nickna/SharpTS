@@ -330,6 +330,9 @@ public class RuntimeFeatureDetectorTests
     [InlineData("global.parseInt = function() { return 1; };", true)]
     [InlineData("const root: any = global; root['parseInt'] = function() { return 1; };", true)]
     [InlineData("parseInt = function() { return 1; };", true)]
+    [InlineData("Object.defineProperty(globalThis, 'parseInt', { value: () => 1 });", true)]
+    [InlineData("Reflect.defineProperty(globalThis, 'parseInt', { value: () => 1 });", true)]
+    [InlineData("Object.defineProperties(globalThis, { parseInt: { value: () => 1 } });", true)]
     [InlineData("eval('void 0');", true)]
     public void DetectsGlobalParseIntMutationRisk(string source, bool expected)
     {

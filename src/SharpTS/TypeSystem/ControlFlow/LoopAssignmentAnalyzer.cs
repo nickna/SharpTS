@@ -346,6 +346,9 @@ public static class LoopAssignmentAnalyzer
                     CollectAssignedPathsFromExpr(exprPart, paths);
                 break;
 
+            case Expr.Instantiation instantiation:
+                CollectAssignedPathsFromExpr(instantiation.Expression, paths);
+                break;
             case Expr.TypeAssertion typeAssertion:
                 CollectAssignedPathsFromExpr(typeAssertion.Expression, paths);
                 break;

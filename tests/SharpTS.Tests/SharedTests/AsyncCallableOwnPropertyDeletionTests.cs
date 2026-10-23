@@ -173,14 +173,6 @@ public sealed class AsyncCallableOwnPropertyDeletionTests
 
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
         new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
-            // #2677: compiled deleted metadata skips default inheritance.
-            // #2678/#2679: async factory identity and named self binding.
-            // #2415/#2680: compiled strict indexed deletion. The ordinary
-            // interpreter carrier in #2680 remains separate from async storage.
-            .Where(mode => mode == ExecutionMode.Interpreted || (string)row[0] is not
-                ("issue" or "metadata-deletion-and-inherited-fallback"
-                or "absent-and-integrity-deletion" or "receiver-views-share-state-and-arrow-this"
-                or "strict-absent-and-frozen-string-deletion"))
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ModeCases))]

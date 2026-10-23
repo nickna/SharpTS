@@ -130,13 +130,8 @@ public sealed class DefinePropertiesConversionOrderTests
 
     }
 
-    // #2717: compiled valid descriptors are applied before all conversions finish.
-    // #2674: compiled defineProperties omits Symbol descriptor-map entries.
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
-        ((string)row[0] is "record-valid-conversion-finishes-before-any-definition"
-            or "generator-symbol-conversion-keeps-source-receiver-and-order"
-            ? new[] { ExecutionMode.Interpreted }
-            : new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled })
+        new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ModeCases))]

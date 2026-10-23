@@ -128,7 +128,7 @@ public partial class Parser
 
         // Compound assignment operators
         if (Match(TokenType.PLUS_EQUAL, TokenType.MINUS_EQUAL, TokenType.STAR_EQUAL,
-                  TokenType.SLASH_EQUAL, TokenType.PERCENT_EQUAL,
+                  TokenType.STAR_STAR_EQUAL, TokenType.SLASH_EQUAL, TokenType.PERCENT_EQUAL,
                   TokenType.AMPERSAND_EQUAL, TokenType.PIPE_EQUAL, TokenType.CARET_EQUAL,
                   TokenType.LESS_LESS_EQUAL, TokenType.GREATER_GREATER_EQUAL, TokenType.GREATER_GREATER_GREATER_EQUAL))
         {
@@ -642,6 +642,10 @@ public partial class Parser
             {
                 expr = FinishCall(expr, typeArgs, typeArgNodes: typeArgNodes);
             }
+            else if (Check(TokenType.LESS) && TryParseTypeArgumentsForInstantiation(out typeArgNodes) is { } instantiationArgs)
+            {
+                expr = CompleteExpression(new Expr.Instantiation(receiver, operation, instantiationArgs, typeArgNodes), start);
+            }
             else if (Match(TokenType.DOT))
             {
                 if (Match(TokenType.PRIVATE_IDENTIFIER))
@@ -897,13 +901,13 @@ public partial class Parser
         if (Match(TokenType.SUPER))
         {
             Token keyword = Previous();
-            // super() for constructor calls, super.method() for method calls
-            if (Check(TokenType.LEFT_PAREN))
+            // The postfix parser builds a computed read around this lexical-home
+            // marker; it must not evaluate the marker as a constructor call.
+            if (Check(TokenType.LEFT_PAREN) || Check(TokenType.LEFT_BRACKET))
             {
-                // super() - constructor call, Method is null
                 return new Expr.Super(keyword, null);
             }
-            Token operation = Consume(TokenType.DOT, "Expect '.' or '(' after 'super'.");
+            Token operation = Consume(TokenType.DOT, "Expect '.', '[' or '(' after 'super'.");
             Token method;
             if (AtEditorRecoveryBoundary())
             {

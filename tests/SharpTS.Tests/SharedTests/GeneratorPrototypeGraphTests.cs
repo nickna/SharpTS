@@ -293,13 +293,15 @@ public sealed class GeneratorPrototypeGraphTests
     }
 
     public static IEnumerable<object[]> CompiledOnlyCases() => Cases()
-        // The new empty async path adopts return values and queues requests;
-        // existing interpreted async generators retain their separate return boundary (#2401).
+        // Keep the established compiled assertion site for intrinsic receiver brands
+        // and empty async constructor return adoption.
         .Where(row => (string)row[0] is "intrinsic-invocation" or "empty-async-return");
 
     public static IEnumerable<object[]> ModeCases() => SharedCases().SelectMany(row =>
         new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
-            .Select(mode => new object[] { row[0], row[1], row[2], mode }));
+            .Select(mode => new object[] { row[0], row[1], row[2], mode }))
+        .Concat(Cases().Where(row => (string)row[0] == "empty-async-return")
+            .Select(row => new object[] { row[0], row[1], row[2], ExecutionMode.Interpreted }));
 
     [Theory, MemberData(nameof(ModeCases))]
     public void GeneratorIntrinsicsAndLivePrototypeReadsFollowTheOrdinaryObjectGraph(

@@ -38,6 +38,11 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
     {
     }
 
+    internal Dictionary<string, TypeInfo>? SnapshotLocalValueTypes() =>
+        _values is null ? null : new(_values, StringComparer.Ordinal);
+
+    internal void RestoreLocalValueTypes(Dictionary<string, TypeInfo>? snapshot) => _values = snapshot;
+
     /// <summary>
     /// Defines a value while preserving the semantic identity of an enclosing binding when this is
     /// a checker-created narrowing scope. Source declarations replace that inherited identity via

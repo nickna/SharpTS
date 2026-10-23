@@ -2306,6 +2306,7 @@ public partial class RuntimeEmitter
         var maxThrowLabel = il.DefineLabel();
         var notExtensibleReturnLabel = il.DefineLabel();
         var indexInRangeLabel = il.DefineLabel();
+        var lengthWritableLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, syncLength);
@@ -2326,11 +2327,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I8, TSArrayMaxWriteIndex);
         il.Emit(OpCodes.Bgt, maxThrowLabel);
 
+        // Extending an array requires its independent length descriptor to be writable.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, construction.Length);
+        il.Emit(OpCodes.Blt, lengthWritableLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsWritable);
+        il.Emit(OpCodes.Brfalse, frozenReturnLabel);
+        il.MarkLabel(lengthWritableLabel);
+
         // SetCoreWithExtend(index, value);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, setCoreWithExtend);
+        EmitTSArrayOwnDataDescriptorValueSync(il, runtime.DescriptorStorage);
 
         il.MarkLabel(frozenReturnLabel);
         il.MarkLabel(notExtensibleReturnLabel);
@@ -2344,7 +2357,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// <c>public void SetStrict(long index, object? value, bool strictMode)</c> —
     /// like <see cref="EmitTSArraySetLong"/> but throws TypeError for writes to
-    /// frozen arrays in strict mode rather than silently no-op'ing.
+    /// frozen arrays or extension beyond a non-writable length in strict mode
+    /// rather than silently no-op'ing.
     /// </summary>
     private void EmitTSArraySetStrictLong(ArrayConstruction construction, TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder setCoreWithExtend, MethodBuilder syncLength)
     {
@@ -2358,6 +2372,7 @@ public partial class RuntimeEmitter
         var frozenReturnLabel = il.DefineLabel();
         var negThrowLabel = il.DefineLabel();
         var maxThrowLabel = il.DefineLabel();
+        var lengthWritableLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, syncLength);
@@ -2388,15 +2403,65 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I8, TSArrayMaxWriteIndex);
         il.Emit(OpCodes.Bgt, maxThrowLabel);
 
+        // PutValue rejects length growth only after the caller has computed its value.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, construction.Length);
+        il.Emit(OpCodes.Blt, lengthWritableLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.IsWritable);
+        il.Emit(OpCodes.Brtrue, lengthWritableLabel);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, frozenReturnLabel);
+        EmitInlineThrowErrorInline(il, "TypeError: Cannot extend an array with a non-writable length", runtime.Errors.TypeErrorConstructor);
+        il.MarkLabel(lengthWritableLabel);
+
         // SetCoreWithExtend(index, value); return;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, setCoreWithExtend);
+        EmitTSArrayOwnDataDescriptorValueSync(il, runtime.DescriptorStorage);
         il.Emit(OpCodes.Ret);
 
         EmitInlineThrowError(il, runtime, "Index out of bounds.", runtime.Errors.RangeErrorConstructor, negThrowLabel);
         EmitInlineThrowError(il, runtime, "Array index exceeds ECMA-262 uint32 maximum.", runtime.Errors.RangeErrorConstructor, maxThrowLabel);
+    }
+
+    // Args 0/1/2 are the array, normalized long index and successfully stored value.
+    // Keep this after the backing write: rejected frozen/length writes must not alter PDS.
+    private void EmitTSArrayOwnDataDescriptorValueSync(ILGenerator il, EmittedDescriptorStorageRuntime descriptors)
+    {
+        // Opaque Object/Reflect aliases can install descriptors without the narrower
+        // direct-descriptor flag. Omit probes only while both existing guards are clear.
+        if (!_features.UsesDynamicPropertyDescriptors && !_features.UsesObjectDefinitionRuntime)
+            return;
+
+        var done = il.DefineLabel();
+        var descriptor = il.DeclareLocal(descriptors.DescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, descriptors.HasPropertyDescriptors);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarga_S, (byte)1);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int64, "ToString"));
+        il.Emit(OpCodes.Call, descriptors.GetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt, descriptors.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, done);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt, descriptors.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, done);
+        // Do not test Writable here: defineProperty also uses SetLong to install
+        // a readonly data value. Only Value changes; all descriptor flags survive.
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, descriptors.DescriptorValue.GetSetMethod()!);
+        il.MarkLabel(done);
     }
 
     /// <summary>

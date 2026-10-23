@@ -101,8 +101,6 @@ public sealed class ReflectFunctionDeletionTests
 
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
         new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
-            // #2647: compiled own-presence checks retain deletion state after recreation.
-            .Where(mode => mode == ExecutionMode.Interpreted || (string)row[0] != "recreation-after-reflect-deletion")
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ModeCases))]

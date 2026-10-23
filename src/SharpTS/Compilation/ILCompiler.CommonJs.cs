@@ -212,6 +212,7 @@ public partial class ILCompiler
         ctx.TopLevelStaticVars["module"] = moduleObjField;
 
         var emitter = new ILEmitter(ctx);
+        EmitInitializeHoistedVars(il, ctx, GetVarLoopHeadDeclarations(module.Statements));
 
         foreach (var stmt in module.Statements)
         {

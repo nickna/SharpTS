@@ -126,13 +126,8 @@ public sealed class ClassNameReflectionTests
 
     }
 
-    // Compiler gaps: #2716 writable name assignment, #2719 computed declaration
-    // metadata fields, and #2720 sealed/frozen name configurability.
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
-        ((string)row[0] is "own-name-redefinition-and-partial-value-updates"
-            or "computed-declaration-metadata-fields" or "metadata-integrity"
-            ? new[] { ExecutionMode.Interpreted }
-            : new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled })
+        new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ModeCases))]

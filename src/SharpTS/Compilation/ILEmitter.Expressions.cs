@@ -250,7 +250,13 @@ public partial class ILEmitter
         // but must ALSO be addressable as values — lodash caches them: `var freeParseFloat = parseFloat`
         // then calls the alias later). Matches how `fetch` resolves the bare reference above.
         if (TryEmitIndirectEvalValue(name)) return;
-        if (name is "parseFloat" or "parseInt" or "isNaN" or "isFinite"
+        if (name == "parseInt" && !_ctx.HasVisibleValueBinding(name))
+        {
+            EmitGlobalParseIntRead(IL, _ctx);
+            SetStackUnknown();
+            return;
+        }
+        if (name is "parseFloat" or "isNaN" or "isFinite"
             or "encodeURIComponent" or "decodeURIComponent"
             or "setTimeout" or "clearTimeout" or "setInterval" or "clearInterval"
             or "queueMicrotask" or "structuredClone")
@@ -505,25 +511,58 @@ public partial class ILEmitter
             EmitExpression(a.Value);
         }
 
-        if (_ctx.LexicalInitializerTdzName == a.Name.Lexeme)
+        EmitAssignmentValueFromStack(a.Name.Lexeme, assignmentDCField, () => EmitBoxIfNeeded(a.Value));
+    }
+
+    protected override void EmitStoreAssignmentLoopVariable(string name)
+    {
+        // Mirror ordinary assignment's early binding routes before its shared store tail.
+        if (_ctx.HasLoopBodyBindingAccess(name))
         {
-            EmitBoxIfNeeded(a.Value);
+            if (!_resolver.TryStoreVariable(name))
+                throw new InvalidOperationException($"Missing lexical storage for '{name}'.");
+            return;
+        }
+        if (InCjsContext && name == "exports")
+        {
+            IL.Emit(OpCodes.Stsfld, _ctx.CurrentCjsExportsField!);
+            return;
+        }
+        if (TryEmitStoreClassDefinitionCapture(name)) return;
+
+        var dcName = _ctx.ResolveFunctionDCFieldName(name);
+        FieldBuilder? dcField = null;
+        if (_ctx.CapturedFunctionLocals?.Contains(dcName) == true)
+            _ctx.FunctionDisplayClassFields?.TryGetValue(dcName, out dcField);
+        // Iterator values are boxed already. The ordinary store leaves an assignment result;
+        // a loop head is a statement, so discard exactly that result after committing the owner.
+        SetStackUnknown();
+        EmitAssignmentValueFromStack(name, dcField, () => { });
+        IL.Emit(OpCodes.Pop);
+        SetStackUnknown();
+    }
+
+    private void EmitAssignmentValueFromStack(string name, FieldBuilder? assignmentDCField, Action ensureBoxed)
+    {
+        if (_ctx.LexicalInitializerTdzName == name)
+        {
+            ensureBoxed();
             IL.Emit(OpCodes.Pop);
-            IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
+            IL.Emit(OpCodes.Ldstr, name);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.ThrowUndefinedVariable);
             EmitNullConstant();
             return;
         }
 
-        EmitLexicalAssignmentTdzGuard(a.Name.Lexeme);
+        EmitLexicalAssignmentTdzGuard(name);
 
         // 0. Per-iteration loop-binding cell (#650): write through the StrongBox so the
         //    mutation is visible to closures that captured this iteration's cell. Mirrors
         //    LocalVariableResolver's cell store; this hand-rolled assignment path does not
         //    route through TryStoreVariable, so the cell case must be handled here too.
-        if (_ctx.CellBindingLocals.TryGetValue(a.Name.Lexeme, out var assignCell))
+        if (_ctx.CellBindingLocals.TryGetValue(name, out var assignCell))
         {
-            EmitBoxIfNeeded(a.Value);
+            ensureBoxed();
             IL.Emit(OpCodes.Dup); // leave the assigned value on the stack (expression result)
             var temp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, temp);
@@ -563,18 +602,18 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldloc, numericTemp);
                 IL.Emit(OpCodes.Stfld, funcDCField);
                 if (_ctx.FunctionDisplayClassLocal != null &&
-                    _ctx.TryGetParameter(a.Name.Lexeme, out var numericParamSync))
+                    _ctx.TryGetParameter(name, out var numericParamSync))
                 {
                     IL.Emit(OpCodes.Ldloc, numericTemp);
                     IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    _ctx.EmitConvertForParamSlot(IL, a.Name.Lexeme);
+                    _ctx.EmitConvertForParamSlot(IL, name);
                     IL.Emit(OpCodes.Starg, numericParamSync);
                 }
                 SetStackType(StackType.Double);
                 return;
             }
 
-            EmitBoxIfNeeded(a.Value);
+            ensureBoxed();
             IL.Emit(OpCodes.Dup);
             // Store to field: need temp since value is on top of stack
             var temp = IL.DeclareLocal(_ctx.Types.Object);
@@ -605,10 +644,10 @@ public partial class ILEmitter
             // reads resolve parameters before the DC, so a DC-only store would
             // leave later same-body reads seeing the stale argument.
             if (_ctx.FunctionDisplayClassLocal != null &&
-                _ctx.TryGetParameter(a.Name.Lexeme, out var funcParamSync))
+                _ctx.TryGetParameter(name, out var funcParamSync))
             {
                 IL.Emit(OpCodes.Ldloc, temp);
-                _ctx.EmitConvertForParamSlot(IL, a.Name.Lexeme);
+                _ctx.EmitConvertForParamSlot(IL, name);
                 IL.Emit(OpCodes.Starg, funcParamSync);
             }
             SetStackUnknown();
@@ -616,10 +655,10 @@ public partial class ILEmitter
         }
 
         // 1b. Arrow scope display class fields (captured arrow-local vars)
-        if (_ctx.CapturedArrowLocals?.Contains(a.Name.Lexeme) == true &&
-            _ctx.ArrowScopeDisplayClassFields?.TryGetValue(a.Name.Lexeme, out var arrowDCField) == true)
+        if (_ctx.CapturedArrowLocals?.Contains(name) == true &&
+            _ctx.ArrowScopeDisplayClassFields?.TryGetValue(name, out var arrowDCField) == true)
         {
-            EmitBoxIfNeeded(a.Value);
+            ensureBoxed();
             IL.Emit(OpCodes.Dup);
             var temp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, temp);
@@ -649,10 +688,10 @@ public partial class ILEmitter
             // leave later same-body reads seeing the stale argument (lodash's
             // `context = context || root; ... context.Date` failure mode).
             if (_ctx.ArrowScopeDisplayClassLocal != null &&
-                _ctx.TryGetParameter(a.Name.Lexeme, out var arrowParamSync))
+                _ctx.TryGetParameter(name, out var arrowParamSync))
             {
                 IL.Emit(OpCodes.Ldloc, temp);
-                _ctx.EmitConvertForParamSlot(IL, a.Name.Lexeme);
+                _ctx.EmitConvertForParamSlot(IL, name);
                 IL.Emit(OpCodes.Starg, arrowParamSync);
             }
             SetStackUnknown();
@@ -663,11 +702,11 @@ public partial class ILEmitter
         // $arrowDC / $arrowScopeDC reference field. Mirrors LocalVariableResolver
         // store path 1c; without this branch the assignment falls through to the
         // "Unknown target" tail and leaves a dangling value on the stack.
-        if (_ctx.ParentArrowCapturedLocals?.Contains(a.Name.Lexeme) == true &&
-            _ctx.ParentArrowScopeDisplayClassFields?.TryGetValue(a.Name.Lexeme, out var parentArrowDCField) == true &&
+        if (_ctx.ParentArrowCapturedLocals?.Contains(name) == true &&
+            _ctx.ParentArrowScopeDisplayClassFields?.TryGetValue(name, out var parentArrowDCField) == true &&
             _ctx.CurrentArrowScopeDCField != null)
         {
-            EmitBoxIfNeeded(a.Value);
+            ensureBoxed();
             IL.Emit(OpCodes.Dup);
             var temp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, temp);
@@ -680,9 +719,9 @@ public partial class ILEmitter
         }
 
         // 1d. EXTRA ancestor arrow scope DCs — mirror of LocalVariableResolver 1d.
-        if (_ctx.ExtraArrowScopeBindings?.TryGetValue(a.Name.Lexeme, out var extraAssignBinding) == true)
+        if (_ctx.ExtraArrowScopeBindings?.TryGetValue(name, out var extraAssignBinding) == true)
         {
-            EmitBoxIfNeeded(a.Value);
+            ensureBoxed();
             IL.Emit(OpCodes.Dup);
             var temp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, temp);
@@ -694,10 +733,10 @@ public partial class ILEmitter
             return;
         }
 
-        var local = _ctx.Locals.GetLocal(a.Name.Lexeme);
+        var local = _ctx.Locals.GetLocal(name);
         if (local != null)
         {
-            var localType = _ctx.Locals.GetLocalType(a.Name.Lexeme);
+            var localType = _ctx.Locals.GetLocalType(name);
             if (localType != null && _ctx.Types.IsDouble(localType))
             {
                 // Typed local - ensure unboxed double
@@ -709,13 +748,13 @@ public partial class ILEmitter
             else
             {
                 // Object local - ensure boxed
-                EmitBoxIfNeeded(a.Value);
+                ensureBoxed();
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Stloc, local);
                 SetStackUnknown();
             }
         }
-        else if (_ctx.TryGetParameter(a.Name.Lexeme, out var argIndex))
+        else if (_ctx.TryGetParameter(name, out var argIndex))
         {
             // A parameter slot is not always object: a `: number` param is an unboxed `double`
             // slot, a `: boolean` param a `bool` slot, a `: string` param a `string` slot. Box the
@@ -724,16 +763,16 @@ public partial class ILEmitter
             // into a double/bool/string slot fails IL verification (StackUnexpected) and reads back
             // garbage (#402). EmitConvertForParamSlot is a no-op for object slots (the common case and
             // the #372-widened undefined-reachable params).
-            EmitBoxIfNeeded(a.Value);
+            ensureBoxed();
             IL.Emit(OpCodes.Dup);
-            _ctx.EmitConvertForParamSlot(IL, a.Name.Lexeme);
+            _ctx.EmitConvertForParamSlot(IL, name);
             IL.Emit(OpCodes.Starg, argIndex);
             SetStackUnknown();
         }
-        else if (_ctx.CapturedFields?.TryGetValue(a.Name.Lexeme, out var field) == true)
+        else if (_ctx.CapturedFields?.TryGetValue(name, out var field) == true)
         {
             // Captured field in display class (closure)
-            EmitBoxIfNeeded(a.Value);
+            ensureBoxed();
             IL.Emit(OpCodes.Dup);
             // Store to field: need temp since value is on top of stack
             var temp = IL.DeclareLocal(_ctx.Types.Object);
@@ -741,7 +780,7 @@ public partial class ILEmitter
             // Per-iteration cell capture (#650): the field holds a shared StrongBox —
             // write through Value so the loop body and sibling closures see the update,
             // rather than overwriting this closure's reference to the cell.
-            if (_ctx.CellCapturedFieldNames?.Contains(a.Name.Lexeme) == true)
+            if (_ctx.CellCapturedFieldNames?.Contains(name) == true)
             {
                 IL.Emit(OpCodes.Ldarg_0);
                 IL.Emit(OpCodes.Ldfld, field);
@@ -757,13 +796,13 @@ public partial class ILEmitter
             }
             SetStackUnknown();
         }
-        else if (_ctx.CapturedTopLevelVars?.Contains(a.Name.Lexeme) == true &&
-                 _ctx.EntryPointDisplayClassFields?.TryGetValue(a.Name.Lexeme, out var entryPointField) == true)
+        else if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
+                 _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
         {
             // Captured top-level variable in entry-point display class
-            EmitBoxIfNeeded(a.Value);
+            ensureBoxed();
             IL.Emit(OpCodes.Dup);
-            _ctx.EmitTopLevelLexicalTdzCheck(IL, a.Name.Lexeme);
+            _ctx.EmitTopLevelLexicalTdzCheck(IL, name);
             // Store to field: need temp since value is on top of stack
             var temp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, temp);
@@ -796,12 +835,12 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stfld, entryPointField);
             SetStackUnknown();
         }
-        else if (_ctx.TopLevelStaticVars?.TryGetValue(a.Name.Lexeme, out var topLevelField) == true)
+        else if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
             // Top-level static variable
-            EmitBoxIfNeeded(a.Value);
+            ensureBoxed();
             IL.Emit(OpCodes.Dup);
-            _ctx.EmitTopLevelLexicalTdzCheck(IL, a.Name.Lexeme);
+            _ctx.EmitTopLevelLexicalTdzCheck(IL, name);
             IL.Emit(OpCodes.Stsfld, topLevelField);
             SetStackUnknown();
         }
@@ -810,11 +849,11 @@ public partial class ILEmitter
             // Class bodies and other strict contexts must reject creation of an
             // unresolvable binding. Evaluate the RHS first, then throw the same
             // guest ReferenceError used by an unknown identifier read.
-            EmitBoxIfNeeded(a.Value);
+            ensureBoxed();
             if (_ctx.IsStrictMode)
             {
                 IL.Emit(OpCodes.Pop);
-                IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
+                IL.Emit(OpCodes.Ldstr, name);
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.ThrowUndefinedVariable);
                 IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
             }
@@ -827,7 +866,7 @@ public partial class ILEmitter
                 var value = IL.DeclareLocal(_ctx.Types.Object);
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Stloc, value);
-                IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
+                IL.Emit(OpCodes.Ldstr, name);
                 IL.Emit(OpCodes.Ldloc, value);
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.SetProperty);
             }

@@ -147,10 +147,25 @@ internal class SharedArrayBufferConstructorImpl : ISharpTSCallable, IBuiltInType
 /// <summary>
 /// ArrayBuffer constructor implementation.
 /// </summary>
-internal class ArrayBufferConstructorImpl : ISharpTSCallable, IBuiltInTypeConstructor
+internal class ArrayBufferConstructorImpl : ISharpTSFunctionObject, IBuiltInTypeConstructor
 {
-    private static readonly BuiltInMethod _isViewMethod = BuiltInMethod.CreateV2("isView", 1, static (_, _, args) =>
+    private static readonly BuiltInMethod _isViewMethod = BuiltInMethod.CreateV2("isView", 1, int.MaxValue, static (_, _, args) =>
         RuntimeValue.FromBoolean(SharpTSArrayBuffer.IsView(args.Length > 0 ? args[0].ToObject() : null)));
+
+    public SharpTSObject OwnProperties { get; }
+
+    public ArrayBufferConstructorImpl() : this(null, null) { }
+
+    internal ArrayBufferConstructorImpl(Interpreter? interpreter, SharpTSObject? prototype)
+    {
+        OwnProperties = FunctionObjectProperties.Create("ArrayBuffer", 1);
+        if (prototype is not null)
+            OwnProperties.DefineProperty("prototype", new SharpTSPropertyDescriptor(
+                prototype, writable: false, enumerable: false, configurable: false));
+        OwnProperties.DefineProperty("isView", new SharpTSPropertyDescriptor(
+            interpreter?.LocalizeBuiltInValue(_isViewMethod) ?? _isViewMethod,
+            writable: true, enumerable: false, configurable: true));
+    }
 
     public int Arity() => 1;
 
@@ -169,14 +184,13 @@ internal class ArrayBufferConstructorImpl : ISharpTSCallable, IBuiltInTypeConstr
         return new SharpTSArrayBuffer((int)length);
     }
 
-    public object? GetProperty(string name)
+    public object? GetProperty(string name, Interpreter? interpreter = null)
     {
-        return name switch
-        {
-            "isView" => _isViewMethod,
-            "prototype" => null,
-            _ => null
-        };
+        // Ordinary descriptor reads run before this native fallback. Never
+        // recreate an intrinsic after deletion or accessor redefinition.
+        return OwnProperties.GetOwnPropertyDescriptor(name) is { HasValue: true } descriptor
+            ? descriptor.Value
+            : null;
     }
 }
 

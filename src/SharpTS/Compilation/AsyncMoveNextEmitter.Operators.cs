@@ -193,11 +193,15 @@ public partial class AsyncMoveNextEmitter
                 $"Cannot write private member #{fieldName} to an object whose class did not declare it");
             _il.MarkLabel(successLabel);
 
+            // The lookup result is live across an awaited RHS, so persist it with the receiver.
+            _il.Emit(OpCodes.Ldloc, dictLocal);
+            var dictSpillLocal = _helpers.SpillStoreObject();
             EmitExpression(sp.Value);
             EnsureBoxed();
             _il.Emit(OpCodes.Stloc, valueLocal);
 
-            _il.Emit(OpCodes.Ldloc, dictLocal);
+            _il.Emit(OpCodes.Ldloc, dictSpillLocal);
+            _il.Emit(OpCodes.Castclass, dictType);
             _il.Emit(OpCodes.Ldstr, fieldName);
             _il.Emit(OpCodes.Ldloc, valueLocal);
             _il.Emit(OpCodes.Callvirt, dictType.GetMethod("set_Item", [typeof(string), typeof(object)])!);
@@ -264,12 +268,10 @@ public partial class AsyncMoveNextEmitter
             {
                 var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
                 var dictType = typeof(Dictionary<string, object?>);
-                var objLocal = _il.DeclareLocal(typeof(object));
                 var dictLocal = _il.DeclareLocal(dictType);
 
-                EmitExpression(cp.Object);
-                EnsureBoxed();
-                _il.Emit(OpCodes.Stloc, objLocal);
+                // Persist the branded receiver across suspension in any argument.
+                var objLocal = SpillBoxed(cp.Object);
 
                 var invalidLabel = _il.DefineLabel();
                 _il.Emit(OpCodes.Ldloc, objLocal);

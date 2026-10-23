@@ -10,6 +10,28 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    private Func<IndexedAccessTypeNode, TypeInfo, TypeInfo, TypeInfo?>? _classFieldIndexedAccessResolver;
+
+    private static bool IsClassFieldEntityName(Expr expression) => expression switch
+    {
+        Expr.Variable => true,
+        Expr.Get get => IsClassFieldEntityName(get.Object),
+        _ => false
+    };
+
+    private void ValidateClassFieldComputedKey(Stmt.Field field)
+    {
+        // TS1166 permits entity-name keys independently of their symbol type.
+        // Other dynamic symbol expressions, such as `[Symbol()]`, remain invalid.
+        if (field.ComputedKey != null && CheckExpr(field.ComputedKey) is TypeInfo.Symbol &&
+            !IsClassFieldEntityName(field.ComputedKey))
+        {
+            RecordTypeError(new TypeCheckException(
+                "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
+                line: TryGetExprLine(field.ComputedKey) ?? field.Name.Line, tsCode: "TS1166"));
+        }
+    }
+
     /// <summary>
     /// Maps a class computed method/accessor key expression to the canonical well-known-symbol member
     /// name the type system uses (<c>Symbol.iterator</c> → <c>@@iterator</c>,
@@ -64,7 +86,7 @@ public partial class TypeChecker
         }
     }
 
-    private TypeInfo BuildDeclaredClassMethodType(Stmt.Function method) => BuildClassMethodSignature(method);
+    private TypeInfo BuildDeclaredClassMethodType(Stmt.Function method) => BuildClassMethodSignature(method, validateDefaults: false);
 
     // Signature collection runs in the caller-owned class type environment and populates
     // the supplied class metadata. Diagnostic recovery and scope restoration remain
@@ -137,7 +159,7 @@ public partial class TypeChecker
             // Generator<Iterator<number>>. An un-annotated generator factory stays <inferred> here
             // and is filled in by the inferred-return post-pass below as Generator<yieldType>.
             var representative = implementations.Count == 1 ? implementations[0] : members[^1];
-            var funcType = BuildClassMethodSignature(representative, wrapGeneratorReturn: false);
+            var funcType = BuildClassMethodSignature(representative, wrapGeneratorReturn: false, validateDefaults: false);
             if (representative.IsStatic)
                 mutableClass.StaticMethods[memberName] = funcType;
             else
@@ -249,8 +271,103 @@ public partial class TypeChecker
     }
 
     // Runs in the class type-parameter environment and populates the caller-owned mutable signature model.
-    private void CollectClassFieldTypes(Stmt.Class classStmt, TypeInfo.MutableClass mutableClass)
+    private void CollectClassFieldTypes(
+        Stmt.Class classStmt, TypeInfo.MutableClass mutableClass, List<TypeInfo.TypeParameter>? classTypeParams)
     {
+        // C["field"] names an instance member, even within a static field's
+        // annotation. Keep declarations distinct when their spellings coincide.
+        Dictionary<string, Stmt.Field> instanceFields = new(StringComparer.Ordinal);
+        foreach (var field in classStmt.Fields)
+            if (!field.IsStatic && !field.IsPrivate)
+                instanceFields.TryAdd(GetFieldMemberName(field), field);
+
+        // Resolve explicit sibling annotations directly from their declarations. Looking
+        // through a frozen view of this class here would publish an incomplete signature,
+        // and looking through the mutable model would lose forward siblings as `any`.
+        Dictionary<Stmt.Field, TypeInfo> resolvedFields = new(ReferenceEqualityComparer.Instance);
+        HashSet<Stmt.Field> resolvingFields = new(ReferenceEqualityComparer.Instance);
+        HashSet<IndexedAccessTypeNode> annotationAccesses = new(ReferenceEqualityComparer.Instance);
+        TypeEnvironment fieldEnvironment = _environment;
+        foreach (var field in classStmt.Fields)
+            if (field.TypeAnnotationNode is { } annotation)
+                CollectAnnotationAccesses(annotation);
+
+        void CollectAnnotationAccesses(TypeNode node)
+        {
+            if (node is IndexedAccessTypeNode indexed)
+                annotationAccesses.Add(indexed);
+            foreach (var child in TypeNodeChildren(node))
+                CollectAnnotationAccesses(child);
+        }
+
+        TypeInfo ResolveFieldType(Stmt.Field field)
+        {
+            if (resolvedFields.TryGetValue(field, out var resolved))
+                return resolved;
+
+            var previousResolver = _classFieldIndexedAccessResolver;
+            resolvingFields.Add(field);
+            _classFieldIndexedAccessResolver = ResolveSiblingAccess;
+            try
+            {
+                // A dependency belongs to the class scope, even when its reference
+                // occurs inside another annotation's generic function signature.
+                using var _ = new EnvironmentScope(this, fieldEnvironment);
+                resolved = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode, field)
+                    ?? TypeInfo.Any.Shared;
+                resolvedFields[field] = resolved;
+                return resolved;
+            }
+            finally
+            {
+                _classFieldIndexedAccessResolver = previousResolver;
+                resolvingFields.Remove(field);
+            }
+        }
+
+        TypeInfo? ResolveSiblingAccess(IndexedAccessTypeNode indexed, TypeInfo objectType, TypeInfo indexType)
+        {
+            if (!annotationAccesses.Contains(indexed)
+                || indexed.ObjectType is not NamedTypeNode { Name: var objectName }
+                || objectName != classStmt.Name.Lexeme
+                || indexed.IndexType is not LiteralTypeNode
+                || !IsCurrentClassInstance(objectType))
+                return null;
+
+            string? memberName = indexType switch
+            {
+                TypeInfo.StringLiteral literal => literal.Value,
+                TypeInfo.NumberLiteral literal => literal.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                _ => null
+            };
+            if (memberName is null || !instanceFields.TryGetValue(memberName, out var dependency)
+                || (dependency.TypeAnnotationNode is null && dependency.TypeAnnotation is null)
+                || resolvingFields.Contains(dependency))
+                return null;
+
+            return WithOptionalPropertyUndefined(ResolveFieldType(dependency), dependency.IsOptional);
+        }
+
+        bool IsCurrentClassInstance(TypeInfo type)
+        {
+            if (type is not TypeInfo.Instance instance) return false;
+            if (ReferenceEquals(instance.ClassType, mutableClass)) return true;
+
+            // Explicit C<T> must select this declaration with its current parameters,
+            // not another instantiation or a same-spelled parameter in a nested scope.
+            if (classTypeParams is not { Count: > 0 }
+                || instance.ClassType is not TypeInfo.InstantiatedGeneric
+                    { GenericDefinition: TypeInfo.GenericClass generic } instantiated
+                || generic.Core.DeclarationId != mutableClass.DeclarationId
+                || instantiated.TypeArguments.Count != classTypeParams.Count)
+                return false;
+
+            for (int i = 0; i < classTypeParams.Count; i++)
+                if (!ReferenceEquals(instantiated.TypeArguments[i], classTypeParams[i]))
+                    return false;
+            return true;
+        }
+
         // Collect static property types, field access modifiers, and non-static field types
         foreach (var field in classStmt.Fields)
         {
@@ -260,25 +377,16 @@ public partial class TypeChecker
 
             string fieldName = GetFieldMemberName(field);
             if (field.TypeAnnotationNode is { } fieldNode &&
-                ContainsSelfIndexedAccess(fieldNode, classStmt.Name.Lexeme, requireLiteralIndex: true))
+                ContainsClassFieldIndexedCycle(fieldNode, classStmt.Name.Lexeme, field, instanceFields))
             {
                 RecordTypeError(new TypeCheckException(
                     $"'{fieldName}' is referenced directly or indirectly in its own type annotation.",
                     field.Name.Line,
                     tsCode: "TS2502"));
             }
-            TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode, field)
-                ?? TypeInfo.Any.Shared;
+            TypeInfo fieldType = ResolveFieldType(field);
 
-            // TS1166: a computed DATA-property name (a class field, unlike a method/accessor) must be a
-            // literal type or a 'unique symbol'. A plain, non-unique `symbol` — e.g. `[Symbol()]` —
-            // is not allowed; a well-known symbol (`[Symbol.iterator]`) is a unique symbol, so it's fine.
-            if (field.ComputedKey != null && CheckExpr(field.ComputedKey) is TypeInfo.Symbol)
-            {
-                RecordTypeError(new TypeCheckException(
-                    "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
-                    line: TryGetExprLine(field.ComputedKey) ?? field.Name.Line, tsCode: "TS1166"));
-            }
+            ValidateClassFieldComputedKey(field);
 
             // Handle ES2022 private fields (#field)
             if (field.IsPrivate)
@@ -308,6 +416,42 @@ public partial class TypeChecker
             {
                 (field.IsStatic ? mutableClass.StaticReadonlyFields : mutableClass.ReadonlyFields).Add(fieldName);
             }
+        }
+    }
+
+    private static bool ContainsClassFieldIndexedCycle(
+        TypeNode annotation, string className, Stmt.Field field,
+        IReadOnlyDictionary<string, Stmt.Field> instanceFields)
+    {
+        HashSet<Stmt.Field> visited = new(ReferenceEqualityComparer.Instance);
+        return Visit(annotation);
+
+        bool Visit(TypeNode node)
+        {
+            if (node is IndexedAccessTypeNode
+                {
+                    ObjectType: NamedTypeNode { Name: var objectName },
+                    IndexType: LiteralTypeNode { Value: var key }
+                } && objectName == className)
+            {
+                string? memberName = key switch
+                {
+                    string name => name,
+                    double number => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    _ => null
+                };
+                if (memberName is not null && instanceFields.TryGetValue(memberName, out var dependency))
+                {
+                    if (ReferenceEquals(dependency, field)) return true;
+                    if (visited.Add(dependency) && dependency.TypeAnnotationNode is { } sibling
+                        && Visit(sibling))
+                        return true;
+                }
+            }
+
+            foreach (var child in TypeNodeChildren(node))
+                if (Visit(child)) return true;
+            return false;
         }
     }
 
@@ -517,14 +661,13 @@ public partial class TypeChecker
         // Type-check static blocks
         if (classStmt.StaticInitializers != null)
         {
-            // Create environment with static class context ('this' refers to the class constructor)
-            var staticBlockEnv = new TypeEnvironment(_environment);
-            staticBlockEnv.Define("this", classTypeForBody);
-
             foreach (var initializer in classStmt.StaticInitializers)
             {
                 if (initializer is Stmt.StaticBlock block)
                 {
+                    // Each static block owns its lexical bindings; only the class context is shared.
+                    var staticBlockEnv = new TypeEnvironment(_environment);
+                    staticBlockEnv.Define("this", classTypeForBody);
                     RegisterEditorScope(block, staticBlockEnv);
                     using var _ = new EnvironmentScope(this, staticBlockEnv);
                     bool previousInStaticBlock = _inStaticBlock;
@@ -537,10 +680,7 @@ public partial class TypeChecker
 
                     try
                     {
-                        foreach (var stmt in block.Body)
-                        {
-                            CheckStmt(stmt);
-                        }
+                        CheckBlock(block.Body, staticBlockEnv);
                     }
                     finally
                     {
@@ -604,6 +744,11 @@ public partial class TypeChecker
             RegisterSourceClassMembers(classStmt, mutableClass);
             MarkEditorBodyEntered(classStmt);
             classTypeEnv.Define(classStmt.Name.Lexeme, mutableClass);
+            // A module's preparatory pass may have published an older type facet.
+            // Keep nongeneric self annotations on this declaration's live signature;
+            // explicit generic references still need their prepared GenericClass facet.
+            if (classTypeParams is not { Count: > 0 })
+                classTypeEnv.DefineType(classStmt.Name.Lexeme, mutableClass);
             BindEditorClassSelf(classStmt, classTypeEnv, mutableClass);
             // `this` in an instance method signature is the polymorphic instance type, not the
             // global object. Make it visible while collecting signatures so `K extends keyof this`
@@ -621,7 +766,7 @@ public partial class TypeChecker
                     CollectClassIndexSignatures(classStmt, mutableClass);
                     CollectComputedClassMethodSignatures(classStmt, mutableClass);
                     CollectNamedClassMethodSignatures(classStmt, mutableClass);
-                    CollectClassFieldTypes(classStmt, mutableClass);
+                    CollectClassFieldTypes(classStmt, mutableClass, classTypeParams);
                     CollectClassAccessorTypes(classStmt, mutableClass);
                     CollectClassAutoAccessorTypes(classStmt, mutableClass, superclass);
                 }
@@ -644,6 +789,12 @@ public partial class TypeChecker
                 classTypeForBody = PublishInitialClassType(classStmt, mutableClass, classTypeParams);
                 _compatibilityCache = null;
                 _identityCompatibilityCache = null;
+            }
+
+            if (CheckClassMethodParameterDefaults(classStmt.Methods, mutableClass, classTypeEnv))
+            {
+                RevalidateClassFieldInitializers(classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams);
+                classTypeForBody = PublishInitialClassType(classStmt, mutableClass, classTypeParams);
             }
 
             ValidateDeclaredClassInterfaces(classStmt, classTypeForBody, classTypeParams);
@@ -758,7 +909,9 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    declaredMethodType = BuildClassMethodSignature(method, wrapGeneratorReturn: false);
+                    declaredMethodType = _classMethodSignatures.TryGetValue(method, out var signature)
+                        ? ClassMethodCallable(signature.Body, signature.Parameters)
+                        : BuildClassMethodSignature(method, wrapGeneratorReturn: false);
                 }
             }
             else if (method.IsPrivate)
@@ -852,7 +1005,7 @@ public partial class TypeChecker
                     // semantics. GeneratorArrowLifter appends a synthesized __genArrow_N
                     // declaration after the earlier forwarding reference, so predeclare both
                     // declaration kinds before the source-order body pass.
-                    HoistFunctionDeclarations(method.Body);
+                    HoistFunctionDeclarations(method.Body, hoistBodyVars: true);
                     HoistLexicalDeclarations(method.Body);
                     CheckClassBodyStatements(method.Body, recoverComputedSymbolDiagnostics);
 
@@ -1032,6 +1185,7 @@ public partial class TypeChecker
 
                 try
                 {
+                    HoistVarDeclarations(accessor.Body);
                     CheckClassBodyStatements(accessor.Body, recoverComputedSymbolDiagnostics);
 
                     if (inferringGetter && accessorName != null)

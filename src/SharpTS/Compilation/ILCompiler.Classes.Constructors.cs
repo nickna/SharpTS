@@ -399,7 +399,7 @@ public partial class ILCompiler
             // Note: Declare fields are excluded - they have no initialization
             var instanceFieldsWithInit = classStmt.Fields.Where(f =>
                 !f.IsStatic && !f.IsDeclare &&
-                (f.IsPrivate || f.Initializer != null || f.ComputedKey != null)).ToList();
+                (f.IsPrivate || f.Initializer != null || f.ComputedKey != null || f.TypeAnnotation == null)).ToList();
             if (instanceFieldsWithInit.Count > 0 || _classes.PrivateElements.Require(className).Storage != null)
             {
                 ctx.FieldsField = fieldsField;
@@ -448,6 +448,14 @@ public partial class ILCompiler
                         // Store directly in backing field
                         il.Emit(OpCodes.Ldarg_0);  // this
 
+                        // Unannotated omitted fields have object backing storage, not CLR null.
+                        if (field.Initializer == null)
+                        {
+                            il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+                            il.Emit(OpCodes.Stfld, EmitterTypeHelpers.SelfFieldReference(backingField));
+                            continue;
+                        }
+
                         // Emit initializer expression
                         initEmitter.EmitExpression(field.Initializer!);
 
@@ -473,7 +481,9 @@ public partial class ILCompiler
                         il.Emit(OpCodes.Ldstr, fieldName);
                         // number[] unboxing: an `arr: number[] = []` field is created as a numeric $Array
                         // (escaping by nature — a field is aliasable), so `this.arr[i]=v` writes unboxed.
-                        if (!initEmitter.TryEmitNumericEmptyArrayInit(field.TypeAnnotation, field.Initializer))
+                        if (field.Initializer == null)
+                            il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+                        else if (!initEmitter.TryEmitNumericEmptyArrayInit(field.TypeAnnotation, field.Initializer))
                         {
                             initEmitter.EmitExpression(field.Initializer!);
                             initEmitter.EmitBoxIfNeeded(field.Initializer!);
@@ -482,22 +492,6 @@ public partial class ILCompiler
                     }
                 }
             }
-
-            // Initialize instance declare fields (without initializers) to null in _extras dictionary
-            // TypeScript semantics: uninitialized fields return null/undefined, not CLR defaults
-            var instanceDeclareFields = classStmt.Fields.Where(f =>
-                !f.IsStatic && !f.IsPrivate && f.IsDeclare && f.Initializer == null && f.ComputedKey == null).ToList();
-            foreach (var field in instanceDeclareFields)
-            {
-                string fieldName = field.Name.Lexeme;
-                // Store null in _extras dictionary
-                il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
-                il.Emit(OpCodes.Ldstr, fieldName);
-                il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
-            }
-
 
         }
     }

@@ -47,6 +47,10 @@ public partial class AsyncMoveNextEmitter
 
         string name = v.Name.Lexeme;
 
+        if (v.IsVar && v.Initializer is null
+            && Ctx.InitializedParameterNames?.Contains(name) == true)
+            return;
+
         if (TryGetFunctionDCField(name, out var dcField))
         {
             // Write to both: first evaluate initializer

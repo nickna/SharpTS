@@ -105,8 +105,15 @@ public sealed class NumericBitwiseLoweringTests
             """);
 
         var instructions = ReadInstructions(FindFunction(assembly, "combine")).ToArray();
-        Assert.Equal(2, instructions.Count(instruction =>
-            instruction.Operand is MethodBase { Name: "JsToInt32" }));
+        Type runtime = assembly.GetType("$Runtime")!;
+        MethodInfo? numericBinary = runtime.GetMethod(
+            "NumericBinary", BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly,
+            binder: null, types: [typeof(object), typeof(object), typeof(int)], modifiers: null);
+        Assert.NotNull(numericBinary);
+        Assert.Equal(typeof(object), numericBinary!.ReturnType);
+        Assert.Equal(1, instructions.Count(instruction =>
+            instruction.OpCode == OpCodes.Call &&
+            instruction.Operand is MethodInfo called && called.Equals(numericBinary)));
         Assert.DoesNotContain(instructions, instruction =>
             instruction.Operand is MethodBase { Name: "JsNumberToInt32" });
     }

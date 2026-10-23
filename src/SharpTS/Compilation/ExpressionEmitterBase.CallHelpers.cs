@@ -635,7 +635,7 @@ public abstract partial class ExpressionEmitterBase
         SetStackUnknown();
     }
 
-    private void EmitGetPropertyAndInvoke(LocalBuilder objLocal, string methodName, List<Expr> arguments, LocalBuilder[]? argLocals = null)
+    protected void EmitGetPropertyAndInvoke(LocalBuilder objLocal, string methodName, List<Expr> arguments, LocalBuilder[]? argLocals = null)
     {
         // ECMA-262 §13.3.2.1: evaluating the member-access callee `recv.method`
         // performs RequireObjectCoercible(recv), so an undefined receiver throws
@@ -1284,6 +1284,7 @@ public abstract partial class ExpressionEmitterBase
         Expr.TemplateLiteral tl => AnyContainsSuspension(tl.Expressions),
         Expr.TaggedTemplateLiteral tagged => ExprContainsSuspension(tagged.Tag) || AnyContainsSuspension(tagged.Expressions),
         Expr.Spread sp => ExprContainsSuspension(sp.Expression),
+        Expr.Instantiation instantiation => ExprContainsSuspension(instantiation.Expression),
         Expr.TypeAssertion ta => ExprContainsSuspension(ta.Expression),
         Expr.Satisfies sa => ExprContainsSuspension(sa.Expression),
         Expr.NonNullAssertion nn => ExprContainsSuspension(nn.Expression),
@@ -1781,6 +1782,11 @@ public abstract partial class ExpressionEmitterBase
     {
         if (Ctx.TypeEmitterRegistry == null)
             return false;
+        // Math's property strategy declines live mutations. Its ordinary lookup must retain the
+        // original namespace receiver, including when evaluating an argument suspends this call.
+        if (obj is Expr.Variable { Name.Lexeme: "Math" }
+            && Ctx.RuntimeFeatures?.UsesMathMutation == true)
+            return false;
         if (obj is Expr.Variable v
             && CanUseStaticTypeStrategy(v.Name.Lexeme)
             && Ctx.TypeEmitterRegistry.GetStaticStrategy(v.Name.Lexeme) != null)
@@ -1801,6 +1807,7 @@ public abstract partial class ExpressionEmitterBase
         Expr.GetIndex gi => gi.Optional || HasOptionalLink(gi.Object),
         Expr.Call call => call.Optional || HasOptionalLink(call.Callee),
         Expr.Grouping gr => HasOptionalLink(gr.Expression),
+        Expr.Instantiation instantiation => HasOptionalLink(instantiation.Expression),
         Expr.TypeAssertion ta => HasOptionalLink(ta.Expression),
         _ => false
     };
@@ -1820,6 +1827,7 @@ public abstract partial class ExpressionEmitterBase
         while (true)
         {
             if (original is Expr.Grouping grouping) original = grouping.Expression;
+            else if (original is Expr.Instantiation instantiation) original = instantiation.Expression;
             else if (original is Expr.TypeAssertion assertion) original = assertion.Expression;
             else break;
         }
@@ -2638,8 +2646,27 @@ public abstract partial class ExpressionEmitterBase
     {
         EmitExpression(obj);
         EnsureBoxed();
-        var objLocal = IL.DeclareLocal(typeof(object));
-        IL.Emit(OpCodes.Stloc, objLocal);
+        var objLocal = _helpers.SpillStoreObject();
+
+        if ((methodName is "indexOf" or "includes") && AnyContainsSuspension(arguments))
+        {
+            // Mutually exclusive type branches must not emit the same source await twice.
+            // Select the method before arguments and retain both receiver and callable.
+            EmitThrowIfReceiverUndefined(objLocal, methodName);
+            IL.Emit(OpCodes.Ldloc, objLocal);
+            IL.Emit(OpCodes.Ldstr, methodName);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
+            var callee = _helpers.SpillStoreObject();
+            EmitArgsArrayWithSpread(arguments);
+            var argumentValues = IL.DeclareLocal(Types.ObjectArray);
+            IL.Emit(OpCodes.Stloc, argumentValues);
+            IL.Emit(OpCodes.Ldloc, objLocal);
+            IL.Emit(OpCodes.Ldloc, callee);
+            IL.Emit(OpCodes.Ldloc, argumentValues);
+            IL.Emit(OpCodes.Call, Ctx.Runtime.Invocation.Method);
+            SetStackUnknown();
+            return;
+        }
 
         var isStringLabel = IL.DefineLabel();
         var isListLabel = IL.DefineLabel();
@@ -2668,11 +2695,21 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Box, typeof(bool));
                 break;
             case "indexOf":
-                // ECMA-262 §22.1.3.8 step 3: searchString = ? ToString(searchString).
-                if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); IL.Emit(OpCodes.Call, Ctx.Runtime!.StringCoercion.ToJsString); }
-                else { IL.Emit(OpCodes.Ldstr, "undefined"); }
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.Strings.IndexOf);
-                IL.Emit(OpCodes.Box, typeof(double));
+                if (Ctx.RuntimeFeatures?.UsesStringPrototypeMutation != false)
+                {
+                    // Discard the temporary cast receiver. Resolve the live chain
+                    // with the original primitive before evaluating arguments.
+                    IL.Emit(OpCodes.Pop);
+                    EmitGetPropertyAndInvoke(objLocal, methodName, arguments);
+                }
+                else
+                {
+                    // ECMA-262 §22.1.3.8 step 3: searchString = ? ToString(searchString).
+                    if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); IL.Emit(OpCodes.Call, Ctx.Runtime!.StringCoercion.ToJsString); }
+                    else { IL.Emit(OpCodes.Ldstr, "undefined"); }
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.Strings.IndexOf);
+                    IL.Emit(OpCodes.Box, typeof(double));
+                }
                 break;
             case "lastIndexOf":
                 if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); IL.Emit(OpCodes.Call, Ctx.Runtime!.StringCoercion.ToJsString); }

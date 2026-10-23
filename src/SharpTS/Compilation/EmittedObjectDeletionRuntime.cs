@@ -44,6 +44,22 @@ public sealed class EmittedObjectDeletionRuntime
         internal set => SetHandle(ref _indexStrict, value);
     }
 
+    // Class-snapshot history support, owned and frozen with the deletion metadata.
+    // Both handles are declared by the runtime emitter before any class is emitted.
+    private MethodBuilder? _recordClassFieldDeletion;
+    public MethodBuilder RecordClassFieldDeletion
+    {
+        get => Require(_recordClassFieldDeletion);
+        internal set => SetHandle(ref _recordClassFieldDeletion, value);
+    }
+
+    private MethodBuilder? _wasClassFieldDeleted;
+    public MethodBuilder WasClassFieldDeleted
+    {
+        get => Require(_wasClassFieldDeleted);
+        internal set => SetHandle(ref _wasClassFieldDeleted, value);
+    }
+
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException("Object deletion metadata '" + name + "' has not been declared.");
 
@@ -70,6 +86,8 @@ public sealed class EmittedObjectDeletionRuntime
         _ = CompactDictionaryOrder;
         _ = Index;
         _ = IndexStrict;
+        _ = RecordClassFieldDeletion;
+        _ = WasClassFieldDeleted;
         IsComplete = true;
     }
 }

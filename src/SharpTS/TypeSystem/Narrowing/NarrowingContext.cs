@@ -76,6 +76,22 @@ public sealed class NarrowingContext
     public IEnumerable<KeyValuePair<NarrowingPath, TypeInfo>> Narrowings => _narrowings;
 
     /// <summary>
+    /// Replaces facts for shadowed variable roots without discarding flow changes to other bindings.
+    /// </summary>
+    internal NarrowingContext RestoreVariableRoots(NarrowingContext previous, IReadOnlySet<string> roots)
+    {
+        var narrowings = _narrowings.RemoveRange(_narrowings.Keys.Where(path => roots.Contains(path.RootVariable)));
+        var invalidated = _invalidatedPaths.Except(_invalidatedPaths.Where(path => roots.Contains(path.RootVariable)));
+        foreach (var (path, type) in previous._narrowings)
+            if (roots.Contains(path.RootVariable))
+                narrowings = narrowings.SetItem(path, type);
+        foreach (var path in previous._invalidatedPaths)
+            if (roots.Contains(path.RootVariable))
+                invalidated = invalidated.Add(path);
+        return new NarrowingContext(narrowings, invalidated);
+    }
+
+    /// <summary>
     /// Returns a new context with the given narrowing applied.
     /// If a narrowing already exists for the path, it is replaced.
     /// </summary>

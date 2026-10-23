@@ -36,10 +36,9 @@ public sealed class FrozenClassConstructorAssignmentTests
         Assert.Equal("true\nfalse false\ntrue\ntrue 1\n", output);
     }
 
-    [Fact]
-    public void SloppyFrozenDataWriteLeavesTheValueUnchanged()
+    [Theory, ModeData]
+    public void SloppyFrozenDataWriteLeavesTheValueUnchanged(ExecutionMode mode)
     {
-        // #2567 tracks compiled sloppy writes; strict writes above run in both modes.
         const string source = """
             class C {}
             const target: any = C;
@@ -48,7 +47,18 @@ public sealed class FrozenClassConstructorAssignmentTests
             target.value = 2;
             console.log(Object.isFrozen(target), target.value);
             """;
-        Assert.Equal("true 1\n", TestHarness.RunInterpreted(source));
+        string output;
+        if (mode == ExecutionMode.Compiled)
+        {
+            var (errors, compiledOutput) = TestHarness.CompileVerifyAndRun(source);
+            Assert.Empty(errors);
+            output = compiledOutput;
+        }
+        else
+        {
+            output = TestHarness.Run(source, mode);
+        }
+        Assert.Equal("true 1\n", output);
     }
 
     [Theory, ModeData]

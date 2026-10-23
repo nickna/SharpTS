@@ -197,6 +197,7 @@ public partial class Interpreter : IDisposable
     // Producers publish this flag while holding the queue lock. Empty checks on
     // ordinary loop iterations can then avoid acquiring that lock altogether.
     private int _hasMicrotasks;
+    private bool _processingMicrotasks;
 
     // Active handles counter - keeps the event loop alive while there are active operations.
     // Uses Interlocked operations for thread-safe lock-free access, consistent with _hasScheduledTimers.
@@ -505,39 +506,47 @@ public partial class Interpreter : IDisposable
     /// </summary>
     internal void ProcessMicrotasks()
     {
-        if (Volatile.Read(ref _hasMicrotasks) == 0)
+        if (_processingMicrotasks || Volatile.Read(ref _hasMicrotasks) == 0)
             return;
 
-        bool drainingCheckpointCallbacks = false;
-        while (true)
+        _processingMicrotasks = true;
+        try
         {
-            Action? callback;
-            lock (_microtaskQueueLock)
+            bool drainingCheckpointCallbacks = false;
+            while (true)
             {
-                if (_isDisposed)
+                Action? callback;
+                lock (_microtaskQueueLock)
                 {
-                    Volatile.Write(ref _hasMicrotasks, 0);
-                    return;
+                    if (_isDisposed)
+                    {
+                        Volatile.Write(ref _hasMicrotasks, 0);
+                        return;
+                    }
+                    if (drainingCheckpointCallbacks && _afterPromiseCheckpointQueue.TryDequeue(out callback))
+                    {
+                        // Finish this callback batch before running jobs it created.
+                    }
+                    else if (_microtaskQueue.TryDequeue(out callback))
+                    {
+                        drainingCheckpointCallbacks = false;
+                    }
+                    else if (_afterPromiseCheckpointQueue.TryDequeue(out callback))
+                    {
+                        drainingCheckpointCallbacks = true;
+                    }
+                    else
+                    {
+                        Volatile.Write(ref _hasMicrotasks, 0);
+                        return;
+                    }
                 }
-                if (drainingCheckpointCallbacks && _afterPromiseCheckpointQueue.TryDequeue(out callback))
-                {
-                    // Finish this callback batch before running jobs it created.
-                }
-                else if (_microtaskQueue.TryDequeue(out callback))
-                {
-                    drainingCheckpointCallbacks = false;
-                }
-                else if (_afterPromiseCheckpointQueue.TryDequeue(out callback))
-                {
-                    drainingCheckpointCallbacks = true;
-                }
-                else
-                {
-                    Volatile.Write(ref _hasMicrotasks, 0);
-                    return;
-                }
+                callback();
             }
-            callback();
+        }
+        finally
+        {
+            _processingMicrotasks = false;
         }
     }
 
@@ -552,9 +561,9 @@ public partial class Interpreter : IDisposable
         WakeEventLoop();
     }
 
-    // Async continuations settle Promise chains inside the same checkpoint,
+    // Promise jobs and async continuations settle chains inside the same checkpoint,
     // before timers and captured listener errors are dispatched.
-    private void EnqueueAsyncContinuation(Action continuation)
+    internal void EnqueuePromiseJob(Action continuation)
     {
         lock (_microtaskQueueLock)
         {
@@ -853,7 +862,7 @@ public partial class Interpreter : IDisposable
     /// </summary>
     private SynchronizationContext? InstallEventLoopSyncContext()
     {
-        _eventLoopSyncContext ??= new InterpreterSynchronizationContext(EnqueueAsyncContinuation);
+        _eventLoopSyncContext ??= new InterpreterSynchronizationContext(EnqueuePromiseJob);
         var previous = SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(_eventLoopSyncContext);
         return previous;
@@ -1051,11 +1060,10 @@ public partial class Interpreter : IDisposable
     private readonly object _finalizationRegistriesLock = new();
     private volatile bool _hasFinalizationRegistries;
 
-    /// <summary>Whether a loop checkpoint has timer, microtask, or finalizer work.</summary>
-    private bool HasPendingCallbacks =>
+    /// <summary>Whether a loop poll has legacy timer or finalizer work.</summary>
+    private bool HasPendingLoopCallbacks =>
         !_isDisposed
-        && (HasMicrotasks()
-            || _hasFinalizationRegistries
+        && (_hasFinalizationRegistries
             || _hasScheduledTimers);
 
     /// <summary>
@@ -1097,19 +1105,24 @@ public partial class Interpreter : IDisposable
                 registry.DrainCleanups(this);
     }
 
-    internal void ProcessPendingCallbacks()
+    internal void ProcessPendingCallbacks(bool processMicrotasks = true)
     {
+        // A guest loop inside a Promise job cannot reenter its checkpoint or run timers.
+        if (_processingMicrotasks) return;
         // A hosted runtime owns event-loop turns. Pumping from an ordinary guest
         // loop reenters synchronous rendering (and other application code).
         if (_hostedOwnerThreadId.HasValue) return;
+        // Legacy loop polling can deliver timers, but a synchronous loop is not a
+        // Promise checkpoint. Pending jobs also prevent timers overtaking that checkpoint.
+        if (!processMicrotasks && HasMicrotasks()) return;
         // Process microtasks first - they always run before any macrotask (timers)
-        // This ensures correct JavaScript event loop semantics during busy-wait loops
-        ProcessMicrotasks();
+        if (processMicrotasks) ProcessMicrotasks();
 
         // FinalizationRegistry cleanups ride event-loop ticks (Node runs them as
         // ordinary tasks after GC observes a target collection).
         if (_hasFinalizationRegistries)
             DrainFinalizationRegistries();
+        if (!processMicrotasks && HasMicrotasks()) return;
 
         // Quick checks before acquiring lock
         if (_isDisposed || !_hasScheduledTimers) return;
@@ -1144,6 +1157,9 @@ public partial class Interpreter : IDisposable
                     toReschedule ??= new List<VirtualTimer>();
                     toReschedule.Add(timer);
                 }
+                // A loop poll cannot drain jobs created by this callback. Leave
+                // later timers queued so the next poll can respect those jobs.
+                if (!processMicrotasks) break;
             }
 
             // Re-enqueue interval timers with updated fire times
@@ -1169,7 +1185,7 @@ public partial class Interpreter : IDisposable
                     timer.Callback();
                     // Each timer is its own task, even when multiple timers became
                     // due before this tick. Drain its Promise jobs before the next.
-                    ProcessMicrotasks();
+                    if (processMicrotasks) ProcessMicrotasks();
                 }
             }
         }
@@ -1253,7 +1269,7 @@ public partial class Interpreter : IDisposable
     /// Looks up a variable and returns its value as RuntimeValue without boxing.
     /// This is the fast path for variable access in expressions.
     /// </summary>
-    private RuntimeValue LookupVariableRV(Token name, Expr expr)
+    private RuntimeValue LookupVariableRV(Token name, Expr expr, bool allowUnresolvable = false)
     {
         // Fast path: resolved locals with known depth
         if (_locals.TryGetValue(expr, out int distance))
@@ -1283,7 +1299,10 @@ public partial class Interpreter : IDisposable
             if (GlobalThis.HasUserProperty(name.Lexeme))
                 return RuntimeValue.FromBoxed(GetPropertyValue(GlobalThis, name.Lexeme));
             if (GlobalThis.IsDeletedProperty(name.Lexeme))
+            {
+                if (allowUnresolvable) return RuntimeValue.Undefined;
                 throw new InterpreterException($"ReferenceError: Undefined variable '{name.Lexeme}'.");
+            }
         }
 
         // Per-realm mutable built-ins (Math, …) shadow the shared global-constants
@@ -1304,6 +1323,10 @@ public partial class Interpreter : IDisposable
         // Check for Node.js module globals (__dirname, __filename)
         if (name.Lexeme == "__filename") return RuntimeValue.FromString(_currentModule?.Path ?? "");
         if (name.Lexeme == "__dirname") return RuntimeValue.FromString(Path.GetDirectoryName(_currentModule?.Path) ?? "");
+
+        // Only typeof on an identifier Reference exempts an unresolvable binding.
+        // Reads above still propagate TDZ and accessor abrupt completions.
+        if (allowUnresolvable) return RuntimeValue.Undefined;
 
         // ECMA-262 §9.4.2: resolving an unbound name is a ReferenceError. The name prefix
         // is what routes this to a guest ReferenceError at the catch binding
@@ -1354,6 +1377,11 @@ public partial class Interpreter : IDisposable
 
             // Hoist function declarations first
             HoistFunctionDeclarations(statements);
+
+            // A same-name function must be initialized before a loop-head var
+            // publishes its binding; registering the var must not replace it.
+            foreach (var name in InterpreterVarDeclarations.CollectLoopHeads(statements))
+                RegisterClassicGlobalVar(name.Lexeme);
 
             foreach (Stmt statement in statements)
             {
@@ -1437,6 +1465,7 @@ public partial class Interpreter : IDisposable
 
         // Hoist function declarations first
         HoistFunctionDeclarations(statements);
+        HoistLocalLoopVarDeclarations(statements);
 
         foreach (Stmt statement in statements)
         {
@@ -1624,6 +1653,7 @@ public partial class Interpreter : IDisposable
 
             // Hoist function declarations first
             HoistFunctionDeclarations(script.Statements);
+            HoistLocalLoopVarDeclarations(script.Statements);
 
             // Execute all statements in the shared environment
             foreach (var stmt in script.Statements)
@@ -1829,6 +1859,7 @@ public partial class Interpreter : IDisposable
         {
             // First pass: hoist function declarations
             HoistFunctionDeclarations(module.Statements);
+            HoistLocalLoopVarDeclarations(module.Statements);
 
             // Second pass: execute all statements
             foreach (var stmt in module.Statements)
@@ -2245,21 +2276,34 @@ public partial class Interpreter : IDisposable
             }
             if (stmt is not Stmt.Var { IsVar: true } variable) continue;
 
-            string name = variable.Name.Lexeme;
-            if (GlobalThis.GetOwnPropertyDescriptor(name) is null)
-            {
-                object? initialValue = _environment.IsDefinedLocally(name) && !_environment.HasObjectBinding(name)
-                    ? _environment.GetAt(0, name).ToObject()
-                    : SharpTSUndefined.Instance;
-                if (!GlobalThis.DefineProperty(name, new SharpTSPropertyDescriptor(
-                        initialValue, writable: true, enumerable: true, configurable: false)
-                        { HasValue = true }))
-                    throw new InterpreterException($"TypeError: Cannot declare global variable '{name}'.");
-            }
+            RegisterClassicGlobalVar(variable.Name.Lexeme);
+        }
+    }
 
-            _environment.DefineObjectBinding(name,
-                () => ReadClassicGlobalVariable(name),
-                (value, strict) => WriteClassicGlobalVariable(name, value, strict));
+    private void RegisterClassicGlobalVar(string name)
+    {
+        if (GlobalThis.GetOwnPropertyDescriptor(name) is null)
+        {
+            object? initialValue = _environment.IsDefinedLocally(name) && !_environment.HasObjectBinding(name)
+                ? _environment.GetAt(0, name).ToObject()
+                : SharpTSUndefined.Instance;
+            if (!GlobalThis.DefineProperty(name, new SharpTSPropertyDescriptor(
+                    initialValue, writable: true, enumerable: true, configurable: false)
+                    { HasValue = true }))
+                throw new InterpreterException($"TypeError: Cannot declare global variable '{name}'.");
+        }
+
+        _environment.DefineObjectBinding(name,
+            () => ReadClassicGlobalVariable(name),
+            (value, strict) => WriteClassicGlobalVariable(name, value, strict));
+    }
+
+    private void HoistLocalLoopVarDeclarations(IEnumerable<Stmt> statements)
+    {
+        foreach (var name in InterpreterVarDeclarations.CollectLoopHeads(statements))
+        {
+            if (!_environment.IsDefinedLocally(name.Lexeme))
+                _environment.Define(name.Lexeme, RuntimeValue.Undefined);
         }
     }
 

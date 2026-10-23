@@ -49,16 +49,16 @@ public class ProcessNextTickTests
             ["main.ts"] = """
                 import { nextTick } from 'process';
                 let executed = false;
-                nextTick(() => { executed = true; });
-                // Wait for callback to execute
-                let start = Date.now();
-                while (Date.now() - start < 50) { }
+                nextTick(() => {
+                    executed = true;
+                    console.log(executed);
+                });
                 console.log(executed);
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("true\n", output);
+        Assert.Equal("false\ntrue\n", output);
     }
 
     [Theory, ModeData]
@@ -66,15 +66,15 @@ public class ProcessNextTickTests
     {
         var source = """
             let executed = false;
-            process.nextTick(() => { executed = true; });
-            // Wait for callback
-            let start = Date.now();
-            while (Date.now() - start < 50) { }
+            process.nextTick(() => {
+                executed = true;
+                console.log(executed);
+            });
             console.log(executed);
             """;
 
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("true\n", output);
+        Assert.Equal("false\ntrue\n", output);
     }
 
     [Theory, ModeData]
@@ -108,17 +108,17 @@ public class ProcessNextTickTests
                 nextTick((a: number, b: string, c: boolean) => {
                     receivedArgs = [a, b, c];
                 }, 42, 'hello', true);
-                // Wait for callback to execute
-                let start = Date.now();
-                while (Date.now() - start < 50) { }
-                console.log(receivedArgs[0]);
-                console.log(receivedArgs[1]);
-                console.log(receivedArgs[2]);
+                nextTick(() => {
+                    console.log(receivedArgs[0]);
+                    console.log(receivedArgs[1]);
+                    console.log(receivedArgs[2]);
+                });
+                console.log(receivedArgs.length);
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("42\nhello\ntrue\n", output);
+        Assert.Equal("0\n42\nhello\ntrue\n", output);
     }
 
     [Theory, ModeData]
@@ -132,16 +132,16 @@ public class ProcessNextTickTests
                 nextTick((a: number, b: string) => {
                     receivedArgs = [a, b];
                 }, 42, 'hello');
-                // Wait for callback to execute
-                let start = Date.now();
-                while (Date.now() - start < 50) { }
-                console.log(receivedArgs[0]);
-                console.log(receivedArgs[1]);
+                nextTick(() => {
+                    console.log(receivedArgs[0]);
+                    console.log(receivedArgs[1]);
+                });
+                console.log(receivedArgs.length);
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("42\nhello\n", output);
+        Assert.Equal("0\n42\nhello\n", output);
     }
 
     // Regression for #1149: the facade forwards `...args` to the primitive instead
@@ -157,15 +157,16 @@ public class ProcessNextTickTests
                 let received: any[] = [];
                 nextTick((...rest: any[]) => { received = rest; },
                     1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-                let start = Date.now();
-                while (Date.now() - start < 50) { }
+                nextTick(() => {
+                    console.log(received.length);
+                    console.log(received.join(','));
+                });
                 console.log(received.length);
-                console.log(received.join(','));
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("10\n1,2,3,4,5,6,7,8,9,10\n", output);
+        Assert.Equal("0\n10\n1,2,3,4,5,6,7,8,9,10\n", output);
     }
 
     // Regression for #1149: a caller-side spread (`...payload`) is expanded by the
@@ -180,15 +181,16 @@ public class ProcessNextTickTests
                 let received: any[] = [];
                 const payload = ['a', 'b', 'c'];
                 nextTick((...rest: any[]) => { received = rest; }, ...payload);
-                let start = Date.now();
-                while (Date.now() - start < 50) { }
+                nextTick(() => {
+                    console.log(received.length);
+                    console.log(received.join(','));
+                });
                 console.log(received.length);
-                console.log(received.join(','));
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("3\na,b,c\n", output);
+        Assert.Equal("0\n3\na,b,c\n", output);
     }
 
     #endregion
@@ -206,16 +208,17 @@ public class ProcessNextTickTests
                 nextTick(() => results.push(1));
                 nextTick(() => results.push(2));
                 nextTick(() => results.push(3));
-                // Wait for callbacks to execute
-                let start = Date.now();
-                while (Date.now() - start < 50) { }
+                nextTick(() => {
+                    console.log(results.length);
+                    console.log(results.includes(1) && results.includes(2) && results.includes(3));
+                    console.log(results.join(','));
+                });
                 console.log(results.length);
-                console.log(results.includes(1) && results.includes(2) && results.includes(3));
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("3\ntrue\n", output);
+        Assert.Equal("0\n3\ntrue\n1,2,3\n", output);
     }
 
     #endregion

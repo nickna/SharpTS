@@ -106,11 +106,8 @@ public sealed class ClassPrototypeInheritedWriteTests
             """, "true\n1 1 true false\n"];
     }
 
-    // #2721: compiled computed class prototype writes skip inherited setters.
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
-        ((string)row[0] == "computed-async-write-retains-reference-and-evaluation-order"
-            ? new[] { ExecutionMode.Interpreted }
-            : new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled })
+        new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ModeCases))]

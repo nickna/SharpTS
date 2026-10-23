@@ -46,7 +46,8 @@ public partial class RuntimeEmitter
 
     private readonly record struct ReflectDefinePropertyInputs(MethodInfo InvokeMethodUnwrapped,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod, MethodInfo ToPropertyKey,
-        MethodInfo ObjectDefineProperty, MethodInfo ObjectIsExtensible, MethodInfo GetProperty);
+        MethodInfo ObjectDefineProperty, MethodInfo ObjectIsExtensible, MethodInfo GetProperty,
+        PropertyDescriptorConversionInputs DescriptorConversion);
 
     private readonly record struct ReflectOwnKeysInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, ProxyOwnKeysCallInputs ProxyOwnKeys,
@@ -970,13 +971,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryDefineLabel);
 
-        // try { ObjectDefineProperty(target, key, descriptor); return true; }
+        // ToPropertyDescriptor is observable and may throw a guest value or a
+        // validation TypeError. Complete it before the ordinary refusal catch.
+        // Replay only its null-prototype partial record, preserving omitted
+        // fields without reading any original descriptor getter a second time.
+        var originalDescriptor = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stloc, originalDescriptor);
+        var convertedDescriptor = EmitConvertPropertyDescriptor(
+            il, inputs.DescriptorConversion, originalDescriptor);
+
+        // try { ObjectDefineProperty(target, key, convertedDescriptor); return true; }
         // catch { return false; }
         il.BeginExceptionBlock();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, reflectDefineKeyLocal);
-        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, convertedDescriptor);
         il.Emit(OpCodes.Call, inputs.ObjectDefineProperty);
         il.Emit(OpCodes.Pop); // ObjectDefineProperty returns the object; discard
 

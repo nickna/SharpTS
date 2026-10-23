@@ -115,8 +115,8 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private record IdentifierPattern(Token Name, Expr? DefaultValue) : DestructurePattern;
     private record RestPattern(Token Name) : DestructurePattern;
 
-    private record ArrayPatternElement(DestructurePattern? Pattern, bool IsHole);
-    private record ObjectPatternProperty(Token Key, DestructurePattern Value, Expr? DefaultValue);
+    private record ArrayPatternElement(DestructurePattern? Pattern, bool IsHole, Expr? DefaultValue = null);
+    private record ObjectPatternProperty(Token Key, DestructurePattern Value, Expr? DefaultValue, Expr? ComputedKey = null);
 
     private Token GenerateTempVar(int line) =>
         new Token(TokenType.IDENTIFIER, $"_dest{_tempVarCounter++}", null, line);

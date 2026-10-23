@@ -49,6 +49,9 @@ public partial class RuntimeEmitter
     private readonly record struct ProxyEnumerableOwnPropertiesCheckInputs(
         EmittedBooleanRuntime Booleans,
         MethodBuilder GetProperty,
+        ProxyDescriptorCallInputs ProxyDescriptor,
+        ProxyOwnKeysCallInputs ProxyOwnKeys,
+        EmittedReflectRuntime Reflect,
         Type UndefinedType
     );
 
@@ -828,18 +831,13 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
         il.MarkLabel(proxyLabel);
 
-        var keysLocal = il.DeclareLocal(_types.ListOfString);
-        EmitProxyMethodCall(il, emitLoadObj, "TrapOwnKeys", () =>
-        {
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Newarr, _types.Object);
-        });
-        il.Emit(OpCodes.Castclass, _types.ListOfString);
+        var keysLocal = il.DeclareLocal(_types.ListOfObject);
+        EmitProxyOwnKeysCompiledCall(il, inputs.ProxyOwnKeys, emitLoadObj);
         il.Emit(OpCodes.Stloc, keysLocal);
 
         var resultLocal = il.DeclareLocal(_types.ListOfObject);
         var indexLocal = il.DeclareLocal(_types.Int32);
-        var keyLocal = il.DeclareLocal(_types.String);
+        var keyLocal = il.DeclareLocal(_types.Object);
         var descriptorLocal = il.DeclareLocal(_types.Object);
         var valueLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
@@ -853,27 +851,31 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldloc, keysLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfString, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Bge, loopEnd);
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfString, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, keyLocal);
+        // EnumerableOwnProperties ignores Symbols before any descriptor/Get.
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, advance);
 
-        EmitProxyMethodCall(il, emitLoadObj, "TrapGetOwnPropertyDescriptor", () =>
-        {
-            il.Emit(OpCodes.Ldc_I4_2);
-            il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ldloc, keyLocal);
-            il.Emit(OpCodes.Stelem_Ref);
-        });
+        EmitProxyGetOwnPropertyDescriptorCompiledCall(il, inputs.ProxyDescriptor,
+            emitLoadObj, () => il.Emit(OpCodes.Ldloc, keyLocal));
         il.Emit(OpCodes.Stloc, descriptorLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Brfalse, advance);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, advance);
+        // The late-bound runtime bridge can return its own undefined singleton.
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "SharpTSUndefined");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Brtrue, advance);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldstr, "enumerable");
@@ -883,7 +885,8 @@ public partial class RuntimeEmitter
 
         emitLoadObj();
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, inputs.GetProperty);
+        emitLoadObj();
+        il.Emit(OpCodes.Call, inputs.Reflect.Get);
         il.Emit(OpCodes.Stloc, valueLocal);
         if (entries)
         {

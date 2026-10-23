@@ -274,6 +274,7 @@ public partial class ILCompiler
         }
 
         var emitter = new ILEmitter(ctx);
+        emitter.InitializeFunctionBodyVarBindings(accessor.Body);
 
         foreach (var stmt in accessor.Body)
         {

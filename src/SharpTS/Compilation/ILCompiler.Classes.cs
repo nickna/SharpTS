@@ -46,6 +46,7 @@ public partial class ILCompiler
     private void DefineClass(Stmt.Class classStmt)
     {
         _classes.Declarations.Add(classStmt);
+        RegisterLiveSuperConstruction(classStmt, _typeMap.GetClassType(classStmt));
         if (ClassConstructorMayReplace(classStmt.Methods) && _typeMap.GetClassType(classStmt) is { } replacementClass)
             _typeMapper.RegisterDynamicClassInstance(replacementClass.Core.DeclarationId);
         if (TryDefineRuntimeClassDeclaration(classStmt)) return;
@@ -378,7 +379,7 @@ public partial class ILCompiler
         // Define real .NET properties with typed backing fields for instance fields
         // Skip fields with generic type parameters - they'll use _extras dictionary instead
         // Skip ES2022 private fields (#field) - they're not exposed as .NET properties
-        // Skip declare fields - they use _extras dictionary to support TypeScript null semantics
+        // Declare fields are type-only and have no runtime storage.
         foreach (var field in classStmt.Fields)
         {
             if (!field.IsStatic && !field.IsPrivate && !field.IsDeclare)
@@ -402,7 +403,7 @@ public partial class ILCompiler
         Dictionary<string, FieldBuilder> staticFieldBuilders = [];
         foreach (var field in classStmt.Fields)
         {
-            if (field.IsStatic && !field.IsPrivate)
+            if (field.IsStatic && !field.IsPrivate && !field.IsDeclare)
             {
                 // Keep as object type for now to maintain compatibility with existing emission code
                 var fieldBuilder = typeBuilder.DefineField(
@@ -411,6 +412,9 @@ public partial class ILCompiler
                     FieldAttributes.Public | FieldAttributes.Static
                 );
                 staticFieldBuilders[field.Name.Lexeme] = fieldBuilder;
+                if (field.ComputedKey == null)
+                    fieldBuilder.SetCustomAttribute(_runtime.ObjectKeys.ClassStaticPropertyConstructor,
+                        CustomAttributeEncoder.Encode(_runtime.ObjectKeys.ClassStaticPropertyConstructor, field.Name.Lexeme, true));
 
                 // Apply field-level decorators as .NET attributes
                 if (_decoratorMode != DecoratorMode.None)

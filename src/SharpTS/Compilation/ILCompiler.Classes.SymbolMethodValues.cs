@@ -96,7 +96,8 @@ public partial class ILCompiler
             && _classes.DeclarationNames.GetValueOrDefault(source) == owner.FullName);
 
     private void EmitDeclaredComputedMethodDescriptor(ILGenerator il, TypeBuilder owner,
-        Stmt.Function source, MethodBuilder original, LocalBuilder key, Type? descriptorOwner = null)
+        Stmt.Function source, MethodBuilder original, LocalBuilder key, Type? descriptorOwner = null,
+        bool sourceOrdered = false)
     {
         var registrationDone = il.DefineLabel();
         if (source.IsStatic && owner.IsGenericTypeDefinition && descriptorOwner == null)
@@ -110,12 +111,12 @@ public partial class ILCompiler
             il.Emit(OpCodes.Bne_Un, registrationDone);
         }
 
-        // Plain methods are installed by prototype registration before computed
-        // names are evaluated. A later plain method still wins a name collision.
-        // The evaluated key is already primitive, so this never coerces it again.
+        // Static plain members are installed before computed names. Preserve
+        // their later-source collision wins; ordered instance installation lets
+        // the later definition perform its own replacement instead.
         foreach (var later in GetNominalClassDeclaration(owner)?.Methods ?? [])
         {
-            if (later.Body == null || later.IsPrivate || later.ComputedKey != null
+            if (sourceOrdered || later.Body == null || later.IsPrivate || later.ComputedKey != null
                 || later.IsStatic != source.IsStatic || later.Name.SourceOrderOffset <= source.Name.SourceOrderOffset
                 || (!later.IsStatic && later.Name.Lexeme == "constructor")) continue;
             il.Emit(OpCodes.Ldloc, key);
@@ -126,7 +127,7 @@ public partial class ILCompiler
         }
         foreach (var later in GetNominalClassDeclaration(owner)?.Accessors ?? [])
         {
-            if (later.IsAbstract || later.IsStatic != source.IsStatic
+            if (sourceOrdered || later.IsAbstract || later.IsStatic != source.IsStatic
                 || later.Name.SourceOrderOffset <= source.Name.SourceOrderOffset) continue;
             // Literal static computed accessors are also installed eagerly by
             // prototype registration, rather than replayed after static blocks.

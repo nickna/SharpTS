@@ -21,6 +21,7 @@ internal sealed class StateMachineDebugSymbols
     internal sealed class Binding(object declaration, Token sourceToken, string storageName, Scope scope, bool isParameter)
     {
         internal object Declaration { get; } = declaration;
+        internal Token SourceToken { get; } = sourceToken;
         internal string SourceName { get; } = sourceToken.Lexeme;
         internal int SourceOffset { get; } = sourceToken.Start;
         internal string StorageName { get; } = storageName;
@@ -107,6 +108,15 @@ internal sealed class StateMachineDebugSymbols
     }
 
     internal Binding? GetBinding(string storage) => _byStorage.GetValueOrDefault(storage);
+
+    internal string DefineLexicalCellHolderName(string storage)
+    {
+        Binding binding = _byStorage[storage];
+        int slot = _slots.Count;
+        _slots.Add(binding.LexicalScope);
+        DescendantSlotBase = Math.Max(DescendantSlotBase, _slots.Count);
+        return $"<>8__{slot + 1}";
+    }
 
     internal int AddDisplayClassSlot()
     {

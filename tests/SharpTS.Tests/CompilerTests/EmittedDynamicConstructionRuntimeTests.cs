@@ -165,14 +165,18 @@ public sealed class EmittedDynamicConstructionRuntimeTests
             ["EmitConstructDynamicValue"] =
             [
                 ("ArrayConstructor", typeof(MethodInfo)),
+                ("ArrayStorage", typeof(EmittedArrayStorageRuntime)),
                 ("Booleans", typeof(EmittedBooleanRuntime)),
                 ("BoxedPrimitives", typeof(EmittedBoxedPrimitiveRuntime)),
                 ("ClassDefinitions", typeof(EmittedClassDefinitionRuntime)),
+                ("DescriptorStorage", typeof(EmittedDescriptorStorageRuntime)),
                 ("DynamicConstruction", typeof(EmittedDynamicConstructionRuntime)),
                 ("Errors", typeof(EmittedErrorRuntime)),
                 ("FunctionConstruction", typeof(EmittedFunctionConstructionRuntime)),
                 ("FunctionValues", typeof(EmittedFunctionValueRuntime)),
                 ("NumericCoercion", typeof(EmittedNumericCoercionRuntime)),
+                ("ObjectRead", typeof(EmittedObjectReadRuntime)),
+                ("Operators", typeof(EmittedOperatorRuntime)),
                 ("Promise", typeof(EmittedPromiseRuntime)),
                 ("RegExps", typeof(EmittedRegExpRuntime)),
                 ("StringCoercion", typeof(EmittedStringCoercionRuntime)),

@@ -1,0 +1,35 @@
+using System.Security.Cryptography;
+using SharpTS.Tests.SharedTests;
+using Xunit;
+
+namespace SharpTS.Tests.CompilerTests;
+
+public partial class StandaloneDllTests
+{
+    [Theory, MemberData(nameof(StaticBlockLexicalReservationTests.Cases), MemberType = typeof(StaticBlockLexicalReservationTests))]
+    public void Isolated_Issue2869StaticBlockLexicalTdz_VerifyBeforeExecution(
+        string name, string source, string expected)
+    {
+        Assert.NotEmpty(name);
+        using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        var sourcePath = directory.CreateFile("main.ts", source);
+        var output = directory.GetPath("static-block-lexical-tdz-" + name + ".dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --strict --noLib --compile \"{sourcePath}\" -o \"{output}\" --standalone --verify",
+            directory.Path, TimeSpan.FromSeconds(60));
+
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        var references = GetAssemblyReferences(output);
+        Assert.NotEmpty(references);
+        Assert.All(references, reference => Assert.StartsWith("System.", reference));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+        var verifiedHash = SHA256.HashData(File.ReadAllBytes(output));
+
+        Assert.Equal(expected, ExecuteCompiledDllIsolated(output, timeoutMs: 10000,
+            verifyStandardError: error => Assert.Empty(error), standardInput: ""));
+
+        Assert.Equal(verifiedHash, SHA256.HashData(File.ReadAllBytes(output)));
+        Assert.False(File.Exists(directory.GetPath("SharpTS.dll")));
+    }
+}

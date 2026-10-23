@@ -112,9 +112,9 @@ public sealed class ComputedStringMethodMetadataTests
             Object.defineProperty(im, "name", { value: "instance-renamed", configurable: true });
             Object.defineProperty(sm, "name", { value: "static-renamed", configurable: true });
             console.log(instance[""] === im, owner[""] === sm, instance[""].name, owner[""].name);
-            // #2359 tracks inherited metadata lookup after own function metadata is deleted.
             console.log(delete im.name, delete sm.name, Object.hasOwn(im, "name"), Object.hasOwn(sm, "name"),
                 instance[""] === im, owner[""] === sm);
+            console.log(JSON.stringify(im.name), JSON.stringify(sm.name));
             console.log(delete prototype[""], delete owner[""], typeof instance[""], typeof new owner()[""], typeof owner[""],
                 Object.getOwnPropertyDescriptor(prototype, "") === undefined, Object.getOwnPropertyDescriptor(owner, "") === undefined);
             Object.defineProperty(prototype, "", { value: undefined, writable: true, configurable: true });
@@ -247,7 +247,7 @@ public sealed class ComputedStringMethodMetadataTests
             + "true true true true\ntrue true true true\ntrue true true true\n";
         yield return ["ordinary-keys-all-function-kinds", KindsSource, kinds + kinds + "done\n"];
         yield return ["deferred-key-evaluation-once", DeferredSource, "abcdef 6\n1 2 3 \"\" 3 text\ntrue true true\n4 5 6 \"\" 3 text\ntrue true true\nabcdef 6\n"];
-        var mutation = "true true instance-renamed static-renamed\ntrue true false false true true\n"
+        var mutation = "true true instance-renamed static-renamed\ntrue true false false true true\n\"\" \"\"\n"
             + "true true undefined undefined undefined true true\ntrue true undefined undefined\n"
             + "true true true true\nundefined undefined undefined\n";
         yield return ["live-function-metadata-and-method-descriptors", MutationSource, mutation + mutation];

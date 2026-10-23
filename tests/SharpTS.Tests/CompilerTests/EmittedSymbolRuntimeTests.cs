@@ -57,6 +57,7 @@ public sealed class EmittedSymbolRuntimeTests
             (nameof(EmittedSymbolAccessorRuntime.ClosedOwner), typeof(MethodBuilder)),
             (nameof(EmittedSymbolAccessorRuntime.FindGetter), typeof(MethodBuilder)),
             (nameof(EmittedSymbolAccessorRuntime.FindMethod), typeof(MethodBuilder)),
+            (nameof(EmittedSymbolAccessorRuntime.FindOwnGetter), typeof(MethodBuilder)),
             (nameof(EmittedSymbolAccessorRuntime.FindOwnMethod), typeof(MethodBuilder)),
             (nameof(EmittedSymbolAccessorRuntime.FindSetter), typeof(MethodBuilder)),
             (nameof(EmittedSymbolAccessorRuntime.GetOrCreateStaticMethod), typeof(MethodBuilder)),
@@ -323,6 +324,8 @@ public sealed class EmittedSymbolRuntimeTests
         Assert.Same(setter, Call(runtime, "FindSymbolSetterFor", receiver, symbol));
         Assert.Same(method, Call(runtime, "FindSymbolMethodFor", receiver, symbol));
         Assert.Same(staticGetter, Call(runtime, "FindSymbolGetterFor", typeof(ProbeDerived), symbol));
+        Assert.Same(staticGetter, Call(runtime, "FindOwnSymbolGetterFor", typeof(ProbeOwner), symbol));
+        Assert.Null(Call(runtime, "FindOwnSymbolGetterFor", typeof(ProbeDerived), symbol));
         Assert.Same(staticSetter, Call(runtime, "FindSymbolSetterFor", typeof(ProbeDerived), symbol));
         Assert.Same(staticMethod, Call(runtime, "FindSymbolMethodFor", typeof(ProbeDerived), symbol));
         Assert.Same(staticMethod, Call(runtime, "FindOwnSymbolMethodFor", typeof(ProbeOwner), symbol));

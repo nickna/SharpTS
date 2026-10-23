@@ -160,12 +160,30 @@ public partial class Interpreter
             return newValue;
         }
 
-        if (obj is SharpTSArray array && index is double idx)
+        if (obj is SharpTSArray array)
         {
-            RuntimeValue current = array.GetRV((int)idx);
+            // Keep the established numeric normalization while canonical
+            // string keys retain the full uint32 array-index range.
+            long arrayIndex = index switch
+            {
+                double idx => (int)idx,
+                string indexKey when PropertySemantics.TryGetArrayIndex(indexKey, out uint parsedIndex) => parsedIndex,
+                _ => throw new InterpreterException("Compound index assignment not supported on this type.")
+            };
+            bool strictMode = _environment.IsStrictMode;
+            string key = arrayIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            RuntimeValue current = arrayIndex >= 0
+                ? GetArrayIndexValue(array, arrayIndex)
+                : RuntimeValue.FromBoxed(GetPropertyValue(array, key));
             RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
-            array.Set((int)idx, newValue.ToObject());
+            // Negative integer keys are ordinary named properties, not array
+            // storage indices. Re-read descriptors after the RHS and retain the
+            // original array as the receiver for both kinds of property.
+            if (!SharpTSProxy.OrdinarySet(this, array, key, newValue.ToObject(), array)
+                && strictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot assign to array index '{key}'"));
             return newValue;
         }
 
@@ -484,13 +502,16 @@ public partial class Interpreter
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Logical_NOT">MDN Logical NOT</seealso>
     private RuntimeValue EvaluateUnary(Expr.Unary unary)
     {
-        // typeof never throws on undeclared variables - it returns "undefined"
-        if (unary.Operator.Type == TokenType.TYPEOF && unary.Right is Expr.Variable)
+        // Parentheses preserve an identifier Reference for typeof's unresolvable exemption.
+        if (unary.Operator.Type == TokenType.TYPEOF)
         {
-            RuntimeValue right;
-            try { right = EvaluateRV(unary.Right); }
-            catch (InterpreterException) { right = RuntimeValue.Undefined; }
-            return RuntimeValue.FromString(right.TypeofString());
+            Expr reference = unary.Right;
+            while (reference is Expr.Grouping grouping) reference = grouping.Expression;
+            if (reference is Expr.Variable variable)
+            {
+                var right = LookupVariableRV(variable.Name, variable, allowUnresolvable: true);
+                return RuntimeValue.FromString(right.TypeofString());
+            }
         }
 
         // Fast path for common unary operations on RuntimeValue
@@ -503,6 +524,9 @@ public partial class Interpreter
     /// </summary>
     private RuntimeValue EvaluateUnaryOperationRV(Token op, RuntimeValue rv)
     {
+        if (op.Type == TokenType.INTERNAL_TO_PROPERTY_KEY)
+            return RuntimeValue.FromBoxed(ToPropertyKey(rv.ToObject()));
+
         if (rv.ToObject() is DotNet.DotNetInstance instance)
         {
             var methods = DotNet.DotNetOperatorResolver.GetUnaryCandidates(
@@ -1128,8 +1152,10 @@ public partial class Interpreter
             SharpTSBuiltInConstructor constructor =>
                 DeleteBuiltInConstructorProperty(constructor, name),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(name),
-            SharpTSFunction function => function.DeleteProperty(name),
-            SharpTSArrowFunction arrow => arrow.DeleteProperty(name),
+            SharpTSFunction function => function.GetOwnPropertyDescriptor(name) is null
+                || CompleteFunctionPropertyDeletion(function.DeleteProperty(name), name, strictMode),
+            SharpTSArrowFunction arrow => arrow.GetOwnPropertyDescriptor(name) is null
+                || CompleteFunctionPropertyDeletion(arrow.DeleteProperty(name), name, strictMode),
             Dictionary<string, object?> dict => dict.Remove(name),
             _ => true // Deleting non-existent property on primitive returns true
         };
@@ -1204,6 +1230,14 @@ public partial class Interpreter
             SharpTSFunctionPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             _ => true
         };
+    }
+
+    private static bool CompleteFunctionPropertyDeletion(bool deleted, string name, bool strictMode)
+    {
+        if (!deleted && strictMode)
+            throw new ThrowException(new SharpTSTypeError(
+                $"Cannot delete non-configurable property '{name}' of function"));
+        return deleted;
     }
 
     private static bool DeleteClassPrototypeProperty(

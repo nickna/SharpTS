@@ -201,6 +201,94 @@ public sealed class EmittedFunctionInvocationRuntimeTests
         }
     }
 
+    [Theory]
+    [InlineData("Invoke", "Void")]
+    [InlineData("Invoke", "Null")]
+    [InlineData("Invoke", "Number")]
+    [InlineData("InvokeWithThis", "Void")]
+    [InlineData("InvokeWithThis", "Null")]
+    [InlineData("InvokeWithThis", "Number")]
+    [InlineData("InvokeWithThis0", "Void")]
+    [InlineData("InvokeWithThis0", "Null")]
+    [InlineData("InvokeWithThis0", "Number")]
+    public void InvocationDistinguishesClrVoidFromObjectNullAndNumericResults(
+        string invocationStyle, string resultKind)
+    {
+        var (assembly, ambientField, undefinedType, undefinedField) = EmitReturnProbe();
+        var function = assembly.GetType("$TSFunction")!;
+        var probe = assembly.GetType("ReturnProbe")!;
+        var method = probe.GetMethod("Return" + resultKind)!;
+        // Exercise both constructor paths that cache the actual CLR return type.
+        var wrapper = invocationStyle == "InvokeWithThis"
+            ? Activator.CreateInstance(function, new object?[] { null, method, "completion", 0 })!
+            : Activator.CreateInstance(function, new object?[] { null, method })!;
+        var current = function.GetField(ambientField)!;
+        var previous = new object();
+        var receiver = new object();
+        current.SetValue(null, previous);
+
+        object? actual = invocationStyle switch
+        {
+            "Invoke" => function.GetMethod("Invoke")!.Invoke(wrapper, [new object[] { receiver }]),
+            "InvokeWithThis" => function.GetMethod("InvokeWithThis")!.Invoke(wrapper, [receiver, Array.Empty<object>()]),
+            "InvokeWithThis0" => function.GetMethod("InvokeWithThis0")!.Invoke(wrapper, [receiver]),
+            _ => throw new InvalidOperationException("Unknown invocation style")
+        };
+
+        switch (resultKind)
+        {
+            case "Void":
+                var undefined = assembly.GetType(undefinedType)!.GetField(undefinedField, Members)!.GetValue(null);
+                Assert.NotNull(undefined);
+                Assert.Same(undefined, actual);
+                break;
+            case "Null":
+                Assert.Null(actual);
+                break;
+            case "Number":
+                Assert.Equal(42d, Assert.IsType<double>(actual));
+                break;
+            default:
+                throw new InvalidOperationException("Unknown result kind");
+        }
+        Assert.Equal(1, probe.GetField("InvocationCount")!.GetValue(null));
+        Assert.Same(receiver, probe.GetField("LastReceiver")!.GetValue(null));
+        Assert.Same(previous, current.GetValue(null));
+    }
+
+    private static (Assembly Assembly, string AmbientField, string UndefinedType, string UndefinedField) EmitReturnProbe()
+    {
+        var builder = NewAssembly();
+        var module = builder.DefineDynamicModule("main");
+        var runtime = new RuntimeEmitter(TypeProvider.Runtime).EmitAll(module, Detect("const n=1;"));
+        var probe = module.DefineType("ReturnProbe", TypeAttributes.Public);
+        var count = probe.DefineField("InvocationCount", typeof(int), FieldAttributes.Public | FieldAttributes.Static);
+        var receiver = probe.DefineField("LastReceiver", typeof(object), FieldAttributes.Public | FieldAttributes.Static);
+        void Target(string kind, Type returnType)
+        {
+            var target = probe.DefineMethod("Return" + kind,
+                MethodAttributes.Public | MethodAttributes.Static, returnType, [typeof(object)]);
+            target.DefineParameter(1, ParameterAttributes.None, "__this");
+            var il = target.GetILGenerator();
+            il.Emit(OpCodes.Ldsfld, count);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stsfld, count);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Stsfld, receiver);
+            if (returnType == typeof(object)) il.Emit(OpCodes.Ldnull);
+            else if (returnType == typeof(int)) il.Emit(OpCodes.Ldc_I4, 42);
+            il.Emit(OpCodes.Ret);
+        }
+        Target("Void", typeof(void));
+        Target("Null", typeof(object));
+        Target("Number", typeof(int));
+        probe.CreateType();
+        var undefined = runtime.Sentinels.UndefinedInstance;
+        return (SaveVerifyLoad(builder), runtime.FunctionValues.CurrentThisField.Name,
+            undefined.DeclaringType!.FullName!, undefined.Name);
+    }
+
     private static (Assembly Assembly, string Field) EmitProbe()
     {
         var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");

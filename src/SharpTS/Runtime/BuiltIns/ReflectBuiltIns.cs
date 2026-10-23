@@ -175,8 +175,7 @@ public static class ReflectBuiltIns
                     case SharpTSInstance inst:
                         if ((inst.IsFrozen || inst.IsSealed) && inst.HasField(propertyKey))
                             return RuntimeValue.False;
-                        inst.DeleteField(propertyKey);
-                        return RuntimeValue.True;
+                        return RuntimeValue.FromBoolean(inst.DeleteField(propertyKey) || inst.GetOwnPropertyDescriptor(propertyKey) is null);
                     case SharpTSPromise promise:
                         return RuntimeValue.FromBoolean(promise.DeletePropertyStrict(propertyKey, false));
                     case SharpTSClassPrototype prototype:
@@ -333,7 +332,9 @@ public static class ReflectBuiltIns
                     return RuntimeValue.FromBoxed(ObjectBuiltIns.PrototypeOf(interpreter, target));
                 return RuntimeValue.FromBoxed(target switch
                 {
-                    SharpTSObject obj => obj.Prototype,
+                    // Null storage also represents the ordinary implicit default;
+                    // the realm-aware operation distinguishes explicit null roots.
+                    SharpTSObject obj => ObjectBuiltIns.PrototypeOf(interpreter, obj),
                     SharpTSInstance inst => inst.Prototype,
                     Dictionary<string, object?> dict => PropertyDescriptorStore.GetPrototype(dict),
                     _ => null
@@ -404,6 +405,10 @@ public static class ReflectBuiltIns
                     case SharpTSClassPrototype prototype:
                         PropertyDescriptorStore.PreventExtensions(prototype);
                         break;
+                    case SharpTSFunctionPrototype functionPrototype:
+                        functionPrototype.PreventExtensionsOwnProperties();
+                        PropertyDescriptorStore.PreventExtensions(functionPrototype);
+                        return RuntimeValue.True;
                     case ISharpTSCallable callable:
                         PropertyDescriptorStore.PreventExtensions(callable);
                         break;
@@ -547,6 +552,10 @@ public static class ReflectBuiltIns
                             return RuntimeValue.FromBoolean(arr.DefineProperty(propertyKey, descriptor));
                         case SharpTSClass klass:
                             return RuntimeValue.FromBoolean(klass.DefineStaticProperty(propertyKey, descriptor));
+                        case SharpTSClassPrototype prototype:
+                            return RuntimeValue.FromBoolean(prototype.DefineExtraProperty(propertyKey, descriptor));
+                        case SharpTSGlobalThis globalThis:
+                            return RuntimeValue.FromBoolean(globalThis.DefineProperty(propertyKey, descriptor));
                         default:
                             return RuntimeValue.False;
                     }
@@ -608,7 +617,12 @@ public static class ReflectBuiltIns
                         keys.AddRange(inst.GetSymbolPropertyNames().Select(s => (object?)s));
                         break;
                     case SharpTSMath math:
+                        keys.AddRange(math.OwnStringKeys().Cast<object?>());
                         keys.AddRange(math.GetSymbolPropertyNames().Select(s => (object?)s));
+                        break;
+                    case SharpTSJSON json:
+                        keys.AddRange(json.OwnStringKeys().Cast<object?>());
+                        keys.AddRange(json.GetSymbolPropertyNames().Cast<object?>());
                         break;
                     case SharpTSStringPrototype stringPrototype:
                         keys.AddRange(stringPrototype.GetSymbolPropertyNames().Select(s => (object?)s));

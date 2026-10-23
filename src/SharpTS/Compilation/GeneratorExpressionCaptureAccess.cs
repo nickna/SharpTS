@@ -17,8 +17,9 @@ internal static class GeneratorExpressionCaptureAccess
         foreach (var field in capture.TargetPath) il.Emit(OpCodes.Ldfld, field);
         if (capture.IsCell)
         {
-            il.Emit(OpCodes.Castclass, context.Types.StrongBoxOfObject);
-            il.Emit(OpCodes.Ldfld, context.Types.StrongBoxOfObjectValueField);
+            var storage = LexicalCellStorage.ForCapture(context, expression.Source, name);
+            il.Emit(OpCodes.Castclass, storage.ReferenceType);
+            il.Emit(OpCodes.Ldfld, storage.ValueField);
         }
         else if (capture.TargetPath[^1].FieldType.IsValueType)
             il.Emit(OpCodes.Box, capture.TargetPath[^1].FieldType);
@@ -39,9 +40,10 @@ internal static class GeneratorExpressionCaptureAccess
         LoadEnvironment(il, expression);
         int ownerPathLength = capture.IsCell ? capture.TargetPath.Count : capture.TargetPath.Count - 1;
         for (int i = 0; i < ownerPathLength; i++) il.Emit(OpCodes.Ldfld, capture.TargetPath[i]);
-        if (capture.IsCell) il.Emit(OpCodes.Castclass, context.Types.StrongBoxOfObject);
+        var storage = capture.IsCell ? LexicalCellStorage.ForCapture(context, expression.Source, name) : null;
+        if (storage is not null) il.Emit(OpCodes.Castclass, storage.ReferenceType);
         il.Emit(OpCodes.Ldloc, value);
-        var destination = capture.IsCell ? context.Types.StrongBoxOfObjectValueField : capture.TargetPath[^1];
+        var destination = storage?.ValueField ?? capture.TargetPath[^1];
         if (destination.FieldType == context.Types.Double)
             il.Emit(OpCodes.Call, context.Runtime!.NumericCoercion.ConvertToNumber);
         else if (destination.FieldType.IsValueType) il.Emit(OpCodes.Unbox_Any, destination.FieldType);

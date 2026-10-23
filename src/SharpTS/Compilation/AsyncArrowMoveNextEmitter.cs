@@ -186,6 +186,17 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
                 _il.Emit(OpCodes.Ldfld, arguments);
                 _il.Emit(OpCodes.Stfld, capturedArguments);
             }
+            if (_builder.PrivateSelfName is { } selfName
+                && _builder.PrivateSelfField is { } self
+                && !_builder.PrivateSelfHasOwnShadow
+                && _builder.FunctionDCFieldMap.TryGetValue(selfName, out var capturedSelf))
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, _builder.FunctionDCField);
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, self);
+                _il.Emit(OpCodes.Stfld, capturedSelf);
+            }
             _il.MarkLabel(dcAlreadySet);
         }
 
@@ -196,7 +207,8 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
         // is valid — unlike the sync-arrow path, no slot widening is needed.
         if (parameters != null)
         {
-            EmitDefaultParameters(parameters);
+            EmitDefaultParameters(parameters, body);
+            RegisterInitializedParameterNames(parameters, body);
         }
 
         // Emit the body
@@ -264,6 +276,23 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
         // Route a shadowing block-scoped binding to its own storage (#766).
         if (BlockScopeRenames.TryGetValue(v, out var renamed))
             v = v with { Name = RenameToken(v.Name, renamed) };
+
+        if (v.IsVar && v.Initializer is null
+            && Ctx.InitializedParameterNames?.Contains(v.Name.Lexeme) == true)
+            return;
+
+        // A declaration owns local storage even when the module has a binding with
+        // the same spelling. Unhoisted locals otherwise reach the global-store
+        // fallback before StoreVariable has had a chance to create their slot.
+        if (!_builder.ParameterFields.ContainsKey(v.Name.Lexeme)
+            && !_builder.LocalFields.ContainsKey(v.Name.Lexeme)
+            && !_builder.FunctionDCFieldMap.ContainsKey(v.Name.Lexeme)
+            && _resolver!.TryResolveLocal(v.Name.Lexeme) is null)
+        {
+            var storage = _resolver.GetOrCreateLocal(v.Name.Lexeme);
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
+            storage.EmitStore(_il);
+        }
 
         if (v.Initializer != null)
         {

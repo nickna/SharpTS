@@ -762,10 +762,12 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static object ProcessGetNextTick()
     /// Returns a TSFunction wrapper for process.nextTick.
-    /// The returned function, when called, schedules its callback via SetTimeout with delay 0.
+    /// The returned function queues its callback before due timers.
     /// </summary>
     private void EmitProcessGetNextTick(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        EmitProcessQueueNextTick(typeBuilder, runtime);
+
         // First, emit the implementation method that will be wrapped
         // Use List<object> as the parameter type because TSFunction.AdjustArgs
         // recognizes List<object> as a rest parameter and packs all args into it
@@ -781,7 +783,7 @@ public partial class RuntimeEmitter
         // ProcessNextTickImpl(List<object> args):
         // - args[0] is the callback
         // - args[1..] are the callback arguments
-        // We call SetTimeout(callback, 0, callbackArgs)
+        // The shared adapter queues the callback with these captured arguments.
 
         // Store callback in local first (needs casting to TSFunctionType)
         var callbackLocal = implIl.DeclareLocal(runtime.FunctionValues.Type);
@@ -856,16 +858,12 @@ public partial class RuntimeEmitter
 
         implIl.MarkLabel(afterCopy);
 
-        // Now set up the call: SetTimeout(callback, delay, args)
+        // Queue the captured callback and arguments before due timers.
         implIl.Emit(OpCodes.Ldloc, callbackLocal);  // callback (TSFunctionType)
-        implIl.Emit(OpCodes.Ldc_R8, 0.0);           // delay = 0
         implIl.Emit(OpCodes.Ldloc, extraArgsLocal); // args
-
-        // Call SetTimeout(callback, 0, extraArgs)
-        implIl.Emit(OpCodes.Call, runtime.Timers.SetTimeout);
+        implIl.Emit(OpCodes.Call, runtime.Process.QueueNextTick);
 
         // nextTick returns undefined
-        implIl.Emit(OpCodes.Pop);
         implIl.Emit(OpCodes.Ldnull);
         implIl.Emit(OpCodes.Ret);
 
@@ -887,6 +885,62 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitProcessQueueNextTick(TypeBuilder runtimeType, EmittedRuntime runtime)
+    {
+        var closure = EmitTypeDefinitions.DefineType(
+            (ModuleBuilder)runtimeType.Module,
+            "$NextTickCallback",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object);
+        var callbackField = closure.DefineField("Callback", _types.Object, FieldAttributes.Private);
+        var argumentsField = closure.DefineField("Arguments", _types.ObjectArray, FieldAttributes.Private);
+        var ctor = closure.DefineConstructor(
+            MethodAttributes.Public, CallingConventions.Standard, [_types.Object, _types.ObjectArray]);
+        {
+            var il = ctor.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, callbackField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Stfld, argumentsField);
+            il.Emit(OpCodes.Ret);
+        }
+        var run = closure.DefineMethod("Run", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        {
+            var il = run.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, callbackField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, argumentsField);
+            il.Emit(OpCodes.Call, runtime.Invocation.Value);
+            // Match the old timer invocation's discarded async-result policy.
+            if (_features.UsesPromise)
+                il.Emit(OpCodes.Call, runtime.RequirePromise().ObserveDiscardedPromiseResult);
+            else
+                il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+        }
+        closure.CreateType();
+
+        var method = runtimeType.DefineMethod(
+            "QueueNextTick", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void, [_types.Object, _types.ObjectArray]);
+        runtime.Process.QueueNextTick = method;
+        var queueIl = method.GetILGenerator();
+        queueIl.Emit(OpCodes.Ldarg_0);
+        queueIl.Emit(OpCodes.Ldarg_1);
+        queueIl.Emit(OpCodes.Newobj, ctor);
+        queueIl.Emit(OpCodes.Ldftn, run);
+        queueIl.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, _types.IntPtr])!);
+        // Reuse the existing checkpoint, pending-work marker and hosted wakeup.
+        // This implements priority over timers without adding Node phase queues.
+        queueIl.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
+        queueIl.Emit(OpCodes.Ret);
     }
 
     /// <summary>

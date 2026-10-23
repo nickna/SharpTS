@@ -22,17 +22,17 @@ public sealed class ArrayBufferStaticEmitter : IStaticTypeEmitterStrategy
     }
 
     /// <summary>
-    /// Attempts to emit IL for an ArrayBuffer static property get.
-    /// ArrayBuffer has no static properties, so this always returns false.
+    /// Emits an ArrayBuffer static method value through the live constructor property.
     /// </summary>
     public bool TryEmitStaticPropertyGet(IEmitterContext emitter, string propertyName)
     {
         if (propertyName != "isView") return false;
         var ctx = emitter.Context;
-        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.RequireArrayBuffer().IsView);
-        ctx.IL.Emit(OpCodes.Ldstr, "isView");
-        ctx.IL.Emit(OpCodes.Ldc_I4_1);
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.FunctionConstruction.GetOrCreate);
+        // Match alias reads: the constructor Type owns live descriptor replacements.
+        ctx.IL.Emit(OpCodes.Ldtoken, ctx.Runtime!.RequireArrayBuffer().Type);
+        ctx.IL.Emit(OpCodes.Call, ctx.Types.TypeGetTypeFromHandle);
+        ctx.IL.Emit(OpCodes.Ldstr, propertyName);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.ObjectRead.Property);
         return true;
     }
 

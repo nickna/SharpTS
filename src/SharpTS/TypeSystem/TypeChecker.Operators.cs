@@ -33,7 +33,7 @@ public partial class TypeChecker
             OperatorDescriptor.Comparison => CheckComparisonBinary(
                 left, right, binary.Left, binary.Right, binary.Operator.Lexeme, line),
             OperatorDescriptor.Equality => CheckEqualityOperator(
-                left, right, binary.Left, binary.Right, binary.Operator.Type, line),
+                left, right, binary.Left, binary.Right, line),
             OperatorDescriptor.Bitwise or OperatorDescriptor.BitwiseShift => CheckBitwiseBinary(left, right, line),
             OperatorDescriptor.UnsignedRightShift => CheckUnsignedShiftBinary(left, right, line),
             OperatorDescriptor.In => CheckInOperator(right, line),
@@ -47,7 +47,6 @@ public partial class TypeChecker
         TypeInfo right,
         Expr leftExpression,
         Expr rightExpression,
-        TokenType operatorType,
         int line)
     {
         // Check()/the execution harness intentionally permits JavaScript-valid comparisons that
@@ -70,14 +69,19 @@ public partial class TypeChecker
         {
             TypeInfo other = leftSymbol ? right : left;
             TypeInfo symbolSide = leftSymbol ? left : right;
-            bool looseNullishOverlap = operatorType is TokenType.EQUAL_EQUAL or TokenType.BANG_EQUAL
-                && ((ContainsNullType(other) && ContainsUndefinedType(symbolSide))
-                    || (ContainsUndefinedType(other) && ContainsNullType(symbolSide)));
+            // A nullish scalar is a valid absence check for Symbol values too,
+            // whether the comparison is loose or strict and regardless of union members.
+            bool nullishComparison = other is TypeInfo.Null or TypeInfo.Undefined;
             bool disjoint = other is TypeInfo.Primitive
                 or TypeInfo.NumberLiteral or TypeInfo.String or TypeInfo.StringLiteral
                 or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.BigIntLiteral
                 or TypeInfo.Null or TypeInfo.Undefined;
-            if (disjoint && !looseNullishOverlap)
+            // One Symbol constituent does not make the whole union disjoint:
+            // any overlapping non-Symbol arm can still equal the scalar operand.
+            if (disjoint && !nullishComparison &&
+                !(symbolSide is TypeInfo.Union union && union.FlattenedTypes.Any(member =>
+                    member is not (TypeInfo.Symbol or TypeInfo.UniqueSymbol or TypeInfo.Never) &&
+                    (IsCompatible(member, other) || IsCompatible(other, member)))))
             {
                 throw new TypeCheckException(
                     $"This comparison appears to be unintentional because the types '{left}' and '{right}' have no overlap.",
@@ -93,12 +97,6 @@ public partial class TypeChecker
         Expr.ObjectLiteral or Expr.ArrayLiteral or Expr.ArrowFunction => true,
         _ => false,
     };
-
-    private static bool ContainsNullType(TypeInfo type) =>
-        type is TypeInfo.Null || type is TypeInfo.Union { ContainsNull: true };
-
-    private static bool ContainsUndefinedType(TypeInfo type) =>
-        type is TypeInfo.Undefined || type is TypeInfo.Union { ContainsUndefined: true };
 
     private TypeInfo CheckInstanceOfOperator(TypeInfo left, TypeInfo right, int line)
     {
@@ -782,11 +780,62 @@ public partial class TypeChecker
                 compound.Operator.Line,
                 tsCode: "TS2322");
 
-        if (!IsNumber(indexType))
+        bool canonicalArrayStringIndex = objType is TypeInfo.Array &&
+            TryGetStringLiteralKeys(indexType, out var stringKeys) &&
+            stringKeys.All(key => Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _));
+        if (!IsNumber(indexType) && !canonicalArrayStringIndex)
             throw new TypeCheckException("Array index must be a number.", tsCode: "TS7053");
+
+        if (objType is TypeInfo.Tuple { IsReadonly: true })
+        {
+            if (indexType is TypeInfo.NumberLiteral literalIndex)
+                throw new TypeCheckException(
+                    $"Cannot assign to '{literalIndex.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}' because it is a read-only property.",
+                    compound.Operator.Line > 0 ? compound.Operator.Line : null, tsCode: "TS2540");
+            throw new TypeCheckException(
+                $" Index signature in type '{objType}' only permits reading.",
+                compound.Operator.Line > 0 ? compound.Operator.Line : null, tsCode: "TS2542");
+        }
 
         if (objType is TypeInfo.Array arrayType)
         {
+            // Every compound assignment writes through the same readonly index signature.
+            if (arrayType.IsReadonly)
+                throw new TypeCheckException(
+                    $" Index signature in type '{objType}' only permits reading.",
+                    compound.Operator.Line > 0 ? compound.Operator.Line : null, tsCode: "TS2542");
+
+            if (compound.Operator.Type == TokenType.PLUS_EQUAL)
+            {
+                int line = compound.Operator.Line;
+                // A never-valued RHS does not complete the write. Retain the
+                // existing numeric compound result rather than rejecting number + never.
+                if (valueType is TypeInfo.Never && IsNumber(arrayType.ElementType))
+                    return arrayType.ElementType;
+
+                TypeInfo result = CheckPlusOperator(arrayType.ElementType, valueType, line);
+                // A known string operand fixes the concatenation result even
+                // when the other operand is any. Validate Symbols above first.
+                if (result is TypeInfo.Any &&
+                    (IsKnownStringOperand(arrayType.ElementType) || IsKnownStringOperand(valueType)))
+                    result = TypeInfo.String.Shared;
+                // Compound arithmetic widens literal slots, but its result must
+                // still fit the writable element domain (e.g. not string into number[]).
+                if (!IsCompatible(WidenLiteralType(arrayType.ElementType), result))
+                    throw new TypeCheckException(
+                        $"Type '{result}' is not assignable to type '{arrayType.ElementType}'.",
+                        line > 0 ? line : null, tsCode: "TS2322");
+                return result;
+
+                static bool IsKnownStringOperand(TypeInfo type) => type switch
+                {
+                    TypeInfo.String or TypeInfo.StringLiteral => true,
+                    TypeInfo.Union union => union.FlattenedTypes.All(IsKnownStringOperand),
+                    TypeInfo.TypeParameter { Constraint: { } constraint } => IsKnownStringOperand(constraint),
+                    _ => false,
+                };
+            }
+
             if (!IsNumber(arrayType.ElementType) || (valueType is not TypeInfo.Never && !IsNumber(valueType)))
                 throw new TypeCheckException("Compound assignment requires numeric operands.", tsCode: "TS2365");
             return arrayType.ElementType;
@@ -1063,6 +1112,16 @@ public partial class TypeChecker
         return TypeInfo.Primitive.Boolean;
     }
 
+    private static TypeInfo ComputedBindingKeyType(TypeInfo type) => type switch
+    {
+        TypeInfo.String or TypeInfo.StringLiteral or TypeInfo.TemplateLiteralType
+            or TypeInfo.Symbol or TypeInfo.UniqueSymbol or TypeInfo.Any or TypeInfo.Never => type,
+        TypeInfo.NumberLiteral number => new TypeInfo.StringLiteral(
+            Runtime.PropertyKeyConverter.ToPropertyKeyString(number.Value)),
+        TypeInfo.Union union => new TypeInfo.Union(union.Types.Select(ComputedBindingKeyType).ToList()),
+        _ => new TypeInfo.Union([TypeInfo.String.Shared, TypeInfo.Symbol.Shared])
+    };
+
     private TypeInfo CheckUnary(Expr.Unary unary)
     {
         // typeof never throws on undeclared variables - it returns "undefined"
@@ -1083,6 +1142,8 @@ public partial class TypeChecker
             return TypeInfo.String.Shared;
         }
         TypeInfo right = CheckExpr(unary.Right);
+        if (unary.Operator.Type == TokenType.INTERNAL_TO_PROPERTY_KEY)
+            return ComputedBindingKeyType(right);
         if (DotNetTypeSynthesizer.TryResolveUnaryOperator(
                 right, unary.Operator.Type, out var clrResult))
         {

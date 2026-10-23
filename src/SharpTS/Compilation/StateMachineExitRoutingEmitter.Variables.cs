@@ -5,6 +5,13 @@ namespace SharpTS.Compilation;
 
 public abstract partial class StateMachineExitRoutingEmitter
 {
+    protected void RegisterInitializedParameterNames(List<Stmt.Parameter> parameters, List<Stmt>? body)
+    {
+        Ctx.InitializedParameterNames = parameters.Select(parameter => parameter.Name.Lexeme)
+            .Concat(ParameterPatternBindings.Declarations(body).Select(binding => binding.Name.Lexeme))
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
     /// <summary>
     /// Checks whether a variable is a captured-AND-mutated function local routed through the shared
     /// function display class (#674/#725), i.e. the state machine holds a function DC and the name
@@ -41,25 +48,65 @@ public abstract partial class StateMachineExitRoutingEmitter
     /// argument was omitted or explicitly <c>undefined</c> arrives in its hoisted state-machine field
     /// as the <c>$Undefined</c> sentinel; this replaces it with the evaluated default
     /// expression — the state-machine analogue of <see cref="ILEmitter.EmitDefaultParameters"/>.
-    /// Defaults are evaluated in declaration order, so a later default may reference an earlier
-    /// (already-defaulted) parameter via its field. The generators mirror an applied default into the
-    /// function display class (#792) via <see cref="ExpressionEmitterBase.GetFunctionDCField"/>; the
-    /// async families leave that virtual at its null default, so the mirror block never fires for
-    /// them. The async function wraps this in its defaults-applied resume guard
-    /// (<see cref="AsyncMoveNextEmitter"/>); the arrow and generators run it on initial entry only.
+    /// Defaults and lowered pattern bindings are evaluated in declaration order, so a later default
+    /// can read every initialized binding of an earlier parameter. Captured defaults also reach the
+    /// function display class (#792) when <see cref="ExpressionEmitterBase.GetFunctionDCField"/>
+    /// exposes one. The async function wraps this in its defaults-applied resume guard
+    /// (<see cref="AsyncMoveNextEmitter"/>); the async arrow runs it on initial entry only.
     /// </summary>
-    protected void EmitDefaultParameters(List<Stmt.Parameter> parameters)
+    protected void EmitDefaultParameters(List<Stmt.Parameter> parameters, List<Stmt>? body = null)
     {
-        if (!parameters.Any(p => p.DefaultValue != null))
+        var initializers = Runtime.ParameterBinder.ParameterInitializers(body);
+        if (!parameters.Any(p => p.DefaultValue != null) && initializers is null)
             return;
 
         for (int i = 0; i < parameters.Count; i++)
         {
             var param = parameters[i];
-            if (param.DefaultValue == null) continue;
+            if (param.DefaultValue != null)
+                EmitDefault(param, ParameterTdzNames(i));
 
+            if (initializers is null || !initializers.TryGetValue(param.Name.Lexeme, out var initializer))
+                continue;
+
+            var previousTdz = Ctx.DefaultParameterTdzNames;
+            var pending = ParameterTdzNames(i);
+            pending.Remove(param.Name.Lexeme);
+            Ctx.DefaultParameterTdzNames = pending;
+            try { EmitBinding(initializer, pending); }
+            finally { Ctx.DefaultParameterTdzNames = previousTdz; }
+            (Ctx.InitializedParameterInitializers ??= new(ReferenceEqualityComparer.Instance)).Add(initializer);
+        }
+
+        HashSet<string> ParameterTdzNames(int index)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var parameter in parameters.Skip(index))
+            {
+                names.Add(parameter.Name.Lexeme);
+                if (initializers?.TryGetValue(parameter.Name.Lexeme, out var initializer) == true)
+                    foreach (var binding in LexicalDeclarationBindings.Collect(initializer.Statements))
+                        names.Add(binding.Lexeme);
+            }
+            return names;
+        }
+
+        void EmitBinding(Stmt statement, HashSet<string> pending)
+        {
+            if (statement is Stmt.Sequence sequence)
+            {
+                foreach (var child in sequence.Statements) EmitBinding(child, pending);
+                return;
+            }
+            EmitStatement(statement);
+            if (statement is Stmt.Var variable) pending.Remove(variable.Name.Lexeme);
+            else if (statement is Stmt.Const constant) pending.Remove(constant.Name.Lexeme);
+        }
+
+        void EmitDefault(Stmt.Parameter param, HashSet<string> pending)
+        {
             var field = GetHoistedVariableField(param.Name.Lexeme);
-            if (field == null) continue; // Parameter not hoisted (unused in body) — default is moot.
+            if (field == null) return; // Parameter not hoisted (unused in body).
 
             var applyDefault = IL.DefineLabel();
             var skipDefault = IL.DefineLabel();
@@ -73,12 +120,10 @@ public abstract partial class StateMachineExitRoutingEmitter
             IL.Emit(OpCodes.Br, skipDefault);
 
             IL.MarkLabel(applyDefault);
-            Ctx.DefaultParameterTdzNames = parameters
-                .Skip(i)
-                .Select(p => p.Name.Lexeme)
-                .ToHashSet(StringComparer.Ordinal);
-            EmitExpression(param.DefaultValue);
-            Ctx.DefaultParameterTdzNames = null;
+            var previousTdz = Ctx.DefaultParameterTdzNames;
+            Ctx.DefaultParameterTdzNames = pending;
+            try { EmitExpression(param.DefaultValue!); }
+            finally { Ctx.DefaultParameterTdzNames = previousTdz; }
             EnsureBoxed();
             var temp = IL.DeclareLocal(Types.Object);
             IL.Emit(OpCodes.Stloc, temp);

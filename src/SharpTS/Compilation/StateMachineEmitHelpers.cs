@@ -1168,6 +1168,15 @@ public class StateMachineEmitHelpers
     /// <param name="runtimeAdd">Runtime.Add method for PLUS_EQUAL (supports string concatenation).</param>
     public void EmitCompoundOperation(TokenType opType, MethodInfo runtimeAdd)
     {
+        // Exponentiation has no IL opcode. Reuse ordered ToNumeric and the
+        // Number/BigInt power dispatch after both reference operands were read.
+        if (opType == TokenType.STAR_STAR_EQUAL)
+        {
+            _il.Emit(OpCodes.Ldc_I4, (int)TokenType.STAR_STAR);
+            EmitCallUnknown(_runtime!.Operators.NumericBinary);
+            return;
+        }
+
         // PLUS_EQUAL uses runtime Add for string concatenation support
         if (opType == TokenType.PLUS_EQUAL)
         {

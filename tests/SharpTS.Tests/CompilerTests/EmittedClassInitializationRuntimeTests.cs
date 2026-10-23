@@ -14,13 +14,25 @@ public sealed class EmittedClassInitializationRuntimeTests
         var owner = new EmittedRuntime().ClassInitialization;
         Assert.Throws<InvalidOperationException>(() => owner.RunDefinition);
         Assert.Throws<ArgumentNullException>(() => owner.RunDefinition = null!);
+        Assert.Throws<InvalidOperationException>(() => owner.CanonicalStaticStorageAttributeConstructor);
+        Assert.Throws<ArgumentNullException>(() => owner.CanonicalStaticStorageAttributeConstructor = null!);
         Assert.Throws<InvalidOperationException>(owner.MarkBodyEmitted);
         Assert.Throws<InvalidOperationException>(owner.CompleteEmission); Assert.False(owner.IsComplete);
-        var builder = NewAssembly(); var type = builder.DefineDynamicModule("main").DefineType("Forward", TypeAttributes.Public);
+        var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
+        var type = module.DefineType("Forward", TypeAttributes.Public);
         var declaration = type.DefineMethod("Run", MethodAttributes.Public | MethodAttributes.Static, typeof(void), [typeof(Type)]);
         owner.RunDefinition = declaration;
         Assert.Same(declaration, owner.RunDefinition);
         Assert.Throws<InvalidOperationException>(() => owner.RunDefinition = declaration);
+        Assert.Throws<InvalidOperationException>(owner.CompleteEmission); Assert.False(owner.IsComplete);
+        var marker = module.DefineType("Marker", TypeAttributes.Public | TypeAttributes.Sealed, typeof(Attribute));
+        var constructor = marker.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var constructorIl = constructor.GetILGenerator(); constructorIl.Emit(OpCodes.Ldarg_0);
+        constructorIl.Emit(OpCodes.Call, typeof(Attribute).GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic,
+            null, Type.EmptyTypes, null)!); constructorIl.Emit(OpCodes.Ret); marker.CreateType();
+        owner.CanonicalStaticStorageAttributeConstructor = constructor;
+        Assert.Same(constructor, owner.CanonicalStaticStorageAttributeConstructor);
+        Assert.Throws<InvalidOperationException>(() => owner.CanonicalStaticStorageAttributeConstructor = constructor);
         Assert.Throws<InvalidOperationException>(owner.CompleteEmission); Assert.False(owner.IsComplete);
         var forward = type.DefineMethod("Consumer", MethodAttributes.Public | MethodAttributes.Static, typeof(void), [typeof(Type)]);
         var il = forward.GetILGenerator(); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, owner.RunDefinition); il.Emit(OpCodes.Ret);
@@ -30,6 +42,7 @@ public sealed class EmittedClassInitializationRuntimeTests
         Assert.Throws<InvalidOperationException>(owner.CompleteEmission);
         Assert.Throws<InvalidOperationException>(owner.MarkBodyEmitted);
         Assert.Throws<InvalidOperationException>(() => owner.RunDefinition = declaration);
+        Assert.Throws<InvalidOperationException>(() => owner.CanonicalStaticStorageAttributeConstructor = constructor);
         type.CreateType(); SaveVerifyLoad(builder).GetType("Forward")!.GetMethod("Consumer")!.Invoke(null, [typeof(object)]);
     }
 
@@ -40,6 +53,7 @@ public sealed class EmittedClassInitializationRuntimeTests
     {
         var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
         var owners = new HashSet<EmittedClassInitializationRuntime>(); var handles = new HashSet<MethodBuilder>();
+        var markers = new HashSet<ConstructorBuilder>();
         var previousCounts = new List<FieldInfo>();
         foreach (string source in new[] { "const n=1;", "Promise.resolve(1); function* g(){yield 1;} g();", "const n=2;" })
         {
@@ -48,6 +62,9 @@ public sealed class EmittedClassInitializationRuntimeTests
             var runtime = emitter.EmitAll(module, features); var owner = runtime.ClassInitialization;
             Assert.True(owner.IsComplete); Assert.True(owners.Add(owner)); Assert.True(handles.Add(owner.RunDefinition));
             Assert.Same(builder, owner.RunDefinition.Module.Assembly); Assert.Same(runtime.RuntimeClass.Type, owner.RunDefinition.DeclaringType);
+            Assert.True(markers.Add(owner.CanonicalStaticStorageAttributeConstructor));
+            Assert.Same(builder, owner.CanonicalStaticStorageAttributeConstructor.Module.Assembly);
+            Assert.Equal(typeof(Attribute), owner.CanonicalStaticStorageAttributeConstructor.DeclaringType!.BaseType);
             DefineInitializers(module);
             var loaded = SaveVerifyLoad(builder); var runtimeType = loaded.GetType("$Runtime")!;
             var helper = runtimeType.GetMethod("RunClassDefinition")!;
@@ -88,8 +105,14 @@ public sealed class EmittedClassInitializationRuntimeTests
         var owner = new EmittedRuntime().ClassInitialization;
         var helper = typeof(RuntimeEmitter).GetMethod("EmitRunClassDefinition", BindingFlags.NonPublic | BindingFlags.Instance)!;
         Assert.Equal(new[] { typeof(TypeBuilder), typeof(EmittedClassInitializationRuntime), typeof(Type) }, helper.GetParameters().Select(p => p.ParameterType));
-        helper.Invoke(new RuntimeEmitter(TypeProvider.Runtime), [type, owner, userClassInterface]);
-        Assert.False(owner.IsComplete); owner.CompleteEmission(); Assert.True(owner.IsComplete);
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime);
+        helper.Invoke(emitter, [type, owner, userClassInterface]);
+        Assert.False(owner.IsComplete);
+        Assert.Throws<InvalidOperationException>(owner.CompleteEmission); Assert.False(owner.IsComplete);
+        var markerHelper = typeof(RuntimeEmitter).GetMethod("EmitCanonicalStaticStorageAttribute", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        Assert.Equal(new[] { typeof(ModuleBuilder), typeof(EmittedClassInitializationRuntime) }, markerHelper.GetParameters().Select(p => p.ParameterType));
+        markerHelper.Invoke(emitter, [module, owner]);
+        owner.CompleteEmission(); Assert.True(owner.IsComplete);
         type.CreateType(); SaveVerifyLoad(builder).GetType("Scoped")!.GetMethod("RunClassDefinition")!.Invoke(null, [typeof(object)]);
         Assert.NotSame(owner, new EmittedRuntime().ClassInitialization);
         Assert.Null(typeof(EmittedRuntime).GetProperty("ClassInitialization")!.SetMethod);

@@ -82,7 +82,7 @@ public partial class RuntimeEmitter
                 _types.Object, [_types.Object, _types.Object, _types.String]) : null;
         var readSuper = _features.UsesUserClasses
             ? type.DefineMethod("ReadSuper", MethodAttributes.Public | MethodAttributes.Static,
-                _types.Object, [_types.Object, _types.Object, _types.String, _types.Boolean]) : null;
+                _types.Object, [_types.Object, _types.Object, _types.Object, _types.Boolean]) : null;
         definitions.Declare(new(type, instanceInterface, instanceInterface.GetMethod(getter.Name)!,
             constructor, template, factory, prototype, keys, parent, captures, privateMembers, create, construct, read, invoke,
             captureType, captureConstructor, captureOwner, captureField, readCapture, writeCapture, findEnvironment,
@@ -282,33 +282,23 @@ public partial class RuntimeEmitter
             () => il.Emit(OpCodes.Ldarg_0), runtime.Invocation.Method,
             runtime.Sentinels.UndefinedInstance, runtime.Sentinels.UndefinedType);
         il.MarkLabel(inheritedProperty);
-        var noParentProperty = il.DefineLabel();
+        var selectedPrototype = il.DeclareLocal(_types.Object);
+        var missingProperty = il.DefineLabel();
+        // Parent is the construction-time superclass. Ordinary property reads
+        // follow the live internal prototype and retain this constructor as
+        // the receiver for any inherited accessor.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, definitions.Parent);
-        il.Emit(OpCodes.Brfalse, noParentProperty);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, definitions.Parent);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, selectedPrototype);
+        il.Emit(OpCodes.Ldloc, selectedPrototype);
+        il.Emit(OpCodes.Brfalse, missingProperty);
+        il.Emit(OpCodes.Ldloc, selectedPrototype);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.Reflect.Get);
         il.Emit(OpCodes.Ret);
-        il.MarkLabel(noParentProperty);
-        var ordinary = il.DefineLabel();
-        foreach (var name in new[] { "bind", "call", "apply", "name", "length", "prototype" })
-        {
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            il.Emit(OpCodes.Brtrue, ordinary);
-        }
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, definitions.Template);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(ordinary);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.FunctionIntrospection.GetProperty);
+        il.MarkLabel(missingProperty);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         il = definitions.Invoke.GetILGenerator();

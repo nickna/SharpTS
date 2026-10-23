@@ -44,6 +44,12 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]);
 
+        symbolAccessors.FindOwnGetter = typeBuilder.DefineMethod(
+            "FindOwnSymbolGetterFor",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]);
+
         symbolAccessors.FindSetter = typeBuilder.DefineMethod(
             "FindSymbolSetterFor",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -162,6 +168,19 @@ public partial class RuntimeEmitter
             innerTryGetValue,
             getBaseType,
             getType
+        );
+        EmitFindSymbolAccessorBody(
+            symbolAccessors,
+            symbolAccessors.FindOwnGetter,
+            field,
+            inner,
+            SymGetterInstanceSlot,
+            SymGetterStaticSlot,
+            outerTryGetValue,
+            innerTryGetValue,
+            getBaseType,
+            getType,
+            ownOnly: true
         );
         EmitFindSymbolAccessorBody(
             symbolAccessors,

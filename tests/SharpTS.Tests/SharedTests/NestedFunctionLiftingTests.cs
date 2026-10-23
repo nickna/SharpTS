@@ -6,10 +6,10 @@ namespace SharpTS.Tests.SharedTests;
 /// <summary>
 /// Tests for nested function-like lowering on the compile path (#470, #501, #583).
 ///
-/// The compiler relocates non-capturing nested generator/async/state-machine-nested function
-/// declarations to the module top level (<c>Compilation/NestedFunctionLifter.cs</c>) so the mature
-/// top-level state-machine pipeline can lower them. These tests assert interpreter/compiler parity
-/// for the supported (non-capturing) shapes and pin the documented limitations (#583 §1/§2).
+/// The compiler lowers nested generator/async/state-machine-nested function declarations into
+/// live function values or relocated helpers (<c>Compilation/NestedFunctionLifter.cs</c>).
+/// These tests assert interpreter/compiler parity for supported shapes and document the
+/// remaining capture and identity limitations (#583 §1/§2).
 /// </summary>
 public class NestedFunctionLiftingTests
 {

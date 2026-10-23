@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
-using SharpTS.Parsing.Visitors;
 using TypeSystem = SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -22,7 +21,8 @@ public partial class ILCompiler
     private void DefineAsyncFunction(Stmt.Function funcStmt)
     {
         // Analyze the async function for await points and hoisted variables
-        var analysis = _async.Analyzer.Analyze(funcStmt, preserveDebugBindings: EmitDebugSymbols);
+        var analysis = _async.Analyzer.Analyze(funcStmt, preserveDebugBindings: EmitDebugSymbols,
+            closureAnalyzer: _closures.Analyzer);
 
         // Module-qualify the stub/registry keys (#418) so two modules that each declare a
         // same-named async function don't clobber each other. Single-file compilation returns
@@ -31,13 +31,8 @@ public partial class ILCompiler
         var ctx = GetDefinitionContext();
         string qualifiedFunctionName = ctx.GetQualifiedFunctionName(funcStmt.Name.Lexeme);
 
-        HashSet<Expr.Await> suspensionFreeAwaits = FindSuspensionFreeAwaits(
-            funcStmt, ctx, analysis);
-        if (suspensionFreeAwaits.Count > 0)
-        {
-            analysis = _async.Analyzer.Analyze(funcStmt, suspensionFreeAwaits, EmitDebugSymbols);
-            _async.SuspensionFreeAwaits[qualifiedFunctionName] = suspensionFreeAwaits;
-        }
+        // A fulfilled Promise still suspends an explicit await into a job.
+        // Only functions with no await points may use the primitive core.
 
         if (CanEmitSuspensionFreePrimitiveAsyncFunction(
                 funcStmt, qualifiedFunctionName, analysis))
@@ -47,6 +42,7 @@ public partial class ILCompiler
             return;
         }
 
+        var bodyAnalysis = analysis;
         analysis = AddAsyncReturnCompletionState(analysis);
 
         // Create state machine builder
@@ -104,7 +100,7 @@ public partial class ILCompiler
 
         // Create function-level display class for captured locals (same as sync functions).
         // This enables closure mutation sharing between the async state machine and sync inner arrows.
-        RegisterAsyncFunctionDisplayClass(funcStmt, qualifiedFunctionName, analysis);
+        RegisterAsyncFunctionDisplayClass(funcStmt, qualifiedFunctionName, bodyAnalysis);
 
         // If a function DC was created, add a field on the state machine to hold it
         if (_closures.FunctionDisplayClasses.TryGetValue(qualifiedFunctionName, out var funcDC))
@@ -128,261 +124,11 @@ public partial class ILCompiler
         return result;
     }
 
-    private HashSet<Expr.Await> FindSuspensionFreeAwaits(
-        Stmt.Function function,
-        CompilationContext definitionContext,
-        AsyncStateAnalyzer.AsyncFunctionAnalysis analysis)
-    {
-        if (analysis.HasTryCatch || analysis.AsyncArrows.Count != 0 || function.Body == null)
-            return [];
-
-        var localBindings = new FunctionLocalBindingCollector(function.Parameters);
-        foreach (Stmt statement in function.Body)
-            localBindings.Visit(statement);
-
-        var collector = new SuspensionFreeAwaitCollector(
-            definitionContext,
-            _async.StableSuspensionFreePrimitiveCores,
-            localBindings.Names,
-            _typeMap,
-            _features?.UsesPromisePrototypeMutation != true
-                && !_promiseBindingScopes.Contains(
-                    PromiseBindingScopeKey(_modules.CurrentPath)));
-        foreach (Stmt statement in function.Body)
-            collector.Visit(statement);
-        return collector.Awaits;
-    }
-
-    private sealed class FunctionLocalBindingCollector(
-        IEnumerable<Stmt.Parameter> parameters) : AstVisitorBase
-    {
-        public HashSet<string> Names { get; } =
-            new(parameters.Select(parameter => parameter.Name.Lexeme), StringComparer.Ordinal);
-
-        protected override void VisitVar(Stmt.Var statement)
-        {
-            Names.Add(statement.Name.Lexeme);
-            base.VisitVar(statement);
-        }
-
-        protected override void VisitConst(Stmt.Const statement)
-        {
-            Names.Add(statement.Name.Lexeme);
-            base.VisitConst(statement);
-        }
-
-        protected override void VisitForOf(Stmt.ForOf statement)
-        {
-            Names.Add(statement.Variable.Lexeme);
-            base.VisitForOf(statement);
-        }
-
-        protected override void VisitForIn(Stmt.ForIn statement)
-        {
-            if (statement.IsDeclaration)
-                Names.Add(statement.Variable.Lexeme);
-            base.VisitForIn(statement);
-        }
-
-        protected override void VisitTryCatch(Stmt.TryCatch statement)
-        {
-            if (statement.CatchParam != null)
-                Names.Add(statement.CatchParam.Lexeme);
-            base.VisitTryCatch(statement);
-        }
-
-        protected override void VisitFunction(Stmt.Function statement) =>
-            Names.Add(statement.Name.Lexeme);
-
-        protected override void VisitClass(Stmt.Class statement) =>
-            Names.Add(statement.Name.Lexeme);
-
-        protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
-        protected override void VisitClassExpr(Expr.ClassExpr expression) { }
-    }
-
-    private void RegisterPromiseBindingScope(
-        IReadOnlyList<Stmt> statements,
-        string? modulePath)
-    {
-        var collector = new ModulePromiseBindingCollector();
-        foreach (Stmt statement in statements)
-            collector.Visit(statement);
-        if (collector.HasBinding)
-            _promiseBindingScopes.Add(PromiseBindingScopeKey(modulePath));
-    }
-
-    private static string PromiseBindingScopeKey(string? modulePath) =>
-        modulePath ?? ClosureCompilationState.SingleFileKey;
-
-    /// <summary>
-    /// Finds value bindings visible from a module body without descending into
-    /// nested callables. The result is deliberately module-wide: a block-scoped
-    /// false positive only retains the ordinary await path, while a missed
-    /// module/import binding can bypass an observable Promise.resolve call.
-    /// </summary>
-    private sealed class ModulePromiseBindingCollector : AstVisitorBase
-    {
-        public bool HasBinding { get; private set; }
-
-        private void Add(string name)
-        {
-            if (name == "Promise")
-                HasBinding = true;
-        }
-
-        protected override void VisitVar(Stmt.Var statement) =>
-            Add(statement.Name.Lexeme);
-
-        protected override void VisitConst(Stmt.Const statement) =>
-            Add(statement.Name.Lexeme);
-
-        protected override void VisitFunction(Stmt.Function statement) =>
-            Add(statement.Name.Lexeme);
-
-        protected override void VisitClass(Stmt.Class statement) =>
-            Add(statement.Name.Lexeme);
-
-        protected override void VisitEnum(Stmt.Enum statement) =>
-            Add(statement.Name.Lexeme);
-
-        protected override void VisitNamespace(Stmt.Namespace statement)
-        {
-            Add(statement.Name.Lexeme);
-            base.VisitNamespace(statement);
-        }
-
-        protected override void VisitForOf(Stmt.ForOf statement)
-        {
-            Add(statement.Variable.Lexeme);
-            base.VisitForOf(statement);
-        }
-
-        protected override void VisitForIn(Stmt.ForIn statement)
-        {
-            if (statement.IsDeclaration)
-                Add(statement.Variable.Lexeme);
-            base.VisitForIn(statement);
-        }
-
-        protected override void VisitTryCatch(Stmt.TryCatch statement)
-        {
-            if (statement.CatchParam is not null)
-                Add(statement.CatchParam.Lexeme);
-            base.VisitTryCatch(statement);
-        }
-
-        protected override void VisitImport(Stmt.Import statement)
-        {
-            if (statement.IsTypeOnly)
-                return;
-            if (statement.DefaultImport is not null)
-                Add(statement.DefaultImport.Lexeme);
-            if (statement.NamespaceImport is not null)
-                Add(statement.NamespaceImport.Lexeme);
-            if (statement.NamedImports is not null)
-            {
-                foreach (var specifier in statement.NamedImports)
-                {
-                    if (!specifier.IsTypeOnly)
-                        Add((specifier.LocalName ?? specifier.Imported).Lexeme);
-                }
-            }
-        }
-
-        protected override void VisitImportAlias(Stmt.ImportAlias statement) =>
-            Add(statement.AliasName.Lexeme);
-
-        protected override void VisitImportRequire(Stmt.ImportRequire statement) =>
-            Add(statement.AliasName.Lexeme);
-
-        protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
-        protected override void VisitClassExpr(Expr.ClassExpr expression) { }
-    }
-
-    private sealed class SuspensionFreeAwaitCollector(
-        CompilationContext context,
-        IReadOnlyDictionary<string, MethodBuilder> stableCores,
-        IReadOnlySet<string> localBindings,
-        TypeSystem.TypeMap? typeMap,
-        bool promiseBehaviorStable) : AstVisitorBase
-    {
-        public HashSet<Expr.Await> Awaits { get; } =
-            new(ReferenceEqualityComparer.Instance);
-
-        protected override void VisitAwait(Expr.Await expression)
-        {
-            if (promiseBehaviorStable
-                && !localBindings.Contains("Promise")
-                && expression.Expression is Expr.Call
-                {
-                    Optional: false,
-                    Callee: Expr.Get
-                    {
-                        Optional: false,
-                        Object: Expr.Variable { Name.Lexeme: "Promise" },
-                        Name.Lexeme: "resolve"
-                    },
-                    Arguments: [var resolvedValue]
-                }
-                && resolvedValue is not Expr.Spread
-                && !ContainsSuspension(resolvedValue)
-                && IsStableNonThenablePrimitive(typeMap?.Get(resolvedValue)))
-            {
-                Awaits.Add(expression);
-            }
-
-            if (expression.Expression is Expr.Call
-                {
-                    Callee: Expr.Variable variable,
-                    Arguments: var arguments
-                }
-                && !localBindings.Contains(variable.Name.Lexeme)
-                && !arguments.Any(argument => argument is Expr.Spread)
-                && !arguments.Any(ContainsSuspension)
-                && context.ResolveFunctionName(variable.Name.Lexeme) is var resolvedName
-                && string.Equals(
-                    resolvedName,
-                    context.GetQualifiedFunctionName(variable.Name.Lexeme),
-                    StringComparison.Ordinal)
-                && stableCores.TryGetValue(resolvedName, out MethodBuilder? core)
-                && arguments.Count == core.GetParameters().Length)
-            {
-                Awaits.Add(expression);
-            }
-            base.VisitAwait(expression);
-        }
-
-        private static bool ContainsSuspension(Expr expression)
-        {
-            var detector = new SuspensionDetector();
-            detector.Visit(expression);
-            return detector.Found;
-        }
-
-        protected override void VisitFunction(Stmt.Function statement) { }
-        protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
-        protected override void VisitClass(Stmt.Class statement) { }
-        protected override void VisitClassExpr(Expr.ClassExpr expression) { }
-
-        private sealed class SuspensionDetector : AstVisitorBase
-        {
-            public bool Found { get; private set; }
-            protected override void VisitAwait(Expr.Await expression) => Found = true;
-            protected override void VisitYield(Expr.Yield expression) => Found = true;
-            protected override void VisitFunction(Stmt.Function statement) { }
-            protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
-            protected override void VisitClass(Stmt.Class statement) { }
-            protected override void VisitClassExpr(Expr.ClassExpr expression) { }
-        }
-    }
-
     /// <summary>
     /// A primitive async function with no suspension points does not need an
     /// <see cref="System.Runtime.CompilerServices.AsyncTaskMethodBuilder{TResult}"/> state
     /// machine. Keep the proof deliberately narrow: a free function with a final primitive
-    /// return, simple required parameters, no closure/dynamic-receiver machinery, and only awaits
-    /// already proven non-suspending (stable primitive cores or intrinsic primitive resolves). Its public
+    /// return, simple required parameters, no closure/dynamic-receiver machinery, and no awaits. Its public
     /// Task&lt;object?&gt; ABI remains identical to the ordinary async stub.
     /// </summary>
     private bool CanEmitSuspensionFreePrimitiveAsyncFunction(
@@ -476,9 +222,9 @@ public partial class ILCompiler
 
     /// <summary>
     /// Registers the function-level display class ($functionDC) for an async free function OR async
-    /// method, keyed by <paramref name="key"/>. Lifts the captured locals a nested SYNC arrow shares —
-    /// minus the ones an async arrow captures (those use the boxed-outer hoisted-field path), keeping the
-    /// async-arrow WRITES that require reference storage for verifiable mutation. Makes the DC
+    /// method, keyed by <paramref name="key"/>. Lifts captured locals shared with nested sync arrows
+    /// and async-arrow writes. Suspending owners also lift async-arrow reads so builder copies share
+    /// authoritative reference storage instead of reading a stale boxed state machine. Makes the DC
     /// rename-aware for captured shadows via <c>DefineFunctionDisplayClass</c>, preserving shared
     /// storage when the enclosing body mutates a binding read by a closure. Records the
     /// AST node so the arrow-collection (<see cref="PropagateFunctionDCRequirements"/>) can resolve a
@@ -490,8 +236,8 @@ public partial class ILCompiler
     {
         _closures.FunctionAstNodes[key] = funcStmt;
 
-        // Collect variables captured by async arrows. By default these can't use the function DC —
-        // they're read through the boxed outer state machine in the arrow's MoveNext.
+        // Collect variables captured by async arrows. A suspending owner must share reference
+        // storage with them because the async builder can resume a copy of its boxed state machine.
         var asyncCapturedVars = new HashSet<string>();
         foreach (var arrowInfo in analysis.AsyncArrows)
         {
@@ -504,18 +250,22 @@ public partial class ILCompiler
         // machine. A boxed struct cannot be mutated in place by verifiable IL — `unbox` yields a
         // readonly managed pointer, so `stfld` through it fails verification and can drop the write in
         // complex state machines (#625). Routing the write through `outer.functionDC.field` (a class
-        // reference) is verifiable. Read-only captures stay on the SM field (the existing, working
-        // load path).
+        // reference) is verifiable. Owners without suspension can retain read-only SM captures.
         var promotedToFunctionDC = ComputeArrowWrittenCapturesToPromote(analysis.AsyncArrows);
+        // Lowered declarations are instantiated before the body's lexical initializers.
+        // Their read captures therefore need the owner's live environment even when the
+        // point-in-time async capture visitor has not seen the declaration yet.
+        promotedToFunctionDC.UnionWith(GetAsyncDeclarationLiveLocals(
+            funcStmt, analysis.AsyncArrows.Select(info => info.Arrow)));
         // A retained generator expression also needs a reference to live storage,
         // including when an intermediate async arrow only reads this binding.
         // Its iterator can then share the existing function DC instead of a
         // snapshot or a copy of the outer value-type state machine.
         promotedToFunctionDC.UnionWith(GetGeneratorExpressionAncestorCaptures(funcStmt));
-        if (EmitDebugSymbols)
+        if (EmitDebugSymbols || analysis.AwaitPointCount > 0)
         {
-            // Captures need a typed reference to their authoritative storage for managed expression
-            // evaluators. Reuse the existing reference-storage lowering for read captures as well.
+            // Read captures need authoritative reference storage across suspension, just as debug
+            // evaluators do. Reuse the existing rename-aware display-class lowering.
             promotedToFunctionDC.UnionWith(asyncCapturedVars);
             asyncCapturedVars.Clear();
         }
@@ -669,12 +419,101 @@ public partial class ILCompiler
     /// </summary>
     private void AttachAsyncArrowFunctionDC(AsyncArrowStateMachineBuilder builder, Expr.ArrowFunction arrow)
     {
+        if (builder.FunctionDCField != null) return;
         if (_closures.AsyncArrowDCKeys.TryGetValue(arrow, out var key) &&
             _closures.FunctionDisplayClasses.TryGetValue(key, out var dc) &&
             _closures.FunctionDisplayClassCtors.TryGetValue(key, out var ctor) &&
             _closures.FunctionDisplayClassFields.TryGetValue(key, out var dcFields))
         {
             builder.DefineFunctionDisplayClassField(dc, ctor, dcFields);
+        }
+    }
+
+    private static bool IsLoweredAsyncDeclaration(Expr.ArrowFunction arrow) =>
+        arrow.IsAsync && !arrow.IsGenerator && arrow.HasOwnThis
+        && arrow.Name == null && arrow.RuntimeName != null;
+
+    private HashSet<string> GetAsyncDeclarationLiveLocals(
+        object owner, IEnumerable<Expr.ArrowFunction> descendants)
+    {
+        var locals = _closures.Analyzer.GetCapturedLocals(owner);
+        HashSet<string> result = [];
+        foreach (var declaration in descendants)
+        {
+            if (!IsLoweredAsyncDeclaration(declaration)) continue;
+            foreach (var name in _closures.Analyzer.GetCaptures(declaration))
+                if (locals.Contains(name)
+                    && ReferenceEquals(_closures.Analyzer.GetCaptureSource(declaration, name), owner)
+                    && !_closures.Analyzer.TryGetLoopBodyCellCapture(declaration, name, out _))
+                    result.Add(name);
+        }
+        IEnumerable<Stmt.Parameter> parameters = owner switch
+        {
+            Stmt.Function function => function.Parameters,
+            Expr.ArrowFunction arrow => arrow.Parameters,
+            _ => []
+        };
+        result.ExceptWith(parameters.Select(parameter => parameter.Name.Lexeme));
+        result.ExceptWith(_closures.Analyzer.GetPerIterationLoopBindings(owner));
+        result.ExceptWith(_closures.Analyzer.GetCellOnlyCapturedLocalNames(owner));
+        return result;
+    }
+
+    private void BindAsyncDeclarationLiveCaptures(AsyncArrowStateMachineBuilder builder)
+    {
+        if (builder.IsStandalone) return;
+        bool loweredDeclaration = IsLoweredAsyncDeclaration(builder.Arrow);
+        foreach (var name in builder.Captures)
+        {
+            if (builder.ParameterFields.ContainsKey(name) || builder.LocalFields.ContainsKey(name)
+                || _closures.Analyzer.TryGetLoopBodyCellCapture(builder.Arrow, name, out _))
+                continue;
+            var source = _closures.Analyzer.GetCaptureSource(builder.Arrow, name);
+            // An async-arrow owner stores a newly promoted local only in its DC.
+            // Sibling async expressions reading that same binding must follow it
+            // rather than the owner's now-stale hoisted-field copy.
+            if (!loweredDeclaration
+                && (source is not Expr.ArrowFunction { IsAsync: true, IsGenerator: false } asyncOwner
+                    || !GetAsyncDeclarationLiveLocals(asyncOwner,
+                        _collectedArrows.Select(entry => entry.Arrow)).Contains(name)))
+                continue;
+            if (source != null && ResolveLiveStorage(builder, source, name) is { } storage)
+                builder.CapturedLiveStorage[name] = storage;
+        }
+
+        AsyncArrowStorageAccess? ResolveLiveStorage(
+            AsyncArrowStateMachineBuilder child, object source, string name)
+        {
+            string storageName = name;
+            if (_closures.ArrowFunctionDCFieldRenames.TryGetValue(builder.Arrow, out var renames)
+                && renames.TryGetValue(name, out var renamed))
+                storageName = renamed;
+
+            if (_async.ArrowParentBuilders.TryGetValue(child.Arrow, out var parent))
+            {
+                AttachAsyncArrowFunctionDC(parent, parent.Arrow);
+                AsyncArrowStorageAccess? parentStorage;
+                if (ReferenceEquals(parent.Arrow, source))
+                {
+                    parentStorage = parent.FunctionDCField is { } holder
+                        && parent.FunctionDCFieldMap.TryGetValue(storageName, out var field)
+                            ? AsyncArrowStorageAccess.OwnDisplayClassField(holder, field) : null;
+                }
+                else
+                    parentStorage = ResolveLiveStorage(parent, source, name);
+                return parentStorage?.ThroughOuterStateMachine(child);
+            }
+            if (_async.ArrowOuterBuilders.TryGetValue(child.Arrow, out var outer)
+                && outer.FunctionDCField is { } outerHolder)
+            {
+                foreach (var (key, function) in _closures.FunctionAstNodes)
+                    if (ReferenceEquals(function, source)
+                        && _closures.FunctionDisplayClassFields.TryGetValue(key, out var fields)
+                        && fields.TryGetValue(storageName, out var field)
+                        && field.DeclaringType == outerHolder.FieldType)
+                        return AsyncArrowStorageAccess.OuterDisplayClassField(child, outerHolder, field);
+            }
+            return null;
         }
     }
 
@@ -758,6 +597,17 @@ public partial class ILCompiler
                     outerHoistedFields[name] = field;
                 foreach (var (name, field) in parentBuilder.LocalFields)
                     outerHoistedFields[name] = field;
+                // Read-only descendants retain the named expression's own
+                // binding even when no mutable display class was needed.
+                if (parentBuilder.PrivateSelfName is { } selfName
+                    && parentBuilder.PrivateSelfField is { } selfField)
+                {
+                    if (_closures.Analyzer.TryGetPrivateSelfCapture(arrowInfo.Arrow, selfName, out var declaration)
+                        && ReferenceEquals(declaration, parentBuilder.Arrow.Name))
+                        outerHoistedFields[selfName] = selfField;
+                    else
+                        outerHoistedFields.TryAdd(selfName, selfField);
+                }
                 // Also include captured fields - they're accessible through parent's outer reference
                 // These are "transitive" captures - we need to go through parent's <>__outer to access them
                 HashSet<string> transitiveCaptures = [];
@@ -803,7 +653,7 @@ public partial class ILCompiler
                 DefineAsyncArrowStub(arrowBuilder);
                 MarkPadsUndefined(arrowBuilder.StubMethod); // #640
                 MarkFunctionLength(arrowBuilder.StubMethod, arrowInfo.Arrow.Parameters);
-                MarkFunctionName(arrowBuilder.StubMethod, arrowInfo.Arrow.Name?.Lexeme ?? "");
+                MarkFunctionName(arrowBuilder.StubMethod, arrowInfo.Arrow.RuntimeName ?? arrowInfo.Arrow.Name?.Lexeme ?? "");
                 RegisterStateMachine(
                     arrowBuilder.StubMethod,
                     arrowBuilder.StateMachineType,
@@ -830,7 +680,7 @@ public partial class ILCompiler
             DefineAsyncArrowStub(arrowBuilder);
             MarkPadsUndefined(arrowBuilder.StubMethod); // #640
             MarkFunctionLength(arrowBuilder.StubMethod, arrowInfo.Arrow.Parameters);
-            MarkFunctionName(arrowBuilder.StubMethod, arrowInfo.Arrow.Name?.Lexeme ?? "");
+            MarkFunctionName(arrowBuilder.StubMethod, arrowInfo.Arrow.RuntimeName ?? arrowInfo.Arrow.Name?.Lexeme ?? "");
             RegisterStateMachine(
                 arrowBuilder.StubMethod,
                 arrowBuilder.StateMachineType,
@@ -973,7 +823,15 @@ public partial class ILCompiler
                 if (!seenAwait)
                     declaredBeforeAwait.Add(ArrowStorageName(f, f.Variable.Lexeme));
                 AnalyzeArrowExprForAwaits(f.Iterable, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                if (f.IsAsync)
+                {
+                    // Match shared for-await emission: iterable, next(), body, return().
+                    awaitCount++;
+                    seenAwait = true;
+                }
                 AnalyzeArrowStmtForAwaits(f.Body, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                if (f.IsAsync)
+                    awaitCount++;
                 break;
             case Stmt.For forStmt:
                 if (forStmt.Initializer != null)
@@ -983,6 +841,9 @@ public partial class ILCompiler
                 if (forStmt.Increment != null)
                     AnalyzeArrowExprForAwaits(forStmt.Increment, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 AnalyzeArrowStmtForAwaits(forStmt.Body, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
+            case Stmt.LabeledStatement labeled:
+                AnalyzeArrowStmtForAwaits(labeled.Statement, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
             case Stmt.Block b:
                 foreach (var s in b.Statements)
@@ -1172,6 +1033,9 @@ public partial class ILCompiler
             case Expr.ArrowFunction:
                 // Nested arrows don't contribute to this arrow's await analysis
                 break;
+            case Expr.Instantiation instantiation:
+                AnalyzeArrowExprForAwaits(instantiation.Expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
             case Expr.TypeAssertion ta:
                 AnalyzeArrowExprForAwaits(ta.Expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
@@ -1227,8 +1091,6 @@ public partial class ILCompiler
             ctx.CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods;
             // Check for function-level "use strict" directive
             ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(func.Body);
-            ctx.SuspensionFreePrimitiveAsyncAwaits =
-                _async.SuspensionFreeAwaits.GetValueOrDefault(funcName);
             // Entry-point display class for captured top-level variables
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
@@ -1319,8 +1181,6 @@ public partial class ILCompiler
             var coreContext = CreateSuspensionFreePrimitiveFunctionContext(
                 coreIl, coreMethod, function);
             coreContext.CurrentMethodReturnType = coreMethod.ReturnType;
-            coreContext.SuspensionFreePrimitiveAsyncAwaits =
-                _async.SuspensionFreeAwaits.GetValueOrDefault(functionName);
             ParameterInfo[] coreParameters = coreMethod.GetParameters();
             for (int index = 0; index < function.Parameters.Count; index++)
             {
@@ -1329,7 +1189,7 @@ public partial class ILCompiler
                     index,
                     coreParameters[index].ParameterType);
             }
-            var coreEmitter = new SuspensionFreeAsyncCoreEmitter(coreContext);
+            var coreEmitter = new ILEmitter(coreContext);
             coreEmitter.EmitStatements(function.Body!);
 
             MethodBuilder stubMethod = _functions.Builders[functionName];
@@ -1408,6 +1268,9 @@ public partial class ILCompiler
 
     private void EmitAsyncArrowMoveNext(AsyncArrowStateMachineBuilder arrowBuilder, Expr.ArrowFunction arrow, CompilationContext parentCtx)
     {
+        // All declaration/reference display classes are known now, including an
+        // async-arrow owner's DC registered after the nested builders were defined.
+        BindAsyncDeclarationLiveCaptures(arrowBuilder);
         // Create IL generator for the arrow's MoveNext
         var il = arrowBuilder.MoveNextMethod.GetILGenerator();
 
@@ -1898,14 +1761,14 @@ public partial class ILCompiler
                 arrow.Parameters,
                 arrowAnalysis.HoistedLocals,
                 GetStandaloneLiveCaptureFields(arrow, captures),
-                GetDebugStaticCaptureNames(arrow, captures),
+                GetStandaloneStaticCaptureNames(arrow, captures),
                 _closures.Analyzer.GetLoopBodyCellCaptures(arrow));
 
             // Define the stub method
             DefineAsyncArrowStub(arrowBuilder);
             MarkPadsUndefined(arrowBuilder.StubMethod); // #640
             MarkFunctionLength(arrowBuilder.StubMethod, arrow.Parameters);
-            MarkFunctionName(arrowBuilder.StubMethod, arrow.Name?.Lexeme ?? "");
+            MarkFunctionName(arrowBuilder.StubMethod, arrow.RuntimeName ?? arrow.Name?.Lexeme ?? "");
             RegisterStateMachine(
                 arrowBuilder.StubMethod,
                 arrowBuilder.StateMachineType,

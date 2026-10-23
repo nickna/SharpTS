@@ -62,7 +62,10 @@ public sealed class EmittedObjectReadRuntimeTests
         var shared = new Dictionary<string, object?> { ["persist"] = 1d };
         foreach (bool optional in new[] { false, true, false, true })
         {
-            var builder = NewAssembly(); var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect(optional));
+            var builder = NewAssembly(); var features = Detect(optional);
+            // This probe invokes the canonical descriptor APIs directly.
+            features.UsesObjectDefinitionRuntime = true;
+            var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             Assert.True(owners.Add(runtime.ObjectRead)); AssertFrozen(runtime.ObjectRead);
             foreach (var property in Handles(typeof(EmittedObjectReadRuntime)))
                 Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.ObjectRead)).Module.Assembly);

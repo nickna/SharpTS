@@ -59,9 +59,9 @@ public static class ArrayBuiltIns
             .MethodV2("at", 1, AtV2)
             .MethodV2("fill", 0, 3, specLength: 1, FillV2)
             .MethodV2("copyWithin", 0, 3, specLength: 2, CopyWithinV2)
-            .MethodV2("entries", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateEntries(arr))))
-            .MethodV2("keys", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateKeys(arr))))
-            .MethodV2("values", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateValues(arr))))
+            .MethodV2("entries", 0, (interp, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateEntries(interp, arr))))
+            .MethodV2("keys", 0, (interp, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateKeys(interp, arr))))
+            .MethodV2("values", 0, (interp, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateValues(interp, arr))))
             .Build();
 
     public static object? GetMember(SharpTSArray receiver, string name)
@@ -1888,24 +1888,39 @@ public static class ArrayBuiltIns
 
     #region Iterator Methods
 
-    private static IEnumerable<object?> EnumerateEntries(SharpTSArray arr)
+    private static IEnumerable<object?> EnumerateEntries(Interpreter interpreter, SharpTSArray arr)
     {
-        for (int i = 0; i < arr.Length; i++)
+        for (long i = 0; i < GetIteratorLength(interpreter, arr); i++)
         {
-            yield return new SharpTSArray([(double)i, arr[i]]);
+            object? value = arr is SharpTSArguments
+                ? interpreter.GetPropertyValue(arr, i.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                : arr[i];
+            yield return new SharpTSArray([(double)i, value]);
         }
     }
 
-    private static IEnumerable<object?> EnumerateKeys(SharpTSArray arr)
+    private static IEnumerable<object?> EnumerateKeys(Interpreter interpreter, SharpTSArray arr)
     {
-        for (int i = 0; i < arr.Length; i++)
+        for (long i = 0; i < GetIteratorLength(interpreter, arr); i++)
         {
             yield return (double)i;
         }
     }
 
-    private static IEnumerable<object?> EnumerateValues(SharpTSArray arr)
+    private static long GetIteratorLength(Interpreter interpreter, SharpTSArray arr)
+        => arr is SharpTSArguments
+            ? ToLength(interpreter.GetPropertyValue(arr, "length"), interpreter)
+            : arr.Length;
+
+    private static IEnumerable<object?> EnumerateValues(Interpreter interpreter, SharpTSArray arr)
     {
+        if (arr is SharpTSArguments)
+        {
+            for (long i = 0; i < GetIteratorLength(interpreter, arr); i++)
+                yield return interpreter.GetPropertyValue(arr,
+                    i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            yield break;
+        }
         foreach (var element in arr)
         {
             yield return element;

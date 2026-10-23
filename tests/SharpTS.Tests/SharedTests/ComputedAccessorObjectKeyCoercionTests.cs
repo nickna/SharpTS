@@ -5,8 +5,31 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class ComputedAccessorObjectKeyCoercionTests
 {
+    public const string SymbolIssueSource = """
+        const symbol = Symbol("key");
+        let coercions = 0;
+        const key: any = {
+            [Symbol.toPrimitive](hint: string) { coercions++; console.log(hint); return symbol; }
+        };
+        class C { get [key]() { return 7; } }
+        console.log(coercions, (new C() as any)[symbol]);
+        """;
+
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["symbol-producing-exotic-key-issue", SymbolIssueSource, "string\n1 7\n"];
+        yield return ["string-producing-and-direct-symbol-controls", """
+            const first = Symbol('same'), second = Symbol('same'), hints: string[] = [];
+            const key: any = { [Symbol.toPrimitive](hint: string) { hints.push(hint); return 'slot'; } };
+            class C {
+                get [key]() { return 1; }
+                get [first]() { return 2; }
+                get [second]() { return 3; }
+                static get [first]() { return 4; }
+            }
+            const instance: any = new C(), owner: any = C;
+            console.log(hints.join(','), instance.slot, instance[first], instance[second], owner[first]);
+            """, "string 1 2 3 4\n"];
         yield return ["issue", """
             let coercions = 0;
             const key: any = { toString() { coercions++; return "result"; } };
@@ -148,11 +171,10 @@ public sealed class ComputedAccessorObjectKeyCoercionTests
 
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
         new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
-            // #2670: compiled class-key conversion rejects object-produced Symbols.
-            .Where(mode => mode == ExecutionMode.Interpreted || (string)row[0] is not
-                ("exotic-key-order-and-pairing" or "ordinary-string-hint-fallbacks"
-                    or "per-accessor-coercion-result-is-retained"))
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
+
+    public static IEnumerable<object[]> StandaloneCases() => Cases().Where(row =>
+        (string)row[0] is not ("issue" or "declaration-expression-generic-string-keys"));
 
     [Theory, MemberData(nameof(ModeCases))]
     public void ComputedAccessorKeysUseGuestPropertyKeyCoercion(

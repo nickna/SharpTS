@@ -172,9 +172,8 @@ public sealed class GeneratorOwnPropertyTests
 
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
         // Compiled generator string assignments are lost (#2576).
-        // Compiled object rest independently omits enumerable Symbols (#2577).
         // Compiled indexed deletion also stringifies object-to-Symbol keys (#2579).
-        ((string)row[0] is "all-descriptors" or "dot-updates" or "rest-symbol" or "delete-key-coercion"
+        ((string)row[0] is "all-descriptors" or "dot-updates" or "delete-key-coercion"
             ? new[] { ExecutionMode.Interpreted }
             : new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled })
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));

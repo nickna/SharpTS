@@ -81,9 +81,9 @@ jobs:
     needs: workflow-policy
     if: needs.workflow-policy.outputs.mode == 'full'
     runs-on: ${{ matrix.os }}
-    # Leave room for the 20-minute core and 10-minute GUI suites plus build
-    # and final packaging gates; a passing core run can exhaust a 30-minute job.
-    timeout-minutes: 40
+    # The Windows core suite can still be passing tests at the old 20-minute
+    # limit. Allow 30 minutes for it, plus build, GUI, and final packaging gates.
+    timeout-minutes: 50
     strategy:
       # Don't let one platform's failure cancel the others — we want to see each
       # platform's real result independently (a flake on one shouldn't hide the rest).
@@ -183,7 +183,7 @@ jobs:
         run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests."
         # The standalone job runs the complementary class on its own runner;
         # its sequential child-process cases otherwise dominate this step.
-        timeout-minutes: 20
+        timeout-minutes: 30
 
       - name: Test GUI conformance
         run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"

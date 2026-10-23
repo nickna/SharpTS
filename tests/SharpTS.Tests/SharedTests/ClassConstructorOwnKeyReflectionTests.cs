@@ -159,11 +159,8 @@ public sealed class ClassConstructorOwnKeyReflectionTests
         new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
             .Where(mode => mode == ExecutionMode.Interpreted || (string)row[0] switch
             {
-                // #2633: compiled constructor reflection omits intrinsic and declared keys.
-                // #2635 also owns declared and recreated constructor key ordering.
-                "definition-order-and-static-initialization" or "enumerable-apis-getters-and-receiver"
-                    or "generic-child-own-only-reflection" or "expando-deletion-recreation-order"
-                    or "generic-transparent-proxy-reflection" => false,
+                // #2635 owns declared and recreated constructor key ordering.
+                "definition-order-and-static-initialization" or "expando-deletion-recreation-order" => false,
                 // #2637: compiled enumeration reads later keys after their descriptors change.
                 "snapshots-and-live-enumerable-descriptors" => false,
                 _ => true

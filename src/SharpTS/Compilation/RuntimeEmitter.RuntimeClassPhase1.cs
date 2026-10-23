@@ -124,13 +124,18 @@ public partial class RuntimeEmitter
         // `globalThis.crypto` through it.
         DeclareGetWebCryptoObject(typeBuilder, runtime.WebCrypto);
 
-        // Reserve GlobalThisGetProperty(string) → object and
+        // Reserve GlobalThisGetProperty/GetBinding(string) → object and
         // GlobalThisSetProperty(string, object) → void. EmitGlobalThisMethods
         // (run much later) fills the bodies, but GetProperty/GetIndex/SetProperty/
         // SetIndex — emitted before it — route the value-position globalThis
         // sentinel through these, so the signatures must exist now (#271).
         runtime.GlobalObject.GetProperty = typeBuilder.DefineMethod(
             "GlobalThisGetProperty",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String]);
+        runtime.GlobalObject.GetBinding = typeBuilder.DefineMethod(
+            "GlobalThisGetBinding",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String]);

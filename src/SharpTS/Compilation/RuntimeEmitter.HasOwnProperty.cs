@@ -13,7 +13,6 @@ public partial class RuntimeEmitter
         FieldBuilder GlobalThisSingletonField,
         MethodInfo IHasFieldsHasProperty,
         Type IHasFieldsInterface,
-        EmittedJsonRuntime Json,
         MethodBuilder LookupBuiltInStaticMember,
         EmittedMathRuntime Math,
         EmittedObjectStateRuntime ObjectState,
@@ -24,11 +23,14 @@ public partial class RuntimeEmitter
         EmittedSymbolAccessorRuntime SymbolAccessors,
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        FunctionOwnPrototypeInputs OwnPrototype
     );
 
     private readonly record struct PropertyIsEnumerableHelperInputs(
         EmittedArrayStorageRuntime ArrayStorage,
+        EmittedObjectKeysRuntime ObjectKeys,
+        Type IHasFieldsInterface,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
         EmittedPromiseRuntime? Promise,
@@ -208,6 +210,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, notTSFunction);
         }
         il.MarkLabel(functionOwnPropertyCheck);
+        // A current own descriptor can recreate a deleted property. As for
+        // constructor/global carriers, it takes precedence over deletion history.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, trueLabel);
         // If `name` or `length` was deleted on this instance, the property is
         // no longer own — report false. Per ECMA-262 §17, both are configurable.
         il.Emit(OpCodes.Ldarg_0);
@@ -235,17 +243,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brfalse, notFunctionPrototype);
+        EmitFunctionOwnPrototypeGuard(il, () => il.Emit(OpCodes.Ldarg_0), inputs.OwnPrototype, notFunctionPrototype);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "prototype");
         il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, trueLabel);
         il.MarkLabel(notFunctionPrototype);
-        // Otherwise check PDS for own descriptor
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-        il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notTSFunction);
 
@@ -339,39 +343,32 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, trueLabel);
         }
 
-        // Math singleton — synth-check the known Math names. The dict is
-        // empty but Math.X resolves through static dispatch; per spec
-        // hasOwn(Math, "abs") === true.
+        // Math methods are installed as actual dictionary/PDS own properties by MathPopulate.
+        // Read current storage before the deletion ledger so descriptor-backed recreations remain own.
+        // Only the constants still need synthetic presence; method-name synthesis would resurrect
+        // an absent method after ordinary dictionary deletion (#2790).
         var notMathForHasOwnLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldsfld, inputs.Math.SingletonField);
         il.Emit(OpCodes.Bne_Un, notMathForHasOwnLabel);
-        // First skip if marked deleted in tracker.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
+        il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
-        foreach (var m in new[] { "abs", "acos", "acosh", "asin", "asinh", "atan", "atan2",
-            "atanh", "cbrt", "ceil", "clz32", "cos", "cosh", "exp", "expm1", "floor",
-            "fround", "hypot", "imul", "log", "log10", "log1p", "log2", "max", "min",
-            "pow", "random", "round", "sign", "sin", "sinh", "sqrt", "tan", "tanh", "trunc",
-            "f16round", "sumPrecise",
-            "E", "LN10", "LN2", "LOG10E", "LOG2E", "PI", "SQRT1_2", "SQRT2" })
+        foreach (var m in new[] { "E", "LN10", "LN2", "LOG10E", "LOG2E", "PI", "SQRT1_2", "SQRT2" })
             DictNameEq(m);
         il.MarkLabel(notMathForHasOwnLabel);
 
-        // JSON singleton — same pattern.
-        var notJsonForHasOwnLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, inputs.Json.SingletonField);
-        il.Emit(OpCodes.Bne_Un, notJsonForHasOwnLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
-        il.Emit(OpCodes.Brtrue, falseLabel);
-        DictNameEq("parse"); DictNameEq("stringify"); DictNameEq("isRawJSON"); DictNameEq("rawJSON");
-        il.MarkLabel(notJsonForHasOwnLabel);
-
+        // JSON methods, like other dictionary properties, use their current materialized slots.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldloc, nameLocal);
@@ -426,31 +423,45 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, trueLabel);
-        var listIdxLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Ldloca, listIdxLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
         var listNotIndexLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, listNotIndexLabel);
-        il.Emit(OpCodes.Ldloc, listIdxLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, listNotIndexLabel);
-        // $TSArray inherits List<object>, but its logical length may contain
-        // holes. Consult HasIndex before the dense List range check; if the
-        // slot is an accessor-only index, the PDS fallback below still reports
-        // it as own.
         var listReceiverIsPlain = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Brfalse, listReceiverIsPlain);
+
+        // Actual arrays have sparse uint32-indexed storage, independently of
+        // their List base. Ordinary List/Arguments keep the Int32 path below.
+        var arrayIdxLocal = il.DeclareLocal(_types.UInt32);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Ldloca, arrayIdxLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, listNotIndexLabel);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Ldloca, arrayIdxLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, listNotIndexLabel);
+        il.Emit(OpCodes.Ldloc, arrayIdxLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Beq, listNotIndexLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
-        il.Emit(OpCodes.Ldloc, listIdxLocal);
-        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Ldloc, arrayIdxLocal);
+        il.Emit(OpCodes.Conv_U8);
         il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, listNotIndexLabel);
+
         il.MarkLabel(listReceiverIsPlain);
+        var listIdxLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Ldloca, listIdxLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, listNotIndexLabel);
+        il.Emit(OpCodes.Ldloc, listIdxLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, listNotIndexLabel);
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
@@ -845,15 +856,43 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.MarkLabel(notArrayLength);
 
-        // System.Type receivers represent built-in constructors. Their
-        // descriptor-less synthetic own properties (prototype, name, length,
-        // constants, and static methods) are all non-enumerable per ECMA-262
-        // §17. User-defined properties installed through defineProperty are
-        // represented in PDS and were handled above. Missing properties also
-        // correctly report false, so no synthetic-name inventory is needed.
+        // Descriptor-less constructor intrinsics and methods are non-enumerable.
+        // Only a positively marked, declared source data field has the default
+        // enumerable shape; explicit PDS descriptors already took priority.
+        var notConstructor = il.DefineLabel();
+        var constructor = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Type);
-        il.Emit(OpCodes.Brtrue, falseLabel);
+        il.Emit(OpCodes.Stloc, constructor);
+        il.Emit(OpCodes.Ldloc, constructor);
+        il.Emit(OpCodes.Brfalse, notConstructor);
+        il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldloc, constructor);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+        il.Emit(OpCodes.Brfalse, falseLabel);
+        var memberOwner = EmitStaticMemberLookupOwner(il, constructor, inputs.IHasFieldsInterface);
+        var ownField = il.DeclareLocal(typeof(FieldInfo));
+        il.Emit(OpCodes.Ldloc, memberOwner);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        il.Emit(OpCodes.Stloc, ownField);
+        il.Emit(OpCodes.Ldloc, ownField);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+        il.Emit(OpCodes.Ldloc, ownField);
+        il.Emit(OpCodes.Ldtoken, inputs.ObjectKeys.ClassStaticPropertyType);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(MemberInfo), "IsDefined", _types.Type, _types.Boolean));
+        il.Emit(OpCodes.Brfalse, falseLabel);
+        // The source data-field marker is enumerable; own presence still
+        // consults the original constructor's deletion/descriptor identity.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, objectOwnProperties.HasOwnProperty);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notConstructor);
 
         // No PDS descriptor — fall back to HasOwnPropertyHelper. ECMA-262
         // says only "own" properties qualify; plain dict entries with no

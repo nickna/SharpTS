@@ -49,7 +49,9 @@ public partial class RuntimeEmitter
         FieldBuilder needsConversion,
         FieldBuilder invoker,
         FieldBuilder methodInfo,
-        FieldBuilder target
+        FieldBuilder target,
+        FieldBuilder returnsVoid,
+        FieldInfo undefinedInstance
     )
     {
         var method = typeBuilder.DefineMethod("InvokeWithThis0", MethodAttributes.Public,
@@ -92,7 +94,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(invoke);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInvoker, "Invoke", _types.Object, _types.Object));
-        EmitNormalizeClrNumericReturn(il);
+        EmitNormalizeTSFunctionReturn(il, returnsVoid, undefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(fallback);
         il.Emit(OpCodes.Ldarg_0);

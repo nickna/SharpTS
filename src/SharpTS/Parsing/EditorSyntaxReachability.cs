@@ -38,6 +38,7 @@ internal sealed class EditorSyntaxReachability(CancellationToken cancellationTok
             case Expr.AssertedAssignment assignment: Visit(assignment.TargetSyntax); break;
             case Expr.Call call:
                 Types(call.TypeArgNodes); Types(call.JsxOrigin?.TypeArgumentNodes); break;
+            case Expr.Instantiation instantiation: Types(instantiation.TypeArgNodes); break;
             case Expr.New construct: Types(construct.TypeArgNodes); Visit(construct.Callee); break;
             case Expr.ArrowFunction arrow:
                 TypeParameters(arrow.TypeParams); Parameters(arrow.Parameters);

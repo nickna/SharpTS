@@ -706,6 +706,8 @@ public partial class ILCompiler
             return;
         }
 
+        EmitInitializeHoistedVars(il, ctx, GetVarLoopHeadDeclarations(module.Statements));
+
         foreach (var stmt in module.Statements)
         {
             // Class definitions still execute at their source position. Other
@@ -785,6 +787,7 @@ public partial class ILCompiler
         ctx.ModuleResolver = _modules.Resolver;
 
         var emitter = new ILEmitter(ctx);
+        EmitInitializeHoistedVars(il, ctx, GetVarLoopHeadDeclarations(script.Statements));
 
         foreach (var stmt in script.Statements)
         {

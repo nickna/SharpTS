@@ -118,6 +118,8 @@ public partial class TypeChecker
             {
                 if (TryToTypeInfo(indexed.ObjectType) is not { } objectType) return null;
                 if (TryToTypeInfo(indexed.IndexType) is not { } indexType) return null;
+                if (_classFieldIndexedAccessResolver?.Invoke(indexed, objectType, indexType) is { } fieldType)
+                    return fieldType;
                 // Chained T[K][J] is already nested structurally by the parser, so a single
                 // IndexedAccess per node mirrors the string path's iterative suffix consumption.
                 // A fully concrete access (`Part[][number]`, `Foo["bar"]`) simplifies to the

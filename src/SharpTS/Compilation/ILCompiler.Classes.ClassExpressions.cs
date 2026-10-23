@@ -28,6 +28,7 @@ public partial class ILCompiler
     private void DefineClassExpression(Expr.ClassExpr classExpr)
     {
         if (_classExprs.Builders.ContainsKey(classExpr)) return;
+        RegisterLiveSuperConstruction(ClassExpressionDeclaration(classExpr), _typeMap.GetClassExprType(classExpr));
         if (ClassConstructorMayReplace(classExpr.Methods) && _typeMap.GetClassExprType(classExpr) is { } replacementClass)
             _typeMapper.RegisterDynamicClassInstance(replacementClass.Core.DeclarationId);
         if (ResolveClassExpressionParent(classExpr) is { } parent && !ReferenceEquals(parent, classExpr))
@@ -174,6 +175,9 @@ public partial class ILCompiler
             EmitTypeDefinitions.SetParent(typeBuilder, baseType);
         }
 
+        if (HasNativePromiseBase(baseType))
+            _classes.PromiseSubclasses.Add(className);
+
         // Implement $IHasFields interface for unified property access
         // All classes implement this interface (including derived classes)
         EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.ObjectFields.Interface);
@@ -304,7 +308,7 @@ public partial class ILCompiler
         setterIL.Emit(OpCodes.Ldarg_0);
         setterIL.Emit(OpCodes.Ldarg_1);
         setterIL.Emit(OpCodes.Stfld, backingField);
-        if (propertyType == _types.Double || propertyType == _types.Boolean)
+        if (propertyType == _types.Double || propertyType == _types.Boolean || propertyType == _types.String)
             EmitClearGuestFieldOverride(setterIL, _classes.InstanceFieldsField[_classExprs.Names[classExpr]], fieldName);
         setterIL.Emit(OpCodes.Ret);
         DefineGuestDataField(typeBuilder, field, propertyType, backingField, getter, setter);
@@ -577,7 +581,7 @@ public partial class ILCompiler
         string className = _classExprs.Names[classExpr];
         var fieldsField = _classes.InstanceFieldsField[className];
         if (_usesRuntimeParents && !typeBuilder.IsGenericTypeDefinition && !_classes.ErrorSubclasses.Contains(className)
-            && typeBuilder.BaseType is not { Name: "$Array" or "$Promise" }
+            && !_classes.PromiseSubclasses.Contains(className)
             && SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr)))
             EmitReceiverInitializer(typeBuilder, ClassExpressionDeclaration(classExpr), classExpr);
 
@@ -1066,6 +1070,19 @@ public partial class ILCompiler
             return declCtor;
 
         return null;
+    }
+
+    private bool HasNativePromiseBase(Type? type)
+    {
+        if (_runtime.Promise is not { } promise) return false;
+        var visited = new HashSet<Type>(ReferenceEqualityComparer.Instance);
+        for (int guard = 0; type != null && guard < 64 && visited.Add(type); guard++)
+        {
+            if (type == promise.Type) return true;
+            if (type.IsConstructedGenericType) type = type.GetGenericTypeDefinition();
+            type = type.BaseType;
+        }
+        return false;
     }
 
     private Expr.ClassExpr? ResolveClassExpressionParent(Expr.ClassExpr classExpr) =>

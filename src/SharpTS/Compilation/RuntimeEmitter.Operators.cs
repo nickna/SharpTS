@@ -66,7 +66,8 @@ public partial class RuntimeEmitter
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
         MethodBuilder ToPascalCase,
-        Type UndefinedType
+        Type UndefinedType,
+        TypeBuilder TSFunctionType
     );
 
     private readonly record struct AddInputs(
@@ -1278,6 +1279,52 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(noOrdinaryOwnDescriptorLabel);
+
+        // Ordinary-function chains use existence-only own descriptors
+        // and actual prototype links, including null termination and Proxy [[Has]].
+        var defaultFunctionHas = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
+        il.Emit(OpCodes.Brfalse, defaultFunctionHas);
+        var functionHasKey = il.DeclareLocal(_types.String);
+        var functionHasPrototype = il.DeclareLocal(_types.Object);
+        var functionHasDescriptor = il.DeclareLocal(_types.Object);
+        var functionHasLoop = il.DefineLabel();
+        var functionHasAdvance = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Stloc, functionHasKey);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, functionHasPrototype);
+        il.MarkLabel(functionHasLoop);
+        il.Emit(OpCodes.Ldloc, functionHasPrototype);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+        var functionHasNotProxy = il.DefineLabel();
+        EmitProxyHasCheck(il,
+            () => il.Emit(OpCodes.Ldloc, functionHasPrototype),
+            () => il.Emit(OpCodes.Ldloc, functionHasKey),
+            functionHasNotProxy, operators,
+            new ProxyHasCheckInputs(inputs.Booleans, inputs.InvokeMethodUnwrapped,
+                inputs.ObjectDescriptors, inputs.ObjectRead, inputs.ObjectState));
+        il.MarkLabel(functionHasNotProxy);
+        il.Emit(OpCodes.Ldloc, functionHasPrototype);
+        il.Emit(OpCodes.Ldloc, functionHasKey);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, functionHasDescriptor);
+        il.Emit(OpCodes.Ldloc, functionHasDescriptor);
+        il.Emit(OpCodes.Brfalse, functionHasAdvance);
+        il.Emit(OpCodes.Ldloc, functionHasDescriptor);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, functionHasAdvance);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(functionHasAdvance);
+        il.Emit(OpCodes.Ldloc, functionHasPrototype);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, functionHasPrototype);
+        il.Emit(OpCodes.Br, functionHasLoop);
+        il.MarkLabel(defaultFunctionHas);
 
         // Use the shared HasProperty walk first for every ordinary property
         // key.  It covers own PDS-only accessors and prototype-chain entries

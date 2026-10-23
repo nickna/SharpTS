@@ -199,11 +199,6 @@ public sealed class FunctionIntrinsicPrototypeMutationTests
 
     public static IEnumerable<object[]> ParityCases()
         => Cases().SelectMany(row => new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
-            // #2359 owns compiled ordinary descendant lookup and deleted helper fallback.
-            // #2668 also owns the metadata row's inherited strict length assignment.
-            .Where(mode => mode == ExecutionMode.Interpreted || (string)row[0] is not
-                ("inherited-reads-receivers-and-presence" or "deleted-intrinsics-reveal-live-parent"
-                    or "absent-callable-metadata-and-inherited-write"))
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ParityCases))]

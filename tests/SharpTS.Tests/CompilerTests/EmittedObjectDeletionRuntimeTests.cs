@@ -34,7 +34,7 @@ public sealed class EmittedObjectDeletionRuntimeTests
         var first = new EmittedRuntime(); var second = new EmittedRuntime();
         Assert.NotSame(first.ObjectDeletion, second.ObjectDeletion);
         Assert.False(first.ObjectDeletion.IsComplete); Assert.False(second.ObjectDeletion.IsComplete);
-        Assert.Equal(5, Handles(typeof(EmittedObjectDeletionRuntime)).Length);
+        Assert.Equal(7, Handles(typeof(EmittedObjectDeletionRuntime)).Length);
         Assert.Null(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.ObjectDeletion))!.SetMethod);
     }
 
@@ -47,7 +47,10 @@ public sealed class EmittedObjectDeletionRuntimeTests
         var shared = new Dictionary<string, object?> { ["persist"] = 1d };
         foreach (bool optional in new[] { false, true, false, true })
         {
-            var builder = NewAssembly(); var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect(optional));
+            var builder = NewAssembly(); var features = Detect(optional);
+            // This probe invokes the canonical descriptor APIs directly.
+            features.UsesObjectDefinitionRuntime = true;
+            var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             Assert.True(owners.Add(runtime.ObjectDeletion)); AssertFrozen(runtime.ObjectDeletion);
             foreach (var property in Handles(typeof(EmittedObjectDeletionRuntime)))
                 Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.ObjectDeletion)).Module.Assembly);

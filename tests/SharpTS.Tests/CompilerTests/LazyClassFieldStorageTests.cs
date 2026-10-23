@@ -241,7 +241,7 @@ public sealed class LazyClassFieldStorageTests
                 Object.hasOwn(box, "absent"), Object.hasOwn(box, "computed"));
             """;
 
-        Assert.Equal("3 null 2 true true\n", TestHarness.RunCompiled(source));
+        Assert.Equal("3 undefined 2 false true\n", TestHarness.RunCompiled(source));
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
     }
 

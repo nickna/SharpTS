@@ -60,7 +60,10 @@ public sealed class EmittedObjectDescriptorRuntimeTests
         var owners = new List<EmittedObjectDescriptorRuntime>();
         foreach (bool optional in new[] { false, true, false, true })
         {
-            var builder = NewAssembly(); var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect(optional));
+            var builder = NewAssembly(); var features = Detect(optional);
+            // This probe invokes the canonical descriptor APIs directly.
+            features.UsesObjectDefinitionRuntime = true;
+            var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             var owner = runtime.ObjectDescriptors; Assert.DoesNotContain(owner, owners); owners.Add(owner); AssertFrozen(owner);
             foreach (var property in Handles)
                 Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(owner)).Module.Assembly);
@@ -103,8 +106,13 @@ public sealed class EmittedObjectDescriptorRuntimeTests
             typeof(object), [typeof(object), typeof(string)]);
         var il = getProperty.GetILGenerator(); il.Emit(OpCodes.Ldstr, "supplied value"); il.Emit(OpCodes.Ret);
         var helper = typeof(RuntimeEmitter).GetMethod("EmitGetOwnDescriptorFunctionReceiver", Members)!;
-        var inputs = Activator.CreateInstance(helper.GetParameters()[1].ParameterType,
-            getProperty, runtime.ObjectState, promise, runtime.FunctionValues.Type, runtime.Sentinels.UndefinedType)!;
+        var inputType = helper.GetParameters()[1].ParameterType;
+        var ownPrototypeType = inputType.GetProperty("OwnPrototype")!.PropertyType;
+        var ownPrototype = Activator.CreateInstance(ownPrototypeType,
+            runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind)!;
+        var inputs = Activator.CreateInstance(inputType,
+            getProperty, runtime.ObjectState, promise, runtime.FunctionValues.Type, runtime.FunctionBindings, runtime.Sentinels.UndefinedType,
+            ownPrototype)!;
         EmitReceiverProbe(emitter, probe, helper, inputs); probe.CreateType();
         var loaded = SaveVerifyLoad(builder); var savedProbe = loaded.GetType(probe.FullName!)!;
         foreach (var receiverType in new[] { resolve, reject })
@@ -130,34 +138,37 @@ public sealed class EmittedObjectDescriptorRuntimeTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public void JsonReceiverFollowsSuppliedSingletonAndImplementation(bool selected, bool supplied)
+    public void DictionaryReceiverFollowsCurrentDescriptorStorage(bool selected, bool storedDescriptor)
     {
         var builder = NewAssembly(); var emitter = new RuntimeEmitter(TypeProvider.Runtime);
-        var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect(selected));
-        var probe = runtime.RuntimeClass.Type.DefineNestedType("JsonDescriptorProbe", TypeAttributes.NestedPublic);
-        var field = probe.DefineField("SuppliedJson", typeof(Dictionary<string, object>), FieldAttributes.Public | FieldAttributes.Static);
-        var json = new EmittedJsonRuntime { SingletonField = field };
-        if (supplied) json.BeginImplementationEmission();
-        var helper = typeof(RuntimeEmitter).GetMethod("EmitGetOwnDescriptorJsonReceiver", Members)!;
-        var inputs = Activator.CreateInstance(helper.GetParameters()[1].ParameterType, json, runtime.ObjectState)!;
-        EmitReceiverProbe(emitter, probe, helper, inputs); probe.CreateType();
-        var loaded = SaveVerifyLoad(builder); var savedProbe = loaded.GetType(probe.FullName!)!;
-        var singleton = new Dictionary<string, object>();
-        foreach (string key in new[] { "parse", "stringify", "isRawJSON", "rawJSON" }) singleton[key] = new object();
-        savedProbe.GetField(field.Name)!.SetValue(null, singleton);
-        foreach (var pair in singleton)
+        var features = Detect(selected); features.UsesObjectDefinitionRuntime = true;
+        var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
+        var loaded = SaveVerifyLoad(builder); var type = loaded.GetType("$Runtime")!;
+        var undefinedType = loaded.GetType(runtime.Sentinels.UndefinedType.FullName!)!;
+        var target = new Dictionary<string, object>();
+        foreach (string key in new[] { "parse", "stringify", "isRawJSON", "rawJSON" })
         {
-            var value = Call(savedProbe, "Lookup", singleton, pair.Key);
-            if (supplied)
-            {
-                var descriptor = Assert.IsType<Dictionary<string, object?>>(value);
-                Assert.Same(pair.Value, descriptor["value"]); Assert.Equal(true, descriptor["writable"]);
-                Assert.Equal(false, descriptor["enumerable"]); Assert.Equal(true, descriptor["configurable"]);
-            }
-            else Assert.Equal("unhandled", value);
+            var value = new object();
+            if (storedDescriptor)
+                Call(type, "ObjectDefineProperty", target, key, new Dictionary<string, object?>
+                    { ["value"] = value, ["writable"] = true, ["enumerable"] = false, ["configurable"] = true });
+            else target[key] = value;
+            var descriptor = Assert.IsType<Dictionary<string, object?>>(Call(type, "ObjectGetOwnPropertyDescriptor", target, key));
+            Assert.Same(value, descriptor["value"]); Assert.Equal(true, descriptor["writable"]);
+            Assert.Equal(!storedDescriptor, descriptor["enumerable"]); Assert.Equal(true, descriptor["configurable"]);
+            Assert.Equal(undefinedType, Call(type, "ObjectGetOwnPropertyDescriptor", target, "missing")!.GetType());
+            Assert.Equal(true, Call(type, runtime.ObjectDeletion.Property.Name, target, key));
+            Assert.False(target.ContainsKey(key));
+            Assert.Equal(undefinedType, Call(type, "ObjectGetOwnPropertyDescriptor", target, key)!.GetType());
+            var replacement = new object();
+            Call(type, "ObjectDefineProperty", target, key, new Dictionary<string, object?>
+                { ["value"] = replacement, ["writable"] = false, ["enumerable"] = true, ["configurable"] = true });
+            descriptor = Assert.IsType<Dictionary<string, object?>>(Call(type, "ObjectGetOwnPropertyDescriptor", target, key));
+            Assert.Same(replacement, descriptor["value"]); Assert.Equal(false, descriptor["writable"]);
+            Assert.Equal(true, descriptor["enumerable"]); Assert.Equal(true, descriptor["configurable"]);
+            Assert.Equal(true, Call(type, runtime.ObjectDeletion.Property.Name, target, key));
+            Assert.Equal(undefinedType, Call(type, "ObjectGetOwnPropertyDescriptor", target, key)!.GetType());
         }
-        Assert.Equal("unhandled", Call(savedProbe, "Lookup", new Dictionary<string, object>(), "parse"));
-        Assert.Equal("unhandled", Call(savedProbe, "Lookup", singleton, "missing"));
     }
 
     [Fact]
@@ -213,7 +224,6 @@ public sealed class EmittedObjectDescriptorRuntimeTests
             "EmitGetOwnDescriptorConstructorFallback",
             "EmitGetOwnDescriptorIndexedReceiver",
             "EmitGetOwnDescriptorMathReceiver",
-            "EmitGetOwnDescriptorJsonReceiver",
             "EmitGetOwnDescriptorDictionaryReceiver",
             "EmitGetOwnDescriptorLiteralAccessor",
             "EmitGetOwnDescriptorFieldsReceiver"

@@ -145,8 +145,27 @@ public partial class AsyncGeneratorStateAnalyzer
         if (_captureVisitor.UsesThis(expr))
             _usesThis = true;
 
-        // Don't traverse into arrow bodies - they have their own analysis
-        // Arrow functions inside async generators don't affect yield/await analysis
+        // Creating a closure after suspension reads its owner's current capture storage, even
+        // when the only source-level read is inside that closure (#2852). Resolve the actual owner
+        // and any block-shadow storage pivot without treating the nested body's awaits/yields as ours.
+        if (_seenSuspension && _closureAnalyzer != null)
+        {
+            var cells = _closureAnalyzer.GetClosureCellFields(expr);
+            foreach (var capture in _closureAnalyzer.GetCaptures(expr))
+            {
+                if (cells.Contains(capture) ||
+                    !ReferenceEquals(_closureAnalyzer.GetCaptureSource(expr, capture), _captureOwner))
+                    continue;
+
+                string storage = _captureRenames.TryGetValue(expr, out var renames) &&
+                    renames.TryGetValue(capture, out var renamed) ? renamed : capture;
+                if (_declaredVariables.Contains(storage))
+                    _variablesUsedAfterSuspension.Add(storage);
+            }
+        }
+
+        // Don't traverse into arrow bodies - they have their own analysis.
+        // Arrow functions inside async generators don't affect yield/await analysis.
     }
 
     #endregion

@@ -28,9 +28,9 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
 
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Instance;
-    private readonly Dictionary<string, object?> _fields = [];
-    private Dictionary<string, ISharpTSCallable>? _getters;
-    private Dictionary<string, ISharpTSCallable>? _setters;
+    private Dictionary<string, object?> _fields = [];
+    private Dictionary<string, ISharpTSCallable?>? _getters;
+    private Dictionary<string, ISharpTSCallable?>? _setters;
     private SharpTSObject? _symbolProperties;
     private Dictionary<string, PropertyDescriptorFlags>? _descriptors;
     private Interpreter? _interpreter;
@@ -251,9 +251,10 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
 
     public RuntimeValue GetRV(Token name) => RuntimeValue.FromBoxed(Get(name));
 
-    private object? InvokeOwnAccessor(ISharpTSCallable callable, List<object?> args)
+    private object? InvokeOwnAccessor(ISharpTSCallable? callable, List<object?> args)
         => callable switch
         {
+            null => SharpTSUndefined.Instance,
             SharpTSFunction function => function.Bind(this).Call(_interpreter!, args),
             SharpTSArrowFunction function => function.Bind(this).Call(_interpreter!, args),
             _ => callable.Call(_interpreter!, args),
@@ -271,7 +272,8 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
 
         if (_setters?.TryGetValue(propName, out var ownSetter) == true)
         {
-            InvokeOwnAccessor(ownSetter, [value]);
+            if (ownSetter is not null)
+                InvokeOwnAccessor(ownSetter, [value]);
             return;
         }
 
@@ -338,7 +340,10 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
 
         if (_setters?.TryGetValue(propName, out var ownSetter) == true)
         {
-            InvokeOwnAccessor(ownSetter, [value]);
+            if (ownSetter is not null)
+                InvokeOwnAccessor(ownSetter, [value]);
+            else if (strictMode)
+                throw StrictModeErrors.TypeError($"Cannot set property '{propName}' which has only a getter");
             return;
         }
 
@@ -447,8 +452,12 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     /// </summary>
     public IEnumerable<string> GetFieldNames()
         => _fields.Keys
-            .Concat(_getters?.Keys as IEnumerable<string> ?? Enumerable.Empty<string>())
-            .Concat(_setters?.Keys as IEnumerable<string> ?? Enumerable.Empty<string>())
+            // A deferred enumerator may retain an older store after deletion.
+            .Where(name => _fields.ContainsKey(name))
+            .Concat((_getters?.Keys as IEnumerable<string> ?? Enumerable.Empty<string>())
+                .Where(name => _getters?.ContainsKey(name) == true))
+            .Concat((_setters?.Keys as IEnumerable<string> ?? Enumerable.Empty<string>())
+                .Where(name => _setters?.ContainsKey(name) == true))
             .Distinct();
 
     /// <summary>
@@ -580,10 +589,34 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
             || !flags.HasExplicitDescriptor
             || flags.Configurable;
 
-    /// <summary>Drops the field plus any descriptor flags and stale resolution-cache entry.</summary>
+    /// <summary>Drops an own data/accessor property plus its descriptor flags and stale resolution-cache entry.</summary>
     private bool RemoveField(string name)
     {
         bool removed = _fields.Remove(name);
+        if (removed)
+        {
+            // Dictionary reuses deleted slots; dense survivors make recreation append.
+            var fields = new Dictionary<string, object?>(_fields.Count, _fields.Comparer);
+            foreach (var field in _fields)
+                fields.Add(field.Key, field.Value);
+            _fields = fields;
+        }
+        if (_getters?.Remove(name) == true)
+        {
+            removed = true;
+            var getters = new Dictionary<string, ISharpTSCallable?>(_getters.Count, _getters.Comparer);
+            foreach (var getter in _getters)
+                getters.Add(getter.Key, getter.Value);
+            _getters = getters;
+        }
+        if (_setters?.Remove(name) == true)
+        {
+            removed = true;
+            var setters = new Dictionary<string, ISharpTSCallable?>(_setters.Count, _setters.Comparer);
+            foreach (var setter in _setters)
+                setters.Add(setter.Key, setter.Value);
+            _setters = setters;
+        }
         _descriptors?.Remove(name);
         _lookupCache.Remove(name);
         return removed;
@@ -591,10 +624,14 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
 
     /// <summary>
     /// Removes a field by name with strict mode behavior.
-    /// In strict mode, throws TypeError for deletions on frozen/sealed objects.
+    /// In strict mode, throws TypeError when an existing own property cannot be deleted.
     /// </summary>
     public bool DeleteFieldStrict(string name, bool strictMode)
     {
+        if (GetOwnPropertyDescriptor(name) is null)
+        {
+            return true;
+        }
         if (IsFrozen || IsSealed)
         {
             if (strictMode)
@@ -750,24 +787,14 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
         if (isAccessor)
         {
             _fields.Remove(name);
-            if (descriptor.HasGet && descriptor.Get is not null)
-            {
-                _getters ??= [];
-                _getters[name] = descriptor.Get;
-            }
-            else if (descriptor.HasGet)
-            {
-                _getters?.Remove(name);
-            }
-            if (descriptor.HasSet && descriptor.Set is not null)
-            {
-                _setters ??= [];
-                _setters[name] = descriptor.Set;
-            }
-            else if (descriptor.HasSet)
-            {
-                _setters?.Remove(name);
-            }
+            var getter = descriptor.HasGet ? descriptor.Get
+                : existingIsAccessor ? _getters?.GetValueOrDefault(name) : null;
+            var setter = descriptor.HasSet ? descriptor.Set
+                : existingIsAccessor ? _setters?.GetValueOrDefault(name) : null;
+            _getters ??= [];
+            _setters ??= [];
+            _getters[name] = getter;
+            _setters[name] = setter;
         }
         else
         {

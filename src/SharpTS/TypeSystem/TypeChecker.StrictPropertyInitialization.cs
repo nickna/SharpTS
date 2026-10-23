@@ -219,6 +219,9 @@ public partial class TypeChecker
                 assigned = AnalyzeInitializationExpression(comma.Left, assigned);
                 assigned = AnalyzeInitializationExpression(comma.Right, assigned);
                 break;
+            case Expr.Instantiation instantiation:
+                assigned = AnalyzeInitializationExpression(instantiation.Expression, assigned);
+                break;
             case Expr.Grouping grouping:
                 assigned = AnalyzeInitializationExpression(grouping.Expression, assigned);
                 break;

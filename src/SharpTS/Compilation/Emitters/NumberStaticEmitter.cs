@@ -119,6 +119,11 @@ public sealed class NumberStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
         }
 
+        // A detached method value must observe the same live descriptor as a direct call. Let the
+        // ordinary property path resolve replacements/accessors instead of rebuilding the intrinsic.
+        if (ctx.RuntimeFeatures?.UsesNumberConstructorMutation == true)
+            return false;
+
         // Method references as values (issue #60). Wrap the matching $Runtime
         // helper in a $TSFunction so `var isInt = Number.isInteger; isInt(42)`
         // dispatches correctly.

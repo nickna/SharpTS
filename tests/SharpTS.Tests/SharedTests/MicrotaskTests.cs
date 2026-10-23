@@ -15,17 +15,17 @@ public class MicrotaskTests
     [Theory, ModeData]
     public void QueueMicrotask_ExecutesCallback(ExecutionMode mode)
     {
-        // queueMicrotask should execute the callback
+        // The callback observes its mutation after synchronous code has finished.
         var source = @"
             let executed = false;
-            queueMicrotask(() => { executed = true; });
-            // Small delay to allow microtask execution
-            let start = Date.now();
-            while (Date.now() - start < 50) { }
+            queueMicrotask(() => {
+                executed = true;
+                console.log(executed);
+            });
             console.log(executed);
         ";
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("true\n", output);
+        Assert.Equal("false\ntrue\n", output);
     }
 
     [Theory, ModeData]
@@ -34,14 +34,10 @@ public class MicrotaskTests
         // queueMicrotask should execute callback that logs output
         var source = @"
             queueMicrotask(() => { console.log('microtask executed'); });
-            // Small delay to allow microtask execution
-            let start = Date.now();
-            while (Date.now() - start < 50) { }
             console.log('done');
         ";
         var output = TestHarness.Run(source, mode);
-        Assert.Contains("microtask executed", output);
-        Assert.Contains("done", output);
+        Assert.Equal("done\nmicrotask executed\n", output);
     }
 
     [Theory, ModeData]
@@ -66,15 +62,15 @@ public class MicrotaskTests
         // Microtasks should execute before macrotasks (setTimeout with 0 delay)
         var source = @"
             let order: string[] = [];
-            setTimeout(() => { order.push('timeout'); }, 0);
+            setTimeout(() => {
+                order.push('timeout');
+                console.log(order.join(','));
+            }, 0);
             queueMicrotask(() => { order.push('microtask'); });
-            // Wait for both to execute
-            let start = Date.now();
-            while (Date.now() - start < 100) { }
-            console.log(order.join(','));
+            console.log(order.length);
         ";
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("microtask,timeout\n", output);
+        Assert.Equal("0\nmicrotask,timeout\n", output);
     }
 
     [Theory, ModeData]
@@ -86,13 +82,11 @@ public class MicrotaskTests
             queueMicrotask(() => { order.push('first'); });
             queueMicrotask(() => { order.push('second'); });
             queueMicrotask(() => { order.push('third'); });
-            // Wait for all to execute
-            let start = Date.now();
-            while (Date.now() - start < 50) { }
-            console.log(order.join(','));
+            queueMicrotask(() => { console.log(order.join(',')); });
+            console.log(order.length);
         ";
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("first,second,third\n", output);
+        Assert.Equal("0\nfirst,second,third\n", output);
     }
 
     [Theory, ModeData]
@@ -101,19 +95,19 @@ public class MicrotaskTests
         // Microtasks queued from within microtasks should still execute before macrotasks
         var source = @"
             let order: string[] = [];
-            setTimeout(() => { order.push('timeout'); }, 0);
+            setTimeout(() => {
+                order.push('timeout');
+                console.log(order.join(','));
+            }, 0);
             queueMicrotask(() => {
                 order.push('microtask1');
                 queueMicrotask(() => { order.push('nested'); });
             });
-            // Wait for all to execute
-            let start = Date.now();
-            while (Date.now() - start < 100) { }
-            console.log(order.join(','));
+            console.log(order.length);
         ";
         var output = TestHarness.Run(source, mode);
         // Nested microtask should still run before timeout
-        Assert.Equal("microtask1,nested,timeout\n", output);
+        Assert.Equal("0\nmicrotask1,nested,timeout\n", output);
     }
 
     #endregion
@@ -153,14 +147,15 @@ public class MicrotaskTests
         var source = @"
             let value = 'captured';
             let result = '';
-            queueMicrotask(() => { result = value; });
-            // Wait for microtask
-            let start = Date.now();
-            while (Date.now() - start < 50) { }
-            console.log(result);
+            queueMicrotask(() => {
+                result = value;
+                console.log(result);
+            });
+            value = 'updated';
+            console.log(result === '');
         ";
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("captured\n", output);
+        Assert.Equal("true\nupdated\n", output);
     }
 
     [Theory, ModeData]
@@ -172,13 +167,11 @@ public class MicrotaskTests
             queueMicrotask(() => { counter++; });
             queueMicrotask(() => { counter++; });
             queueMicrotask(() => { counter++; });
-            // Wait for all microtasks
-            let start = Date.now();
-            while (Date.now() - start < 50) { }
+            queueMicrotask(() => { console.log(counter); });
             console.log(counter);
         ";
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("3\n", output);
+        Assert.Equal("0\n3\n", output);
     }
 
     #endregion

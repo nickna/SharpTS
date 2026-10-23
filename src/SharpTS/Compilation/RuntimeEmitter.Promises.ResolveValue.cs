@@ -8,24 +8,29 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Fills PromiseResolveValue and emits the queued thenable job used by
     /// Promise.resolve's intrinsic path. The `then` getter is observed before
-    /// Promise.resolve returns; invocation is posted as a Promise job.
+    /// Promise.resolve returns; invocation is queued as a Promise job.
     /// </summary>
     private void EmitPromiseResolveValue(
         ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var jobType = EmitPromiseResolveThenableJob(moduleBuilder, runtime);
-        var method = runtime.RequirePromise().ResolveValueMethod;
-        var il = method.GetILGenerator();
+        var promise = runtime.RequirePromise();
+        var entryIl = promise.ResolveValueMethod.GetILGenerator();
+        entryIl.Emit(OpCodes.Ldarg_0);
+        entryIl.Emit(OpCodes.Ldnull);
+        entryIl.Emit(OpCodes.Call, promise.ResolveValueWithRootMethod);
+        entryIl.Emit(OpCodes.Ret);
+
+        var il = promise.ResolveValueWithRootMethod.GetILGenerator();
         var tcsType = _types.TaskCompletionSourceOfObject;
         var resultLocal = il.DeclareLocal(_types.TaskOfObject);
         var thenLocal = il.DeclareLocal(_types.Object);
         var tcsLocal = il.DeclareLocal(tcsType);
+        var rootLocal = il.DeclareLocal(_types.TaskOfObject);
         var jobLocal = il.DeclareLocal(jobType.Type);
-        var contextLocal = il.DeclareLocal(typeof(SynchronizationContext));
         var exceptionLocal = il.DeclareLocal(_types.Exception);
         var wrapValueLabel = il.DefineLabel();
         var thenCallableLabel = il.DefineLabel();
-        var runWithoutContextLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
 
         il.BeginExceptionBlock();
@@ -59,38 +64,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Leave, doneLabel);
 
         il.MarkLabel(thenCallableLabel);
-        il.Emit(OpCodes.Ldc_I4, (int)TaskCreationOptions.RunContinuationsAsynchronously);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(tcsType, typeof(TaskCreationOptions)));
+        // Internal adoption transfers must settle within this Promise checkpoint.
+        // Thenable invocation and guest reactions still have their own queued jobs;
+        // AwaitValueToTask also gives a pending guest await a reaction-job facade.
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(tcsType));
         il.Emit(OpCodes.Stloc, tcsLocal);
+
+        // Recursive jobs retain the public Promise.resolve task. A fresh entry
+        // owns its newly created task; each job still has a separate resolving pair.
+        var haveRootLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, rootLocal);
+        il.Emit(OpCodes.Ldloc, rootLocal);
+        il.Emit(OpCodes.Brtrue, haveRootLabel);
+        il.Emit(OpCodes.Ldloc, tcsLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, rootLocal);
+        il.MarkLabel(haveRootLabel);
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, thenLocal);
         il.Emit(OpCodes.Ldloc, tcsLocal);
+        il.Emit(OpCodes.Ldloc, rootLocal);
         il.Emit(OpCodes.Newobj, jobType.Constructor);
         il.Emit(OpCodes.Stloc, jobLocal);
 
-        il.Emit(OpCodes.Call, typeof(SynchronizationContext)
-            .GetProperty("Current")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, contextLocal);
-        il.Emit(OpCodes.Ldloc, contextLocal);
-        il.Emit(OpCodes.Brfalse, runWithoutContextLabel);
-        il.Emit(OpCodes.Ldloc, contextLocal);
+        // Thenable invocation shares the Promise reaction FIFO, including jobs
+        // queued by recursive adoption during the same microtask checkpoint.
+        // The shared queue defers invocation even without a current SyncContext.
         il.Emit(OpCodes.Ldloc, jobLocal);
         il.Emit(OpCodes.Ldftn, jobType.Run);
-        il.Emit(OpCodes.Newobj, typeof(SendOrPostCallback)
+        il.Emit(OpCodes.Newobj, typeof(Action)
             .GetConstructor([_types.Object, _types.IntPtr])!);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, typeof(SynchronizationContext).GetMethod(
-            "Post", [typeof(SendOrPostCallback), _types.Object])!);
-        var haveScheduledLabel = il.DefineLabel();
-        il.Emit(OpCodes.Br, haveScheduledLabel);
-
-        // Standalone hosts without an event-loop SynchronizationContext still
-        // make progress; normal SharpTS execution always takes the Post path.
-        il.MarkLabel(runWithoutContextLabel);
-        il.Emit(OpCodes.Ldloc, jobLocal);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, jobType.Run);
-        il.MarkLabel(haveScheduledLabel);
+        il.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
 
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
@@ -129,7 +135,7 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_types.Object, _types.Object, _types.TaskCompletionSourceOfObject]);
+            [_types.Object, _types.Object, _types.TaskCompletionSourceOfObject, _types.TaskOfObject]);
         {
             var il = ctor.GetILGenerator();
             var boxLocal = il.DeclareLocal(typeof(System.Runtime.CompilerServices.StrongBox<bool>));
@@ -147,7 +153,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Ldloc, boxLocal);
-            il.Emit(OpCodes.Newobj, runtime.RequirePromise().ResolveCallbackCtor);
+            il.Emit(OpCodes.Ldarg_S, (byte)4);
+            il.Emit(OpCodes.Newobj, runtime.RequirePromise().ResolveCallbackWithRootCtor);
             il.Emit(OpCodes.Stfld, resolveField);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_3);
@@ -158,7 +165,7 @@ public partial class RuntimeEmitter
         }
 
         var run = typeBuilder.DefineMethod(
-            "Run", MethodAttributes.Public, _types.Void, [_types.Object]);
+            "Run", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
         {
             var il = run.GetILGenerator();
             var exceptionLocal = il.DeclareLocal(_types.Exception);

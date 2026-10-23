@@ -7,10 +7,12 @@ namespace SharpTS.Runtime.Types;
 /// Callback for Promise resolve function passed to the executor.
 /// Implements ISharpTSCallable so it can be called from TypeScript code.
 /// </summary>
-public class PromiseResolveCallback : ISharpTSCallable, IBuiltInFunctionMetadata
+public class PromiseResolveCallback : ISharpTSFunctionObject, IBuiltInFunctionMetadata
 {
     private readonly Action<object?> _resolve;
-    private readonly BuiltInFunctionMetadata _metadata = new();
+    private SharpTSObject? _properties;
+    private SharpTSObject OwnPropertyStorage => _properties ??= FunctionObjectProperties.Create(FunctionName, Arity());
+    SharpTSObject ISharpTSFunctionObject.OwnProperties => OwnPropertyStorage;
 
     public PromiseResolveCallback(Action<object?> resolve)
     {
@@ -19,8 +21,15 @@ public class PromiseResolveCallback : ISharpTSCallable, IBuiltInFunctionMetadata
 
     public int Arity() => 1;
     public string FunctionName => "";
-    public bool HasMetadataProperty(string name) => _metadata.Has(name);
-    public bool DeleteMetadataProperty(string name) => _metadata.Delete(name);
+    public bool HasMetadataProperty(string name)
+        => name is "name" or "length"
+            && OwnPropertyStorage.GetOwnPropertyDescriptor(name) is not null;
+
+    public bool DeleteMetadataProperty(string name)
+    {
+        if (name is not ("name" or "length")) return true;
+        return OwnPropertyStorage.DeletePropertyStrict(name, false);
+    }
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
@@ -34,10 +43,12 @@ public class PromiseResolveCallback : ISharpTSCallable, IBuiltInFunctionMetadata
 /// Callback for Promise reject function passed to the executor.
 /// Implements ISharpTSCallable so it can be called from TypeScript code.
 /// </summary>
-public class PromiseRejectCallback : ISharpTSCallable, IBuiltInFunctionMetadata
+public class PromiseRejectCallback : ISharpTSFunctionObject, IBuiltInFunctionMetadata
 {
     private readonly Action<object?> _reject;
-    private readonly BuiltInFunctionMetadata _metadata = new();
+    private SharpTSObject? _properties;
+    private SharpTSObject OwnPropertyStorage => _properties ??= FunctionObjectProperties.Create(FunctionName, Arity());
+    SharpTSObject ISharpTSFunctionObject.OwnProperties => OwnPropertyStorage;
 
     public PromiseRejectCallback(Action<object?> reject)
     {
@@ -46,8 +57,15 @@ public class PromiseRejectCallback : ISharpTSCallable, IBuiltInFunctionMetadata
 
     public int Arity() => 1;
     public string FunctionName => "";
-    public bool HasMetadataProperty(string name) => _metadata.Has(name);
-    public bool DeleteMetadataProperty(string name) => _metadata.Delete(name);
+    public bool HasMetadataProperty(string name)
+        => name is "name" or "length"
+            && OwnPropertyStorage.GetOwnPropertyDescriptor(name) is not null;
+
+    public bool DeleteMetadataProperty(string name)
+    {
+        if (name is not ("name" or "length")) return true;
+        return OwnPropertyStorage.DeletePropertyStrict(name, false);
+    }
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {

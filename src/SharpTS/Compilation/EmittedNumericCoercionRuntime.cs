@@ -17,6 +17,14 @@ public sealed class EmittedNumericCoercionRuntime
         internal set => Set(ref _toNumber, value);
     }
 
+    private MethodBuilder? _toNumeric;
+    /// <summary>$Runtime.ToNumeric(object) preserves BigInt or returns a boxed Number.</summary>
+    public MethodBuilder ToNumeric
+    {
+        get => Require(_toNumeric);
+        internal set => Set(ref _toNumeric, value);
+    }
+
     private MethodBuilder? _convertToNumber;
     public MethodBuilder ConvertToNumber
     {
@@ -70,6 +78,7 @@ public sealed class EmittedNumericCoercionRuntime
         _ = JsNumberToInt32;
         _ = JsToInt32;
         _ = ToIntegerOrInfinity;
+        _ = ToNumeric;
         IsComplete = true;
     }
 }

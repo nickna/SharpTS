@@ -205,6 +205,8 @@ public partial class RuntimeEmitter
         EmitFunctionLengthAttribute(moduleBuilder, runtime.FunctionAttributes);
         EmitNewTargetCoreAttribute(moduleBuilder, runtime.FunctionAttributes);
         EmitFunctionNameAttribute(moduleBuilder, runtime.FunctionAttributes);
+        EmitClassStaticPropertyAttribute(moduleBuilder, runtime.ObjectKeys);
+        EmitCanonicalStaticStorageAttribute(moduleBuilder, runtime.ClassInitialization);
         EmitNumericRest4Attribute(moduleBuilder, runtime.FunctionAttributes);
         EmitNonConstructibleAttribute(moduleBuilder, runtime.FunctionAttributes);
 
@@ -752,6 +754,10 @@ public partial class RuntimeEmitter
             new ConstructDynamicValueInputs(
                 runtime.ClassDefinitions,
                 runtime.DynamicConstruction,
+                runtime.ArrayStorage,
+                runtime.DescriptorStorage,
+                runtime.ObjectRead,
+                runtime.Operators,
                 runtime.BoxedPrimitives,
                 runtime.Booleans,
                 runtime.Errors,

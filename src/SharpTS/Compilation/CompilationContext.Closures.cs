@@ -296,9 +296,20 @@ public partial class CompilationContext
     /// </summary>
     public LocalBuilder? FunctionDisplayClassLocal { get; set; }
 
-    // Enabled after parameters have been seeded into this callable's own function/scope
-    // display class. Defaults still read the incoming argument slots beforehand.
+    // Enabled as parameters are seeded into this callable's own function/scope
+    // display class. During defaults only already-published captures are visible.
     internal bool UseOwnedCapturedParameterStorage { get; set; }
+
+    internal HashSet<string>? PublishedCapturedParameterNames { get; set; }
+
+    // Initialized parameter bindings survive initializer-free var redeclarations,
+    // including receiver adapters whose parameters live in locals rather than args.
+    internal IReadOnlySet<string>? InitializedParameterNames { get; set; }
+
+    // Parameter destructuring executes during entry, before later defaults. Its original
+    // source sequence remains in the body AST and must not execute a second time there.
+    internal HashSet<Stmt.Sequence>? InitializedParameterInitializers { get; set; }
+    internal HashSet<string>? InitializedParameterBindingNames { get; set; }
 
     /// <summary>
     /// Fields in the current function's display class (variable name -> field).
@@ -470,6 +481,11 @@ public partial class CompilationContext
     internal Dictionary<Token, string> LexicalCellStorageNames { get; } = new(ReferenceEqualityComparer.Instance);
     internal Dictionary<string, Token> LoopBodyCellShadows { get; } = [];
     internal IReadOnlyDictionary<string, Token>? LoopBodyCellCaptures { get; set; }
+
+    // Shared by all contexts in this compilation. Declaration identity keeps escaped closures and
+    // same-spelled shadows on the exact cell selected by their owner. Empty outside debug builds.
+    internal IReadOnlyDictionary<Token, LexicalCellStorage>? DebugLexicalCellStorages { get; set; }
+    internal Dictionary<Token, FieldBuilder> ProjectedLexicalCellFields { get; } = new(ReferenceEqualityComparer.Instance);
 
     internal bool IsLoopBodyCellCapture(string name) =>
         LoopBodyCellCaptures?.ContainsKey(name) == true &&

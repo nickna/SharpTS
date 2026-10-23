@@ -156,6 +156,8 @@ public partial class TypeChecker
                 // Re-contextualize callbacks after inference. This includes callbacks nested in
                 // object/array arguments, whose parameter types depend on the instantiated props.
                 ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
+                if (call.TypeArgs is { Count: > 0 })
+                    CheckInstantiatedGenericCallArguments(call, instFunc, argTypes);
                 RecordEditorInvocationSelection(genericFunc, instFunc);
                 return instFunc.ReturnType;
             }
@@ -955,6 +957,86 @@ public partial class TypeChecker
     {
         for (int i = 0; i < arguments.Count && i < parameterTypes.Count; i++)
             ContextualizeNestedGenericCallback(arguments[i], parameterTypes[i]);
+    }
+
+    /// <summary>Checks provided arguments after generic substitution and callback contextualization.</summary>
+    private void CheckInstantiatedGenericCallArguments(
+        Expr.Call call,
+        TypeInfo.Function signature,
+        IReadOnlyList<TypeInfo> inferenceArgumentTypes)
+    {
+        int regularCount = signature.ParamTypes.Count - (signature.HasRestParam ? 1 : 0);
+        TypeInfo? restElement = signature.HasRestParam && signature.ParamTypes.Count > 0 &&
+            signature.ParamTypes[^1] is TypeInfo.Array restArray ? restArray.ElementType : null;
+        int parameterIndex = 0;
+
+        for (int i = 0; i < call.Arguments.Count; i++)
+        {
+            Expr argument = call.Arguments[i];
+            if (argument is Expr.Spread spread)
+            {
+                TypeInfo spreadType = _typeMap.Get(spread.Expression) ?? inferenceArgumentTypes[i];
+                if (spreadType is TypeInfo.Tuple tuple && !tuple.HasSpread)
+                {
+                    foreach (var element in tuple.Elements)
+                    {
+                        TypeInfo type = element.IsOptional
+                            ? new TypeInfo.Union([element.Type, TypeInfo.Undefined.Shared]) : element.Type;
+                        CheckElement(type);
+                    }
+                    if (tuple.RestElementType is null) continue;
+                    CheckSpreadElement(tuple.RestElementType);
+                }
+                else if (spreadType is TypeInfo.Tuple)
+                {
+                    // Keep variadic tuple matching under its existing inference policy. Its
+                    // fixed prefix must not be compared wholesale with the rest element type.
+                    return;
+                }
+                else if (TryGetSpreadElementType(spreadType, out var elementType))
+                    CheckSpreadElement(elementType);
+                else
+                    throw new TypeCheckException(
+                        $"Spread argument must be an iterable type (array, iterator, set, map, string, or generator), got '{spreadType}'.",
+                        call.Paren.Line, tsCode: "TS2488");
+
+                // An unknown-length spread prevents reliable positional matching afterwards,
+                // as in the ordinary function-call path. Do not treat its array as one argument.
+                return;
+            }
+
+            TypeInfo? expected = parameterIndex < regularCount
+                ? signature.ParamTypes[parameterIndex] : restElement;
+            if (expected is TypeInfo.Tuple tupleTarget && argument is Expr.ArrayLiteral literal)
+            {
+                // This is the same intentionally contextual, element-wise check used by an
+                // ordinary tuple parameter, not a second CheckExpr pass over all arguments.
+                CheckArrayLiteralAgainstTuple(literal, tupleTarget, $"argument {i + 1}");
+                parameterIndex++;
+            }
+            else
+                CheckElement(_typeMap.Get(argument) ?? inferenceArgumentTypes[i]);
+        }
+
+        void CheckElement(TypeInfo actual)
+        {
+            TypeInfo? expected = parameterIndex < regularCount
+                ? signature.ParamTypes[parameterIndex] : restElement;
+            bool optional = parameterIndex < regularCount && parameterIndex >= signature.MinArity;
+            if (expected is not null && !IsArgumentCompatible(expected, actual, optional))
+                throw new TypeCheckException(
+                    $"Argument {parameterIndex + 1} expected type '{expected}' but got '{actual}'.",
+                    call.Paren.Line, tsCode: "TS2345");
+            parameterIndex++;
+        }
+
+        void CheckSpreadElement(TypeInfo actual)
+        {
+            if (restElement is not null && !IsCompatible(restElement, actual))
+                throw new TypeCheckException(
+                    $"Spread element type '{actual}' not compatible with rest parameter type '{restElement}'.",
+                    call.Paren.Line, tsCode: "TS2345");
+        }
     }
 
     private void ContextualizeNestedGenericCallback(Expr expression, TypeInfo? contextualType)

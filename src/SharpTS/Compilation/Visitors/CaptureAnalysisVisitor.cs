@@ -92,6 +92,10 @@ internal class CaptureAnalysisVisitor : ControlledAstVisitor
         foreach (var param in af.Parameters)
             _locals.Add(param.Name.Lexeme);
 
+        // Ordinary function expressions own arguments; true arrows inherit it.
+        if (af.HasOwnThis)
+            _locals.Add("arguments");
+
         // Analyze arrow body
         if (af.ExpressionBody != null)
             Visit(af.ExpressionBody);
@@ -230,6 +234,9 @@ internal class CaptureAnalysisVisitor : ControlledAstVisitor
         // Add nested arrow parameters as locals
         foreach (var param in expr.Parameters)
             _locals.Add(param.Name.Lexeme);
+
+        if (expr.HasOwnThis)
+            _locals.Add("arguments");
 
         // Analyze nested arrow body
         if (expr.ExpressionBody != null)

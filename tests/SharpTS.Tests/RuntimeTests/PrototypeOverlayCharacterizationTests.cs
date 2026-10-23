@@ -5,12 +5,12 @@ using Xunit;
 
 namespace SharpTS.Tests.RuntimeTests;
 
-// These characterize interpreter representations before extraction (#1616).
-// They deliberately preserve existing differences instead of imposing new semantics.
+// These pin interpreter representation boundaries from extraction (#1616).
+// Targeted conformance repairs update their owning characterization.
 public class PrototypeOverlayCharacterizationTests
 {
     [Fact]
-    public void BuiltInAssignment_UsesExistingPrototypeSpecificEnumerability()
+    public void BuiltInAssignment_PreservesLiveConstructorFlagsAndUsesOrdinaryRecreationDefaults()
     {
         const string source = """
             const prototypes: any[] = [String.prototype, Number.prototype, Boolean.prototype,
@@ -24,9 +24,9 @@ public class PrototypeOverlayCharacterizationTests
                 console.log(Object.getOwnPropertyDescriptor(p, "constructor").enumerable);
             }
             """;
-        // #2732 tracks constructor enumerability on the other intrinsic prototypes.
-        Assert.Equal(string.Concat(Enumerable.Repeat("true\ntrue\n", 5)) + "false\ntrue\n"
-            + string.Concat(Enumerable.Repeat("true\ntrue\n", 2)) + "false\nfalse\nfalse\nfalse\n",
+        // #2732: replacing a live constructor retains its nonenumerable flag;
+        // deleting and recreating it uses ordinary enumerable property defaults.
+        Assert.Equal(string.Concat(Enumerable.Repeat("false\ntrue\n", 10)),
             TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 

@@ -11,8 +11,8 @@ namespace SharpTS.Tests.CompilerTests;
 /// <summary>
 /// Regression coverage for #1451. A deliberately narrow async function with no
 /// suspension points and a primitive result completes through a typed core and fresh Task wrapper.
-/// Immediately consumed intrinsic primitive resolves can join that core; observable or uncertain
-/// shapes retain the ordinary async state machine.
+/// Explicit awaits retain the ordinary async state machine and Promise job;
+/// only functions with no await points can join the typed core.
 /// </summary>
 public sealed class SuspensionFreePrimitiveAsyncTests
 {
@@ -256,20 +256,21 @@ public sealed class SuspensionFreePrimitiveAsyncTests
             run(1);
             """);
 
-        MethodInfo runCore = assembly.GetType("$Program")!
-            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
-            .Single(method => method.Name.Contains(
-                "$asyncCore$run", StringComparison.Ordinal));
-        var calls = ReadInstructions(runCore)
+        MethodInfo moveNext = assembly.GetTypes()
+            .Single(type => type.Name.Contains("<run>d__", StringComparison.Ordinal))
+            .GetMethod("MoveNext")!;
+        var calls = ReadInstructions(moveNext)
             .Select(instruction => instruction.Operand)
             .OfType<MethodBase>()
             .ToArray();
 
-        Assert.Contains(calls, method => method.Name.Contains(
+        Assert.DoesNotContain(calls, method => method.Name.Contains(
             "$asyncCore$identity", StringComparison.Ordinal));
-        Assert.DoesNotContain(calls, method => method.Name == "identity");
-        Assert.DoesNotContain(assembly.GetTypes(), type =>
-            type.Name.Contains("<run>d__", StringComparison.Ordinal));
+        Assert.Contains(calls, method => method.Name == "identity");
+        Assert.Contains(calls, method => method.Name == "AwaitValueToTask");
+        Assert.DoesNotContain(assembly.GetType("$Program")!.GetMethods(
+            BindingFlags.NonPublic | BindingFlags.Static), method =>
+            method.Name.Contains("$asyncCore$run", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -331,8 +332,14 @@ public sealed class SuspensionFreePrimitiveAsyncTests
             """;
 
         Assembly assembly = Compile(source);
-        Assert.DoesNotContain(assembly.GetTypes(), type =>
-            type.Name.Contains("<sum>d__", StringComparison.Ordinal));
+        MethodInfo moveNext = assembly.GetTypes()
+            .Single(type => type.Name.Contains("<sum>d__", StringComparison.Ordinal))
+            .GetMethod("MoveNext")!;
+        Assert.Contains(ReadInstructions(moveNext).Select(instruction => instruction.Operand)
+            .OfType<MethodBase>(), method => method.Name == "AwaitValueToTask");
+        Assert.DoesNotContain(assembly.GetType("$Program")!.GetMethods(
+            BindingFlags.NonPublic | BindingFlags.Static), method =>
+            method.Name.Contains("$asyncCore$sum", StringComparison.Ordinal));
         Assert.Equal("10\n", TestHarness.RunCompiled(source));
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
     }
@@ -375,23 +382,18 @@ public sealed class SuspensionFreePrimitiveAsyncTests
             totalDeclaration.Initializer!));
 
         Assembly assembly = Compile(source);
-        Assert.DoesNotContain(assembly.GetTypes(), type =>
-            type.Name.Contains("<sum>d__", StringComparison.Ordinal));
-        MethodInfo core = assembly.GetType("$Program")!
-            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
-            .Single(method => method.Name.Contains(
-                "$asyncCore$sum", StringComparison.Ordinal));
-        var instructions = ReadInstructions(core).ToArray();
-        var calls = instructions
+        MethodInfo moveNext = assembly.GetTypes()
+            .Single(type => type.Name.Contains("<sum>d__", StringComparison.Ordinal))
+            .GetMethod("MoveNext")!;
+        var calls = ReadInstructions(moveNext)
             .Select(instruction => instruction.Operand)
             .OfType<MethodBase>()
             .ToArray();
 
-        Assert.DoesNotContain(calls, method =>
-            method.Name == "FromResult" && method.DeclaringType == typeof(Task));
-        Assert.DoesNotContain(calls, method => method.Name == "PrepareHostedAwait");
-        Assert.DoesNotContain(instructions, instruction =>
-            instruction.OpCode == OpCodes.Box);
+        Assert.Contains(calls, method => method.Name == "AwaitValueToTask");
+        Assert.DoesNotContain(assembly.GetType("$Program")!.GetMethods(
+            BindingFlags.NonPublic | BindingFlags.Static), method =>
+            method.Name.Contains("$asyncCore$sum", StringComparison.Ordinal));
         Assert.Equal("10\n", TestHarness.RunCompiled(source));
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
     }
@@ -485,11 +487,14 @@ public sealed class SuspensionFreePrimitiveAsyncTests
             run().then(v=>console.log(v));
             """;
         Assembly assembly = Compile(source);
-        Assert.Contains(assembly.GetType("$Program")!.GetMethods(
+        Assert.DoesNotContain(assembly.GetType("$Program")!.GetMethods(
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static),
             method => method.Name.Contains("$asyncCore$run", StringComparison.Ordinal));
-        Assert.DoesNotContain(assembly.GetTypes(), type =>
-            type.Name.Contains("<run>d__", StringComparison.Ordinal));
+        MethodInfo moveNext = assembly.GetTypes()
+            .Single(type => type.Name.Contains("<run>d__", StringComparison.Ordinal))
+            .GetMethod("MoveNext")!;
+        Assert.Contains(ReadInstructions(moveNext).Select(instruction => instruction.Operand)
+            .OfType<MethodBase>(), method => method.Name == "AwaitValueToTask");
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
         Assert.Equal("5\n", TestHarness.RunCompiledStandalone(source));
     }

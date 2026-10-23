@@ -89,6 +89,13 @@ public class GeneratorStateAnalyzer : AstVisitorBase
             _declaredVariables.Add(param.Name.Lexeme);
             _variablesDeclaredBeforeYield.Add(param.Name.Lexeme);
         }
+        foreach (var (declaration, name) in ParameterPatternBindings.Declarations(func.Body))
+        {
+            string storageName = StorageName(declaration, name.Lexeme);
+            parameters.Add(storageName);
+            _declaredVariables.Add(storageName);
+            _variablesDeclaredBeforeYield.Add(storageName);
+        }
 
         bool usesArguments = ArgumentsRefScanner.Contains(func.Parameters, func.Body,
             treatEvalReferenceAsUse: true);

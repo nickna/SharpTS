@@ -121,7 +121,8 @@ public sealed class EmittedObjectStateRuntimeTests
         var supplied = CopyWithNewTables(runtime.ObjectState, type, operation);
         var method = typeof(RuntimeEmitter).GetMethod(freeze ? "EmitObjectFreeze" : "EmitObjectSeal", InstanceMembers)!;
         var inputs = Activator.CreateInstance(method.GetParameters()[2].ParameterType,
-            runtime.ArrayStorage, runtime.DescriptorStorage, runtime.ObjectStorage)!;
+            runtime.ArrayStorage, runtime.DescriptorStorage, runtime.ObjectStorage,
+            runtime.ObjectDescriptors.GetOwnPropertyDescriptor, runtime.ObjectFields.Interface)!;
         object?[] arguments = freeze
             ? [type, supplied, inputs, Activator.CreateInstance(method.GetParameters()[3].ParameterType,
                 runtime.FunctionValues.Type, runtime.FunctionValues.GetMethodInfo,

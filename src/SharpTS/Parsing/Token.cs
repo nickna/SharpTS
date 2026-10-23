@@ -29,7 +29,7 @@ public enum TokenType
     QUESTION_QUESTION_EQUAL,  // Nullish coalescing assignment
     PLUS_PLUS, MINUS_MINUS,
     PLUS_EQUAL, MINUS_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL,
-    STAR_STAR,
+    STAR_STAR, STAR_STAR_EQUAL,
     DOT_DOT_DOT,
     // Bitwise operators
     AMPERSAND, PIPE, CARET, TILDE,
@@ -61,7 +61,10 @@ public enum TokenType
     BIGINT_LITERAL,  // 123n literal (stores BigInteger value)
     REGEX,  // Regex literal /pattern/flags
 
-    EOF
+    EOF,
+
+    // Parser-only lowering operation; never produced by the lexer.
+    INTERNAL_TO_PROPERTY_KEY
 }
 
 /// <summary>

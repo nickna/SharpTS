@@ -84,6 +84,19 @@ public partial class ILEmitter
                 break;
 
             case "indexOf":
+                if (_ctx.RuntimeFeatures?.UsesStringPrototypeMutation != false)
+                {
+                    // Boxed strings retain their native argument path. Only a
+                    // primitive uses the live prototype chain with its own receiver.
+                    var nativeIndexOf = builder.DefineLabel("ambiguous_native_indexof");
+                    IL.Emit(OpCodes.Ldloc, objLocal);
+                    IL.Emit(OpCodes.Isinst, _ctx.Types.String);
+                    builder.Emit_Brfalse(nativeIndexOf);
+                    IL.Emit(OpCodes.Pop); // temporary unwrapped string
+                    EmitGetPropertyAndInvoke(objLocal, methodName, arguments);
+                    builder.Emit_Br(doneLabel);
+                    builder.MarkLabel(nativeIndexOf);
+                }
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);

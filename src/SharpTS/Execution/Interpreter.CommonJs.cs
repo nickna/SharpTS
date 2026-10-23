@@ -160,6 +160,7 @@ public partial class Interpreter
         using (PushModuleContext(moduleEnv, module, moduleInstance))
         {
             HoistFunctionDeclarations(module.Statements);
+            HoistLocalLoopVarDeclarations(module.Statements);
 
             foreach (var stmt in module.Statements)
             {

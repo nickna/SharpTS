@@ -18,6 +18,14 @@ public sealed class EmittedOperatorRuntime
         internal set => SetHandle(ref _updateNumeric, value);
     }
 
+    private MethodBuilder? _numericBinary;
+    /// <summary>Ordered ToNumeric and numeric-kind dispatch for dynamic binary operators.</summary>
+    public MethodBuilder NumericBinary
+    {
+        get => Require(_numericBinary);
+        internal set => SetHandle(ref _numericBinary, value);
+    }
+
     private MethodBuilder? _lessThan;
     public MethodBuilder LessThan
     {
@@ -147,6 +155,7 @@ public sealed class EmittedOperatorRuntime
         _ = LooseEquals;
         _ = StrictEquals;
         _ = WarnSloppyDeleteVariable;
+        _ = NumericBinary;
         if (!_equalityBodyEmitted)
             throw new InvalidOperationException("Operator Equality body has not been emitted.");
         if (!_instanceOfBodyEmitted)

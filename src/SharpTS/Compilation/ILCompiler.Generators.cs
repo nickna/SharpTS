@@ -235,7 +235,7 @@ public partial class ILCompiler
 
     /// <summary>
     /// Returns the generator's own locals/parameters that need shared reference storage in the function
-    /// display class: those both captured AND written by an inner arrow (#674), plus (#945) those a
+    /// display class: those both captured AND written by the owning body or an inner arrow (#674), plus (#945) those a
     /// HOISTED lambda-lifted nested generator forwards read-only — those must be read LIVE through the DC
     /// rather than a stale by-value snapshot taken above the captured local's assignment. Per-iteration
     /// <c>for (let…)</c> bindings are excluded — each iteration owns its binding (#649), so closures must
@@ -249,6 +249,13 @@ public partial class ILCompiler
 
         var result = new HashSet<string>(capturedLocals);
         result.IntersectWith(CollectGeneratorArrowCapturedWrites(funcStmt));
+
+        // A read-only closure must see later writes by its generator owner too. Use resolved storage
+        // keys so a write to a renamed block shadow cannot select the enclosing same-named binding.
+        var renames = GeneratorBlockScopeRenamer.Compute(funcStmt, preserveDebugBindings: EmitDebugSymbols);
+        var ownerWrites = new HashSet<string>(capturedLocals);
+        ownerWrites.IntersectWith(renames.AssignedStorageNames);
+        result.UnionWith(ownerWrites);
 
         // #945: a read-only capture forwarded by a HOISTED lambda-lifted nested generator (the sync
         // forwarding arrow NestedFunctionLifter marks IsLiftedForwarder) must also live in the DC, so the
@@ -273,7 +280,6 @@ public partial class ILCompiler
             result.ExceptWith(perIteration);
         // #838: a write-captured nested-block shadow gets its own renamed DC field so it does not collide
         // with the outer same-named binding on a single name-keyed cell.
-        var renames = GeneratorBlockScopeRenamer.Compute(funcStmt, preserveDebugBindings: EmitDebugSymbols);
         ApplyWriteCaptureRenames(result, renames);
         ApplyReadCaptureRenames(result, renames);
         return result;
@@ -351,7 +357,7 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Unions, over every arrow lexically inside the generator body (nested arrows included), the
+    /// Unions, over every arrow lexically inside the generator's defaults and body (nested arrows included), the
     /// names the arrow assigns within its own scope that it also captures from an enclosing scope.
     /// Intersected by the caller with the generator's own captured locals to identify mutated
     /// generator captures.
@@ -359,19 +365,28 @@ public partial class ILCompiler
     private HashSet<string> CollectGeneratorArrowCapturedWrites(Stmt.Function funcStmt)
     {
         var collector = new ArrowCollector();
+        foreach (var parameter in funcStmt.Parameters)
+            if (parameter.DefaultValue is { } defaultValue)
+                collector.Visit(defaultValue);
+        int defaultArrowCount = collector.Arrows.Count;
         if (funcStmt.Body != null)
             foreach (var stmt in funcStmt.Body)
                 collector.Visit(stmt);
 
         var writes = new HashSet<string>();
-        foreach (var arrow in collector.Arrows)
+        for (int i = 0; i < collector.Arrows.Count; i++)
         {
+            var arrow = collector.Arrows[i];
             // Only sync arrows share the generator's function DC — async arrows capture through
             // their own boxed state machine, the same scope the compile-time guard covers (#674).
             if (arrow.IsAsync)
                 continue;
             var arrowWrites = CapturedWriteAnalysis.CollectImmediateWrites(arrow);
             arrowWrites.IntersectWith(_closures.Analyzer.GetCaptures(arrow));
+            // Defaults run outside the body-local environment. Do not mistake an outer capture for
+            // a same-spelled body local that another closure captures.
+            if (i < defaultArrowCount)
+                arrowWrites.RemoveWhere(name => !ReferenceEquals(_closures.Analyzer.GetCaptureSource(arrow, name), funcStmt));
             writes.UnionWith(arrowWrites);
         }
         return writes;

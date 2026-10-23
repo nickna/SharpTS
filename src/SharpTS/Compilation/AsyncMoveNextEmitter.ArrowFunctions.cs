@@ -56,9 +56,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Box, _builder.StateMachineType);
         }
 
-        Types.EmitLoadMethodInfoViaHandle(_il, arrowBuilder.StubMethod);
-        _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.FunctionConstruction.Constructor);
-        SetStackUnknown();
+        EmitAsyncFunctionValue(arrowBuilder);
     }
 
     private void EmitCapturingArrowFunction(Expr.ArrowFunction af, MethodBuilder method, TypeBuilder displayClass)

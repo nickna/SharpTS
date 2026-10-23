@@ -53,21 +53,24 @@ public abstract partial class AsyncFunctionMoveNextEmitter
     /// <summary>
     /// Routes a guest throw escaping the top level of a flag-based try body into that try: stores the
     /// value into its exception local and branches to its catch dispatch (<see
-    /// cref="_currentTryCatchSkipLabel"/>, which is null-gated on the local so no separate present flag is
-    /// needed). Any finally(s) strictly inside the try run first; because such a finally can await, the
+    /// cref="_currentTryCatchSkipLabel"/>), setting presence independently from a possibly-null value.
+    /// Any finally(s) strictly inside the try run first; because such a finally can await, the
     /// value is held in <c>&lt;&gt;pendingException</c> across them and moved into the exception local by
     /// the routing terminal (#914, the async-function analog of the generators' throw routing).
     /// </summary>
     private void RouteThrowIntoCurrentTry(Action loadValue)
     {
         var exLocal = _currentTryCatchExceptionLocal!;
+        var presentLocal = _currentTryCatchExceptionPresentLocal!;
         var skip = _currentTryCatchSkipLabel!.Value;
         var chain = FinallyFramesInside(_currentTryCatchScopeDepth);
         if (chain.Count == 0)
         {
             loadValue();
             IL.Emit(OpCodes.Stloc, exLocal);
-            IL.Emit(OpCodes.Br, skip);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Stloc, presentLocal);
+            EmitPendingExitBranch(skip);
             return;
         }
 
@@ -77,14 +80,17 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         loadValue();
         IL.Emit(OpCodes.Stfld, GetPendingExceptionField());
         int code = _nextExitCode++;
+        _iteratorCloseThrowExits.Add(code);
         _exitTerminals[code] = () =>
         {
             IL.Emit(OpCodes.Ldarg_0);
             IL.Emit(OpCodes.Ldfld, GetPendingExceptionField());
             IL.Emit(OpCodes.Stloc, exLocal);
-            IL.Emit(OpCodes.Br, skip);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Stloc, presentLocal);
+            EmitPendingExitBranch(skip);
         };
-        RouteThroughFinallys(chain, code, OpCodes.Br);
+        RouteThroughFinallys(chain, code, ProtectedRegionDepth > 0 ? OpCodes.Leave : OpCodes.Br);
     }
 
     protected override void EmitTryCatch(Stmt.TryCatch t)
@@ -163,9 +169,14 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.Emit(OpCodes.Ldloc, caught);
         if (TryInitializeLexicalCell(parameter)) return;
         string name = GetBindingStorageName(declaration, parameter.Lexeme);
-        var local = IL.DeclareLocal(Types.Object);
-        Ctx.Locals.RegisterLocal(name, local);
-        RegisterLoopLocal(name, local);
+        if (GetHoistedVariableField(name) == null)
+        {
+            // A suspending catch uses its existing field. Registering an IL local
+            // would make async-arrow reads and writes bypass that field (#2850).
+            var local = IL.DeclareLocal(Types.Object);
+            Ctx.Locals.RegisterLocal(name, local);
+            RegisterLoopLocal(name, local);
+        }
         EmitStoreVariable(name);
     }
 
@@ -176,12 +187,15 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
         // Create locals for exception tracking
         var caughtExceptionLocal = IL.DeclareLocal(typeof(object));
+        var exceptionPresentLocal = IL.DeclareLocal(typeof(bool));
         var skipCatchLabel = IL.DefineLabel();
         var afterTryCatchLabel = IL.DefineLabel();
 
-        // Initialize caught exception to null
+        // A null guest value is a real failure, not the absence of one.
         IL.Emit(OpCodes.Ldnull);
         IL.Emit(OpCodes.Stloc, caughtExceptionLocal);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, exceptionPresentLocal);
 
         // A finally must run on every path that leaves the try — including a non-local break / continue
         // / return that crosses it. Push a FinallyScope before emitting the try body so those exits
@@ -200,7 +214,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         if (hasAwaitsInTry)
         {
             // Resume gateways keep the complete try body protected.
-            EmitTryBodyWithAwaits(t.TryBlock, caughtExceptionLocal);
+            EmitTryBodyWithAwaits(t.TryBlock, caughtExceptionLocal, exceptionPresentLocal);
         }
         else if (t.FinallyBlock != null)
         {
@@ -217,6 +231,8 @@ public abstract partial class AsyncFunctionMoveNextEmitter
             IL.BeginCatchBlock(typeof(Exception));
             IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.WrapException);
             IL.Emit(OpCodes.Stloc, caughtExceptionLocal);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Stloc, exceptionPresentLocal);
 
             IL.EndExceptionBlock();
             Ctx.ExceptionBlockDepth--;
@@ -236,6 +252,8 @@ public abstract partial class AsyncFunctionMoveNextEmitter
                 IL.BeginCatchBlock(typeof(Exception));
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.WrapException);
                 IL.Emit(OpCodes.Stloc, caughtExceptionLocal);
+                IL.Emit(OpCodes.Ldc_I4_1);
+                IL.Emit(OpCodes.Stloc, exceptionPresentLocal);
             }
             IL.EndExceptionBlock();
             Ctx.ExceptionBlockDepth--;
@@ -243,29 +261,31 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         }
 
         // Cleanup entry: normal completion falls here, and a routed non-local exit branches here. The
-        // catch is gated on caughtExceptionLocal below, which is null on every exit path, so those
-        // paths skip the catch and flow straight into the finally (#774).
+        // presence flag remains false on a non-exception exit, so those paths skip the catch and
+        // flow straight into the finally (#774).
         if (frame != null)
             IL.MarkLabel(cleanupLabel);
 
         // Check if we need to run catch block
         if (t.CatchBlock != null)
         {
-            IL.Emit(OpCodes.Ldloc, caughtExceptionLocal);
+            IL.Emit(OpCodes.Ldloc, exceptionPresentLocal);
             IL.Emit(OpCodes.Brfalse, skipCatchLabel);
 
             WithGeneratorLexicalScope([], () =>
             {
                 EmitGeneratorCatchBinding(t, caughtExceptionLocal);
 
-                // Clear the exception local since catch handled it
+                // The catch handled this failure; a new catch-body failure sets presence again.
                 IL.Emit(OpCodes.Ldnull);
                 IL.Emit(OpCodes.Stloc, caughtExceptionLocal);
+                IL.Emit(OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Stloc, exceptionPresentLocal);
 
                 // A catch-body failure must run this try's finally before it
                 // propagates, without re-entering this same catch. Resume gateways
                 // protect its operand evaluation just as they protect the try body.
-                EmitTryBodyWithAwaits(t.CatchBlock, caughtExceptionLocal);
+                EmitTryBodyWithAwaits(t.CatchBlock, caughtExceptionLocal, exceptionPresentLocal);
             }, t, t.CatchParam);
 
             // Fall through to finally (don't skip it)
@@ -285,7 +305,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
                 // Finally with awaits - need special handling
                 // The finally must run regardless of exception, so we emit it
                 // and track if there's a pending exception to rethrow after
-                EmitFinallyBodyWithAwaits(t.FinallyBlock, caughtExceptionLocal);
+                EmitFinallyBodyWithAwaits(t.FinallyBlock, caughtExceptionLocal, exceptionPresentLocal);
             }
             else
             {
@@ -300,10 +320,10 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
         }
 
-        // Entering a catch clears the original failure. A value remaining
-        // here is either an unhandled try failure or a new catch-body failure.
+        // Entering a catch clears presence. An unhandled try failure or a new catch-body failure
+        // must propagate even when its exact value is null.
         var noExceptionLabel = IL.DefineLabel();
-        IL.Emit(OpCodes.Ldloc, caughtExceptionLocal);
+        IL.Emit(OpCodes.Ldloc, exceptionPresentLocal);
         IL.Emit(OpCodes.Brfalse, noExceptionLabel);
         IL.Emit(OpCodes.Ldloc, caughtExceptionLocal);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.CreateException);
@@ -313,29 +333,45 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.MarkLabel(afterTryCatchLabel);
     }
 
-    private void EmitFinallyBodyWithAwaits(List<Stmt> finallyBody, LocalBuilder caughtExceptionLocal)
+    private void EmitFinallyBodyWithAwaits(List<Stmt> finallyBody, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)
     {
         // Unlike try, we don't wrap in try/catch - finally must run even if
         // statements throw, but a finally failure replaces the original one.
         // Preserve the pending failure across a genuine MoveNext resumption.
 
-        var pendingException = DefineStateMachineField(
-            $"<>finallyException{_finallyExceptionCount++}", typeof(object));
+        int id = _finallyExceptionCount++;
+        var pendingException = DefineStateMachineField($"<>finallyException{id}", typeof(object));
+        var pendingExceptionPresent = DefineStateMachineField($"<>finallyExceptionPresent{id}", typeof(bool));
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldloc, caughtExceptionLocal);
         IL.Emit(OpCodes.Stfld, pendingException);
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldloc, exceptionPresentLocal);
+        IL.Emit(OpCodes.Stfld, pendingExceptionPresent);
         EmitGeneratorScopedStatements(finallyBody);
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldfld, pendingException);
         IL.Emit(OpCodes.Stloc, caughtExceptionLocal);
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldfld, pendingExceptionPresent);
+        IL.Emit(OpCodes.Stloc, exceptionPresentLocal);
     }
 
-    private void EmitTryBodyWithAwaits(List<Stmt> tryBody, LocalBuilder caughtExceptionLocal)
-        => WithGeneratorLexicalScope(tryBody, () => EmitTryBodyWithAwaitsCore(tryBody, caughtExceptionLocal));
+    private void EmitTryBodyWithAwaits(List<Stmt> tryBody, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)
+        => WithGeneratorLexicalScope(tryBody, () => EmitTryBodyWithAwaitsCore(tryBody, caughtExceptionLocal, exceptionPresentLocal));
 
-    private void EmitTryBodyWithAwaitsCore(List<Stmt> tryBody, LocalBuilder caughtExceptionLocal)
+    private void EmitTryBodyWithAwaitsCore(List<Stmt> tryBody, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)
+        => EmitTryBodyWithAwaitsCore(() =>
+        {
+            foreach (var stmt in tryBody)
+                EmitStatement(stmt);
+        }, caughtExceptionLocal, exceptionPresentLocal);
+
+    // The same resumable protected region can guard a generated iterator-close span.
+    private void EmitTryBodyWithAwaitsCore(Action emitBody, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)
     {
         var previousExceptionLocal = _currentTryCatchExceptionLocal;
+        var previousExceptionPresentLocal = _currentTryCatchExceptionPresentLocal;
         var previousSkipLabel = _currentTryCatchSkipLabel;
         var previousScopeDepth = _currentTryCatchScopeDepth;
         var previousRegion = _awaitCatchRegion;
@@ -345,6 +381,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         var dispatch = IL.DefineLabel();
         var afterTryLabel = IL.DefineLabel();
         _currentTryCatchExceptionLocal = caughtExceptionLocal;
+        _currentTryCatchExceptionPresentLocal = exceptionPresentLocal;
         _currentTryCatchSkipLabel = afterTryLabel;
         _currentTryCatchScopeDepth = _exitScopes.Count;
 
@@ -360,8 +397,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         _awaitCatchRegion = region;
         IL.Emit(OpCodes.Br, dispatch);
         IL.MarkLabel(initial);
-        foreach (var stmt in tryBody)
-            EmitStatement(stmt);
+        emitBody();
         IL.Emit(OpCodes.Leave, afterTryLabel);
 
         IL.MarkLabel(dispatch);
@@ -381,6 +417,8 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.BeginCatchBlock(typeof(Exception));
         IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.WrapException);
         IL.Emit(OpCodes.Stloc, caughtExceptionLocal);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, exceptionPresentLocal);
         IL.EndExceptionBlock();
         IL.Emit(OpCodes.Br, afterTryLabel);
 
@@ -394,6 +432,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.MarkLabel(afterTryLabel);
 
         _currentTryCatchExceptionLocal = previousExceptionLocal;
+        _currentTryCatchExceptionPresentLocal = previousExceptionPresentLocal;
         _currentTryCatchSkipLabel = previousSkipLabel;
         _currentTryCatchScopeDepth = previousScopeDepth;
     }

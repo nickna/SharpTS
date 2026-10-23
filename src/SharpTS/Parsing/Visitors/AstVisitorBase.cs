@@ -39,6 +39,7 @@ public abstract class AstVisitorBase
             case Expr.Assign e: VisitAssign(e); break;
             case Expr.AssertedAssignment e: VisitAssertedAssignment(e); break;
             case Expr.Call e: VisitCall(e); break;
+            case Expr.Instantiation e: VisitInstantiation(e); break;
             case Expr.Get e: VisitGet(e); break;
             case Expr.Set e: VisitSet(e); break;
             case Expr.GetPrivate e: VisitGetPrivate(e); break;
@@ -399,6 +400,8 @@ public abstract class AstVisitorBase
     {
         Visit(expr.Expression);
     }
+
+    protected virtual void VisitInstantiation(Expr.Instantiation expr) => Visit(expr.Expression);
 
     protected virtual void VisitTypeAssertion(Expr.TypeAssertion expr)
     {

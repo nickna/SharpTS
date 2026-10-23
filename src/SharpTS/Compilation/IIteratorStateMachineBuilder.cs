@@ -22,6 +22,9 @@ public interface IIteratorStateMachineBuilder
     /// <summary>The <c>&lt;&gt;__functionDC</c> field, or null when the iterator has no function display class.</summary>
     FieldBuilder? FunctionDCField { get; }
 
+    /// <summary>Storage names for source lexical bindings transported from eager parameter initialization.</summary>
+    IReadOnlyDictionary<object, string> BlockScopeRenames { get; }
+
     /// <summary>The hoisted state-machine field backing the named parameter/local, or null if not hoisted.</summary>
     FieldBuilder? GetVariableField(string name);
 }

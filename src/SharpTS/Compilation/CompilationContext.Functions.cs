@@ -13,16 +13,16 @@ public partial class CompilationContext
     public Dictionary<string, MethodBuilder> Functions { get; }
 
     /// <summary>
-    /// Assembly-internal typed cores for primitive async functions proven to have no suspension points.
-    /// An immediately awaited, statically direct call may target the core without materializing
-    /// the public function's otherwise-observable Promise wrapper.
+    /// Legacy metadata for assembly-internal primitive async cores, retained for compiler-context
+    /// compatibility. Explicit awaits retain the public Promise wrapper and ordinary Promise-job
+    /// suspension path; this catalog does not authorize await elision.
     /// </summary>
     public Dictionary<string, MethodBuilder>? SuspensionFreePrimitiveAsyncCores { get; set; }
 
     /// <summary>
-    /// Await nodes proven non-suspending before state-machine layout, including stable direct
-    /// async-core calls and immediately awaited intrinsic primitive resolves. These nodes do not
-    /// consume a state number or force locals into hoisted object fields.
+    /// Legacy await metadata retained for compiler-context compatibility. The compiler no longer
+    /// populates or consumes this set as an await-elision proof; every syntactic await retains
+    /// the ordinary suspension path.
     /// </summary>
     public IReadOnlySet<Expr.Await>? SuspensionFreePrimitiveAsyncAwaits { get; set; }
 

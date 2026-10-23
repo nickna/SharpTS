@@ -180,10 +180,10 @@ public partial class RuntimeEmitter
 
         runtime.RequireArrayBuffer().Create = method;
 
-        // Also emit slice, byteLength, and isView helpers
+        // Also emit slice and byteLength helpers. isView is emitted earlier
+        // for the static-member lookup table.
         EmitArrayBufferSliceHelper(runtimeType, runtime.RequireArrayBuffer());
         EmitArrayBufferByteLengthHelper(runtimeType, runtime.RequireArrayBuffer());
-        EmitArrayBufferIsView(runtimeType, runtime);
     }
 
     /// <summary>

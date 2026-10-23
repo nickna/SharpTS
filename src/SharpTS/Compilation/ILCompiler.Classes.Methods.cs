@@ -205,6 +205,8 @@ public partial class ILCompiler
                 paramTypes
             );
 
+            methodBuilder.SetCustomAttribute(_runtime.ObjectKeys.ClassStaticPropertyConstructor,
+                CustomAttributeEncoder.Encode(_runtime.ObjectKeys.ClassStaticPropertyConstructor, method.Name.Lexeme, false));
             _classes.StaticMethods[qualifiedClassName][method.Name.Lexeme] = methodBuilder;
             RegisterArgumentsCapturingMethod(methodBuilder, method.Body, method.Parameters);
         }
@@ -625,7 +627,7 @@ public partial class ILCompiler
         // Emit constructor
         EmitConstructor(typeBuilder, classStmt, fieldsField);
         EmitDeclaredConstructorFactory(typeBuilder, classStmt, _classes.Constructors[qualifiedClassName]);
-        if (_usesRuntimeParents && !typeBuilder.IsGenericTypeDefinition && typeBuilder.BaseType is not { Name: "$Array" or "$Promise" }
+        if (_usesRuntimeParents && !typeBuilder.IsGenericTypeDefinition && typeBuilder.BaseType is not { Name: "$Promise" }
             && !_classes.ErrorSubclasses.Contains(qualifiedClassName) && SupportsReceiverInitialization(classStmt))
             EmitReceiverInitializer(typeBuilder, classStmt);
 
@@ -907,11 +909,14 @@ public partial class ILCompiler
         // this fires the default the same way function/public-method bodies do. Private methods are
         // emitted with all-`object` parameter slots, so none are skipped for being value types. (#696,
         // covers the private-method case of #705's explicit-undefined repro too.)
-        emitter.EmitDefaultParameters(
+        EmitFunctionEnvironmentPrologue(
+            il,
+            ctx,
+            emitter,
             method.Parameters,
-            isInstanceMethod: !isStatic,
-            hasOwnThis: false,
-            paramTypes: methodParams.Select(p => p.ParameterType).ToArray());
+            method.Body,
+            methodParams.Select(p => p.ParameterType).ToArray(),
+            argumentOffset: paramOffset);
         InitializeSyncMethodCapturedParameters(ctx, il, method, methodBuilder, paramOffset);
 
         // Emit method body
