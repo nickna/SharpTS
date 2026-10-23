@@ -5,6 +5,66 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class GlobalIsNaNValueTests
 {
+    [Theory, ModeData]
+    public void GlobalIsNaNCoercesArgumentsBeforeTestingForNaN(ExecutionMode mode)
+    {
+        var source = """
+            console.log(isNaN(null as any), globalThis.isNaN(null as any));
+            console.log(isNaN("" as any), globalThis.isNaN("" as any));
+            console.log(isNaN("   " as any), globalThis.isNaN("   " as any));
+            console.log(isNaN(undefined as any));
+            console.log(isNaN("abc" as any));
+            console.log(isNaN(42));
+            console.log(isNaN("0x10" as any));
+            console.log(isNaN({ valueOf() { return 4; } } as any));
+            console.log(Number.isNaN(null), Number.isNaN(""), Number.isNaN("abc"));
+            """;
+
+        Assert.Equal(
+            "false false\nfalse false\nfalse false\ntrue\ntrue\nfalse\nfalse\nfalse\nfalse false false\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNConvertsObjectsInOrderAndPropagatesCoercionErrors(ExecutionMode mode)
+    {
+        var source = """
+            try { console.log(isNaN(Symbol() as any)); }
+            catch (error) { console.log(error.name, error instanceof TypeError); }
+            try { console.log(isNaN(0n as any)); }
+            catch (error) { console.log(error.name, error instanceof TypeError); }
+
+            const original = new Error("coerce");
+            const throwing: any = { valueOf() { throw original; } };
+            try { console.log(isNaN(throwing)); }
+            catch (error) { console.log(error === original, error.name, error.message); }
+
+            let trace = "";
+            const invalid: any = {
+                valueOf() { trace += "v"; return "bad"; },
+                toString() { trace += "s"; return "4"; }
+            };
+            console.log(isNaN(invalid), trace);
+            trace = "";
+            const fallback: any = {
+                valueOf() { trace += "v"; return {}; },
+                toString() { trace += "s"; return "4"; }
+            };
+            console.log(isNaN(fallback), trace);
+            trace = "";
+            const failed: any = {
+                valueOf() { trace += "v"; return {}; },
+                toString(): any { trace += "s"; return {}; }
+            };
+            try { console.log(isNaN(failed)); }
+            catch (error) { console.log(error.name, error instanceof TypeError, trace); }
+            """;
+
+        Assert.Equal(
+            "TypeError true\nTypeError true\ntrue Error coerce\ntrue v\nfalse vs\nTypeError true vs\n",
+            TestHarness.Run(source, mode));
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         yield return new object[] { "original", """
