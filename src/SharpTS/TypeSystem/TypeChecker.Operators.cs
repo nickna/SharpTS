@@ -797,12 +797,12 @@ public partial class TypeChecker
         bool canonicalArrayStringIndex = objType is TypeInfo.Array &&
             TryGetStringLiteralKeys(indexType, out var stringKeys) &&
             stringKeys.All(key => Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _));
-        bool ordinaryStringKey = (IsObjectType(objType) ||
+        bool ordinaryPropertyKey = (IsObjectType(objType) ||
             objType is TypeInfo.Any or TypeInfo.Object or TypeInfo.MutableClass or
                 TypeInfo.Function or TypeInfo.GenericFunction or TypeInfo.OverloadedFunction or TypeInfo.OverloadSet) &&
             objType is not (TypeInfo.Array or TypeInfo.Tuple or TypeInfo.TypedArray) &&
-            IsString(indexType);
-        if (!IsNumber(indexType) && !canonicalArrayStringIndex && !ordinaryStringKey)
+            IsPropertyKeyDomain(indexType);
+        if (!IsNumber(indexType) && !canonicalArrayStringIndex && !ordinaryPropertyKey)
             throw new TypeCheckException("Array index must be a number.", tsCode: "TS7053");
 
         if (objType is TypeInfo.Tuple { IsReadonly: true })
