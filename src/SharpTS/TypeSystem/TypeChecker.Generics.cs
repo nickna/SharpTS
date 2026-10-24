@@ -317,6 +317,7 @@ public partial class TypeChecker
                     ? ResolveTypeName(baseName)
                     : _environment.GetTypeBinding(baseName) ?? _environment.Get(baseName);
 
+                genericDef = ResolveForwardGenericClassDefinition(genericDef);
                 result = genericDef switch
                 {
                     TypeInfo.GenericClass gc => new TypeInfo.Instance(InstantiateGenericClass(gc, typeArgs)),

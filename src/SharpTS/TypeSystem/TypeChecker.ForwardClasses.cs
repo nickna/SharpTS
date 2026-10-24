@@ -17,6 +17,7 @@ public partial class TypeChecker
         public string? FilePath { get; } = filePath;
         public SourceDocument? StandaloneSourceDocument { get; } = standaloneSourceDocument;
         public TypeInfo? Constructor { get; set; }
+        public List<TypeInfo.TypeParameter>? TypeParameters { get; set; }
         public bool IsResolving { get; set; }
         public Dictionary<BindingSymbol, bool>? DeclarationFlow { get; set; }
     }
@@ -48,10 +49,10 @@ public partial class TypeChecker
             forward.DeclarationFlow = declarationFlow;
             // Shadow an existing outer type with this declaration's shell, so
             // annotations and deferred constructor reads select the same class.
-            // Preserve existing unresolved annotation and generic handling.
-            if (declaration.TypeParams is not { Count: > 0 } &&
-                !_environment.IsTypeDefinedLocally(declaration.Name.Lexeme) &&
-                _environment.GetTypeBinding(declaration.Name.Lexeme) is not null)
+            // Generic references resolve this shell before instantiating their arguments.
+            if (!_environment.IsTypeDefinedLocally(declaration.Name.Lexeme) &&
+                (_environment.GetTypeBinding(declaration.Name.Lexeme) is not null ||
+                    declaration.TypeParams is { Count: > 0 }))
             {
                 _environment.DefineType(declaration.Name.Lexeme, forward.Shape);
                 _forwardClassTypeShadows[forward.Shape] = forward;
@@ -158,10 +159,20 @@ public partial class TypeChecker
             ResolveForwardClassSignature(forward);
     }
 
+    private TypeInfo? ResolveForwardGenericClassDefinition(TypeInfo? declared)
+    {
+        if (declared is TypeInfo.MutableClass shape &&
+            _forwardClassTypeShadows.TryGetValue(shape, out var forward) &&
+            forward.Declaration.TypeParams is { Count: > 0 })
+            return ResolveForwardClassSignature(forward);
+        return declared;
+    }
+
     private TypeInfo ResolveForwardClassSignature(ForwardClassDeclaration forward)
     {
         if (forward.Constructor is { } completed) return completed;
-        if (forward.IsResolving) return forward.Shape.Freeze();
+        if (forward.IsResolving) return forward.TypeParameters is { Count: > 0 } parameters
+            ? forward.Shape.FreezeGeneric(parameters) : forward.Shape.Freeze();
 
         forward.IsResolving = true;
         _forwardClassSignatureDepth++;
@@ -180,6 +191,7 @@ public partial class TypeChecker
             // retain the declaration's identity and follow its final frozen instance shape.
             forward.Environment.DefineType(declaration.Name.Lexeme, shape);
             var (signatureEnvironment, typeParameters, superclass) = CreateClassTypeEnvironment(declaration);
+            forward.TypeParameters = typeParameters;
             shape.Superclass = superclass;
             shape.IsAbstract = declaration.IsAbstract;
             RegisterSourceClassMembers(declaration, shape);
