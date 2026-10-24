@@ -150,9 +150,11 @@ public partial class TypeChecker
                     });
                 }
                 for (int i = 0; i < parameters.Count; i++)
-                    if (!TypeInfoEqualityComparer.Instance.Equals(signature.Body.ParamTypes[i], parameters[i]))
+                    if (!ReferenceEquals(signature.Body.ParamTypes[i], parameters[i]))
                     {
                         // Public overload/generic signatures share these parameter lists.
+                        // A completed immutable class shape can have the same declaration
+                        // identity as its earlier shell, but must replace that shell here.
                         signature.Body.ParamTypes[i] = parameters[i];
                         refined = true;
                     }
