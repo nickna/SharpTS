@@ -244,9 +244,18 @@ public sealed class SemanticHoverServiceTests
     }
 
     [Fact]
-    public async Task UnvisitedBodyDoesNotReusePreparatoryTypes()
+    public async Task ParameterlessCatchPublishesCheckedMemberTypes()
     {
-        using var project = new HoverProject("class Box { value: number = 1; } const box = new Box(); try {} catch { box./*skipped*/value; } box./*known*/value;");
+        using var project = new HoverProject("class Box { value: number = 1; } const box = new Box(); try {} catch { box./*inside*/value; } box./*known*/value;");
+
+        await project.AssertTypeAsync("inside", "value", "number");
+        await project.AssertTypeAsync("known", "value", "number");
+    }
+
+    [Fact]
+    public async Task InvalidCatchAnnotationCannotExposeUnvisitedBodyTypes()
+    {
+        using var project = new HoverProject("class Box { value: number = 1; } const box = new Box(); try {} catch (error: number) { box./*skipped*/value; } box./*known*/value;");
 
         Assert.Null(await project.QueryAsync("skipped"));
         await project.AssertTypeAsync("known", "value", "number");
