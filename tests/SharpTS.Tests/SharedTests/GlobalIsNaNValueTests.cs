@@ -376,6 +376,68 @@ public sealed class GlobalIsNaNValueTests
             TestHarness.Run(source, mode));
     }
 
+    // Interpreted only: the StringPrototypeMethodWrapper boxed-receiver coercion is interpreter machinery.
+    // Pins: a String.prototype method dispatched on a boxed String wrapper uses an overriding own toString hook instead of the stored primitive (Node: "xy x").
+    [Fact]
+    public void GlobalIsNaNBoxedStringIntrinsicsHonorOverridingHooks()
+    {
+        var source = """
+            const s: any = new String("ab");
+            s.toString = () => "xy";
+            console.log(s.replace("ab","Z"), s.charAt(0));
+            """;
+
+        Assert.Equal(
+            "xy x\n",
+            TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
+    // Interpreted only: the shared numeric coercion hook machinery is interpreter-side (nickna/SharpTS#2929).
+    // Pins: an arguments object's conversion hooks run exactly once — valueOf runs once (n increments to 1), both hooks return objects, so the coercion throws TypeError with n still 1.
+    [Fact]
+    public void GlobalIsNaNArgumentsHooksRunExactlyOnce()
+    {
+        var source = """
+            const args: any = (function () { return arguments; })();
+            let n = 0;
+            args.valueOf = () => (n++, n > 1 ? 5 : {});
+            args.toString = () => ({});
+            try { console.log(isNaN(args), n); }
+            catch (error) { console.log(error.name, error instanceof TypeError, n); }
+            """;
+
+        Assert.Equal(
+            "TypeError true 1\n",
+            TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
+    // Interpreted only: the shared numeric coercion hook machinery is interpreter-side (nickna/SharpTS#2929).
+    // Pins: an Object.prototype-level valueOf override is the resolved hook for an array and diverts the join fast path (Node: 42, then NaN with the "x" override).
+    [Fact]
+    public void GlobalIsNaNHonorsObjectPrototypeLevelValueOf()
+    {
+        var source = """
+            const original: any = Object.prototype.valueOf;
+            try {
+                (Object.prototype as any).valueOf = () => 42;
+                console.log(isNaN([5] as any), Number([5] as any));
+            } finally {
+                (Object.prototype as any).valueOf = original;
+            }
+            const original2: any = Object.prototype.valueOf;
+            try {
+                (Object.prototype as any).valueOf = () => "x";
+                console.log(isNaN([5] as any), Number([5] as any));
+            } finally {
+                (Object.prototype as any).valueOf = original2;
+            }
+            """;
+
+        Assert.Equal(
+            "false 42\ntrue NaN\n",
+            TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         yield return new object[] { "original", """
