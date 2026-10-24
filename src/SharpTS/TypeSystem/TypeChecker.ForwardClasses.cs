@@ -47,12 +47,10 @@ public partial class TypeChecker
                     _currentModule, _filePath, _standaloneSourceDocument);
             _definiteAssignmentStack.TryPeek(out var declarationFlow);
             forward.DeclarationFlow = declarationFlow;
-            // Shadow an existing outer type with this declaration's shell, so
-            // annotations and deferred constructor reads select the same class.
+            // Publish the type facet before the value initializes, so annotations
+            // and deferred constructor reads select the same class.
             // Generic references resolve this shell before instantiating their arguments.
-            if (!_environment.IsTypeDefinedLocally(declaration.Name.Lexeme) &&
-                (_environment.GetTypeBinding(declaration.Name.Lexeme) is not null ||
-                    declaration.TypeParams is { Count: > 0 }))
+            if (!_environment.IsTypeDefinedLocally(declaration.Name.Lexeme))
             {
                 _environment.DefineType(declaration.Name.Lexeme, forward.Shape);
                 _forwardClassTypeShadows[forward.Shape] = forward;
