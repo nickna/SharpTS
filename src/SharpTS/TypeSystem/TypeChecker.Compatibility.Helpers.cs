@@ -155,7 +155,8 @@ public partial class TypeChecker
     private static IEnumerable<ClassMetadataCore> EnumerateClassCores(TypeInfo? type)
     {
         TypeInfo? current = ResolveToClassLike(type);
-        for (int guard = 0; current is not null && guard < 256; guard++)
+        HashSet<ClassMetadataCore> seen = new(ReferenceEqualityComparer.Instance);
+        while (current is not null)
         {
             ClassMetadataCore? core = current switch
             {
@@ -164,7 +165,7 @@ public partial class TypeChecker
                 TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass igc } => igc.Core,
                 _ => null,
             };
-            if (core is null) yield break;
+            if (core is null || !seen.Add(core)) yield break;
             yield return core;
             current = core.Superclass;
         }
