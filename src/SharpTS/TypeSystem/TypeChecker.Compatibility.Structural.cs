@@ -369,35 +369,16 @@ public partial class TypeChecker
     /// </summary>
     private bool IsInSuperclassChain(TypeInfo classType, TypeInfo.InstantiatedGeneric target)
     {
-        TypeInfo? current = classType switch
+        if (!TryGetOrdinaryConstructorHierarchy(classType, out var levels)) return false;
+        foreach (var level in levels.Skip(1))
         {
-            TypeInfo.Class c => c.Superclass,
-            TypeInfo.InstantiatedGeneric ig => GetSuperclass(ig),
-            _ => null
-        };
-
-        while (current != null)
-        {
-            if (current is TypeInfo.InstantiatedGeneric ig)
-            {
-                // Check if this InstantiatedGeneric matches the target
-                if (InstantiatedGenericsMatch(ig, target))
-                    return true;
-
-                // Continue up the chain
-                current = GetSuperclass(ig);
-            }
-            else if (current is TypeInfo.Class c)
-            {
-                // Regular class in chain, continue up
-                current = c.Superclass;
-            }
-            else
-            {
-                break;
-            }
+            if (target.GenericDefinition is not TypeInfo.GenericClass generic ||
+                level.Core.DeclarationId != generic.Core.DeclarationId) continue;
+            var arguments = generic.TypeParams.Select(parameter =>
+                level.Substitutions.GetValueOrDefault(parameter.Name, parameter)).ToList();
+            if (InstantiatedGenericsMatch(new TypeInfo.InstantiatedGeneric(generic, arguments), target))
+                return true;
         }
-
         return false;
     }
 
