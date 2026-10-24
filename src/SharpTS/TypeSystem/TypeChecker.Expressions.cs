@@ -2652,6 +2652,12 @@ public partial class TypeChecker
                 throw new TypeCheckException("Superclass must be a class", tsCode: "TS2507");
         }
 
+        var declarationView = new Stmt.Class(
+            classExpr.Name ?? new Token(TokenType.IDENTIFIER, className, null, TryGetExprLine(classExpr) ?? 0),
+            classExpr.TypeParams, classExpr.SuperclassExpr, classExpr.SuperclassTypeArgs,
+            classExpr.Methods, classExpr.Fields, classExpr.Accessors, classExpr.AutoAccessors,
+            IndexSignatures: classExpr.IndexSignatures);
+
         // Create mutable class early so self-references work
         var mutableClass = previousClass is null
             ? new TypeInfo.MutableClass(className)
@@ -2824,6 +2830,10 @@ public partial class TypeChecker
                 ValidateAccessorAccessibility(classExpr.Accessors);
             }
         }
+
+        using (new EnvironmentScope(this, classTypeEnv))
+            CollectClassAutoAccessorTypes(declarationView, mutableClass, superclass);
+        mutableClass.ResetFrozenCache();
 
         bool anyInferredFieldTypeResolved = CheckClassFieldInitializers(
             classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams);
@@ -3153,6 +3163,8 @@ public partial class TypeChecker
             _compatibilityCache = null;
             _identityCompatibilityCache = null;
         }
+
+        CheckClassAutoAccessorInitializers(declarationView, mutableClass.Freeze());
 
         // Validate against completed inferred signatures, not the placeholders
         // collected before method and getter bodies were checked.
