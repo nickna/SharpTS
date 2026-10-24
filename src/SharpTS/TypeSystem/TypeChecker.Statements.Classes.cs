@@ -787,8 +787,8 @@ public partial class TypeChecker
             // Create mutable class early so self-references in method return types work.
             // This allows methods like "next(): Node" to correctly resolve the return type.
             // The mutable class is populated during signature collection and frozen at the end.
-            var mutableClass = _environment.GetTypeBinding(classStmt.Name.Lexeme) is
-                TypeInfo.MutableClass preregisteredClass
+            var mutableClass = _environment.GetLocalTypeBinding(classStmt.Name.Lexeme) is
+                TypeInfo.MutableClass preregisteredClass && preregisteredClass.DeclarationId == declarationId
                     ? preregisteredClass
                     : new TypeInfo.MutableClass(classStmt.Name.Lexeme, declarationId);
             mutableClass.Superclass = superclass;
