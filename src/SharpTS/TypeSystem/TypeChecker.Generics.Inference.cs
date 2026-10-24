@@ -96,7 +96,15 @@ public partial class TypeChecker
             }
             else
             {
-                result.Add(tp.Default is { } defaultType
+                bool dependsOnSuppliedArgument = gf.ParamTypes.Take(argTypes.Count).Any(parameter =>
+                {
+                    HashSet<string> names = [];
+                    CollectSubstitutionParameterNames(parameter, names);
+                    return names.Contains(tp.Name);
+                });
+                // Callback result inference is deferred until contextualization. Preserve its
+                // fallback here; defaults for return-only parameters are already authoritative.
+                result.Add(tp.Default is { } defaultType && (fallbackToConstraints || !dependsOnSuppliedArgument)
                     ? Substitute(defaultType, inferred)
                     : tp.Constraint ?? TypeInfo.Any.Shared);
             }
