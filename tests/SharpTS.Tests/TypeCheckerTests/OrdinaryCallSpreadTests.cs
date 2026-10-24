@@ -31,6 +31,7 @@ public sealed class OrdinaryCallSpreadTests
     [Theory]
     [InlineData("function f(x: number) {} const a: number[] = [1]; f(...a);", "TS2556")]
     [InlineData("function f(x: number, ...rest: number[]) {} const a: number[] = [1]; f(...a);", "TS2556")]
+    [InlineData("class C { m(first: string, second: string, ...rest: any[]) {} } const three: string[] = ['x', 'y', 'a']; new C().m(...three);", "TS2556")]
     [InlineData("function f(x: number) {} f(...[] as const);", "TS2554")]
     [InlineData("function f(x: number) {} f(...[1, 2] as const);", "TS2554")]
     public void SpreadMustProveFixedParameterPositions(string source, string code)
