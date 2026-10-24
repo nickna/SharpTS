@@ -138,6 +138,8 @@ public partial class TypeChecker
         // parent cache entry that could later match a different same-named class.
         if (ordinaryConstructorPair) unchecked { _ordinaryConstructorComparisonEpoch++; }
         bool ordinaryConstructorContext = _ordinaryConstructorRelationDepth > 0 || ordinaryConstructorPair;
+        // An inferred argument retains its exact type object, including recursive generic members.
+        if (ReferenceEquals(expected, actual)) return true;
         // Mutable self types and recursive constructor facets are compared against
         // their current view. Neither provisional success nor a name-based key is
         // authoritative for another constructor comparison.
