@@ -41,7 +41,7 @@ public partial class TypeChecker
         TypeInfo.MutableClass owner, TypeEnvironment classEnvironment)
     {
         var methodsWithDefaults = methods.Where(method =>
-            method.Parameters.Any(parameter => parameter.DefaultValue is not null ||
+            method.Parameters.Any(parameter => parameter.Type is not null || parameter.DefaultValue is not null ||
                 parameter.DestructuredProperties?.Any(property => property.DefaultValue is not null) == true) ||
             method.Body?.Any(statement => statement is Stmt.Sequence { ParameterName: not null }) == true).ToList();
         if (methodsWithDefaults.Count == 0) return false;
