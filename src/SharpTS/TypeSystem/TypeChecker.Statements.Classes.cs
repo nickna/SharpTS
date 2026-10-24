@@ -812,7 +812,10 @@ public partial class TypeChecker
             _forwardClassTypeShadows.TryGetValue(mutableClass, out var ownedForward);
             bool wasResolving = ownedForward?.IsResolving ?? false;
             if (ownedForward is not null)
+            {
+                ownedForward.TypeParameters = classTypeParams;
                 ownedForward.IsResolving = true;
+            }
             try
             {
                 using (new EnvironmentScope(this, classTypeEnv))
