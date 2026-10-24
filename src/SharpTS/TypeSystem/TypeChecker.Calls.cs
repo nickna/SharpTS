@@ -276,8 +276,11 @@ public partial class TypeChecker
                     {
                         throw new TypeCheckException($"Spread argument must be an iterable type (array, iterator, set, map, string, or generator), got '{spreadType}'.", tsCode: "TS2488");
                     }
-                    // After spread, we can't reliably match params
-                    break;
+                    // An open-ended spread consumes the fixed prefix. Later arguments still
+                    // require checking, even when the total argument count is unknown.
+                    paramIndex = regularParamCount;
+                    argIndex++;
+                    continue;
                 }
                 else
                 {
