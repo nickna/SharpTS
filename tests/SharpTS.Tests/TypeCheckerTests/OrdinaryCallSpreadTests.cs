@@ -24,4 +24,22 @@ public sealed class OrdinaryCallSpreadTests
             function m(...args: number[]) { console.log(args.join(',')); }
             m(...[1], 2, ...[3]);
             """));
+
+    [Theory]
+    [InlineData("m(...['x', 1, 2] as const);", "x 1,2\n")]
+    [InlineData("m(...['x'] as const);", "x \n")]
+    [InlineData("m(...['x'] as const, ...[1, 2] as const);", "x 1,2\n")]
+    public void FixedTupleElementsConsumeFixedParametersBeforeRest(string call, string expected)
+        => Assert.Equal(expected, TestHarness.RunInterpreted(
+            "function m(first: string, ...rest: number[]) { console.log(first, rest.join(',')); } " + call));
+
+    [Fact]
+    public void TupleSpreadRejectsAnIncompatibleFixedPrefix()
+    {
+        var error = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted("""
+            function m(first: string, ...rest: number[]) {}
+            m(...[1, 2, 3] as const);
+            """));
+        Assert.Equal("TS2345", error.Diagnostic.TsCode);
+    }
 }

@@ -246,23 +246,34 @@ public partial class TypeChecker
                     TypeInfo spreadType = CheckExpr(spread.Expression);
                     if (spreadType is TypeInfo.Tuple tupleSpread)
                     {
-                        // A tuple's arity and per-position types are known, so check each
-                        // element against the rest parameter instead of collapsing to one type.
-                        if (restElementType != null)
+                        tupleSpread = (TypeInfo.Tuple)FlattenTupleSpreads(tupleSpread);
+                        // Fixed tuple elements consume the same parameter positions as written
+                        // arguments. Only elements beyond the fixed prefix belong to the rest.
+                        foreach (var element in tupleSpread.Elements)
                         {
-                            foreach (var tupleElem in tupleSpread.ElementTypes)
+                            TypeInfo tupleElem = element.IsOptional
+                                ? new TypeInfo.Union([element.Type, TypeInfo.Undefined.Shared])
+                                : element.Type;
+                            TypeInfo? expected = paramIndex < regularParamCount
+                                ? funcType.ParamTypes[paramIndex]
+                                : restElementType;
+                            if (expected is not null && !IsArgumentCompatible(
+                                expected, tupleElem, paramIndex < regularParamCount && paramIndex >= funcType.MinArity))
                             {
-                                if (!IsCompatible(restElementType, tupleElem))
-                                {
-                                    throw new TypeCheckException($"Spread element type '{tupleElem}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
-                                }
+                                throw new TypeCheckException($"Spread element type '{tupleElem}' not compatible with parameter type '{expected}'.", tsCode: "TS2345");
                             }
-                            if (tupleSpread.RestElementType != null
-                                && !IsCompatible(restElementType, tupleSpread.RestElementType))
+                            paramIndex++;
+                        }
+                        if (tupleSpread.RestElementType != null)
+                        {
+                            if (restElementType != null && !IsCompatible(restElementType, tupleSpread.RestElementType))
                             {
                                 throw new TypeCheckException($"Spread element type '{tupleSpread.RestElementType}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
                             }
+                            paramIndex = Math.Max(paramIndex, regularParamCount);
                         }
+                        argIndex++;
+                        continue;
                     }
                     else if (TryGetSpreadElementType(spreadType, out var spreadElementType))
                     {
