@@ -700,6 +700,7 @@ public partial class TypeChecker
     private TypeInfo CheckCompoundSet(Expr.CompoundSet compound)
     {
         TypeInfo objType = CheckExpr(compound.Object);
+        CheckReadonlyRecordProperty(objType, compound.Name.Lexeme, compound.Name.Line);
         TypeInfo valueType = CheckExpr(compound.Value);
 
         // Invalidate any narrowings affected by this property assignment
@@ -734,6 +735,7 @@ public partial class TypeChecker
     {
         TypeInfo objType = CheckExpr(compound.Object);
         TypeInfo indexType = CheckExpr(compound.Index);
+        CheckReadonlyRecordIndex(objType, indexType, compound.Operator.Line);
         TypeInfo valueType = CheckExpr(compound.Value);
 
         // Invalidate any narrowings affected by this index assignment
@@ -1001,7 +1003,8 @@ public partial class TypeChecker
 
     private TypeInfo CheckLogicalSet(Expr.LogicalSet logical)
     {
-        CheckExpr(logical.Object);
+        TypeInfo objType = CheckExpr(logical.Object);
+        CheckReadonlyRecordProperty(objType, logical.Name.Lexeme, logical.Name.Line);
         CheckExpr(logical.Value);
 
         // Invalidate any narrowings affected by this property assignment
@@ -1018,7 +1021,8 @@ public partial class TypeChecker
     private TypeInfo CheckLogicalSetIndex(Expr.LogicalSetIndex logical)
     {
         TypeInfo objType = CheckExpr(logical.Object);
-        CheckExpr(logical.Index);
+        TypeInfo indexType = CheckExpr(logical.Index);
+        CheckReadonlyRecordIndex(objType, indexType, logical.Operator.Line);
         CheckExpr(logical.Value);
 
         // Invalidate any narrowings affected by this index assignment
@@ -1052,6 +1056,7 @@ public partial class TypeChecker
     private TypeInfo CheckPrefixIncrement(Expr.PrefixIncrement prefix)
     {
         TypeInfo operandType = CheckExpr(prefix.Operand);
+        CheckReadonlyRecordUpdate(prefix.Operand, prefix.Operator.Line);
         if (DotNetTypeSynthesizer.TryResolveIncrementOperator(
                 operandType, prefix.Operator.Type, out var clrResult))
             return clrResult;
@@ -1065,6 +1070,7 @@ public partial class TypeChecker
     private TypeInfo CheckPostfixIncrement(Expr.PostfixIncrement postfix)
     {
         TypeInfo operandType = CheckExpr(postfix.Operand);
+        CheckReadonlyRecordUpdate(postfix.Operand, postfix.Operator.Line);
         if (DotNetTypeSynthesizer.TryResolveIncrementOperator(
                 operandType, postfix.Operator.Type, out _))
             return operandType;
@@ -1073,6 +1079,37 @@ public partial class TypeChecker
             throw new TypeCheckException("An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.", line: postfix.Operator.Line, tsCode: "TS2356");
         }
         return TypeInfo.Primitive.Number;
+    }
+
+    private static void CheckReadonlyRecordProperty(TypeInfo? receiver, string name, int line)
+    {
+        if (receiver is TypeInfo.Record record && record.IsFieldReadonly(name))
+            throw new TypeCheckException($"Cannot assign to '{name}' because it is a read-only property.", line, tsCode: "TS2540");
+    }
+
+    private void CheckReadonlyRecordIndex(TypeInfo? receiver, TypeInfo? index, int line)
+    {
+        if (index is not null && TryGetStringLiteralKeys(index, out var keys))
+            foreach (string key in keys) CheckReadonlyRecordProperty(receiver, key, line);
+    }
+
+    private void CheckReadonlyRecordUpdate(Expr operand, int line)
+    {
+        switch (operand)
+        {
+            case Expr.Get get:
+                CheckReadonlyRecordProperty(_typeMap.Get(get.Object), get.Name.Lexeme, line);
+                break;
+            case Expr.GetIndex index:
+                CheckReadonlyRecordIndex(_typeMap.Get(index.Object), _typeMap.Get(index.Index), line);
+                break;
+            case Expr.Grouping grouping:
+                CheckReadonlyRecordUpdate(grouping.Expression, line);
+                break;
+            case Expr.NonNullAssertion assertion:
+                CheckReadonlyRecordUpdate(assertion.Expression, line);
+                break;
+        }
     }
 
     private TypeInfo CheckNonNullAssertion(Expr.NonNullAssertion nna)

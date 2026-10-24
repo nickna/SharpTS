@@ -928,7 +928,8 @@ public abstract record TypeInfo
         FrozenSet<string>? GetterOnlyFields = null,
         List<CallSignature>? CallSignatures = null,
         List<ConstructorSignature>? ConstructorSignatures = null,
-        FrozenSet<string>? MethodMembers = null
+        FrozenSet<string>? MethodMembers = null,
+        FrozenSet<string>? ReadonlyFields = null
     ) : TypeInfo
     {
         /// <summary>True when the field was declared with method syntax (`m(x): T`), which keeps
@@ -953,6 +954,8 @@ public abstract record TypeInfo
         /// </summary>
         public bool IsFieldOptional(string name) => OptionalFields?.Contains(name) ?? false;
 
+        public bool IsFieldReadonly(string name) => IsReadonly || (ReadonlyFields?.Contains(name) ?? false);
+
         /// <summary>
         /// Checks if a field is defined by a getter with no corresponding setter.
         /// </summary>
@@ -965,7 +968,7 @@ public abstract record TypeInfo
             // property member of the same function type differ in assignability, and ToString is
             // the compatibility-cache key.
             var parts = Fields.Select(f =>
-                $"{f.Key}{(IsMethodMember(f.Key) ? "#m" : "")}{(IsFieldOptional(f.Key) ? "?" : "")}: {f.Value}").ToList();
+                $"{(ReadonlyFields?.Contains(f.Key) == true ? "readonly " : "")}{f.Key}{(IsMethodMember(f.Key) ? "#m" : "")}{(IsFieldOptional(f.Key) ? "?" : "")}: {f.Value}").ToList();
             if (CallSignatures != null) parts.InsertRange(0, CallSignatures.Select(s => s.ToString()));
             if (ConstructorSignatures != null) parts.InsertRange(0, ConstructorSignatures.Select(s => s.ToString()));
             // Index signatures must be rendered so distinct index types don't collapse to the same

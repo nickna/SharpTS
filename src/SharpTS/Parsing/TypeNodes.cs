@@ -158,7 +158,8 @@ public sealed record PropertyMemberNode(
     bool IsOptional,
     bool IsMethod,
     int Line,
-    bool HasExplicitType = true) : ObjectTypeMemberNode(Line);
+    bool HasExplicitType = true,
+    bool IsReadonly = false) : ObjectTypeMemberNode(Line);
 
 /// <summary>An index signature: <c>[k: string]: T</c>. <see cref="KeyKind"/> is
 /// <c>string</c>, <c>number</c>, or <c>symbol</c>.</summary>

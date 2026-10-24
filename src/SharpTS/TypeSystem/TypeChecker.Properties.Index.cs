@@ -917,6 +917,9 @@ public partial class TypeChecker
             List<TypeInfo> propertyTypes = [];
             foreach (string key in literalKeys)
             {
+                if (objType is TypeInfo.Record recordTarget && recordTarget.IsFieldReadonly(key))
+                    throw new TypeCheckException($"Cannot assign to '{key}' because it is a read-only property.",
+                        TryGetExprLine(setIndex.Index), tsCode: "TS2540");
                 if (GetMemberType(objType, key) is not { } propertyType)
                 {
                     propertyTypes.Clear();

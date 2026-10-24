@@ -1097,7 +1097,7 @@ public partial class TypeChecker
                  // A readonly record (`as const`, `Readonly<T>`, a const type parameter) rejects all
                  // member writes with TS2540, in preference to the literal-type mismatch TS2322 the
                  // value-compatibility check below would otherwise report (#493).
-                 if (record.IsReadonly)
+                 if (record.IsFieldReadonly(set.Name.Lexeme))
                  {
                      throw new TypeCheckException(
                          $" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.",

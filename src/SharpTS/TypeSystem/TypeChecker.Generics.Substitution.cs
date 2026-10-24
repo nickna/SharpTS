@@ -112,7 +112,8 @@ public partial class TypeChecker
                         OptionalFields: rec.OptionalFields,
                         IsReadonly: rec.IsReadonly,
                         GetterOnlyFields: rec.GetterOnlyFields,
-                        MethodMembers: rec.MethodMembers)
+                        MethodMembers: rec.MethodMembers,
+                        ReadonlyFields: rec.ReadonlyFields)
                     : SubstituteRecordMembers(rec, Sub),
             TypeInfo.InstantiatedGeneric ig =>
                 new TypeInfo.InstantiatedGeneric(
@@ -350,7 +351,8 @@ public partial class TypeChecker
                 ParamTypes = cs.ParamTypes.Select(sub).ToList(),
                 ReturnType = sub(cs.ReturnType)
             })).ToList(),
-            rec.MethodMembers);
+            rec.MethodMembers,
+            rec.ReadonlyFields);
 
     /// <summary>
     /// Like <see cref="Substitute"/>, but preserves (and substitutes into) a Record's call/construct
