@@ -349,16 +349,8 @@ public partial class TypeChecker
 
     /// <summary>True when a class declares an ES <c>#private</c> field/method anywhere in its hierarchy.
     /// Such classes stay strictly nominal — a <c>#</c>-member has no structural surface to relate.</summary>
-    private static bool HasEsPrivateBrand(TypeInfo.Class cls)
-    {
-        TypeInfo? current = cls;
-        while (current is TypeInfo.Class c)
-        {
-            if (c.Core.PrivateFieldTypes.Count > 0 || c.Core.PrivateMethodTypes.Count > 0) return true;
-            current = GetSuperclass(current);
-        }
-        return false;
-    }
+    private static bool HasEsPrivateBrand(TypeInfo.Class cls) =>
+        EnumerateClassCores(cls).Any(core => core.PrivateFieldTypes.Count > 0 || core.PrivateMethodTypes.Count > 0);
 
     /// <summary>
     /// Collects all instance members (public and TypeScript private/protected) of a class and its
