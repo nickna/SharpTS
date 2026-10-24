@@ -297,7 +297,7 @@ public partial class Parser
                 else
                 {
                     Token accessorBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
-                    body = Block();
+                    body = VarHoister.Hoist(Block(), _spans);
                     accessorBodySpan = new SourceSpan(accessorBodyOpen.Start, ConsumedSourceEnd);
                 }
 
@@ -959,7 +959,7 @@ public partial class Parser
                 }
 
                 Token accessorBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
-                List<Stmt> body = Block();
+                List<Stmt> body = VarHoister.Hoist(Block(), _spans);
 
                 var accessor = new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, IsOverride: isOverride, IsStatic: isStatic, ComputedKey: accessorComputedKey, ReturnTypeNode: returnTypeNode);
                 RecordWrittenMember(accessor, accessorName);

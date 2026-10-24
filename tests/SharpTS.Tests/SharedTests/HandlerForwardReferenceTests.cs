@@ -36,7 +36,23 @@ public class HandlerForwardReferenceTests
         Assert.Equal("1\n2\n3\n4\nouter\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void AccessorHandlerVarsKeepTheirCallableScope(ExecutionMode mode)
+    {
+        const string source = """
+            const C = class {
+                get value(): number {
+                    try { var value = 1; let local = 2; value += local; } finally {}
+                    return value;
+                }
+            };
+            console.log(new C().value);
+            """;
+        Assert.Equal("3\n", TestHarness.Run(source, mode));
+    }
+
     [Theory]
+    [InlineData("class C { get value(): string { try { var value = 1; } finally {} return value; } }")]
     [InlineData("try { let hidden = 1; } catch (error) {} console.log(hidden);")]
     [InlineData("try {} finally { let hidden = 1; } console.log(hidden);")]
     [InlineData("try { throw 0; } catch (error: unknown) { const n: number = error; }")]
