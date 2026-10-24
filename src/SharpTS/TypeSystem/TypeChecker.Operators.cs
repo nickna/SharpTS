@@ -1115,6 +1115,17 @@ public partial class TypeChecker
 
     private void CheckReadonlyRecordIndex(TypeInfo? receiver, TypeInfo? index, int line)
     {
+        if (index is TypeInfo.NumberLiteral number)
+        {
+            CheckReadonlyRecordProperty(receiver,
+                number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), line);
+            return;
+        }
+        if (index is TypeInfo.Union union)
+        {
+            foreach (var member in union.FlattenedTypes) CheckReadonlyRecordIndex(receiver, member, line);
+            return;
+        }
         if (index is not null && TryGetStringLiteralKeys(index, out var keys))
             foreach (string key in keys) CheckReadonlyRecordProperty(receiver, key, line);
     }

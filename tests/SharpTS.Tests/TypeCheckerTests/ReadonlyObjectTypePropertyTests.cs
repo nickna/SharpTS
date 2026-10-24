@@ -25,6 +25,24 @@ public sealed class ReadonlyObjectTypePropertyTests
         Assert.Equal("TS2540", error.Diagnostic.TsCode);
     }
 
+    [Theory]
+    [InlineData("object[0] += 1;")]
+    [InlineData("object[0] -= 1;")]
+    [InlineData("object[0] ||= 2;")]
+    [InlineData("object[0] &&= 2;")]
+    [InlineData("object[0] ??= 2;")]
+    [InlineData("function update(key: 0 | 'mutable') { object[key] += 1; }")]
+    public void NumericReadonlyObjectPropertyRejectsUpdates(string write)
+    {
+        var error = Assert.ThrowsAny<TypeCheckException>(() => Check(
+            "const object: { readonly 0: number; mutable: number } = { 0: 1, mutable: 1 };" + write));
+        Assert.Equal("TS2540", error.Diagnostic.TsCode);
+    }
+
+    [Fact]
+    public void MutableNumericPropertyStillAcceptsUpdates()
+        => Check("const object: { 0: number; readonly other: number } = { 0: 1, other: 1 }; object[0] += 1; object[0] ||= 2;");
+
     [Fact]
     public void MutableSiblingAndGenericReadonlyReadRetainTheirFacets()
     {
