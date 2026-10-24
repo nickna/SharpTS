@@ -53,7 +53,11 @@ public partial class TypeChecker
         // that appear only in the result (`const n: number = host.create<T>()`).
         // Calls checked without a context retain the existing constraint/any fallback.
         if (contextualResultType is not null and not TypeInfo.Any)
-            InferFromType(gf.ReturnType, contextualResultType, inferred, combineCandidates);
+        {
+            Dictionary<string, TypeInfo> contextualInferences = [];
+            InferFromType(gf.ReturnType, contextualResultType, contextualInferences, combineCandidates);
+            foreach (var (name, candidate) in contextualInferences) inferred.TryAdd(name, candidate);
+        }
 
         // Build result list in order of type parameters
         List<TypeInfo> result = [];
@@ -187,7 +191,8 @@ public partial class TypeChecker
                     if (!IsCompatible(existing, inferredType))
                     {
                         if (IsCompatible(inferredType, existing)) inferred[tp.Name] = inferredType;
-                        else if (SamePrimitiveInferenceDomain(existing, inferredType) ||
+                        else if (IsNullishInferenceCandidate(existing) || IsNullishInferenceCandidate(inferredType) ||
+                            SamePrimitiveInferenceDomain(existing, inferredType) ||
                             IsObjectInferenceCandidate(existing) && IsObjectInferenceCandidate(inferredType))
                             inferred[tp.Name] = CreateUnion(existing, inferredType);
                     }
@@ -250,12 +255,55 @@ public partial class TypeChecker
             }
             InferFromType(paramFunc.ReturnType, argFunc.ReturnType, inferred);
         }
+        else if (paramType is TypeInfo.ConditionalType conditional)
+        {
+            foreach (var branch in new[] { conditional.TrueType, conditional.FalseType })
+            {
+                var branchInferences = new Dictionary<string, TypeInfo>(inferred);
+                InferFromType(branch, argType, branchInferences, combineCandidates);
+                if (branchInferences.Count == inferred.Count && branchInferences.All(pair =>
+                    inferred.TryGetValue(pair.Key, out var previous) && TypesEqual(previous, pair.Value)))
+                    continue;
+                var resolved = Substitute(conditional, branchInferences);
+                if (resolved is TypeInfo.ConditionalType || !IsCompatible(resolved, argType)) continue;
+                foreach (var (name, candidate) in branchInferences) inferred[name] = candidate;
+                break;
+            }
+        }
         else if (paramType is TypeInfo.MappedType
-                 { Constraint: TypeInfo.KeyOf keyOf, AsClause: null })
+                 { Constraint: TypeInfo.KeyOf keyOf, AsClause: null } mapped)
         {
             // Homomorphic mapped types (Readonly<T>, Partial<T>, and their direct forms)
             // preserve T's object shape and are inference sites for JSX/class arguments.
-            InferFromType(keyOf.SourceType, argType, inferred, combineCandidates);
+            if (keyOf.SourceType is TypeInfo.TypeParameter source && argType is TypeInfo.Record record &&
+                mapped.ValueType is not TypeInfo.IndexedAccess
+                {
+                    ObjectType: TypeInfo.TypeParameter,
+                    IndexType: TypeInfo.TypeParameter
+                })
+            {
+                Dictionary<string, TypeInfo> reverseMembers = [];
+                foreach (var (name, member) in record.Fields)
+                {
+                    var candidate = new TypeInfo.TypeParameter("'mappedValue");
+                    var sourceMember = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+                        { [name] = candidate }.ToFrozenDictionary());
+                    Dictionary<string, TypeInfo> substitutions = new()
+                    {
+                        [source.Name] = sourceMember,
+                        [mapped.ParameterName] = new TypeInfo.StringLiteral(name)
+                    };
+                    var memberPattern = ResolveIndexedAccessTypes(Substitute(mapped.ValueType, substitutions), substitutions);
+                    Dictionary<string, TypeInfo> memberInferences = [];
+                    InferFromType(memberPattern, member, memberInferences, combineCandidates);
+                    reverseMembers[name] = memberInferences.GetValueOrDefault(candidate.Name) ?? TypeInfo.Unknown.Shared;
+                }
+                InferFromType(source, new TypeInfo.Record(reverseMembers.ToFrozenDictionary(),
+                    OptionalFields: record.OptionalFields, IsReadonly: record.IsReadonly,
+                    ReadonlyFields: record.ReadonlyFields), inferred, combineCandidates);
+            }
+            else
+                InferFromType(keyOf.SourceType, argType, inferred, combineCandidates);
         }
         else if (paramType is TypeInfo.Intersection intersection)
         {
@@ -312,11 +360,15 @@ public partial class TypeChecker
             TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral => 2,
             TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral => 3,
             TypeInfo.BigInt or TypeInfo.BigIntLiteral => 4,
-            TypeInfo.Union union when union.FlattenedTypes.Count > 0 =>
-                union.FlattenedTypes.All(t => Domain(t) == Domain(union.FlattenedTypes[0]))
-                    ? Domain(union.FlattenedTypes[0]) : 0,
+            TypeInfo.Union union => UnionDomain(union),
             _ => 0
         };
+        static int UnionDomain(TypeInfo.Union union)
+        {
+            var members = union.FlattenedTypes.Where(type => !IsNullishInferenceCandidate(type)).ToList();
+            return members.Count > 0 && members.All(type => Domain(type) == Domain(members[0]))
+                ? Domain(members[0]) : 0;
+        }
         int domain = Domain(left);
         return domain != 0 && domain == Domain(right);
     }
@@ -325,7 +377,15 @@ public partial class TypeChecker
     {
         TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance or TypeInfo.Array or TypeInfo.Tuple or
             TypeInfo.Function or TypeInfo.GenericFunction or TypeInfo.InstantiatedGeneric => true,
-        TypeInfo.Union union => union.FlattenedTypes.All(IsObjectInferenceCandidate),
+        TypeInfo.Union union => union.FlattenedTypes.Where(type => !IsNullishInferenceCandidate(type))
+            .All(IsObjectInferenceCandidate),
+        _ => false
+    };
+
+    private static bool IsNullishInferenceCandidate(TypeInfo type) => type switch
+    {
+        TypeInfo.Null or TypeInfo.Undefined => true,
+        TypeInfo.Union union => union.FlattenedTypes.All(IsNullishInferenceCandidate),
         _ => false
     };
 
