@@ -703,7 +703,7 @@ public partial class TypeChecker
         TypeInfo valueType = CheckExpr(compound.Value);
 
         // Invalidate any narrowings affected by this property assignment
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(compound.Object);
+        var basePath = ExtractNarrowingPath(compound.Object);
         if (basePath != null)
         {
             var assignedPath = new Narrowing.NarrowingPath.PropertyAccess(basePath, compound.Name.Lexeme);
@@ -737,7 +737,7 @@ public partial class TypeChecker
         TypeInfo valueType = CheckExpr(compound.Value);
 
         // Invalidate any narrowings affected by this index assignment
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(compound.Object);
+        var basePath = ExtractNarrowingPath(compound.Object);
         if (basePath != null)
         {
             Narrowing.NarrowingPath? assignedPath = null;
@@ -1005,7 +1005,7 @@ public partial class TypeChecker
         CheckExpr(logical.Value);
 
         // Invalidate any narrowings affected by this property assignment
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(logical.Object);
+        var basePath = ExtractNarrowingPath(logical.Object);
         if (basePath != null)
         {
             var assignedPath = new Narrowing.NarrowingPath.PropertyAccess(basePath, logical.Name.Lexeme);
@@ -1022,7 +1022,7 @@ public partial class TypeChecker
         CheckExpr(logical.Value);
 
         // Invalidate any narrowings affected by this index assignment
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(logical.Object);
+        var basePath = ExtractNarrowingPath(logical.Object);
         if (basePath != null)
         {
             Narrowing.NarrowingPath? assignedPath = null;

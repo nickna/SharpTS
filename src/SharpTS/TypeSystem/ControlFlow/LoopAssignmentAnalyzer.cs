@@ -175,6 +175,13 @@ public static class LoopAssignmentAnalyzer
                 CollectAssignedPathsFromExpr(set.Value, paths);
                 break;
 
+            case Expr.SetPrivate setPrivate:
+                if (NarrowingPathExtractor.TryExtract(setPrivate.Object) is { } privateBase)
+                    paths.Add(privateBase);
+                CollectAssignedPathsFromExpr(setPrivate.Object, paths);
+                CollectAssignedPathsFromExpr(setPrivate.Value, paths);
+                break;
+
             case Expr.SetSuper setSuper:
                 CollectAssignedPathsFromExpr(setSuper.Value, paths);
                 break;
@@ -210,7 +217,10 @@ public static class LoopAssignmentAnalyzer
                 break;
 
             case Expr.CompoundSetPrivate compoundSetPrivate:
-                // Private names carry lexical identity and are not public property paths.
+                // The checker supplies private-owner identity. Conservatively invalidate
+                // the receiver here, where lexical class context is unavailable.
+                if (NarrowingPathExtractor.TryExtract(compoundSetPrivate.Object) is { } compoundPrivateBase)
+                    paths.Add(compoundPrivateBase);
                 CollectAssignedPathsFromExpr(compoundSetPrivate.Object, paths);
                 CollectAssignedPathsFromExpr(compoundSetPrivate.Value, paths);
                 break;
@@ -241,6 +251,8 @@ public static class LoopAssignmentAnalyzer
                 break;
 
             case Expr.LogicalSetPrivate logicalSetPrivate:
+                if (NarrowingPathExtractor.TryExtract(logicalSetPrivate.Object) is { } logicalPrivateBase)
+                    paths.Add(logicalPrivateBase);
                 CollectAssignedPathsFromExpr(logicalSetPrivate.Object, paths);
                 CollectAssignedPathsFromExpr(logicalSetPrivate.Value, paths);
                 break;

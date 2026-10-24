@@ -29,6 +29,7 @@ public partial class TypeChecker
 
         ObservePrivateSourceMemberSelection(compound.Name, receiver, owner,
             isStatic ? MemberFacet.PrivateStatic : MemberFacet.PrivateInstance);
+        InvalidatePrivateNarrowing(compound.Object, compound.Name);
         memberLookup?.Succeed();
         return result;
     }

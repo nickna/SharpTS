@@ -314,7 +314,7 @@ public partial class TypeChecker
 
         // Check for property narrowing (e.g., after "if (obj.prop !== null)" or nested "obj.a.b")
         // Use NarrowingPathExtractor to support nested property access
-        var path = Narrowing.NarrowingPathExtractor.TryExtract(get);
+        var path = ExtractNarrowingPath(get);
         if (path != null)
         {
             var narrowedType = GetNarrowing(path);
@@ -824,7 +824,7 @@ public partial class TypeChecker
         objType = ResolveMappedTypeForAccess(objType);
 
         // Extract the narrowing path for the written location, if narrowable.
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(set.Object);
+        var basePath = ExtractNarrowingPath(set.Object);
         Narrowing.NarrowingPath.PropertyAccess? assignedPath = null;
         if (basePath != null)
         {
@@ -1376,6 +1376,8 @@ public partial class TypeChecker
     {
         using var memberLookup = BeginSourceMemberLookup(get, get.Name, MemberOperation.Read);
         TypeInfo result = CheckGetPrivateCore(get);
+        if (ExtractNarrowingPath(get) is { } path && GetNarrowing(path) is { } narrowed)
+            result = narrowed;
         memberLookup?.Succeed();
         return result;
     }
@@ -1437,6 +1439,7 @@ public partial class TypeChecker
     {
         using var memberLookup = BeginSourceMemberLookup(set, set.Name, MemberOperation.Write);
         TypeInfo result = CheckSetPrivateCore(set);
+        InvalidatePrivateNarrowing(set.Object, set.Name);
         memberLookup?.Succeed();
         return result;
     }

@@ -726,7 +726,7 @@ public partial class TypeChecker
                 _ => (null, null)
             };
             if (operand is not null && typeName is not null &&
-                Narrowing.NarrowingPathExtractor.TryExtract(operand) is { } path &&
+                ExtractNarrowingPath(operand) is { } path &&
                 path is not Narrowing.NarrowingPath.Variable && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
                 bool negated = comparison.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL;
@@ -741,7 +741,7 @@ public partial class TypeChecker
             bin.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
             bin.Right is Expr.Literal { Value: null })
         {
-            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin.Left);
+            var path = ExtractNarrowingPath(bin.Left);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
                 return AnalyzePathNullCheck(path, bin.Left, negated: true, checkingForNull: true, checkBoth: bin.Operator.Type == TokenType.BANG_EQUAL);
@@ -753,7 +753,7 @@ public partial class TypeChecker
             bin2.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
             bin2.Left is Expr.Literal { Value: null })
         {
-            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin2.Right);
+            var path = ExtractNarrowingPath(bin2.Right);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
                 return AnalyzePathNullCheck(path, bin2.Right, negated: true, checkingForNull: true, checkBoth: bin2.Operator.Type == TokenType.BANG_EQUAL);
@@ -765,7 +765,7 @@ public partial class TypeChecker
             bin3.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
             bin3.Right is Expr.Literal { Value: null })
         {
-            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin3.Left);
+            var path = ExtractNarrowingPath(bin3.Left);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
                 return AnalyzePathNullCheck(path, bin3.Left, negated: false, checkingForNull: true, checkBoth: bin3.Operator.Type == TokenType.EQUAL_EQUAL);
@@ -777,7 +777,7 @@ public partial class TypeChecker
             bin4.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
             bin4.Left is Expr.Literal { Value: null })
         {
-            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin4.Right);
+            var path = ExtractNarrowingPath(bin4.Right);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
                 return AnalyzePathNullCheck(path, bin4.Right, negated: false, checkingForNull: true, checkBoth: bin4.Operator.Type == TokenType.EQUAL_EQUAL);
@@ -789,7 +789,7 @@ public partial class TypeChecker
             bin5.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
             bin5.Right is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
         {
-            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin5.Left);
+            var path = ExtractNarrowingPath(bin5.Left);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
                 return AnalyzePathNullCheck(path, bin5.Left, negated: true, checkingForNull: false, checkBoth: bin5.Operator.Type == TokenType.BANG_EQUAL);
@@ -801,7 +801,7 @@ public partial class TypeChecker
             bin6.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
             bin6.Left is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
         {
-            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin6.Right);
+            var path = ExtractNarrowingPath(bin6.Right);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
                 return AnalyzePathNullCheck(path, bin6.Right, negated: true, checkingForNull: false, checkBoth: bin6.Operator.Type == TokenType.BANG_EQUAL);
@@ -813,7 +813,7 @@ public partial class TypeChecker
             bin7.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
             bin7.Right is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
         {
-            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin7.Left);
+            var path = ExtractNarrowingPath(bin7.Left);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
                 return AnalyzePathNullCheck(path, bin7.Left, negated: false, checkingForNull: false, checkBoth: bin7.Operator.Type == TokenType.EQUAL_EQUAL);
@@ -825,7 +825,7 @@ public partial class TypeChecker
             bin8.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
             bin8.Left is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
         {
-            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin8.Right);
+            var path = ExtractNarrowingPath(bin8.Right);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
                 return AnalyzePathNullCheck(path, bin8.Right, negated: false, checkingForNull: false, checkBoth: bin8.Operator.Type == TokenType.EQUAL_EQUAL);
@@ -871,7 +871,7 @@ public partial class TypeChecker
             break;
         }
 
-        var path = Narrowing.NarrowingPathExtractor.TryExtract(expr);
+        var path = ExtractNarrowingPath(expr);
         if (path == null || !Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
         {
             return (null, null, null);

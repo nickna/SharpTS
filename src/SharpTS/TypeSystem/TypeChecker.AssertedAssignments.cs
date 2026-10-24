@@ -57,7 +57,7 @@ public partial class TypeChecker
             // Only this explicit operation uses the assertion's type. Nested RHS
             // writes go through their normal checker; no ambient override leaks.
             _typeMap.Set(expression.LoweredAssignment, result);
-            var path = Narrowing.NarrowingPathExtractor.TryExtract(reference);
+            var path = ExtractNarrowingPath(reference);
             if (path is not null) InvalidateNarrowingsFor(path);
             if (reference is Expr.Variable written)
             {

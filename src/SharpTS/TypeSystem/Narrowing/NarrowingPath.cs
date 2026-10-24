@@ -38,6 +38,7 @@ public abstract record NarrowingPath
         {
             PropertyAccess pa => IsPrefixOf(pa.Base),
             ElementAccess ea => IsPrefixOf(ea.Base),
+            PrivateAccess pa => IsPrefixOf(pa.Base),
             _ => false
         };
     }
@@ -84,6 +85,14 @@ public abstract record NarrowingPath
         public override string RootVariable => Base.RootVariable;
         public override int Depth => Base.Depth + 1;
         public override string ToString() => $"{Base}.{Property}";
+    }
+
+    /// <summary>A private name is identified by its lexical class declaration.</summary>
+    public sealed record PrivateAccess(NarrowingPath Base, int OwnerId, string Name) : NarrowingPath
+    {
+        public override string RootVariable => Base.RootVariable;
+        public override int Depth => Base.Depth + 1;
+        public override string ToString() => $"{Base}.{Name}@{OwnerId}";
     }
 
     /// <summary>

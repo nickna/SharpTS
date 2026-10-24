@@ -34,7 +34,7 @@ public partial class TypeChecker
     {
         // Validate the ordinary indexed read before applying a stable path refinement.
         TypeInfo result = CheckGetIndexCore(getIndex);
-        var path = Narrowing.NarrowingPathExtractor.TryExtract(getIndex);
+        var path = ExtractNarrowingPath(getIndex);
         return path is not null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path)
             ? GetNarrowing(path) ?? result
             : result;
@@ -689,7 +689,7 @@ public partial class TypeChecker
         }
 
         // Invalidate any narrowings affected by this index assignment
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(setIndex.Object);
+        var basePath = ExtractNarrowingPath(setIndex.Object);
         if (basePath != null)
         {
             Narrowing.NarrowingPath? assignedPath = null;
