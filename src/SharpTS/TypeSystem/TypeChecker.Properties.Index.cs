@@ -686,6 +686,11 @@ public partial class TypeChecker
 
     private void EnsureWritableClassIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
     {
+        if (receiver is TypeInfo.Union union)
+        {
+            foreach (var member in union.FlattenedTypes) EnsureWritableClassIndex(member, index, syntax);
+            return;
+        }
         if (receiver is TypeInfo.TypeParameter { Constraint: { } constraint })
         {
             EnsureWritableClassIndex(constraint, index, syntax);
