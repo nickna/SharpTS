@@ -185,7 +185,7 @@ public sealed class AnyStaticPrivateReceiverTests
             """, "TS2554"];
         yield return ["""
             class C { static #value: number = 1; static read(value: unknown) { return value.#value; } }
-            """, "TS2339"];
+            """, "TS18046"];
         yield return ["""
             class C { static #value: number = 1; static read(value: {}) { return value.#value; } }
             """, "TS2339"];

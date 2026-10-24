@@ -1413,13 +1413,15 @@ public partial class TypeChecker
         }
         if (owner.StaticPrivateMethodTypes.TryGetValue(fieldName, out var staticMethodType))
         {
+            ValidatePrivateReceiver(objType, owner, isStatic: true, get.Name);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateStatic);
             return objType is TypeInfo.Any ? TypeInfo.Any.Shared : staticMethodType;
         }
 
         // Check static private fields if accessing on the class itself
-        if (IsStaticPrivateConstructor(objType, owner) && owner.StaticPrivateFieldTypes.TryGetValue(fieldName, out var staticFieldType))
+        if (owner.StaticPrivateFieldTypes.TryGetValue(fieldName, out var staticFieldType))
         {
+            ValidatePrivateReceiver(objType, owner, isStatic: true, get.Name);
             ObservePendingGetterFieldRead(owner, isStatic: true, fieldName);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateStatic);
             return objType is TypeInfo.Any ? TypeInfo.Any.Shared : staticFieldType;
@@ -1462,9 +1464,10 @@ public partial class TypeChecker
             ObservePrivateSourceMemberSelection(set.Name, objType, owner, MemberFacet.PrivateInstance);
             fieldType = pf;
         }
-        else if (IsStaticPrivateConstructor(objType, owner) && owner.StaticPrivateFieldTypes.TryGetValue(fieldName, out var spf))
+        else if (owner.StaticPrivateFieldTypes.TryGetValue(fieldName, out var spf))
         {
             ObservePrivateSourceMemberSelection(set.Name, objType, owner, MemberFacet.PrivateStatic);
+            ValidatePrivateReceiver(objType, owner, isStatic: true, set.Name);
             fieldType = objType is TypeInfo.Any ? TypeInfo.Any.Shared : spf;
         }
 
@@ -1519,9 +1522,8 @@ public partial class TypeChecker
         {
             methodType = pm;
         }
-        else if (IsStaticPrivateConstructor(objType, owner) &&
-            (owner.StaticPrivateFieldTypes.TryGetValue(methodName, out var spm) ||
-                owner.StaticPrivateMethodTypes.TryGetValue(methodName, out spm)))
+        else if (owner.StaticPrivateFieldTypes.TryGetValue(methodName, out var spm) ||
+                owner.StaticPrivateMethodTypes.TryGetValue(methodName, out spm))
         {
             methodType = spm;
             selectedFacet = MemberFacet.PrivateStatic;
@@ -1534,8 +1536,7 @@ public partial class TypeChecker
             throw new TypeCheckException($" Private method '{methodName}' does not exist on class '{_currentClass.Name}'.", tsCode: "TS2339");
         }
 
-        if (selectedFacet == MemberFacet.PrivateInstance)
-            ValidatePrivateReceiver(objType, owner, isStatic: false, call.Name);
+        ValidatePrivateReceiver(objType, owner, selectedFacet == MemberFacet.PrivateStatic, call.Name);
         RecordPrivateSourceMemberRead(call, call.Name, objType, owner, selectedFacet);
         if (methodType is TypeInfo.Any || selectedFacet == MemberFacet.PrivateStatic && objType is TypeInfo.Any)
         {
@@ -1577,14 +1578,4 @@ public partial class TypeChecker
         return funcType.ReturnType;
     }
 
-    // Any receivers still require a lexical declaration; runtime branding checks their value.
-    // Generic constructor aliases retain their declaration identity. Accepting
-    // every generic class here would expose another declaration's same-spelled
-    // private member through the current class's metadata.
-    private bool IsStaticPrivateConstructor(TypeInfo type, TypeInfo.Class owner) =>
-        type is TypeInfo.Any or TypeInfo.Class ||
-        type is TypeInfo.MutableClass mutable && mutable.DeclarationId != 0 &&
-        mutable.DeclarationId == owner.Core.DeclarationId ||
-        type is TypeInfo.GenericClass generic &&
-        SourceDerivesFromDeclaration(generic, owner.Core.DeclarationId);
 }
