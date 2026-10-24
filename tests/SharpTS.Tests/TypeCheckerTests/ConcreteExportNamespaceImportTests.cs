@@ -16,11 +16,11 @@ public sealed class ConcreteExportNamespaceImportTests
         => Check("const value: { known: number };", source, code);
 
     [Theory]
-    [InlineData("const result: number = Dynamic('ok');", null)]
-    [InlineData("Dynamic(1);", "TS2345")]
-    [InlineData("const result: string = Dynamic('ok');", "TS2322")]
-    public void CallableExportAssignmentRetainsItsSignature(string source, string? code)
-        => Check("function value(input: string): number;", source, code);
+    [InlineData("const result: number = Dynamic.read('ok');", null)]
+    [InlineData("Dynamic.read(1);", "TS2345")]
+    [InlineData("const result: string = Dynamic.read('ok');", "TS2322")]
+    public void RecordExportAssignmentRetainsMemberCallSignatures(string source, string? code)
+        => Check("const value: { read: (input: string) => number };", source, code);
 
     private static void Check(string declaration, string source, string? code)
     {
