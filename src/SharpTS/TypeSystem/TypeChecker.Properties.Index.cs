@@ -377,11 +377,8 @@ public partial class TypeChecker
             if (objType is TypeInfo.Interface { StringIndexType: { } itfIdxType }) return WithUncheckedUndefined(itfIdxType);
         }
 
-        if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
-            getIndex.Index is Expr.Literal { Value: string constructorMember } &&
-            (constructorMember == "prototype" || HasKnownConstructorMember(objType, constructorMember)))
-            return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, constructorMember, null,
-                TryGetExprLine(getIndex.Index) ?? 0));
+        if (TryReadKnownIndexedConstructorMember(objType, indexType, getIndex) is { } knownConstructorMember)
+            return knownConstructorMember;
 
         if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
             return knownInstanceMember;
@@ -1499,11 +1496,8 @@ public partial class TypeChecker
             return GetFunctionHasInstanceReadType(objType, getIndex.Index)
                 ?? GetMemberType(objType, "@@hasInstance");
 
-        if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
-            getIndex.Index is Expr.Literal { Value: string constructorMember } &&
-            (constructorMember == "prototype" || HasKnownConstructorMember(objType, constructorMember)))
-            return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, constructorMember, null,
-                TryGetExprLine(getIndex.Index) ?? 0));
+        if (TryReadKnownIndexedConstructorMember(objType, indexType, getIndex) is { } knownConstructorMember)
+            return knownConstructorMember;
 
         if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
             return knownInstanceMember;
@@ -1607,6 +1601,19 @@ public partial class TypeChecker
         }
 
         return null;
+    }
+
+    private TypeInfo? TryReadKnownIndexedConstructorMember(TypeInfo receiver, TypeInfo index, Expr.GetIndex syntax)
+    {
+        if (receiver is not (TypeInfo.Class or TypeInfo.GenericClass or
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass }) ||
+            !(TryGetStringLiteralKeys(index, out var names) || TryGetNumericLiteralKeys(index, out names)) ||
+            names.Any(name => name != "prototype" && !HasKnownConstructorMember(receiver, name)))
+            return null;
+
+        return names.Select(name => CheckGetOnClass(receiver,
+            new Token(TokenType.IDENTIFIER, name, null, TryGetExprLine(syntax.Index) ?? 0)))
+            .Aggregate(CreateUnion);
     }
 
     private bool HasKnownConstructorMember(TypeInfo receiver, string name)
