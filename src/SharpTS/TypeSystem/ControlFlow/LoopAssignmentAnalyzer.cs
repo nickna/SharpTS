@@ -17,13 +17,32 @@ public static class LoopAssignmentAnalyzer
     /// <param name="privateOwner">Resolves lexical private names to their declaration identity.</param>
     /// <returns>A set of all paths that receive assignments within the statement.</returns>
     public static HashSet<NarrowingPath> GetAssignedPaths(Stmt stmt, Func<Token, int?>? privateOwner = null)
+        => GetAssignedWrites(stmt, privateOwner).Writes.Keys.ToHashSet();
+
+    public sealed record AssignmentAnalysis(Dictionary<NarrowingPath, List<Expr?>> Writes, bool HasOpaqueEffects);
+
+    /// <summary>Records every syntactic write; null denotes an unknown written value.</summary>
+    public static AssignmentAnalysis GetAssignedWrites(
+        Stmt stmt, Func<Token, int?>? privateOwner = null)
     {
-        var assignedPaths = new HashSet<NarrowingPath>();
-        CollectAssignedPaths(stmt, assignedPaths, privateOwner);
-        return assignedPaths;
+        var assignments = new AssignmentCollection();
+        CollectAssignedPaths(stmt, assignments, privateOwner);
+        return new(assignments.Writes, assignments.HasOpaqueEffects);
     }
 
-    private static void CollectAssignedPaths(Stmt stmt, HashSet<NarrowingPath> paths, Func<Token, int?>? privateOwner)
+    private sealed class AssignmentCollection
+    {
+        public Dictionary<NarrowingPath, List<Expr?>> Writes { get; } = [];
+        public bool HasOpaqueEffects { get; set; }
+
+        public void Add(NarrowingPath path, Expr? write = null)
+        {
+            if (!Writes.TryGetValue(path, out var writes)) Writes[path] = writes = [];
+            writes.Add(write);
+        }
+    }
+
+    private static void CollectAssignedPaths(Stmt stmt, AssignmentCollection paths, Func<Token, int?>? privateOwner)
     {
         switch (stmt)
         {
@@ -143,12 +162,17 @@ public static class LoopAssignmentAnalyzer
                 CollectAssignedPaths(labeledStmt.Statement, paths, privateOwner);
                 break;
 
-            // Other statement types (declarations, imports, etc.) don't contain assignments
-            // that we care about for narrowing purposes
+            case Stmt.Break or Stmt.Continue or Stmt.Function:
+                break;
+            default:
+                // Keep invalidation conservative when a preservation proof cannot
+                // account for a construct's eager effects (for example a class).
+                paths.HasOpaqueEffects = true;
+                break;
         }
     }
 
-    private static void CollectAssignedPathsFromExpr(Expr expr, HashSet<NarrowingPath> paths, Func<Token, int?>? privateOwner)
+    private static void CollectAssignedPathsFromExpr(Expr expr, AssignmentCollection paths, Func<Token, int?>? privateOwner)
     {
         switch (expr)
         {
@@ -171,13 +195,13 @@ public static class LoopAssignmentAnalyzer
 
             case Expr.Set set:
                 if (NarrowingPathExtractor.TryExtract(set.Object, privateOwner) is { } setBasePath)
-                    paths.Add(new NarrowingPath.PropertyAccess(setBasePath, set.Name.Lexeme));
+                    paths.Add(new NarrowingPath.PropertyAccess(setBasePath, set.Name.Lexeme), set);
                 CollectAssignedPathsFromExpr(set.Object, paths, privateOwner);
                 CollectAssignedPathsFromExpr(set.Value, paths, privateOwner);
                 break;
 
             case Expr.SetPrivate setPrivate:
-                AddPrivateAssignmentPath(setPrivate.Object, setPrivate.Name, paths, privateOwner);
+                AddPrivateAssignmentPath(setPrivate.Object, setPrivate.Name, paths, privateOwner, setPrivate);
                 CollectAssignedPathsFromExpr(setPrivate.Object, paths, privateOwner);
                 CollectAssignedPathsFromExpr(setPrivate.Value, paths, privateOwner);
                 break;
@@ -194,7 +218,7 @@ public static class LoopAssignmentAnalyzer
                 {
                     if (setIndex.Index is Expr.Literal { Value: double d } && d == Math.Floor(d) && d >= 0)
                     {
-                        paths.Add(new NarrowingPath.ElementAccess(indexBasePath, (int)d));
+                        paths.Add(new NarrowingPath.ElementAccess(indexBasePath, (int)d), setIndex);
                     }
                     else
                     {
@@ -211,13 +235,13 @@ public static class LoopAssignmentAnalyzer
 
             case Expr.CompoundSet compoundSet:
                 if (NarrowingPathExtractor.TryExtract(compoundSet.Object, privateOwner) is { } compoundBasePath)
-                    paths.Add(new NarrowingPath.PropertyAccess(compoundBasePath, compoundSet.Name.Lexeme));
+                    paths.Add(new NarrowingPath.PropertyAccess(compoundBasePath, compoundSet.Name.Lexeme), compoundSet);
                 CollectAssignedPathsFromExpr(compoundSet.Object, paths, privateOwner);
                 CollectAssignedPathsFromExpr(compoundSet.Value, paths, privateOwner);
                 break;
 
             case Expr.CompoundSetPrivate compoundSetPrivate:
-                AddPrivateAssignmentPath(compoundSetPrivate.Object, compoundSetPrivate.Name, paths, privateOwner);
+                AddPrivateAssignmentPath(compoundSetPrivate.Object, compoundSetPrivate.Name, paths, privateOwner, compoundSetPrivate);
                 CollectAssignedPathsFromExpr(compoundSetPrivate.Object, paths, privateOwner);
                 CollectAssignedPathsFromExpr(compoundSetPrivate.Value, paths, privateOwner);
                 break;
@@ -229,7 +253,7 @@ public static class LoopAssignmentAnalyzer
                 if (NarrowingPathExtractor.TryExtract(compoundSetIndex.Object, privateOwner) is { } compoundIndexBasePath)
                 {
                     if (compoundSetIndex.Index is Expr.Literal { Value: double d } && d == Math.Floor(d) && d >= 0)
-                        paths.Add(new NarrowingPath.ElementAccess(compoundIndexBasePath, (int)d));
+                        paths.Add(new NarrowingPath.ElementAccess(compoundIndexBasePath, (int)d), compoundSetIndex);
                     else
                         paths.Add(compoundIndexBasePath);
                 }
@@ -242,13 +266,13 @@ public static class LoopAssignmentAnalyzer
 
             case Expr.LogicalSet logicalSet:
                 if (NarrowingPathExtractor.TryExtract(logicalSet.Object, privateOwner) is { } logicalBasePath)
-                    paths.Add(new NarrowingPath.PropertyAccess(logicalBasePath, logicalSet.Name.Lexeme));
+                    paths.Add(new NarrowingPath.PropertyAccess(logicalBasePath, logicalSet.Name.Lexeme), logicalSet);
                 CollectAssignedPathsFromExpr(logicalSet.Object, paths, privateOwner);
                 CollectAssignedPathsFromExpr(logicalSet.Value, paths, privateOwner);
                 break;
 
             case Expr.LogicalSetPrivate logicalSetPrivate:
-                AddPrivateAssignmentPath(logicalSetPrivate.Object, logicalSetPrivate.Name, paths, privateOwner);
+                AddPrivateAssignmentPath(logicalSetPrivate.Object, logicalSetPrivate.Name, paths, privateOwner, logicalSetPrivate);
                 CollectAssignedPathsFromExpr(logicalSetPrivate.Object, paths, privateOwner);
                 CollectAssignedPathsFromExpr(logicalSetPrivate.Value, paths, privateOwner);
                 break;
@@ -260,7 +284,7 @@ public static class LoopAssignmentAnalyzer
                 if (NarrowingPathExtractor.TryExtract(logicalSetIndex.Object, privateOwner) is { } logicalIndexBasePath)
                 {
                     if (logicalSetIndex.Index is Expr.Literal { Value: double d } && d == Math.Floor(d) && d >= 0)
-                        paths.Add(new NarrowingPath.ElementAccess(logicalIndexBasePath, (int)d));
+                        paths.Add(new NarrowingPath.ElementAccess(logicalIndexBasePath, (int)d), logicalSetIndex);
                     else
                         paths.Add(logicalIndexBasePath);
                 }
@@ -269,13 +293,13 @@ public static class LoopAssignmentAnalyzer
             case Expr.PrefixIncrement prefix:
                 CollectAssignedPathsFromExpr(prefix.Operand, paths, privateOwner);
                 if (NarrowingPathExtractor.TryExtract(prefix.Operand, privateOwner) is { } prefixPath)
-                    paths.Add(prefixPath);
+                    paths.Add(prefixPath, prefix);
                 break;
 
             case Expr.PostfixIncrement postfix:
                 CollectAssignedPathsFromExpr(postfix.Operand, paths, privateOwner);
                 if (NarrowingPathExtractor.TryExtract(postfix.Operand, privateOwner) is { } postfixPath)
-                    paths.Add(postfixPath);
+                    paths.Add(postfixPath, postfix);
                 break;
 
             case Expr.Binary binary:
@@ -326,7 +350,10 @@ public static class LoopAssignmentAnalyzer
 
             case Expr.ObjectLiteral obj:
                 foreach (var prop in obj.Properties)
+                {
+                    if (prop.Key is Expr.ComputedKey) paths.HasOpaqueEffects = true;
                     CollectAssignedPathsFromExpr(prop.Value, paths, privateOwner);
+                }
                 break;
 
             case Expr.NullishCoalescing nullish:
@@ -348,6 +375,7 @@ public static class LoopAssignmentAnalyzer
                 break;
 
             case Expr.New newExpr:
+                paths.HasOpaqueEffects = true;
                 foreach (var arg in newExpr.Arguments)
                     CollectAssignedPathsFromExpr(arg, paths, privateOwner);
                 break;
@@ -372,16 +400,20 @@ public static class LoopAssignmentAnalyzer
                 CollectAssignedPathsFromExpr(spread.Expression, paths, privateOwner);
                 break;
 
-            // Literals, variables, this, etc. don't contain assignments
+            case Expr.Literal or Expr.Variable or Expr.This or Expr.Super or Expr.ImportMeta or Expr.RegexLiteral:
+                break;
+            default:
+                paths.HasOpaqueEffects = true;
+                break;
         }
     }
 
     private static void AddPrivateAssignmentPath(
-        Expr receiver, Token name, HashSet<NarrowingPath> paths, Func<Token, int?>? privateOwner)
+        Expr receiver, Token name, AssignmentCollection paths, Func<Token, int?>? privateOwner, Expr write)
     {
         if (NarrowingPathExtractor.TryExtract(receiver, privateOwner) is not { } basePath) return;
         paths.Add(privateOwner?.Invoke(name) is { } ownerId
             ? new NarrowingPath.PrivateAccess(basePath, ownerId, name.Lexeme)
-            : basePath);
+            : basePath, write);
     }
 }

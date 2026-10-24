@@ -1442,10 +1442,10 @@ public partial class TypeChecker
         var incomingAssignments = SnapshotDefiniteAssignmentState();
 
         // Include increment expression in assigned paths analysis
-        HashSet<Narrowing.NarrowingPath>? incrementPaths = null;
+        ControlFlow.LoopAssignmentAnalyzer.AssignmentAnalysis? incrementPaths = null;
         if (stmt.Increment != null)
         {
-            incrementPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(
+            incrementPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
                 new Stmt.Expression(stmt.Increment), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
         }
 
@@ -1684,16 +1684,22 @@ public partial class TypeChecker
     private void CheckLoopBody(
         Stmt body,
         List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)>? conditionNarrowings,
-        HashSet<Narrowing.NarrowingPath>? additionalAssignedPaths = null,
+        ControlFlow.LoopAssignmentAnalyzer.AssignmentAnalysis? additionalAssignedPaths = null,
         TypeEnvironment? loopEnvironment = null)
     {
         // Get assigned paths from body
-        var assignedPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(
+        var analysis = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
             body, name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
+        var assignments = analysis.Writes;
+        bool hasOpaqueEffects = analysis.HasOpaqueEffects;
         if (additionalAssignedPaths != null)
         {
-            foreach (var p in additionalAssignedPaths)
-                assignedPaths.Add(p);
+            hasOpaqueEffects |= additionalAssignedPaths.HasOpaqueEffects;
+            foreach (var (path, writes) in additionalAssignedPaths.Writes)
+            {
+                if (assignments.TryGetValue(path, out var existing)) existing.AddRange(writes);
+                else assignments[path] = writes;
+            }
         }
 
         // Set up loop environment if provided
@@ -1710,9 +1716,12 @@ public partial class TypeChecker
             try
             {
                 // Invalidate narrowings for any paths assigned within the loop
-                foreach (var assignedPath in assignedPaths)
+                HashSet<Narrowing.NarrowingPath> preservedPrivatePaths = hasOpaqueEffects ? [] :
+                    assignments.Keys.Where(path => LoopWritesPreserveNestedPrivateGuard(path, assignments)).ToHashSet();
+                foreach (var assignedPath in assignments.Keys)
                 {
-                    InvalidateNarrowingsFor(assignedPath);
+                    if (!preservedPrivatePaths.Contains(assignedPath))
+                        InvalidateNarrowingsFor(assignedPath);
                 }
 
                 // Apply the loop-condition narrowings. The condition is re-evaluated at the top of
