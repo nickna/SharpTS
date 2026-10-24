@@ -1379,6 +1379,15 @@ public partial class TypeChecker
 
         if (expected is TypeInfo.Void && actual is TypeInfo.Void) return true;
 
+        // Every target overload must be supported by a declared source overload.
+        // The implementation signature is not part of the public callable surface.
+        if (expected is TypeInfo.OverloadedFunction targetOverloads
+            && actual is TypeInfo.OverloadedFunction sourceOverloads)
+        {
+            return targetOverloads.Signatures.All(target => sourceOverloads.Signatures.Any(source =>
+                IsCompatible(target, source)));
+        }
+
         // OverloadedFunction expected: actual function must satisfy all overload signatures
         // This handles cases like interface method overloads being satisfied by a union-parameter function
         if (expected is TypeInfo.OverloadedFunction overloadedFunc && actual is TypeInfo.Function actualFunc)
