@@ -8,17 +8,20 @@ public sealed class AnyExportNamespaceImportTests
 {
     [Theory]
     [InlineData("any", "const value: number = Dynamic.missing; const text: string = Dynamic.anything(1);", null)]
-    [InlineData("{ known: number }", "const value: string = Dynamic.known;", "TS2322")]
-    [InlineData("{ known: number }", "Dynamic.missing;", "TS2339")]
+    [InlineData("namespace", "const value: string = Dynamic.known;", "TS2322")]
+    [InlineData("namespace", "Dynamic.missing;", "TS2339")]
     public void ExplicitDynamicExportAssignmentsRemainAny(string exportedType, string source, string? code)
     {
         string directory = Path.GetFullPath("any-export-namespace");
         string entryPath = Path.Combine(directory, "main.ts");
+        string valueDeclaration = exportedType == "any"
+            ? "const value: any;"
+            : "namespace value { const known: number; }";
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             [Path.Combine(directory, "assignment.d.ts")] = $$"""
                 declare module "assignment" {
-                    const value: {{exportedType}};
+                    {{valueDeclaration}}
                     interface Auxiliary { marker: number; }
                     export = value;
                 }

@@ -25,11 +25,13 @@ public sealed class GeneratorCompletionTypeTests
             function* defaulted(): Generator<number> { yield 1; return 'done'; }
             function* generic<T>(value: T): Generator<number, T, unknown> { yield 1; return value; }
             async function* asyncCompletion(): AsyncGenerator<number, string, unknown> { yield 1; return 'done'; }
+            async function* adoptedCompletion(): AsyncGenerator<number, string, unknown> { yield 1; return Promise.resolve('done'); }
             """);
 
     [Theory]
     [InlineData("function* bad(): Generator<number, string, unknown> { yield 1; return 2; }")]
     [InlineData("async function* bad(): AsyncGenerator<number, string, unknown> { yield 1; return 2; }")]
+    [InlineData("function* bad(): Generator<number, void, unknown> { yield 1; return 'bad'; }")]
     public void IncompatibleCompletionValuesRemainInvalid(string source)
         => Assert.Equal("TS2322", Assert.ThrowsAny<TypeCheckException>(() => Check(source)).Diagnostic.TsCode);
 }
