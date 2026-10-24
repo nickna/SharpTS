@@ -62,4 +62,15 @@ public sealed class OrdinaryCallSpreadTests
             f(1, ...a);
             f(...[1] as const, ...a);
             """);
+
+    [Fact]
+    public void FreshArraySpreadsAreContextuallyTypedAsTuples()
+        => TestHarness.RunInterpreted("""
+            function f(x: number) {}
+            function g(x: number, y: string) {}
+            function h(callback: (value: number) => number) {}
+            f(...[1]);
+            g(...[1, 'ok']);
+            h(...[value => value + 1]);
+            """);
 }

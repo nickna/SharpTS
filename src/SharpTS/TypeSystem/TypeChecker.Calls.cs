@@ -248,13 +248,22 @@ public partial class TypeChecker
             {
                 if (arg is Expr.Spread spread)
                 {
-                    // A spread argument only has to be *iterable*, not an array: the runtime
-                    // expander walks Symbol.iterator, so Set/Map/string/generator/iterator/
-                    // TypedArray and hand-written iterables all spread correctly, and tsc
-                    // accepts them. TS2488 is reserved for genuinely non-iterable operands.
-                    // Uses the same predicate as array-literal spread (CheckArray) so the two
-                    // spread positions can't drift apart. (#1282)
-                    TypeInfo spreadType = CheckExpr(spread.Expression);
+                    // Fresh array literals in call spreads receive positional tuple context;
+                    // retained array values still have an unknown length. Other iterables are
+                    // accepted only where the signature has reached a rest parameter.
+                    TypeInfo spreadType;
+                    if (spread.Expression is Expr.ArrayLiteral literal &&
+                        literal.Elements.All(element => element is not Expr.Spread))
+                    {
+                        var contexts = literal.Elements.Select((_, offset) =>
+                            paramIndex + offset < regularParamCount
+                                ? funcType.ParamTypes[paramIndex + offset]
+                                : restElementType ?? TypeInfo.Any.Shared).ToList();
+                        spreadType = CheckExprWithContext(literal,
+                            TypeInfo.Tuple.FromTypes(contexts, contexts.Count));
+                    }
+                    else
+                        spreadType = CheckExpr(spread.Expression);
                     if (spreadType is TypeInfo.Tuple tupleSpread)
                     {
                         tupleSpread = (TypeInfo.Tuple)FlattenTupleSpreads(tupleSpread);
