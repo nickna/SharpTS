@@ -158,8 +158,8 @@ public partial class TypeChecker
                 // Re-contextualize callbacks after inference. This includes callbacks nested in
                 // object/array arguments, whose parameter types depend on the instantiated props.
                 ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
-                if (call.TypeArgs is { Count: > 0 })
-                    CheckInstantiatedGenericCallArguments(call, instFunc, argTypes);
+                CheckInstantiatedGenericCallArguments(call, instFunc, argTypes,
+                    call.TypeArgs is { Count: > 0 } ? null : genericFunc);
                 RecordEditorInvocationSelection(genericFunc, instFunc);
                 return instFunc.ReturnType;
             }
@@ -999,7 +999,8 @@ public partial class TypeChecker
     private void CheckInstantiatedGenericCallArguments(
         Expr.Call call,
         TypeInfo.Function signature,
-        IReadOnlyList<TypeInfo> inferenceArgumentTypes)
+        IReadOnlyList<TypeInfo> inferenceArgumentTypes,
+        TypeInfo.GenericFunction? inferredSignature = null)
     {
         int regularCount = signature.ParamTypes.Count - (signature.HasRestParam ? 1 : 0);
         TypeInfo? restElement = signature.HasRestParam && signature.ParamTypes.Count > 0 &&
@@ -1043,7 +1044,7 @@ public partial class TypeChecker
 
             TypeInfo? expected = parameterIndex < regularCount
                 ? signature.ParamTypes[parameterIndex] : restElement;
-            if (expected is TypeInfo.Tuple tupleTarget && argument is Expr.ArrayLiteral literal)
+            if (expected is TypeInfo.Tuple tupleTarget && argument is Expr.ArrayLiteral literal && ShouldCheckPosition())
             {
                 // This is the same intentionally contextual, element-wise check used by an
                 // ordinary tuple parameter, not a second CheckExpr pass over all arguments.
@@ -1059,7 +1060,7 @@ public partial class TypeChecker
             TypeInfo? expected = parameterIndex < regularCount
                 ? signature.ParamTypes[parameterIndex] : restElement;
             bool optional = parameterIndex < regularCount && parameterIndex >= signature.MinArity;
-            if (expected is not null && !IsArgumentCompatible(expected, actual, optional))
+            if (ShouldCheckPosition() && expected is not null && !IsArgumentCompatible(expected, actual, optional))
                 throw new TypeCheckException(
                     $"Argument {parameterIndex + 1} expected type '{expected}' but got '{actual}'.",
                     call.Paren.Line, tsCode: "TS2345");
@@ -1068,10 +1069,21 @@ public partial class TypeChecker
 
         void CheckSpreadElement(TypeInfo actual)
         {
-            if (restElement is not null && !IsCompatible(restElement, actual))
+            if (ShouldCheckPosition() && restElement is not null && !IsCompatible(restElement, actual))
                 throw new TypeCheckException(
                     $"Spread element type '{actual}' not compatible with rest parameter type '{restElement}'.",
                     call.Paren.Line, tsCode: "TS2345");
+        }
+
+        bool ShouldCheckPosition()
+        {
+            if (inferredSignature is not { ParamTypes.Count: > 0 }) return true;
+            // Keep inference-dependent matching under the inference policy; fixed parameter
+            // types, including containing-interface parameters, still require validation.
+            int declaredPosition = Math.Min(parameterIndex, inferredSignature.ParamTypes.Count - 1);
+            HashSet<string> names = [];
+            CollectSubstitutionParameterNames(inferredSignature.ParamTypes[declaredPosition], names);
+            return !inferredSignature.TypeParams.Any(parameter => names.Contains(parameter.Name));
         }
     }
 

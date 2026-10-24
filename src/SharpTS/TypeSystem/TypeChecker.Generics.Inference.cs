@@ -96,10 +96,8 @@ public partial class TypeChecker
             }
             else
             {
-                // JSX instantiation applies defaults when inference produced no candidate. Keep
-                // ordinary call inference's established constraint/any fallback unchanged.
-                result.Add(fallbackToConstraints
-                    ? tp.Default ?? tp.Constraint ?? TypeInfo.Any.Shared
+                result.Add(tp.Default is { } defaultType
+                    ? Substitute(defaultType, inferred)
                     : tp.Constraint ?? TypeInfo.Any.Shared);
             }
         }
