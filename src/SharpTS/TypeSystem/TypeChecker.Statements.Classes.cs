@@ -116,14 +116,23 @@ public partial class TypeChecker
         // validation string-named methods get, rather than silently "last one wins" registration.
         // Arbitrary computed keys (e.g. `[v]()`) aren't statically named members and are skipped
         // (still parsed/checked, just untyped — like computed accessors).
-        var computedMethodGroups = methods
+        var computedMethods = methods
             .Where(m => m.ComputedKey != null)
             .Select(m => (Method: m, Name: TryGetComputedClassMemberName(m.ComputedKey),
                 IsLiteral: IsLiteralComputedClassMemberKey(m.ComputedKey)))
             .Where(x => x.Name != null)
+            .ToList();
+        var independentlyImplementedSymbols = computedMethods.GroupBy(x => x.Name)
+            .Where(group => group.Any(x => x.Method.IsStatic && x.Method.Body != null) &&
+                group.Any(x => !x.Method.IsStatic && x.Method.Body != null))
+            .Select(group => group.Key!)
+            .ToHashSet(StringComparer.Ordinal);
+        var computedMethodGroups = computedMethods
             // Ordinary property names have independent static and instance overload groups.
-            // Symbol overloads retain the cross-facet group needed for TS2387/TS2388.
-            .GroupBy(x => (Name: x.Name!, IsStatic: x.IsLiteral ? x.Method.IsStatic : (bool?)null))
+            // A symbol with implementations on both objects does too. A declaration-only
+            // opposite facet still belongs to the malformed overload group (TS2387/TS2388).
+            .GroupBy(x => (Name: x.Name!, IsStatic: x.IsLiteral || independentlyImplementedSymbols.Contains(x.Name!)
+                ? x.Method.IsStatic : (bool?)null))
             .ToList();
 
         foreach (var group in computedMethodGroups)
