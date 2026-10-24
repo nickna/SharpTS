@@ -673,17 +673,25 @@ public partial class TypeChecker
                 throw new TypeCheckException("The '+=' operator cannot be applied to type 'symbol'.", line: line > 0 ? line : null, tsCode: "TS2469");
             }
 
-            if (IsString(varType)) return varType;
-            if (!IsNumber(varType) || (valueType is not TypeInfo.Never && !IsNumber(valueType)))
+            TypeInfo result = CheckPlusOperator(varType, valueType, line);
+            if (!IsCompatible(varType, result))
                 throw new TypeCheckException("Compound assignment requires numeric operands.", tsCode: "TS2365");
             return varType;
         }
 
-        // All other compound operators require numbers — same per-side TS2362/TS2363 split as the
-        // binary arithmetic/bitwise operators.
-        if (!IsNumber(varType) || (valueType is not TypeInfo.Never && !IsNumber(valueType)))
+        // Compound numeric operations use the same number/bigint pairing rules as their
+        // binary forms, retaining per-operand diagnostics for nonnumeric operands.
+        if ((!IsNumber(varType) && !IsBigInt(varType)) ||
+            (valueType is not TypeInfo.Never && !IsNumber(valueType) && !IsBigInt(valueType)))
         {
             RecordInvalidArithmeticOperand(varType, valueType, line);
+        }
+        if (valueType is not TypeInfo.Never)
+        {
+            if (compound.Operator.Type == TokenType.GREATER_GREATER_GREATER_EQUAL)
+                CheckUnsignedShiftBinary(varType, valueType, line);
+            else
+                CheckArithmeticBinary(varType, valueType, line);
         }
 
         return varType;
