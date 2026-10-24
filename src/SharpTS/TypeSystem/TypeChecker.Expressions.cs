@@ -508,12 +508,10 @@ public partial class TypeChecker
 
     private TypeInfo CheckTypeAssertion(Expr.TypeAssertion ta)
     {
-        TypeInfo sourceType = CheckExpr(ta.Expression);
-
         // Handle 'as const' - deep readonly inference with literal types
         if (ta.TargetType == "const")
         {
-            return InferConstType(ta.Expression, sourceType);
+            return InferConstType(ta.Expression, CheckExpr(ta.Expression));
         }
 
         // Resolve the target node-first: a composite target such as a conditional type whose
@@ -525,6 +523,11 @@ public partial class TypeChecker
         TypeInfo targetType = (ta.TargetTypeNode is { } targetNode ? TryToTypeInfo(targetNode) : null)
             ?? ToTypeInfo(ta.TargetType);
         CompleteEditorExpressionAnnotation(ta, editorVersion);
+
+        // Assertions provide tuple context to fresh literals while ordinary array-to-tuple
+        // assignment keeps its length requirements. Preserve positions instead of comparing
+        // a union of literal element types with every asserted tuple element.
+        TypeInfo sourceType = CheckExprWithContext(ta.Expression, FlattenTupleSpreads(targetType));
 
         // Allow any <-> anything (escape hatch)
         if (sourceType is TypeInfo.Any || targetType is TypeInfo.Any)
