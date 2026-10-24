@@ -2777,8 +2777,11 @@ public partial class TypeChecker
             // Collect accessor types
             if (classExpr.Accessors != null)
             {
+                var seenGetters = new Dictionary<(bool IsStatic, string Name), int>();
+                var seenSetters = new Dictionary<(bool IsStatic, string Name), int>();
                 foreach (var accessor in classExpr.Accessors)
                 {
+                    CheckDuplicateClassAccessorName(accessor, mutableClass, seenGetters, seenSetters);
                     string? propName = accessor.ComputedKey != null
                         ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
                         : accessor.Name.Lexeme;

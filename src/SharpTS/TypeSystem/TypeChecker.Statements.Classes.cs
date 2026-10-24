@@ -466,6 +466,30 @@ public partial class TypeChecker
     }
 
     // Requires method signatures to be registered for duplicate detection; keeps pair validation in the same class environment.
+    private void CheckDuplicateClassAccessorName(Stmt.Accessor accessor, TypeInfo.MutableClass owner,
+        Dictionary<(bool IsStatic, string Name), int> seenGetters,
+        Dictionary<(bool IsStatic, string Name), int> seenSetters)
+    {
+        string? name = accessor.ComputedKey is null
+            ? accessor.Name.Lexeme : TryGetComputedClassMemberName(accessor.ComputedKey);
+        if (name is null) return;
+
+        bool hasMethod = accessor.IsStatic ? owner.StaticMethods.ContainsKey(name)
+            : name == "constructor" ? owner.ComputedConstructorMethodType is not null
+            : owner.Methods.ContainsKey(name);
+        var seen = accessor.Kind.Type == TokenType.GET ? seenGetters : seenSetters;
+        int line = accessor.ComputedKey is null ? accessor.Name.Line
+            : TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line;
+        if (!hasMethod && seen.TryAdd((accessor.IsStatic, name), line)) return;
+
+        string display = accessor.ComputedKey is not null &&
+            !IsLiteralComputedClassMemberKey(accessor.ComputedKey) &&
+            name.StartsWith("@@", StringComparison.Ordinal)
+                ? $"[Symbol.{name["@@".Length..]}]" : name;
+        RecordTypeError(new TypeCheckException(
+            $" Duplicate identifier '{display}'.", line: line, tsCode: "TS2300"));
+    }
+
     private void CollectClassAccessorTypes(Stmt.Class classStmt, TypeInfo.MutableClass mutableClass)
     {
         // Collect accessor types
@@ -486,27 +510,11 @@ public partial class TypeChecker
                     : DecoratorTarget.Setter;
                 CheckDecorators(accessor.Decorators, accessorTarget);
 
+                CheckDuplicateClassAccessorName(accessor, mutableClass, seenGetters, seenSetters);
+
                 string? canonicalName = accessor.ComputedKey != null
                     ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
                     : accessor.Name.Lexeme;
-                if (canonicalName != null)
-                {
-                    int line = accessor.ComputedKey != null
-                        ? TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line
-                        : accessor.Name.Line;
-                    string displayName = accessor.ComputedKey != null ? $"[Symbol.{canonicalName["@@".Length..]}]" : canonicalName;
-                    // A method already registered under this name (methods are processed above)
-                    // makes ANY accessor of the same name a duplicate too — a class member can't be
-                    // both a method and an accessor. tsc flags the accessor, not the method.
-                    var methodDict = accessor.IsStatic ? mutableClass.StaticMethods : mutableClass.Methods;
-                    var seen = accessor.Kind.Type == TokenType.GET ? seenGetters : seenSetters;
-                    var key = (accessor.IsStatic, canonicalName);
-                    if (methodDict.ContainsKey(canonicalName) || !seen.TryAdd(key, line))
-                    {
-                        RecordTypeError(new TypeCheckException(
-                            $" Duplicate identifier '{displayName}'.", line: line, tsCode: "TS2300"));
-                    }
-                }
 
                 // Arbitrary computed names have no stable member identity. Well-known and augmented
                 // unique symbols do, and use the same @@ key as interfaces/object literals.
