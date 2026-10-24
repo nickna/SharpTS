@@ -2681,12 +2681,16 @@ public partial class TypeChecker
             CollectClassIndexSignatures(classExpr.IndexSignatures, mutableClass);
             TypeInfo BuildMethodFuncType(Stmt.Function method) => BuildClassMethodSignature(method, validateDefaults: false);
 
+            CollectComputedClassMethodSignatures(classExpr.Methods.Where(method =>
+                IsLiteralComputedClassMemberKey(method.ComputedKey)), mutableClass);
+
             // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their
             // canonical @@name (@@iterator, …) so structural iterability sees them (#592). They carry the
             // synthetic `<computed>` name, so they're pulled out of the name-keyed overload grouping.
             // An iterator factory's explicit return type is used as-is (not generator-wrapped), so the
             // structural probe reads the right element type.
-            foreach (var method in classExpr.Methods.Where(m => m.ComputedKey != null && m.Body != null))
+            foreach (var method in classExpr.Methods.Where(m => m.ComputedKey != null && m.Body != null &&
+                !IsLiteralComputedClassMemberKey(m.ComputedKey)))
             {
                 if (TryGetComputedClassMemberName(method.ComputedKey) is not { } memberName)
                     continue;

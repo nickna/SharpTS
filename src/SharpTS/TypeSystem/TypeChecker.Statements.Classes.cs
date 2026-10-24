@@ -106,7 +106,7 @@ public partial class TypeChecker
     // Signature collection runs in the caller-owned class type environment and populates
     // the supplied class metadata. Diagnostic recovery and scope restoration remain
     // owned by CheckClassDeclaration, including when collection throws.
-    private void CollectComputedClassMethodSignatures(Stmt.Class classStmt, TypeInfo.MutableClass mutableClass)
+    private void CollectComputedClassMethodSignatures(IEnumerable<Stmt.Function> methods, TypeInfo.MutableClass mutableClass)
     {
         // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their canonical
         // well-known-symbol member name (@@iterator, @@asyncIterator, …) so structural iterability and
@@ -116,7 +116,7 @@ public partial class TypeChecker
         // validation string-named methods get, rather than silently "last one wins" registration.
         // Arbitrary computed keys (e.g. `[v]()`) aren't statically named members and are skipped
         // (still parsed/checked, just untyped — like computed accessors).
-        var computedMethodGroups = classStmt.Methods
+        var computedMethodGroups = methods
             .Where(m => m.ComputedKey != null)
             .Select(m => (Method: m, Name: TryGetComputedClassMemberName(m.ComputedKey),
                 IsLiteral: IsLiteralComputedClassMemberKey(m.ComputedKey)))
@@ -174,6 +174,17 @@ public partial class TypeChecker
             // and is filled in by the inferred-return post-pass below as Generator<yieldType>.
             var representative = implementations.Count == 1 ? implementations[0] : members[^1];
             var funcType = BuildClassMethodSignature(representative, wrapGeneratorReturn: false, validateDefaults: false);
+            if (implementations.Count == 1 && signatures.Count > 0)
+            {
+                var publicSignatures = signatures.Select(signature => BuildClassMethodSignature(
+                    signature, wrapGeneratorReturn: false, validateDefaults: false)).ToList();
+                foreach (var signature in publicSignatures)
+                    if (ClassMethodImplementation(funcType).MinArity > ClassMethodImplementation(signature).MinArity)
+                        throw new TypeCheckException(
+                            $"Implementation of '{memberName}' requires more arguments than an overload signature.",
+                            representative.Name.Line, tsCode: "TS2394");
+                funcType = BuildClassMethodOverload(publicSignatures, funcType);
+            }
             PublishComputedClassMethod(mutableClass, representative, memberName, funcType);
         }
     }
@@ -798,7 +809,7 @@ public partial class TypeChecker
                 using (new EnvironmentScope(this, classTypeEnv))
                 {
                     CollectClassIndexSignatures(classStmt, mutableClass);
-                    CollectComputedClassMethodSignatures(classStmt, mutableClass);
+                    CollectComputedClassMethodSignatures(classStmt.Methods, mutableClass);
                     CollectNamedClassMethodSignatures(classStmt, mutableClass);
                     CollectClassFieldTypes(classStmt, mutableClass, classTypeParams);
                     CollectClassAccessorTypes(classStmt, mutableClass);
