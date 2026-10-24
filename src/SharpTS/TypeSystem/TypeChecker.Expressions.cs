@@ -2025,7 +2025,9 @@ public partial class TypeChecker
                     }
                     else if (collected.Count == 0)
                     {
-                        returnType = TypeInfo.Void.Shared;
+                        returnType = DoesBlockDefinitelyReturn(arrow.BlockBody)
+                            ? TypeInfo.Never.Shared
+                            : TypeInfo.Void.Shared;
                     }
                     else
                     {
