@@ -22,4 +22,11 @@ public sealed class ComposedGenericBaseAssignmentTests
         if (rejected) Assert.ThrowsAny<TypeCheckException>(Check);
         else Check();
     }
+
+    [Fact]
+    public void KnownGenericAncestorSurvivesDynamicTail()
+    {
+        const string source = "declare const Parent: any; class Base<T> extends Parent { #brand = 1; value: T = null as any; } class Middle<U> extends Base<U[]> {} class Leaf extends Middle<string> {} const value: Base<string[]> = new Leaf();";
+        new TypeChecker().Check(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
+    }
 }

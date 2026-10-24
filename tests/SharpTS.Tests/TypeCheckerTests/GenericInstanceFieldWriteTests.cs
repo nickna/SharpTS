@@ -11,6 +11,8 @@ public sealed class GenericInstanceFieldWriteTests
     [InlineData("class Base<T> { value: T = undefined as any; } class Derived<U> extends Base<U> {}", "new Derived<number>().value = 'bad';", "TS2322")]
     [InlineData("class Base<T> { readonly code: number = 1; } class Derived<U> extends Base<U> {}", "new Derived<number>().code = 2;", "TS2540")]
     [InlineData("class Box<T> { readonly code: number = 1; }", "new Box<number>().code = 2;", "TS2540")]
+    [InlineData("declare const Parent: any; class Box<T> extends Parent { readonly code: number = 1; }", "new Box<number>().code = 2;", "TS2540")]
+    [InlineData("declare const Parent: any; class Box<T> extends Parent { value: T = undefined as any; }", "new Box<number>().value = 'bad';", "TS2322")]
     public void GenericWritesEnforceInheritedTypeAndReadonly(string declarations, string write, string code)
     {
         var statements = new Parser(new Lexer(declarations + write).ScanTokens()).ParseOrThrow();

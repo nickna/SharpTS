@@ -369,11 +369,12 @@ public partial class TypeChecker
     /// </summary>
     private bool IsInSuperclassChain(TypeInfo classType, TypeInfo.InstantiatedGeneric target)
     {
-        if (!TryGetOrdinaryConstructorHierarchy(classType, out var levels)) return false;
+        TryGetOrdinaryConstructorHierarchy(classType, out var levels);
         foreach (var level in levels.Skip(1))
         {
             if (target.GenericDefinition is not TypeInfo.GenericClass generic ||
-                level.Core.DeclarationId != generic.Core.DeclarationId) continue;
+                !(ReferenceEquals(level.Core, generic.Core) || level.Core.DeclarationId != 0 &&
+                    level.Core.DeclarationId == generic.Core.DeclarationId)) continue;
             var arguments = generic.TypeParams.Select(parameter =>
                 level.Substitutions.GetValueOrDefault(parameter.Name, parameter)).ToList();
             if (InstantiatedGenericsMatch(new TypeInfo.InstantiatedGeneric(generic, arguments), target))

@@ -12,6 +12,7 @@ public sealed class InheritedGenericClassIndexerTests
     [Theory]
     [InlineData("declare class Base { [index: number]: string; } class Derived extends Base {}", "Derived")]
     [InlineData("declare class Base<T> { [index: number]: T; }", "Base<string>")]
+    [InlineData("declare const Parent: any; class Base<T> extends Parent { [index: number]: T; }", "Base<string>")]
     [InlineData("declare class Base<T> { [index: number]: T; } class Middle<U> extends Base<U[]> {} class Derived extends Middle<string> {}", "Derived")]
     public void InheritedIndexesPreserveSubstitutedReadAndWriteTypes(string declarations, string instance)
     {

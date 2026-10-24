@@ -969,8 +969,7 @@ public partial class TypeChecker
              if (instance.ClassType is TypeInfo.InstantiatedGeneric ig &&
                  ig.GenericDefinition is TypeInfo.GenericClass gc && !promiseHeritage)
              {
-                 if (!TryGetOrdinaryConstructorHierarchy(ig, out var levels))
-                     return CheckExpr(set.Value);
+                 TryGetOrdinaryConstructorHierarchy(ig, out var levels);
                  foreach (var level in levels)
                  {
                      if (!level.Core.FieldTypes.TryGetValue(memberName, out var fieldType)) continue;

@@ -640,8 +640,8 @@ public partial class TypeChecker
         if (objType is TypeInfo.Class or TypeInfo.GenericClass or
             TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
             return GetConstructorIndexType(objType, keyType);
-        if (objType is not TypeInfo.Instance instance ||
-            !TryGetOrdinaryConstructorHierarchy(instance.ResolvedClassType, out var levels)) return null;
+        if (objType is not TypeInfo.Instance instance) return null;
+        TryGetOrdinaryConstructorHierarchy(instance.ResolvedClassType, out var levels);
         foreach (var level in levels)
         {
             var index = keyType switch
