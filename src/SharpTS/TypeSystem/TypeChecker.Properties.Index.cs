@@ -682,6 +682,58 @@ public partial class TypeChecker
             System.Globalization.CultureInfo.InvariantCulture, out double numericKey) &&
         Runtime.PropertyKeyConverter.ToPropertyKeyString(numericKey) == literal.Value;
 
+    private void EnsureWritableClassIndex(TypeInfo receiver, TypeInfo index, Expr.SetIndex syntax)
+    {
+        if (receiver is TypeInfo.TypeParameter { Constraint: { } constraint })
+        {
+            EnsureWritableClassIndex(constraint, index, syntax);
+            return;
+        }
+        if (receiver is not TypeInfo.Instance && receiver is not (TypeInfo.Class or TypeInfo.GenericClass or
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })) return;
+        bool isStatic = receiver is not TypeInfo.Instance;
+        TypeInfo owner = receiver is TypeInfo.Instance instance ? instance.ResolvedClassType : receiver;
+        string? name = index switch
+        {
+            TypeInfo.StringLiteral text => text.Value,
+            TypeInfo.NumberLiteral number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _ => null
+        };
+        List<ClassMetadataCore> levels = [];
+        HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);
+        for (TypeInfo? current = owner; current is not null && visited.Add(current); current = GetSuperclass(current))
+        {
+            if (current is TypeInfo.MutableClass mutable) current = mutable.Freeze();
+            if (ClassInfoAccessor.Get(current, c => c.Core, gc => gc.Core) is not { } core) break;
+            levels.Add(core);
+            if (name is not null && (isStatic
+                ? core.StaticMethods.ContainsKey(name) || core.StaticProperties.ContainsKey(name)
+                : core.Methods.ContainsKey(name) || core.FieldTypes.ContainsKey(name) || core.Getters.ContainsKey(name) || core.Setters.ContainsKey(name)))
+                return;
+        }
+        TokenType[] kinds = index is TypeInfo.Symbol or TypeInfo.UniqueSymbol ? [TokenType.TYPE_SYMBOL]
+            : IsNumber(index) || index is TypeInfo.NumberLiteral || IsNumericConstructorIndex(index)
+                ? [TokenType.TYPE_NUMBER, TokenType.TYPE_STRING] : [TokenType.TYPE_STRING];
+        foreach (var kind in kinds)
+            foreach (var core in levels)
+            {
+                TypeInfo? value = (isStatic, kind) switch
+                {
+                    (true, TokenType.TYPE_STRING) => core.StaticStringIndexType,
+                    (true, TokenType.TYPE_NUMBER) => core.StaticNumberIndexType,
+                    (true, _) => core.StaticSymbolIndexType,
+                    (false, TokenType.TYPE_STRING) => core.StringIndexType,
+                    (false, TokenType.TYPE_NUMBER) => core.NumberIndexType,
+                    _ => core.SymbolIndexType
+                };
+                if (value is null) continue;
+                if (core.ReadonlyIndexes?.Contains((isStatic, kind)) == true)
+                    throw new TypeCheckException($"Index signature in type '{receiver}' only permits reading.",
+                        TryGetExprLine(syntax.Index), tsCode: "TS2542");
+                return;
+            }
+    }
+
     private TypeInfo CheckSetIndex(Expr.SetIndex setIndex)
     {
         TypeInfo objType = CheckExpr(setIndex.Object);
@@ -744,6 +796,8 @@ public partial class TypeChecker
             objType = next;
         }
         objType = ResolveMappedTypeForAccess(objType);
+        EnsureWritableClassIndex(objType, indexType, setIndex);
+
 
         // A deferred mapped type is writable by a key from its mapped domain. Project the
         // corresponding value slot directly, just as CheckGetIndex does for reads.
@@ -1540,6 +1594,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo? CheckSetIndexOnType(TypeInfo objType, TypeInfo indexType, TypeInfo valueType, Expr.SetIndex setIndex)
     {
+        EnsureWritableClassIndex(objType, indexType, setIndex);
         // Recursive case for nested type parameters
         if (objType is TypeInfo.TypeParameter tp && tp.Constraint != null)
         {

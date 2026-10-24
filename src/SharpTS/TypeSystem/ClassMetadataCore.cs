@@ -48,6 +48,8 @@ public sealed record ClassMetadataCore(
     public TypeInfo? StaticNumberIndexType { get; init; }
     public TypeInfo? StaticSymbolIndexType { get; init; }
 
+    public FrozenSet<(bool IsStatic, TokenType KeyType)>? ReadonlyIndexes { get; init; }
+
     // CLR interop accepts the declared camelCase member's PascalCase spelling.
     internal bool IsDotNetMapped { get; init; }
 

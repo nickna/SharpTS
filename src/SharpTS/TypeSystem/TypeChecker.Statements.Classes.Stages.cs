@@ -76,6 +76,7 @@ public partial class TypeChecker
             foreach (var indexSig in indexSignatures)
             {
                 TypeInfo valueType = ResolveAnnotation(indexSig.ValueType, indexSig.ValueTypeNode)!;
+                if (indexSig.IsReadonly) mutableClass.ReadonlyIndexes.Add((indexSig.IsStatic, indexSig.KeyType));
                 if (indexSig.IsStatic)
                 {
                     switch (indexSig.KeyType)

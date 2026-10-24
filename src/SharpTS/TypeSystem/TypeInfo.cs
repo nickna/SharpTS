@@ -411,6 +411,7 @@ public abstract record TypeInfo
         public TypeInfo? StaticStringIndexType { get; set; }
         public TypeInfo? StaticNumberIndexType { get; set; }
         public TypeInfo? StaticSymbolIndexType { get; set; }
+        public HashSet<(bool IsStatic, TokenType KeyType)> ReadonlyIndexes { get; } = [];
 
         private ClassMetadataCore? _frozenCore;
         private TypeInfo.Class? _frozen;
@@ -454,6 +455,7 @@ public abstract record TypeInfo
                 StaticStringIndexType = StaticStringIndexType,
                 StaticNumberIndexType = StaticNumberIndexType,
                 StaticSymbolIndexType = StaticSymbolIndexType,
+                ReadonlyIndexes = ReadonlyIndexes.Count > 0 ? ReadonlyIndexes.ToFrozenSet() : null,
                 IsDotNetMapped = IsDotNetMapped
             };
             return _frozenCore;

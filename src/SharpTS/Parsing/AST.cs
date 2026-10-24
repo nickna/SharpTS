@@ -472,7 +472,7 @@ public abstract record Stmt
     /// <summary>
     /// Index signature in interfaces: [key: string]: valueType, [key: number]: valueType, [key: symbol]: valueType
     /// </summary>
-    public record IndexSignature(Token KeyName, TokenType KeyType, string ValueType, TypeNode? ValueTypeNode = null, bool IsStatic = false);
+    public record IndexSignature(Token KeyName, TokenType KeyType, string ValueType, TypeNode? ValueTypeNode = null, bool IsStatic = false, bool IsReadonly = false);
     /// <summary>
     /// Call signature in interfaces: (params): ReturnType or &lt;T&gt;(params): ReturnType
     /// Indicates the interface represents a callable type (e.g., function).
