@@ -70,6 +70,13 @@ public partial class TypeChecker
             ? (TryGetComputedClassMemberName(field.ComputedKey) ?? field.Name.Lexeme)
             : field.Name.Lexeme;
 
+    private static bool IsLiteralComputedClassMemberKey(Expr? key) => key switch
+    {
+        Expr.Literal { Value: string or double } => true,
+        Expr.Grouping grouping => IsLiteralComputedClassMemberKey(grouping.Expression),
+        _ => false
+    };
+
     /// <summary>
     /// CheckModules recovers between root declarations without setting the standalone checker's
     /// recovery flag. A class body needs statement-level recovery too so an error in one method
@@ -104,25 +111,24 @@ public partial class TypeChecker
         // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their canonical
         // well-known-symbol member name (@@iterator, @@asyncIterator, …) so structural iterability and
         // member lookup see them (#592/#485). They carry the synthetic `<computed>` name, so they are
-        // pulled out of the name-keyed overload grouping below and grouped here instead by (IsStatic,
-        // canonical name) — running the SAME overload/duplicate-implementation/static-consistency
+        // pulled out of the name-keyed overload grouping below and grouped here by canonical name
+        // and the applicable static facet — running the SAME overload/duplicate-implementation/static-consistency
         // validation string-named methods get, rather than silently "last one wins" registration.
         // Arbitrary computed keys (e.g. `[v]()`) aren't statically named members and are skipped
         // (still parsed/checked, just untyped — like computed accessors).
         var computedMethodGroups = classStmt.Methods
             .Where(m => m.ComputedKey != null)
-            .Select(m => (Method: m, Name: TryGetComputedClassMemberName(m.ComputedKey)))
+            .Select(m => (Method: m, Name: TryGetComputedClassMemberName(m.ComputedKey),
+                IsLiteral: IsLiteralComputedClassMemberKey(m.ComputedKey)))
             .Where(x => x.Name != null)
-            // Grouped by canonical NAME ONLY (not IsStatic too): the static-consistency check
-            // below needs static AND instance declarations of the same name in one group to
-            // compare them against each other — grouping by (IsStatic, Name) would silently
-            // split a static/instance mismatch into two single-member groups that never meet.
-            .GroupBy(x => x.Name!)
+            // Ordinary property names have independent static and instance overload groups.
+            // Symbol overloads retain the cross-facet group needed for TS2387/TS2388.
+            .GroupBy(x => (Name: x.Name!, IsStatic: x.IsLiteral ? x.Method.IsStatic : (bool?)null))
             .ToList();
 
         foreach (var group in computedMethodGroups)
         {
-            string memberName = group.Key;
+            string memberName = group.Key.Name;
             var members = group.Select(x => x.Method).ToList();
 
             // TS2387/TS2388: tsc requires every declaration in an overload group to agree on
