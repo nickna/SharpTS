@@ -248,7 +248,7 @@ public partial class TypeChecker
             GetGlobalThisType().Members.TryGetValue(get.Name.Lexeme, out TypeInfo? windowGlobalMember))
             return windowGlobalMember;
 
-        TypeInfo objType = CheckExpr(get.Object);
+        TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(get.Object));
         ExpectSourceMemberReceiver(objType);
 
         if (_hasDefaultLibraries &&
@@ -785,7 +785,7 @@ public partial class TypeChecker
                 tsCode: "TS7017");
         }
 
-        TypeInfo objType = CheckExpr(set.Object);
+        TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(set.Object));
 
         // A generic interface is the same mutable object shape for writes as for reads.
         if (objType is TypeInfo.InstantiatedGeneric instantiated &&
