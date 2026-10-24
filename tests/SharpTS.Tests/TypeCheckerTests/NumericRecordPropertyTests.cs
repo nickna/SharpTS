@@ -16,6 +16,8 @@ public sealed class NumericRecordPropertyTests
     [InlineData("function read<T extends { 0: number }>(object: T): number { return object[0]; }")]
     [InlineData("declare const key: 0 | 1; declare const object: { 0: number; 1: string }; const value: number | string = object[key];")]
     [InlineData("declare const object: { 0: number; [key: number]: number | string }; const value: number = object[0];")]
+    [InlineData("declare const key: 0 | 'name'; declare const object: { 0: number; name: string }; const value: number | string = object[key];")]
+    [InlineData("declare const key: 0 | 'name'; declare const object: { 0: number; name: number }; object[key] = 2;")]
     public void NumericKeysResolveNamedProperties(string source)
     {
         new TypeChecker(strictNullChecks: true).Check(Parse(source));
@@ -29,6 +31,7 @@ public sealed class NumericRecordPropertyTests
     [InlineData("declare const object: { 0?: number }; const value: number = object[0];", "TS2322")]
     [InlineData("declare const object: { 0: number }; const value: string = object[0];", "TS2322")]
     [InlineData("declare const object: { 0: number }; object[1];", "TS7053")]
+    [InlineData("declare const key: 0 | 'name'; declare const object: { 0: number; name: string }; object[key] = 2;", "TS2322")]
     public void NumericKeysPreserveValidation(string source, string expected)
     {
         Assert.Equal(expected, Assert.ThrowsAny<TypeCheckException>(() =>

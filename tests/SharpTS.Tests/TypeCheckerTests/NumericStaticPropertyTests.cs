@@ -16,6 +16,7 @@ public sealed class NumericStaticPropertyTests
     [InlineData("class Base<T> { static '0': number = 1; } class Child<U> extends Base<U> {} const value: number = Child[0];")]
     [InlineData("class C { static '0': number = 1; } declare const key: 0; const value: number = C[key];")]
     [InlineData("class C { static '0': number = 1; static '1': string = 'a'; } declare const key: 0 | 1; const value: number | string = C[key];")]
+    [InlineData("class C { static '0': number = 1; static text: string = 'a'; } declare const key: 0 | 'text'; const value: number | string = C[key];")]
     [InlineData("class C { static '0': number = 1; } class D { static '0': number = 2; } declare const value: typeof C | typeof D; const result: number = value[0];")]
     public void NumericKeysResolveStaticMembers(string source)
     {

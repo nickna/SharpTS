@@ -383,8 +383,8 @@ public partial class TypeChecker
         if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
             return knownInstanceMember;
 
-        if (TryReadNumericRecordMember(objType, indexType) is { } numericRecordMember)
-            return numericRecordMember;
+        if (TryReadKnownIndexedRecordMember(objType, indexType) is { } knownRecordMember)
+            return knownRecordMember;
 
         if (getIndex.Index is Expr.Literal { Value: string functionMemberName } &&
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
@@ -916,8 +916,7 @@ public partial class TypeChecker
         // A write through a known literal-key domain must be valid for every property that the
         // key may select. Reads use a union of the property types; writes use their intersection,
         // represented here by checking the assigned value against each candidate slot.
-        if ((TryGetStringLiteralKeys(indexType, out var literalKeys) ||
-             TryGetNumericLiteralKeys(indexType, out literalKeys)) &&
+        if (TryGetLiteralPropertyKeys(indexType, out var literalKeys) &&
             objType is TypeInfo.Record or TypeInfo.Interface)
         {
             List<TypeInfo> propertyTypes = [];
@@ -1277,30 +1276,36 @@ public partial class TypeChecker
         return keys.Count > 0;
     }
 
-    private static bool TryGetNumericLiteralKeys(TypeInfo indexType, out List<string> keys)
+    private static bool TryGetLiteralPropertyKeys(TypeInfo indexType, out List<string> keys)
     {
         keys = [];
         IEnumerable<TypeInfo> candidates = indexType is TypeInfo.Union union
             ? union.FlattenedTypes : [indexType];
         foreach (TypeInfo candidate in candidates)
         {
-            if (candidate is not TypeInfo.NumberLiteral number)
+            string? key = candidate switch
+            {
+                TypeInfo.NumberLiteral number => Runtime.PropertyKeyConverter.ToPropertyKeyString(number.Value),
+                TypeInfo.StringLiteral text => text.Value,
+                _ => null
+            };
+            if (key is null)
             {
                 keys.Clear();
                 return false;
             }
-            keys.Add(Runtime.PropertyKeyConverter.ToPropertyKeyString(number.Value));
+            keys.Add(key);
         }
         return keys.Count > 0;
     }
 
-    private TypeInfo? TryReadNumericRecordMember(TypeInfo receiver, TypeInfo index)
+    private TypeInfo? TryReadKnownIndexedRecordMember(TypeInfo receiver, TypeInfo index)
     {
         if (receiver is TypeInfo.InstantiatedGeneric instantiated &&
             FlattenInstantiatedInterface(instantiated) is { } flattened)
             receiver = flattened;
         if (receiver is not (TypeInfo.Record or TypeInfo.Interface) ||
-            !TryGetNumericLiteralKeys(index, out var names))
+            !TryGetLiteralPropertyKeys(index, out var names))
             return null;
         List<TypeInfo> members = [];
         foreach (string name in names)
@@ -1502,8 +1507,8 @@ public partial class TypeChecker
         if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
             return knownInstanceMember;
 
-        if (TryReadNumericRecordMember(objType, indexType) is { } numericRecordMember)
-            return numericRecordMember;
+        if (TryReadKnownIndexedRecordMember(objType, indexType) is { } knownRecordMember)
+            return knownRecordMember;
 
         if (getIndex.Index is Expr.Literal { Value: string functionMemberName } &&
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
@@ -1607,7 +1612,7 @@ public partial class TypeChecker
     {
         if (receiver is not (TypeInfo.Class or TypeInfo.GenericClass or
             TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass }) ||
-            !(TryGetStringLiteralKeys(index, out var names) || TryGetNumericLiteralKeys(index, out names)) ||
+            !TryGetLiteralPropertyKeys(index, out var names) ||
             names.Any(name => name != "prototype" && !HasKnownConstructorMember(receiver, name)))
             return null;
 
