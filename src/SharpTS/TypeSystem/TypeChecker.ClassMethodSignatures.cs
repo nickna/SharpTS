@@ -8,6 +8,28 @@ public partial class TypeChecker
     private readonly Dictionary<Stmt.Function, ClassMethodSignature> _classMethodSignatures = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<TypeInfo.Function, List<TypeInfo.TypeParameter>?> _classMethodImplementationParameters = new(ReferenceEqualityComparer.Instance);
 
+    private static ClassMetadataCore? ComputedConstructorMethodCore(TypeInfo? owner) => owner switch
+    {
+        TypeInfo.Class cls => cls.Core,
+        TypeInfo.GenericClass generic => generic.Core,
+        TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass generic } => generic.Core,
+        TypeInfo.MutableClass mutable => mutable.Frozen?.Core,
+        _ => null
+    };
+
+    private static void PublishComputedClassMethod(TypeInfo.MutableClass owner, Stmt.Function method,
+        string name, TypeInfo callable)
+    {
+        if (!method.IsStatic && name == "constructor")
+        {
+            owner.ComputedConstructorMethodType = callable;
+            owner.ComputedConstructorMethodAccess = method.Access;
+            return;
+        }
+        (method.IsStatic ? owner.StaticMethods : owner.Methods)[name] = callable;
+        (method.IsStatic ? owner.StaticMethodAccess : owner.MethodAccess)[name] = method.Access;
+    }
+
     private TypeInfo BuildClassMethodSignature(Stmt.Function method, bool preparatory = false,
         bool wrapGeneratorReturn = true, bool validateDefaults = true)
     {

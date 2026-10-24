@@ -230,6 +230,9 @@ public partial class TypeChecker
             var fieldAccess = isStatic ? core.StaticFieldAccessMap : core.FieldAccess;
             var methodAccess = isStatic ? core.StaticMethodAccessMap : core.MethodAccess;
             bool Optional(string name) => core.OrdinaryOptionalMembers?.Contains((isStatic, name)) == true;
+            if (!isStatic && core.ComputedConstructorMethodType is { } constructorMethod)
+                members.TryAdd("constructor", new(SubstituteConstructorMember(constructorMethod, level.Substitutions),
+                    true, core.ComputedConstructorMethodAccess, core));
             foreach (var (name, type) in fields)
                 members.TryAdd(name, new(SubstituteConstructorMember(type, level.Substitutions), false,
                     fieldAccess.GetValueOrDefault(name, AccessModifier.Public), core, Optional(name)));

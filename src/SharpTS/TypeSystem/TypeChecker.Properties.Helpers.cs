@@ -476,6 +476,9 @@ public partial class TypeChecker
         if (TryGetDefaultLibraryPromiseType(gc, out _))
             return CheckGetOnRegularInstance(new TypeInfo.Class(gc.Core), memberToken, subs, enforceAccessibility);
 
+        if (memberName == "constructor")
+            return CheckGetOnRegularInstance(new TypeInfo.Class(gc.Core), memberToken, subs, enforceAccessibility);
+
         // Check for getter first
         if (gc.Getters?.TryGetValue(memberName, out var getterType) == true)
         {
@@ -624,7 +627,10 @@ public partial class TypeChecker
             AccessModifier access = AccessModifier.Public;
             var methodAccess = GetMethodAccess(current);
             var fieldAccess = GetFieldAccess(current);
-            if (methodAccess != null && methodAccess.TryGetValue(memberNameStr, out var ma))
+            var computedConstructor = memberNameStr == "constructor" ? ComputedConstructorMethodCore(current) : null;
+            if (computedConstructor?.ComputedConstructorMethodType is not null)
+                access = computedConstructor.ComputedConstructorMethodAccess;
+            else if (methodAccess != null && methodAccess.TryGetValue(memberNameStr, out var ma))
                 access = ma;
             else if (fieldAccess != null && fieldAccess.TryGetValue(memberNameStr, out var fa))
                 access = fa;
@@ -638,6 +644,12 @@ public partial class TypeChecker
             if (enforceAccessibility && access == AccessModifier.Protected && currentClassForAccess != null && !IsSubclassOf(_currentClass, currentClassForAccess))
             {
                 throw new TypeCheckException($" Property '{memberNameStr}' is protected and only accessible within class '{currentName}' and its subclasses.", tsCode: "TS2445");
+            }
+
+            if (computedConstructor?.ComputedConstructorMethodType is { } constructorMethod)
+            {
+                ObserveSourceMemberSelection(memberName, current, MemberFacet.Instance);
+                return Sub(constructorMethod);
             }
 
             var methods = GetMethods(current);

@@ -2691,11 +2691,7 @@ public partial class TypeChecker
                 if (TryGetComputedClassMemberName(method.ComputedKey) is not { } memberName)
                     continue;
                 var computedFunc = BuildClassMethodSignature(method, wrapGeneratorReturn: false, validateDefaults: false);
-                if (method.IsStatic)
-                    mutableClass.StaticMethods[memberName] = computedFunc;
-                else
-                    mutableClass.Methods[memberName] = computedFunc;
-                (method.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[memberName] = method.Access;
+                PublishComputedClassMethod(mutableClass, method, memberName, computedFunc);
             }
 
             // Collect method signatures (computed-key methods handled above)
@@ -2970,7 +2966,12 @@ public partial class TypeChecker
                     // @@name, arbitrary ones aren't modeled — build a signature inline to bind params.
                     string? memberName = TryGetComputedClassMemberName(method.ComputedKey);
                     var computedDict = method.IsStatic ? classTypeForBody.StaticMethods : classTypeForBody.Methods;
-                    if (memberName != null && computedDict.TryGetValue(memberName, out var ct))
+                    if (!method.IsStatic && memberName == "constructor" &&
+                        classTypeForBody.Core.ComputedConstructorMethodType is { } constructorMethod)
+                    {
+                        declaredMethodType = constructorMethod;
+                    }
+                    else if (memberName != null && computedDict.TryGetValue(memberName, out var ct))
                     {
                         declaredMethodType = ct;
                     }
@@ -3093,7 +3094,11 @@ public partial class TypeChecker
                             : method.Name.Lexeme;
                         if (mName != null)
                         {
-                            if (method.IsPrivate)
+                            if (method.ComputedKey != null)
+                            {
+                                PublishComputedClassMethod(mutableClass, method, mName, updatedMethodType);
+                            }
+                            else if (method.IsPrivate)
                             {
                                 if (method.IsStatic) mutableClass.StaticPrivateMethods[mName] = updatedMethodType;
                                 else mutableClass.PrivateMethods[mName] = updatedMethodType;

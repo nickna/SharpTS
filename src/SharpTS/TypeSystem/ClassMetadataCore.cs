@@ -53,6 +53,11 @@ public sealed record ClassMetadataCore(
     // CLR interop accepts the declared camelCase member's PascalCase spelling.
     internal bool IsDotNetMapped { get; init; }
 
+    // ["constructor"] is an instance method, independent of the construction
+    // signature historically stored in Methods["constructor"].
+    internal TypeInfo? ComputedConstructorMethodType { get; init; }
+    internal AccessModifier ComputedConstructorMethodAccess { get; init; }
+
     /// <summary>True when the instance facet declares any index signature.</summary>
     public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
 

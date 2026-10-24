@@ -168,11 +168,7 @@ public partial class TypeChecker
             // and is filled in by the inferred-return post-pass below as Generator<yieldType>.
             var representative = implementations.Count == 1 ? implementations[0] : members[^1];
             var funcType = BuildClassMethodSignature(representative, wrapGeneratorReturn: false, validateDefaults: false);
-            if (representative.IsStatic)
-                mutableClass.StaticMethods[memberName] = funcType;
-            else
-                mutableClass.Methods[memberName] = funcType;
-            (representative.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[memberName] = representative.Access;
+            PublishComputedClassMethod(mutableClass, representative, memberName, funcType);
         }
     }
 
@@ -927,7 +923,12 @@ public partial class TypeChecker
                 // signature inline just to bind parameter types for the body check.
                 string? memberName = TryGetComputedClassMemberName(method.ComputedKey);
                 var computedDict = method.IsStatic ? classTypeForBody.StaticMethods : classTypeForBody.Methods;
-                if (memberName != null && computedDict.TryGetValue(memberName, out var computedType))
+                if (!method.IsStatic && memberName == "constructor" &&
+                    classTypeForBody.Core.ComputedConstructorMethodType is { } constructorMethod)
+                {
+                    declaredMethodType = constructorMethod;
+                }
+                else if (memberName != null && computedDict.TryGetValue(memberName, out var computedType))
                 {
                     declaredMethodType = computedType;
                 }
@@ -1078,7 +1079,11 @@ public partial class TypeChecker
                         : method.Name.Lexeme;
                     if (mName != null)
                     {
-                        if (method.IsPrivate)
+                        if (method.ComputedKey != null)
+                        {
+                            PublishComputedClassMethod(mutableClass, method, mName, updatedMethodType);
+                        }
+                        else if (method.IsPrivate)
                         {
                             if (method.IsStatic) mutableClass.StaticPrivateMethods[mName] = updatedMethodType;
                             else mutableClass.PrivateMethods[mName] = updatedMethodType;

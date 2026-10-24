@@ -573,7 +573,8 @@ public partial class TypeChecker
                 .Select(member => member.Value)
                 .FirstOrDefault(),
             TypeInfo.Record rec => rec.Fields.GetValueOrDefault(propertyName),
-            TypeInfo.Class cls => cls.Methods.GetValueOrDefault(propertyName)
+            TypeInfo.Class cls => (propertyName == "constructor" ? cls.Core.ComputedConstructorMethodType : null)
+                               ?? cls.Methods.GetValueOrDefault(propertyName)
                                ?? cls.FieldTypes.GetValueOrDefault(propertyName)
                                ?? cls.Getters.GetValueOrDefault(propertyName),
             TypeInfo.Instance inst => GetPropertyType(inst.ClassType, propertyName),
@@ -601,6 +602,8 @@ public partial class TypeChecker
             case TypeInfo.GenericClass gc:
                 for (int i = 0; i < gc.TypeParams.Count && i < ig.TypeArguments.Count; i++)
                     subs[gc.TypeParams[i].Name] = ig.TypeArguments[i];
+                if (propertyName == "constructor" && gc.Core.ComputedConstructorMethodType is { } constructorMethod)
+                    return Substitute(constructorMethod, subs);
                 if (gc.Methods.TryGetValue(propertyName, out var methodType))
                     return Substitute(methodType, subs);
                 if (gc.FieldTypes.TryGetValue(propertyName, out var fieldType))

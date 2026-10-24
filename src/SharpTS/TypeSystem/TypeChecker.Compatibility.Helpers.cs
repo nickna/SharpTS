@@ -199,6 +199,8 @@ public partial class TypeChecker
     {
         foreach (var core in EnumerateClassCores(type))
         {
+            if (core.ComputedConstructorMethodType is not null &&
+                core.ComputedConstructorMethodAccess != AccessModifier.Public) return true;
             foreach (var access in core.FieldAccess.Values)
                 if (access != AccessModifier.Public) return true;
             foreach (var access in core.MethodAccess.Values)
@@ -238,6 +240,9 @@ public partial class TypeChecker
         var seen = new HashSet<string>();
         foreach (var core in EnumerateClassCores(type))
         {
+            if (core.ComputedConstructorMethodType is not null &&
+                core.ComputedConstructorMethodAccess != AccessModifier.Public && seen.Add("constructor"))
+                yield return "constructor";
             foreach (var (name, mod) in core.FieldAccess)
                 if (mod != AccessModifier.Public && seen.Add(name)) yield return name;
             foreach (var (name, mod) in core.MethodAccess)
@@ -278,6 +283,12 @@ public partial class TypeChecker
             default:
                 foreach (var core in EnumerateClassCores(type))
                 {
+                    if (name == "constructor" && core.ComputedConstructorMethodType is not null)
+                    {
+                        access = core.ComputedConstructorMethodAccess;
+                        declaringId = core.DeclarationId;
+                        return true;
+                    }
                     if (core.FieldTypes.ContainsKey(name))
                     {
                         if (core.FieldAccess.TryGetValue(name, out var fa)) access = fa;
@@ -385,6 +396,8 @@ public partial class TypeChecker
         while (current is TypeInfo.Class c)
         {
             var core = c.Core;
+            if (core.ComputedConstructorMethodType is { } constructorMethod)
+                members.TryAdd("constructor", constructorMethod);
             foreach (var (name, type) in core.FieldTypes) members.TryAdd(name, type);
             foreach (var (name, type) in core.Methods)
                 if (name != "constructor") members.TryAdd(name, type);
@@ -706,6 +719,9 @@ public partial class TypeChecker
         while (current is TypeInfo.Class c)
         {
             var core = c.Core;
+            if (core.ComputedConstructorMethodType is { } constructorMethod &&
+                core.ComputedConstructorMethodAccess == AccessModifier.Public)
+                members.TryAdd("constructor", constructorMethod);
             foreach (var (name, type) in core.FieldTypes)
                 if (IsPublicMember(core.FieldAccess, name) && !members.ContainsKey(name))
                     members[name] = type;
@@ -749,6 +765,8 @@ public partial class TypeChecker
     /// <summary>True when a class metadata core declares a private/protected member (nominal brand).</summary>
     private static bool CoreHasNominalBrand(ClassMetadataCore core)
     {
+        if (core.ComputedConstructorMethodType is not null &&
+            core.ComputedConstructorMethodAccess != AccessModifier.Public) return true;
         if (core.PrivateFieldTypes.Count > 0 || core.PrivateMethodTypes.Count > 0) return true;
         foreach (var access in core.FieldAccess.Values)
             if (access != AccessModifier.Public) return true;
@@ -776,6 +794,9 @@ public partial class TypeChecker
         var subs = GenericClassSubs(gc, args);
         Dictionary<string, TypeInfo> members = [];
         var core = gc.Core;
+        if (core.ComputedConstructorMethodType is { } constructorMethod &&
+            (includeNonPublic || core.ComputedConstructorMethodAccess == AccessModifier.Public))
+            members["constructor"] = Substitute(constructorMethod, subs);
         foreach (var (name, type) in core.FieldTypes)
             if ((includeNonPublic || IsPublicMember(core.FieldAccess, name)) && !members.ContainsKey(name))
                 members[name] = Substitute(type, subs);

@@ -377,6 +377,8 @@ public abstract record TypeInfo
         // surface. Source class shells must not acquire this permission.
         internal bool IsDynamicSuperclass { get; init; }
         internal bool IsDotNetMapped { get; set; }
+        internal TypeInfo? ComputedConstructorMethodType { get; set; }
+        internal AccessModifier ComputedConstructorMethodAccess { get; set; }
         public Dictionary<string, TypeInfo> Methods { get; } = [];
         public Dictionary<string, TypeInfo> StaticMethods { get; } = [];
         public Dictionary<string, TypeInfo> StaticProperties { get; } = [];
@@ -458,7 +460,9 @@ public abstract record TypeInfo
                 StaticNumberIndexType = StaticNumberIndexType,
                 StaticSymbolIndexType = StaticSymbolIndexType,
                 ReadonlyIndexes = ReadonlyIndexes.Count > 0 ? ReadonlyIndexes.ToFrozenSet() : null,
-                IsDotNetMapped = IsDotNetMapped
+                IsDotNetMapped = IsDotNetMapped,
+                ComputedConstructorMethodType = ComputedConstructorMethodType,
+                ComputedConstructorMethodAccess = ComputedConstructorMethodAccess
             };
             return _frozenCore;
         }
