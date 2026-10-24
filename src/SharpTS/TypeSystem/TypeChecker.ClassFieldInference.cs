@@ -21,14 +21,14 @@ public partial class TypeChecker
 
     private TypeInfo GetClassFieldOuterBindingType(Token name, TypeInfo current)
     {
-        if (_deferredInitializerFlowBoundary is not { } boundary || _environment.IsConst(name.Lexeme) ||
+        if (_deferredInitializerFlowBoundary is not { } boundary ||
             boundary.GetValueBinding(name.Lexeme) is not { } binding ||
             !ReferenceEquals(binding, _environment.GetValueBinding(name.Lexeme)) ||
             !_classFieldDeclaredBindingTypes.TryGetValue(binding, out var declared))
             return current;
 
         // Preserve assignments and guards checked within the initializer itself. Only the
-        // mutable enclosing binding's declaration-time flow is unavailable at construction.
+        // enclosing binding's declaration-time flow is unavailable at construction.
         for (var environment = _environment; !ReferenceEquals(environment, boundary); environment = environment.Enclosing!)
             if (environment.IsDefinedLocally(name.Lexeme))
                 return current;

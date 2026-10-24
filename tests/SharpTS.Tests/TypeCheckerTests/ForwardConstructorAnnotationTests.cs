@@ -10,6 +10,7 @@ public class ForwardConstructorAnnotationTests
     [Theory]
     [InlineData("class C { static test(other: typeof D) { return other.missing; } } class D extends C {}")]
     [InlineData("function read(other: typeof D) { return other.missing; } class D {}")]
+    [InlineData("class C { static #x = 1; static test(other: typeof D) { return other.#x; } } class D extends C {}")]
     public void ForwardConstructorAnnotationRejectsMissingMembers(string source)
     {
         Assert.Equal("TS2339", Assert.Single(Check(source).Diagnostics).TsCode);

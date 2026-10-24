@@ -18,6 +18,12 @@ public class InstanceFieldOuterVariableFlowTests
     }
 
     [Fact]
+    public void AnnotatedConstRetainsItsDeclaredTypeInInstanceFieldInference()
+    {
+        Assert.Equal("TS2322", Assert.Single(Check("const value: string | number = 'ok'; class C { later = value; } const wrong: string = new C().later;").Diagnostics).TsCode);
+    }
+
+    [Fact]
     public void OuterGuardDoesNotBecomeTheInstanceFieldType()
     {
         Assert.Equal("TS2322", Assert.Single(Check("""
@@ -31,11 +37,10 @@ public class InstanceFieldOuterVariableFlowTests
     }
 
     [Theory]
-    [InlineData("const value: string | number = 'ok'; class C { later = value; } const valid: string = new C().later;")]
-    [InlineData("let value: string | number = 'ok'; class C { static later = value; } const valid: string = C.later;")]
+    [InlineData("const value = 'ok'; class C { later = value; } const valid: string = new C().later;")]
     [InlineData("let value: string | number = 'outer'; class C { later = (() => { let value = 1; return value; })(); } const valid: number = new C().later;")]
     [InlineData("let value: string | number = 'outer'; class C { later = (() => { if (typeof value === 'string') { const valid: string = value; } return value; })(); }")]
-    public void ConstStaticAndInitializerLocalFlowRemainsAvailable(string source)
+    public void ConstAndInitializerLocalFlowRemainsAvailable(string source)
     {
         Assert.Empty(Check(source).Diagnostics);
     }
