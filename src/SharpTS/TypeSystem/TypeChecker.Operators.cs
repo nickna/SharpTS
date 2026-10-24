@@ -676,7 +676,7 @@ public partial class TypeChecker
             if (valueType is TypeInfo.Never && (IsNumber(varType) || IsBigInt(varType)))
                 return varType;
             TypeInfo result = CheckPlusOperator(varType, valueType, line);
-            if (!IsCompatible(varType, result))
+            if (!IsCompatible(WidenLiteralType(varType), result))
                 throw new TypeCheckException("Compound assignment requires numeric operands.", tsCode: "TS2365");
             return varType;
         }
