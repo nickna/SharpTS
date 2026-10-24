@@ -2933,7 +2933,8 @@ public partial class TypeChecker
                     // Namespace import: import * as Module from './file'
                     if (import.NamespaceImport != null)
                     {
-                        if (isCjsImport)
+                        if (isCjsImport || importedModule.HasExportAssignment &&
+                            ResolveDeferredModuleExportAssignment(importedModule, env) is TypeInfo.Any)
                         {
                             env.Define(import.NamespaceImport.Lexeme, TypeInfo.Any.Shared);
                             BindImportedDeclaration(
