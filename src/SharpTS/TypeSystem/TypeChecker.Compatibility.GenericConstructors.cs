@@ -46,17 +46,10 @@ public partial class TypeChecker
             if (member.IsMethod) methodNames.Add("'static:" + name);
         var result = new TypeInfo.Record(members.ToFrozenDictionary(), MethodMembers: methodNames.ToFrozenSet());
 
-        var constructor = ResolveClassMemberTypeSubstituted(
-            new TypeInfo.InstantiatedGeneric(type, arguments), "constructor");
-        var functions = constructor switch
-        {
-            TypeInfo.Function f => new List<TypeInfo.Function> { f },
-            TypeInfo.OverloadedFunction overloads => overloads.Signatures,
-            _ => [new TypeInfo.Function([], TypeInfo.Void.Shared)]
-        };
-        return functions.Select(f => new NormalizedSignature(type.TypeParams,
-            new TypeInfo.Function(f.ParamTypes, result, f.RequiredParams, f.HasRestParam,
-                f.ThisType, f.ParamNames))).ToList();
+        // Construction uses the real constructor metadata. An instance method named
+        // ["constructor"] remains a member of the projected result above.
+        return OrdinaryConstructSignatures(levels).Signatures.Select(signature =>
+            new NormalizedSignature(type.TypeParams, signature.Func with { ReturnType = result })).ToList();
     }
 
     private Dictionary<string, TypeInfo> CollectConstructorStaticMembers(TypeInfo type)

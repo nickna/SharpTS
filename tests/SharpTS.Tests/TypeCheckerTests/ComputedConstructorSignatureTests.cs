@@ -69,6 +69,138 @@ public class ComputedConstructorSignatureTests
             diagnostic => diagnostic.TsCode == "TS2322");
     }
 
+    [Theory]
+    [InlineData("", false)]
+    [InlineData(", extra: number", true)]
+    [InlineData(", extra?: number", false)]
+    public void GenericConstructorAssignmentUsesRealConstructionArity(string extra, bool rejected)
+    {
+        string source = $$"""
+            class Target<T> {
+                constructor(value: T) {}
+                ["constructor"](value: string): number { return 1; }
+            }
+            class Source<U> {
+                constructor(value: U{{extra}}) {}
+                ["constructor"](value: string): number { return 1; }
+            }
+            const Alias: typeof Target = Source;
+            """;
+        AssertRejected(Check(source), rejected);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void MixedConstructorAssignmentKeepsComputedMethodsSeparateFromConstruction(
+        bool targetGeneric, bool sourceGeneric)
+    {
+        string source = $$"""
+            class Target{{(targetGeneric ? "<T>" : "")}} {
+                constructor(value: {{(targetGeneric ? "T" : "number")}}) {}
+                ["constructor"](value: string): number { return 1; }
+            }
+            class Source{{(sourceGeneric ? "<U>" : "")}} {
+                constructor(value: {{(sourceGeneric ? "U" : "number")}}, extra: number) {}
+                ["constructor"](value: string): number { return 1; }
+            }
+            const Alias: typeof Target = Source;
+            """;
+        AssertRejected(Check(source), true);
+    }
+
+    [Theory]
+    [InlineData("string", "number", false)]
+    [InlineData("number", "number", true)]
+    [InlineData("string", "string", true)]
+    public void GenericConstructorAssignmentAlsoChecksComputedInstanceMethod(
+        string parameter, string result, bool rejected)
+    {
+        string source = $$"""
+            class Target<T> {
+                constructor(value: T) {}
+                ["constructor"](value: string): number { return 1; }
+            }
+            class Source<U> {
+                constructor(value: U) {}
+                ["constructor"](value: {{parameter}}): {{result}} { return 1 as any; }
+            }
+            const Alias: typeof Target = Source;
+            """;
+        AssertRejected(Check(source), rejected);
+    }
+
+    [Theory]
+    [InlineData("string", "number", false)]
+    [InlineData("number", "number", true)]
+    [InlineData("string", "string", true)]
+    public void DistinctInstancesCheckComputedMethodButIgnoreRealConstructionSignatures(
+        string parameter, string result, bool rejected)
+    {
+        string source = $$"""
+            class Target {
+                constructor(value: number) {}
+                ["constructor"](value: string): number { return 1; }
+            }
+            class Source {
+                constructor(value: boolean, extra: number) {}
+                ["constructor"](value: {{parameter}}): {{result}} { return 1 as any; }
+            }
+            declare const source: Source;
+            const target: Target = source;
+            """;
+        AssertRejected(Check(source), rejected);
+    }
+
+    [Theory]
+    [InlineData("string", "number", false)]
+    [InlineData("number", "number", true)]
+    [InlineData("string", "string", true)]
+    public void RecordsAndInstancesProjectTheComputedMethodInBothDirections(
+        string parameter, string result, bool rejected)
+    {
+        const string declaration = """
+            class C {
+                constructor(value: boolean, extra: number) {}
+                ["constructor"](value: string): number { return 1; }
+            }
+            """;
+        AssertRejected(Check(declaration + $$"""
+            declare const value: C;
+            const shape: { constructor: (value: {{parameter}}) => {{result}} } = value;
+            """), rejected);
+        AssertRejected(Check(declaration + $$"""
+            declare const shape: { constructor: (value: {{parameter}}) => {{result}} };
+            const value: C = shape;
+            """), rejected);
+    }
+
+    [Theory]
+    [InlineData("number", false)]
+    [InlineData("string", true)]
+    public void InheritedGenericComputedMethodsRetainSubstitutionInRecordProjections(
+        string result, bool rejected)
+    {
+        string source = $$"""
+            class Base<T> {
+                constructor(value: T) {}
+                ["constructor"](value: T): T { return value; }
+            }
+            class Derived extends Base<number> {}
+            declare const value: Derived;
+            const shape: { constructor: (value: number) => {{result}} } = value;
+            """;
+        AssertRejected(Check(source), rejected);
+    }
+
+    private static void AssertRejected(TypeCheckDiagnosticResult result, bool rejected)
+    {
+        if (rejected)
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
+        else
+            Assert.Empty(result.Diagnostics);
+    }
+
     private static TypeCheckDiagnosticResult Check(string source) => new TypeChecker(strictNullChecks: true)
         .CheckWithRecovery(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
 }
