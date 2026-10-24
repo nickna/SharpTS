@@ -57,9 +57,17 @@ public partial class TypeChecker
     /// a symbol-keyed field is stored under the synthetic <c>&lt;computed&gt;</c> lexeme and never lines
     /// up with the interface's <c>@@iterator</c>, producing spurious missing-property errors.
     /// </summary>
+    private string? TryGetComputedClassMemberName(Expr key) => key switch
+    {
+        Expr.Literal { Value: string name } => name,
+        Expr.Literal { Value: double number } => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        Expr.Grouping grouping => TryGetComputedClassMemberName(grouping.Expression),
+        _ => TryGetWellKnownSymbolMemberName(key)
+    };
+
     private string GetFieldMemberName(Stmt.Field field) =>
         field.ComputedKey != null
-            ? (TryGetWellKnownSymbolMemberName(field.ComputedKey) ?? field.Name.Lexeme)
+            ? (TryGetComputedClassMemberName(field.ComputedKey) ?? field.Name.Lexeme)
             : field.Name.Lexeme;
 
     /// <summary>
