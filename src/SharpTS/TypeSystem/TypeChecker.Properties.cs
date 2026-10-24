@@ -756,6 +756,12 @@ public partial class TypeChecker
         return objType;
     }
 
+    private TypeInfo ClassFieldWriteType(TypeInfo owner, string name, TypeInfo type) =>
+        !_exactOptionalPropertyTypes && ClassInfoAccessor.Get(owner,
+            c => c.Core.OrdinaryOptionalMembers,
+            gc => gc.Core.OrdinaryOptionalMembers)?.Contains((false, name)) == true
+                ? CreateUnion(type, TypeInfo.Undefined.Shared) : type;
+
     private TypeInfo CheckSet(Expr.Set set)
     {
         using var memberLookup = BeginSourceMemberLookup(set, set.Name, MemberOperation.Write);
@@ -970,7 +976,7 @@ public partial class TypeChecker
                  if (gc.FieldTypes?.TryGetValue(memberName, out var fieldType) == true)
                  {
                      ObserveSourceMemberSelection(set.Name, gc, MemberFacet.Instance);
-                     var substitutedType = Substitute(fieldType, subs);
+                     var substitutedType = ClassFieldWriteType(gc, memberName, Substitute(fieldType, subs));
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(substitutedType, valueType))
                      {
@@ -1062,6 +1068,7 @@ public partial class TypeChecker
                      if (promiseHeritage)
                          fieldDeclType = SubstituteConstructorMember(fieldDeclType, substitutions);
                      ObserveSourceMemberSelection(set.Name, current, MemberFacet.Instance);
+                     fieldDeclType = ClassFieldWriteType(current, memberName, fieldDeclType);
                      if (fieldDeclType is not (TypeInfo.Inferred or TypeInfo.Any)
                          && !IsCompatible(fieldDeclType, fieldValueType))
                      {
