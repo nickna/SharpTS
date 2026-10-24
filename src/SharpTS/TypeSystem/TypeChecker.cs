@@ -2879,16 +2879,26 @@ public partial class TypeChecker
                     // The actual values come from `module.exports` at runtime via the CJS interop path.
                     bool isCjsImport = importedModule.IsCommonJs;
 
+                    if (import.IsTypeOnly)
+                    {
+                        if (import.DefaultImport is { } defaultName)
+                            env.MarkTypeOnlyImport(defaultName.Lexeme);
+                        if (import.NamespaceImport is { } namespaceName)
+                            env.MarkTypeOnlyImport(namespaceName.Lexeme);
+                    }
+                    foreach (var spec in import.NamedImports ?? [])
+                        if (import.IsTypeOnly || spec.IsTypeOnly)
+                            env.MarkTypeOnlyImport((spec.LocalName ?? spec.Imported).Lexeme);
+
                     // Default import
                     if (import.DefaultImport != null)
                     {
                         if (isCjsImport)
                         {
-                            env.Define(import.DefaultImport.Lexeme, TypeInfo.Any.Shared);
-                            BindImportedDeclaration(
-                                env,
-                                import.DefaultImport,
-                                BindingNamespace.Value);
+                            env.DefineImportAlias(import.DefaultImport.Lexeme, TypeInfo.Any.Shared,
+                                isValue: !import.IsTypeOnly);
+                            BindImportedDeclaration(env, import.DefaultImport,
+                                import.IsTypeOnly ? BindingNamespace.Type : BindingNamespace.Value);
                         }
                         else
                         {
@@ -2985,11 +2995,12 @@ public partial class TypeChecker
 
                             if (isCjsImport)
                             {
-                                env.Define(localName, TypeInfo.Any.Shared);
+                                bool cjsTypeOnly = import.IsTypeOnly || spec.IsTypeOnly;
+                                env.DefineImportAlias(localName, TypeInfo.Any.Shared, isValue: !cjsTypeOnly);
                                 BindImportedDeclaration(
                                     env,
                                     spec.LocalName ?? spec.Imported,
-                                    BindingNamespace.Value,
+                                    cjsTypeOnly ? BindingNamespace.Type : BindingNamespace.Value,
                                     importedToken: spec.Imported);
                                 continue;
                             }

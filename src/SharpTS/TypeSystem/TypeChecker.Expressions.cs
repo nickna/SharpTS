@@ -2133,6 +2133,7 @@ public partial class TypeChecker
 
     private TypeInfo CheckAssign(Expr.Assign assign)
     {
+        ValidateImportValueUse(assign.Name);
         BindValueUse(assign.Name);
 
         // For assignment, check against the DECLARED type, not the narrowed type
@@ -2342,6 +2343,7 @@ public partial class TypeChecker
 
     private TypeInfo LookupVariable(Token name)
     {
+        ValidateImportValueUse(name);
         if (name.Lexeme == "globalThis" && _hasDefaultLibraries)
             return GetGlobalThisType();
 
@@ -2533,6 +2535,14 @@ public partial class TypeChecker
         }
 
         return type;
+    }
+
+    private void ValidateImportValueUse(Token name)
+    {
+        if (_environment.IsTypeOnlyImport(name.Lexeme))
+            throw new TypeCheckException(
+                $"'{name.Lexeme}' cannot be used as a value because it was imported using 'import type'.",
+                line: name.Line, tsCode: "TS1361");
     }
 
     private TypeInfo GetLiteralType(object? value)

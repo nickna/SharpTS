@@ -32,6 +32,7 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
     private readonly Dictionary<string, TypeInfo> _typeParameters = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo.Namespace> _namespaces = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (TypeInfo Type, bool IsValue)> _importAliases = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _typeOnlyImports = new(StringComparer.Ordinal);
 
     public TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode = null)
         : base(enclosing, strictMode)
@@ -308,5 +309,14 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
     {
         if (_importAliases.ContainsKey(name)) return true;
         return Enclosing?.IsImportAlias(name) ?? false;
+    }
+
+    internal void MarkTypeOnlyImport(string name) => _typeOnlyImports.Add(name);
+
+    internal bool IsTypeOnlyImport(string name)
+    {
+        if (_typeOnlyImports.Contains(name)) return true;
+        if (IsDefinedLocally(name)) return false;
+        return Enclosing?.IsTypeOnlyImport(name) ?? false;
     }
 }
