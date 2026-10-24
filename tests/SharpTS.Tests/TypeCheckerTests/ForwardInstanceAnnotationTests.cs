@@ -1,3 +1,4 @@
+using SharpTS.Diagnostics;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using Xunit;
