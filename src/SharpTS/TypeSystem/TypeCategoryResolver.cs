@@ -123,6 +123,7 @@ public static class TypeCategoryResolver
     public static bool HasBuiltInMemberValidation(TypeCategory category) => category switch
     {
         TypeCategory.String => true,
+        TypeCategory.Number => true,
         TypeCategory.Array => true,
         TypeCategory.Tuple => true,
         TypeCategory.Map => true,

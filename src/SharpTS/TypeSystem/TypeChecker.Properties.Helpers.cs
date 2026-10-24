@@ -18,6 +18,7 @@ public partial class TypeChecker
         return category switch
         {
             TypeCategory.String => ResolveStringMemberType(memberName),
+            TypeCategory.Number => ResolveNumberMemberType(memberName),
             TypeCategory.Array when objType is TypeInfo.Array arr =>
                 BuiltInTypes.GetArrayMemberType(memberName, arr.ElementType),
             TypeCategory.Tuple when objType is TypeInfo.Tuple tuple =>
@@ -76,6 +77,22 @@ public partial class TypeChecker
         return !Options.RespectLoadedLibraries && memberName == "match" && member is TypeInfo.Function function
             ? function with { ReturnType = TypeInfo.Any.Shared }
             : member;
+    }
+
+    private TypeInfo? ResolveNumberMemberType(string memberName)
+    {
+        if (_globalDeclarationEnvironment?.GetTypeBinding("Number") is TypeInfo.Interface number)
+            return ResolveNamedInterfaceMember(number, memberName) ?? ResolveObjectPrototypeMember(memberName);
+
+        return memberName switch
+        {
+            "toString" or "toFixed" or "toExponential" or "toPrecision" =>
+                new TypeInfo.Function([TypeInfo.Primitive.Number], TypeInfo.String.Shared, RequiredParams: 0),
+            "toLocaleString" => new TypeInfo.Function([TypeInfo.Any.Shared, TypeInfo.Any.Shared],
+                TypeInfo.String.Shared, RequiredParams: 0),
+            "valueOf" => new TypeInfo.Function([], TypeInfo.Primitive.Number),
+            _ => ResolveObjectPrototypeMember(memberName)
+        };
     }
 
     private TypeInfo? ResolveRegExpMemberType(string memberName)
