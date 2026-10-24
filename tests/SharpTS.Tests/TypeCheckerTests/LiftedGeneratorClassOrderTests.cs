@@ -19,4 +19,23 @@ public class LiftedGeneratorClassOrderTests
         var result = new TypeChecker().CheckWithRecovery(TestHarness.ParseOrThrow(source));
         Assert.Single(result.Diagnostics, diagnostic => diagnostic.TsCode == "TS2449");
     }
+
+    [Theory]
+    [InlineData("as any", "value = Later", "value")]
+    [InlineData("satisfies any", "value = Later", "value")]
+    [InlineData("as any", "", "Later")]
+    [InlineData("satisfies any", "", "Later")]
+    public void TypeWrappedGeneratorsRemainDeferredForDeclarationOrder(
+        string wrapper, string parameters, string yielded)
+    {
+        // Pinned TypeScript 6.0.3 recognizes only grouping wrappers as an IIFE.
+        // Assertions and satisfies therefore retain deferred declaration-order checking.
+        string source = $$"""
+            function make() {
+                ((function*({{parameters}}) { yield {{yielded}}; }) {{wrapper}})();
+                class Later {}
+            }
+            """;
+        new TypeChecker().Check(TestHarness.ParseOrThrow(source));
+    }
 }
