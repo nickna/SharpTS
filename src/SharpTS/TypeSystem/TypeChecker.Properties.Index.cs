@@ -386,6 +386,9 @@ public partial class TypeChecker
         if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
             return knownInstanceMember;
 
+        if (TryReadNumericRecordMember(objType, indexType) is { } numericRecordMember)
+            return numericRecordMember;
+
         if (getIndex.Index is Expr.Literal { Value: string functionMemberName } &&
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
             return apparentNamedMember;
@@ -916,13 +919,17 @@ public partial class TypeChecker
         // A write through a known literal-key domain must be valid for every property that the
         // key may select. Reads use a union of the property types; writes use their intersection,
         // represented here by checking the assigned value against each candidate slot.
-        if (TryGetStringLiteralKeys(indexType, out var literalKeys) &&
+        if ((TryGetStringLiteralKeys(indexType, out var literalKeys) ||
+             TryGetNumericLiteralKeys(indexType, out literalKeys)) &&
             objType is TypeInfo.Record or TypeInfo.Interface)
         {
             List<TypeInfo> propertyTypes = [];
             foreach (string key in literalKeys)
             {
                 if (objType is TypeInfo.Record recordTarget && recordTarget.IsFieldReadonly(key))
+                    throw new TypeCheckException($"Cannot assign to '{key}' because it is a read-only property.",
+                        TryGetExprLine(setIndex.Index), tsCode: "TS2540");
+                if (objType is TypeInfo.Interface interfaceTarget && interfaceTarget.IsMemberReadonly(key))
                     throw new TypeCheckException($"Cannot assign to '{key}' because it is a read-only property.",
                         TryGetExprLine(setIndex.Index), tsCode: "TS2540");
                 if (GetMemberType(objType, key) is not { } propertyType)
@@ -1273,6 +1280,41 @@ public partial class TypeChecker
         return keys.Count > 0;
     }
 
+    private static bool TryGetNumericLiteralKeys(TypeInfo indexType, out List<string> keys)
+    {
+        keys = [];
+        IEnumerable<TypeInfo> candidates = indexType is TypeInfo.Union union
+            ? union.FlattenedTypes : [indexType];
+        foreach (TypeInfo candidate in candidates)
+        {
+            if (candidate is not TypeInfo.NumberLiteral number)
+            {
+                keys.Clear();
+                return false;
+            }
+            keys.Add(Runtime.PropertyKeyConverter.ToPropertyKeyString(number.Value));
+        }
+        return keys.Count > 0;
+    }
+
+    private TypeInfo? TryReadNumericRecordMember(TypeInfo receiver, TypeInfo index)
+    {
+        if (receiver is TypeInfo.InstantiatedGeneric instantiated &&
+            FlattenInstantiatedInterface(instantiated) is { } flattened)
+            receiver = flattened;
+        if (receiver is not (TypeInfo.Record or TypeInfo.Interface) ||
+            !TryGetNumericLiteralKeys(index, out var names))
+            return null;
+        List<TypeInfo> members = [];
+        foreach (string name in names)
+        {
+            if (GetMemberTypeWithOptionality(receiver, name) is not { } member)
+                return null;
+            members.Add(WithOptionalPropertyUndefined(member.Type, member.IsOptional));
+        }
+        return members.Aggregate(CreateUnion);
+    }
+
     private bool TryGetIndexSignatureWriteTypes(
         TypeInfo objectType, TypeInfo indexType, out List<TypeInfo> signatureTypes)
     {
@@ -1465,6 +1507,9 @@ public partial class TypeChecker
 
         if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
             return knownInstanceMember;
+
+        if (TryReadNumericRecordMember(objType, indexType) is { } numericRecordMember)
+            return numericRecordMember;
 
         if (getIndex.Index is Expr.Literal { Value: string functionMemberName } &&
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
