@@ -468,6 +468,11 @@ public partial class TypeChecker
         if (expected is TypeInfo.GenericClass targetClass && actual is TypeInfo.GenericClass sourceClass)
             return GenericConstructorsRelated(targetClass, sourceClass);
 
+        if (expected is TypeInfo.Class mixedTarget && actual is TypeInfo.GenericClass genericSource)
+            return GenericConstructorsRelated(new TypeInfo.GenericClass(mixedTarget.Core, []), genericSource);
+        if (expected is TypeInfo.GenericClass genericTarget && actual is TypeInfo.Class mixedSource)
+            return GenericConstructorsRelated(genericTarget, new TypeInfo.GenericClass(mixedSource.Core, []));
+
         if (IsOrdinaryConstructorPair(expected, actual))
             return OrdinaryConstructorsRelated(expected, actual);
 
