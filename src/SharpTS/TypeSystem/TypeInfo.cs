@@ -197,9 +197,10 @@ public abstract record TypeInfo
         // Substitution origin changes assignability (it gates the callback rule), so marked and
         // unmarked renderings must not share compatibility-cache entries.
         internal override string CacheKey() =>
-            InstantiatedTypeParamPositions is { Count: > 0 } marks
-                ? $"{ToString()}@itp{string.Join(",", marks.Order())}"
-                : base.CacheKey();
+            $"fn({string.Join(",", ParamTypes.Select(parameter => parameter.CacheKey()))})" +
+            $"=>{ReturnType.CacheKey()}@arity{MinArity}@rest{HasRestParam}@this{ThisType?.CacheKey()}" +
+            (InstantiatedTypeParamPositions is { Count: > 0 } marks
+                ? $"@itp{string.Join(",", marks.Order())}" : "");
     }
 
     /// <summary>
@@ -211,6 +212,7 @@ public abstract record TypeInfo
         [new Array(Any.Shared)], Any.Shared, RequiredParams: 0, HasRestParam: true)
     {
         public override string ToString() => "Function";
+        internal override string CacheKey() => "Function";
     }
 
     /// <summary>
