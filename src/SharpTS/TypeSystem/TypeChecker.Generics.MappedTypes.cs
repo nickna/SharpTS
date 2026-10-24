@@ -250,6 +250,7 @@ public partial class TypeChecker
         // Evaluate keyof if present. A homomorphic mapped type preserves optionality unless
         // it explicitly adds/removes `?` (Readonly<T> is the common case).
         HashSet<string>? homomorphicOptional = null;
+        HashSet<string>? homomorphicReadonly = null;
         if (constraint is TypeInfo.KeyOf keyOf)
         {
             TypeInfo sourceType = Substitute(keyOf.SourceType, outerSubstitutions);
@@ -272,6 +273,7 @@ public partial class TypeChecker
                     return array with { IsReadonly = Readonly(array.IsReadonly) };
             }
             homomorphicOptional = ExtractOptionalProperties(sourceType).ToHashSet(StringComparer.Ordinal);
+            homomorphicReadonly = ExtractReadonlyProperties(sourceType);
             constraint = EvaluateKeyOf(sourceType);
         }
 
@@ -372,7 +374,8 @@ public partial class TypeChecker
                 optionalFields.Add(finalKeyName);
             }
             // For -?, we don't add to optionalFields (making it required)
-            if (addsReadonly)
+            if (addsReadonly || (!mapped.Modifiers.HasFlag(MappedTypeModifiers.RemoveReadonly) &&
+                keyName is not null && homomorphicReadonly?.Contains(keyName) == true))
             {
                 readonlyFields.Add(finalKeyName);
             }
