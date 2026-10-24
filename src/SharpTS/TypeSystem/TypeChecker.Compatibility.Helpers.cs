@@ -135,20 +135,8 @@ public partial class TypeChecker
     /// assignment except when the target type is so branded, in which case it requires the source
     /// to originate from the same class.
     /// </summary>
-    private static bool HasNominalClassBrand(TypeInfo.Class cls)
-    {
-        TypeInfo? current = cls;
-        while (current is TypeInfo.Class c)
-        {
-            if (CoreHasNominalBrand(c.Core)) return true;
-            current = GetSuperclass(current);
-        }
-        return HasComputedConstructorMethodBrand(current);
-    }
-
-    private static bool HasComputedConstructorMethodBrand(TypeInfo? type) =>
-        EnumerateClassCores(type).Any(core => core.ComputedConstructorMethodType is not null &&
-            core.ComputedConstructorMethodAccess != AccessModifier.Public);
+    private static bool HasNominalClassBrand(TypeInfo.Class cls) =>
+        EnumerateClassCores(cls).Any(CoreHasNominalBrand);
 
     private static bool IsPublicMember(FrozenDictionary<string, AccessModifier> access, string name)
         => !access.TryGetValue(name, out var mod) || mod == AccessModifier.Public;
@@ -773,14 +761,9 @@ public partial class TypeChecker
         return false;
     }
 
-    /// <summary>Checks a generic class's own brands and inherited computed constructor method brands.</summary>
-    private static bool GenericClassHasNominalBrand(TypeInfo.GenericClass gc)
-    {
-        if (CoreHasNominalBrand(gc.Core)) return true;
-        return gc.Superclass is TypeInfo.Class sc
-            ? HasNominalClassBrand(sc)
-            : HasComputedConstructorMethodBrand(gc.Superclass);
-    }
+    /// <summary>Checks a generic class's own and inherited instance brands.</summary>
+    private static bool GenericClassHasNominalBrand(TypeInfo.GenericClass gc) =>
+        EnumerateClassCores(gc).Any(CoreHasNominalBrand);
 
     /// <summary>
     /// Collects the instance members of a generic class with its type arguments substituted
