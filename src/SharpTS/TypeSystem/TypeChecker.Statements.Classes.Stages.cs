@@ -349,7 +349,7 @@ public partial class TypeChecker
                 _currentArrowCapturesScriptGlobalThis = false;
                 if (!field.IsStatic) _deferredInitializerFlowBoundary = outerEnvironment;
                 _privateNameEnclosingClasses.Push(previousClass);
-                if (!field.IsStatic) PushEmptyNarrowingScope();
+                var previousNarrowings = field.IsStatic ? null : PushIsolatedClassFieldNarrowingScope();
                 try
                 {
                     getterScope.ActiveFields.Add(field);
@@ -363,7 +363,7 @@ public partial class TypeChecker
                 {
                     if (!field.IsStatic)
                     {
-                        PopNarrowingScope();
+                        RestoreClassFieldNarrowingScope(previousNarrowings!);
                         RestoreDefiniteAssignmentState(previousAssignmentState);
                     }
                     getterScope.ActiveFields.Remove(field);
