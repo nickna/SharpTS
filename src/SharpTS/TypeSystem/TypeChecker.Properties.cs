@@ -967,16 +967,25 @@ public partial class TypeChecker
              if (instance.ClassType is TypeInfo.InstantiatedGeneric ig &&
                  ig.GenericDefinition is TypeInfo.GenericClass gc && !promiseHeritage)
              {
-                 // Build substitution map
-                 Dictionary<string, TypeInfo> subs = [];
-                 for (int i = 0; i < gc.TypeParams.Count; i++)
-                     subs[gc.TypeParams[i].Name] = ig.TypeArguments[i];
-
-                 // Check for field
-                 if (gc.FieldTypes?.TryGetValue(memberName, out var fieldType) == true)
+                 if (!TryGetOrdinaryConstructorHierarchy(ig, out var levels))
+                     return CheckExpr(set.Value);
+                 foreach (var level in levels)
                  {
-                     ObserveSourceMemberSelection(set.Name, gc, MemberFacet.Instance);
-                     var substitutedType = ClassFieldWriteType(gc, memberName, Substitute(fieldType, subs));
+                     if (!level.Core.FieldTypes.TryGetValue(memberName, out var fieldType)) continue;
+                     if (level.Core.ReadonlyFields.Contains(memberName) &&
+                         _currentClass?.Core.DeclarationId != level.Core.DeclarationId)
+                         throw new TypeCheckException($"Cannot assign to '{memberName}' because it is a read-only property.",
+                             set.Name.Line, tsCode: "TS2540");
+                     var access = level.Core.FieldAccess.GetValueOrDefault(memberName);
+                     if (access == AccessModifier.Private && _currentClass?.Core.DeclarationId != level.Core.DeclarationId)
+                         throw new TypeCheckException($"Property '{memberName}' is private and only accessible within class '{level.Core.Name}'.",
+                             set.Name.Line, tsCode: "TS2341");
+                     if (access == AccessModifier.Protected && !IsSubclassOf(_currentClass, new TypeInfo.Class(level.Core)))
+                         throw new TypeCheckException($"Property '{memberName}' is protected and only accessible within class '{level.Core.Name}' and its subclasses.",
+                             set.Name.Line, tsCode: "TS2445");
+                     ObserveSourceMemberSelection(set.Name, new TypeInfo.Class(level.Core), MemberFacet.Instance);
+                     var substitutedType = ClassFieldWriteType(new TypeInfo.Class(level.Core), memberName,
+                         SubstituteConstructorMember(fieldType, level.Substitutions));
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(substitutedType, valueType))
                      {
