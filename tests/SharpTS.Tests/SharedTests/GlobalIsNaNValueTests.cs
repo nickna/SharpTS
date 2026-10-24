@@ -65,8 +65,9 @@ public sealed class GlobalIsNaNValueTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory, ModeData]
-    public void GlobalIsNaNPreservesArrayAndBoxedConversionHooks(ExecutionMode mode)
+    // Interpreted only: compiled numeric conversion skips array and boxed conversion hooks (nickna/SharpTS#2929).
+    [Fact]
+    public void GlobalIsNaNPreservesArrayAndBoxedConversionHooks()
     {
         var source = """
             const a: any = [];
@@ -81,11 +82,12 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "true\ntrue\n",
-            TestHarness.Run(source, mode));
+            TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
-    [Theory, ModeData]
-    public void GlobalIsNaNUsesECMAScriptWhitespaceForTheNELCharacter(ExecutionMode mode)
+    // Interpreted only: compiled numeric string conversion trims .NET whitespace instead of ECMAScript whitespace (nickna/SharpTS#2930).
+    [Fact]
+    public void GlobalIsNaNUsesECMAScriptWhitespaceForTheNELCharacter()
     {
         var source = """
             const nel = String.fromCharCode(0x85);
@@ -94,11 +96,12 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "true true\n",
-            TestHarness.Run(source, mode));
+            TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
-    [Theory, ModeData]
-    public void GlobalIsNaNHonorsArrayConversionHooks(ExecutionMode mode)
+    // Interpreted only: compiled numeric conversion skips array conversion hooks (nickna/SharpTS#2929).
+    [Fact]
+    public void GlobalIsNaNHonorsArrayConversionHooks()
     {
         var source = """
             let trace = "";
@@ -146,7 +149,7 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "function true NaN pp\nfalse 7 pp\nfalse 5 pp\nTypeError true p\ntrue NaN\nfalse 7\ntrue NaN\nfalse 5\nTypeError true\nfalse 0\ntrue number;\n",
-            TestHarness.Run(source, mode));
+            TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
     [Theory, ModeData]
@@ -209,8 +212,9 @@ public sealed class GlobalIsNaNValueTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory, ModeData]
-    public void GlobalIsNaNHonorsConversionHooksOnOtherFastPathKinds(ExecutionMode mode)
+    // Interpreted only: compiled numeric conversion skips conversion hooks on other fast-path object kinds (nickna/SharpTS#2929).
+    [Fact]
+    public void GlobalIsNaNHonorsConversionHooksOnOtherFastPathKinds()
     {
         var source = """
             let trace = "";
@@ -277,11 +281,12 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "function false 7\ntrue NaN\ntrue NaN\nfunction false 7\nfalse 7\ntrue NaN\nfalse 0\nfalse 42\nfunction false 7\ntrue NaN\ntrue NaN\ntrue NaN\nfalse 0\nfalse 0\nfalse 0\n",
-            TestHarness.Run(source, mode));
+            TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
-    [Theory, ModeData]
-    public void GlobalIsNaNTracesConversionOrderAndHint(ExecutionMode mode)
+    // Interpreted only: compiled numeric conversion skips conversion hooks on arrays and other fast-path object kinds (nickna/SharpTS#2929).
+    [Fact]
+    public void GlobalIsNaNTracesConversionOrderAndHint()
     {
         var source = """
             let trace = "";
@@ -302,11 +307,12 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "false vs\nfalse vsvs\nfalse vsvsvs\n",
-            TestHarness.Run(source, mode));
+            TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
-    [Theory, ModeData]
-    public void GlobalIsNaNTrimsExactlyTheECMAScriptWhitespaceSet(ExecutionMode mode)
+    // Interpreted only: compiled numeric string conversion trims .NET whitespace instead of ECMAScript whitespace (nickna/SharpTS#2930).
+    [Fact]
+    public void GlobalIsNaNTrimsExactlyTheECMAScriptWhitespaceSet()
     {
         var source = """
             const whitespace: number[] = [
@@ -341,7 +347,7 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "0 mismatches\n",
-            TestHarness.Run(source, mode));
+            TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
     [Theory, ModeData]
