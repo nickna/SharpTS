@@ -7,6 +7,14 @@ public partial class TypeChecker
 {
     private bool GenericConstructorsRelated(TypeInfo.GenericClass target, TypeInfo.GenericClass source)
     {
+        if (!target.IsAbstract && source.IsAbstract) return false;
+        TryGetOrdinaryConstructorHierarchy(target, out var targetLevels);
+        TryGetOrdinaryConstructorHierarchy(source, out var sourceLevels);
+        var targetAccess = OrdinaryConstructSignatures(targetLevels).Access;
+        var sourceAccess = OrdinaryConstructSignatures(sourceLevels).Access;
+        if (targetAccess != AccessModifier.Private && sourceAccess == AccessModifier.Private ||
+            targetAccess == AccessModifier.Public && sourceAccess != AccessModifier.Public)
+            return false;
         if (!MembersAccessibilityCompatible(target, source)
             || !ConstructorPrivateBrandsRelated(target, source, isStatic: false)
             || !ConstructorPrivateBrandsRelated(target, source, isStatic: true)
@@ -17,7 +25,9 @@ public partial class TypeChecker
         // uses one substitution for parameters, instance members and static members.
         var targets = ProjectGenericConstructors(target);
         var sources = ProjectGenericConstructors(source);
-        return targets.All(t => sources.Any(s => SignatureRelatedTo(s, t)));
+        _methodBivarianceDepth++;
+        try { return targets.All(t => sources.Any(s => SignatureRelatedTo(s, t))); }
+        finally { _methodBivarianceDepth--; }
     }
 
     private List<NormalizedSignature> ProjectGenericConstructors(TypeInfo.GenericClass type)
@@ -29,7 +39,13 @@ public partial class TypeChecker
         if (type.StringIndexType is { } stringIndex) members.Add("'stringIndex", stringIndex);
         if (type.NumberIndexType is { } numberIndex) members.Add("'numberIndex", numberIndex);
         if (type.SymbolIndexType is { } symbolIndex) members.Add("'symbolIndex", symbolIndex);
-        var result = new TypeInfo.Record(members.ToFrozenDictionary());
+        HashSet<string> methodNames = [];
+        TryGetOrdinaryConstructorHierarchy(type, out var levels);
+        foreach (var (name, member) in OrdinaryConstructorMembers(levels, isStatic: false))
+            if (member.IsMethod) methodNames.Add(name);
+        foreach (var (name, member) in OrdinaryConstructorMembers(levels, isStatic: true))
+            if (member.IsMethod) methodNames.Add("'static:" + name);
+        var result = new TypeInfo.Record(members.ToFrozenDictionary(), MethodMembers: methodNames.ToFrozenSet());
 
         var constructor = ResolveClassMemberTypeSubstituted(
             new TypeInfo.InstantiatedGeneric(type, arguments), "constructor");
