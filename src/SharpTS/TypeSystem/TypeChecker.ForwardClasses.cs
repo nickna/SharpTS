@@ -8,11 +8,12 @@ public partial class TypeChecker
 {
     private sealed class ForwardClassDeclaration(
         Stmt.Class declaration, TypeEnvironment environment, int declarationId,
-        ParsedModule? module, string? filePath, SourceDocument? standaloneSourceDocument)
+        ParsedModule? module, string? filePath, SourceDocument? standaloneSourceDocument,
+        TypeInfo.MutableClass? shape = null)
     {
         public Stmt.Class Declaration { get; } = declaration;
         public TypeEnvironment Environment { get; } = environment;
-        public TypeInfo.MutableClass Shape { get; } = new(declaration.Name.Lexeme, declarationId);
+        public TypeInfo.MutableClass Shape { get; } = shape ?? new(declaration.Name.Lexeme, declarationId);
         public ParsedModule? Module { get; } = module;
         public string? FilePath { get; } = filePath;
         public SourceDocument? StandaloneSourceDocument { get; } = standaloneSourceDocument;
@@ -43,8 +44,12 @@ public partial class TypeChecker
         {
             if (!_forwardClassDeclarations.TryGetValue(symbol, out var forward) ||
                 !ReferenceEquals(forward.Environment, _environment))
+            {
+                var preregistered = _environment.GetLocalTypeBinding(declaration.Name.Lexeme) is
+                    TypeInfo.MutableClass candidate && candidate.DeclarationId == -symbol.Id ? candidate : null;
                 _forwardClassDeclarations[symbol] = forward = new(declaration, _environment, -symbol.Id,
-                    _currentModule, _filePath, _standaloneSourceDocument);
+                    _currentModule, _filePath, _standaloneSourceDocument, preregistered);
+            }
             _definiteAssignmentStack.TryPeek(out var declarationFlow);
             forward.DeclarationFlow = declarationFlow;
             // Publish the type facet before the value initializes, so annotations
@@ -55,6 +60,8 @@ public partial class TypeChecker
                 _environment.DefineType(declaration.Name.Lexeme, forward.Shape);
                 _forwardClassTypeShadows[forward.Shape] = forward;
             }
+            else if (ReferenceEquals(_environment.GetLocalTypeBinding(declaration.Name.Lexeme), forward.Shape))
+                _forwardClassTypeShadows[forward.Shape] = forward;
         }
         return symbol;
     }

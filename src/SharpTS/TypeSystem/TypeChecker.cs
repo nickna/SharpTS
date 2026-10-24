@@ -1653,10 +1653,11 @@ public partial class TypeChecker
                 _environment.IsTypeDefinedLocally(classDeclaration.Name.Lexeme))
                 continue;
 
-            BindingSymbol typeSymbol = RegisterTypeDeclaration(classDeclaration.Name);
+            RegisterTypeDeclaration(classDeclaration.Name);
+            BindingSymbol valueSymbol = RegisterValueDeclaration(classDeclaration.Name);
             _environment.DefineType(
                 classDeclaration.Name.Lexeme,
-                new TypeInfo.MutableClass(classDeclaration.Name.Lexeme, -typeSymbol.Id));
+                new TypeInfo.MutableClass(classDeclaration.Name.Lexeme, -valueSymbol.Id));
         }
 
         if (_suppressDiagnostics == 0)
