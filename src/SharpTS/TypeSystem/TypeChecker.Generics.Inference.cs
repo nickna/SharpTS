@@ -173,13 +173,25 @@ public partial class TypeChecker
                 // Repeated occurrences of T must therefore contribute a best common candidate
                 // (`value="a"; repeated="b"` infers string), rather than letting the first
                 // property freeze T to the literal "a". Const parameters retain literal unions.
-                if (!TypesEqual(existing, inferredType) && (tp.IsConst || combineCandidates))
+                if (!TypesEqual(existing, inferredType) && combineCandidates)
                 {
                     inferred[tp.Name] = tp.IsConst
                         ? CreateUnion(existing, inferredType)
                         : CreateUnion(WidenLiteralType(existing), WidenLiteralType(inferredType));
                 }
-                // Non-const: keep existing behavior (first inferred type wins)
+                else if (!TypesEqual(existing, inferredType))
+                {
+                    // Sibling arguments contribute compatible common candidates, but unrelated
+                    // primitive domains keep the first inference so argument validation can reject
+                    // same(1, "bad"). Numeric/string literals and object candidates can form unions.
+                    if (!IsCompatible(existing, inferredType))
+                    {
+                        if (IsCompatible(inferredType, existing)) inferred[tp.Name] = inferredType;
+                        else if (SamePrimitiveInferenceDomain(existing, inferredType) ||
+                            IsObjectInferenceCandidate(existing) && IsObjectInferenceCandidate(inferredType))
+                            inferred[tp.Name] = CreateUnion(existing, inferredType);
+                    }
+                }
             }
             else
             {
@@ -291,6 +303,31 @@ public partial class TypeChecker
             }
         }
     }
+
+    private static bool SamePrimitiveInferenceDomain(TypeInfo left, TypeInfo right)
+    {
+        static int Domain(TypeInfo type) => type switch
+        {
+            TypeInfo.String or TypeInfo.StringLiteral => 1,
+            TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral => 2,
+            TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral => 3,
+            TypeInfo.BigInt or TypeInfo.BigIntLiteral => 4,
+            TypeInfo.Union union when union.FlattenedTypes.Count > 0 =>
+                union.FlattenedTypes.All(t => Domain(t) == Domain(union.FlattenedTypes[0]))
+                    ? Domain(union.FlattenedTypes[0]) : 0,
+            _ => 0
+        };
+        int domain = Domain(left);
+        return domain != 0 && domain == Domain(right);
+    }
+
+    private static bool IsObjectInferenceCandidate(TypeInfo type) => type switch
+    {
+        TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance or TypeInfo.Array or TypeInfo.Tuple or
+            TypeInfo.Function or TypeInfo.GenericFunction or TypeInfo.InstantiatedGeneric => true,
+        TypeInfo.Union union => union.FlattenedTypes.All(IsObjectInferenceCandidate),
+        _ => false
+    };
 
     /// <summary>
     /// Creates a union type from two types. If either is already a union, flattens them.
