@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Modules;
 using SharpTS.TypeSystem;
 using SharpTS.TypeSystem.Exceptions;
 using Xunit;
@@ -38,5 +39,29 @@ public sealed class NumberPropertyValidationTests
             """));
         Assert.Equal("TS2322", Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(Parse(
             "const value: number = 1; const invalid: number = value.toFixed();"))).Diagnostic.TsCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ModuleCheckingValidatesNumberMembersWithAndWithoutLibraries(bool loadLibraries)
+    {
+        string path = Path.GetFullPath("number-property-library/main.ts");
+        var files = new Dictionary<string, string>
+        {
+            [path] = "const value: number = 1; const text: string = value.toFixed(2); value.length;"
+        };
+        var resolver = new ModuleResolver(path, files, new TypeScriptProgramOptions
+        {
+            LoadDefaultLib = loadLibraries,
+            NoLib = !loadLibraries,
+            PreferDeclarationFiles = true
+        });
+        var entry = resolver.LoadModule(path);
+        var checker = new TypeChecker(TypeCheckerOptions.Strict);
+        checker.CheckModules(resolver.GetModulesInOrder(entry), resolver);
+        var diagnostic = Assert.Single(checker.GetDiagnostics());
+        Assert.Equal("TS2339", diagnostic.TsCode);
+        Assert.Contains("length", diagnostic.Message);
     }
 }
