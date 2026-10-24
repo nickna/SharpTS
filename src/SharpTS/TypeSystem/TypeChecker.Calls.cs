@@ -238,12 +238,19 @@ public partial class TypeChecker
 
             void CheckOpenSpread(TypeInfo elementType)
             {
-                if (!allParamsAny && (!funcType.HasRestParam || paramIndex < regularParamCount))
+                // An unknown-length spread may start after all required parameters,
+                // including at an optional parameter. Like TypeScript's synthetic call
+                // arguments, it occupies one position for subsequent type checks.
+                if (!allParamsAny && !hasOpenSpread &&
+                    (paramIndex < funcType.MinArity || !funcType.HasRestParam && paramIndex >= regularParamCount))
                     throw new TypeCheckException("A spread argument must either have a tuple type or be passed to a rest parameter.", call.Paren.Line, tsCode: "TS2556");
-                if (restElementType != null && !IsCompatible(restElementType, elementType))
-                    throw new TypeCheckException($"Spread element type '{elementType}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
+                TypeInfo? expected = paramIndex < regularParamCount
+                    ? funcType.ParamTypes[paramIndex] : restElementType;
+                if (expected != null && !IsArgumentCompatible(
+                    expected, elementType, paramIndex < regularParamCount && paramIndex >= funcType.MinArity))
+                    throw new TypeCheckException($"Spread element type '{elementType}' not compatible with parameter type '{expected}'.", tsCode: "TS2345");
                 hasOpenSpread = true;
-                paramIndex = Math.Max(paramIndex, regularParamCount);
+                paramIndex++;
             }
 
             TypeInfo CheckSpreadOperand(Expr operand, int position)
@@ -275,7 +282,7 @@ public partial class TypeChecker
                                 if (!TryGetSpreadElementType(nestedType, out var nestedElement))
                                     throw new TypeCheckException($"Spread argument must be an iterable type, got '{nestedType}'.", tsCode: "TS2488");
                                 elements.Add(new TypeInfo.TupleElement(new TypeInfo.Array(nestedElement), TupleElementKind.Spread));
-                                position = Math.Max(position, regularParamCount);
+                                position++;
                                 continue;
                             }
                             TypeInfo expected = position < regularParamCount
@@ -301,8 +308,8 @@ public partial class TypeChecker
                 if (arg is Expr.Spread spread)
                 {
                     // Fresh array literals in call spreads receive positional tuple context;
-                    // retained array values still have an unknown length. Other iterables are
-                    // accepted only where the signature has reached a rest parameter.
+                    // retained array values still have an unknown length. Other iterables may
+                    // start once the signature's required parameters have been supplied.
                     TypeInfo spreadType = CheckSpreadOperand(spread.Expression, paramIndex);
                     if (spreadType is TypeInfo.Tuple tupleSpread)
                     {
@@ -344,9 +351,6 @@ public partial class TypeChecker
                     {
                         throw new TypeCheckException($"Spread argument must be an iterable type (array, iterator, set, map, string, or generator), got '{spreadType}'.", tsCode: "TS2488");
                     }
-                    // An open-ended spread consumes the fixed prefix. Later arguments still
-                    // require checking, even when the total argument count is unknown.
-                    paramIndex = regularParamCount;
                     argIndex++;
                     continue;
                 }

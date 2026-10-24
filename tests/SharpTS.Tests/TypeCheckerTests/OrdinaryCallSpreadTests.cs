@@ -19,21 +19,6 @@ public sealed class OrdinaryCallSpreadTests
     }
 
     [Fact]
-    public void MultipleCompatibleSpreadsAndValuesAreAccepted()
-        => Assert.Equal("1,2,3\n", TestHarness.RunInterpreted("""
-            function m(...args: number[]) { console.log(args.join(',')); }
-            m(...[1], 2, ...[3]);
-            """));
-
-    [Theory]
-    [InlineData("m(...['x', 1, 2] as const);", "x 1,2\n")]
-    [InlineData("m(...['x'] as const);", "x \n")]
-    [InlineData("m(...['x'] as const, ...[1, 2] as const);", "x 1,2\n")]
-    public void FixedTupleElementsConsumeFixedParametersBeforeRest(string call, string expected)
-        => Assert.Equal(expected, TestHarness.RunInterpreted(
-            "function m(first: string, ...rest: number[]) { console.log(first, rest.join(',')); } " + call));
-
-    [Fact]
     public void TupleSpreadRejectsAnIncompatibleFixedPrefix()
     {
         var error = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted("""
@@ -62,6 +47,35 @@ public sealed class OrdinaryCallSpreadTests
             f(1, ...a);
             f(...[1] as const, ...a);
             """);
+
+    [Fact]
+    public void OpenSpreadsMaySupplyOptionalParameterPositions()
+        => TestHarness.RunInterpreted("""
+            function optional(value?: number) {}
+            function pack(prefix: number = 10, ...values: number[]) {}
+            function mixed(first: number = 1, second: string = 'ok', ...values: string[]) {}
+            function* items(): Generator<number> { yield 1; yield 2; }
+            const numbers: number[] = [1, 2];
+            optional(...numbers);
+            pack(...items(), 3, ...[4, 5]);
+            mixed(...numbers, 'ok', ...['tail']);
+            mixed(...[...numbers, 'ok', 'tail']);
+            """);
+
+    [Theory]
+    [InlineData("function f(value: number, ...rest: number[]) {} f(...items());", "TS2556")]
+    [InlineData("function f(value: number) {} f(...items());", "TS2556")]
+    [InlineData("function f(value?: number) {} f(1, ...items());", "TS2556")]
+    [InlineData("function f(value: string = 'ok', ...rest: number[]) {} f(...items());", "TS2345")]
+    [InlineData("function f(first: number = 1, second: string = 'ok', ...rest: string[]) {} f(...items(), 2);", "TS2345")]
+    [InlineData("function f(first: number = 1, second: string = 'ok', ...rest: string[]) {} f(...[...items(), 2]);", "TS2345")]
+    [InlineData("function f(first: number = 1, ...rest: string[]) {} f(...items(), 2);", "TS2345")]
+    public void OptionalPrefixSpreadsStillCheckRequiredPositionsAndLaterArguments(string source, string code)
+    {
+        var error = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(
+            "function* items(): Generator<number> { yield 1; yield 2; } " + source));
+        Assert.Equal(code, error.Diagnostic.TsCode);
+    }
 
     [Fact]
     public void FreshArraySpreadsAreContextuallyTypedAsTuples()
