@@ -2839,6 +2839,8 @@ public partial class TypeChecker
 
         bool anyInferredFieldTypeResolved = CheckClassFieldInitializers(
             classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams);
+        using (new EnvironmentScope(this, classTypeEnv))
+            anyInferredFieldTypeResolved |= CheckClassAutoAccessorInitializers(declarationView, mutableClass);
         if (anyInferredFieldTypeResolved)
         {
             _compatibilityCache = null;
@@ -3165,8 +3167,6 @@ public partial class TypeChecker
             _compatibilityCache = null;
             _identityCompatibilityCache = null;
         }
-
-        CheckClassAutoAccessorInitializers(declarationView, mutableClass.Freeze());
 
         // Validate against completed inferred signatures, not the placeholders
         // collected before method and getter bodies were checked.

@@ -622,10 +622,6 @@ public partial class TypeChecker
                 {
                     accessorType = ResolveAnnotation(autoAccessor.TypeAnnotation, autoAccessor.TypeAnnotationNode, autoAccessor)!;
                 }
-                else if (autoAccessor.Initializer != null)
-                {
-                    accessorType = CheckExpr(autoAccessor.Initializer);
-                }
                 else
                 {
                     accessorType = TypeInfo.Any.Shared;
@@ -812,6 +808,8 @@ public partial class TypeChecker
 
             bool anyInferredFieldTypeResolved = CheckClassFieldInitializers(
                 classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams);
+            using (new EnvironmentScope(this, classTypeEnv))
+                anyInferredFieldTypeResolved |= CheckClassAutoAccessorInitializers(classStmt, mutableClass);
             if (anyInferredFieldTypeResolved)
             {
                 classTypeForBody = PublishInitialClassType(classStmt, mutableClass, classTypeParams);
@@ -828,8 +826,6 @@ public partial class TypeChecker
             ValidateDeclaredClassInterfaces(classStmt, classTypeForBody, classTypeParams);
 
             ValidateDeclaredClassMembers(classStmt, classTypeForBody, classTypeParams, classTypeEnv);
-
-            CheckClassAutoAccessorInitializers(classStmt, classTypeForBody);
 
             CheckClassStaticBlocks(classStmt, classTypeForBody);
 

@@ -438,8 +438,9 @@ public partial class TypeChecker
     }
 
     // Checks initializers at declaration scope before static blocks, preserving diagnostic order.
-    private void CheckClassAutoAccessorInitializers(Stmt.Class classStmt, TypeInfo.Class classTypeForBody)
+    private bool CheckClassAutoAccessorInitializers(Stmt.Class classStmt, TypeInfo.MutableClass owner)
     {
+        bool inferred = false;
         // Check auto-accessor initializers
         if (classStmt.AutoAccessors != null)
         {
@@ -447,6 +448,7 @@ public partial class TypeChecker
             {
                 if (autoAccessor.Initializer != null)
                 {
+                    TypeInfo.Class classTypeForBody = owner.Freeze();
                     TypeEnvironment previousEnvironment = _environment;
                     TypeInfo.Class? previousClass = _currentClass;
                     TypeInfo? previousThis = _currentFunctionThisType;
@@ -471,6 +473,17 @@ public partial class TypeChecker
                         _currentFunctionThisType = previousThis;
                         _inStaticMethod = previousStatic;
                     }
+                    if (autoAccessor.TypeAnnotation is null && autoAccessor.TypeAnnotationNode is null)
+                    {
+                        TypeInfo inferredType = WidenClassFieldInitializerType(autoAccessor.Initializer, initType);
+                        (autoAccessor.IsStatic ? owner.StaticGetters : owner.Getters)[autoAccessor.Name.Lexeme] = inferredType;
+                        if (!autoAccessor.IsReadonly)
+                            (autoAccessor.IsStatic ? owner.StaticSetters : owner.Setters)[autoAccessor.Name.Lexeme] = inferredType;
+                        PublishStaticAccessorTypes(owner);
+                        owner.ResetFrozenCache();
+                        inferred = true;
+                        continue;
+                    }
                     TypeInfo declaredType = (autoAccessor.IsStatic ? classTypeForBody.StaticProperties : classTypeForBody.Getters)[autoAccessor.Name.Lexeme];
                     if (!IsCompatible(declaredType, initType))
                     {
@@ -479,6 +492,7 @@ public partial class TypeChecker
                 }
             }
         }
+        return inferred;
     }
 
     // Creates but does not activate the body environment. The declaration owns activation
