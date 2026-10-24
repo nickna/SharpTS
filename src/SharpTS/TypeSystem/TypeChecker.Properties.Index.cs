@@ -635,24 +635,25 @@ public partial class TypeChecker
     /// type is not a class (or has no such index signature). Constructor types use the
     /// static facet; a <see cref="TypeInfo.Instance"/> uses its instance facet.
     /// </summary>
-    private static TypeInfo? GetClassIndexType(TypeInfo objType, TokenType keyType)
+    private TypeInfo? GetClassIndexType(TypeInfo objType, TokenType keyType)
     {
         if (objType is TypeInfo.Class or TypeInfo.GenericClass or
             TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
             return GetConstructorIndexType(objType, keyType);
-        TypeInfo.Class? cls = objType switch
+        if (objType is not TypeInfo.Instance instance ||
+            !TryGetOrdinaryConstructorHierarchy(instance.ResolvedClassType, out var levels)) return null;
+        foreach (var level in levels)
         {
-            TypeInfo.Instance { ClassType: TypeInfo.Class ic } => ic,
-            _ => null
-        };
-        if (cls == null) return null;
-        return keyType switch
-        {
-            TokenType.TYPE_STRING => cls.StringIndexType,
-            TokenType.TYPE_NUMBER => cls.NumberIndexType,
-            TokenType.TYPE_SYMBOL => cls.SymbolIndexType,
-            _ => null
-        };
+            var index = keyType switch
+            {
+                TokenType.TYPE_STRING => level.Core.StringIndexType,
+                TokenType.TYPE_NUMBER => level.Core.NumberIndexType,
+                TokenType.TYPE_SYMBOL => level.Core.SymbolIndexType,
+                _ => null
+            };
+            if (index is not null) return SubstituteConstructorMember(index, level.Substitutions);
+        }
+        return null;
     }
 
     private static TypeInfo? GetConstructorIndexType(TypeInfo constructor, TokenType keyType)
