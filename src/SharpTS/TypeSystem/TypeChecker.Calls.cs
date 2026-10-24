@@ -38,6 +38,8 @@ public partial class TypeChecker
         if (TryCheckBuiltinCall(call, out var builtinCallResult))
             return builtinCallResult;
 
+        if (call.OriginalGeneratorCallee is { } originalGenerator)
+            CheckClassOrderCallTarget(originalGenerator);
         TypeInfo calleeType = CheckClassOrderCallTarget(call.Callee);
         if (call.Callee is Expr.Get extensionGet &&
             calleeType is not (TypeInfo.Function or TypeInfo.OverloadedFunction or
@@ -156,8 +158,8 @@ public partial class TypeChecker
                 // Re-contextualize callbacks after inference. This includes callbacks nested in
                 // object/array arguments, whose parameter types depend on the instantiated props.
                 ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
-                if (call.TypeArgs is { Count: > 0 })
-                    CheckInstantiatedGenericCallArguments(call, instFunc, argTypes);
+                CheckInstantiatedGenericCallArguments(call, instFunc, argTypes,
+                    call.TypeArgs is { Count: > 0 } ? null : genericFunc);
                 RecordEditorInvocationSelection(genericFunc, instFunc);
                 return instFunc.ReturnType;
             }
@@ -232,52 +234,125 @@ public partial class TypeChecker
             int argIndex = 0;
             int paramIndex = 0;
             int regularParamCount = funcType.HasRestParam ? funcType.ParamTypes.Count - 1 : funcType.ParamTypes.Count;
+            bool hasOpenSpread = false;
+
+            void CheckOpenSpread(TypeInfo elementType)
+            {
+                // An unknown-length spread may start after all required parameters,
+                // including at an optional parameter. Like TypeScript's synthetic call
+                // arguments, it occupies one position for subsequent type checks.
+                if (!allParamsAny && !hasOpenSpread &&
+                    (paramIndex < funcType.MinArity || !funcType.HasRestParam && paramIndex >= regularParamCount))
+                    throw new TypeCheckException("A spread argument must either have a tuple type or be passed to a rest parameter.", call.Paren.Line, tsCode: "TS2556");
+                TypeInfo? expected = paramIndex < regularParamCount
+                    ? funcType.ParamTypes[paramIndex] : restElementType;
+                if (expected != null && !IsArgumentCompatible(
+                    expected, elementType, paramIndex < regularParamCount && paramIndex >= funcType.MinArity))
+                    throw new TypeCheckException($"Spread element type '{elementType}' not compatible with parameter type '{expected}'.", tsCode: "TS2345");
+                hasOpenSpread = true;
+                paramIndex++;
+            }
+
+            TypeInfo CheckSpreadOperand(Expr operand, int position)
+            {
+                if (operand is not (Expr.ArrayLiteral or Expr.Grouping)) return CheckExpr(operand);
+                if (EditorFacts.IsEnabled) BeginEditorExpression(operand);
+                try
+                {
+                    TypeInfo result;
+                    if (operand is Expr.Grouping grouping)
+                        result = CheckSpreadOperand(grouping.Expression, position);
+                    else
+                    {
+                        var literal = (Expr.ArrayLiteral)operand;
+                        var elements = new List<TypeInfo.TupleElement>();
+                        foreach (var element in literal.Elements)
+                        {
+                            if (element is Expr.Spread nestedSpread)
+                            {
+                                TypeInfo nestedType = CheckExpr(nestedSpread.Expression);
+                                if (nestedType is TypeInfo.Tuple nestedTuple)
+                                {
+                                    nestedTuple = (TypeInfo.Tuple)FlattenTupleSpreads(nestedTuple);
+                                    elements.AddRange(nestedTuple.Elements);
+                                    position += nestedTuple.Elements.Count;
+                                    if (nestedTuple.RestElementType is null) continue;
+                                    nestedType = new TypeInfo.Array(nestedTuple.RestElementType);
+                                }
+                                if (!TryGetSpreadElementType(nestedType, out var nestedElement))
+                                    throw new TypeCheckException($"Spread argument must be an iterable type, got '{nestedType}'.", tsCode: "TS2488");
+                                elements.Add(new TypeInfo.TupleElement(new TypeInfo.Array(nestedElement), TupleElementKind.Spread));
+                                position++;
+                                continue;
+                            }
+                            TypeInfo expected = position < regularParamCount
+                                ? funcType.ParamTypes[position] : restElementType ?? TypeInfo.Any.Shared;
+                            elements.Add(new TypeInfo.TupleElement(CheckExprWithContext(element, expected), TupleElementKind.Required));
+                            position++;
+                        }
+                        result = new TypeInfo.Tuple(elements, elements.Count(element => element.IsRequired));
+                    }
+                    _typeMap.Set(operand, result);
+                    RecordEditorExpressionType(operand, result);
+                    return result;
+                }
+                catch
+                {
+                    if (EditorFacts.IsEnabled) FailEditorExpression(operand);
+                    throw;
+                }
+            }
 
             foreach (var arg in call.Arguments)
             {
                 if (arg is Expr.Spread spread)
                 {
-                    // A spread argument only has to be *iterable*, not an array: the runtime
-                    // expander walks Symbol.iterator, so Set/Map/string/generator/iterator/
-                    // TypedArray and hand-written iterables all spread correctly, and tsc
-                    // accepts them. TS2488 is reserved for genuinely non-iterable operands.
-                    // Uses the same predicate as array-literal spread (CheckArray) so the two
-                    // spread positions can't drift apart. (#1282)
-                    TypeInfo spreadType = CheckExpr(spread.Expression);
+                    // Fresh array literals in call spreads receive positional tuple context;
+                    // retained array values still have an unknown length. Other iterables may
+                    // start once the signature's required parameters have been supplied.
+                    TypeInfo spreadType = CheckSpreadOperand(spread.Expression, paramIndex);
                     if (spreadType is TypeInfo.Tuple tupleSpread)
                     {
-                        // A tuple's arity and per-position types are known, so check each
-                        // element against the rest parameter instead of collapsing to one type.
-                        if (restElementType != null)
+                        tupleSpread = (TypeInfo.Tuple)FlattenTupleSpreads(tupleSpread);
+                        // Fixed tuple elements consume the same parameter positions as written
+                        // arguments. Only elements beyond the fixed prefix belong to the rest.
+                        foreach (var element in tupleSpread.Elements)
                         {
-                            foreach (var tupleElem in tupleSpread.ElementTypes)
+                            if (element.IsSpread && TryGetSpreadElementType(element.Type, out var nestedElement))
                             {
-                                if (!IsCompatible(restElementType, tupleElem))
-                                {
-                                    throw new TypeCheckException($"Spread element type '{tupleElem}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
-                                }
+                                CheckOpenSpread(nestedElement);
+                                continue;
                             }
-                            if (tupleSpread.RestElementType != null
-                                && !IsCompatible(restElementType, tupleSpread.RestElementType))
+                            TypeInfo tupleElem = element.IsOptional
+                                ? new TypeInfo.Union([element.Type, TypeInfo.Undefined.Shared])
+                                : element.Type;
+                            TypeInfo? expected = paramIndex < regularParamCount
+                                ? funcType.ParamTypes[paramIndex]
+                                : restElementType;
+                            if (expected is not null && !IsArgumentCompatible(
+                                expected, tupleElem, paramIndex < regularParamCount && paramIndex >= funcType.MinArity))
                             {
-                                throw new TypeCheckException($"Spread element type '{tupleSpread.RestElementType}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
+                                throw new TypeCheckException($"Spread element type '{tupleElem}' not compatible with parameter type '{expected}'.", tsCode: "TS2345");
                             }
+                            paramIndex++;
                         }
+                        if (tupleSpread.RestElementType != null)
+                        {
+                            CheckOpenSpread(tupleSpread.RestElementType);
+                        }
+                        argIndex++;
+                        continue;
                     }
                     else if (TryGetSpreadElementType(spreadType, out var spreadElementType))
                     {
-                        // Check element type compatibility with rest param or remaining regular params
-                        if (restElementType != null && !IsCompatible(restElementType, spreadElementType))
-                        {
-                            throw new TypeCheckException($"Spread element type '{spreadElementType}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
-                        }
+                        CheckOpenSpread(spreadElementType);
                     }
                     else
                     {
                         throw new TypeCheckException($"Spread argument must be an iterable type (array, iterator, set, map, string, or generator), got '{spreadType}'.", tsCode: "TS2488");
                     }
-                    // After spread, we can't reliably match params
-                    break;
+                    argIndex++;
+                    continue;
                 }
                 else
                 {
@@ -353,10 +428,13 @@ public partial class TypeChecker
                         }
                     }
 
-                    if (paramIndex < regularParamCount) paramIndex++;
+                    paramIndex++;
                     argIndex++;
                 }
             }
+            if (hasSpread && !hasOpenSpread && !allParamsAny &&
+                (paramIndex < funcType.MinArity || !funcType.HasRestParam && paramIndex > regularParamCount))
+                throw new TypeCheckException($"Expected {funcType.MinArity} to {regularParamCount} arguments but got {paramIndex}.", call.Paren.Line, tsCode: "TS2554");
             RecordEditorInvocationSelection(funcType);
             // The legacy array surface models reduce as returning `any`, but
             // the two-argument form has an explicit accumulator seed. When a
@@ -963,7 +1041,8 @@ public partial class TypeChecker
     private void CheckInstantiatedGenericCallArguments(
         Expr.Call call,
         TypeInfo.Function signature,
-        IReadOnlyList<TypeInfo> inferenceArgumentTypes)
+        IReadOnlyList<TypeInfo> inferenceArgumentTypes,
+        TypeInfo.GenericFunction? inferredSignature = null)
     {
         int regularCount = signature.ParamTypes.Count - (signature.HasRestParam ? 1 : 0);
         TypeInfo? restElement = signature.HasRestParam && signature.ParamTypes.Count > 0 &&
@@ -1007,7 +1086,7 @@ public partial class TypeChecker
 
             TypeInfo? expected = parameterIndex < regularCount
                 ? signature.ParamTypes[parameterIndex] : restElement;
-            if (expected is TypeInfo.Tuple tupleTarget && argument is Expr.ArrayLiteral literal)
+            if (expected is TypeInfo.Tuple tupleTarget && argument is Expr.ArrayLiteral literal && ShouldCheckPosition())
             {
                 // This is the same intentionally contextual, element-wise check used by an
                 // ordinary tuple parameter, not a second CheckExpr pass over all arguments.
@@ -1023,7 +1102,7 @@ public partial class TypeChecker
             TypeInfo? expected = parameterIndex < regularCount
                 ? signature.ParamTypes[parameterIndex] : restElement;
             bool optional = parameterIndex < regularCount && parameterIndex >= signature.MinArity;
-            if (expected is not null && !IsArgumentCompatible(expected, actual, optional))
+            if (ShouldCheckPosition() && expected is not null && !IsArgumentCompatible(expected, actual, optional))
                 throw new TypeCheckException(
                     $"Argument {parameterIndex + 1} expected type '{expected}' but got '{actual}'.",
                     call.Paren.Line, tsCode: "TS2345");
@@ -1032,10 +1111,21 @@ public partial class TypeChecker
 
         void CheckSpreadElement(TypeInfo actual)
         {
-            if (restElement is not null && !IsCompatible(restElement, actual))
+            if (ShouldCheckPosition() && restElement is not null && !IsCompatible(restElement, actual))
                 throw new TypeCheckException(
                     $"Spread element type '{actual}' not compatible with rest parameter type '{restElement}'.",
                     call.Paren.Line, tsCode: "TS2345");
+        }
+
+        bool ShouldCheckPosition()
+        {
+            if (inferredSignature is not { ParamTypes.Count: > 0 }) return true;
+            // Keep inference-dependent matching under the inference policy; fixed parameter
+            // types, including containing-interface parameters, still require validation.
+            int declaredPosition = Math.Min(parameterIndex, inferredSignature.ParamTypes.Count - 1);
+            HashSet<string> names = [];
+            CollectSubstitutionParameterNames(inferredSignature.ParamTypes[declaredPosition], names);
+            return !inferredSignature.TypeParams.Any(parameter => names.Contains(parameter.Name));
         }
     }
 

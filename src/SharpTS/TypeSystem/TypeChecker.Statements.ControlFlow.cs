@@ -102,8 +102,7 @@ public partial class TypeChecker
         // Check try block
         {
             using var editorScope = EnterEditorLexicalScope(tryCatch, keyword: TokenType.TRY);
-            foreach (var stmt in tryCatch.TryBlock)
-                CheckStmt(stmt);
+            CheckBlock(tryCatch.TryBlock, new TypeEnvironment(_environment));
         }
 
         // TS1196: a catch-binding annotation must be exactly 'any' or 'unknown'.
@@ -119,41 +118,27 @@ public partial class TypeChecker
         }
 
         // Check catch block with its parameter in scope
-        if (tryCatch.CatchBlock != null && tryCatch.CatchParam != null)
+        if (tryCatch.CatchBlock != null)
         {
             using var editorScope = EnterEditorLexicalScope(tryCatch, keyword: TokenType.CATCH);
             TypeEnvironment catchEnv = new(_environment);
-            DeclareValue(
-                catchEnv,
-                tryCatch.CatchParam,
-                tryCatch.CatchParamType == "unknown" ||
-                    (tryCatch.CatchParamType is null && Options.UseUnknownInCatchVariables)
-                    ? TypeInfo.Unknown.Shared
-                    : TypeInfo.Any.Shared);
+            if (tryCatch.CatchParam is not null)
+                DeclareValue(
+                    catchEnv,
+                    tryCatch.CatchParam,
+                    tryCatch.CatchParamType == "unknown" ||
+                        (tryCatch.CatchParamType is null && Options.UseUnknownInCatchVariables)
+                        ? TypeInfo.Unknown.Shared
+                        : TypeInfo.Any.Shared);
 
-            TypeEnvironment prevEnv = _environment;
-            _environment = catchEnv;
-            try
-            {
-                foreach (var stmt in tryCatch.CatchBlock)
-                {
-                    CheckStmt(stmt);
-                }
-            }
-            finally
-            {
-                _environment = prevEnv;
-            }
+            CheckBlock(tryCatch.CatchBlock, catchEnv);
         }
 
         // Check finally block
         if (tryCatch.FinallyBlock != null)
         {
             using var editorScope = EnterEditorLexicalScope(tryCatch, keyword: TokenType.FINALLY);
-            foreach (var stmt in tryCatch.FinallyBlock)
-            {
-                CheckStmt(stmt);
-            }
+            CheckBlock(tryCatch.FinallyBlock, new TypeEnvironment(_environment));
         }
     }
 }

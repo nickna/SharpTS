@@ -284,10 +284,22 @@ public sealed class PrivateRenameDomainTests
     }
 
     [Fact]
-    public void UnvisitedCatchAndFailedPrivateUseCannotReusePreparatoryFacts()
+    public void ParameterlessCatchPrivateUseJoinsTheCheckedDomain()
     {
-        var value = Check("class Box { /*selected*/#value: number = 1; read(): void { try {} catch { this.#value; } } }");
+        var value = Check("class Box { /*selected*/#value: number = 1; read(): void { try {} catch { this./*use*/#value; } } }");
         Clean(value);
+        var domain = Domain(value, "selected");
+        Assert.Equal(new[] { Offset(value.Document.Text, "selected"), Offset(value.Document.Text, "use") },
+            domain.Tokens.Select(token => token.Start));
+        Assert.Same(domain.Symbol, Domain(value, "use").Symbol);
+        Clean(Check(Apply(value.Document.Text, domain, "#renamed")));
+    }
+
+    [Fact]
+    public void ErrorLimitedCatchCannotReuseUnvisitedPrivateFacts()
+    {
+        var value = Check("class Box { /*selected*/#value: number = 1; read(): void { try {} catch { missing; this.#value; } } }", maxErrors: 1);
+        Assert.False(value.Check.IsSuccess);
         Assert.False(Query(value, "selected").IsAvailable);
     }
 

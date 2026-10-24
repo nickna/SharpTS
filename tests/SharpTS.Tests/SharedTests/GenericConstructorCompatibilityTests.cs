@@ -79,7 +79,6 @@ public sealed class GenericConstructorCompatibilityTests
     [InlineData("#value: number = 1;", "#value: number = 1;")]
     [InlineData("static private value: number = 1;", "static private value: number = 1;")]
     [InlineData("static protected value: number = 1;", "static protected value: number = 1;")]
-    [InlineData("static #value: number = 1;", "static #value: number = 1;")]
     [InlineData("#read(): number { return 1; }", "#read(): number { return 1; }")]
     [InlineData("static value: number = 1;", "static value: string = 'bad';")]
     [InlineData("read(): number { return 1; }", "read(): string { return 'bad'; }")]
@@ -94,6 +93,19 @@ public sealed class GenericConstructorCompatibilityTests
             alias = Right;
             """;
         Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(TestHarness.ParseOrThrow(source)));
+    }
+
+    [Theory, ModeData]
+    public void StaticEsPrivateMembersDoNotBrandThePublicConstructorSurface(ExecutionMode mode)
+    {
+        const string source = """
+            const Left = class Same<T> { static #value: number = 1; value = 1; };
+            const Right = class Same<U> { static #value: number = 1; value = 2; };
+            let alias: typeof Left = Left;
+            alias = Right;
+            console.log(new alias<number>().value);
+            """;
+        Assert.Equal("2\n", TestHarness.Run(source, mode));
     }
 
     [Theory]

@@ -16,6 +16,7 @@ public partial class TypeChecker
                 logical.Operator.Line, tsCode: "TS2322");
         ObservePrivateSourceMemberSelection(logical.Name, receiver, owner,
             isStatic ? MemberFacet.PrivateStatic : MemberFacet.PrivateInstance);
+        InvalidatePrivateNarrowing(logical.Object, logical.Name);
         lookup?.Succeed();
         TypeInfo retained = logical.Operator.Type switch
         {

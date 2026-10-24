@@ -34,7 +34,7 @@ public partial class TypeChecker
     {
         // Validate the ordinary indexed read before applying a stable path refinement.
         TypeInfo result = CheckGetIndexCore(getIndex);
-        var path = Narrowing.NarrowingPathExtractor.TryExtract(getIndex);
+        var path = ExtractNarrowingPath(getIndex);
         return path is not null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path)
             ? GetNarrowing(path) ?? result
             : result;
@@ -377,6 +377,15 @@ public partial class TypeChecker
             if (objType is TypeInfo.Interface { StringIndexType: { } itfIdxType }) return WithUncheckedUndefined(itfIdxType);
         }
 
+        if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
+            getIndex.Index is Expr.Literal { Value: string constructorMember } &&
+            (constructorMember == "prototype" || HasKnownConstructorMember(objType, constructorMember)))
+            return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, constructorMember, null,
+                TryGetExprLine(getIndex.Index) ?? 0));
+
+        if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
+            return knownInstanceMember;
+
         if (getIndex.Index is Expr.Literal { Value: string functionMemberName } &&
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
             return apparentNamedMember;
@@ -626,24 +635,25 @@ public partial class TypeChecker
     /// type is not a class (or has no such index signature). Constructor types use the
     /// static facet; a <see cref="TypeInfo.Instance"/> uses its instance facet.
     /// </summary>
-    private static TypeInfo? GetClassIndexType(TypeInfo objType, TokenType keyType)
+    private TypeInfo? GetClassIndexType(TypeInfo objType, TokenType keyType)
     {
         if (objType is TypeInfo.Class or TypeInfo.GenericClass or
             TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
             return GetConstructorIndexType(objType, keyType);
-        TypeInfo.Class? cls = objType switch
+        if (objType is not TypeInfo.Instance instance) return null;
+        TryGetOrdinaryConstructorHierarchy(instance.ResolvedClassType, out var levels);
+        foreach (var level in levels)
         {
-            TypeInfo.Instance { ClassType: TypeInfo.Class ic } => ic,
-            _ => null
-        };
-        if (cls == null) return null;
-        return keyType switch
-        {
-            TokenType.TYPE_STRING => cls.StringIndexType,
-            TokenType.TYPE_NUMBER => cls.NumberIndexType,
-            TokenType.TYPE_SYMBOL => cls.SymbolIndexType,
-            _ => null
-        };
+            var index = keyType switch
+            {
+                TokenType.TYPE_STRING => level.Core.StringIndexType,
+                TokenType.TYPE_NUMBER => level.Core.NumberIndexType,
+                TokenType.TYPE_SYMBOL => level.Core.SymbolIndexType,
+                _ => null
+            };
+            if (index is not null) return SubstituteConstructorMember(index, level.Substitutions);
+        }
+        return null;
     }
 
     private static TypeInfo? GetConstructorIndexType(TypeInfo constructor, TokenType keyType)
@@ -674,6 +684,63 @@ public partial class TypeChecker
             System.Globalization.CultureInfo.InvariantCulture, out double numericKey) &&
         Runtime.PropertyKeyConverter.ToPropertyKeyString(numericKey) == literal.Value;
 
+    private void EnsureWritableClassIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
+    {
+        if (receiver is TypeInfo.Union union)
+        {
+            foreach (var member in union.FlattenedTypes) EnsureWritableClassIndex(member, index, syntax);
+            return;
+        }
+        if (receiver is TypeInfo.TypeParameter { Constraint: { } constraint })
+        {
+            EnsureWritableClassIndex(constraint, index, syntax);
+            return;
+        }
+        if (receiver is not TypeInfo.Instance && receiver is not (TypeInfo.Class or TypeInfo.GenericClass or
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })) return;
+        bool isStatic = receiver is not TypeInfo.Instance;
+        TypeInfo owner = receiver is TypeInfo.Instance instance ? instance.ResolvedClassType : receiver;
+        string? name = index switch
+        {
+            TypeInfo.StringLiteral text => text.Value,
+            TypeInfo.NumberLiteral number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _ => null
+        };
+        List<ClassMetadataCore> levels = [];
+        HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);
+        for (TypeInfo? current = owner; current is not null && visited.Add(current); current = GetSuperclass(current))
+        {
+            if (current is TypeInfo.MutableClass mutable) current = mutable.Freeze();
+            if (ClassInfoAccessor.Get(current, c => c.Core, gc => gc.Core) is not { } core) break;
+            levels.Add(core);
+            if (name is not null && (isStatic
+                ? core.StaticMethods.ContainsKey(name) || core.StaticProperties.ContainsKey(name)
+                : core.Methods.ContainsKey(name) || core.FieldTypes.ContainsKey(name) || core.Getters.ContainsKey(name) || core.Setters.ContainsKey(name)))
+                return;
+        }
+        TokenType[] kinds = index is TypeInfo.Symbol or TypeInfo.UniqueSymbol ? [TokenType.TYPE_SYMBOL]
+            : IsNumber(index) || index is TypeInfo.NumberLiteral || IsNumericConstructorIndex(index)
+                ? [TokenType.TYPE_NUMBER, TokenType.TYPE_STRING] : [TokenType.TYPE_STRING];
+        foreach (var kind in kinds)
+            foreach (var core in levels)
+            {
+                TypeInfo? value = (isStatic, kind) switch
+                {
+                    (true, TokenType.TYPE_STRING) => core.StaticStringIndexType,
+                    (true, TokenType.TYPE_NUMBER) => core.StaticNumberIndexType,
+                    (true, _) => core.StaticSymbolIndexType,
+                    (false, TokenType.TYPE_STRING) => core.StringIndexType,
+                    (false, TokenType.TYPE_NUMBER) => core.NumberIndexType,
+                    _ => core.SymbolIndexType
+                };
+                if (value is null) continue;
+                if (core.ReadonlyIndexes?.Contains((isStatic, kind)) == true)
+                    throw new TypeCheckException($"Index signature in type '{receiver}' only permits reading.",
+                        TryGetExprLine(syntax) ?? _currentStatementLine, tsCode: "TS2542");
+                return;
+            }
+    }
+
     private TypeInfo CheckSetIndex(Expr.SetIndex setIndex)
     {
         TypeInfo objType = CheckExpr(setIndex.Object);
@@ -689,7 +756,7 @@ public partial class TypeChecker
         }
 
         // Invalidate any narrowings affected by this index assignment
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(setIndex.Object);
+        var basePath = ExtractNarrowingPath(setIndex.Object);
         if (basePath != null)
         {
             Narrowing.NarrowingPath? assignedPath = null;
@@ -736,6 +803,8 @@ public partial class TypeChecker
             objType = next;
         }
         objType = ResolveMappedTypeForAccess(objType);
+        EnsureWritableClassIndex(objType, indexType, setIndex.Index);
+
 
         // A deferred mapped type is writable by a key from its mapped domain. Project the
         // corresponding value slot directly, just as CheckGetIndex does for reads.
@@ -853,6 +922,9 @@ public partial class TypeChecker
             List<TypeInfo> propertyTypes = [];
             foreach (string key in literalKeys)
             {
+                if (objType is TypeInfo.Record recordTarget && recordTarget.IsFieldReadonly(key))
+                    throw new TypeCheckException($"Cannot assign to '{key}' because it is a read-only property.",
+                        TryGetExprLine(setIndex.Index), tsCode: "TS2540");
                 if (GetMemberType(objType, key) is not { } propertyType)
                 {
                     propertyTypes.Clear();
@@ -1385,6 +1457,15 @@ public partial class TypeChecker
             return GetFunctionHasInstanceReadType(objType, getIndex.Index)
                 ?? GetMemberType(objType, "@@hasInstance");
 
+        if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
+            getIndex.Index is Expr.Literal { Value: string constructorMember } &&
+            (constructorMember == "prototype" || HasKnownConstructorMember(objType, constructorMember)))
+            return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, constructorMember, null,
+                TryGetExprLine(getIndex.Index) ?? 0));
+
+        if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
+            return knownInstanceMember;
+
         if (getIndex.Index is Expr.Literal { Value: string functionMemberName } &&
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
             return apparentNamedMember;
@@ -1483,6 +1564,41 @@ public partial class TypeChecker
         return null;
     }
 
+    private bool HasKnownConstructorMember(TypeInfo receiver, string name)
+    {
+        HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);
+        for (TypeInfo? owner = receiver; owner is not null && visited.Add(owner); owner = GetSuperclass(owner))
+            if (GetStaticMethods(owner)?.ContainsKey(name) == true || GetStaticProperties(owner)?.ContainsKey(name) == true)
+                return true;
+        return false;
+    }
+
+    private TypeInfo? TryReadKnownIndexedInstanceMember(TypeInfo receiver, TypeInfo index, Expr.GetIndex syntax)
+    {
+        if (receiver is not TypeInfo.Instance instance) return null;
+        string? name = index switch
+        {
+            TypeInfo.StringLiteral text => text.Value,
+            TypeInfo.NumberLiteral number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _ => null
+        };
+        if (name is null) return null;
+        HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);
+        for (TypeInfo? owner = instance.ResolvedClassType; owner is not null && visited.Add(owner); owner = GetSuperclass(owner))
+        {
+            if (GetFieldTypes(owner)?.ContainsKey(name) != true &&
+                GetMethods(owner)?.ContainsKey(name) != true &&
+                GetGetters(owner)?.ContainsKey(name) != true && GetSetters(owner)?.ContainsKey(name) != true)
+                continue;
+            var token = new Token(TokenType.IDENTIFIER, name, null, TryGetExprLine(syntax.Index) ?? 0);
+            TypeInfo type = CheckGetOnInstance(instance, token, enforceAccessibility: false);
+            bool optional = ClassInfoAccessor.Get(owner, c => c.Core.OrdinaryOptionalMembers,
+                gc => gc.Core.OrdinaryOptionalMembers)?.Contains((false, name)) == true;
+            return WithOptionalPropertyUndefined(type, optional);
+        }
+        return null;
+    }
+
     private TypeInfo? ReadStringIndexOf(TypeInfo receiver) =>
         receiver is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass }
             ? GetConstructorStringIndexType(receiver)
@@ -1498,6 +1614,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo? CheckSetIndexOnType(TypeInfo objType, TypeInfo indexType, TypeInfo valueType, Expr.SetIndex setIndex)
     {
+        EnsureWritableClassIndex(objType, indexType, setIndex.Index);
         // Recursive case for nested type parameters
         if (objType is TypeInfo.TypeParameter tp && tp.Constraint != null)
         {

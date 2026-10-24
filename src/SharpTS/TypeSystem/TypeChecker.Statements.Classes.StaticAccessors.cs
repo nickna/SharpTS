@@ -25,9 +25,6 @@ public partial class TypeChecker
             TypeInfo setterType = mutableClass.StaticSetters[name];
             if (setterType is TypeInfo.Inferred && getterType is not TypeInfo.Inferred)
                 mutableClass.StaticSetters[name] = getterType;
-            else if (getterType is not TypeInfo.Inferred && setterType is not TypeInfo.Inferred
-                     && !IsCompatible(setterType, getterType))
-                throw new TypeCheckException($" Getter and setter for '{name}' have incompatible types.", tsCode: "TS2380");
         }
         PublishStaticAccessorTypes(mutableClass);
     }

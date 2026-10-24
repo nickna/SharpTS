@@ -48,8 +48,15 @@ public sealed record ClassMetadataCore(
     public TypeInfo? StaticNumberIndexType { get; init; }
     public TypeInfo? StaticSymbolIndexType { get; init; }
 
+    public FrozenSet<(bool IsStatic, TokenType KeyType)>? ReadonlyIndexes { get; init; }
+
     // CLR interop accepts the declared camelCase member's PascalCase spelling.
     internal bool IsDotNetMapped { get; init; }
+
+    // ["constructor"] is an instance method, independent of the construction
+    // signature historically stored in Methods["constructor"].
+    internal TypeInfo? ComputedConstructorMethodType { get; init; }
+    internal AccessModifier ComputedConstructorMethodAccess { get; init; }
 
     /// <summary>True when the instance facet declares any index signature.</summary>
     public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;

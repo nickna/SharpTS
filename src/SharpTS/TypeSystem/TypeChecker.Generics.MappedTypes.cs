@@ -64,10 +64,14 @@ public partial class TypeChecker
                 break;
 
             case TypeInfo.Class cls:
+                if (cls.Core.ComputedConstructorMethodType is not null &&
+                    cls.Core.ComputedConstructorMethodAccess == Parsing.AccessModifier.Public)
+                    keys.Add(new TypeInfo.StringLiteral("constructor"));
                 // Public methods
                 foreach (var key in cls.Methods.Keys)
                 {
-                    if (cls.MethodAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
+                    if (key != "constructor" &&
+                        cls.MethodAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
                         keys.Add(new TypeInfo.StringLiteral(key));
                 }
                 // Public fields
@@ -129,9 +133,13 @@ public partial class TypeChecker
                 break;
 
             case TypeInfo.GenericClass gc:
+                if (gc.Core.ComputedConstructorMethodType is not null &&
+                    gc.Core.ComputedConstructorMethodAccess == Parsing.AccessModifier.Public)
+                    keys.Add(new TypeInfo.StringLiteral("constructor"));
                 foreach (var key in gc.Methods.Keys)
                 {
-                    if (gc.MethodAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
+                    if (key != "constructor" &&
+                        gc.MethodAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
                         keys.Add(new TypeInfo.StringLiteral(key));
                 }
                 foreach (var key in gc.FieldTypes.Keys)
@@ -573,7 +581,8 @@ public partial class TypeChecker
                 .Select(member => member.Value)
                 .FirstOrDefault(),
             TypeInfo.Record rec => rec.Fields.GetValueOrDefault(propertyName),
-            TypeInfo.Class cls => cls.Methods.GetValueOrDefault(propertyName)
+            TypeInfo.Class cls => (propertyName == "constructor" ? cls.Core.ComputedConstructorMethodType : null)
+                               ?? cls.Methods.GetValueOrDefault(propertyName)
                                ?? cls.FieldTypes.GetValueOrDefault(propertyName)
                                ?? cls.Getters.GetValueOrDefault(propertyName),
             TypeInfo.Instance inst => GetPropertyType(inst.ClassType, propertyName),
@@ -601,6 +610,8 @@ public partial class TypeChecker
             case TypeInfo.GenericClass gc:
                 for (int i = 0; i < gc.TypeParams.Count && i < ig.TypeArguments.Count; i++)
                     subs[gc.TypeParams[i].Name] = ig.TypeArguments[i];
+                if (propertyName == "constructor" && gc.Core.ComputedConstructorMethodType is { } constructorMethod)
+                    return Substitute(constructorMethod, subs);
                 if (gc.Methods.TryGetValue(propertyName, out var methodType))
                     return Substitute(methodType, subs);
                 if (gc.FieldTypes.TryGetValue(propertyName, out var fieldType))

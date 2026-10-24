@@ -35,6 +35,14 @@ public partial class TypeChecker
         return marks?.ToFrozenSet();
     }
 
+    private static TypeInfo CollapseSubstitutedIntersection(List<TypeInfo> members)
+    {
+        var intersection = new TypeInfo.Intersection(members);
+        // Collapse identity/absorbing constituents after substitution without merging
+        // object members: each intersected property contract remains observable to JSX.
+        return intersection.FlattenedTypes is [var only] ? only : intersection;
+    }
+
     /// <summary>
     /// Substitutes type parameters with concrete types, evaluating any conditional types reached.
     /// </summary>
@@ -70,6 +78,10 @@ public partial class TypeChecker
                 new TypeInfo.Array(Sub(arr.ElementType), arr.IsReadonly),
             TypeInfo.Promise promise =>
                 new TypeInfo.Promise(Sub(promise.ValueType)),
+            TypeInfo.Generator generator =>
+                new TypeInfo.Generator(Sub(generator.YieldType)) { ReturnType = Sub(generator.ReturnType) },
+            TypeInfo.AsyncGenerator generator =>
+                new TypeInfo.AsyncGenerator(Sub(generator.YieldType)) { ReturnType = Sub(generator.ReturnType) },
             TypeInfo.FunctionSupertype => type,
             TypeInfo.GenericFunction generic => SubstituteGenericMethod(generic, substitutions, evalConditionals),
             TypeInfo.OverloadSet overloaded => new TypeInfo.OverloadSet(overloaded.Signatures.Select(Sub).ToList()),
@@ -93,7 +105,7 @@ public partial class TypeChecker
             TypeInfo.Union union =>
                 new TypeInfo.Union(union.Types.Select(Sub).ToList()),
             TypeInfo.Intersection intersection =>
-                new TypeInfo.Intersection(intersection.Types.Select(Sub).ToList()),
+                CollapseSubstitutedIntersection(intersection.Types.Select(Sub).ToList()),
             // Assignability path (evalConditionals): fields only. Preserving call/construct signatures here
             // would feed generic construct-signature *assignment* relating (which erases/instantiates via
             // Substitute) types it does not yet compare correctly, regressing
@@ -108,7 +120,8 @@ public partial class TypeChecker
                         OptionalFields: rec.OptionalFields,
                         IsReadonly: rec.IsReadonly,
                         GetterOnlyFields: rec.GetterOnlyFields,
-                        MethodMembers: rec.MethodMembers)
+                        MethodMembers: rec.MethodMembers,
+                        ReadonlyFields: rec.ReadonlyFields)
                     : SubstituteRecordMembers(rec, Sub),
             TypeInfo.InstantiatedGeneric ig =>
                 new TypeInfo.InstantiatedGeneric(
@@ -346,7 +359,8 @@ public partial class TypeChecker
                 ParamTypes = cs.ParamTypes.Select(sub).ToList(),
                 ReturnType = sub(cs.ReturnType)
             })).ToList(),
-            rec.MethodMembers);
+            rec.MethodMembers,
+            rec.ReadonlyFields);
 
     /// <summary>
     /// Like <see cref="Substitute"/>, but preserves (and substitutes into) a Record's call/construct

@@ -738,6 +738,40 @@ public class JsxTypeCheckerTests
     }
 
     [Fact]
+    public void GenericClassChildrenIntersection_RetainsEachRepeatedChildContract()
+    {
+        const string prelude = """
+            declare const _jsx: any;
+            declare namespace JSX {
+                interface Element { __jsxElementBrand: string }
+                interface ElementClass { render(): JSX.Element }
+                interface ElementAttributesProperty { props: {} }
+                interface ElementChildrenAttribute { children: {} }
+            }
+            interface ReactElement<P> { props: P }
+            type ReactNode = ReactElement<any> | {} | boolean | Array<JSX.Element | boolean>;
+            declare class Component<P> {
+                props: P & { children?: ReactNode };
+                render(): JSX.Element;
+            }
+            interface Props { children: (value: string) => JSX.Element }
+            class Widget extends Component<Props> {}
+            declare const renderChild: (value: string) => JSX.Element;
+            """;
+        var single = JsxCall(JsxElementKind.Component, "Widget",
+            new Expr.Variable(Identifier("Widget")), new Expr.ObjectLiteral([]),
+            new Expr.Variable(Identifier("renderChild", 30)));
+        Assert.Empty(Check(single, prelude).Diagnostics);
+        var multiple = JsxCall(JsxElementKind.Component, "Widget",
+            new Expr.Variable(Identifier("Widget")), new Expr.ObjectLiteral([]),
+            new Expr.Variable(Identifier("renderChild", 30)),
+            new Expr.Variable(Identifier("renderChild", 31)));
+        var diagnostics = Check(multiple, prelude).Diagnostics;
+        Assert.Equal(new[] { 30, 31 }, diagnostics.Where(d => d.TsCode == "TS2322").Select(d => d.Line));
+        Assert.DoesNotContain(diagnostics, d => d.TsCode == "TS2746");
+    }
+
+    [Fact]
     public void FunctionComponent_BadReturnType_ReportsTs2786()
     {
         const string prelude = JsxPrelude + """

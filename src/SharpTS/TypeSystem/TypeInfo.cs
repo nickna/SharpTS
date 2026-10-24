@@ -197,9 +197,10 @@ public abstract record TypeInfo
         // Substitution origin changes assignability (it gates the callback rule), so marked and
         // unmarked renderings must not share compatibility-cache entries.
         internal override string CacheKey() =>
-            InstantiatedTypeParamPositions is { Count: > 0 } marks
-                ? $"{ToString()}@itp{string.Join(",", marks.Order())}"
-                : base.CacheKey();
+            $"fn({string.Join(",", ParamTypes.Select(parameter => parameter.CacheKey()))})" +
+            $"=>{ReturnType.CacheKey()}@arity{MinArity}@rest{HasRestParam}@this{ThisType?.CacheKey()}" +
+            (InstantiatedTypeParamPositions is { Count: > 0 } marks
+                ? $"@itp{string.Join(",", marks.Order())}" : "");
     }
 
     /// <summary>
@@ -211,6 +212,7 @@ public abstract record TypeInfo
         [new Array(Any.Shared)], Any.Shared, RequiredParams: 0, HasRestParam: true)
     {
         public override string ToString() => "Function";
+        internal override string CacheKey() => "Function";
     }
 
     /// <summary>
@@ -375,6 +377,8 @@ public abstract record TypeInfo
         // surface. Source class shells must not acquire this permission.
         internal bool IsDynamicSuperclass { get; init; }
         internal bool IsDotNetMapped { get; set; }
+        internal TypeInfo? ComputedConstructorMethodType { get; set; }
+        internal AccessModifier ComputedConstructorMethodAccess { get; set; }
         public Dictionary<string, TypeInfo> Methods { get; } = [];
         public Dictionary<string, TypeInfo> StaticMethods { get; } = [];
         public Dictionary<string, TypeInfo> StaticProperties { get; } = [];
@@ -411,6 +415,7 @@ public abstract record TypeInfo
         public TypeInfo? StaticStringIndexType { get; set; }
         public TypeInfo? StaticNumberIndexType { get; set; }
         public TypeInfo? StaticSymbolIndexType { get; set; }
+        public HashSet<(bool IsStatic, TokenType KeyType)> ReadonlyIndexes { get; } = [];
 
         private ClassMetadataCore? _frozenCore;
         private TypeInfo.Class? _frozen;
@@ -454,7 +459,10 @@ public abstract record TypeInfo
                 StaticStringIndexType = StaticStringIndexType,
                 StaticNumberIndexType = StaticNumberIndexType,
                 StaticSymbolIndexType = StaticSymbolIndexType,
-                IsDotNetMapped = IsDotNetMapped
+                ReadonlyIndexes = ReadonlyIndexes.Count > 0 ? ReadonlyIndexes.ToFrozenSet() : null,
+                IsDotNetMapped = IsDotNetMapped,
+                ComputedConstructorMethodType = ComputedConstructorMethodType,
+                ComputedConstructorMethodAccess = ComputedConstructorMethodAccess
             };
             return _frozenCore;
         }
@@ -924,7 +932,8 @@ public abstract record TypeInfo
         FrozenSet<string>? GetterOnlyFields = null,
         List<CallSignature>? CallSignatures = null,
         List<ConstructorSignature>? ConstructorSignatures = null,
-        FrozenSet<string>? MethodMembers = null
+        FrozenSet<string>? MethodMembers = null,
+        FrozenSet<string>? ReadonlyFields = null
     ) : TypeInfo
     {
         /// <summary>True when the field was declared with method syntax (`m(x): T`), which keeps
@@ -949,6 +958,8 @@ public abstract record TypeInfo
         /// </summary>
         public bool IsFieldOptional(string name) => OptionalFields?.Contains(name) ?? false;
 
+        public bool IsFieldReadonly(string name) => IsReadonly || (ReadonlyFields?.Contains(name) ?? false);
+
         /// <summary>
         /// Checks if a field is defined by a getter with no corresponding setter.
         /// </summary>
@@ -961,7 +972,7 @@ public abstract record TypeInfo
             // property member of the same function type differ in assignability, and ToString is
             // the compatibility-cache key.
             var parts = Fields.Select(f =>
-                $"{f.Key}{(IsMethodMember(f.Key) ? "#m" : "")}{(IsFieldOptional(f.Key) ? "?" : "")}: {f.Value}").ToList();
+                $"{(ReadonlyFields?.Contains(f.Key) == true ? "readonly " : "")}{f.Key}{(IsMethodMember(f.Key) ? "#m" : "")}{(IsFieldOptional(f.Key) ? "?" : "")}: {f.Value}").ToList();
             if (CallSignatures != null) parts.InsertRange(0, CallSignatures.Select(s => s.ToString()));
             if (ConstructorSignatures != null) parts.InsertRange(0, ConstructorSignatures.Select(s => s.ToString()));
             // Index signatures must be rendered so distinct index types don't collapse to the same
@@ -1265,7 +1276,9 @@ public abstract record TypeInfo
     /// </summary>
     public record Generator(TypeInfo YieldType) : TypeInfo
     {
-        public override string ToString() => $"Generator<{YieldType}>";
+        public TypeInfo ReturnType { get; init; } = Any.Shared;
+        public override string ToString() => ReturnType is Any
+            ? $"Generator<{YieldType}>" : $"Generator<{YieldType}, {ReturnType}>";
     }
 
     /// <summary>
@@ -1274,7 +1287,9 @@ public abstract record TypeInfo
     /// </summary>
     public record AsyncGenerator(TypeInfo YieldType) : TypeInfo
     {
-        public override string ToString() => $"AsyncGenerator<{YieldType}>";
+        public TypeInfo ReturnType { get; init; } = Any.Shared;
+        public override string ToString() => ReturnType is Any
+            ? $"AsyncGenerator<{YieldType}>" : $"AsyncGenerator<{YieldType}, {ReturnType}>";
     }
 
     /// <summary>

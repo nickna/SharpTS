@@ -1143,7 +1143,7 @@ public partial class Parser
                 }
                 // The string path renders computed members as plain fields (no method marker).
                 if (TakeTypeNode() is { } computedNode)
-                    memberNodes.Add(new PropertyMemberNode(computedName, computedNode, computedOptional, false, computedLine));
+                    memberNodes.Add(new PropertyMemberNode(computedName, computedNode, computedOptional, false, computedLine, IsReadonly: bracketReadonly));
                 else
                     nodeComplete = false;
                 members.Add($"{computedName}{(computedOptional ? "?" : "")}: {computedType}");
@@ -1218,7 +1218,6 @@ public partial class Parser
             {
                 // Optional readonly modifier on a property member
                 bool isReadonly = Match(TokenType.READONLY);
-                _ = isReadonly; // readonly is parsed but not yet modeled on inline object types
 
                 // Parse property/method name — an identifier, a keyword (e.g. `type`, `set`),
                 // or a string/numeric literal name (e.g. `"1"`, `1`).
@@ -1252,7 +1251,7 @@ public partial class Parser
                 {
                     var memberNode = new PropertyMemberNode(
                         propertyName.Lexeme, propertyNode, isOptional, isMethodMember,
-                        propertyName.Line, hasExplicitType);
+                        propertyName.Line, hasExplicitType, isReadonly);
                     memberNodes.Add(memberNode);
                     RecordWrittenMember(memberNode, propertyName);
                 }
@@ -1262,7 +1261,7 @@ public partial class Parser
                 // Build member string. Method members carry a '#m' marker (stripped by
                 // ParseInlineObjectTypeInfo) so method-ness survives the string round-trip —
                 // under strictFunctionTypes methods keep bivariant parameter relating.
-                string member = $"{propertyName.Lexeme}{(isMethodMember ? "#m" : "")}{(isOptional ? "?" : "")}: {propertyType}";
+                string member = $"{(isReadonly ? "readonly " : "")}{propertyName.Lexeme}{(isMethodMember ? "#m" : "")}{(isOptional ? "?" : "")}: {propertyType}";
                 members.Add(member);
             }
 

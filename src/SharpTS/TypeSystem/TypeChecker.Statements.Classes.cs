@@ -57,10 +57,25 @@ public partial class TypeChecker
     /// a symbol-keyed field is stored under the synthetic <c>&lt;computed&gt;</c> lexeme and never lines
     /// up with the interface's <c>@@iterator</c>, producing spurious missing-property errors.
     /// </summary>
+    private string? TryGetComputedClassMemberName(Expr? key) => key switch
+    {
+        Expr.Literal { Value: string name } => name,
+        Expr.Literal { Value: double number } => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        Expr.Grouping grouping => TryGetComputedClassMemberName(grouping.Expression),
+        _ => TryGetWellKnownSymbolMemberName(key)
+    };
+
     private string GetFieldMemberName(Stmt.Field field) =>
         field.ComputedKey != null
-            ? (TryGetWellKnownSymbolMemberName(field.ComputedKey) ?? field.Name.Lexeme)
+            ? (TryGetComputedClassMemberName(field.ComputedKey) ?? field.Name.Lexeme)
             : field.Name.Lexeme;
+
+    private static bool IsLiteralComputedClassMemberKey(Expr? key) => key switch
+    {
+        Expr.Literal { Value: string or double } => true,
+        Expr.Grouping grouping => IsLiteralComputedClassMemberKey(grouping.Expression),
+        _ => false
+    };
 
     /// <summary>
     /// CheckModules recovers between root declarations without setting the standalone checker's
@@ -91,30 +106,29 @@ public partial class TypeChecker
     // Signature collection runs in the caller-owned class type environment and populates
     // the supplied class metadata. Diagnostic recovery and scope restoration remain
     // owned by CheckClassDeclaration, including when collection throws.
-    private void CollectComputedClassMethodSignatures(Stmt.Class classStmt, TypeInfo.MutableClass mutableClass)
+    private void CollectComputedClassMethodSignatures(IEnumerable<Stmt.Function> methods, TypeInfo.MutableClass mutableClass)
     {
         // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their canonical
         // well-known-symbol member name (@@iterator, @@asyncIterator, …) so structural iterability and
         // member lookup see them (#592/#485). They carry the synthetic `<computed>` name, so they are
-        // pulled out of the name-keyed overload grouping below and grouped here instead by (IsStatic,
-        // canonical name) — running the SAME overload/duplicate-implementation/static-consistency
+        // pulled out of the name-keyed overload grouping below and grouped here by canonical name
+        // and the applicable static facet — running the SAME overload/duplicate-implementation/static-consistency
         // validation string-named methods get, rather than silently "last one wins" registration.
         // Arbitrary computed keys (e.g. `[v]()`) aren't statically named members and are skipped
         // (still parsed/checked, just untyped — like computed accessors).
-        var computedMethodGroups = classStmt.Methods
+        var computedMethodGroups = methods
             .Where(m => m.ComputedKey != null)
-            .Select(m => (Method: m, Name: TryGetWellKnownSymbolMemberName(m.ComputedKey)))
+            .Select(m => (Method: m, Name: TryGetComputedClassMemberName(m.ComputedKey),
+                IsLiteral: IsLiteralComputedClassMemberKey(m.ComputedKey)))
             .Where(x => x.Name != null)
-            // Grouped by canonical NAME ONLY (not IsStatic too): the static-consistency check
-            // below needs static AND instance declarations of the same name in one group to
-            // compare them against each other — grouping by (IsStatic, Name) would silently
-            // split a static/instance mismatch into two single-member groups that never meet.
-            .GroupBy(x => x.Name!)
+            // Ordinary property names have independent static and instance overload groups.
+            // Symbol overloads retain the cross-facet group needed for TS2387/TS2388.
+            .GroupBy(x => (Name: x.Name!, IsStatic: x.IsLiteral ? x.Method.IsStatic : (bool?)null))
             .ToList();
 
         foreach (var group in computedMethodGroups)
         {
-            string memberName = group.Key;
+            string memberName = group.Key.Name;
             var members = group.Select(x => x.Method).ToList();
 
             // TS2387/TS2388: tsc requires every declaration in an overload group to agree on
@@ -160,11 +174,18 @@ public partial class TypeChecker
             // and is filled in by the inferred-return post-pass below as Generator<yieldType>.
             var representative = implementations.Count == 1 ? implementations[0] : members[^1];
             var funcType = BuildClassMethodSignature(representative, wrapGeneratorReturn: false, validateDefaults: false);
-            if (representative.IsStatic)
-                mutableClass.StaticMethods[memberName] = funcType;
-            else
-                mutableClass.Methods[memberName] = funcType;
-            (representative.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[memberName] = representative.Access;
+            if (implementations.Count == 1 && signatures.Count > 0)
+            {
+                var publicSignatures = signatures.Select(signature => BuildClassMethodSignature(
+                    signature, wrapGeneratorReturn: false, validateDefaults: false)).ToList();
+                foreach (var signature in publicSignatures)
+                    if (ClassMethodImplementation(funcType).MinArity > ClassMethodImplementation(signature).MinArity)
+                        throw new TypeCheckException(
+                            $"Implementation of '{memberName}' requires more arguments than an overload signature.",
+                            representative.Name.Line, tsCode: "TS2394");
+                funcType = BuildClassMethodOverload(publicSignatures, funcType);
+            }
+            PublishComputedClassMethod(mutableClass, representative, memberName, funcType);
         }
     }
 
@@ -456,6 +477,30 @@ public partial class TypeChecker
     }
 
     // Requires method signatures to be registered for duplicate detection; keeps pair validation in the same class environment.
+    private void CheckDuplicateClassAccessorName(Stmt.Accessor accessor, TypeInfo.MutableClass owner,
+        Dictionary<(bool IsStatic, string Name), int> seenGetters,
+        Dictionary<(bool IsStatic, string Name), int> seenSetters)
+    {
+        string? name = accessor.ComputedKey is null
+            ? accessor.Name.Lexeme : TryGetComputedClassMemberName(accessor.ComputedKey);
+        if (name is null) return;
+
+        bool hasMethod = accessor.IsStatic ? owner.StaticMethods.ContainsKey(name)
+            : name == "constructor" ? owner.ComputedConstructorMethodType is not null
+            : owner.Methods.ContainsKey(name);
+        var seen = accessor.Kind.Type == TokenType.GET ? seenGetters : seenSetters;
+        int line = accessor.ComputedKey is null ? accessor.Name.Line
+            : TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line;
+        if (!hasMethod && seen.TryAdd((accessor.IsStatic, name), line)) return;
+
+        string display = accessor.ComputedKey is not null &&
+            !IsLiteralComputedClassMemberKey(accessor.ComputedKey) &&
+            name.StartsWith("@@", StringComparison.Ordinal)
+                ? $"[Symbol.{name["@@".Length..]}]" : name;
+        RecordTypeError(new TypeCheckException(
+            $" Duplicate identifier '{display}'.", line: line, tsCode: "TS2300"));
+    }
+
     private void CollectClassAccessorTypes(Stmt.Class classStmt, TypeInfo.MutableClass mutableClass)
     {
         // Collect accessor types
@@ -476,27 +521,11 @@ public partial class TypeChecker
                     : DecoratorTarget.Setter;
                 CheckDecorators(accessor.Decorators, accessorTarget);
 
+                CheckDuplicateClassAccessorName(accessor, mutableClass, seenGetters, seenSetters);
+
                 string? canonicalName = accessor.ComputedKey != null
                     ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
                     : accessor.Name.Lexeme;
-                if (canonicalName != null)
-                {
-                    int line = accessor.ComputedKey != null
-                        ? TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line
-                        : accessor.Name.Line;
-                    string displayName = accessor.ComputedKey != null ? $"[Symbol.{canonicalName["@@".Length..]}]" : canonicalName;
-                    // A method already registered under this name (methods are processed above)
-                    // makes ANY accessor of the same name a duplicate too — a class member can't be
-                    // both a method and an accessor. tsc flags the accessor, not the method.
-                    var methodDict = accessor.IsStatic ? mutableClass.StaticMethods : mutableClass.Methods;
-                    var seen = accessor.Kind.Type == TokenType.GET ? seenGetters : seenSetters;
-                    var key = (accessor.IsStatic, canonicalName);
-                    if (methodDict.ContainsKey(canonicalName) || !seen.TryAdd(key, line))
-                    {
-                        RecordTypeError(new TypeCheckException(
-                            $" Duplicate identifier '{displayName}'.", line: line, tsCode: "TS2300"));
-                    }
-                }
 
                 // Arbitrary computed names have no stable member identity. Well-known and augmented
                 // unique symbols do, and use the same @@ key as interfaces/object literals.
@@ -549,12 +578,32 @@ public partial class TypeChecker
                 {
                     mutableClass.Setters[propName] = getterType;
                 }
-                else if (!IsCompatible(getterType, setterType))
-                {
-                    throw new TypeCheckException($" Getter and setter for '{propName}' have incompatible types.", tsCode: "TS2380");
-                }
             }
             ValidateStaticAccessorPairs(mutableClass);
+            ValidateAccessorAccessibility(classStmt.Accessors);
+        }
+    }
+
+    private void ValidateAccessorAccessibility(IReadOnlyList<Stmt.Accessor>? accessors)
+    {
+        if (accessors is null) return;
+        foreach (var group in accessors.GroupBy(a => (a.IsStatic, Name: ClassAccessorName(a))))
+        {
+            if (group.Key.Name is null) continue;
+            var getter = group.FirstOrDefault(a => a.Kind.Type == TokenType.GET);
+            var setter = group.FirstOrDefault(a => a.Kind.Type == TokenType.SET);
+            if (getter is null || setter is null) continue;
+            static int Accessibility(AccessModifier access) => access switch
+            {
+                AccessModifier.Public => 2,
+                AccessModifier.Protected => 1,
+                _ => 0
+            };
+            if (Accessibility(getter.Access) >= Accessibility(setter.Access)) continue;
+            foreach (var accessor in new[] { getter, setter })
+                RecordTypeError(new TypeCheckException(
+                    "A get accessor must be at least as accessible as the setter.",
+                    accessor.Name.Line, tsCode: "TS2808"));
         }
     }
 
@@ -593,10 +642,6 @@ public partial class TypeChecker
                 if (autoAccessor.TypeAnnotation != null)
                 {
                     accessorType = ResolveAnnotation(autoAccessor.TypeAnnotation, autoAccessor.TypeAnnotationNode, autoAccessor)!;
-                }
-                else if (autoAccessor.Initializer != null)
-                {
-                    accessorType = CheckExpr(autoAccessor.Initializer);
                 }
                 else
                 {
@@ -712,7 +757,7 @@ public partial class TypeChecker
 
             bool recoverComputedSymbolDiagnostics =
                 classStmt.Fields.Any(field => TryGetWellKnownSymbolMemberName(field.ComputedKey) != null) ||
-                classStmt.Methods.Any(method => TryGetWellKnownSymbolMemberName(method.ComputedKey) != null) ||
+                classStmt.Methods.Any(method => TryGetComputedClassMemberName(method.ComputedKey) != null) ||
                 (classStmt.Accessors?.Any(accessor => TryGetWellKnownSymbolMemberName(accessor.ComputedKey) != null) ?? false);
 
             // Check class decorators
@@ -764,7 +809,7 @@ public partial class TypeChecker
                 using (new EnvironmentScope(this, classTypeEnv))
                 {
                     CollectClassIndexSignatures(classStmt, mutableClass);
-                    CollectComputedClassMethodSignatures(classStmt, mutableClass);
+                    CollectComputedClassMethodSignatures(classStmt.Methods, mutableClass);
                     CollectNamedClassMethodSignatures(classStmt, mutableClass);
                     CollectClassFieldTypes(classStmt, mutableClass, classTypeParams);
                     CollectClassAccessorTypes(classStmt, mutableClass);
@@ -784,6 +829,8 @@ public partial class TypeChecker
 
             bool anyInferredFieldTypeResolved = CheckClassFieldInitializers(
                 classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams);
+            using (new EnvironmentScope(this, classTypeEnv))
+                anyInferredFieldTypeResolved |= CheckClassAutoAccessorInitializers(classStmt, mutableClass);
             if (anyInferredFieldTypeResolved)
             {
                 classTypeForBody = PublishInitialClassType(classStmt, mutableClass, classTypeParams);
@@ -800,8 +847,6 @@ public partial class TypeChecker
             ValidateDeclaredClassInterfaces(classStmt, classTypeForBody, classTypeParams);
 
             ValidateDeclaredClassMembers(classStmt, classTypeForBody, classTypeParams, classTypeEnv);
-
-            CheckClassAutoAccessorInitializers(classStmt, classTypeForBody);
 
             CheckClassStaticBlocks(classStmt, classTypeForBody);
 
@@ -901,9 +946,14 @@ public partial class TypeChecker
                 // in the method dictionaries by a static name. Well-known ones are stored under their
                 // @@name; reuse that type. An arbitrary computed key has no modeled member — build a
                 // signature inline just to bind parameter types for the body check.
-                string? memberName = TryGetWellKnownSymbolMemberName(method.ComputedKey);
+                string? memberName = TryGetComputedClassMemberName(method.ComputedKey);
                 var computedDict = method.IsStatic ? classTypeForBody.StaticMethods : classTypeForBody.Methods;
-                if (memberName != null && computedDict.TryGetValue(memberName, out var computedType))
+                if (!method.IsStatic && memberName == "constructor" &&
+                    classTypeForBody.Core.ComputedConstructorMethodType is { } constructorMethod)
+                {
+                    declaredMethodType = constructorMethod;
+                }
+                else if (memberName != null && computedDict.TryGetValue(memberName, out var computedType))
                 {
                     declaredMethodType = computedType;
                 }
@@ -1050,11 +1100,15 @@ public partial class TypeChecker
                     // arbitrary computed key (no well-known @@name) carries no static member to update.
                     var updatedMethodType = UpdateClassMethodReturn(method, declaredMethodType, methodType, inferredReturn);
                     string? mName = method.ComputedKey != null
-                        ? TryGetWellKnownSymbolMemberName(method.ComputedKey)
+                        ? TryGetComputedClassMemberName(method.ComputedKey)
                         : method.Name.Lexeme;
                     if (mName != null)
                     {
-                        if (method.IsPrivate)
+                        if (method.ComputedKey != null)
+                        {
+                            PublishComputedClassMethod(mutableClass, method, mName, updatedMethodType);
+                        }
+                        else if (method.IsPrivate)
                         {
                             if (method.IsStatic) mutableClass.StaticPrivateMethods[mName] = updatedMethodType;
                             else mutableClass.PrivateMethods[mName] = updatedMethodType;
@@ -1502,6 +1556,7 @@ public partial class TypeChecker
                         () => ResolveAnnotation(indexSig.ValueType, indexSig.ValueTypeNode)!,
                         out TypeInfo valueType))
                     continue;
+                if (indexSig.IsReadonly) mutableClass.ReadonlyIndexes.Add((indexSig.IsStatic, indexSig.KeyType));
                 if (indexSig.IsStatic)
                 {
                     switch (indexSig.KeyType)

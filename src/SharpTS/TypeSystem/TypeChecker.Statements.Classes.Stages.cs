@@ -76,6 +76,7 @@ public partial class TypeChecker
             foreach (var indexSig in indexSignatures)
             {
                 TypeInfo valueType = ResolveAnnotation(indexSig.ValueType, indexSig.ValueTypeNode)!;
+                if (indexSig.IsReadonly) mutableClass.ReadonlyIndexes.Add((indexSig.IsStatic, indexSig.KeyType));
                 if (indexSig.IsStatic)
                 {
                     switch (indexSig.KeyType)
@@ -348,9 +349,10 @@ public partial class TypeChecker
                 _currentArrowCapturesScriptGlobalThis = false;
                 if (!field.IsStatic) _deferredInitializerFlowBoundary = outerEnvironment;
                 _privateNameEnclosingClasses.Push(previousClass);
-                if (!field.IsStatic) PushEmptyNarrowingScope();
+                var previousNarrowings = field.IsStatic ? null : PushIsolatedClassFieldNarrowingScope();
                 try
                 {
+                    getterScope.ActiveFields.Add(field);
                     if (validationOnly)
                         CheckExpr(field.Initializer);
                     else
@@ -361,9 +363,10 @@ public partial class TypeChecker
                 {
                     if (!field.IsStatic)
                     {
-                        PopNarrowingScope();
+                        RestoreClassFieldNarrowingScope(previousNarrowings!);
                         RestoreDefiniteAssignmentState(previousAssignmentState);
                     }
+                    getterScope.ActiveFields.Remove(field);
                     _privateNameEnclosingClasses.Pop();
                     _environment = previousEnvironment;
                     _currentClass = previousClass;
@@ -435,8 +438,9 @@ public partial class TypeChecker
     }
 
     // Checks initializers at declaration scope before static blocks, preserving diagnostic order.
-    private void CheckClassAutoAccessorInitializers(Stmt.Class classStmt, TypeInfo.Class classTypeForBody)
+    private bool CheckClassAutoAccessorInitializers(Stmt.Class classStmt, TypeInfo.MutableClass owner)
     {
+        bool inferred = false;
         // Check auto-accessor initializers
         if (classStmt.AutoAccessors != null)
         {
@@ -444,7 +448,42 @@ public partial class TypeChecker
             {
                 if (autoAccessor.Initializer != null)
                 {
-                    TypeInfo initType = CheckExpr(autoAccessor.Initializer);
+                    TypeInfo.Class classTypeForBody = owner.Freeze();
+                    TypeEnvironment previousEnvironment = _environment;
+                    TypeInfo.Class? previousClass = _currentClass;
+                    TypeInfo? previousThis = _currentFunctionThisType;
+                    bool previousStatic = _inStaticMethod;
+                    _environment = new TypeEnvironment(previousEnvironment);
+                    _currentClass = classTypeForBody;
+                    _currentFunctionThisType = autoAccessor.IsStatic
+                        ? classTypeForBody : new TypeInfo.Instance(classTypeForBody);
+                    _environment.Define("this", _currentFunctionThisType);
+                    _inStaticMethod = autoAccessor.IsStatic;
+                    _privateNameEnclosingClasses.Push(previousClass);
+                    TypeInfo initType;
+                    try
+                    {
+                        initType = CheckExpr(autoAccessor.Initializer);
+                    }
+                    finally
+                    {
+                        _privateNameEnclosingClasses.Pop();
+                        _environment = previousEnvironment;
+                        _currentClass = previousClass;
+                        _currentFunctionThisType = previousThis;
+                        _inStaticMethod = previousStatic;
+                    }
+                    if (autoAccessor.TypeAnnotation is null && autoAccessor.TypeAnnotationNode is null)
+                    {
+                        TypeInfo inferredType = WidenClassFieldInitializerType(autoAccessor.Initializer, initType);
+                        (autoAccessor.IsStatic ? owner.StaticGetters : owner.Getters)[autoAccessor.Name.Lexeme] = inferredType;
+                        if (!autoAccessor.IsReadonly)
+                            (autoAccessor.IsStatic ? owner.StaticSetters : owner.Setters)[autoAccessor.Name.Lexeme] = inferredType;
+                        PublishStaticAccessorTypes(owner);
+                        owner.ResetFrozenCache();
+                        inferred = true;
+                        continue;
+                    }
                     TypeInfo declaredType = (autoAccessor.IsStatic ? classTypeForBody.StaticProperties : classTypeForBody.Getters)[autoAccessor.Name.Lexeme];
                     if (!IsCompatible(declaredType, initType))
                     {
@@ -453,6 +492,7 @@ public partial class TypeChecker
                 }
             }
         }
+        return inferred;
     }
 
     // Creates but does not activate the body environment. The declaration owns activation

@@ -317,6 +317,7 @@ public partial class TypeChecker
         Dictionary<string, TypeInfo> fields = [];
         HashSet<string> optionalFields = [];
         HashSet<string> methodMembers = [];
+        HashSet<string> readonlyFields = [];
         TypeInfo? stringIndexType = null;
         TypeInfo? numberIndexType = null;
         TypeInfo? symbolIndexType = null;
@@ -338,6 +339,7 @@ public partial class TypeChecker
                     if (TryToTypeInfo(prop.Type) is not { } propType) return null;
                     if (prop.IsMethod) methodMembers.Add(prop.Name);
                     if (prop.IsOptional) optionalFields.Add(prop.Name);
+                    if (prop.IsReadonly) readonlyFields.Add(prop.Name);
                     fields[prop.Name] = propType;
                     break;
 
@@ -398,7 +400,8 @@ public partial class TypeChecker
             optionalFields.Count > 0 ? optionalFields.ToFrozenSet() : null,
             CallSignatures: recCallSigs,
             ConstructorSignatures: recCtorSigs,
-            MethodMembers: methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null);
+            MethodMembers: methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null,
+            ReadonlyFields: readonlyFields.Count > 0 ? readonlyFields.ToFrozenSet() : null);
     }
 
     /// <summary>

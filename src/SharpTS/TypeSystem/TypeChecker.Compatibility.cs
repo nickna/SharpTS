@@ -468,6 +468,11 @@ public partial class TypeChecker
         if (expected is TypeInfo.GenericClass targetClass && actual is TypeInfo.GenericClass sourceClass)
             return GenericConstructorsRelated(targetClass, sourceClass);
 
+        if (expected is TypeInfo.Class mixedTarget && actual is TypeInfo.GenericClass genericSource)
+            return GenericConstructorsRelated(new TypeInfo.GenericClass(mixedTarget.Core, []), genericSource);
+        if (expected is TypeInfo.GenericClass genericTarget && actual is TypeInfo.Class mixedSource)
+            return GenericConstructorsRelated(genericTarget, new TypeInfo.GenericClass(mixedSource.Core, []));
+
         if (IsOrdinaryConstructorPair(expected, actual))
             return OrdinaryConstructorsRelated(expected, actual);
 
@@ -1094,6 +1099,9 @@ public partial class TypeChecker
 
             if (resolvedExpected is TypeInfo.Class expectedClass && resolvedActual is TypeInfo.Class actualClass)
             {
+                if (TryGetOrdinaryConstructorHierarchy(expectedClass, out _) &&
+                    TryGetOrdinaryConstructorHierarchy(actualClass, out _))
+                    return OrdinaryInstancesRelated(i1, i2);
                 // Check direct class hierarchy (by name)
                 TypeInfo? current = actualClass;
                 while (current != null)
@@ -1144,17 +1152,21 @@ public partial class TypeChecker
             if (itf.IsCallable)
             {
                 if (NormalizeSignature(actual) is { } funcSource)
-                    return CallSignaturesSatisfiedBy(itf.CallSignatures!, [funcSource]);
-
-                if (GetCallSignatures(actual) is { } actualCallSigs)
+                {
+                    if (!CallSignaturesSatisfiedBy(itf.CallSignatures!, [funcSource])) return false;
+                    if (!itf.GetAllMembers().Any()) return true;
+                }
+                else if (GetCallSignatures(actual) is { } actualCallSigs)
                 {
                     if (!CallSignaturesSatisfiedBy(itf.CallSignatures!, actualCallSigs.Select(NormalizeCallSignature).ToList()))
                         return false;
                     // Non-signature members (if any) still checked by the structural path below.
                     if (itf.Members.Count == 0) return true;
                 }
-                // Other actuals may still be callable via downstream paths — fall through rather
-                // than rejecting here.
+                else
+                {
+                    return false;
+                }
             }
 
             // Constructable interface: the source must satisfy the construct signatures.
@@ -1277,7 +1289,10 @@ public partial class TypeChecker
                     if (!CallSignaturesSatisfiedBy(exSigRec.CallSignatures!, actualSigs.Select(NormalizeCallSignature).ToList()))
                         return false;
                 }
-                // Other actuals may still be callable via downstream paths.
+                else
+                {
+                    return false;
+                }
             }
 
             if (exSigRec.IsConstructable)
@@ -1363,6 +1378,15 @@ public partial class TypeChecker
         }
 
         if (expected is TypeInfo.Void && actual is TypeInfo.Void) return true;
+
+        // Every target overload must be supported by a declared source overload.
+        // The implementation signature is not part of the public callable surface.
+        if (expected is TypeInfo.OverloadedFunction targetOverloads
+            && actual is TypeInfo.OverloadedFunction sourceOverloads)
+        {
+            return targetOverloads.Signatures.All(target => sourceOverloads.Signatures.Any(source =>
+                IsCompatible(target, source)));
+        }
 
         // OverloadedFunction expected: actual function must satisfy all overload signatures
         // This handles cases like interface method overloads being satisfied by a union-parameter function

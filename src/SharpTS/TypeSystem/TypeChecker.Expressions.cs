@@ -508,12 +508,10 @@ public partial class TypeChecker
 
     private TypeInfo CheckTypeAssertion(Expr.TypeAssertion ta)
     {
-        TypeInfo sourceType = CheckExpr(ta.Expression);
-
         // Handle 'as const' - deep readonly inference with literal types
         if (ta.TargetType == "const")
         {
-            return InferConstType(ta.Expression, sourceType);
+            return InferConstType(ta.Expression, CheckExpr(ta.Expression));
         }
 
         // Resolve the target node-first: a composite target such as a conditional type whose
@@ -525,6 +523,11 @@ public partial class TypeChecker
         TypeInfo targetType = (ta.TargetTypeNode is { } targetNode ? TryToTypeInfo(targetNode) : null)
             ?? ToTypeInfo(ta.TargetType);
         CompleteEditorExpressionAnnotation(ta, editorVersion);
+
+        // Assertions provide tuple context to fresh literals while ordinary array-to-tuple
+        // assignment keeps its length requirements. Preserve positions instead of comparing
+        // a union of literal element types with every asserted tuple element.
+        TypeInfo sourceType = CheckExprWithContext(ta.Expression, FlattenTupleSpreads(targetType));
 
         // Allow any <-> anything (escape hatch)
         if (sourceType is TypeInfo.Any || targetType is TypeInfo.Any)
@@ -1441,6 +1444,9 @@ public partial class TypeChecker
             elementTypes.Add(elemType);
         }
 
+        // Empty tuple spreads contribute no elements, just like an empty literal.
+        if (elementTypes.Count == 0) return new TypeInfo.Array(TypeInfo.Any.Shared);
+
         // Find common type or create union
         TypeInfo commonType = elementTypes[0];
         bool allCompatible = true;
@@ -1910,11 +1916,14 @@ public partial class TypeChecker
         _loopDepth = 0;
         _switchDepth = 0;
         _activeLabels.Clear();
-        PushDefiniteAssignmentScope();
+        PushDeclaredVariableScope();
+        for (int i = 0; i < arrow.Parameters.Count; i++)
+            RecordDeclaredType(arrow.Parameters[i].Name.Lexeme, bodyParamTypes[i]);
         _definiteAssignmentStack.TryPeek(out var classBodyFlow);
         if (classBodyFlow is not null && _immediateClassCallables.TryGetValue(arrow, out var callerFlow))
             _immediateClassFlows[classBodyFlow] = callerFlow;
 
+        _classFieldDeferredReadDepth++;
         try
         {
             if (arrow.ExpressionBody != null)
@@ -2019,7 +2028,9 @@ public partial class TypeChecker
                     }
                     else if (collected.Count == 0)
                     {
-                        returnType = TypeInfo.Void.Shared;
+                        returnType = DoesBlockDefinitelyReturn(arrow.BlockBody)
+                            ? TypeInfo.Never.Shared
+                            : TypeInfo.Void.Shared;
                     }
                     else
                     {
@@ -2034,8 +2045,9 @@ public partial class TypeChecker
         }
         finally
         {
+            _classFieldDeferredReadDepth--;
             if (classBodyFlow is not null) _immediateClassFlows.Remove(classBodyFlow);
-            PopDefiniteAssignmentScope();
+            PopDeclaredVariableScope();
             _environment = previousEnv;
             _currentFunctionReturnType = previousReturn;
             _inferredReturnTypes = previousInferredArrow;
@@ -2611,7 +2623,7 @@ public partial class TypeChecker
                 // "does not have a superclass".
                 bool isNativeFallback = !_hasDefaultLibraries &&
                     classExpr.SuperclassExpr is Expr.Variable nativeBase &&
-                    nativeBase.Name.Lexeme is "Array" or "Promise" &&
+                    (nativeBase.Name.Lexeme is "Array" or "Promise" || BuiltInNames.IsErrorTypeName(nativeBase.Name.Lexeme)) &&
                     _environment.Get(nativeBase.Name.Lexeme) is null &&
                     _currentMergedNamespace?.Values.ContainsKey(nativeBase.Name.Lexeme) != true;
                 var placeholder = new TypeInfo.MutableClass(isNativeFallback
@@ -2642,6 +2654,12 @@ public partial class TypeChecker
                 throw new TypeCheckException("Superclass must be a class", tsCode: "TS2507");
         }
 
+        var declarationView = new Stmt.Class(
+            classExpr.Name ?? new Token(TokenType.IDENTIFIER, className, null, TryGetExprLine(classExpr) ?? 0),
+            classExpr.TypeParams, classExpr.SuperclassExpr, classExpr.SuperclassTypeArgs,
+            classExpr.Methods, classExpr.Fields, classExpr.Accessors, classExpr.AutoAccessors,
+            IndexSignatures: classExpr.IndexSignatures);
+
         // Create mutable class early so self-references work
         var mutableClass = previousClass is null
             ? new TypeInfo.MutableClass(className)
@@ -2663,21 +2681,21 @@ public partial class TypeChecker
             CollectClassIndexSignatures(classExpr.IndexSignatures, mutableClass);
             TypeInfo BuildMethodFuncType(Stmt.Function method) => BuildClassMethodSignature(method, validateDefaults: false);
 
+            CollectComputedClassMethodSignatures(classExpr.Methods.Where(method =>
+                IsLiteralComputedClassMemberKey(method.ComputedKey)), mutableClass);
+
             // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their
             // canonical @@name (@@iterator, …) so structural iterability sees them (#592). They carry the
             // synthetic `<computed>` name, so they're pulled out of the name-keyed overload grouping.
             // An iterator factory's explicit return type is used as-is (not generator-wrapped), so the
             // structural probe reads the right element type.
-            foreach (var method in classExpr.Methods.Where(m => m.ComputedKey != null && m.Body != null))
+            foreach (var method in classExpr.Methods.Where(m => m.ComputedKey != null && m.Body != null &&
+                !IsLiteralComputedClassMemberKey(m.ComputedKey)))
             {
-                if (TryGetWellKnownSymbolMemberName(method.ComputedKey) is not { } memberName)
+                if (TryGetComputedClassMemberName(method.ComputedKey) is not { } memberName)
                     continue;
                 var computedFunc = BuildClassMethodSignature(method, wrapGeneratorReturn: false, validateDefaults: false);
-                if (method.IsStatic)
-                    mutableClass.StaticMethods[memberName] = computedFunc;
-                else
-                    mutableClass.Methods[memberName] = computedFunc;
-                (method.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[memberName] = method.Access;
+                PublishComputedClassMethod(mutableClass, method, memberName, computedFunc);
             }
 
             // Collect method signatures (computed-key methods handled above)
@@ -2763,8 +2781,11 @@ public partial class TypeChecker
             // Collect accessor types
             if (classExpr.Accessors != null)
             {
+                var seenGetters = new Dictionary<(bool IsStatic, string Name), int>();
+                var seenSetters = new Dictionary<(bool IsStatic, string Name), int>();
                 foreach (var accessor in classExpr.Accessors)
                 {
+                    CheckDuplicateClassAccessorName(accessor, mutableClass, seenGetters, seenSetters);
                     string? propName = accessor.ComputedKey != null
                         ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
                         : accessor.Name.Lexeme;
@@ -2795,8 +2816,6 @@ public partial class TypeChecker
                         mutableClass.Getters[propName] = setterType;
                     else if (setterType is TypeInfo.Inferred && getterType is not TypeInfo.Inferred)
                         mutableClass.Setters[propName] = getterType;
-                    else if (!IsCompatible(getterType, setterType))
-                        throw new TypeCheckException($" Getter and setter for '{propName}' have incompatible types.", tsCode: "TS2380");
                 }
                 // Methods are checked before accessor bodies. Preserve their
                 // existing permissive view of pending expression getters, then
@@ -2813,11 +2832,18 @@ public partial class TypeChecker
                     if (mutableClass.Setters[name] is TypeInfo.Inferred)
                         mutableClass.Setters[name] = TypeInfo.Any.Shared;
                 ValidateStaticAccessorPairs(mutableClass);
+                ValidateAccessorAccessibility(classExpr.Accessors);
             }
         }
 
+        using (new EnvironmentScope(this, classTypeEnv))
+            CollectClassAutoAccessorTypes(declarationView, mutableClass, superclass);
+        mutableClass.ResetFrozenCache();
+
         bool anyInferredFieldTypeResolved = CheckClassFieldInitializers(
             classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams);
+        using (new EnvironmentScope(this, classTypeEnv))
+            anyInferredFieldTypeResolved |= CheckClassAutoAccessorInitializers(declarationView, mutableClass);
         if (anyInferredFieldTypeResolved)
         {
             _compatibilityCache = null;
@@ -2945,9 +2971,14 @@ public partial class TypeChecker
                 {
                     // Computed methods carry the `<computed>` name; well-known ones are keyed by their
                     // @@name, arbitrary ones aren't modeled — build a signature inline to bind params.
-                    string? memberName = TryGetWellKnownSymbolMemberName(method.ComputedKey);
+                    string? memberName = TryGetComputedClassMemberName(method.ComputedKey);
                     var computedDict = method.IsStatic ? classTypeForBody.StaticMethods : classTypeForBody.Methods;
-                    if (memberName != null && computedDict.TryGetValue(memberName, out var ct))
+                    if (!method.IsStatic && memberName == "constructor" &&
+                        classTypeForBody.Core.ComputedConstructorMethodType is { } constructorMethod)
+                    {
+                        declaredMethodType = constructorMethod;
+                    }
+                    else if (memberName != null && computedDict.TryGetValue(memberName, out var ct))
                     {
                         declaredMethodType = ct;
                     }
@@ -3066,11 +3097,15 @@ public partial class TypeChecker
                         // @@name) carries no static member to update.
                         var updatedMethodType = UpdateClassMethodReturn(method, declaredMethodType, methodType, inferredReturn);
                         string? mName = method.ComputedKey != null
-                            ? TryGetWellKnownSymbolMemberName(method.ComputedKey)
+                            ? TryGetComputedClassMemberName(method.ComputedKey)
                             : method.Name.Lexeme;
                         if (mName != null)
                         {
-                            if (method.IsPrivate)
+                            if (method.ComputedKey != null)
+                            {
+                                PublishComputedClassMethod(mutableClass, method, mName, updatedMethodType);
+                            }
+                            else if (method.IsPrivate)
                             {
                                 if (method.IsStatic) mutableClass.StaticPrivateMethods[mName] = updatedMethodType;
                                 else mutableClass.PrivateMethods[mName] = updatedMethodType;
@@ -3148,6 +3183,10 @@ public partial class TypeChecker
         // Validate against completed inferred signatures, not the placeholders
         // collected before method and getter bodies were checked.
         mutableClass.ResetFrozenCache();
+        TypeInfo.Class indexValidatedClass = mutableClass.Freeze();
+        ValidateClassPropertiesAgainstIndex(declarationView, indexValidatedClass);
+        ValidateClassMembersAgainstSymbolIndex(declarationView, indexValidatedClass);
+        ValidateClassIndexSignatureExtends(declarationView, indexValidatedClass);
         ValidateStaticOverrideCompatibility(classExpr.Methods, classExpr.Accessors,
             className, mutableClass.Freeze());
 

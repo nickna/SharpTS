@@ -706,8 +706,16 @@ internal sealed class GeneratorArrowLifter
             {
                 var callee = RewriteExpr(c.Callee);
                 var args = RewriteListIfChanged(c.Arguments, RewriteExpr);
+                Expr sourceCallee = c.Callee;
+                while (sourceCallee is Expr.Grouping grouping) sourceCallee = grouping.Expression;
                 return ReferenceEquals(callee, c.Callee) && ReferenceEquals(args, c.Arguments)
-                    ? c : new Expr.Call(callee, c.Paren, c.TypeArgs, args, c.Optional, c.TypeArgNodes);
+                    ? c : c with
+                    {
+                        Callee = callee,
+                        Arguments = args,
+                        OriginalGeneratorCallee = sourceCallee is Expr.ArrowFunction { IsGenerator: true } generator
+                            ? generator : c.OriginalGeneratorCallee,
+                    };
             }
             case Expr.CallPrivate cp:
             {

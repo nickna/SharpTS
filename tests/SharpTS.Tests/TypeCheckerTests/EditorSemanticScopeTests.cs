@@ -254,12 +254,24 @@ public sealed class EditorSemanticScopeTests
     }
 
     [Fact]
-    public void UnvisitedCatchBodyDoesNotExposeAnOuterBindingOverItsWrittenLocal()
+    public void ParameterlessCatchPublishesItsOwnLocalBinding()
     {
-        // Existing checking skips a parameterless catch body. Its syntax still proves that
-        // a same-spelled local could hide the outer binding, so a query must refuse the guess.
-        var value = Check("const local: string = 'outer'; try {} catch { const local = 1; /*inside*/local; }");
+        var value = Check("const local: string = 'outer'; try {} catch { const local = 1; /*inside*/local; } /*outside*/local;");
         Clean(value);
+        var inside = Local(value, "inside", "local");
+        var outside = Local(value, "outside", "local");
+        Assert.Equal(EditorFactAvailability.Available, inside.Availability);
+        Assert.Equal("1", inside.Type.Text);
+        Assert.Equal("string", outside.Type.Text);
+        Assert.NotEqual(inside.Binding!.Id, outside.Binding!.Id);
+    }
+
+    [Fact]
+    public void InvalidCatchAnnotationLeavesItsBodyUnproved()
+    {
+        var value = Check("const local: string = 'outer'; try {} catch (error: number) { const local = 1; /*inside*/local; }");
+        Assert.False(value.Result.IsSuccess);
+        Assert.Contains(value.Result.Diagnostics, diagnostic => diagnostic.TsCode == "TS1196");
         Assert.Empty(value.Facts.GetVisibleBindings(value.Document, At(value, "inside")));
     }
 

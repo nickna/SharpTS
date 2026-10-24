@@ -20,19 +20,40 @@ public partial class TypeChecker
 
     private sealed class FieldGetterScope(
         TypeInfo.MutableClass owner, TypeEnvironment environment,
-        TypeInfo.Class?[] enclosingClasses, FieldGetterScope? previous)
+        TypeEnvironment initializerFlowBoundary, TypeInfo.Class?[] enclosingClasses, FieldGetterScope? previous)
     {
         public TypeInfo.MutableClass Owner { get; } = owner;
         public TypeEnvironment Environment { get; } = environment;
+        public TypeEnvironment InitializerFlowBoundary { get; } = initializerFlowBoundary;
         public TypeInfo.Class?[] EnclosingClasses { get; } = enclosingClasses;
         public FieldGetterScope? Previous { get; } = previous;
         public Dictionary<(bool IsStatic, string Name), Stmt.Accessor> Getters { get; } = [];
         public Dictionary<Stmt.Accessor, TypeInfo> Resolved { get; } = new(ReferenceEqualityComparer.Instance);
         public List<FieldGetterDependency> Active { get; } = [];
         public HashSet<(bool IsStatic, string Name)> PendingFields { get; } = [];
+        public Dictionary<(bool IsStatic, string Name), Stmt.Field> Fields { get; } = [];
+        public HashSet<Stmt.Field> ActiveFields { get; } = new(ReferenceEqualityComparer.Instance);
+        public int DeferredReadDepth { get; set; }
     }
 
     private FieldGetterScope? _fieldGetterScope;
+    private int _classFieldDeferredReadDepth;
+
+    private Narrowing.NarrowingContext[] PushIsolatedClassFieldNarrowingScope()
+    {
+        // An empty top frame still lets GetNarrowing search parent frames.
+        // Instance initializers execute later, outside their caller's flow.
+        var previous = _narrowingContextStack.ToArray();
+        _narrowingContextStack.Clear();
+        PushEmptyNarrowingScope();
+        return previous;
+    }
+
+    private void RestoreClassFieldNarrowingScope(Narrowing.NarrowingContext[] previous)
+    {
+        _narrowingContextStack.Clear();
+        foreach (var context in previous.Reverse()) _narrowingContextStack.Push(context);
+    }
     // Early inference is provisional: the ordinary body pass must see completed
     // fields and self bindings, rather than treating its result as an annotation.
     private readonly ConditionalWeakTable<TypeInfo.MutableClass, HashSet<Stmt.Accessor>>
@@ -42,8 +63,9 @@ public partial class TypeChecker
         object sourceOwner, IReadOnlyList<Stmt.Field> fields,
         TypeInfo.MutableClass owner, TypeEnvironment environment)
     {
-        var scope = new FieldGetterScope(owner, environment,
-            new[] { _currentClass }.Concat(_privateNameEnclosingClasses).ToArray(), _fieldGetterScope);
+        var scope = new FieldGetterScope(owner, environment, _environment,
+            new[] { _currentClass }.Concat(_privateNameEnclosingClasses).ToArray(), _fieldGetterScope)
+            { DeferredReadDepth = _classFieldDeferredReadDepth };
         var accessors = sourceOwner switch
         {
             Stmt.Class declaration => declaration.Accessors,
@@ -73,7 +95,11 @@ public partial class TypeChecker
         foreach (var field in fields)
             if (field.Initializer is not null && !field.IsDeclare &&
                 field.TypeAnnotation is null && field.TypeAnnotationNode is null)
-                scope.PendingFields.Add((field.IsStatic, GetFieldMemberName(field)));
+            {
+                var key = (field.IsStatic, GetFieldMemberName(field));
+                scope.PendingFields.Add(key);
+                scope.Fields[key] = field;
+            }
         return scope;
     }
 
@@ -93,7 +119,72 @@ public partial class TypeChecker
     {
         if (FindFieldGetterScope(owner) is not { } scope ||
             !scope.PendingFields.Contains((isStatic, name))) return;
+        if (_classFieldDeferredReadDepth > scope.DeferredReadDepth && scope.Fields.TryGetValue((isStatic, name), out var field))
+        {
+            InferDeferredClassFieldDependency(scope, field);
+            return;
+        }
         MarkFieldGetterDependenciesUnresolved();
+    }
+
+    private TypeInfo CompletedFieldDependencyType(TypeInfo owner, bool isStatic, string name, TypeInfo fallback)
+    {
+        if (FindFieldGetterScope(owner) is not { } scope) return fallback;
+        var members = isStatic ? scope.Owner.StaticProperties : scope.Owner.FieldTypes;
+        if (members.TryGetValue(name, out var type)) return type;
+        return (isStatic ? scope.Owner.StaticPrivateFields : scope.Owner.PrivateFields).GetValueOrDefault(name) ?? fallback;
+    }
+
+    private void InferDeferredClassFieldDependency(FieldGetterScope scope, Stmt.Field field)
+    {
+        // A recursive read keeps the current placeholder until the active initializer
+        // publishes its result. An annotated recursive callback can still complete precisely.
+        if (!scope.ActiveFields.Add(field)) return;
+        var previousEnvironment = _environment;
+        var previousClass = _currentClass;
+        var previousThis = _currentFunctionThisType;
+        bool previousStatic = _inStaticMethod;
+        bool previousStaticBlock = _inStaticBlock;
+        var previousFlowBoundary = _deferredInitializerFlowBoundary;
+        var assignmentState = SnapshotDefiniteAssignmentState();
+        var aliases = new Dictionary<string, string>(_variableAliases, StringComparer.Ordinal);
+        var environments = new Dictionary<TypeEnvironment, Dictionary<string, TypeInfo>?>(ReferenceEqualityComparer.Instance);
+        for (TypeEnvironment? environment = scope.Environment; environment is not null; environment = environment.Enclosing)
+            environments[environment] = environment.SnapshotLocalValueTypes();
+        var previousNarrowings = field.IsStatic ? null : PushIsolatedClassFieldNarrowingScope();
+        if (field.IsStatic) PushNarrowingScope();
+        _privateNameEnclosingClasses.Push(previousClass);
+        _environment = new TypeEnvironment(scope.Environment);
+        _currentClass = scope.Owner.Freeze();
+        _currentFunctionThisType = field.IsStatic ? _currentClass : new TypeInfo.Instance(scope.Owner);
+        _environment.Define("this", _currentFunctionThisType);
+        _inStaticMethod = field.IsStatic;
+        _inStaticBlock = false;
+        if (!field.IsStatic) _deferredInitializerFlowBoundary = scope.InitializerFlowBoundary;
+        try
+        {
+            // Only a field requested by a deferred callback is inferred early. Restore
+            // flow effects so its ordinary initializer pass retains source-order behavior.
+            CheckAndInferClassFieldInitializer(field, scope.Owner);
+            scope.PendingFields.Remove((field.IsStatic, GetFieldMemberName(field)));
+        }
+        finally
+        {
+            _privateNameEnclosingClasses.Pop();
+            if (previousNarrowings is not null) RestoreClassFieldNarrowingScope(previousNarrowings);
+            else PopNarrowingScope();
+            RestoreDefiniteAssignmentState(assignmentState);
+            _variableAliases.Clear();
+            foreach (var (name, alias) in aliases) _variableAliases.Add(name, alias);
+            foreach (var (environment, values) in environments) environment.RestoreLocalValueTypes(values);
+            _environment = previousEnvironment;
+            _currentClass = previousClass;
+            _currentFunctionThisType = previousThis;
+            _inStaticMethod = previousStatic;
+            _inStaticBlock = previousStaticBlock;
+            _deferredInitializerFlowBoundary = previousFlowBoundary;
+            scope.ActiveFields.Remove(field);
+        }
     }
 
     private void MarkFieldGetterDependenciesUnresolved()

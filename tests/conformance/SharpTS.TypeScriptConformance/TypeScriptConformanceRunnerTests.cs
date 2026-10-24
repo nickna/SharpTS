@@ -368,6 +368,7 @@ public class TypeScriptConformanceRunnerTests
     }
 
     [Theory]
+    [InlineData("jsx/checkJsxChildrenProperty4.tsx")]
     [InlineData("jsx/checkJsxChildrenProperty15.tsx")]
     [InlineData("jsx/tsxGenericAttributesType2.tsx")]
     [InlineData("types/conditional/inferTypes1.ts")]

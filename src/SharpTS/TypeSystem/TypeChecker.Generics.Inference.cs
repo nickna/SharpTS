@@ -96,10 +96,16 @@ public partial class TypeChecker
             }
             else
             {
-                // JSX instantiation applies defaults when inference produced no candidate. Keep
-                // ordinary call inference's established constraint/any fallback unchanged.
-                result.Add(fallbackToConstraints
-                    ? tp.Default ?? tp.Constraint ?? TypeInfo.Any.Shared
+                bool dependsOnSuppliedArgument = gf.ParamTypes.Take(argTypes.Count).Any(parameter =>
+                {
+                    HashSet<string> names = [];
+                    CollectSubstitutionParameterNames(parameter, names);
+                    return names.Contains(tp.Name);
+                });
+                // Callback result inference is deferred until contextualization. Preserve its
+                // fallback here; defaults for return-only parameters are already authoritative.
+                result.Add(tp.Default is { } defaultType && (fallbackToConstraints || !dependsOnSuppliedArgument)
+                    ? Substitute(defaultType, inferred)
                     : tp.Constraint ?? TypeInfo.Any.Shared);
             }
         }

@@ -163,7 +163,8 @@ public partial class TypeChecker
                     ObservePendingGetterFieldRead(current, isStatic: true, lookupName);
                 }
                 ObserveSourceMemberSelection(memberName, current, MemberFacet.Static);
-                return ResolveFieldStageGetter(current, isStatic: true, lookupName, staticPropType);
+                return ResolveFieldStageGetter(current, isStatic: true, lookupName,
+                    CompletedFieldDependencyType(current, true, lookupName, staticPropType));
             }
             current = GetSuperclass(current);
         }
@@ -411,14 +412,15 @@ public partial class TypeChecker
     /// Type checks member access on a class instance (new Foo().prop).
     /// Handles both regular and generic class instances with inheritance chain walking.
     /// </summary>
-    private TypeInfo CheckGetOnInstance(TypeInfo.Instance instance, Token memberName)
+    private TypeInfo CheckGetOnInstance(TypeInfo.Instance instance, Token memberName, bool enforceAccessibility = true)
     {
         string memberNameStr = memberName.Lexeme;
 
         if (TrySelectInstanceAccessor(instance, memberNameStr, out var accessor))
         {
-            EnforceAccessorAccess(accessor.DeclaringType, instance.ResolvedClassType,
-                memberName, isStatic: false, isWrite: false);
+            if (enforceAccessibility)
+                EnforceAccessorAccess(accessor.DeclaringType, instance.ResolvedClassType,
+                    memberName, isStatic: false, isWrite: false);
             ObserveSourceMemberSelection(memberName, accessor.DeclaringType, MemberFacet.Instance);
             return SelectedInstanceAccessorReadType(accessor, memberNameStr);
         }
@@ -427,7 +429,7 @@ public partial class TypeChecker
         if (instance.ClassType is TypeInfo.InstantiatedGeneric ig &&
             ig.GenericDefinition is TypeInfo.GenericClass gc)
         {
-            return CheckGetOnGenericInstance(gc, ig.TypeArguments, memberName);
+            return CheckGetOnGenericInstance(gc, ig.TypeArguments, memberName, enforceAccessibility);
         }
 
         // Handle regular class instance. ResolvedClassType unwraps MutableClass to its
@@ -437,7 +439,7 @@ public partial class TypeChecker
         {
             try
             {
-                return CheckGetOnRegularInstance(instanceClassType, memberName);
+                return CheckGetOnRegularInstance(instanceClassType, memberName, enforceAccessibility: enforceAccessibility);
             }
             catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2339")
             {
@@ -463,7 +465,7 @@ public partial class TypeChecker
     /// <summary>
     /// Type checks member access on a generic class instance.
     /// </summary>
-    private TypeInfo CheckGetOnGenericInstance(TypeInfo.GenericClass gc, List<TypeInfo> typeArgs, Token memberToken)
+    private TypeInfo CheckGetOnGenericInstance(TypeInfo.GenericClass gc, List<TypeInfo> typeArgs, Token memberToken, bool enforceAccessibility = true)
     {
         string memberName = memberToken.Lexeme;
         // Build substitution map from type parameters to type arguments
@@ -472,7 +474,10 @@ public partial class TypeChecker
             subs[gc.TypeParams[i].Name] = typeArgs[i];
 
         if (TryGetDefaultLibraryPromiseType(gc, out _))
-            return CheckGetOnRegularInstance(new TypeInfo.Class(gc.Core), memberToken, subs);
+            return CheckGetOnRegularInstance(new TypeInfo.Class(gc.Core), memberToken, subs, enforceAccessibility);
+
+        if (memberName == "constructor")
+            return CheckGetOnRegularInstance(new TypeInfo.Class(gc.Core), memberToken, subs, enforceAccessibility);
 
         // Check for getter first
         if (gc.Getters?.TryGetValue(memberName, out var getterType) == true)
@@ -486,7 +491,7 @@ public partial class TypeChecker
         {
             ObservePendingGetterFieldRead(gc, isStatic: false, memberName);
             ObserveSourceMemberSelection(memberToken, gc, MemberFacet.Instance);
-            return Substitute(fieldType, subs);
+            return Substitute(CompletedFieldDependencyType(gc, false, memberName, fieldType), subs);
         }
 
         // Check for method
@@ -515,7 +520,7 @@ public partial class TypeChecker
                 {
                     ObservePendingGetterFieldRead(currentSuper, isStatic: false, memberName);
                     ObserveSourceMemberSelection(memberToken, currentSuper, MemberFacet.Instance);
-                    return SubstituteConstructorMember(superField, fieldSubstitutions);
+                    return SubstituteConstructorMember(CompletedFieldDependencyType(currentSuper, false, memberName, superField), fieldSubstitutions);
                 }
                 currentSuper = GetSuperclass(currentSuper);
             }
@@ -571,7 +576,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckGetOnRegularInstance(
         TypeInfo.Class startClass, Token memberName,
-        Dictionary<string, TypeInfo>? promiseSubstitutions = null)
+        Dictionary<string, TypeInfo>? promiseSubstitutions = null, bool enforceAccessibility = true)
     {
         string memberNameStr = memberName.Lexeme;
         TypeInfo? current = startClass;
@@ -622,20 +627,34 @@ public partial class TypeChecker
             AccessModifier access = AccessModifier.Public;
             var methodAccess = GetMethodAccess(current);
             var fieldAccess = GetFieldAccess(current);
-            if (methodAccess != null && methodAccess.TryGetValue(memberNameStr, out var ma))
+            var computedConstructor = memberNameStr == "constructor" ? ComputedConstructorMethodCore(current) : null;
+            if (computedConstructor?.ComputedConstructorMethodType is not null)
+                access = computedConstructor.ComputedConstructorMethodAccess;
+            else if (methodAccess != null && methodAccess.TryGetValue(memberNameStr, out var ma))
                 access = ma;
             else if (fieldAccess != null && fieldAccess.TryGetValue(memberNameStr, out var fa))
                 access = fa;
 
             var currentName = GetClassName(current);
-            if (access == AccessModifier.Private && _currentClass?.Name != currentName)
+            bool privateAccessAllowed = computedConstructor?.ComputedConstructorMethodType is not null
+                ? ReferenceEquals(_currentClass?.Core, computedConstructor) ||
+                  computedConstructor.DeclarationId != 0 &&
+                  _currentClass?.Core.DeclarationId == computedConstructor.DeclarationId
+                : _currentClass?.Name == currentName;
+            if (enforceAccessibility && access == AccessModifier.Private && !privateAccessAllowed)
             {
                 throw new TypeCheckException($" Property '{memberNameStr}' is private and only accessible within class '{currentName}'.", tsCode: "TS2341");
             }
             var currentClassForAccess = AsClass(current);
-            if (access == AccessModifier.Protected && currentClassForAccess != null && !IsSubclassOf(_currentClass, currentClassForAccess))
+            if (enforceAccessibility && access == AccessModifier.Protected && currentClassForAccess != null && !IsSubclassOf(_currentClass, currentClassForAccess))
             {
                 throw new TypeCheckException($" Property '{memberNameStr}' is protected and only accessible within class '{currentName}' and its subclasses.", tsCode: "TS2445");
+            }
+
+            if (computedConstructor?.ComputedConstructorMethodType is { } constructorMethod)
+            {
+                ObserveSourceMemberSelection(memberName, current, MemberFacet.Instance);
+                return Sub(constructorMethod);
             }
 
             var methods = GetMethods(current);
@@ -651,6 +670,7 @@ public partial class TypeChecker
             {
                 ObservePendingGetterFieldRead(current, isStatic: false, memberNameStr);
                 ObserveSourceMemberSelection(memberName, current, MemberFacet.Instance);
+                fieldType = CompletedFieldDependencyType(current, false, memberNameStr, fieldType);
                 return promiseHeritage ? Sub(fieldType) : SubstituteConstructorMember(fieldType, fieldSubstitutions);
             }
 

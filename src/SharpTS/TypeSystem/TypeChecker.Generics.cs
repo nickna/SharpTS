@@ -61,8 +61,8 @@ public partial class TypeChecker
         }
         // The lib signatures are Generator<T = unknown, TReturn = any, TNext = unknown> and
         // AsyncGenerator<T = unknown, TReturn = any, TNext = unknown> — TReturn/TNext are defaulted, so a
-        // reference may carry 1–3 arguments. SharpTS models only the yield type (T), so the extra two are
-        // accepted and dropped, exactly like the Iterator arm below. Out-of-range is TS2707 (the code tsc
+        // reference may carry 1–3 arguments. Retain the completion type separately from the yield
+        // type so return operands are checked against TReturn. Out-of-range is TS2707 (the code tsc
         // uses for a defaulted-arity range), not the exact-count TS2314 (#487).
         else if (baseName == "Generator")
         {
@@ -70,7 +70,7 @@ public partial class TypeChecker
             {
                 throw new TypeCheckException($" Generator requires between 1 and 3 type arguments, got {typeArgs.Count}.", tsCode: "TS2707");
             }
-            result = new TypeInfo.Generator(typeArgs[0]);
+            result = new TypeInfo.Generator(typeArgs[0]) { ReturnType = typeArgs.Count > 1 ? typeArgs[1] : TypeInfo.Any.Shared };
         }
         else if (baseName == "AsyncGenerator")
         {
@@ -78,7 +78,7 @@ public partial class TypeChecker
             {
                 throw new TypeCheckException($" AsyncGenerator requires between 1 and 3 type arguments, got {typeArgs.Count}.", tsCode: "TS2707");
             }
-            result = new TypeInfo.AsyncGenerator(typeArgs[0]);
+            result = new TypeInfo.AsyncGenerator(typeArgs[0]) { ReturnType = typeArgs.Count > 1 ? typeArgs[1] : TypeInfo.Any.Shared };
         }
         // The built-in collections carry dedicated TypeInfo records (with IsCompatible + member-type
         // support) but were previously only constructed from `new Map()`/`new Set()` expressions — a
@@ -317,6 +317,7 @@ public partial class TypeChecker
                     ? ResolveTypeName(baseName)
                     : _environment.GetTypeBinding(baseName) ?? _environment.Get(baseName);
 
+                genericDef = ResolveForwardGenericClassDefinition(genericDef);
                 result = genericDef switch
                 {
                     TypeInfo.GenericClass gc => new TypeInfo.Instance(InstantiateGenericClass(gc, typeArgs)),

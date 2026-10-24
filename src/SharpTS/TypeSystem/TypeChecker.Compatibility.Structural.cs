@@ -205,6 +205,8 @@ public partial class TypeChecker
 
         if (type is TypeInfo.Class cls)
         {
+            if (name == "constructor" && cls.Core.ComputedConstructorMethodType is { } constructorMethod)
+                return constructorMethod;
             if (cls.FieldTypes.TryGetValue(name, out var field)) return field;
             if (cls.Methods.TryGetValue(name, out var method)) return method;
             if (cls.Getters.TryGetValue(name, out var getter)) return getter;
@@ -276,6 +278,8 @@ public partial class TypeChecker
             // Handle MutableClass (during signature collection)
             else if (instance.ClassType is TypeInfo.MutableClass mutableClass)
             {
+                if (name == "constructor" && mutableClass.ComputedConstructorMethodType is { } constructorMethod)
+                    return constructorMethod;
                 // Check fields first, then methods
                 if (mutableClass.FieldTypes.TryGetValue(name, out var fieldType)) return fieldType;
                 if (mutableClass.Methods.TryGetValue(name, out var methodType)) return methodType;
@@ -338,6 +342,8 @@ public partial class TypeChecker
                 setters = GetSetters(current);
                 next = GetSuperclass(current);
             }
+            if (name == "constructor" && ComputedConstructorMethodCore(current)?.ComputedConstructorMethodType is { } constructorMethod)
+                return subs is null ? constructorMethod : Substitute(constructorMethod, subs);
             if (fields is not null && fields.TryGetValue(name, out var fieldType))
                 return subs is null ? fieldType : Substitute(fieldType, subs);
             if (methods is not null && methods.TryGetValue(name, out var methodType))
@@ -369,35 +375,17 @@ public partial class TypeChecker
     /// </summary>
     private bool IsInSuperclassChain(TypeInfo classType, TypeInfo.InstantiatedGeneric target)
     {
-        TypeInfo? current = classType switch
+        TryGetOrdinaryConstructorHierarchy(classType, out var levels);
+        foreach (var level in levels.Skip(1))
         {
-            TypeInfo.Class c => c.Superclass,
-            TypeInfo.InstantiatedGeneric ig => GetSuperclass(ig),
-            _ => null
-        };
-
-        while (current != null)
-        {
-            if (current is TypeInfo.InstantiatedGeneric ig)
-            {
-                // Check if this InstantiatedGeneric matches the target
-                if (InstantiatedGenericsMatch(ig, target))
-                    return true;
-
-                // Continue up the chain
-                current = GetSuperclass(ig);
-            }
-            else if (current is TypeInfo.Class c)
-            {
-                // Regular class in chain, continue up
-                current = c.Superclass;
-            }
-            else
-            {
-                break;
-            }
+            if (target.GenericDefinition is not TypeInfo.GenericClass generic ||
+                !(ReferenceEquals(level.Core, generic.Core) || level.Core.DeclarationId != 0 &&
+                    level.Core.DeclarationId == generic.Core.DeclarationId)) continue;
+            var arguments = generic.TypeParams.Select(parameter =>
+                level.Substitutions.GetValueOrDefault(parameter.Name, parameter)).ToList();
+            if (InstantiatedGenericsMatch(new TypeInfo.InstantiatedGeneric(generic, arguments), target))
+                return true;
         }
-
         return false;
     }
 

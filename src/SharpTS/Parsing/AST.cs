@@ -104,6 +104,9 @@ public abstract record Expr
     // TypeArgs when non-null; an element without node support is null without discarding siblings.
     public record Call(Expr Callee, Token Paren, List<string>? TypeArgs, List<Expr> Arguments, bool Optional = false, List<TypeNode?>? TypeArgNodes = null) : Expr
     {
+        // Source-only checker metadata: lifting must preserve an IIFE's declaration-order flow.
+        public ArrowFunction? OriginalGeneratorCallee { get; init; }
+
         /// <summary>
         /// Non-null when this call was produced by JSX lowering. The type checker dispatches
         /// JSX-origin calls to its JSX pipeline (tsc-shaped diagnostics, JSX.Element result)
@@ -472,7 +475,7 @@ public abstract record Stmt
     /// <summary>
     /// Index signature in interfaces: [key: string]: valueType, [key: number]: valueType, [key: symbol]: valueType
     /// </summary>
-    public record IndexSignature(Token KeyName, TokenType KeyType, string ValueType, TypeNode? ValueTypeNode = null, bool IsStatic = false);
+    public record IndexSignature(Token KeyName, TokenType KeyType, string ValueType, TypeNode? ValueTypeNode = null, bool IsStatic = false, bool IsReadonly = false);
     /// <summary>
     /// Call signature in interfaces: (params): ReturnType or &lt;T&gt;(params): ReturnType
     /// Indicates the interface represents a callable type (e.g., function).

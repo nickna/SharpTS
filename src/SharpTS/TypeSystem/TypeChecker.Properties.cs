@@ -248,7 +248,7 @@ public partial class TypeChecker
             GetGlobalThisType().Members.TryGetValue(get.Name.Lexeme, out TypeInfo? windowGlobalMember))
             return windowGlobalMember;
 
-        TypeInfo objType = CheckExpr(get.Object);
+        TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(get.Object));
         ExpectSourceMemberReceiver(objType);
 
         if (_hasDefaultLibraries &&
@@ -314,7 +314,7 @@ public partial class TypeChecker
 
         // Check for property narrowing (e.g., after "if (obj.prop !== null)" or nested "obj.a.b")
         // Use NarrowingPathExtractor to support nested property access
-        var path = Narrowing.NarrowingPathExtractor.TryExtract(get);
+        var path = ExtractNarrowingPath(get);
         if (path != null)
         {
             var narrowedType = GetNarrowing(path);
@@ -756,6 +756,12 @@ public partial class TypeChecker
         return objType;
     }
 
+    private TypeInfo ClassFieldWriteType(TypeInfo owner, string name, TypeInfo type) =>
+        !_exactOptionalPropertyTypes && ClassInfoAccessor.Get(owner,
+            c => c.Core.OrdinaryOptionalMembers,
+            gc => gc.Core.OrdinaryOptionalMembers)?.Contains((false, name)) == true
+                ? CreateUnion(type, TypeInfo.Undefined.Shared) : type;
+
     private TypeInfo CheckSet(Expr.Set set)
     {
         using var memberLookup = BeginSourceMemberLookup(set, set.Name, MemberOperation.Write);
@@ -785,7 +791,9 @@ public partial class TypeChecker
                 tsCode: "TS7017");
         }
 
-        TypeInfo objType = CheckExpr(set.Object);
+        TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(set.Object));
+        EnsureWritableClassIndex(objType, new TypeInfo.StringLiteral(set.Name.Lexeme),
+            new Expr.Literal(set.Name.Lexeme));
 
         // A generic interface is the same mutable object shape for writes as for reads.
         if (objType is TypeInfo.InstantiatedGeneric instantiated &&
@@ -824,7 +832,7 @@ public partial class TypeChecker
         objType = ResolveMappedTypeForAccess(objType);
 
         // Extract the narrowing path for the written location, if narrowable.
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(set.Object);
+        var basePath = ExtractNarrowingPath(set.Object);
         Narrowing.NarrowingPath.PropertyAccess? assignedPath = null;
         if (basePath != null)
         {
@@ -961,16 +969,24 @@ public partial class TypeChecker
              if (instance.ClassType is TypeInfo.InstantiatedGeneric ig &&
                  ig.GenericDefinition is TypeInfo.GenericClass gc && !promiseHeritage)
              {
-                 // Build substitution map
-                 Dictionary<string, TypeInfo> subs = [];
-                 for (int i = 0; i < gc.TypeParams.Count; i++)
-                     subs[gc.TypeParams[i].Name] = ig.TypeArguments[i];
-
-                 // Check for field
-                 if (gc.FieldTypes?.TryGetValue(memberName, out var fieldType) == true)
+                 TryGetOrdinaryConstructorHierarchy(ig, out var levels);
+                 foreach (var level in levels)
                  {
-                     ObserveSourceMemberSelection(set.Name, gc, MemberFacet.Instance);
-                     var substitutedType = Substitute(fieldType, subs);
+                     if (!level.Core.FieldTypes.TryGetValue(memberName, out var fieldType)) continue;
+                     if (level.Core.ReadonlyFields.Contains(memberName) &&
+                         _currentClass?.Core.DeclarationId != level.Core.DeclarationId)
+                         throw new TypeCheckException($"Cannot assign to '{memberName}' because it is a read-only property.",
+                             set.Name.Line, tsCode: "TS2540");
+                     var access = level.Core.FieldAccess.GetValueOrDefault(memberName);
+                     if (access == AccessModifier.Private && _currentClass?.Core.DeclarationId != level.Core.DeclarationId)
+                         throw new TypeCheckException($"Property '{memberName}' is private and only accessible within class '{level.Core.Name}'.",
+                             set.Name.Line, tsCode: "TS2341");
+                     if (access == AccessModifier.Protected && !IsSubclassOf(_currentClass, new TypeInfo.Class(level.Core)))
+                         throw new TypeCheckException($"Property '{memberName}' is protected and only accessible within class '{level.Core.Name}' and its subclasses.",
+                             set.Name.Line, tsCode: "TS2445");
+                     ObserveSourceMemberSelection(set.Name, new TypeInfo.Class(level.Core), MemberFacet.Instance);
+                     var substitutedType = ClassFieldWriteType(new TypeInfo.Class(level.Core), memberName,
+                         SubstituteConstructorMember(fieldType, level.Substitutions));
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(substitutedType, valueType))
                      {
@@ -1062,6 +1078,7 @@ public partial class TypeChecker
                      if (promiseHeritage)
                          fieldDeclType = SubstituteConstructorMember(fieldDeclType, substitutions);
                      ObserveSourceMemberSelection(set.Name, current, MemberFacet.Instance);
+                     fieldDeclType = ClassFieldWriteType(current, memberName, fieldDeclType);
                      if (fieldDeclType is not (TypeInfo.Inferred or TypeInfo.Any)
                          && !IsCompatible(fieldDeclType, fieldValueType))
                      {
@@ -1081,7 +1098,7 @@ public partial class TypeChecker
                  // A readonly record (`as const`, `Readonly<T>`, a const type parameter) rejects all
                  // member writes with TS2540, in preference to the literal-type mismatch TS2322 the
                  // value-compatibility check below would otherwise report (#493).
-                 if (record.IsReadonly)
+                 if (record.IsFieldReadonly(set.Name.Lexeme))
                  {
                      throw new TypeCheckException(
                          $" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.",
@@ -1376,6 +1393,8 @@ public partial class TypeChecker
     {
         using var memberLookup = BeginSourceMemberLookup(get, get.Name, MemberOperation.Read);
         TypeInfo result = CheckGetPrivateCore(get);
+        if (ExtractNarrowingPath(get) is { } path && GetNarrowing(path) is { } narrowed)
+            result = narrowed;
         memberLookup?.Succeed();
         return result;
     }
@@ -1403,7 +1422,7 @@ public partial class TypeChecker
             ValidatePrivateReceiver(objType, owner, isStatic: false, get.Name);
             ObservePendingGetterFieldRead(owner, isStatic: false, fieldName);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateInstance);
-            return fieldType;
+            return CompletedFieldDependencyType(owner, false, fieldName, fieldType);
         }
         if (owner.PrivateMethodTypes.TryGetValue(fieldName, out var methodType))
         {
@@ -1413,16 +1432,18 @@ public partial class TypeChecker
         }
         if (owner.StaticPrivateMethodTypes.TryGetValue(fieldName, out var staticMethodType))
         {
+            ValidatePrivateReceiver(objType, owner, isStatic: true, get.Name);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateStatic);
             return objType is TypeInfo.Any ? TypeInfo.Any.Shared : staticMethodType;
         }
 
         // Check static private fields if accessing on the class itself
-        if (IsStaticPrivateConstructor(objType, owner) && owner.StaticPrivateFieldTypes.TryGetValue(fieldName, out var staticFieldType))
+        if (owner.StaticPrivateFieldTypes.TryGetValue(fieldName, out var staticFieldType))
         {
+            ValidatePrivateReceiver(objType, owner, isStatic: true, get.Name);
             ObservePendingGetterFieldRead(owner, isStatic: true, fieldName);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateStatic);
-            return objType is TypeInfo.Any ? TypeInfo.Any.Shared : staticFieldType;
+            return objType is TypeInfo.Any ? TypeInfo.Any.Shared : CompletedFieldDependencyType(owner, true, fieldName, staticFieldType);
         }
 
         throw new TypeCheckException($" Private field '{fieldName}' does not exist on class '{_currentClass.Name}'.", tsCode: "TS2339");
@@ -1435,6 +1456,7 @@ public partial class TypeChecker
     {
         using var memberLookup = BeginSourceMemberLookup(set, set.Name, MemberOperation.Write);
         TypeInfo result = CheckSetPrivateCore(set);
+        InvalidatePrivateNarrowing(set.Object, set.Name);
         memberLookup?.Succeed();
         return result;
     }
@@ -1462,9 +1484,10 @@ public partial class TypeChecker
             ObservePrivateSourceMemberSelection(set.Name, objType, owner, MemberFacet.PrivateInstance);
             fieldType = pf;
         }
-        else if (IsStaticPrivateConstructor(objType, owner) && owner.StaticPrivateFieldTypes.TryGetValue(fieldName, out var spf))
+        else if (owner.StaticPrivateFieldTypes.TryGetValue(fieldName, out var spf))
         {
             ObservePrivateSourceMemberSelection(set.Name, objType, owner, MemberFacet.PrivateStatic);
+            ValidatePrivateReceiver(objType, owner, isStatic: true, set.Name);
             fieldType = objType is TypeInfo.Any ? TypeInfo.Any.Shared : spf;
         }
 
@@ -1519,9 +1542,8 @@ public partial class TypeChecker
         {
             methodType = pm;
         }
-        else if (IsStaticPrivateConstructor(objType, owner) &&
-            (owner.StaticPrivateFieldTypes.TryGetValue(methodName, out var spm) ||
-                owner.StaticPrivateMethodTypes.TryGetValue(methodName, out spm)))
+        else if (owner.StaticPrivateFieldTypes.TryGetValue(methodName, out var spm) ||
+                owner.StaticPrivateMethodTypes.TryGetValue(methodName, out spm))
         {
             methodType = spm;
             selectedFacet = MemberFacet.PrivateStatic;
@@ -1534,8 +1556,7 @@ public partial class TypeChecker
             throw new TypeCheckException($" Private method '{methodName}' does not exist on class '{_currentClass.Name}'.", tsCode: "TS2339");
         }
 
-        if (selectedFacet == MemberFacet.PrivateInstance)
-            ValidatePrivateReceiver(objType, owner, isStatic: false, call.Name);
+        ValidatePrivateReceiver(objType, owner, selectedFacet == MemberFacet.PrivateStatic, call.Name);
         RecordPrivateSourceMemberRead(call, call.Name, objType, owner, selectedFacet);
         if (methodType is TypeInfo.Any || selectedFacet == MemberFacet.PrivateStatic && objType is TypeInfo.Any)
         {
@@ -1577,14 +1598,4 @@ public partial class TypeChecker
         return funcType.ReturnType;
     }
 
-    // Any receivers still require a lexical declaration; runtime branding checks their value.
-    // Generic constructor aliases retain their declaration identity. Accepting
-    // every generic class here would expose another declaration's same-spelled
-    // private member through the current class's metadata.
-    private bool IsStaticPrivateConstructor(TypeInfo type, TypeInfo.Class owner) =>
-        type is TypeInfo.Any or TypeInfo.Class ||
-        type is TypeInfo.MutableClass mutable && mutable.DeclarationId != 0 &&
-        mutable.DeclarationId == owner.Core.DeclarationId ||
-        type is TypeInfo.GenericClass generic &&
-        SourceDerivesFromDeclaration(generic, owner.Core.DeclarationId);
 }

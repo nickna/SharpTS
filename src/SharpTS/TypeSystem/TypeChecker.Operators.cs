@@ -183,6 +183,18 @@ public partial class TypeChecker
                 throw new TypeCheckException($"Operator '+' cannot be applied to types '{left}' and '{right}'.", line > 0 ? line : null, tsCode: "TS2365");
             throw new TypeCheckException("The '+' operator cannot be applied to type 'symbol'.", line > 0 ? line : null, tsCode: "TS2469");
         }
+        // Never is assignable to each primitive operand domain. Choose the other
+        // operand's numeric domain first, then TypeScript's string fallback. Keep
+        // symbol rejection above this branch, including when the other side is never.
+        if (left is TypeInfo.Never || right is TypeInfo.Never)
+        {
+            TypeInfo other = left is TypeInfo.Never ? right : left;
+            if (other is TypeInfo.Never || !IsAnyPermissive(other) && IsNumber(other))
+                return TypeInfo.Primitive.Number;
+            if (!IsAnyPermissive(other) && IsBigInt(other))
+                return TypeInfo.BigInt.Shared;
+            return TypeInfo.String.Shared;
+        }
         // Any/Inferred (incl. in unions) bypasses type checking - return any
         if (IsAnyPermissive(left) || IsAnyPermissive(right)) return TypeInfo.Any.Shared;
         if (IsBigInt(left) && IsBigInt(right)) return TypeInfo.BigInt.Shared;
@@ -199,16 +211,25 @@ public partial class TypeChecker
     /// diagnostic messages where `any` must NOT be treated as "the other side was a number".</summary>
     private static bool IsBareNumberType(TypeInfo t) => t is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral;
 
+    private TypeInfo? NumericBinaryResult(TypeInfo left, TypeInfo right)
+    {
+        // Never can inhabit either numeric domain. Test number first so two
+        // never operands retain TypeScript's number result rather than bigint.
+        if ((left is TypeInfo.Never || IsNumber(left)) && (right is TypeInfo.Never || IsNumber(right)))
+            return TypeInfo.Primitive.Number;
+        if ((left is TypeInfo.Never || IsBigInt(left)) && (right is TypeInfo.Never || IsBigInt(right)))
+            return TypeInfo.BigInt.Shared;
+        return null;
+    }
+
     private TypeInfo CheckArithmeticBinary(TypeInfo left, TypeInfo right, int line = 0)
     {
         // Any/Inferred (incl. in unions) bypasses type checking
         if (IsAnyPermissive(left) || IsAnyPermissive(right))
             return TypeInfo.Any.Shared;
         // Allow number+number OR bigint+bigint, NOT mixed
-        if (IsBigInt(left) && IsBigInt(right))
-            return TypeInfo.BigInt.Shared;
-        if (IsNumber(left) && IsNumber(right))
-            return TypeInfo.Primitive.Number;
+        if (NumericBinaryResult(left, right) is { } result)
+            return result;
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.", line > 0 ? line : null, tsCode: "TS2365");
         RecordInvalidArithmeticOperand(left, right, line);
@@ -226,7 +247,7 @@ public partial class TypeChecker
     private void RecordInvalidArithmeticOperand(TypeInfo left, TypeInfo right, int line)
     {
         const string message = "An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.";
-        bool leftInvalid = !IsNumber(left) && !IsBigInt(left);
+        bool leftInvalid = left is not TypeInfo.Never && !IsNumber(left) && !IsBigInt(left);
         bool rightInvalid = right is not TypeInfo.Never && !IsNumber(right) && !IsBigInt(right);
         if (leftInvalid && rightInvalid)
             RecordTypeError(new TypeCheckException(message, line: line > 0 ? line : null, tsCode: "TS2363"));
@@ -250,8 +271,7 @@ public partial class TypeChecker
             return TypeInfo.Primitive.Boolean;
         // Allow number vs number, bigint vs bigint, or string vs string
         // (JS AbstractRelationalComparison: both strings → lexicographic).
-        if ((IsBigInt(left) && IsBigInt(right))
-            || (IsNumber(left) && IsNumber(right))
+        if (NumericBinaryResult(left, right) is not null
             || (IsString(left) && IsString(right)))
             return TypeInfo.Primitive.Boolean;
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
@@ -290,10 +310,8 @@ public partial class TypeChecker
         if (IsAnyPermissive(left) || IsAnyPermissive(right))
             return TypeInfo.Any.Shared;
         // Allow both number and bigint (separately)
-        if (IsBigInt(left) && IsBigInt(right))
-            return TypeInfo.BigInt.Shared;
-        if (IsNumber(left) && IsNumber(right))
-            return TypeInfo.Primitive.Number;
+        if (NumericBinaryResult(left, right) is { } result)
+            return result;
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot mix bigint and number in bitwise operations.", line > 0 ? line : null, tsCode: "TS2365");
         // Same per-side TS2362/TS2363 split as arithmetic — tsc uses the identical codes for bitwise.
@@ -309,18 +327,11 @@ public partial class TypeChecker
         // Unsigned right shift - NOT SUPPORTED for bigint in TypeScript!
         if (IsBigInt(left) || IsBigInt(right))
             throw new TypeCheckException("Unsigned right shift (>>>) is not supported for bigint.", line > 0 ? line : null, tsCode: "TS2791");
-        if (!IsNumber(left) || !IsNumber(right))
+        if (NumericBinaryResult(left, right) is null)
         {
-            // Same per-side TS2362/TS2363 split as the other arithmetic/bitwise operators (see
-            // RecordInvalidArithmeticOperand) — bigint is excluded above (not a valid >>> operand
-            // at all), so only number qualifies here. Always throws; when both sides are invalid,
-            // the one not thrown is recorded directly so recovery mode still gets both.
-            const string message = "An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.";
-            if (!IsNumber(left) && !IsNumber(right))
-                RecordTypeError(new TypeCheckException(message, line: line > 0 ? line : null, tsCode: "TS2363"));
-            if (!IsNumber(left))
-                throw new TypeCheckException(message, line > 0 ? line : null, tsCode: "TS2362");
-            throw new TypeCheckException(message, line > 0 ? line : null, tsCode: "TS2363");
+            // Bigint has already been rejected; retain the ordinary per-side
+            // operand diagnostics while admitting never as a numeric operand.
+            RecordInvalidArithmeticOperand(left, right, line);
         }
         return TypeInfo.Primitive.Number;
     }
@@ -673,18 +684,25 @@ public partial class TypeChecker
                 throw new TypeCheckException("The '+=' operator cannot be applied to type 'symbol'.", line: line > 0 ? line : null, tsCode: "TS2469");
             }
 
-            if (IsString(varType)) return varType;
-            if (!IsNumber(varType) || (valueType is not TypeInfo.Never && !IsNumber(valueType)))
+            if (valueType is TypeInfo.Never && (IsNumber(varType) || IsBigInt(varType)))
+                return varType;
+            TypeInfo result = CheckPlusOperator(varType, valueType, line);
+            if (!IsCompatible(WidenLiteralType(varType), result))
                 throw new TypeCheckException("Compound assignment requires numeric operands.", tsCode: "TS2365");
             return varType;
         }
 
-        // All other compound operators require numbers — same per-side TS2362/TS2363 split as the
-        // binary arithmetic/bitwise operators.
-        if (!IsNumber(varType) || (valueType is not TypeInfo.Never && !IsNumber(valueType)))
+        // Compound numeric operations use the same number/bigint pairing rules as their
+        // binary forms, retaining per-operand diagnostics for nonnumeric operands.
+        if ((!IsNumber(varType) && !IsBigInt(varType)) ||
+            (valueType is not TypeInfo.Never && !IsNumber(valueType) && !IsBigInt(valueType)))
         {
             RecordInvalidArithmeticOperand(varType, valueType, line);
         }
+        if (compound.Operator.Type == TokenType.GREATER_GREATER_GREATER_EQUAL)
+            CheckUnsignedShiftBinary(varType, valueType, line);
+        else if (valueType is not TypeInfo.Never)
+            CheckArithmeticBinary(varType, valueType, line);
 
         return varType;
     }
@@ -692,10 +710,12 @@ public partial class TypeChecker
     private TypeInfo CheckCompoundSet(Expr.CompoundSet compound)
     {
         TypeInfo objType = CheckExpr(compound.Object);
+        CheckReadonlyRecordProperty(objType, compound.Name.Lexeme, compound.Name.Line);
+        EnsureWritableClassIndex(objType, new TypeInfo.StringLiteral(compound.Name.Lexeme), new Expr.Literal(compound.Name.Lexeme));
         TypeInfo valueType = CheckExpr(compound.Value);
 
         // Invalidate any narrowings affected by this property assignment
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(compound.Object);
+        var basePath = ExtractNarrowingPath(compound.Object);
         if (basePath != null)
         {
             var assignedPath = new Narrowing.NarrowingPath.PropertyAccess(basePath, compound.Name.Lexeme);
@@ -726,10 +746,12 @@ public partial class TypeChecker
     {
         TypeInfo objType = CheckExpr(compound.Object);
         TypeInfo indexType = CheckExpr(compound.Index);
+        CheckReadonlyRecordIndex(objType, indexType, compound.Operator.Line);
+        EnsureWritableClassIndex(objType, indexType, compound.Index);
         TypeInfo valueType = CheckExpr(compound.Value);
 
         // Invalidate any narrowings affected by this index assignment
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(compound.Object);
+        var basePath = ExtractNarrowingPath(compound.Object);
         if (basePath != null)
         {
             Narrowing.NarrowingPath? assignedPath = null;
@@ -783,7 +805,12 @@ public partial class TypeChecker
         bool canonicalArrayStringIndex = objType is TypeInfo.Array &&
             TryGetStringLiteralKeys(indexType, out var stringKeys) &&
             stringKeys.All(key => Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _));
-        if (!IsNumber(indexType) && !canonicalArrayStringIndex)
+        bool ordinaryPropertyKey = (IsObjectType(objType) ||
+            objType is TypeInfo.Any or TypeInfo.Object or TypeInfo.MutableClass or
+                TypeInfo.Function or TypeInfo.GenericFunction or TypeInfo.OverloadedFunction or TypeInfo.OverloadSet) &&
+            objType is not (TypeInfo.Array or TypeInfo.Tuple or TypeInfo.TypedArray) &&
+            IsPropertyKeyDomain(indexType);
+        if (!IsNumber(indexType) && !canonicalArrayStringIndex && !ordinaryPropertyKey)
             throw new TypeCheckException("Array index must be a number.", tsCode: "TS7053");
 
         if (objType is TypeInfo.Tuple { IsReadonly: true })
@@ -993,11 +1020,13 @@ public partial class TypeChecker
 
     private TypeInfo CheckLogicalSet(Expr.LogicalSet logical)
     {
-        CheckExpr(logical.Object);
+        TypeInfo objType = CheckExpr(logical.Object);
+        CheckReadonlyRecordProperty(objType, logical.Name.Lexeme, logical.Name.Line);
+        EnsureWritableClassIndex(objType, new TypeInfo.StringLiteral(logical.Name.Lexeme), new Expr.Literal(logical.Name.Lexeme));
         CheckExpr(logical.Value);
 
         // Invalidate any narrowings affected by this property assignment
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(logical.Object);
+        var basePath = ExtractNarrowingPath(logical.Object);
         if (basePath != null)
         {
             var assignedPath = new Narrowing.NarrowingPath.PropertyAccess(basePath, logical.Name.Lexeme);
@@ -1010,11 +1039,13 @@ public partial class TypeChecker
     private TypeInfo CheckLogicalSetIndex(Expr.LogicalSetIndex logical)
     {
         TypeInfo objType = CheckExpr(logical.Object);
-        CheckExpr(logical.Index);
+        TypeInfo indexType = CheckExpr(logical.Index);
+        CheckReadonlyRecordIndex(objType, indexType, logical.Operator.Line);
+        EnsureWritableClassIndex(objType, indexType, logical.Index);
         CheckExpr(logical.Value);
 
         // Invalidate any narrowings affected by this index assignment
-        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(logical.Object);
+        var basePath = ExtractNarrowingPath(logical.Object);
         if (basePath != null)
         {
             Narrowing.NarrowingPath? assignedPath = null;
@@ -1041,9 +1072,24 @@ public partial class TypeChecker
         return TypeInfo.Any.Shared;
     }
 
+    private void EnsureWritableClassIndexUpdate(Expr expression)
+    {
+        switch (AssignmentReference(expression))
+        {
+            case Expr.GetIndex index when _typeMap.Get(index.Object) is { } receiver && _typeMap.Get(index.Index) is { } key:
+                EnsureWritableClassIndex(receiver, key, index.Index);
+                break;
+            case Expr.Get member when _typeMap.Get(member.Object) is { } receiver:
+                EnsureWritableClassIndex(receiver, new TypeInfo.StringLiteral(member.Name.Lexeme), new Expr.Literal(member.Name.Lexeme));
+                break;
+        }
+    }
+
     private TypeInfo CheckPrefixIncrement(Expr.PrefixIncrement prefix)
     {
         TypeInfo operandType = CheckExpr(prefix.Operand);
+        CheckReadonlyRecordUpdate(prefix.Operand, prefix.Operator.Line);
+        EnsureWritableClassIndexUpdate(prefix.Operand);
         if (DotNetTypeSynthesizer.TryResolveIncrementOperator(
                 operandType, prefix.Operator.Type, out var clrResult))
             return clrResult;
@@ -1057,6 +1103,8 @@ public partial class TypeChecker
     private TypeInfo CheckPostfixIncrement(Expr.PostfixIncrement postfix)
     {
         TypeInfo operandType = CheckExpr(postfix.Operand);
+        CheckReadonlyRecordUpdate(postfix.Operand, postfix.Operator.Line);
+        EnsureWritableClassIndexUpdate(postfix.Operand);
         if (DotNetTypeSynthesizer.TryResolveIncrementOperator(
                 operandType, postfix.Operator.Type, out _))
             return operandType;
@@ -1065,6 +1113,48 @@ public partial class TypeChecker
             throw new TypeCheckException("An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.", line: postfix.Operator.Line, tsCode: "TS2356");
         }
         return TypeInfo.Primitive.Number;
+    }
+
+    private static void CheckReadonlyRecordProperty(TypeInfo? receiver, string name, int line)
+    {
+        if (receiver is TypeInfo.Record record && record.IsFieldReadonly(name))
+            throw new TypeCheckException($"Cannot assign to '{name}' because it is a read-only property.", line, tsCode: "TS2540");
+    }
+
+    private void CheckReadonlyRecordIndex(TypeInfo? receiver, TypeInfo? index, int line)
+    {
+        if (index is TypeInfo.NumberLiteral number)
+        {
+            CheckReadonlyRecordProperty(receiver,
+                number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), line);
+            return;
+        }
+        if (index is TypeInfo.Union union)
+        {
+            foreach (var member in union.FlattenedTypes) CheckReadonlyRecordIndex(receiver, member, line);
+            return;
+        }
+        if (index is not null && TryGetStringLiteralKeys(index, out var keys))
+            foreach (string key in keys) CheckReadonlyRecordProperty(receiver, key, line);
+    }
+
+    private void CheckReadonlyRecordUpdate(Expr operand, int line)
+    {
+        switch (operand)
+        {
+            case Expr.Get get:
+                CheckReadonlyRecordProperty(_typeMap.Get(get.Object), get.Name.Lexeme, line);
+                break;
+            case Expr.GetIndex index:
+                CheckReadonlyRecordIndex(_typeMap.Get(index.Object), _typeMap.Get(index.Index), line);
+                break;
+            case Expr.Grouping grouping:
+                CheckReadonlyRecordUpdate(grouping.Expression, line);
+                break;
+            case Expr.NonNullAssertion assertion:
+                CheckReadonlyRecordUpdate(assertion.Expression, line);
+                break;
+        }
     }
 
     private TypeInfo CheckNonNullAssertion(Expr.NonNullAssertion nna)

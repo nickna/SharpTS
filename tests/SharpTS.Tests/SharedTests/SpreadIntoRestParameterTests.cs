@@ -117,7 +117,7 @@ public class SpreadIntoRestParameterTests
         AssertLines("""
             const args: string[] = ['a', 'b'];
             const empty: string[] = [];
-            const three: string[] = ['x', 'y', 'a'];
+            const three: [string, string, string] = ['x', 'y', 'a'];
 
             class C { m(first: string, second: string, ...p: any[]): any[] { return [first, second, p]; } }
             const c = new C();

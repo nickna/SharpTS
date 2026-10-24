@@ -297,7 +297,7 @@ public partial class Parser
                 else
                 {
                     Token accessorBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
-                    body = Block();
+                    body = VarHoister.Hoist(Block(), _spans);
                     accessorBodySpan = new SourceSpan(accessorBodyOpen.Start, ConsumedSourceEnd);
                 }
 
@@ -394,7 +394,7 @@ public partial class Parser
             {
                 // Index signature: [key: string|number|symbol]: ValueType. Distinguished from a
                 // computed property name ([expr]: T) by an identifier immediately followed by ':'.
-                if (TryParseClassIndexSignature(isStatic) is { } indexSig)
+                if (TryParseClassIndexSignature(isStatic, isReadonly) is { } indexSig)
                 {
                     indexSignatures.Add(indexSig);
                     continue;
@@ -680,7 +680,7 @@ public partial class Parser
     /// restores position and returns null so the caller can fall through to computed-property-name
     /// parsing.
     /// </summary>
-    private Stmt.IndexSignature? TryParseClassIndexSignature(bool isStatic)
+    private Stmt.IndexSignature? TryParseClassIndexSignature(bool isStatic, bool isReadonly)
     {
         int saved = _current;
 
@@ -700,7 +700,7 @@ public partial class Parser
         string valueType = ParseTypeAnnotation();
         TypeNode? valueTypeNode = TakeTypeNode();
         ConsumeSemicolon("Expect ';' after index signature.");
-        var signature = new Stmt.IndexSignature(keyName, keyType, valueType, valueTypeNode, isStatic);
+        var signature = new Stmt.IndexSignature(keyName, keyType, valueType, valueTypeNode, isStatic, isReadonly);
         if (EditorSyntaxEnabled)
         {
             var span = new SourceSpan(_tokens[saved].Start, ConsumedSourceEnd);
@@ -959,7 +959,7 @@ public partial class Parser
                 }
 
                 Token accessorBodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
-                List<Stmt> body = Block();
+                List<Stmt> body = VarHoister.Hoist(Block(), _spans);
 
                 var accessor = new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, IsOverride: isOverride, IsStatic: isStatic, ComputedKey: accessorComputedKey, ReturnTypeNode: returnTypeNode);
                 RecordWrittenMember(accessor, accessorName);
@@ -1101,7 +1101,7 @@ public partial class Parser
             // Computed-name member: [Symbol.iterator]() {} (method) or [expr]: T = v (field).
             else if (Check(TokenType.LEFT_BRACKET))
             {
-                if (TryParseClassIndexSignature(isStatic) is { } indexSig)
+                if (TryParseClassIndexSignature(isStatic, isReadonly) is { } indexSig)
                 {
                     indexSignatures.Add(indexSig);
                     continue;

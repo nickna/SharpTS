@@ -848,11 +848,11 @@ public static class BuiltInTypes
                 promiseAny,
                 RequiredParams: 0),
             "catch" => new TypeInfo.Function(
-                [new TypeInfo.Function([AnyType], AnyType)],
-                promiseAny),
+                [new TypeInfo.Union([new TypeInfo.Function([AnyType], AnyType), TypeInfo.Undefined.Shared, TypeInfo.Null.Shared])],
+                promiseAny, RequiredParams: 0),
             "finally" => new TypeInfo.Function(
-                [new TypeInfo.Function([], new TypeInfo.Union([VoidType, new TypeInfo.Promise(VoidType)]))],
-                new TypeInfo.Promise(valueType)),
+                [new TypeInfo.Union([new TypeInfo.Function([], new TypeInfo.Union([VoidType, new TypeInfo.Promise(VoidType)])), TypeInfo.Undefined.Shared, TypeInfo.Null.Shared])],
+                new TypeInfo.Promise(valueType), RequiredParams: 0),
             _ => null
         };
     }

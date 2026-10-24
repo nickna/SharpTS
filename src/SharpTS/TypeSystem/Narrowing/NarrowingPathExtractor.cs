@@ -22,7 +22,7 @@ public static class NarrowingPathExtractor
     /// Attempts to extract a NarrowingPath from an expression.
     /// Returns null if the expression is not narrowable.
     /// </summary>
-    public static NarrowingPath? TryExtract(Expr expr)
+    public static NarrowingPath? TryExtract(Expr expr, Func<Token, int?>? privateOwner = null)
     {
         return expr switch
         {
@@ -36,19 +36,23 @@ public static class NarrowingPathExtractor
             // control-flow narrowing exactly like a variable-backed property path.
             Expr.ImportMeta => new NarrowingPath.Variable("import.meta"),
 
-            Expr.Get get when TryExtract(get.Object) is NarrowingPath basePath =>
+            Expr.Get get when TryExtract(get.Object, privateOwner) is NarrowingPath basePath =>
                 new NarrowingPath.PropertyAccess(basePath, get.Name.Lexeme),
 
-            Expr.GetIndex idx when TryExtract(idx.Object) is NarrowingPath basePath &&
+            Expr.GetPrivate get when privateOwner?.Invoke(get.Name) is { } ownerId &&
+                                     TryExtract(get.Object, privateOwner) is NarrowingPath basePath =>
+                new NarrowingPath.PrivateAccess(basePath, ownerId, get.Name.Lexeme),
+
+            Expr.GetIndex idx when TryExtract(idx.Object, privateOwner) is NarrowingPath basePath &&
                                    idx.Index is Expr.Literal { Value: double d } &&
                                    d == Math.Floor(d) && d >= 0 =>
                 new NarrowingPath.ElementAccess(basePath, (int)d),
 
             // Parenthesized expressions - unwrap
-            Expr.Grouping g => TryExtract(g.Expression),
+            Expr.Grouping g => TryExtract(g.Expression, privateOwner),
 
             // Non-null assertion - unwrap (x!.prop is narrowable if x.prop is)
-            Expr.NonNullAssertion nna => TryExtract(nna.Expression),
+            Expr.NonNullAssertion nna => TryExtract(nna.Expression, privateOwner),
 
             _ => null
         };

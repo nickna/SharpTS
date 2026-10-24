@@ -199,7 +199,7 @@ public sealed class SourceMemberOccurrenceTests
     }
 
     [Fact]
-    public void BaselineAnyGenericSelfSignatureAndForwardClassCannotProvePrivateReceivers()
+    public void GenericSelfSignatureProvesPrivateReceiverWhileForwardClassRemainsUnproven()
     {
         const string source = """
             class Base<T> {
@@ -221,9 +221,18 @@ public sealed class SourceMemberOccurrenceTests
                 member => member.Name.Start == Offset(enabled, marker));
             var baselineMember = Assert.Single(baseline.Document.EditorSyntax!.Members,
                 member => member.Name.Start == Offset(baseline, marker));
-            Assert.IsType<TypeInfo.Any>(enabled.Result.TypeMap.Get(capturedMember.Receiver));
-            Assert.IsType<TypeInfo.Any>(baseline.Result.TypeMap.Get(baselineMember.Receiver));
-            Assert.False(enabled.Members.FindResolution(enabled.Document, Offset(enabled, marker)).IsResolved);
+            if (marker == "generic")
+            {
+                Assert.IsType<TypeInfo.Instance>(enabled.Result.TypeMap.Get(capturedMember.Receiver));
+                Assert.IsType<TypeInfo.Instance>(baseline.Result.TypeMap.Get(baselineMember.Receiver));
+                Assert.True(enabled.Members.FindResolution(enabled.Document, Offset(enabled, marker)).IsResolved);
+            }
+            else
+            {
+                Assert.IsType<TypeInfo.Any>(enabled.Result.TypeMap.Get(capturedMember.Receiver));
+                Assert.IsType<TypeInfo.Any>(baseline.Result.TypeMap.Get(baselineMember.Receiver));
+                Assert.False(enabled.Members.FindResolution(enabled.Document, Offset(enabled, marker)).IsResolved);
+            }
         }
     }
 

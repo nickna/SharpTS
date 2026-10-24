@@ -68,6 +68,8 @@ public sealed class ClassValueDeclarationOrderTests
     [InlineData("function read() { (({ value = Later } = {}) => value)(); class Later {} }")]
     [InlineData("function read() { (function({ value = Later } = {}) { return value; })(); class Later {} }")]
     [InlineData("function read() { { (function*() { yield Later; })(); class Later {} } }")]
+    [InlineData("function read() { (function*() { yield Later; })(); class Later {} }")]
+    [InlineData("function read() { (((function*() { yield Later; })))(); class Later {} }")]
     [InlineData("function read() { (async () => { await 0; return Later; })(); class Later {} }")]
     [InlineData("function read() { (async function() { return Later; })(); class Later {} }")]
     public void EagerClassValueReadsBeforeDeclarationAreRejected(string source)
