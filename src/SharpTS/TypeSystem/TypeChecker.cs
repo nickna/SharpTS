@@ -781,6 +781,7 @@ public partial class TypeChecker
     /// </summary>
     private void RecordDeclaredType(string name, TypeInfo type)
     {
+        RecordClassFieldBindingType(name, type);
         if (_declaredVariableTypesStack.Count > 0)
         {
             _declaredVariableTypesStack.Peek()[name] = type;

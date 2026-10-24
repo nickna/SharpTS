@@ -2387,6 +2387,7 @@ public partial class TypeChecker
             // the use site's scope (which may shadow the original declaration).
             declared = ResolveForwardClassConstructor(name, declared);
             declared = RefreshCompletedInterfaceBinding(declared);
+            declared = GetClassFieldOuterBindingType(name, declared);
             var declaredPath = new Narrowing.NarrowingPath.Variable(name.Lexeme);
             return GetNarrowing(declaredPath) ?? declared;
         }
