@@ -636,7 +636,12 @@ public partial class TypeChecker
                 access = fa;
 
             var currentName = GetClassName(current);
-            if (enforceAccessibility && access == AccessModifier.Private && _currentClass?.Name != currentName)
+            bool privateAccessAllowed = computedConstructor?.ComputedConstructorMethodType is not null
+                ? ReferenceEquals(_currentClass?.Core, computedConstructor) ||
+                  computedConstructor.DeclarationId != 0 &&
+                  _currentClass?.Core.DeclarationId == computedConstructor.DeclarationId
+                : _currentClass?.Name == currentName;
+            if (enforceAccessibility && access == AccessModifier.Private && !privateAccessAllowed)
             {
                 throw new TypeCheckException($" Property '{memberNameStr}' is private and only accessible within class '{currentName}'.", tsCode: "TS2341");
             }
