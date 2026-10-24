@@ -2876,6 +2876,10 @@ public partial class TypeChecker
         }
 
         ValidateOverrideMembers(classExpr.Methods, classExpr.Accessors, classTypeForBody);
+        TypeInfo.Class completedClass = mutableClass.Freeze();
+        ValidateClassPropertiesAgainstIndex(declarationView, completedClass);
+        ValidateClassMembersAgainstSymbolIndex(declarationView, completedClass);
+        ValidateClassIndexSignatureExtends(declarationView, completedClass);
         ValidateStaticOverrideCompatibility(classExpr.Methods, classExpr.Accessors, className, classTypeForBody);
 
         // Validate interface implementations (skip for generic - validated at instantiation)
@@ -3169,6 +3173,10 @@ public partial class TypeChecker
         // Validate against completed inferred signatures, not the placeholders
         // collected before method and getter bodies were checked.
         mutableClass.ResetFrozenCache();
+        TypeInfo.Class completedClass = mutableClass.Freeze();
+        ValidateClassPropertiesAgainstIndex(declarationView, completedClass);
+        ValidateClassMembersAgainstSymbolIndex(declarationView, completedClass);
+        ValidateClassIndexSignatureExtends(declarationView, completedClass);
         ValidateStaticOverrideCompatibility(classExpr.Methods, classExpr.Accessors,
             className, mutableClass.Freeze());
 
