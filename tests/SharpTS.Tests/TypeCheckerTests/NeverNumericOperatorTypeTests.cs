@@ -50,12 +50,12 @@ public sealed class NeverNumericOperatorTypeTests
         }
         foreach (string op in NumericOperators)
         {
-            yield return [$"numberValue {op} big", op == ">>>" ? "TS2791" : "TS2365"];
-            yield return [$"big {op} numberValue", op == ">>>" ? "TS2791" : "TS2365"];
+            yield return [$"numberValue {op} big", "TS2365"];
+            yield return [$"big {op} numberValue", "TS2365"];
         }
-        yield return ["big >>> bottom", "TS2791"];
-        yield return ["bottom >>> big", "TS2791"];
-        yield return ["big >>> big", "TS2791"];
+        yield return ["big >>> bottom", "TS2365"];
+        yield return ["bottom >>> big", "TS2365"];
+        yield return ["big >>> big", "TS2365"];
     }
 
     [Theory, MemberData(nameof(RejectedCases))]
@@ -72,6 +72,6 @@ public sealed class NeverNumericOperatorTypeTests
         new TypeChecker().Check(TestHarness.ParseOrThrow(Source("numberValue >>>= bottom;")));
         var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(
             TestHarness.ParseOrThrow(Source("big >>>= bottom;"))));
-        Assert.Equal("TS2791", error.Diagnostic.TsCode);
+        Assert.Equal("TS2365", error.Diagnostic.TsCode);
     }
 }
