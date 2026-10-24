@@ -2805,8 +2805,6 @@ public partial class TypeChecker
                         mutableClass.Getters[propName] = setterType;
                     else if (setterType is TypeInfo.Inferred && getterType is not TypeInfo.Inferred)
                         mutableClass.Setters[propName] = getterType;
-                    else if (!IsCompatible(getterType, setterType))
-                        throw new TypeCheckException($" Getter and setter for '{propName}' have incompatible types.", tsCode: "TS2380");
                 }
                 // Methods are checked before accessor bodies. Preserve their
                 // existing permissive view of pending expression getters, then

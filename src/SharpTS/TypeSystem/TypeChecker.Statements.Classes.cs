@@ -557,10 +557,6 @@ public partial class TypeChecker
                 {
                     mutableClass.Setters[propName] = getterType;
                 }
-                else if (!IsCompatible(getterType, setterType))
-                {
-                    throw new TypeCheckException($" Getter and setter for '{propName}' have incompatible types.", tsCode: "TS2380");
-                }
             }
             ValidateStaticAccessorPairs(mutableClass);
         }
