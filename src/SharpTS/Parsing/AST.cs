@@ -104,6 +104,9 @@ public abstract record Expr
     // TypeArgs when non-null; an element without node support is null without discarding siblings.
     public record Call(Expr Callee, Token Paren, List<string>? TypeArgs, List<Expr> Arguments, bool Optional = false, List<TypeNode?>? TypeArgNodes = null) : Expr
     {
+        // Source-only checker metadata: lifting must preserve an IIFE's declaration-order flow.
+        public ArrowFunction? OriginalGeneratorCallee { get; init; }
+
         /// <summary>
         /// Non-null when this call was produced by JSX lowering. The type checker dispatches
         /// JSX-origin calls to its JSX pipeline (tsc-shaped diagnostics, JSX.Element result)

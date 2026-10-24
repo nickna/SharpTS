@@ -38,6 +38,8 @@ public partial class TypeChecker
         if (TryCheckBuiltinCall(call, out var builtinCallResult))
             return builtinCallResult;
 
+        if (call.OriginalGeneratorCallee is { } originalGenerator)
+            CheckClassOrderCallTarget(originalGenerator);
         TypeInfo calleeType = CheckClassOrderCallTarget(call.Callee);
         if (call.Callee is Expr.Get extensionGet &&
             calleeType is not (TypeInfo.Function or TypeInfo.OverloadedFunction or
