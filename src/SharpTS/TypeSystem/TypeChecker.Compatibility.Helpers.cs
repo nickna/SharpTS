@@ -129,15 +129,6 @@ public partial class TypeChecker
         return null;
     }
 
-    /// <summary>
-    /// True when <paramref name="cls"/> (or any class in its hierarchy) carries a nominal brand,
-    /// i.e. declares a private or protected member. TypeScript compares classes structurally for
-    /// assignment except when the target type is so branded, in which case it requires the source
-    /// to originate from the same class.
-    /// </summary>
-    private static bool HasNominalClassBrand(TypeInfo.Class cls) =>
-        EnumerateClassCores(cls).Any(CoreHasNominalBrand);
-
     private static bool IsPublicMember(FrozenDictionary<string, AccessModifier> access, string name)
         => !access.TryGetValue(name, out var mod) || mod == AccessModifier.Public;
 
