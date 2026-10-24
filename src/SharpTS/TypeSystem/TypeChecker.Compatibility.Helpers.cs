@@ -143,8 +143,12 @@ public partial class TypeChecker
             if (CoreHasNominalBrand(c.Core)) return true;
             current = GetSuperclass(current);
         }
-        return false;
+        return HasComputedConstructorMethodBrand(current);
     }
+
+    private static bool HasComputedConstructorMethodBrand(TypeInfo? type) =>
+        EnumerateClassCores(type).Any(core => core.ComputedConstructorMethodType is not null &&
+            core.ComputedConstructorMethodAccess != AccessModifier.Public);
 
     private static bool IsPublicMember(FrozenDictionary<string, AccessModifier> access, string name)
         => !access.TryGetValue(name, out var mod) || mod == AccessModifier.Public;
@@ -769,11 +773,13 @@ public partial class TypeChecker
         return false;
     }
 
-    /// <summary>Nominal-brand check for a generic class (own core plus a non-generic superclass chain).</summary>
+    /// <summary>Checks a generic class's own brands and inherited computed constructor method brands.</summary>
     private static bool GenericClassHasNominalBrand(TypeInfo.GenericClass gc)
     {
         if (CoreHasNominalBrand(gc.Core)) return true;
-        return gc.Superclass is TypeInfo.Class sc && HasNominalClassBrand(sc);
+        return gc.Superclass is TypeInfo.Class sc
+            ? HasNominalClassBrand(sc)
+            : HasComputedConstructorMethodBrand(gc.Superclass);
     }
 
     /// <summary>
