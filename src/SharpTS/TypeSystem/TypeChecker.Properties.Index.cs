@@ -1591,7 +1591,7 @@ public partial class TypeChecker
                 GetGetters(owner)?.ContainsKey(name) != true && GetSetters(owner)?.ContainsKey(name) != true)
                 continue;
             var token = new Token(TokenType.IDENTIFIER, name, null, TryGetExprLine(syntax.Index) ?? 0);
-            TypeInfo type = CheckGetOnInstance(instance, token);
+            TypeInfo type = CheckGetOnInstance(instance, token, enforceAccessibility: false);
             bool optional = ClassInfoAccessor.Get(owner, c => c.Core.OrdinaryOptionalMembers,
                 gc => gc.Core.OrdinaryOptionalMembers)?.Contains((false, name)) == true;
             return WithOptionalPropertyUndefined(type, optional);

@@ -412,14 +412,15 @@ public partial class TypeChecker
     /// Type checks member access on a class instance (new Foo().prop).
     /// Handles both regular and generic class instances with inheritance chain walking.
     /// </summary>
-    private TypeInfo CheckGetOnInstance(TypeInfo.Instance instance, Token memberName)
+    private TypeInfo CheckGetOnInstance(TypeInfo.Instance instance, Token memberName, bool enforceAccessibility = true)
     {
         string memberNameStr = memberName.Lexeme;
 
         if (TrySelectInstanceAccessor(instance, memberNameStr, out var accessor))
         {
-            EnforceAccessorAccess(accessor.DeclaringType, instance.ResolvedClassType,
-                memberName, isStatic: false, isWrite: false);
+            if (enforceAccessibility)
+                EnforceAccessorAccess(accessor.DeclaringType, instance.ResolvedClassType,
+                    memberName, isStatic: false, isWrite: false);
             ObserveSourceMemberSelection(memberName, accessor.DeclaringType, MemberFacet.Instance);
             return SelectedInstanceAccessorReadType(accessor, memberNameStr);
         }
@@ -428,7 +429,7 @@ public partial class TypeChecker
         if (instance.ClassType is TypeInfo.InstantiatedGeneric ig &&
             ig.GenericDefinition is TypeInfo.GenericClass gc)
         {
-            return CheckGetOnGenericInstance(gc, ig.TypeArguments, memberName);
+            return CheckGetOnGenericInstance(gc, ig.TypeArguments, memberName, enforceAccessibility);
         }
 
         // Handle regular class instance. ResolvedClassType unwraps MutableClass to its
@@ -438,7 +439,7 @@ public partial class TypeChecker
         {
             try
             {
-                return CheckGetOnRegularInstance(instanceClassType, memberName);
+                return CheckGetOnRegularInstance(instanceClassType, memberName, enforceAccessibility: enforceAccessibility);
             }
             catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2339")
             {
@@ -464,7 +465,7 @@ public partial class TypeChecker
     /// <summary>
     /// Type checks member access on a generic class instance.
     /// </summary>
-    private TypeInfo CheckGetOnGenericInstance(TypeInfo.GenericClass gc, List<TypeInfo> typeArgs, Token memberToken)
+    private TypeInfo CheckGetOnGenericInstance(TypeInfo.GenericClass gc, List<TypeInfo> typeArgs, Token memberToken, bool enforceAccessibility = true)
     {
         string memberName = memberToken.Lexeme;
         // Build substitution map from type parameters to type arguments
@@ -473,7 +474,7 @@ public partial class TypeChecker
             subs[gc.TypeParams[i].Name] = typeArgs[i];
 
         if (TryGetDefaultLibraryPromiseType(gc, out _))
-            return CheckGetOnRegularInstance(new TypeInfo.Class(gc.Core), memberToken, subs);
+            return CheckGetOnRegularInstance(new TypeInfo.Class(gc.Core), memberToken, subs, enforceAccessibility);
 
         // Check for getter first
         if (gc.Getters?.TryGetValue(memberName, out var getterType) == true)
@@ -572,7 +573,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckGetOnRegularInstance(
         TypeInfo.Class startClass, Token memberName,
-        Dictionary<string, TypeInfo>? promiseSubstitutions = null)
+        Dictionary<string, TypeInfo>? promiseSubstitutions = null, bool enforceAccessibility = true)
     {
         string memberNameStr = memberName.Lexeme;
         TypeInfo? current = startClass;
@@ -629,12 +630,12 @@ public partial class TypeChecker
                 access = fa;
 
             var currentName = GetClassName(current);
-            if (access == AccessModifier.Private && _currentClass?.Name != currentName)
+            if (enforceAccessibility && access == AccessModifier.Private && _currentClass?.Name != currentName)
             {
                 throw new TypeCheckException($" Property '{memberNameStr}' is private and only accessible within class '{currentName}'.", tsCode: "TS2341");
             }
             var currentClassForAccess = AsClass(current);
-            if (access == AccessModifier.Protected && currentClassForAccess != null && !IsSubclassOf(_currentClass, currentClassForAccess))
+            if (enforceAccessibility && access == AccessModifier.Protected && currentClassForAccess != null && !IsSubclassOf(_currentClass, currentClassForAccess))
             {
                 throw new TypeCheckException($" Property '{memberNameStr}' is protected and only accessible within class '{currentName}' and its subclasses.", tsCode: "TS2445");
             }
