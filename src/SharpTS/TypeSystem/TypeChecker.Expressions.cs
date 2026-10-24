@@ -2821,6 +2821,7 @@ public partial class TypeChecker
                     if (mutableClass.Setters[name] is TypeInfo.Inferred)
                         mutableClass.Setters[name] = TypeInfo.Any.Shared;
                 ValidateStaticAccessorPairs(mutableClass);
+                ValidateAccessorAccessibility(classExpr.Accessors);
             }
         }
 

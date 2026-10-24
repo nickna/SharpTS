@@ -559,6 +559,30 @@ public partial class TypeChecker
                 }
             }
             ValidateStaticAccessorPairs(mutableClass);
+            ValidateAccessorAccessibility(classStmt.Accessors);
+        }
+    }
+
+    private void ValidateAccessorAccessibility(IReadOnlyList<Stmt.Accessor>? accessors)
+    {
+        if (accessors is null) return;
+        foreach (var group in accessors.GroupBy(a => (a.IsStatic, Name: ClassAccessorName(a))))
+        {
+            if (group.Key.Name is null) continue;
+            var getter = group.FirstOrDefault(a => a.Kind.Type == TokenType.GET);
+            var setter = group.FirstOrDefault(a => a.Kind.Type == TokenType.SET);
+            if (getter is null || setter is null) continue;
+            static int Accessibility(AccessModifier access) => access switch
+            {
+                AccessModifier.Public => 2,
+                AccessModifier.Protected => 1,
+                _ => 0
+            };
+            if (Accessibility(getter.Access) >= Accessibility(setter.Access)) continue;
+            foreach (var accessor in new[] { getter, setter })
+                RecordTypeError(new TypeCheckException(
+                    "A get accessor must be at least as accessible as the setter.",
+                    accessor.Name.Line, tsCode: "TS2808"));
         }
     }
 

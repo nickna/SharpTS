@@ -1,3 +1,4 @@
+using SharpTS.Diagnostics;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using Xunit;
@@ -20,3 +21,4 @@ public class ComputedLiteralClassMethodTests
     private static TypeCheckDiagnosticResult Check(string source) => new TypeChecker(strictNullChecks: true)
         .CheckWithRecovery(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
 }
+
