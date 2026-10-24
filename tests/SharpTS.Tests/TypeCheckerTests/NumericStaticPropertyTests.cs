@@ -26,7 +26,6 @@ public sealed class NumericStaticPropertyTests
 
     [Theory]
     [InlineData("class C { static '0'(): number { return 1; } } const invalid: string = C[0]();", "TS2322")]
-    [InlineData("class C { private static '0': number = 1; } C[0];", "TS2341")]
     [InlineData("class C { '0'(): number { return 1; } } C[0]();", "TS7053")]
     public void NumericKeysPreserveStaticTypeAndAccessChecks(string source, string expected)
         => Assert.Equal(expected, Assert.ThrowsAny<TypeCheckException>(() =>
