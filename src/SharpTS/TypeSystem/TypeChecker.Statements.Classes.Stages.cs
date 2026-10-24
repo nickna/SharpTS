@@ -444,7 +444,30 @@ public partial class TypeChecker
             {
                 if (autoAccessor.Initializer != null)
                 {
-                    TypeInfo initType = CheckExpr(autoAccessor.Initializer);
+                    TypeEnvironment previousEnvironment = _environment;
+                    TypeInfo.Class? previousClass = _currentClass;
+                    TypeInfo? previousThis = _currentFunctionThisType;
+                    bool previousStatic = _inStaticMethod;
+                    _environment = new TypeEnvironment(previousEnvironment);
+                    _currentClass = classTypeForBody;
+                    _currentFunctionThisType = autoAccessor.IsStatic
+                        ? classTypeForBody : new TypeInfo.Instance(classTypeForBody);
+                    _environment.Define("this", _currentFunctionThisType);
+                    _inStaticMethod = autoAccessor.IsStatic;
+                    _privateNameEnclosingClasses.Push(previousClass);
+                    TypeInfo initType;
+                    try
+                    {
+                        initType = CheckExpr(autoAccessor.Initializer);
+                    }
+                    finally
+                    {
+                        _privateNameEnclosingClasses.Pop();
+                        _environment = previousEnvironment;
+                        _currentClass = previousClass;
+                        _currentFunctionThisType = previousThis;
+                        _inStaticMethod = previousStatic;
+                    }
                     TypeInfo declaredType = (autoAccessor.IsStatic ? classTypeForBody.StaticProperties : classTypeForBody.Getters)[autoAccessor.Name.Lexeme];
                     if (!IsCompatible(declaredType, initType))
                     {
