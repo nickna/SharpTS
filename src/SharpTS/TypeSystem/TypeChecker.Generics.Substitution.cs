@@ -70,6 +70,10 @@ public partial class TypeChecker
                 new TypeInfo.Array(Sub(arr.ElementType), arr.IsReadonly),
             TypeInfo.Promise promise =>
                 new TypeInfo.Promise(Sub(promise.ValueType)),
+            TypeInfo.Generator generator =>
+                new TypeInfo.Generator(Sub(generator.YieldType)) { ReturnType = Sub(generator.ReturnType) },
+            TypeInfo.AsyncGenerator generator =>
+                new TypeInfo.AsyncGenerator(Sub(generator.YieldType)) { ReturnType = Sub(generator.ReturnType) },
             TypeInfo.FunctionSupertype => type,
             TypeInfo.GenericFunction generic => SubstituteGenericMethod(generic, substitutions, evalConditionals),
             TypeInfo.OverloadSet overloaded => new TypeInfo.OverloadSet(overloaded.Signatures.Select(Sub).ToList()),

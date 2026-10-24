@@ -799,6 +799,13 @@ public partial class TypeChecker
                 {
                     expectedReturnType = promiseType.ValueType;
                 }
+                if (_inGeneratorFunction)
+                    expectedReturnType = expectedReturnType switch
+                    {
+                        TypeInfo.Generator generator => generator.ReturnType,
+                        TypeInfo.AsyncGenerator generator => generator.ReturnType,
+                        _ => expectedReturnType,
+                    };
 
                 TypeInfo actualReturnType = stmt.Value != null
                     ? CheckExprWithContext(stmt.Value, expectedReturnType)
