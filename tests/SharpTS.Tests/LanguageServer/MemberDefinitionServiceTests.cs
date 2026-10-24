@@ -293,12 +293,26 @@ public sealed class MemberDefinitionServiceTests
     }
 
     [Fact]
-    public async Task UnvisitedSourceBodyCannotReuseAnOtherwiseKnownMemberName()
+    public async Task ParameterlessCatchPublishesCheckedMemberDefinitions()
     {
         using var project = new MemberProject("""
             class Box { /*origin*/value: number = 1; }
             const box = new Box();
-            try {} catch { box./*skipped*/value; }
+            try {} catch { box./*inside*/value; }
+            box./*known*/value;
+            """);
+
+        await project.AssertTargetsAsync("inside", ("origin", "value"));
+        await project.AssertTargetsAsync("known", ("origin", "value"));
+    }
+
+    [Fact]
+    public async Task InvalidCatchAnnotationCannotExposeUnvisitedMemberDefinitions()
+    {
+        using var project = new MemberProject("""
+            class Box { /*origin*/value: number = 1; }
+            const box = new Box();
+            try {} catch (error: number) { box./*skipped*/value; }
             box./*known*/value;
             """);
 

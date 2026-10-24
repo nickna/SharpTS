@@ -206,11 +206,23 @@ public sealed class SemanticCompletionServiceTests
         Assert.All(items, item => Assert.False(string.IsNullOrEmpty(item.Detail)));
     }
 
+    [Fact]
+    public async Task ParameterlessCatchOffersCheckedMemberCompletions()
+    {
+        using var project = new CompletionProject("class Box { value: number = 1; } const box = new Box(); try {} catch { box.va/*cursor*/; }");
+        var item = Assert.Single((await project.CompleteAsync()).Items);
+        Assert.Equal("value", item.Label);
+        Assert.Equal(CompletionItemKind.Field, item.Kind);
+        Assert.Contains("number", item.Detail);
+        project.AssertEdit(item, "va", "value");
+        project.AssertAppliedSyntax(item);
+    }
+
     [Theory]
     [InlineData("function inspect(value: any) { value./*cursor*/ }")]
     [InlineData("missing./*cursor*/")]
     [InlineData("function inspect(value: Missing) { value./*cursor*/ }")]
-    [InlineData("class Box { value: number = 1; } const box = new Box(); try {} catch { box.va/*cursor*/; }")]
+    [InlineData("class Box { value: number = 1; } const box = new Box(); try {} catch (error: number) { box.va/*cursor*/; }")]
     public async Task DynamicUnresolvedAndUnvisitedReceiversHaveNoGuessedMembers(string source)
     {
         using var project = new CompletionProject(source);
