@@ -32,6 +32,7 @@ public partial class TypeChecker
         public HashSet<(bool IsStatic, string Name)> PendingFields { get; } = [];
         public Dictionary<(bool IsStatic, string Name), Stmt.Field> Fields { get; } = [];
         public HashSet<Stmt.Field> ActiveFields { get; } = new(ReferenceEqualityComparer.Instance);
+        public int DeferredReadDepth { get; set; }
     }
 
     private FieldGetterScope? _fieldGetterScope;
@@ -46,7 +47,8 @@ public partial class TypeChecker
         TypeInfo.MutableClass owner, TypeEnvironment environment)
     {
         var scope = new FieldGetterScope(owner, environment,
-            new[] { _currentClass }.Concat(_privateNameEnclosingClasses).ToArray(), _fieldGetterScope);
+            new[] { _currentClass }.Concat(_privateNameEnclosingClasses).ToArray(), _fieldGetterScope)
+            { DeferredReadDepth = _classFieldDeferredReadDepth };
         var accessors = sourceOwner switch
         {
             Stmt.Class declaration => declaration.Accessors,
@@ -100,7 +102,7 @@ public partial class TypeChecker
     {
         if (FindFieldGetterScope(owner) is not { } scope ||
             !scope.PendingFields.Contains((isStatic, name))) return;
-        if (_classFieldDeferredReadDepth > 0 && scope.Fields.TryGetValue((isStatic, name), out var field))
+        if (_classFieldDeferredReadDepth > scope.DeferredReadDepth && scope.Fields.TryGetValue((isStatic, name), out var field))
         {
             InferDeferredClassFieldDependency(scope, field);
             return;
@@ -118,9 +120,9 @@ public partial class TypeChecker
 
     private void InferDeferredClassFieldDependency(FieldGetterScope scope, Stmt.Field field)
     {
-        if (!scope.ActiveFields.Add(field))
-            throw new TypeCheckException($"Field '{field.Name.Lexeme}' is referenced directly or indirectly in its own initializer.",
-                field.Name.Line, tsCode: "TS7022");
+        // A recursive read keeps the current placeholder until the active initializer
+        // publishes its result. An annotated recursive callback can still complete precisely.
+        if (!scope.ActiveFields.Add(field)) return;
         var previousEnvironment = _environment;
         var previousClass = _currentClass;
         var previousThis = _currentFunctionThisType;

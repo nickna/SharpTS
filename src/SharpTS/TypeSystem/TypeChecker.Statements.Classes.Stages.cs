@@ -352,6 +352,7 @@ public partial class TypeChecker
                 if (!field.IsStatic) PushEmptyNarrowingScope();
                 try
                 {
+                    getterScope.ActiveFields.Add(field);
                     if (validationOnly)
                         CheckExpr(field.Initializer);
                     else
@@ -365,6 +366,7 @@ public partial class TypeChecker
                         PopNarrowingScope();
                         RestoreDefiniteAssignmentState(previousAssignmentState);
                     }
+                    getterScope.ActiveFields.Remove(field);
                     _privateNameEnclosingClasses.Pop();
                     _environment = previousEnvironment;
                     _currentClass = previousClass;
