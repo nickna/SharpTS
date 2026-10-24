@@ -614,7 +614,7 @@ public partial class TypeChecker
             throw new TypeCheckException($"Cannot find name '{firstName}' for typeof.", tsCode: "TS2304");
 
         // Resolve what typeof returns for the value
-        EnsureForwardClassTypeSignature(currentType);
+        currentType = EnsureForwardClassTypeSignature(currentType);
         currentType = ResolveForwardGenericClassDefinition(currentType)!;
         currentType = ResolveTypeOfValue(currentType);
 

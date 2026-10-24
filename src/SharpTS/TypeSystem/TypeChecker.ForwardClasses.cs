@@ -141,7 +141,7 @@ public partial class TypeChecker
     {
         // Only deferred bodies (or an enclosing constructor signature being resolved for one)
         // need a forward value type. Direct reads and heritage retain their source-order checks.
-        if (declared is not TypeInfo.Any ||
+        if (declared is not (TypeInfo.Any or TypeInfo.MutableClass) ||
             _currentFunctionReturnType is null && _forwardClassSignatureDepth == 0 ||
             _environment.GetValueBinding(use.Lexeme) is not { } binding ||
             !_forwardClassDeclarations.TryGetValue(binding, out var forward))
@@ -150,11 +150,12 @@ public partial class TypeChecker
         return ResolveForwardClassSignature(forward);
     }
 
-    private void EnsureForwardClassTypeSignature(TypeInfo declared)
+    private TypeInfo EnsureForwardClassTypeSignature(TypeInfo declared)
     {
         if (declared is TypeInfo.MutableClass shape &&
             _forwardClassTypeShadows.TryGetValue(shape, out var forward))
-            ResolveForwardClassSignature(forward);
+            return ResolveForwardClassSignature(forward);
+        return declared;
     }
 
     private TypeInfo? ResolveForwardGenericClassDefinition(TypeInfo? declared)

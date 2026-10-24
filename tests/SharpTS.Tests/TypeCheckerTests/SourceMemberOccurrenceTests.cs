@@ -199,7 +199,7 @@ public sealed class SourceMemberOccurrenceTests
     }
 
     [Fact]
-    public void GenericSelfSignatureProvesPrivateReceiverWhileForwardClassRemainsUnproven()
+    public void GenericSelfAndForwardDerivedSignaturesProveTheSamePrivateReceiver()
     {
         const string source = """
             class Base<T> {
@@ -221,19 +221,11 @@ public sealed class SourceMemberOccurrenceTests
                 member => member.Name.Start == Offset(enabled, marker));
             var baselineMember = Assert.Single(baseline.Document.EditorSyntax!.Members,
                 member => member.Name.Start == Offset(baseline, marker));
-            if (marker == "generic")
-            {
-                Assert.IsType<TypeInfo.Instance>(enabled.Result.TypeMap.Get(capturedMember.Receiver));
-                Assert.IsType<TypeInfo.Instance>(baseline.Result.TypeMap.Get(baselineMember.Receiver));
-                Assert.True(enabled.Members.FindResolution(enabled.Document, Offset(enabled, marker)).IsResolved);
-            }
-            else
-            {
-                Assert.IsType<TypeInfo.Any>(enabled.Result.TypeMap.Get(capturedMember.Receiver));
-                Assert.IsType<TypeInfo.Any>(baseline.Result.TypeMap.Get(baselineMember.Receiver));
-                Assert.False(enabled.Members.FindResolution(enabled.Document, Offset(enabled, marker)).IsResolved);
-            }
+            Assert.IsType<TypeInfo.Instance>(enabled.Result.TypeMap.Get(capturedMember.Receiver));
+            Assert.IsType<TypeInfo.Instance>(baseline.Result.TypeMap.Get(baselineMember.Receiver));
+            Assert.True(enabled.Members.FindResolution(enabled.Document, Offset(enabled, marker)).IsResolved);
         }
+        Assert.Same(Symbol(enabled, "generic"), Symbol(enabled, "derived"));
     }
 
     [Fact]
@@ -501,10 +493,13 @@ public sealed class SourceMemberOccurrenceTests
         var resolution = frozen.FindResolution(document!, Offset(files[model], "use"));
         var member = Assert.Single(document!.EditorSyntax!.Members,
             item => item.Name.Start == Offset(files[model], "use"));
+        Assert.IsType<TypeInfo.Instance>(types.Get(member.Receiver));
+        Assert.True(resolution.IsResolved);
+        var symbol = Assert.Single(resolution.Candidates);
+        Assert.Equal("value", symbol.Name);
+        Assert.False(symbol.CanRename);
         if (forward)
         {
-            Assert.IsType<TypeInfo.Any>(types.Get(member.Receiver));
-            Assert.False(resolution.IsResolved);
             var baselineResolver = new ModuleResolver(entry, files, TypeScriptProgramOptions.Disabled) { CaptureEditorSyntax = true };
             var baselineProgram = baselineResolver.LoadProgram(entry);
             var baselineChecker = new TypeChecker();
@@ -512,14 +507,8 @@ public sealed class SourceMemberOccurrenceTests
             var baselineDocument = baselineResolver.GetCachedModule(model)!.Document!;
             var baselineMember = Assert.Single(baselineDocument.EditorSyntax!.Members,
                 item => item.Name.Start == Offset(files[model], "use"));
-            Assert.IsType<TypeInfo.Any>(baselineTypes.Get(baselineMember.Receiver));
+            Assert.IsType<TypeInfo.Instance>(baselineTypes.Get(baselineMember.Receiver));
             Assert.False(baselineChecker.Members.IsEnabled);
-        }
-        else
-        {
-            Assert.IsType<TypeInfo.Instance>(types.Get(member.Receiver));
-            Assert.True(resolution.IsResolved);
-            Assert.Equal("value", Assert.Single(resolution.Candidates).Name);
         }
     }
 

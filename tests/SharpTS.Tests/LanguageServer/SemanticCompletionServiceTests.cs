@@ -230,7 +230,7 @@ public sealed class SemanticCompletionServiceTests
     }
 
     [Fact]
-    public async Task AnnotatedClassReturnBaselineAnyCannotBeReplacedByItsDisplayedSignature()
+    public async Task AnnotatedClassReturnOffersMembersFromItsCheckedInstanceType()
     {
         const string prefix = "class Box { value: number = 1; } const box = new Box(); function create(): Box { return box; } ";
         string source = prefix + "create().value;";
@@ -239,9 +239,14 @@ public sealed class SemanticCompletionServiceTests
         var checker = new TypeChecker();
         var baseline = checker.CheckWithRecovery(statements, document);
         var receiver = Assert.Single(document.EditorSyntax!.Members).Receiver;
-        Assert.IsType<TypeInfo.Any>(baseline.TypeMap.Get(receiver));
+        Assert.IsType<TypeInfo.Instance>(baseline.TypeMap.Get(receiver));
         using var project = new CompletionProject(prefix + "create()./*cursor*/");
-        Assert.Empty((await project.CompleteAsync()).Items);
+        var item = Assert.Single((await project.CompleteAsync()).Items);
+        Assert.Equal("value", item.Label);
+        Assert.Equal(CompletionItemKind.Field, item.Kind);
+        Assert.Contains("number", item.Detail);
+        project.AssertEdit(item, "", "value");
+        project.AssertAppliedSyntax(item);
     }
 
     [Theory]
