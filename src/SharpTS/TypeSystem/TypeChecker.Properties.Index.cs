@@ -377,6 +377,9 @@ public partial class TypeChecker
             if (objType is TypeInfo.Interface { StringIndexType: { } itfIdxType }) return WithUncheckedUndefined(itfIdxType);
         }
 
+        if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
+            return knownInstanceMember;
+
         if (getIndex.Index is Expr.Literal { Value: string functionMemberName } &&
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
             return apparentNamedMember;
@@ -1385,6 +1388,9 @@ public partial class TypeChecker
             return GetFunctionHasInstanceReadType(objType, getIndex.Index)
                 ?? GetMemberType(objType, "@@hasInstance");
 
+        if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
+            return knownInstanceMember;
+
         if (getIndex.Index is Expr.Literal { Value: string functionMemberName } &&
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
             return apparentNamedMember;
@@ -1480,6 +1486,32 @@ public partial class TypeChecker
                 return WithUncheckedUndefined(recNumString.StringIndexType);
         }
 
+        return null;
+    }
+
+    private TypeInfo? TryReadKnownIndexedInstanceMember(TypeInfo receiver, TypeInfo index, Expr.GetIndex syntax)
+    {
+        if (receiver is not TypeInfo.Instance instance) return null;
+        string? name = index switch
+        {
+            TypeInfo.StringLiteral text => text.Value,
+            TypeInfo.NumberLiteral number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _ => null
+        };
+        if (name is null) return null;
+        HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);
+        for (TypeInfo? owner = instance.ResolvedClassType; owner is not null && visited.Add(owner); owner = GetSuperclass(owner))
+        {
+            if (GetFieldTypes(owner)?.ContainsKey(name) != true &&
+                GetMethods(owner)?.ContainsKey(name) != true &&
+                GetGetters(owner)?.ContainsKey(name) != true && GetSetters(owner)?.ContainsKey(name) != true)
+                continue;
+            var token = new Token(TokenType.IDENTIFIER, name, null, TryGetExprLine(syntax.Index) ?? 0);
+            TypeInfo type = CheckGetOnInstance(instance, token);
+            bool optional = ClassInfoAccessor.Get(owner, c => c.Core.OrdinaryOptionalMembers,
+                gc => gc.Core.OrdinaryOptionalMembers)?.Contains((false, name)) == true;
+            return WithOptionalPropertyUndefined(type, optional);
+        }
         return null;
     }
 
