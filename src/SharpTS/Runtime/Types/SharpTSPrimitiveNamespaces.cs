@@ -385,15 +385,20 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
         // [[StringData]] is "", so `String.prototype.toString()` is "" rather than
         // the object's "[object String]" stringification. A boxed wrapper's stored
         // primitive is ThisStringValue (§22.1.3.3) and is returned directly, never
-        // re-coerced: ToStringForBuiltInArgument consults the receiver's conversion
-        // hooks, and when the hook that resolves is this same intrinsic
-        // (ToPrimitive's OrdinaryToPrimitive step resolves it through the prototype
-        // chain) the two re-enter each other without bound.
+        // re-coerced — an OWN overriding toString on the wrapper is consulted
+        // first (TryOwnToStringHook), since that is the non-intrinsic hook the
+        // coercion must honor. Re-coercing unconditionally is not an option:
+        // ToStringForBuiltInArgument consults the receiver's conversion hooks, and
+        // when the hook that resolves is this same intrinsic (ToPrimitive's
+        // OrdinaryToPrimitive step resolves it through the prototype chain) the
+        // two re-enter each other without bound.
         var coerced = _receiver switch
         {
             SharpTSStringPrototype => "",
             SharpTSObject boxed when boxed.GetProperty("__primitiveType") is "String"
-                => boxed.GetProperty("__primitiveValue") as string ?? "",
+                => TryOwnToStringHook(interpreter, boxed, out var overridden)
+                    ? overridden
+                    : boxed.GetProperty("__primitiveValue") as string ?? "",
             _ => interpreter.ToStringForBuiltInArgument(_receiver),
         };
         if (_name == "replace")
@@ -409,6 +414,33 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
                 arguments.Count > 1 ? arguments[1] : SharpTSUndefined.Instance).ToObject();
         }
         return _inner.Bind(coerced).Call(interpreter, arguments);
+    }
+
+    /// <summary>
+    /// Consults an own overriding <c>toString</c> on a boxed String wrapper —
+    /// the non-intrinsic hook a receiver coercion must honor — and yields its
+    /// result only when it is a primitive, stringified the same way
+    /// <see cref="Interpreter.ToStringForBuiltInArgument"/> stringifies the
+    /// unoverridden receiver (the coerced value is a string everywhere
+    /// downstream). False when no own hook resolves, in which case the stored
+    /// primitive is the answer and no conversion machinery re-enters:
+    /// ToPrimitive's OrdinaryToPrimitive step resolves this same intrinsic
+    /// through the prototype chain, so re-entering it for an unoverridden
+    /// receiver would recurse without bound.
+    /// </summary>
+    private static bool TryOwnToStringHook(
+        Interpreter interpreter, SharpTSObject boxed, out string result)
+    {
+        result = "";
+        if (!boxed.HasProperty("toString")
+            || boxed.GetProperty("toString") is not ISharpTSCallable callable)
+            return false;
+        var converted = FunctionBuiltIns.CallWithThis(interpreter, callable, boxed, []);
+        if (converted is not (null or double or string or bool or SharpTSUndefined
+                or SharpTSBigInt or SharpTSSymbol))
+            return false;
+        result = converted as string ?? interpreter.ToStringForBuiltInArgument(converted);
+        return true;
     }
 
     public override string ToString() => $"function {_name}() {{ [native code] }}";

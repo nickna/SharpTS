@@ -922,8 +922,10 @@ public partial class Interpreter
     /// <summary>
     /// True when an array or arguments object carries a conversion hook beyond
     /// its kind's intrinsic stringify (join / "[object Arguments]"): an own
-    /// <c>valueOf</c>/<c>toString</c>, @@toPrimitive anywhere on its chain, or
-    /// an Array.prototype override of either method. Hook-less receivers keep
+    /// <c>valueOf</c>/<c>toString</c>, @@toPrimitive anywhere on its chain, an
+    /// Array.prototype override of either method, or an Object.prototype-level
+    /// override (arrays have no Array.prototype.valueOf to shadow it, so that
+    /// override IS the chain's valueOf resolution). Hook-less receivers keep
     /// their fast path byte-for-byte.
     /// </summary>
     private bool CarriesConversionHook(SharpTSArray array)
@@ -931,6 +933,8 @@ public partial class Interpreter
             || array.HasOwnProperty("toString")
             || GetArrayPrototype().HasExtra("valueOf")
             || GetArrayPrototype().HasExtra("toString")
+            || GetObjectPrototype().HasExtra("valueOf")
+            || GetObjectPrototype().HasExtra("toString")
             || GetSymbolPropertyValue(array, SharpTSSymbol.ToPrimitive)
                 is not (null or SharpTSUndefined);
 
