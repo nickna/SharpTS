@@ -63,6 +63,15 @@ public sealed class OrdinaryCallSpreadTests
             mixed(...[...numbers, 'ok', 'tail']);
             """);
 
+    [Fact]
+    public void MultipleOpenSpreadsRetainTypeScriptOptionalArityBehavior()
+        => TestHarness.RunInterpreted("""
+            function f(value?: number) {}
+            const numbers: number[] = [];
+            const strings: string[] = [];
+            f(...numbers, ...strings);
+            """);
+
     [Theory]
     [InlineData("function f(value: number, ...rest: number[]) {} f(...items());", "TS2556")]
     [InlineData("function f(value: number) {} f(...items());", "TS2556")]
