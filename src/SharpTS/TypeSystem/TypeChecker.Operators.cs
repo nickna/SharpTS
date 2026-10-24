@@ -673,6 +673,8 @@ public partial class TypeChecker
                 throw new TypeCheckException("The '+=' operator cannot be applied to type 'symbol'.", line: line > 0 ? line : null, tsCode: "TS2469");
             }
 
+            if (valueType is TypeInfo.Never && (IsNumber(varType) || IsBigInt(varType)))
+                return varType;
             TypeInfo result = CheckPlusOperator(varType, valueType, line);
             if (!IsCompatible(varType, result))
                 throw new TypeCheckException("Compound assignment requires numeric operands.", tsCode: "TS2365");
