@@ -1446,7 +1446,7 @@ public partial class TypeChecker
         if (stmt.Increment != null)
         {
             incrementPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(
-                new Stmt.Expression(stmt.Increment));
+                new Stmt.Expression(stmt.Increment), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
         }
 
         try
@@ -1688,7 +1688,8 @@ public partial class TypeChecker
         TypeEnvironment? loopEnvironment = null)
     {
         // Get assigned paths from body
-        var assignedPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(body);
+        var assignedPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(
+            body, name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
         if (additionalAssignedPaths != null)
         {
             foreach (var p in additionalAssignedPaths)
