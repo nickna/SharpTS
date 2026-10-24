@@ -26,14 +26,14 @@ public partial class TypeChecker
     {
         if (!EditorFacts.IsEnabled)
         {
-            TypeInfo ordinaryResult = DispatchExpr(expr);
+            TypeInfo ordinaryResult = RefreshForwardClassConstructor(DispatchExpr(expr));
             _typeMap.Set(expr, ordinaryResult);
             return ordinaryResult;
         }
         BeginEditorExpression(expr);
         try
         {
-            TypeInfo result = DispatchExpr(expr);
+            TypeInfo result = RefreshForwardClassConstructor(DispatchExpr(expr));
             _typeMap.Set(expr, result);
             RecordEditorExpressionType(expr, result);
             return result;

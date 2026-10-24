@@ -149,6 +149,7 @@ public partial class TypeChecker
         bool dotNetMappedSurface = false;
         while (current != null)
         {
+            current = ResolveForwardStaticFieldRead(current, memberName.Lexeme);
             // A class extending an any-valued constructor keeps that dynamic
             // constructor's unknown static surface.
             if (current is TypeInfo.Any or TypeInfo.MutableClass { IsDynamicSuperclass: true })

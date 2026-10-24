@@ -751,6 +751,8 @@ public partial class TypeChecker
     private void CheckClassDeclaration(Stmt.Class classStmt)
     {
         bool previousRecoveryMode = _recoveryMode;
+        ForwardClassDeclaration? checkingForward = null;
+        bool wasCheckingDeclaration = false;
         // Match generic-function diagnostics in module mode: independent class fields and members
         // must still be checked after one generic relationship error.
         if (_currentModule != null && classStmt.TypeParams is { Count: > 0 })
@@ -758,6 +760,13 @@ public partial class TypeChecker
         try
         {
             BindingSymbol classSymbol = RegisterValueDeclaration(classStmt.Name);
+            if (_forwardClassDeclarations.TryGetValue(classSymbol, out var forwardDeclaration) &&
+                ReferenceEquals(forwardDeclaration.Environment, _environment))
+            {
+                checkingForward = forwardDeclaration;
+                wasCheckingDeclaration = checkingForward.IsCheckingDeclaration;
+                checkingForward.IsCheckingDeclaration = true;
+            }
             // The same AST declaration is checked in preparatory and authoritative module passes.
             // Derive its nominal class identity from the stable binding rather than allocating a new
             // identity per pass; otherwise `var s: S` looks like a conflicting TS2403 redeclaration
@@ -902,9 +911,13 @@ public partial class TypeChecker
             var resolvedClass = mutableClass.Freeze();
             ValidateClassMembersAgainstSymbolIndex(classStmt, resolvedClass);
             ValidateStaticOverrideCompatibility(classStmt, resolvedClass);
+            PublishForwardClassConstructor(mutableClass,
+                classTypeParams is { Count: > 0 } ? mutableClass.FreezeGeneric(classTypeParams) : resolvedClass,
+                complete: true);
         }
         finally
         {
+            if (checkingForward is not null) checkingForward.IsCheckingDeclaration = wasCheckingDeclaration;
             _recoveryMode = previousRecoveryMode;
         }
     }

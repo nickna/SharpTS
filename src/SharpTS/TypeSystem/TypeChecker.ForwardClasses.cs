@@ -1,6 +1,7 @@
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem.Exceptions;
+using System.Runtime.CompilerServices;
 
 namespace SharpTS.TypeSystem;
 
@@ -20,6 +21,11 @@ public partial class TypeChecker
         public TypeInfo? Constructor { get; set; }
         public List<TypeInfo.TypeParameter>? TypeParameters { get; set; }
         public bool IsResolving { get; set; }
+        public bool IsComplete { get; set; }
+        public bool IsCheckingDeclaration { get; set; }
+        public TypeEnvironment? SignatureEnvironment { get; set; }
+        public TypeInfo.Class?[] EnclosingClasses { get; set; } = [];
+        public HashSet<Stmt.Field> ActiveFieldReads { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<BindingSymbol, bool>? DeclarationFlow { get; set; }
     }
 
@@ -29,6 +35,9 @@ public partial class TypeChecker
         new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<TypeInfo.MutableClass, ForwardClassDeclaration> _forwardClassTypeShadows =
         new(ReferenceEqualityComparer.Instance);
+    // Retained REPL aliases can outlive one checking entry point. Keep their exact
+    // declaration's publication link without retaining otherwise-unreferenced snapshots.
+    private readonly ConditionalWeakTable<TypeInfo, ForwardClassDeclaration> _forwardClassConstructorSnapshots = new();
     private int _forwardClassSignatureDepth;
     private Token? _recoverableClassHeritageRead;
     private readonly Stack<Dictionary<BindingSymbol, bool>?> _deferredClassDefaultFlows = new();
@@ -49,6 +58,7 @@ public partial class TypeChecker
                     TypeInfo.MutableClass candidate && candidate.DeclarationId == -symbol.Id ? candidate : null;
                 _forwardClassDeclarations[symbol] = forward = new(declaration, _environment, -symbol.Id,
                     _currentModule, _filePath, _standaloneSourceDocument, preregistered);
+                forward.EnclosingClasses = new[] { _currentClass }.Concat(_privateNameEnclosingClasses).ToArray();
             }
             _definiteAssignmentStack.TryPeek(out var declarationFlow);
             forward.DeclarationFlow = declarationFlow;
@@ -177,8 +187,9 @@ public partial class TypeChecker
     private TypeInfo ResolveForwardClassSignature(ForwardClassDeclaration forward)
     {
         if (forward.Constructor is { } completed) return completed;
-        if (forward.IsResolving) return forward.TypeParameters is { Count: > 0 } parameters
-            ? forward.Shape.FreezeGeneric(parameters) : forward.Shape.Freeze();
+        if (forward.IsResolving) return TrackForwardClassConstructor(forward,
+            forward.TypeParameters is { Count: > 0 } parameters
+                ? forward.Shape.FreezeGeneric(parameters) : forward.Shape.Freeze());
 
         forward.IsResolving = true;
         _forwardClassSignatureDepth++;
@@ -198,6 +209,7 @@ public partial class TypeChecker
             forward.Environment.DefineType(declaration.Name.Lexeme, shape);
             var (signatureEnvironment, typeParameters, superclass) = CreateClassTypeEnvironment(declaration);
             forward.TypeParameters = typeParameters;
+            forward.SignatureEnvironment = signatureEnvironment;
             shape.Superclass = superclass;
             shape.IsAbstract = declaration.IsAbstract;
             RegisterSourceClassMembers(declaration, shape);
@@ -209,9 +221,8 @@ public partial class TypeChecker
                 CollectForwardClassSignatures(declaration, shape);
             }
             shape.ResetFrozenCache();
-            return forward.Constructor = typeParameters is { Count: > 0 }
-                ? shape.FreezeGeneric(typeParameters)
-                : shape.Freeze();
+            return forward.Constructor = TrackForwardClassConstructor(forward,
+                typeParameters is { Count: > 0 } ? shape.FreezeGeneric(typeParameters) : shape.Freeze());
         }
         finally
         {
@@ -223,8 +234,81 @@ public partial class TypeChecker
         }
     }
 
-    // Collect only declaration signatures. Decorators, computed-key expressions, default values,
-    // initializers and bodies are checked once, at the declaration's normal source position.
+    private TypeInfo TrackForwardClassConstructor(ForwardClassDeclaration forward, TypeInfo constructor)
+    {
+        _forwardClassConstructorSnapshots.AddOrUpdate(constructor, forward);
+        return constructor;
+    }
+
+    private TypeInfo RefreshForwardClassConstructor(TypeInfo type) =>
+        _forwardClassConstructorSnapshots.TryGetValue(type, out var forward) && forward.Constructor is { } current
+            ? current : type;
+
+    private void PublishForwardClassConstructor(TypeInfo.MutableClass owner, TypeInfo constructor, bool complete = false)
+    {
+        if (!_forwardClassTypeShadows.TryGetValue(owner, out var forward)) return;
+        forward.Constructor = TrackForwardClassConstructor(forward, constructor);
+        forward.IsComplete = complete;
+    }
+
+    private TypeInfo ResolveForwardStaticFieldRead(TypeInfo constructor, string name)
+    {
+        constructor = RefreshForwardClassConstructor(constructor);
+        if (!_forwardClassConstructorSnapshots.TryGetValue(constructor, out var forward) ||
+            forward.IsComplete || forward.IsResolving || forward.IsCheckingDeclaration || forward.SignatureEnvironment is null ||
+            forward.Declaration.Fields.FirstOrDefault(field => field.IsStatic && !field.IsDeclare &&
+                field.TypeAnnotation is null && field.TypeAnnotationNode is null && field.Initializer is not null &&
+                GetFieldMemberName(field) == name) is not { } field || !forward.ActiveFieldReads.Add(field))
+            return constructor;
+
+        var previousScope = _fieldGetterScope;
+        var previousModule = _currentModule;
+        var previousPath = _filePath;
+        var previousDocument = _standaloneSourceDocument;
+        var previousClass = _currentClass;
+        var previousClasses = _privateNameEnclosingClasses.ToArray();
+        _currentModule = forward.Module;
+        _filePath = forward.FilePath;
+        _standaloneSourceDocument = forward.StandaloneSourceDocument;
+        _currentClass = forward.EnclosingClasses.FirstOrDefault();
+        _privateNameEnclosingClasses.Clear();
+        foreach (var enclosing in forward.EnclosingClasses.Skip(1).Reverse())
+            _privateNameEnclosingClasses.Push(enclosing);
+        _suppressDiagnostics++;
+        try
+        {
+            // Share the field dependency checker's flow snapshots. A deferred signature read
+            // must not perform the initializer's writes in its caller's environment.
+            using var declarationScope = new EnvironmentScope(this, forward.Environment);
+            var scope = CreateFieldGetterScope(forward.Declaration, forward.Declaration.Fields,
+                forward.Shape, forward.SignatureEnvironment);
+            _fieldGetterScope = scope;
+            try { InferDeferredClassFieldDependency(scope, field); }
+            catch (TypeCheckException) { }
+            forward.Shape.ResetFrozenCache();
+            forward.Constructor = TrackForwardClassConstructor(forward,
+                forward.TypeParameters is { Count: > 0 } parameters
+                    ? forward.Shape.FreezeGeneric(parameters) : forward.Shape.Freeze());
+            _compatibilityCache = null;
+            _identityCompatibilityCache = null;
+            return forward.Constructor;
+        }
+        finally
+        {
+            _suppressDiagnostics--;
+            forward.ActiveFieldReads.Remove(field);
+            _fieldGetterScope = previousScope;
+            _currentModule = previousModule;
+            _filePath = previousPath;
+            _standaloneSourceDocument = previousDocument;
+            _currentClass = previousClass;
+            _privateNameEnclosingClasses.Clear();
+            foreach (var enclosing in previousClasses.Reverse()) _privateNameEnclosingClasses.Push(enclosing);
+        }
+    }
+
+    // Collect declaration signatures without checking decorators, computed keys, defaults or bodies.
+    // A requested static initializer can be inferred later under the isolated dependency scope.
     private void CollectForwardClassSignatures(Stmt.Class declaration, TypeInfo.MutableClass shape)
     {
         CollectClassIndexSignatures(declaration, shape);

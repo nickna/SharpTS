@@ -122,6 +122,8 @@ public partial class TypeChecker
     /// </summary>
     private bool IsCompatible(TypeInfo expected, TypeInfo actual)
     {
+        expected = RefreshForwardClassConstructor(expected);
+        actual = RefreshForwardClassConstructor(actual);
         // Under strictFunctionTypes the verdict for a function-typed pair depends on whether the
         // comparison happens inside a method member (bivariant) or not (strict) — the same pair
         // can legitimately differ between the two contexts, so bivariant-context results must not

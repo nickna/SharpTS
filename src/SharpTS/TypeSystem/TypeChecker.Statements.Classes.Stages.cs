@@ -126,6 +126,7 @@ public partial class TypeChecker
             _typeMap.SetClassType(classStmt, classType);
             classTypeForBody = classType;
         }
+        PublishForwardClassConstructor(mutableClass, _environment.Get(classStmt.Name.Lexeme)!);
         return classTypeForBody;
     }
 
