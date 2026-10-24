@@ -383,10 +383,19 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
 
         // ECMA-262 §22.1.3: String.prototype is itself a String object whose
         // [[StringData]] is "", so `String.prototype.toString()` is "" rather than
-        // the object's "[object String]" stringification.
-        var coerced = _receiver is SharpTSStringPrototype
-            ? ""
-            : interpreter.ToStringForBuiltInArgument(_receiver);
+        // the object's "[object String]" stringification. A boxed wrapper's stored
+        // primitive is ThisStringValue (§22.1.3.3) and is returned directly, never
+        // re-coerced: ToStringForBuiltInArgument consults the receiver's conversion
+        // hooks, and when the hook that resolves is this same intrinsic
+        // (ToPrimitive's OrdinaryToPrimitive step resolves it through the prototype
+        // chain) the two re-enter each other without bound.
+        var coerced = _receiver switch
+        {
+            SharpTSStringPrototype => "",
+            SharpTSObject boxed when boxed.GetProperty("__primitiveType") is "String"
+                => boxed.GetProperty("__primitiveValue") as string ?? "",
+            _ => interpreter.ToStringForBuiltInArgument(_receiver),
+        };
         if (_name == "replace")
         {
             return StringBuiltIns.ReplaceWithoutSymbolDispatch(interpreter, coerced,
