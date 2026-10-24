@@ -7,7 +7,7 @@ namespace SharpTS.Tests.TypeCheckerTests;
 
 public sealed class NumberPropertyValidationTests
 {
-    private static IReadOnlyList<Stmt> Parse(string source)
+    private static List<Stmt> Parse(string source)
         => new Parser(new Lexer(source).ScanTokens()).Parse().Statements;
 
     [Theory]
