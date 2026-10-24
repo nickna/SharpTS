@@ -684,7 +684,7 @@ public partial class TypeChecker
             System.Globalization.CultureInfo.InvariantCulture, out double numericKey) &&
         Runtime.PropertyKeyConverter.ToPropertyKeyString(numericKey) == literal.Value;
 
-    private void EnsureWritableClassIndex(TypeInfo receiver, TypeInfo index, Expr.SetIndex syntax)
+    private void EnsureWritableClassIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
     {
         if (receiver is TypeInfo.TypeParameter { Constraint: { } constraint })
         {
@@ -731,7 +731,7 @@ public partial class TypeChecker
                 if (value is null) continue;
                 if (core.ReadonlyIndexes?.Contains((isStatic, kind)) == true)
                     throw new TypeCheckException($"Index signature in type '{receiver}' only permits reading.",
-                        TryGetExprLine(syntax.Index), tsCode: "TS2542");
+                        TryGetExprLine(syntax) ?? _currentStatementLine, tsCode: "TS2542");
                 return;
             }
     }
@@ -798,7 +798,7 @@ public partial class TypeChecker
             objType = next;
         }
         objType = ResolveMappedTypeForAccess(objType);
-        EnsureWritableClassIndex(objType, indexType, setIndex);
+        EnsureWritableClassIndex(objType, indexType, setIndex.Index);
 
 
         // A deferred mapped type is writable by a key from its mapped domain. Project the
@@ -1609,7 +1609,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo? CheckSetIndexOnType(TypeInfo objType, TypeInfo indexType, TypeInfo valueType, Expr.SetIndex setIndex)
     {
-        EnsureWritableClassIndex(objType, indexType, setIndex);
+        EnsureWritableClassIndex(objType, indexType, setIndex.Index);
         // Recursive case for nested type parameters
         if (objType is TypeInfo.TypeParameter tp && tp.Constraint != null)
         {

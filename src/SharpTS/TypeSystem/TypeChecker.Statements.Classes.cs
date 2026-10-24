@@ -1530,6 +1530,7 @@ public partial class TypeChecker
                         () => ResolveAnnotation(indexSig.ValueType, indexSig.ValueTypeNode)!,
                         out TypeInfo valueType))
                     continue;
+                if (indexSig.IsReadonly) mutableClass.ReadonlyIndexes.Add((indexSig.IsStatic, indexSig.KeyType));
                 if (indexSig.IsStatic)
                 {
                     switch (indexSig.KeyType)
