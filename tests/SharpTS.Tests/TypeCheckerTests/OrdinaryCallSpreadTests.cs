@@ -42,4 +42,24 @@ public sealed class OrdinaryCallSpreadTests
             """));
         Assert.Equal("TS2345", error.Diagnostic.TsCode);
     }
+
+    [Theory]
+    [InlineData("function f(x: number) {} const a: number[] = [1]; f(...a);", "TS2556")]
+    [InlineData("function f(x: number, ...rest: number[]) {} const a: number[] = [1]; f(...a);", "TS2556")]
+    [InlineData("function f(x: number) {} f(...[] as const);", "TS2554")]
+    [InlineData("function f(x: number) {} f(...[1, 2] as const);", "TS2554")]
+    public void SpreadMustProveFixedParameterPositions(string source, string code)
+    {
+        var error = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(source));
+        Assert.Equal(code, error.Diagnostic.TsCode);
+    }
+
+    [Fact]
+    public void ArraysAreAcceptedAfterASatisfiedFixedPrefix()
+        => TestHarness.RunInterpreted("""
+            function f(x: number, ...rest: number[]) {}
+            const a: number[] = [2, 3];
+            f(1, ...a);
+            f(...[1] as const, ...a);
+            """);
 }

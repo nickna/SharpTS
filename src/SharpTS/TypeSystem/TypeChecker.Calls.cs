@@ -232,6 +232,17 @@ public partial class TypeChecker
             int argIndex = 0;
             int paramIndex = 0;
             int regularParamCount = funcType.HasRestParam ? funcType.ParamTypes.Count - 1 : funcType.ParamTypes.Count;
+            bool hasOpenSpread = false;
+
+            void CheckOpenSpread(TypeInfo elementType)
+            {
+                if (!allParamsAny && (!funcType.HasRestParam || paramIndex < regularParamCount))
+                    throw new TypeCheckException("A spread argument must either have a tuple type or be passed to a rest parameter.", call.Paren.Line, tsCode: "TS2556");
+                if (restElementType != null && !IsCompatible(restElementType, elementType))
+                    throw new TypeCheckException($"Spread element type '{elementType}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
+                hasOpenSpread = true;
+                paramIndex = Math.Max(paramIndex, regularParamCount);
+            }
 
             foreach (var arg in call.Arguments)
             {
@@ -251,6 +262,11 @@ public partial class TypeChecker
                         // arguments. Only elements beyond the fixed prefix belong to the rest.
                         foreach (var element in tupleSpread.Elements)
                         {
+                            if (element.IsSpread && TryGetSpreadElementType(element.Type, out var nestedElement))
+                            {
+                                CheckOpenSpread(nestedElement);
+                                continue;
+                            }
                             TypeInfo tupleElem = element.IsOptional
                                 ? new TypeInfo.Union([element.Type, TypeInfo.Undefined.Shared])
                                 : element.Type;
@@ -266,22 +282,14 @@ public partial class TypeChecker
                         }
                         if (tupleSpread.RestElementType != null)
                         {
-                            if (restElementType != null && !IsCompatible(restElementType, tupleSpread.RestElementType))
-                            {
-                                throw new TypeCheckException($"Spread element type '{tupleSpread.RestElementType}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
-                            }
-                            paramIndex = Math.Max(paramIndex, regularParamCount);
+                            CheckOpenSpread(tupleSpread.RestElementType);
                         }
                         argIndex++;
                         continue;
                     }
                     else if (TryGetSpreadElementType(spreadType, out var spreadElementType))
                     {
-                        // Check element type compatibility with rest param or remaining regular params
-                        if (restElementType != null && !IsCompatible(restElementType, spreadElementType))
-                        {
-                            throw new TypeCheckException($"Spread element type '{spreadElementType}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
-                        }
+                        CheckOpenSpread(spreadElementType);
                     }
                     else
                     {
@@ -367,10 +375,13 @@ public partial class TypeChecker
                         }
                     }
 
-                    if (paramIndex < regularParamCount) paramIndex++;
+                    paramIndex++;
                     argIndex++;
                 }
             }
+            if (hasSpread && !hasOpenSpread && !allParamsAny &&
+                (paramIndex < funcType.MinArity || !funcType.HasRestParam && paramIndex > regularParamCount))
+                throw new TypeCheckException($"Expected {funcType.MinArity} to {regularParamCount} arguments but got {paramIndex}.", call.Paren.Line, tsCode: "TS2554");
             RecordEditorInvocationSelection(funcType);
             // The legacy array surface models reduce as returning `any`, but
             // the two-argument form has an explicit accumulator seed. When a
