@@ -140,13 +140,7 @@ public partial class TypeChecker
         TypeInfo? current = cls;
         while (current is TypeInfo.Class c)
         {
-            var core = c.Core;
-            if (core.PrivateFieldTypes.Count > 0 || core.PrivateMethodTypes.Count > 0)
-                return true;
-            foreach (var access in core.FieldAccess.Values)
-                if (access != AccessModifier.Public) return true;
-            foreach (var access in core.MethodAccess.Values)
-                if (access != AccessModifier.Public) return true;
+            if (CoreHasNominalBrand(c.Core)) return true;
             current = GetSuperclass(current);
         }
         return false;
