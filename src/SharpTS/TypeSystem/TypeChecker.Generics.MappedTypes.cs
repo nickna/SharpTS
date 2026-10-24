@@ -64,10 +64,14 @@ public partial class TypeChecker
                 break;
 
             case TypeInfo.Class cls:
+                if (cls.Core.ComputedConstructorMethodType is not null &&
+                    cls.Core.ComputedConstructorMethodAccess == Parsing.AccessModifier.Public)
+                    keys.Add(new TypeInfo.StringLiteral("constructor"));
                 // Public methods
                 foreach (var key in cls.Methods.Keys)
                 {
-                    if (cls.MethodAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
+                    if (key != "constructor" &&
+                        cls.MethodAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
                         keys.Add(new TypeInfo.StringLiteral(key));
                 }
                 // Public fields
@@ -129,9 +133,13 @@ public partial class TypeChecker
                 break;
 
             case TypeInfo.GenericClass gc:
+                if (gc.Core.ComputedConstructorMethodType is not null &&
+                    gc.Core.ComputedConstructorMethodAccess == Parsing.AccessModifier.Public)
+                    keys.Add(new TypeInfo.StringLiteral("constructor"));
                 foreach (var key in gc.Methods.Keys)
                 {
-                    if (gc.MethodAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
+                    if (key != "constructor" &&
+                        gc.MethodAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
                         keys.Add(new TypeInfo.StringLiteral(key));
                 }
                 foreach (var key in gc.FieldTypes.Keys)
