@@ -1441,6 +1441,9 @@ public partial class TypeChecker
             elementTypes.Add(elemType);
         }
 
+        // Empty tuple spreads contribute no elements, just like an empty literal.
+        if (elementTypes.Count == 0) return new TypeInfo.Array(TypeInfo.Any.Shared);
+
         // Find common type or create union
         TypeInfo commonType = elementTypes[0];
         bool allCompatible = true;
