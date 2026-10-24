@@ -25,7 +25,10 @@ public sealed class AnyExportNamespaceImportTests
                 """,
             [entryPath] = "/// <reference path=\"./assignment.d.ts\" />\nimport * as Dynamic from 'assignment';\n" + source,
         };
-        var resolver = new ModuleResolver(entryPath, files);
+        var resolver = new ModuleResolver(entryPath, files,
+            new TypeScriptProgramOptions { NoLib = true, PreferDeclarationFiles = true });
+        var declaration = resolver.LoadModule(Path.Combine(directory, "assignment.d.ts"));
+        resolver.RegisterAmbientModuleDeclarations([declaration]);
         var entry = resolver.LoadModule(entryPath);
         var checker = new TypeChecker(strictNullChecks: true, maxErrors: 20);
         checker.CheckModules(resolver.GetModulesInOrder(entry), resolver);
