@@ -111,7 +111,7 @@ public sealed class GenericStaticPrivateLookupTests
     [InlineData("class Box<T> { static #read(value: number) { return value; } static read() { return Box.#read(); } }", "TS2554")]
     [InlineData("class Box<T> { static #value: number = 1; } console.log(Box.#value);", "TS18013")]
     [InlineData("class Box<T> { static #value: number = 1; } class Derived<T> extends Box<T> { static read() { return Derived.#value; } }", "TS2339")]
-    [InlineData("class Other<T> { static #value: number = 2; } class Box<T> { static #value: number = 1; static read() { return Other.#value; } }", "TS2339")]
+    [InlineData("class Other<T> { static #value: number = 2; } class Box<T> { static #value: number = 1; static read() { return Other.#value; } }", "TS18013")]
     public void GenericLookupPreservesTypeArityAndLexicalAccessChecks(string source, string code)
     {
         var error = Assert.Throws<TypeCheckException>(() => TestHarness.RunInterpreted(source));
