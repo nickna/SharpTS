@@ -41,4 +41,3 @@ public class ArrowParameterAssignmentTests
             new TypeChecker().Check(TestHarness.ParseOrThrow(source)));
     }
 }
-
