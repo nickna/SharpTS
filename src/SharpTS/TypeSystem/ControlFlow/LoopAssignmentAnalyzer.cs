@@ -162,7 +162,7 @@ public static class LoopAssignmentAnalyzer
                 CollectAssignedPaths(labeledStmt.Statement, paths, privateOwner);
                 break;
 
-            case Stmt.Break or Stmt.Continue or Stmt.Function:
+            case Stmt.Break or Stmt.Continue:
                 break;
             default:
                 // Keep invalidation conservative when a preservation proof cannot
@@ -370,8 +370,9 @@ public static class LoopAssignmentAnalyzer
                 break;
 
             case Expr.ArrowFunction:
-                // Don't descend into arrow functions - they have their own scope
-                // Assignments inside don't affect outer narrowings during the loop's execution
+                // A callable may be invoked immediately. Keep the existing write
+                // collection boundary, but do not prove preservation across its body.
+                paths.HasOpaqueEffects = true;
                 break;
 
             case Expr.New newExpr:

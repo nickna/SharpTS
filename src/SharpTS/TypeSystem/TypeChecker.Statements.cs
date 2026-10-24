@@ -1407,9 +1407,11 @@ public partial class TypeChecker
         CheckExpr(stmt.Condition);
         var incomingAssignments = SnapshotDefiniteAssignmentState();
         var conditionNarrowings = AnalyzeLoopConditionNarrowings(stmt.Condition);
+        var conditionWrites = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
+            new Stmt.Expression(stmt.Condition), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
         try
         {
-            CheckLoopBody(stmt.Body, conditionNarrowings);
+            CheckLoopBody(stmt.Body, conditionNarrowings, conditionAssignedPaths: conditionWrites);
         }
         finally
         {
@@ -1422,7 +1424,9 @@ public partial class TypeChecker
     internal VoidResult VisitDoWhile(Stmt.DoWhile stmt)
     {
         // Do-while runs body first, so no condition narrowings in body
-        CheckLoopBody(stmt.Body, conditionNarrowings: null);
+        var conditionWrites = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
+            new Stmt.Expression(stmt.Condition), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
+        CheckLoopBody(stmt.Body, conditionNarrowings: null, conditionAssignedPaths: conditionWrites);
         CheckExpr(stmt.Condition);
         return VoidResult.Instance;
     }
@@ -1448,10 +1452,12 @@ public partial class TypeChecker
             incrementPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
                 new Stmt.Expression(stmt.Increment), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
         }
+        var conditionWrites = stmt.Condition is null ? null : ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
+            new Stmt.Expression(stmt.Condition), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
 
         try
         {
-            CheckLoopBody(stmt.Body, conditionNarrowings, incrementPaths);
+            CheckLoopBody(stmt.Body, conditionNarrowings, incrementPaths, conditionAssignedPaths: conditionWrites);
 
             if (stmt.Increment != null)
                 CheckExpr(stmt.Increment);
@@ -1681,11 +1687,13 @@ public partial class TypeChecker
     /// <param name="conditionNarrowings">Narrowings from condition to apply in body (null for do-while, for-of, for-in)</param>
     /// <param name="additionalAssignedPaths">Additional paths to consider as assigned (e.g., from increment)</param>
     /// <param name="loopEnvironment">Custom environment for the loop (e.g., for-of/for-in iterator variable)</param>
+    /// <param name="conditionAssignedPaths">Condition effects used only to validate guard preservation</param>
     private void CheckLoopBody(
         Stmt body,
         List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)>? conditionNarrowings,
         ControlFlow.LoopAssignmentAnalyzer.AssignmentAnalysis? additionalAssignedPaths = null,
-        TypeEnvironment? loopEnvironment = null)
+        TypeEnvironment? loopEnvironment = null,
+        ControlFlow.LoopAssignmentAnalyzer.AssignmentAnalysis? conditionAssignedPaths = null)
     {
         // Get assigned paths from body
         var analysis = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
@@ -1699,6 +1707,22 @@ public partial class TypeChecker
             {
                 if (assignments.TryGetValue(path, out var existing)) existing.AddRange(writes);
                 else assignments[path] = writes;
+            }
+        }
+        // Conditions also execute between iterations. Include their effects in
+        // the preservation proof without changing the existing invalidation set.
+        var preservationWrites = assignments;
+        if (conditionAssignedPaths is not null)
+        {
+            hasOpaqueEffects |= conditionAssignedPaths.HasOpaqueEffects;
+            if (conditionAssignedPaths.Writes.Count > 0)
+            {
+                preservationWrites = assignments.ToDictionary(pair => pair.Key, pair => new List<Expr?>(pair.Value));
+                foreach (var (path, writes) in conditionAssignedPaths.Writes)
+                {
+                    if (preservationWrites.TryGetValue(path, out var existing)) existing.AddRange(writes);
+                    else preservationWrites[path] = writes;
+                }
             }
         }
 
@@ -1717,7 +1741,7 @@ public partial class TypeChecker
             {
                 // Invalidate narrowings for any paths assigned within the loop
                 HashSet<Narrowing.NarrowingPath> preservedPrivatePaths = hasOpaqueEffects ? [] :
-                    assignments.Keys.Where(path => LoopWritesPreserveNestedPrivateGuard(path, assignments)).ToHashSet();
+                    assignments.Keys.Where(path => LoopWritesPreserveNestedPrivateGuard(path, preservationWrites)).ToHashSet();
                 foreach (var assignedPath in assignments.Keys)
                 {
                     if (!preservedPrivatePaths.Contains(assignedPath))

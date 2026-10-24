@@ -81,6 +81,34 @@ public class PrivateLoopPreservingWriteTests
         Assert.Contains(Check(source).Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
     }
 
+    [Theory, ModeData]
+    public void CompatibleDoWhileConditionWritesPreserveTheGuard(ExecutionMode mode)
+    {
+        string source = StringSource("let i = 0; do { const value: string = this.#holder.#value; " +
+            "console.log(value); this.#holder.#value = 'again'; } " +
+            "while (i++ < 1 && (this.#holder.#value = 'again') === 'again');");
+        Assert.Equal("safe\nagain\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void DoWhileConditionMustAlsoPreserveTheGuard()
+    {
+        string source = StringSource("let i = 0; do { const value: string = this.#holder.#value; " +
+            "this.#holder.#value = 'again'; } " +
+            "while (i++ < 1 && (this.#holder.#value = undefined) === undefined);");
+        Assert.Contains(Check(source).Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
+    }
+
+    [Theory]
+    [InlineData("(() => { this.#holder.#value = undefined; })();")]
+    [InlineData("(function () { this.#holder.#value = undefined; }).call(this);")]
+    public void ImmediatelyInvokedCallablesCannotHideUnsafeWrites(string invoke)
+    {
+        string source = StringSource("for (let i = 0; i < 2; i++) { " +
+            "const value: string = this.#holder.#value; this.#holder.#value = 'again'; " + invoke + " }");
+        Assert.Contains(Check(source).Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
+    }
+
     [Fact]
     public void UnanalysedWriteContainersDoNotRelaxInvalidation()
     {
