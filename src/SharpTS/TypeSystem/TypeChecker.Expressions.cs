@@ -2621,7 +2621,7 @@ public partial class TypeChecker
                 // "does not have a superclass".
                 bool isNativeFallback = !_hasDefaultLibraries &&
                     classExpr.SuperclassExpr is Expr.Variable nativeBase &&
-                    nativeBase.Name.Lexeme is "Array" or "Promise" &&
+                    (nativeBase.Name.Lexeme is "Array" or "Promise" || BuiltInNames.IsErrorTypeName(nativeBase.Name.Lexeme)) &&
                     _environment.Get(nativeBase.Name.Lexeme) is null &&
                     _currentMergedNamespace?.Values.ContainsKey(nativeBase.Name.Lexeme) != true;
                 var placeholder = new TypeInfo.MutableClass(isNativeFallback
