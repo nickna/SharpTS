@@ -378,7 +378,8 @@ public partial class TypeChecker
         }
 
         if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
-            getIndex.Index is Expr.Literal { Value: string constructorMember } && constructorMember == "prototype")
+            getIndex.Index is Expr.Literal { Value: string constructorMember } &&
+            (constructorMember == "prototype" || HasKnownConstructorMember(objType, constructorMember)))
             return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, constructorMember, null,
                 TryGetExprLine(getIndex.Index) ?? 0));
 
@@ -1448,7 +1449,8 @@ public partial class TypeChecker
                 ?? GetMemberType(objType, "@@hasInstance");
 
         if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
-            getIndex.Index is Expr.Literal { Value: string constructorMember } && constructorMember == "prototype")
+            getIndex.Index is Expr.Literal { Value: string constructorMember } &&
+            (constructorMember == "prototype" || HasKnownConstructorMember(objType, constructorMember)))
             return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, constructorMember, null,
                 TryGetExprLine(getIndex.Index) ?? 0));
 
@@ -1551,6 +1553,15 @@ public partial class TypeChecker
         }
 
         return null;
+    }
+
+    private bool HasKnownConstructorMember(TypeInfo receiver, string name)
+    {
+        HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);
+        for (TypeInfo? owner = receiver; owner is not null && visited.Add(owner); owner = GetSuperclass(owner))
+            if (GetStaticMethods(owner)?.ContainsKey(name) == true || GetStaticProperties(owner)?.ContainsKey(name) == true)
+                return true;
+        return false;
     }
 
     private TypeInfo? TryReadKnownIndexedInstanceMember(TypeInfo receiver, TypeInfo index, Expr.GetIndex syntax)
