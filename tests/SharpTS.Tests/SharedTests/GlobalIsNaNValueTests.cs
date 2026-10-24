@@ -65,6 +65,311 @@ public sealed class GlobalIsNaNValueTests
             TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void GlobalIsNaNPreservesArrayAndBoxedConversionHooks(ExecutionMode mode)
+    {
+        var source = """
+            const a: any = [];
+            a.valueOf = () => NaN;
+            console.log(isNaN(a));
+
+            const n: any = new Number(1);
+            n.valueOf = () => ({});
+            n.toString = () => "bad";
+            console.log(isNaN(n));
+            """;
+
+        Assert.Equal(
+            "true\ntrue\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNUsesECMAScriptWhitespaceForTheNELCharacter(ExecutionMode mode)
+    {
+        var source = """
+            const nel = String.fromCharCode(0x85);
+            console.log(isNaN(nel as any), isNaN((nel + "1") as any));
+            """;
+
+        Assert.Equal(
+            "true true\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNHonorsArrayConversionHooks(ExecutionMode mode)
+    {
+        var source = """
+            let trace = "";
+            const exoticNaN: any = [];
+            exoticNaN[Symbol.toPrimitive] = (hint: string) => { trace += "p"; return NaN; };
+            console.log(typeof exoticNaN[Symbol.toPrimitive], isNaN(exoticNaN), Number(exoticNaN), trace);
+            trace = "";
+            const exoticNumber: any = [];
+            exoticNumber[Symbol.toPrimitive] = (hint: string) => { trace += "p"; return 7; };
+            console.log(isNaN(exoticNumber), Number(exoticNumber), trace);
+            trace = "";
+            const exoticString: any = [];
+            exoticString[Symbol.toPrimitive] = (hint: string) => { trace += "p"; return "5"; };
+            console.log(isNaN(exoticString), Number(exoticString), trace);
+            trace = "";
+            const exoticObject: any = [];
+            exoticObject[Symbol.toPrimitive] = (hint: string) => { trace += "p"; return {}; };
+            try { console.log(isNaN(exoticObject), Number(exoticObject), trace); }
+            catch (error) { console.log(error.name, error instanceof TypeError, trace); }
+            const valueOfNaN: any = [];
+            valueOfNaN.valueOf = () => NaN;
+            console.log(isNaN(valueOfNaN), Number(valueOfNaN));
+            const valueOfNumber: any = [];
+            valueOfNumber.valueOf = () => 7;
+            console.log(isNaN(valueOfNumber), Number(valueOfNumber));
+            const valueOfObject: any = [];
+            valueOfObject.valueOf = () => ({});
+            valueOfObject.toString = () => "bad";
+            console.log(isNaN(valueOfObject), Number(valueOfObject));
+            const valueOfString: any = [];
+            valueOfString.valueOf = () => "5";
+            console.log(isNaN(valueOfString), Number(valueOfString));
+            const valueOfFailed: any = [];
+            valueOfFailed.valueOf = () => ({});
+            valueOfFailed.toString = () => ({});
+            try { console.log(isNaN(valueOfFailed), Number(valueOfFailed)); }
+            catch (error) { console.log(error.name, error instanceof TypeError); }
+            const untouched: any = [];
+            console.log(isNaN(untouched), Number(untouched));
+            const hintProbe: any = [];
+            hintProbe[Symbol.toPrimitive] = (hint: string) => { trace += hint + ";"; return NaN; };
+            trace = "";
+            console.log(isNaN(hintProbe), trace);
+            """;
+
+        Assert.Equal(
+            "function true NaN pp\nfalse 7 pp\nfalse 5 pp\nTypeError true p\ntrue NaN\nfalse 7\ntrue NaN\nfalse 5\nTypeError true\nfalse 0\ntrue number;\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNHonorsBoxedWrapperConversionHooks(ExecutionMode mode)
+    {
+        var source = """
+            let trace = "";
+            const exoticNaN: any = new Number(1);
+            exoticNaN[Symbol.toPrimitive] = (hint: string) => { trace += "p"; return NaN; };
+            console.log(typeof exoticNaN[Symbol.toPrimitive], isNaN(exoticNaN), Number(exoticNaN), trace);
+            trace = "";
+            const exoticNumber: any = new Number(1);
+            exoticNumber[Symbol.toPrimitive] = (hint: string) => { trace += "p"; return 7; };
+            console.log(isNaN(exoticNumber), Number(exoticNumber), trace);
+            trace = "";
+            const exoticString: any = new Number(1);
+            exoticString[Symbol.toPrimitive] = (hint: string) => { trace += "p"; return "5"; };
+            console.log(isNaN(exoticString), Number(exoticString), trace);
+            trace = "";
+            const exoticObject: any = new Number(1);
+            exoticObject[Symbol.toPrimitive] = (hint: string) => { trace += "p"; return {}; };
+            try { console.log(isNaN(exoticObject), Number(exoticObject), trace); }
+            catch (error) { console.log(error.name, error instanceof TypeError, trace); }
+            const valueOfNaN: any = new Number(1);
+            valueOfNaN.valueOf = () => NaN;
+            console.log(isNaN(valueOfNaN), Number(valueOfNaN));
+            const valueOfNumber: any = new Number(1);
+            valueOfNumber.valueOf = () => 7;
+            console.log(isNaN(valueOfNumber), Number(valueOfNumber));
+            const valueOfObject: any = new Number(1);
+            valueOfObject.valueOf = () => ({});
+            valueOfObject.toString = () => "bad";
+            console.log(isNaN(valueOfObject), Number(valueOfObject));
+            const valueOfString: any = new Number(1);
+            valueOfString.valueOf = () => "5";
+            console.log(isNaN(valueOfString), Number(valueOfString));
+            const valueOfFailed: any = new Number(1);
+            valueOfFailed.valueOf = () => ({});
+            valueOfFailed.toString = () => ({});
+            try { console.log(isNaN(valueOfFailed), Number(valueOfFailed)); }
+            catch (error) { console.log(error.name, error instanceof TypeError); }
+            const untouched: any = new Number(1);
+            console.log(isNaN(untouched), Number(untouched));
+            const boxedString: any = new String("9");
+            boxedString.valueOf = () => ({});
+            boxedString.toString = () => "bad";
+            console.log(isNaN(boxedString), Number(boxedString));
+            const boxedBoolean: any = new Boolean(true);
+            boxedBoolean.valueOf = () => ({});
+            boxedBoolean.toString = () => "bad";
+            console.log(isNaN(boxedBoolean), Number(boxedBoolean));
+            const hintProbe: any = new Number(1);
+            hintProbe[Symbol.toPrimitive] = (hint: string) => { trace += hint + ";"; return NaN; };
+            trace = "";
+            console.log(isNaN(hintProbe), trace);
+            """;
+
+        Assert.Equal(
+            "function true NaN pp\nfalse 7 pp\nfalse 5 pp\nTypeError true p\ntrue NaN\nfalse 7\ntrue NaN\nfalse 5\nTypeError true\nfalse 1\ntrue NaN\ntrue NaN\ntrue number;\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNHonorsConversionHooksOnOtherFastPathKinds(ExecutionMode mode)
+    {
+        var source = """
+            let trace = "";
+            try {
+                const fnExotic: any = () => 1;
+                fnExotic[Symbol.toPrimitive] = (hint: string) => 7;
+                console.log(typeof fnExotic[Symbol.toPrimitive], isNaN(fnExotic), Number(fnExotic));
+            } catch (error) { console.log(error.name, error instanceof TypeError); }
+            try {
+                const fnValueOf: any = () => 1;
+                fnValueOf.valueOf = () => NaN;
+                console.log(isNaN(fnValueOf), Number(fnValueOf));
+            } catch (error) { console.log(error.name, error instanceof TypeError); }
+            try {
+                const fnPlain: any = () => 1;
+                console.log(isNaN(fnPlain), Number(fnPlain));
+            } catch (error) { console.log(error.name, error instanceof TypeError); }
+            const argsExotic: any = (function () { return arguments; })();
+            try {
+                argsExotic[Symbol.toPrimitive] = (hint: string) => 7;
+                console.log(typeof argsExotic[Symbol.toPrimitive], isNaN(argsExotic), Number(argsExotic));
+            } catch (error) { console.log(error.name, error instanceof TypeError); }
+            const argsValueOf: any = (function () { return arguments; })();
+            try {
+                argsValueOf.valueOf = () => 7;
+                console.log(isNaN(argsValueOf), Number(argsValueOf));
+            } catch (error) { console.log(error.name, error instanceof TypeError); }
+            const argsPlain: any = (function () { return arguments; })();
+            try { console.log(isNaN(argsPlain), Number(argsPlain)); }
+            catch (error) { console.log(error.name, error instanceof TypeError); }
+            const dateUntouched: any = new Date(0);
+            console.log(isNaN(dateUntouched), Number(dateUntouched));
+            const dateHooked: any = new Date(0);
+            try {
+                dateHooked.valueOf = () => 42;
+                console.log(isNaN(dateHooked), Number(dateHooked));
+            } catch (error) { console.log(error.name, error instanceof TypeError); }
+            class Box {
+                value: number;
+                constructor(v: number) { this.value = v; }
+            }
+            const instExotic: any = new Box(1);
+            try {
+                instExotic[Symbol.toPrimitive] = (hint: string) => 7;
+                console.log(typeof instExotic[Symbol.toPrimitive], isNaN(instExotic), Number(instExotic));
+            } catch (error) { console.log(error.name, error instanceof TypeError); }
+            const instFallback: any = new Box(2);
+            try {
+                instFallback.valueOf = () => ({});
+                instFallback.toString = () => "bad";
+                console.log(isNaN(instFallback), Number(instFallback));
+            } catch (error) { console.log(error.name, error instanceof TypeError); }
+            const instPlain: any = new Box(3);
+            try { console.log(isNaN(instPlain), Number(instPlain)); }
+            catch (error) { console.log(error.name, error instanceof TypeError); }
+            const plainFallback: any = {};
+            plainFallback.valueOf = () => ({});
+            plainFallback.toString = () => "bad";
+            console.log(isNaN(plainFallback), Number(plainFallback));
+            console.log(isNaN(Number.prototype as any), Number(Number.prototype as any));
+            console.log(isNaN(String.prototype as any), Number(String.prototype as any));
+            console.log(isNaN(Boolean.prototype as any), Number(Boolean.prototype as any));
+            """;
+
+        Assert.Equal(
+            "function false 7\ntrue NaN\ntrue NaN\nfunction false 7\nfalse 7\ntrue NaN\nfalse 0\nfalse 42\nfunction false 7\ntrue NaN\ntrue NaN\ntrue NaN\nfalse 0\nfalse 0\nfalse 0\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNTracesConversionOrderAndHint(ExecutionMode mode)
+    {
+        var source = """
+            let trace = "";
+            const plain = {
+                valueOf() { trace += "v"; return {}; },
+                toString() { trace += "s"; return "5"; }
+            };
+            console.log(isNaN(plain as any), trace);
+            const boxed: any = new Number(3);
+            boxed.valueOf = () => { trace += "v"; return {}; };
+            boxed.toString = () => { trace += "s"; return "5"; };
+            console.log(isNaN(boxed), trace);
+            const arrayCase: any = [];
+            arrayCase.valueOf = () => { trace += "v"; return {}; };
+            arrayCase.toString = () => { trace += "s"; return "5"; };
+            console.log(isNaN(arrayCase), trace);
+            """;
+
+        Assert.Equal(
+            "false vs\nfalse vsvs\nfalse vsvsvs\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNTrimsExactlyTheECMAScriptWhitespaceSet(ExecutionMode mode)
+    {
+        var source = """
+            const whitespace: number[] = [
+                0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0xA0, 0x1680, 0x2000, 0x2001,
+                0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A,
+                0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF
+            ];
+            let mismatchCount = 0;
+            for (let codePoint = 0; codePoint <= 0xFFFF; codePoint++) {
+                const c = String.fromCharCode(codePoint);
+                const inSet = whitespace.indexOf(codePoint) >= 0;
+                const isDigit = codePoint >= 0x30 && codePoint <= 0x39;
+                const numericPunct = isDigit || codePoint === 0x2B || codePoint === 0x2D || codePoint === 0x2E;
+                const wrapped = Number(c + "1" + c);
+                if (inSet ? wrapped !== 1 : (!isDigit && !Number.isNaN(wrapped))) {
+                    console.log("U+" + ("000" + codePoint.toString(16)).slice(-4).toUpperCase());
+                    mismatchCount++;
+                    continue;
+                }
+                if (inSet ? isNaN(c as any) : (!isDigit && !isNaN(c as any))) {
+                    console.log("U+" + ("000" + codePoint.toString(16)).slice(-4).toUpperCase());
+                    mismatchCount++;
+                    continue;
+                }
+                if (inSet ? isNaN((c + "1") as any) : (!numericPunct && !isNaN((c + "1") as any))) {
+                    console.log("U+" + ("000" + codePoint.toString(16)).slice(-4).toUpperCase());
+                    mismatchCount++;
+                }
+            }
+            console.log(mismatchCount + " mismatches");
+            """;
+
+        Assert.Equal(
+            "0 mismatches\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNHonorsOverridesOnPrimitivePrototypes(ExecutionMode mode)
+    {
+        var source = """
+            console.log(isNaN(Number.prototype as any), Number(Number.prototype as any));
+            try {
+                (Number.prototype as any).valueOf = () => NaN;
+                console.log(isNaN(Number.prototype as any), Number(Number.prototype as any));
+            } catch (error) { console.log(error.name, error instanceof TypeError); }
+            console.log(isNaN(String.prototype as any), Number(String.prototype as any));
+            try {
+                (String.prototype as any).valueOf = () => NaN;
+                console.log(isNaN(String.prototype as any), Number(String.prototype as any));
+            } catch (error) { console.log(error.name, error instanceof TypeError); }
+            console.log(isNaN(Boolean.prototype as any), Number(Boolean.prototype as any));
+            try {
+                (Boolean.prototype as any).valueOf = () => NaN;
+                console.log(isNaN(Boolean.prototype as any), Number(Boolean.prototype as any));
+            } catch (error) { console.log(error.name, error instanceof TypeError); }
+            """;
+
+        Assert.Equal(
+            "false 0\ntrue NaN\nfalse 0\ntrue NaN\nfalse 0\ntrue NaN\n",
+            TestHarness.Run(source, mode));
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         yield return new object[] { "original", """
