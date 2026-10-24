@@ -1144,17 +1144,21 @@ public partial class TypeChecker
             if (itf.IsCallable)
             {
                 if (NormalizeSignature(actual) is { } funcSource)
-                    return CallSignaturesSatisfiedBy(itf.CallSignatures!, [funcSource]);
-
-                if (GetCallSignatures(actual) is { } actualCallSigs)
+                {
+                    if (!CallSignaturesSatisfiedBy(itf.CallSignatures!, [funcSource])) return false;
+                    if (!itf.GetAllMembers().Any()) return true;
+                }
+                else if (GetCallSignatures(actual) is { } actualCallSigs)
                 {
                     if (!CallSignaturesSatisfiedBy(itf.CallSignatures!, actualCallSigs.Select(NormalizeCallSignature).ToList()))
                         return false;
                     // Non-signature members (if any) still checked by the structural path below.
                     if (itf.Members.Count == 0) return true;
                 }
-                // Other actuals may still be callable via downstream paths — fall through rather
-                // than rejecting here.
+                else
+                {
+                    return false;
+                }
             }
 
             // Constructable interface: the source must satisfy the construct signatures.
@@ -1277,7 +1281,10 @@ public partial class TypeChecker
                     if (!CallSignaturesSatisfiedBy(exSigRec.CallSignatures!, actualSigs.Select(NormalizeCallSignature).ToList()))
                         return false;
                 }
-                // Other actuals may still be callable via downstream paths.
+                else
+                {
+                    return false;
+                }
             }
 
             if (exSigRec.IsConstructable)
