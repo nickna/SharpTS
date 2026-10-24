@@ -1412,7 +1412,7 @@ public partial class TypeChecker
             ValidatePrivateReceiver(objType, owner, isStatic: false, get.Name);
             ObservePendingGetterFieldRead(owner, isStatic: false, fieldName);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateInstance);
-            return fieldType;
+            return CompletedFieldDependencyType(owner, false, fieldName, fieldType);
         }
         if (owner.PrivateMethodTypes.TryGetValue(fieldName, out var methodType))
         {
@@ -1433,7 +1433,7 @@ public partial class TypeChecker
             ValidatePrivateReceiver(objType, owner, isStatic: true, get.Name);
             ObservePendingGetterFieldRead(owner, isStatic: true, fieldName);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateStatic);
-            return objType is TypeInfo.Any ? TypeInfo.Any.Shared : staticFieldType;
+            return objType is TypeInfo.Any ? TypeInfo.Any.Shared : CompletedFieldDependencyType(owner, true, fieldName, staticFieldType);
         }
 
         throw new TypeCheckException($" Private field '{fieldName}' does not exist on class '{_currentClass.Name}'.", tsCode: "TS2339");

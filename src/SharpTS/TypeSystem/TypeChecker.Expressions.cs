@@ -1923,6 +1923,7 @@ public partial class TypeChecker
         if (classBodyFlow is not null && _immediateClassCallables.TryGetValue(arrow, out var callerFlow))
             _immediateClassFlows[classBodyFlow] = callerFlow;
 
+        _classFieldDeferredReadDepth++;
         try
         {
             if (arrow.ExpressionBody != null)
@@ -2044,6 +2045,7 @@ public partial class TypeChecker
         }
         finally
         {
+            _classFieldDeferredReadDepth--;
             if (classBodyFlow is not null) _immediateClassFlows.Remove(classBodyFlow);
             PopDeclaredVariableScope();
             _environment = previousEnv;

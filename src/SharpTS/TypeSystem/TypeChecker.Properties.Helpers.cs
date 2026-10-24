@@ -163,7 +163,8 @@ public partial class TypeChecker
                     ObservePendingGetterFieldRead(current, isStatic: true, lookupName);
                 }
                 ObserveSourceMemberSelection(memberName, current, MemberFacet.Static);
-                return ResolveFieldStageGetter(current, isStatic: true, lookupName, staticPropType);
+                return ResolveFieldStageGetter(current, isStatic: true, lookupName,
+                    CompletedFieldDependencyType(current, true, lookupName, staticPropType));
             }
             current = GetSuperclass(current);
         }
@@ -486,7 +487,7 @@ public partial class TypeChecker
         {
             ObservePendingGetterFieldRead(gc, isStatic: false, memberName);
             ObserveSourceMemberSelection(memberToken, gc, MemberFacet.Instance);
-            return Substitute(fieldType, subs);
+            return Substitute(CompletedFieldDependencyType(gc, false, memberName, fieldType), subs);
         }
 
         // Check for method
@@ -515,7 +516,7 @@ public partial class TypeChecker
                 {
                     ObservePendingGetterFieldRead(currentSuper, isStatic: false, memberName);
                     ObserveSourceMemberSelection(memberToken, currentSuper, MemberFacet.Instance);
-                    return SubstituteConstructorMember(superField, fieldSubstitutions);
+                    return SubstituteConstructorMember(CompletedFieldDependencyType(currentSuper, false, memberName, superField), fieldSubstitutions);
                 }
                 currentSuper = GetSuperclass(currentSuper);
             }
@@ -651,6 +652,7 @@ public partial class TypeChecker
             {
                 ObservePendingGetterFieldRead(current, isStatic: false, memberNameStr);
                 ObserveSourceMemberSelection(memberName, current, MemberFacet.Instance);
+                fieldType = CompletedFieldDependencyType(current, false, memberNameStr, fieldType);
                 return promiseHeritage ? Sub(fieldType) : SubstituteConstructorMember(fieldType, fieldSubstitutions);
             }
 
