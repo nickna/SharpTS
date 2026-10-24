@@ -8,7 +8,7 @@ namespace SharpTS.Tests.TypeCheckerTests;
 public sealed class OptionalPromiseHandlerTests
 {
     private static void Check(string source)
-        => new TypeChecker(strictNullChecks: true).Check(new Parser(new Lexer(source).ScanTokens()).Parse());
+        => new TypeChecker(strictNullChecks: true).Check(new Parser(new Lexer(source).ScanTokens()).Parse().Statements);
 
     [Theory]
     [InlineData("")]
