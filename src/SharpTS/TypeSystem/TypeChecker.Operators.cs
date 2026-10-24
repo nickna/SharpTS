@@ -211,16 +211,25 @@ public partial class TypeChecker
     /// diagnostic messages where `any` must NOT be treated as "the other side was a number".</summary>
     private static bool IsBareNumberType(TypeInfo t) => t is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral;
 
+    private TypeInfo? NumericBinaryResult(TypeInfo left, TypeInfo right)
+    {
+        // Never can inhabit either numeric domain. Test number first so two
+        // never operands retain TypeScript's number result rather than bigint.
+        if ((left is TypeInfo.Never || IsNumber(left)) && (right is TypeInfo.Never || IsNumber(right)))
+            return TypeInfo.Primitive.Number;
+        if ((left is TypeInfo.Never || IsBigInt(left)) && (right is TypeInfo.Never || IsBigInt(right)))
+            return TypeInfo.BigInt.Shared;
+        return null;
+    }
+
     private TypeInfo CheckArithmeticBinary(TypeInfo left, TypeInfo right, int line = 0)
     {
         // Any/Inferred (incl. in unions) bypasses type checking
         if (IsAnyPermissive(left) || IsAnyPermissive(right))
             return TypeInfo.Any.Shared;
         // Allow number+number OR bigint+bigint, NOT mixed
-        if (IsBigInt(left) && IsBigInt(right))
-            return TypeInfo.BigInt.Shared;
-        if (IsNumber(left) && IsNumber(right))
-            return TypeInfo.Primitive.Number;
+        if (NumericBinaryResult(left, right) is { } result)
+            return result;
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.", line > 0 ? line : null, tsCode: "TS2365");
         RecordInvalidArithmeticOperand(left, right, line);
@@ -238,7 +247,7 @@ public partial class TypeChecker
     private void RecordInvalidArithmeticOperand(TypeInfo left, TypeInfo right, int line)
     {
         const string message = "An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.";
-        bool leftInvalid = !IsNumber(left) && !IsBigInt(left);
+        bool leftInvalid = left is not TypeInfo.Never && !IsNumber(left) && !IsBigInt(left);
         bool rightInvalid = right is not TypeInfo.Never && !IsNumber(right) && !IsBigInt(right);
         if (leftInvalid && rightInvalid)
             RecordTypeError(new TypeCheckException(message, line: line > 0 ? line : null, tsCode: "TS2363"));
@@ -262,8 +271,7 @@ public partial class TypeChecker
             return TypeInfo.Primitive.Boolean;
         // Allow number vs number, bigint vs bigint, or string vs string
         // (JS AbstractRelationalComparison: both strings → lexicographic).
-        if ((IsBigInt(left) && IsBigInt(right))
-            || (IsNumber(left) && IsNumber(right))
+        if (NumericBinaryResult(left, right) is not null
             || (IsString(left) && IsString(right)))
             return TypeInfo.Primitive.Boolean;
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
@@ -302,10 +310,8 @@ public partial class TypeChecker
         if (IsAnyPermissive(left) || IsAnyPermissive(right))
             return TypeInfo.Any.Shared;
         // Allow both number and bigint (separately)
-        if (IsBigInt(left) && IsBigInt(right))
-            return TypeInfo.BigInt.Shared;
-        if (IsNumber(left) && IsNumber(right))
-            return TypeInfo.Primitive.Number;
+        if (NumericBinaryResult(left, right) is { } result)
+            return result;
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot mix bigint and number in bitwise operations.", line > 0 ? line : null, tsCode: "TS2365");
         // Same per-side TS2362/TS2363 split as arithmetic — tsc uses the identical codes for bitwise.
@@ -321,18 +327,11 @@ public partial class TypeChecker
         // Unsigned right shift - NOT SUPPORTED for bigint in TypeScript!
         if (IsBigInt(left) || IsBigInt(right))
             throw new TypeCheckException("Unsigned right shift (>>>) is not supported for bigint.", line > 0 ? line : null, tsCode: "TS2791");
-        if (!IsNumber(left) || !IsNumber(right))
+        if (NumericBinaryResult(left, right) is null)
         {
-            // Same per-side TS2362/TS2363 split as the other arithmetic/bitwise operators (see
-            // RecordInvalidArithmeticOperand) — bigint is excluded above (not a valid >>> operand
-            // at all), so only number qualifies here. Always throws; when both sides are invalid,
-            // the one not thrown is recorded directly so recovery mode still gets both.
-            const string message = "An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.";
-            if (!IsNumber(left) && !IsNumber(right))
-                RecordTypeError(new TypeCheckException(message, line: line > 0 ? line : null, tsCode: "TS2363"));
-            if (!IsNumber(left))
-                throw new TypeCheckException(message, line > 0 ? line : null, tsCode: "TS2362");
-            throw new TypeCheckException(message, line > 0 ? line : null, tsCode: "TS2363");
+            // Bigint has already been rejected; retain the ordinary per-side
+            // operand diagnostics while admitting never as a numeric operand.
+            RecordInvalidArithmeticOperand(left, right, line);
         }
         return TypeInfo.Primitive.Number;
     }
@@ -700,13 +699,10 @@ public partial class TypeChecker
         {
             RecordInvalidArithmeticOperand(varType, valueType, line);
         }
-        if (valueType is not TypeInfo.Never)
-        {
-            if (compound.Operator.Type == TokenType.GREATER_GREATER_GREATER_EQUAL)
-                CheckUnsignedShiftBinary(varType, valueType, line);
-            else
-                CheckArithmeticBinary(varType, valueType, line);
-        }
+        if (compound.Operator.Type == TokenType.GREATER_GREATER_GREATER_EQUAL)
+            CheckUnsignedShiftBinary(varType, valueType, line);
+        else if (valueType is not TypeInfo.Never)
+            CheckArithmeticBinary(varType, valueType, line);
 
         return varType;
     }
