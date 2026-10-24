@@ -1094,6 +1094,9 @@ public partial class TypeChecker
 
             if (resolvedExpected is TypeInfo.Class expectedClass && resolvedActual is TypeInfo.Class actualClass)
             {
+                if (TryGetOrdinaryConstructorHierarchy(expectedClass, out _) &&
+                    TryGetOrdinaryConstructorHierarchy(actualClass, out _))
+                    return OrdinaryInstancesRelated(i1, i2);
                 // Check direct class hierarchy (by name)
                 TypeInfo? current = actualClass;
                 while (current != null)
