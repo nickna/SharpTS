@@ -183,6 +183,18 @@ public partial class TypeChecker
                 throw new TypeCheckException($"Operator '+' cannot be applied to types '{left}' and '{right}'.", line > 0 ? line : null, tsCode: "TS2365");
             throw new TypeCheckException("The '+' operator cannot be applied to type 'symbol'.", line > 0 ? line : null, tsCode: "TS2469");
         }
+        // Never is assignable to each primitive operand domain. Choose the other
+        // operand's numeric domain first, then TypeScript's string fallback. Keep
+        // symbol rejection above this branch, including when the other side is never.
+        if (left is TypeInfo.Never || right is TypeInfo.Never)
+        {
+            TypeInfo other = left is TypeInfo.Never ? right : left;
+            if (other is TypeInfo.Never || !IsAnyPermissive(other) && IsNumber(other))
+                return TypeInfo.Primitive.Number;
+            if (!IsAnyPermissive(other) && IsBigInt(other))
+                return TypeInfo.BigInt.Shared;
+            return TypeInfo.String.Shared;
+        }
         // Any/Inferred (incl. in unions) bypasses type checking - return any
         if (IsAnyPermissive(left) || IsAnyPermissive(right)) return TypeInfo.Any.Shared;
         if (IsBigInt(left) && IsBigInt(right)) return TypeInfo.BigInt.Shared;
