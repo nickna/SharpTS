@@ -70,7 +70,19 @@ public sealed class OrdinaryCallSpreadTests
             function g(x: number, y: string) {}
             function h(callback: (value: number) => number) {}
             f(...[1]);
+            f(...([1]));
             g(...[1, 'ok']);
+            g(...[...[1] as const, 'ok']);
             h(...[value => value + 1]);
             """);
+
+    [Fact]
+    public void NestedUnknownArraySpreadsCannotProveFixedPositions()
+    {
+        var error = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted("""
+            function g(x: number, y: string) {}
+            g(...[...[1], 'ok']);
+            """));
+        Assert.Equal("TS2556", error.Diagnostic.TsCode);
+    }
 }

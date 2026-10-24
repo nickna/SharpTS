@@ -246,6 +246,56 @@ public partial class TypeChecker
                 paramIndex = Math.Max(paramIndex, regularParamCount);
             }
 
+            TypeInfo CheckSpreadOperand(Expr operand, int position)
+            {
+                if (operand is not (Expr.ArrayLiteral or Expr.Grouping)) return CheckExpr(operand);
+                if (EditorFacts.IsEnabled) BeginEditorExpression(operand);
+                try
+                {
+                    TypeInfo result;
+                    if (operand is Expr.Grouping grouping)
+                        result = CheckSpreadOperand(grouping.Expression, position);
+                    else
+                    {
+                        var literal = (Expr.ArrayLiteral)operand;
+                        var elements = new List<TypeInfo.TupleElement>();
+                        foreach (var element in literal.Elements)
+                        {
+                            if (element is Expr.Spread nestedSpread)
+                            {
+                                TypeInfo nestedType = CheckExpr(nestedSpread.Expression);
+                                if (nestedType is TypeInfo.Tuple nestedTuple)
+                                {
+                                    nestedTuple = (TypeInfo.Tuple)FlattenTupleSpreads(nestedTuple);
+                                    elements.AddRange(nestedTuple.Elements);
+                                    position += nestedTuple.Elements.Count;
+                                    if (nestedTuple.RestElementType is null) continue;
+                                    nestedType = new TypeInfo.Array(nestedTuple.RestElementType);
+                                }
+                                if (!TryGetSpreadElementType(nestedType, out var nestedElement))
+                                    throw new TypeCheckException($"Spread argument must be an iterable type, got '{nestedType}'.", tsCode: "TS2488");
+                                elements.Add(new TypeInfo.TupleElement(new TypeInfo.Array(nestedElement), TupleElementKind.Spread));
+                                position = Math.Max(position, regularParamCount);
+                                continue;
+                            }
+                            TypeInfo expected = position < regularParamCount
+                                ? funcType.ParamTypes[position] : restElementType ?? TypeInfo.Any.Shared;
+                            elements.Add(new TypeInfo.TupleElement(CheckExprWithContext(element, expected), TupleElementKind.Required));
+                            position++;
+                        }
+                        result = new TypeInfo.Tuple(elements, elements.Count(element => element.IsRequired));
+                    }
+                    _typeMap.Set(operand, result);
+                    RecordEditorExpressionType(operand, result);
+                    return result;
+                }
+                catch
+                {
+                    if (EditorFacts.IsEnabled) FailEditorExpression(operand);
+                    throw;
+                }
+            }
+
             foreach (var arg in call.Arguments)
             {
                 if (arg is Expr.Spread spread)
@@ -253,19 +303,7 @@ public partial class TypeChecker
                     // Fresh array literals in call spreads receive positional tuple context;
                     // retained array values still have an unknown length. Other iterables are
                     // accepted only where the signature has reached a rest parameter.
-                    TypeInfo spreadType;
-                    if (spread.Expression is Expr.ArrayLiteral literal &&
-                        literal.Elements.All(element => element is not Expr.Spread))
-                    {
-                        var contexts = literal.Elements.Select((_, offset) =>
-                            paramIndex + offset < regularParamCount
-                                ? funcType.ParamTypes[paramIndex + offset]
-                                : restElementType ?? TypeInfo.Any.Shared).ToList();
-                        spreadType = CheckExprWithContext(literal,
-                            TypeInfo.Tuple.FromTypes(contexts, contexts.Count));
-                    }
-                    else
-                        spreadType = CheckExpr(spread.Expression);
+                    TypeInfo spreadType = CheckSpreadOperand(spread.Expression, paramIndex);
                     if (spreadType is TypeInfo.Tuple tupleSpread)
                     {
                         tupleSpread = (TypeInfo.Tuple)FlattenTupleSpreads(tupleSpread);
