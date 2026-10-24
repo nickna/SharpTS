@@ -1916,7 +1916,9 @@ public partial class TypeChecker
         _loopDepth = 0;
         _switchDepth = 0;
         _activeLabels.Clear();
-        PushDefiniteAssignmentScope();
+        PushDeclaredVariableScope();
+        for (int i = 0; i < arrow.Parameters.Count; i++)
+            RecordDeclaredType(arrow.Parameters[i].Name.Lexeme, bodyParamTypes[i]);
         _definiteAssignmentStack.TryPeek(out var classBodyFlow);
         if (classBodyFlow is not null && _immediateClassCallables.TryGetValue(arrow, out var callerFlow))
             _immediateClassFlows[classBodyFlow] = callerFlow;
@@ -2043,7 +2045,7 @@ public partial class TypeChecker
         finally
         {
             if (classBodyFlow is not null) _immediateClassFlows.Remove(classBodyFlow);
-            PopDefiniteAssignmentScope();
+            PopDeclaredVariableScope();
             _environment = previousEnv;
             _currentFunctionReturnType = previousReturn;
             _inferredReturnTypes = previousInferredArrow;
