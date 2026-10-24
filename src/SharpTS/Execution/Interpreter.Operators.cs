@@ -150,7 +150,7 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, index?.ToString() ?? "");
         }
 
-        if (obj is ISharpTSOwnPropertyObject or BuiltInMethod)
+        if (obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObject or SharpTSInstance)
         {
             object key = ToPropertyKey(index);
             RuntimeValue current = RuntimeValue.FromBoxed(GetOwnPropertyObjectValue(obj, key));
