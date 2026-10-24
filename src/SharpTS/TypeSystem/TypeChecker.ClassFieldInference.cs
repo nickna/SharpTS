@@ -29,10 +29,14 @@ public partial class TypeChecker
 
         // Preserve assignments and guards checked within the initializer itself. Only the
         // enclosing binding's declaration-time flow is unavailable at construction.
-        for (var environment = _environment; !ReferenceEquals(environment, boundary); environment = environment.Enclosing!)
+        for (TypeEnvironment? environment = _environment; environment is not null; environment = environment.Enclosing)
+        {
+            if (ReferenceEquals(environment, boundary))
+                return declared.Type;
             if (environment.IsDefinedLocally(name.Lexeme))
                 return current;
-        return declared.Type;
+        }
+        return current;
     }
 
     private sealed class FieldGetterDependency(Stmt.Accessor accessor)
