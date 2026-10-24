@@ -2933,10 +2933,13 @@ public partial class TypeChecker
                     // Namespace import: import * as Module from './file'
                     if (import.NamespaceImport != null)
                     {
-                        if (isCjsImport || importedModule.HasExportAssignment &&
-                            ResolveDeferredModuleExportAssignment(importedModule, env) is TypeInfo.Any)
+                        TypeInfo? assignedType = importedModule.HasExportAssignment
+                            ? ResolveDeferredModuleExportAssignment(importedModule, env)
+                            : null;
+                        if (isCjsImport || assignedType is not null and not TypeInfo.Namespace)
                         {
-                            env.DefineImportAlias(import.NamespaceImport.Lexeme, TypeInfo.Any.Shared,
+                            env.DefineImportAlias(import.NamespaceImport.Lexeme,
+                                isCjsImport ? TypeInfo.Any.Shared : assignedType!,
                                 isValue: !import.IsTypeOnly);
                             if (!import.IsTypeOnly)
                             {
