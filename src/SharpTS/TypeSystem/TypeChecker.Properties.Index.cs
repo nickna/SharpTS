@@ -377,6 +377,11 @@ public partial class TypeChecker
             if (objType is TypeInfo.Interface { StringIndexType: { } itfIdxType }) return WithUncheckedUndefined(itfIdxType);
         }
 
+        if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
+            getIndex.Index is Expr.Literal { Value: string constructorMember } && constructorMember == "prototype")
+            return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, constructorMember, null,
+                TryGetExprLine(getIndex.Index) ?? 0));
+
         if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
             return knownInstanceMember;
 
@@ -1387,6 +1392,11 @@ public partial class TypeChecker
             TryGetWellKnownSymbolMemberName(getIndex.Index) == "@@hasInstance")
             return GetFunctionHasInstanceReadType(objType, getIndex.Index)
                 ?? GetMemberType(objType, "@@hasInstance");
+
+        if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
+            getIndex.Index is Expr.Literal { Value: string constructorMember } && constructorMember == "prototype")
+            return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, constructorMember, null,
+                TryGetExprLine(getIndex.Index) ?? 0));
 
         if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
             return knownInstanceMember;
