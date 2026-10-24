@@ -555,7 +555,7 @@ public partial class TypeChecker
             // would lose per-symbol precision when an object defines several distinct well-known
             // symbol members (#99 Cluster B).
             if (wellKnownName is not null &&
-                GetMemberType(objType, wellKnownName) is { } wellKnownType)
+                GetSymbolIndexedMemberType(objType, wellKnownName) is { } wellKnownType)
                 return wellKnownType;
 
             if (objType is TypeInfo.Interface itf4 && itf4.SymbolIndexType != null)
@@ -588,6 +588,19 @@ public partial class TypeChecker
                 TryGetExprLine(getIndex.Index) ?? TryGetExprLine(getIndex.Object), tsCode: "TS7015");
 
         throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing '{objType}'.", tsCode: "TS7053");
+    }
+
+    private TypeInfo? GetSymbolIndexedMemberType(TypeInfo receiver, string name)
+    {
+        if (receiver is not (TypeInfo.Class or TypeInfo.GenericClass))
+            return GetMemberType(receiver, name);
+
+        TypeInfo? current = receiver;
+        for (int depth = 0; current is not null && depth < 256; depth++, current = GetSuperclass(current))
+            if ((GetStaticMethods(current)?.GetValueOrDefault(name)
+                ?? GetStaticProperties(current)?.GetValueOrDefault(name)) is { } member)
+                return member;
+        return null;
     }
 
     private static bool TryGetBuiltInArraySubclassElement(
