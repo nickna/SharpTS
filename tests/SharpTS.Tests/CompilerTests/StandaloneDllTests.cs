@@ -4577,7 +4577,7 @@ public partial class StandaloneDllTests
         {
             new Dictionary<string, string>
             {
-                ["main.ts"] = "console.log((25).toExponential(0),(12345).toExponential(3),(-0).toExponential(2));console.log((123).toExponential(null),(123).toExponential(undefined));"
+                ["main.ts"] = "console.log((25).toExponential(0),(12345).toExponential(3),(-0).toExponential(2));console.log((123).toExponential(null as any),(123).toExponential(undefined));"
             },
             "3e+1 1.235e+4 0.00e+0\n1e+2 1.23e+2\n", "main.ts", true
         },

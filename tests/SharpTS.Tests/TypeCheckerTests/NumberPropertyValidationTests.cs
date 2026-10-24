@@ -41,6 +41,15 @@ public sealed class NumberPropertyValidationTests
             "const value: number = 1; const invalid: number = value.toFixed();"))).Diagnostic.TsCode);
     }
 
+    [Fact]
+    public void NumberFormattingRejectsTypedNullAndAllowsExplicitDynamicCoercion()
+    {
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict)
+            .CheckWithRecovery(Parse("(123).toExponential(null);")).Diagnostics);
+        Assert.Equal("TS2345", diagnostic.TsCode);
+        new TypeChecker(TypeCheckerOptions.Strict).Check(Parse("(123).toExponential(null as any);"));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
