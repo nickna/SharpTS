@@ -35,6 +35,14 @@ public partial class TypeChecker
         return marks?.ToFrozenSet();
     }
 
+    private static TypeInfo CollapseSubstitutedIntersection(List<TypeInfo> members)
+    {
+        var intersection = new TypeInfo.Intersection(members);
+        // Collapse identity/absorbing constituents after substitution without merging
+        // object members: each intersected property contract remains observable to JSX.
+        return intersection.FlattenedTypes is [var only] ? only : intersection;
+    }
+
     /// <summary>
     /// Substitutes type parameters with concrete types, evaluating any conditional types reached.
     /// </summary>
@@ -97,7 +105,7 @@ public partial class TypeChecker
             TypeInfo.Union union =>
                 new TypeInfo.Union(union.Types.Select(Sub).ToList()),
             TypeInfo.Intersection intersection =>
-                SimplifyIntersection(intersection.Types.Select(Sub).ToList()),
+                CollapseSubstitutedIntersection(intersection.Types.Select(Sub).ToList()),
             // Assignability path (evalConditionals): fields only. Preserving call/construct signatures here
             // would feed generic construct-signature *assignment* relating (which erases/instantiates via
             // Substitute) types it does not yet compare correctly, regressing
