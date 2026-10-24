@@ -53,4 +53,16 @@ public sealed class MixedGenericConstructorAssignmentTests
         const string source = "class Target { value = 'target'; } abstract class Source<T = string> { value = 'source'; } const Held: typeof Target = Source;";
         Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow()));
     }
+
+    [Theory]
+    [InlineData("static #brand = 1;", false)]
+    [InlineData("#brand = 1;", true)]
+    [InlineData("private static brand = 1;", true)]
+    public void ConstructorSurfaceOmitsStaticEsPrivateBrands(string targetMember, bool rejected)
+    {
+        string source = $"class Target {{ {targetMember} value = 'target'; }} class Source<T = string> {{ value = 'source'; }} const Held: typeof Target = Source;";
+        void Check() => new TypeChecker().Check(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
+        if (rejected) Assert.ThrowsAny<TypeCheckException>(Check);
+        else Check();
+    }
 }

@@ -17,7 +17,6 @@ public partial class TypeChecker
             return false;
         if (!MembersAccessibilityCompatible(target, source)
             || !ConstructorPrivateBrandsRelated(target, source, isStatic: false)
-            || !ConstructorPrivateBrandsRelated(target, source, isStatic: true)
             || !ConstructorStaticAccessibilityRelated(target, source))
             return false;
 
