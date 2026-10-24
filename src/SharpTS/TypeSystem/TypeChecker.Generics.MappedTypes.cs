@@ -210,14 +210,8 @@ public partial class TypeChecker
 
         switch (ig.GenericDefinition)
         {
-            case TypeInfo.GenericInterface gi:
-                for (int i = 0; i < gi.TypeParams.Count && i < ig.TypeArguments.Count; i++)
-                    subs[gi.TypeParams[i].Name] = ig.TypeArguments[i];
-
-                var substitutedMembers = gi.Members.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => Substitute(kvp.Value, subs));
-                return new TypeInfo.Interface(gi.Name, substitutedMembers.ToFrozenDictionary(), gi.OptionalMembers);
+            case TypeInfo.GenericInterface:
+                return FlattenInstantiatedInterface(ig)!;
 
             case TypeInfo.GenericClass gc:
                 for (int i = 0; i < gc.TypeParams.Count && i < ig.TypeArguments.Count; i++)

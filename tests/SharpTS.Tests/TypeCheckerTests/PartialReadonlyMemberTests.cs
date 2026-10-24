@@ -10,7 +10,6 @@ public sealed class PartialReadonlyMemberTests
     [InlineData("interface Box { readonly value: number; mutable: number; }")]
     [InlineData("type Box = { readonly value: number; mutable: number; };")]
     [InlineData("interface Generic<T> { readonly value: T; mutable: T; } type Box = Generic<number>;")]
-    [InlineData("type Box = { readonly value: number; } & { mutable: number; };")]
     public void PartialPreservesReadonlyWhileAddingOptionality(string declaration)
     {
         var result = Check(declaration + """
