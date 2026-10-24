@@ -2680,7 +2680,7 @@ public partial class TypeChecker
             // structural probe reads the right element type.
             foreach (var method in classExpr.Methods.Where(m => m.ComputedKey != null && m.Body != null))
             {
-                if (TryGetWellKnownSymbolMemberName(method.ComputedKey) is not { } memberName)
+                if (TryGetComputedClassMemberName(method.ComputedKey) is not { } memberName)
                     continue;
                 var computedFunc = BuildClassMethodSignature(method, wrapGeneratorReturn: false, validateDefaults: false);
                 if (method.IsStatic)
@@ -2955,7 +2955,7 @@ public partial class TypeChecker
                 {
                     // Computed methods carry the `<computed>` name; well-known ones are keyed by their
                     // @@name, arbitrary ones aren't modeled — build a signature inline to bind params.
-                    string? memberName = TryGetWellKnownSymbolMemberName(method.ComputedKey);
+                    string? memberName = TryGetComputedClassMemberName(method.ComputedKey);
                     var computedDict = method.IsStatic ? classTypeForBody.StaticMethods : classTypeForBody.Methods;
                     if (memberName != null && computedDict.TryGetValue(memberName, out var ct))
                     {
@@ -3076,7 +3076,7 @@ public partial class TypeChecker
                         // @@name) carries no static member to update.
                         var updatedMethodType = UpdateClassMethodReturn(method, declaredMethodType, methodType, inferredReturn);
                         string? mName = method.ComputedKey != null
-                            ? TryGetWellKnownSymbolMemberName(method.ComputedKey)
+                            ? TryGetComputedClassMemberName(method.ComputedKey)
                             : method.Name.Lexeme;
                         if (mName != null)
                         {

@@ -111,7 +111,7 @@ public partial class TypeChecker
         // (still parsed/checked, just untyped — like computed accessors).
         var computedMethodGroups = classStmt.Methods
             .Where(m => m.ComputedKey != null)
-            .Select(m => (Method: m, Name: TryGetWellKnownSymbolMemberName(m.ComputedKey)))
+            .Select(m => (Method: m, Name: TryGetComputedClassMemberName(m.ComputedKey)))
             .Where(x => x.Name != null)
             // Grouped by canonical NAME ONLY (not IsStatic too): the static-consistency check
             // below needs static AND instance declarations of the same name in one group to
@@ -720,7 +720,7 @@ public partial class TypeChecker
 
             bool recoverComputedSymbolDiagnostics =
                 classStmt.Fields.Any(field => TryGetWellKnownSymbolMemberName(field.ComputedKey) != null) ||
-                classStmt.Methods.Any(method => TryGetWellKnownSymbolMemberName(method.ComputedKey) != null) ||
+                classStmt.Methods.Any(method => TryGetComputedClassMemberName(method.ComputedKey) != null) ||
                 (classStmt.Accessors?.Any(accessor => TryGetWellKnownSymbolMemberName(accessor.ComputedKey) != null) ?? false);
 
             // Check class decorators
@@ -909,7 +909,7 @@ public partial class TypeChecker
                 // in the method dictionaries by a static name. Well-known ones are stored under their
                 // @@name; reuse that type. An arbitrary computed key has no modeled member — build a
                 // signature inline just to bind parameter types for the body check.
-                string? memberName = TryGetWellKnownSymbolMemberName(method.ComputedKey);
+                string? memberName = TryGetComputedClassMemberName(method.ComputedKey);
                 var computedDict = method.IsStatic ? classTypeForBody.StaticMethods : classTypeForBody.Methods;
                 if (memberName != null && computedDict.TryGetValue(memberName, out var computedType))
                 {
@@ -1058,7 +1058,7 @@ public partial class TypeChecker
                     // arbitrary computed key (no well-known @@name) carries no static member to update.
                     var updatedMethodType = UpdateClassMethodReturn(method, declaredMethodType, methodType, inferredReturn);
                     string? mName = method.ComputedKey != null
-                        ? TryGetWellKnownSymbolMemberName(method.ComputedKey)
+                        ? TryGetComputedClassMemberName(method.ComputedKey)
                         : method.Name.Lexeme;
                     if (mName != null)
                     {
