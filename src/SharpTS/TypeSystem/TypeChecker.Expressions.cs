@@ -24,10 +24,15 @@ public partial class TypeChecker
     /// <returns>The resolved TypeInfo for the expression.</returns>
     private TypeInfo CheckExpr(Expr expr)
     {
+        var immediateArguments = ActiveImmediateArgumentCache;
+        if (immediateArguments is { Capturing: false } && !immediateArguments.Refresh.Contains(expr) &&
+            immediateArguments.Types.TryGetValue(expr, out var checkedArgument)) return checkedArgument;
         if (!EditorFacts.IsEnabled)
         {
             TypeInfo ordinaryResult = RefreshForwardClassConstructor(DispatchExpr(expr));
             _typeMap.Set(expr, ordinaryResult);
+            RecordTryValueMutation(expr);
+            RecordImmediateArgumentType(immediateArguments, expr, ordinaryResult);
             return ordinaryResult;
         }
         BeginEditorExpression(expr);
@@ -35,7 +40,9 @@ public partial class TypeChecker
         {
             TypeInfo result = RefreshForwardClassConstructor(DispatchExpr(expr));
             _typeMap.Set(expr, result);
+            RecordTryValueMutation(expr);
             RecordEditorExpressionType(expr, result);
+            RecordImmediateArgumentType(immediateArguments, expr, result);
             return result;
         }
         catch
@@ -1642,12 +1649,15 @@ public partial class TypeChecker
         string contextualReturnTsCode = "TS2322",
         bool useContextualReturnType = true)
     {
+        bool signatureOnly = _immediateArrowArguments is { Capturing: true } arguments && arguments.DeferredArrows.Contains(arrow);
+        using var argumentCache = new ImmediateArgumentCacheSuspension(this);
+        using var deferredFlow = new DeferredValueFlowScope(this, _immediateClassCallables.ContainsKey(arrow));
         if (!EditorFacts.IsEnabled)
-            return CheckArrowFunctionCore(arrow, expectedType, contextualReturnTsCode, useContextualReturnType);
+            return CheckArrowFunctionCore(arrow, expectedType, contextualReturnTsCode, useContextualReturnType, signatureOnly);
         BeginEditorExpression(arrow);
         try
         {
-            TypeInfo result = CheckArrowFunctionCore(arrow, expectedType, contextualReturnTsCode, useContextualReturnType);
+            TypeInfo result = CheckArrowFunctionCore(arrow, expectedType, contextualReturnTsCode, useContextualReturnType, signatureOnly);
             RecordEditorExpressionType(arrow, result);
             return result;
         }
@@ -1662,7 +1672,8 @@ public partial class TypeChecker
         Expr.ArrowFunction arrow,
         TypeInfo? expectedType,
         string contextualReturnTsCode,
-        bool useContextualReturnType)
+        bool useContextualReturnType,
+        bool signatureOnly = false)
     {
         // Extract expected function type for parameter inference
         TypeInfo.Function? expectedFuncType = GetContextualFunctionType(expectedType);
@@ -1758,6 +1769,7 @@ public partial class TypeChecker
             funcType = (typeParams != null && typeParams.Count > 0)
                 ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
                 : new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
+            if (signatureOnly) return funcType;
 
             TypeEnvironment defaultParent = _environment;
             if (arrow.Name is { } privateName)
@@ -1924,10 +1936,12 @@ public partial class TypeChecker
             _immediateClassFlows[classBodyFlow] = callerFlow;
 
         _classFieldDeferredReadDepth++;
+        var valueFlowReturns = BeginArrowValueFlow();
         try
         {
             if (arrow.ExpressionBody != null)
             {
+                RecordStableCaptureParameters(arrow.Parameters, null, arrow.ExpressionBody);
                 // Expression body - infer return type if not specified
                 TypeInfo exprType = CheckExpr(arrow.ExpressionBody);
                 if (arrow.ReturnType == null && expectedFuncType is not null && useContextualReturnType)
@@ -2005,6 +2019,7 @@ public partial class TypeChecker
                 // Likewise hoist the body's own let/const (as `any`) so an inner function declared
                 // before a later block-scoped binding in the same body can forward-reference it (#533).
                 HoistLexicalDeclarations(arrow.BlockBody);
+                RecordStableCaptureParameters(arrow.Parameters, arrow.BlockBody);
 
                 // Block body - check statements
                 CheckStmtList(arrow.BlockBody);
@@ -2045,6 +2060,7 @@ public partial class TypeChecker
         }
         finally
         {
+            CompleteArrowValueFlow(arrow, valueFlowReturns);
             _classFieldDeferredReadDepth--;
             if (classBodyFlow is not null) _immediateClassFlows.Remove(classBodyFlow);
             PopDeclaredVariableScope();
@@ -3066,6 +3082,7 @@ public partial class TypeChecker
                         HoistClassDeclarations(method.Body);
                         HoistFunctionDeclarations(method.Body, hoistBodyVars: true);
                         HoistLexicalDeclarations(method.Body);
+                        RecordStableCaptureParameters(method.Parameters, method.Body);
                         CheckStmtList(method.Body);
 
                         // #367/#372: object-slot number/boolean-typed locals, parameters, and returns

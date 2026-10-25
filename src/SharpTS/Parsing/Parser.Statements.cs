@@ -99,10 +99,11 @@ public partial class Parser
         {
             // Track whether the keyword was `var` so the for-loop initializer is hoistable.
             bool initIsVar = Previous().Type == TokenType.VAR;
+            bool initIsConst = Previous().Type == TokenType.CONST;
             // Check for destructuring patterns: for (const [a, b] of ...) or for (const {x, y} of ...)
             if (Check(TokenType.LEFT_BRACKET) || Check(TokenType.LEFT_BRACE))
             {
-                return ParseDestructuringForOf(isAsync, initIsVar);
+                return ParseDestructuringForOf(isAsync, initIsVar, initIsConst);
             }
 
             Token varName = ConsumeIdentifierName("Expect variable name.");
@@ -315,7 +316,7 @@ public partial class Parser
     /// Desugars: for (const [a, b] of iterable) { body }
     /// Into: for (const _dest0 of iterable) { const [a, b] = _dest0; body }
     /// </summary>
-    private Stmt ParseDestructuringForOf(bool isAsync, bool isVar)
+    private Stmt ParseDestructuringForOf(bool isAsync, bool isVar, bool isConst)
     {
         int line = Previous().Line;
 
@@ -352,8 +353,8 @@ public partial class Parser
         Expr tempVarExpr = new Expr.Variable(tempVar);
         Stmt destructuringStmt = pattern switch
         {
-            ArrayPattern arrayPattern => DesugarArrayPattern(arrayPattern, tempVarExpr, isVar: isVar),
-            ObjectPattern objectPattern => DesugarObjectPattern(objectPattern, tempVarExpr, isVar: isVar),
+            ArrayPattern arrayPattern => DesugarArrayPattern(arrayPattern, tempVarExpr, isVar: isVar, isConst: isConst),
+            ObjectPattern objectPattern => DesugarObjectPattern(objectPattern, tempVarExpr, isVar: isVar, isConst: isConst),
             _ => throw new Exception("Unexpected pattern type in for...of destructuring.")
         };
 

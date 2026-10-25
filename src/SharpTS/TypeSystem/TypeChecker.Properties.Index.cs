@@ -209,6 +209,8 @@ public partial class TypeChecker
 
         if (objType is TypeInfo.Intersection objectIntersection)
         {
+            if (ReadLiteralIntersectionIndex(objectIntersection, indexType, getIndex) is { } literalResult)
+                return literalResult;
             List<TypeInfo> intersectionResults = [];
             foreach (TypeInfo member in objectIntersection.FlattenedTypes)
             {
@@ -698,6 +700,37 @@ public partial class TypeChecker
             System.Globalization.CultureInfo.InvariantCulture, out double numericKey) &&
         Runtime.PropertyKeyConverter.ToPropertyKeyString(numericKey) == literal.Value;
 
+    private void EnsureWritableInterfaceNumberIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
+    {
+        if (receiver is TypeInfo.InstantiatedGeneric generic && FlattenInstantiatedInterface(generic) is { } flattened)
+            receiver = flattened;
+        if (receiver is TypeInfo.Union union)
+        {
+            foreach (var member in union.FlattenedTypes) EnsureWritableInterfaceNumberIndex(member, index, syntax);
+            return;
+        }
+        if (receiver is not TypeInfo.Interface { ReadonlyNumberIndex: true } itf) return;
+        // TypeScript keeps writes through an unresolved generic key admissible here,
+        // even when its constraint is number; do not classify the constraint as the key.
+        if (index is TypeInfo.TypeParameter) return;
+        if (index is TypeInfo.Union keys)
+        {
+            foreach (var key in keys.FlattenedTypes) EnsureWritableInterfaceNumberIndex(itf, key, syntax);
+            return;
+        }
+        if (index is TypeInfo.KeyOf keyOf)
+        {
+            EnsureWritableInterfaceNumberIndex(itf, EvaluateKeyOf(keyOf.SourceType), syntax);
+            return;
+        }
+        if (!IsNumericConstructorIndex(index)) return;
+        // A concrete named declaration takes precedence over an index signature and
+        // carries its own readonly modifier, independently of the remaining numeric slots.
+        if (TryGetLiteralPropertyKeys(index, out var names) && GetMemberType(itf, names[0]) is not null) return;
+        throw new TypeCheckException($" Index signature in type '{itf}' only permits reading.",
+            TryGetExprLine(syntax), tsCode: "TS2542");
+    }
+
     private void EnsureWritableClassIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
     {
         if (receiver is TypeInfo.Union union)
@@ -769,7 +802,17 @@ public partial class TypeChecker
     {
         TypeInfo objType = CheckExpr(setIndex.Object);
         TypeInfo indexType = CheckExpr(setIndex.Index);
-        TypeInfo valueType = CheckExpr(setIndex.Value);
+        TypeInfo? intersectionWriteContext = null;
+        if (objType is TypeInfo.Intersection intersection && TryGetLiteralPropertyKeys(indexType, out var writeKeys))
+        {
+            var target = IntersectionWriteTarget(intersection, writeKeys,
+                TryGetExprLine(setIndex.Index) ?? TryGetExprLine(setIndex.Object) ?? _currentStatementLine ?? 0,
+                enforceAccessibility: false, missingCode: "TS7053");
+            objType = target;
+            intersectionWriteContext = SimplifyIntersection(target.Fields.Values.Distinct(TypeInfoEqualityComparer.Instance).ToList());
+        }
+        TypeInfo valueType = intersectionWriteContext is null
+            ? CheckExpr(setIndex.Value) : CheckExprWithContext(setIndex.Value, intersectionWriteContext);
 
         // Same enum-index widening as CheckGetIndex: `x[E.A] = v` uses the enum's key kind.
         if (indexType is TypeInfo.Enum indexEnum)
@@ -867,14 +910,7 @@ public partial class TypeChecker
         // Reject a readonly numeric slot before the generic index-signature write helper can
         // accept its value type. Read and write signatures share the same value type; mutability
         // is independent metadata and therefore must be checked first.
-        if ((IsNumber(indexType) || indexType is TypeInfo.NumberLiteral) &&
-            objType is TypeInfo.Interface { ReadonlyNumberIndex: true })
-        {
-            throw new TypeCheckException(
-                $" Index signature in type '{objType}' only permits reading.",
-                TryGetExprLine(setIndex.Index),
-                tsCode: "TS2542");
-        }
+        EnsureWritableInterfaceNumberIndex(objType, indexType, setIndex.Index);
 
         // Writes through a type parameter are deliberately stricter than reads. Even when the
         // constraint makes a key readable, an instantiation can narrow the selected property's
@@ -1505,6 +1541,8 @@ public partial class TypeChecker
 
         if (objType is TypeInfo.Intersection intersection)
         {
+            if (ReadLiteralIntersectionIndex(intersection, indexType, getIndex) is { } literalResult)
+                return literalResult;
             foreach (TypeInfo member in intersection.FlattenedTypes)
                 if (CheckGetIndexOnType(member, indexType, getIndex) is { } result)
                     return result;
@@ -1728,6 +1766,7 @@ public partial class TypeChecker
     private TypeInfo? CheckSetIndexOnType(TypeInfo objType, TypeInfo indexType, TypeInfo valueType, Expr.SetIndex setIndex)
     {
         EnsureWritableClassIndex(objType, indexType, setIndex.Index);
+        EnsureWritableInterfaceNumberIndex(objType, indexType, setIndex.Index);
         // Recursive case for nested type parameters
         if (objType is TypeInfo.TypeParameter tp && tp.Constraint != null)
         {

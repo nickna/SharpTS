@@ -621,22 +621,17 @@ public partial class TypeChecker
 
     /// <summary>
     /// Type checks property access on an intersection type.
-    /// The property is looked up on each member type until found.
+    /// Combines the declared property slots contributed by its constituent types.
     /// </summary>
-    private TypeInfo CheckGetOnIntersection(TypeInfo.Intersection intersection, Token memberName)
+    private TypeInfo CheckGetOnIntersection(TypeInfo.Intersection intersection, Token memberName, bool enforceAccessibility = true)
     {
-        foreach (var member in intersection.FlattenedTypes)
-        {
-            try
-            {
-                return CheckGetOnType(member, memberName);
-            }
-            catch (TypeCheckException)
-            {
-                // Continue to next type in intersection
-            }
-        }
-        throw new TypeCheckException($"Property '{memberName.Lexeme}' does not exist on type '{intersection}'.", tsCode: "TS2339");
+        if (!HasImpossibleIntersectionWriteBrands(intersection) &&
+            !intersection.FlattenedTypes.Any(IsImpossibleIntersectionConstraint) &&
+            IntersectionReadMemberOf(intersection, memberName, enforceAccessibility,
+                new HashSet<TypeInfo>(ReferenceEqualityComparer.Instance), intersection) is { } member)
+            return member.Type;
+        throw new TypeCheckException($"Property '{memberName.Lexeme}' does not exist on type '{intersection}'.",
+            memberName.Line, tsCode: "TS2339");
     }
 
     /// <summary>
@@ -830,6 +825,10 @@ public partial class TypeChecker
         if (objType is TypeInfo.RecursiveTypeAlias rtaObj)
             objType = ExpandRecursiveTypeAlias(rtaObj);
         objType = ResolveMappedTypeForAccess(objType);
+
+        bool intersectionWrite = objType is TypeInfo.Intersection;
+        if (objType is TypeInfo.Intersection intersection)
+            objType = IntersectionWriteTarget(intersection, [set.Name.Lexeme], set.Name.Line, enforceAccessibility: true);
 
         // Extract the narrowing path for the written location, if narrowable.
         var basePath = ExtractNarrowingPath(set.Object);
@@ -1105,7 +1104,8 @@ public partial class TypeChecker
                          set.Name.Line,
                          tsCode: "TS2540");
                  }
-                 TypeInfo valueType = CheckExpr(set.Value);
+                 TypeInfo valueType = intersectionWrite
+                     ? CheckExprWithContext(set.Value, fieldType) : CheckExpr(set.Value);
                  // Getter-only properties: allow at type-check time, runtime handles sloppy/strict
                  if (record.IsGetterOnly(set.Name.Lexeme))
                  {
@@ -1355,19 +1355,7 @@ public partial class TypeChecker
         // Handle Intersection type - merge members from all types
         if (objType is TypeInfo.Intersection intersection)
         {
-            // Try each type in the intersection - first match wins
-            foreach (var member in intersection.FlattenedTypes)
-            {
-                try
-                {
-                    return CheckGetOnType(member, memberName);
-                }
-                catch (TypeCheckException)
-                {
-                    // Continue to next type in intersection
-                }
-            }
-            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type '{intersection}'.", tsCode: "TS2339");
+            return CheckGetOnIntersection(intersection, memberName);
         }
 
         // Handle Any type

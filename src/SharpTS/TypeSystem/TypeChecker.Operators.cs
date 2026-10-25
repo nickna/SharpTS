@@ -339,6 +339,10 @@ public partial class TypeChecker
     private TypeInfo CheckLogical(Expr.Logical logical)
     {
         TypeInfo leftType = CheckExpr(logical.Left);
+        var incomingFlow = CaptureValueFlow();
+        var tryWrites = CaptureTryValueWrites();
+        var jumps = CaptureValueFlowJumps();
+        ValueFlowState rightFlow;
 
         Expr truthinessOperand = logical.Left is Expr.Grouping grouping
             ? grouping.Expression
@@ -395,7 +399,7 @@ public partial class TypeChecker
                 }
                 try
                 {
-                    rightType = CheckExpr(logical.Right);
+                    rightType = CheckValueFlowExpression(logical.Right, null, out rightFlow);
                 }
                 finally
                 {
@@ -408,8 +412,19 @@ public partial class TypeChecker
         }
         else
         {
-            rightType = CheckExpr(logical.Right);
+            rightType = CheckValueFlowExpression(logical.Right, null, out rightFlow);
         }
+
+        bool? leftTruth = IsAlwaysFalsy(leftType) ? false : IsAlwaysTruthy(leftType) ? true : null;
+        bool? runsRight = logical.Operator.Type == TokenType.AND_AND ? leftTruth : leftTruth is null ? null : !leftTruth;
+        if (runsRight == false)
+        {
+            JoinValueFlow(incomingFlow, incomingFlow);
+            RestoreTryValueWrites(tryWrites);
+            RestoreValueFlowJumps(jumps);
+        }
+        else if (runsRight == true) JoinValueFlow(incomingFlow, rightFlow);
+        else JoinValueFlow(incomingFlow, incomingFlow, rightFlow);
 
         // In JavaScript/TypeScript, || and && return one of their operands, not a boolean.
         // - `a || b` returns `a` if truthy, otherwise `b`. Type is A | B.
@@ -472,7 +487,24 @@ public partial class TypeChecker
     private TypeInfo CheckNullishCoalescing(Expr.NullishCoalescing nc)
     {
         TypeInfo leftType = CheckExpr(nc.Left);
-        TypeInfo rightType = CheckExpr(nc.Right);
+        var incomingFlow = CaptureValueFlow();
+        var skippedFlow = incomingFlow;
+        Expr left = nc.Left;
+        while (left is Expr.Grouping grouping) left = grouping.Expression;
+        TypeInfo? skippedLeftType = null;
+        if (left is Expr.Variable variable && _environment.GetValueBinding(variable.Name.Lexeme) is { } symbol &&
+            incomingFlow.Bindings.TryGetValue(symbol, out var binding))
+        {
+            skippedLeftType = ExcludeNullUndefined(leftType);
+            var bindings = new Dictionary<BindingSymbol, ValueFlowBinding>(incomingFlow.Bindings, ReferenceEqualityComparer.Instance)
+            {
+                [symbol] = binding with { Type = skippedLeftType }
+            };
+            skippedFlow = incomingFlow with { Bindings = bindings };
+        }
+        TypeInfo rightType = CheckValueFlowExpression(nc.Right, null, out var rightFlow);
+        if (skippedLeftType is TypeInfo.Never) JoinValueFlow(incomingFlow, rightFlow);
+        else JoinValueFlow(incomingFlow, skippedFlow, rightFlow);
 
         // Remove null and undefined from left type since ?? handles both cases
         TypeInfo nonNullishLeft = leftType;
@@ -507,6 +539,24 @@ public partial class TypeChecker
     private TypeInfo CheckTernary(Expr.Ternary ternary, TypeInfo? contextualType = null)
     {
         CheckExpr(ternary.Condition);
+        var incomingFlow = CaptureValueFlow();
+        ValueFlowState? thenFlow = null, elseFlow = null;
+
+        TypeInfo CheckBranch(bool then)
+        {
+            RestoreValueFlow(incomingFlow);
+            var tryWrites = CaptureTryValueWrites();
+            var jumps = CaptureValueFlowJumps();
+            TypeInfo result = CheckValueFlowExpression(then ? ternary.ThenBranch : ternary.ElseBranch,
+                contextualType, out var exit);
+            if (then) thenFlow = exit; else elseFlow = exit;
+            if (CheckedConditionTruthiness(ternary.Condition) == !then)
+            {
+                RestoreTryValueWrites(tryWrites);
+                RestoreValueFlowJumps(jumps);
+            }
+            return result;
+        }
 
         // Apply expression-level narrowing for the branches
         var narrowings = AnalyzeCompoundTypeGuards(ternary.Condition);
@@ -545,7 +595,7 @@ public partial class TypeChecker
                 }
                 try
                 {
-                    thenType = CheckExprWithContext(ternary.ThenBranch, contextualType);
+                    thenType = CheckBranch(then: true);
                 }
                 finally
                 {
@@ -585,7 +635,7 @@ public partial class TypeChecker
                 }
                 try
                 {
-                    elseType = CheckExprWithContext(ternary.ElseBranch, contextualType);
+                    elseType = CheckBranch(then: false);
                 }
                 finally
                 {
@@ -606,7 +656,7 @@ public partial class TypeChecker
                 _suppressVariableUseBeforeAssignment++;
             try
             {
-                thenType = CheckExprWithContext(ternary.ThenBranch, contextualType);
+                thenType = CheckBranch(then: true);
             }
             finally
             {
@@ -618,7 +668,7 @@ public partial class TypeChecker
                 _suppressVariableUseBeforeAssignment++;
             try
             {
-                elseType = CheckExprWithContext(ternary.ElseBranch, contextualType);
+                elseType = CheckBranch(then: false);
             }
             finally
             {
@@ -626,6 +676,11 @@ public partial class TypeChecker
                     _suppressVariableUseBeforeAssignment--;
             }
         }
+
+        bool? truth = CheckedConditionTruthiness(ternary.Condition);
+        if (truth == true) JoinValueFlow(incomingFlow, thenFlow ?? incomingFlow);
+        else if (truth == false) JoinValueFlow(incomingFlow, elseFlow ?? incomingFlow);
+        else JoinValueFlow(incomingFlow, thenFlow ?? incomingFlow, elseFlow ?? incomingFlow);
 
         // Return whichever branch type is the wider of the two (the other is assignable to it),
         // or thenType if they're mutually compatible (e.g. identical types).
@@ -748,6 +803,7 @@ public partial class TypeChecker
         TypeInfo indexType = CheckExpr(compound.Index);
         CheckReadonlyRecordIndex(objType, indexType, compound.Operator.Line);
         EnsureWritableClassIndex(objType, indexType, compound.Index);
+        EnsureWritableInterfaceNumberIndex(objType, indexType, compound.Index);
         TypeInfo valueType = CheckExpr(compound.Value);
 
         // Invalidate any narrowings affected by this index assignment
@@ -1042,6 +1098,7 @@ public partial class TypeChecker
         TypeInfo indexType = CheckExpr(logical.Index);
         CheckReadonlyRecordIndex(objType, indexType, logical.Operator.Line);
         EnsureWritableClassIndex(objType, indexType, logical.Index);
+        EnsureWritableInterfaceNumberIndex(objType, indexType, logical.Index);
         CheckExpr(logical.Value);
 
         // Invalidate any narrowings affected by this index assignment
@@ -1078,6 +1135,7 @@ public partial class TypeChecker
         {
             case Expr.GetIndex index when _typeMap.Get(index.Object) is { } receiver && _typeMap.Get(index.Index) is { } key:
                 EnsureWritableClassIndex(receiver, key, index.Index);
+                EnsureWritableInterfaceNumberIndex(receiver, key, index.Index);
                 break;
             case Expr.Get member when _typeMap.Get(member.Object) is { } receiver:
                 EnsureWritableClassIndex(receiver, new TypeInfo.StringLiteral(member.Name.Lexeme), new Expr.Literal(member.Name.Lexeme));

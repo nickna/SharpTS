@@ -230,7 +230,7 @@ public sealed class SemanticCompletionServiceTests
     }
 
     [Fact]
-    public async Task AnnotatedClassReturnPrecisionDoesNotBypassIncompleteReceiverProof()
+    public async Task AnnotatedClassReturnProvidesCheckedWrittenCallReceiverCompletions()
     {
         const string prefix = "class Box { value: number = 1; } const box = new Box(); function create(): Box { return box; } ";
         string source = prefix + "create().value;";
@@ -241,7 +241,42 @@ public sealed class SemanticCompletionServiceTests
         var receiver = Assert.Single(document.EditorSyntax!.Members).Receiver;
         Assert.IsType<TypeInfo.Instance>(baseline.TypeMap.Get(receiver));
         using var project = new CompletionProject(prefix + "create()./*cursor*/");
-        // The incomplete call receiver still needs its own recovered checker proof.
+        using var recovered = await project.CursorAsync();
+        var model = recovered.Model;
+        var member = Assert.Single(model.Document.EditorSyntax!.Members);
+        Assert.Contains(model.Document.EditorSyntax.GetRecords(member.Receiver), record =>
+            record.IsAuthoritative && record.Kind == EditorSyntaxKind.Expression && record.Origin == EditorSyntaxOrigin.Written);
+        var occurrence = Assert.IsType<EditorOccurrenceFact>(model.EditorFacts.GetOccurrence(model.Document, member.Receiver));
+        Assert.Equal(EditorFactAvailability.Available, occurrence.Availability);
+        Assert.True(occurrence.Type.IsAvailable);
+        Assert.Equal("Box", occurrence.Type.Text);
+        var members = model.EditorFacts.GetReceiverMembers(model.Document, member.Receiver);
+        Assert.True(members.IsComplete);
+        Assert.Equal("value", Assert.Single(members.Members).Name);
+
+        var item = Assert.Single((await project.CompleteAsync()).Items);
+        Assert.Equal("value", item.Label);
+        Assert.Equal(CompletionItemKind.Field, item.Kind);
+        Assert.Contains("number", item.Detail);
+        project.AssertEdit(item, "", "value");
+        project.AssertAppliedSyntax(item);
+    }
+
+    [Theory]
+    [InlineData("create()")]
+    [InlineData("create('wrong')")]
+    [InlineData("create(missing)")]
+    public async Task AnnotatedClassReturnsDoNotInventReceiverProofForFailedCalls(string call)
+    {
+        const string prefix = "class Box { value: number = 1; } const box = new Box(); function create(input: number): Box { return box; } ";
+        using var project = new CompletionProject(prefix + call + "./*cursor*/");
+        using var recovered = await project.CursorAsync();
+        var model = recovered.Model;
+        var receiver = Assert.Single(model.Document.EditorSyntax!.Members).Receiver;
+        var occurrence = Assert.IsType<EditorOccurrenceFact>(model.EditorFacts.GetOccurrence(model.Document, receiver));
+        Assert.Equal(EditorFactAvailability.Unavailable, occurrence.Availability);
+        Assert.False(occurrence.Type.IsAvailable);
+        Assert.Empty(model.EditorFacts.GetReceiverMembers(model.Document, receiver).Members);
         Assert.Empty((await project.CompleteAsync()).Items);
     }
 
@@ -335,6 +370,13 @@ public sealed class SemanticCompletionServiceTests
             var result = await _completion.CompletionAsync(capture!, new Position(line - 1, column - 1), CancellationToken.None);
             Assert.True(result.IsCurrent());
             return result.List;
+        }
+
+        public async Task<AnalysisLease> CursorAsync()
+        {
+            Assert.True(_store.TryCapture(_uri.ToString(), out var capture));
+            return Assert.IsType<AnalysisLease>(await Analysis.GetCursorDocumentAsync(capture!, _offset,
+                EditorQueryKind.Completion, null, CancellationToken.None));
         }
 
         public void AssertEdit(CompletionItem item, string replaced, string inserted)

@@ -370,6 +370,9 @@ public abstract record Stmt
     /// runtime (interpreter and IL compiler ignore it).</param>
     public record Var(Token Name, string? TypeAnnotation, Expr? Initializer, bool HasDefiniteAssignmentAssertion = false, bool IsVar = false, TypeNode? TypeAnnotationNode = null, Expr? HoistTypeInferenceInitializer = null, TypeNode? InitializerContext = null, bool IsDeclare = false, DestructuringSourceKind DestructuringSource = DestructuringSourceKind.None) : Stmt
     {
+        /// <summary>Source const binding preserved by destructuring lowering; implementation temporaries remain unmarked.</summary>
+        public bool IsSourceConst { get; init; }
+
         /// <summary>
         /// A synthetic matched-value spill awaiting an undefined-only destructuring default. Keep its
         /// guest value in object storage even when the initializer is statically numeric (#2752).

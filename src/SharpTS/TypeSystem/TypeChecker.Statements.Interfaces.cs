@@ -72,7 +72,8 @@ public partial class TypeChecker
                 : (record.ReadonlyFields ?? FrozenSet<string>.Empty)
                     .Concat(record.GetterOnlyFields ?? FrozenSet<string>.Empty)
                     .ToFrozenSet(StringComparer.Ordinal),
-            MethodMembers: record.MethodMembers);
+            MethodMembers: record.MethodMembers,
+            ReadonlyNumberIndex: record.IsReadonly && record.NumberIndexType is not null);
 
     private static HashSet<Stmt.Interface> InterfaceDeclarationsFor(
         Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> declarations,
@@ -380,6 +381,7 @@ public partial class TypeChecker
             MethodMembers = MergeSet(left.MethodMembers, right.MethodMembers),
             MemberBrands = left.MemberBrands ?? right.MemberBrands,
             ReadonlyNumberIndex = left.ReadonlyNumberIndex || right.ReadonlyNumberIndex,
+            ClassOrigin = right.ClassOrigin ?? left.ClassOrigin,
         };
 
     private static TypeInfo.GenericInterface MergeGenericInterfaces(
@@ -542,6 +544,16 @@ public partial class TypeChecker
                     {
                         extendsList.Add(extendInterface);
                     }
+                    else if (extendType is TypeInfo.Instance { ClassType: TypeInfo.MutableClass origin })
+                    {
+                        // Retain the exact preregistered class shell. Its field/accessor surface
+                        // is populated before deferred method bodies are checked; freezing an
+                        // empty member dictionary here would lose that source-owned publication.
+                        extendsList.Add(new TypeInfo.Interface(origin.Name, FrozenDictionary<string, TypeInfo>.Empty,
+                            FrozenSet<string>.Empty) { ClassOrigin = origin });
+                    }
+                    else if ((extendType is TypeInfo.Instance instance ? instance.ResolvedClassType : extendType) is TypeInfo.Class originClass)
+                        extendsList.Add(ClassAsInterfaceBase(originClass));
                 }
                 catch
                 {
@@ -589,6 +601,39 @@ public partial class TypeChecker
         }
 
         InterfaceDeclarationsFor(_preRegisteredInterfaces, _environment).Add(interfaceStmt);
+    }
+
+    private void RefreshPreRegisteredClassInterfaceHeritage()
+    {
+        // Plain-script type preregistration precedes class hoisting. Revisit only the
+        // declaration-owned pending interfaces once those exact class shells are bound,
+        // before deferred method signatures can collapse an empty interface intersection.
+        if (!_preRegisteredInterfaces.TryGetValue(_environment, out var declarations)) return;
+        foreach (var declaration in declarations)
+        {
+            if (declaration.TypeParams is { Count: > 0 } || declaration.Extends is not { Count: > 0 } ||
+                _completedInterfaces.GetValueOrDefault(_environment)?.Contains(declaration) == true ||
+                _environment.GetLocalTypeBinding(declaration.Name.Lexeme) is not TypeInfo.Interface current) continue;
+            HashSet<TypeInfo.Interface> parents = current.Extends?.ToHashSet() ?? [];
+            bool changed = false;
+            for (int i = 0; i < declaration.Extends.Count; i++)
+            {
+                // Read the declaration's actual binding, without resolving class signatures
+                // early (which would inspect method annotations before this link is installed).
+                string? declaredName = declaration.ExtendsNodes is { } nodes && i < nodes.Count
+                    ? (nodes[i] is NamedTypeNode { TypeArguments: null } named ? named.Name : null)
+                    : declaration.Extends[i];
+                if (declaredName is null || declaredName.Contains('.') || declaredName.Contains('<')) continue;
+                TypeInfo? origin = _environment.GetTypeBinding(declaredName);
+                if (origin is not (TypeInfo.MutableClass or TypeInfo.Class) ||
+                    parents.Any(parent => ReferenceEquals(parent.ClassOrigin, origin))) continue;
+                parents.Add(origin is TypeInfo.Class cls ? ClassAsInterfaceBase(cls) :
+                    new TypeInfo.Interface(GetClassName(origin) ?? "", FrozenDictionary<string, TypeInfo>.Empty,
+                        FrozenSet<string>.Empty) { ClassOrigin = origin });
+                changed = true;
+            }
+            if (changed) DefineInterfaceBinding(declaration.Name.Lexeme, current with { Extends = parents.ToFrozenSet() });
+        }
     }
 
     private void CheckInterfaceDeclaration(Stmt.Interface interfaceStmt)
@@ -814,6 +859,17 @@ public partial class TypeChecker
         using (new EnvironmentScope(this, interfaceTypeEnv))
         {
             var extendsList = new HashSet<TypeInfo.Interface>();
+            void AddBase(TypeInfo.Interface baseInterface)
+            {
+                extendsList.Add(baseInterface);
+                // Index mutability travels with the selected value type. An own index
+                // declaration, including a mutable override, wins over inherited indices.
+                if (numberIndexType is null && baseInterface.NumberIndexType is { } inheritedIndex)
+                {
+                    numberIndexType = inheritedIndex;
+                    readonlyNumberIndex = baseInterface.ReadonlyNumberIndex;
+                }
+            }
             // Resolving `extends A<Base>` instantiates the generic base; a type-argument constraint
             // violation (TS2344) is recorded at the interface name's line and resolution continues
             // with the offending argument, so sibling declarations in the enclosing module/block and
@@ -830,14 +886,14 @@ public partial class TypeChecker
                     interfaceStmt.ExtendsNodes != null && i < interfaceStmt.ExtendsNodes.Count ? interfaceStmt.ExtendsNodes[i] : null)!;
                 if (extendType is TypeInfo.Interface extendInterface)
                 {
-                    extendsList.Add(extendInterface);
+                    AddBase(extendInterface);
                 }
                 else if (extendType is TypeInfo.InstantiatedGeneric extendIG &&
                          FlattenInstantiatedInterface(extendIG) is { } flattened)
                 {
                     // `extends A<Base>` — substitute the type arguments into the generic
                     // interface's members so the base behaves like a concrete interface.
-                    extendsList.Add(flattened);
+                    AddBase(flattened);
                 }
                 else if ((extendType is TypeInfo.Instance inst ? inst.ResolvedClassType : extendType)
                          is TypeInfo.Class extendClass)
@@ -845,14 +901,14 @@ public partial class TypeChecker
                     // TypeScript allows an interface to extend a CLASS: it inherits the class's
                     // member types as if they were interface members. (A class name in type
                     // position resolves to its Instance type, so unwrap that first.)
-                    extendsList.Add(ClassAsInterfaceBase(extendClass));
+                    AddBase(ClassAsInterfaceBase(extendClass));
                 }
                 else if (extendType is TypeInfo.InstantiatedGeneric
                          { GenericDefinition: TypeInfo.GenericClass genericClass } instantiatedClass)
                 {
                     var inheritedMembers = CollectGenericClassMembers(
                         genericClass, instantiatedClass.TypeArguments);
-                    extendsList.Add(new TypeInfo.Interface(
+                    AddBase(new TypeInfo.Interface(
                         genericClass.Name,
                         inheritedMembers.ToFrozenDictionary(StringComparer.Ordinal),
                         FrozenSet<string>.Empty));
@@ -863,7 +919,7 @@ public partial class TypeChecker
                         genericClassWithDefaults.TypeParams, [], genericClassWithDefaults.Name);
                     var inheritedMembers = CollectGenericClassMembers(
                         genericClassWithDefaults, defaultArguments);
-                    extendsList.Add(new TypeInfo.Interface(
+                    AddBase(new TypeInfo.Interface(
                         genericClassWithDefaults.Name,
                         inheritedMembers.ToFrozenDictionary(StringComparer.Ordinal),
                         FrozenSet<string>.Empty));
@@ -875,14 +931,17 @@ public partial class TypeChecker
                     // This is what lets DeepReadonlyArray index-access resolve and reject writes
                     // (#337 item 2). The element type carries the interface's own type parameters
                     // and is substituted at instantiation by FlattenInstantiatedInterface.
-                    numberIndexType = extendArray.ElementType;
-                    if (extendArray.IsReadonly) readonlyNumberIndex = true;
+                    if (numberIndexType is null)
+                    {
+                        numberIndexType = extendArray.ElementType;
+                        readonlyNumberIndex = extendArray.IsReadonly;
+                    }
                 }
                 else if (extendType is TypeInfo.Record extendRecord)
                 {
                     // An object-literal type alias has statically known members and is a legal
                     // interface base. Adapt the internal Record shape to the inheritance pipeline.
-                    extendsList.Add(RecordAsInterfaceBase(extendTypeName, extendRecord));
+                    AddBase(RecordAsInterfaceBase(extendTypeName, extendRecord));
                 }
                 else
                 {
@@ -1134,7 +1193,7 @@ public partial class TypeChecker
             FrozenSet<string>.Empty,
             cls.StringIndexType,
             cls.NumberIndexType,
-            MemberBrands: brands.Count == 0 ? null : brands.ToFrozenDictionary());
+            MemberBrands: brands.Count == 0 ? null : brands.ToFrozenDictionary()) { ClassOrigin = cls };
     }
 
     /// <summary>Records a member's brand when it is non-public (private/protected). Public members

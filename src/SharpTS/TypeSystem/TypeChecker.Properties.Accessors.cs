@@ -71,7 +71,29 @@ public partial class TypeChecker
         (left == right || Members.IsSameSourceClass(left, right));
 
     private bool AccessorSourceDerivesFrom(TypeInfo source, int ownerId) =>
-        EnumerateClassCores(source).Any(core => IsSameAccessorSource(core.DeclarationId, ownerId));
+        InterfaceReceiverDerivesFrom(source, ownerId, new(ReferenceEqualityComparer.Instance));
+
+    private bool InterfaceReceiverDerivesFrom(TypeInfo source, int ownerId, HashSet<TypeInfo> active)
+    {
+        if (!active.Add(source)) return false;
+        try
+        {
+            return source switch
+            {
+                TypeInfo.TypeParameter { Constraint: { } constraint } => InterfaceReceiverDerivesFrom(constraint, ownerId, active),
+                TypeInfo.MutableClass mutable => IsSameAccessorSource(mutable.DeclarationId, ownerId) ||
+                    mutable.Superclass is { } parent && InterfaceReceiverDerivesFrom(parent, ownerId, active),
+                TypeInfo.Intersection intersection => intersection.FlattenedTypes.Any(part => InterfaceReceiverDerivesFrom(part, ownerId, active)),
+                TypeInfo.Union union => union.FlattenedTypes.All(part => InterfaceReceiverDerivesFrom(part, ownerId, active)),
+                TypeInfo.Interface iface => iface.ClassOrigin is { } origin && InterfaceReceiverDerivesFrom(origin, ownerId, active) ||
+                    iface.Extends?.Any(parent => InterfaceReceiverDerivesFrom(parent, ownerId, active)) == true,
+                TypeInfo.InstantiatedGeneric generic when FlattenInstantiatedInterface(generic) is { } iface =>
+                    InterfaceReceiverDerivesFrom(iface, ownerId, active),
+                _ => EnumerateClassCores(source).Any(core => IsSameAccessorSource(core.DeclarationId, ownerId))
+            };
+        }
+        finally { active.Remove(source); }
+    }
 
     private void EnforceAccessorAccess(
         TypeInfo declaringType, TypeInfo receiverType, Token memberName, bool isStatic, bool isWrite)

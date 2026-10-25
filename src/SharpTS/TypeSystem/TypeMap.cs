@@ -55,6 +55,7 @@ public class TypeMap
     private readonly HashSet<Token> _rawCallStorage = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _assertedAssignmentStorage = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _constBindings = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<BindingSymbol> _sourceConstCaptureBindings = new(ReferenceEqualityComparer.Instance);
 
     // Written assertions can admit arbitrary values without changing the
     // binding's checked TS type. Its physical CLR slot must retain those values.
@@ -63,6 +64,9 @@ public class TypeMap
         GetValueBinding(name) is { } binding && _assertedAssignmentStorage.Contains(binding);
     internal void MarkConstBinding(BindingSymbol binding) => _constBindings.Add(binding);
     internal bool IsConstBinding(BindingSymbol binding) => _constBindings.Contains(binding);
+    // Capture stability is independent of the existing asserted-assignment admission policy.
+    internal void MarkSourceConstCaptureBinding(BindingSymbol binding) => _sourceConstCaptureBindings.Add(binding);
+    internal bool IsConstCaptureBinding(BindingSymbol binding) => IsConstBinding(binding) || _sourceConstCaptureBindings.Contains(binding);
     internal bool IsConstBinding(Token name) => GetValueBinding(name) is { } binding && IsConstBinding(binding);
 
     // Stronger than conservative checker taint: an actual raw call flows into this exact

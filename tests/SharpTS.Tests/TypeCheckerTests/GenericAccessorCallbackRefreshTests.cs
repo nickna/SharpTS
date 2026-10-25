@@ -56,7 +56,7 @@ public sealed class GenericAccessorCallbackRefreshTests
 
     [Theory, MemberData(nameof(InvalidCallbacks))]
     public void RefreshRetainsExplicitCallbackParameterTypes(string source, bool modules)
-        => Assert.Equal("TS2345", Assert.Single(Check(source, modules)).TsCode);
+        => Assert.Equal("TS2322", Assert.Single(Check(source, modules)).TsCode);
 
     [Theory]
     [InlineData("get value(){return 1;}", true)]
