@@ -1630,7 +1630,8 @@ public partial class TypeChecker
             return null;
 
         return names.Select(name => CheckGetOnClass(receiver,
-            new Token(TokenType.IDENTIFIER, name, null, TryGetExprLine(syntax.Index) ?? 0)))
+            new Token(TokenType.IDENTIFIER, name, null, TryGetExprLine(syntax.Index) ?? 0),
+            enforceAccessibility: false))
             .Aggregate(CreateUnion);
     }
 
