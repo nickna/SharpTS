@@ -2946,6 +2946,12 @@ public partial class TypeChecker
                     // Namespace import: import * as Module from './file'
                     if (import.NamespaceImport != null)
                     {
+                        if (reportErrors && !isCjsImport && importedModule.HasExportAssignment &&
+                            ExportAssignmentRequiresDefaultImport(importedModule))
+                            RecordTypeError(new TypeCheckException(
+                                "This module can only be referenced with ECMAScript imports/exports by turning on " +
+                                "'allowSyntheticDefaultImports' and referencing its default export.",
+                                import.Keyword.Line, tsCode: "TS2497"));
                         TypeInfo? assignedType = importedModule.HasExportAssignment
                             ? ResolveDeferredModuleExportAssignment(importedModule, env)
                             : null;
