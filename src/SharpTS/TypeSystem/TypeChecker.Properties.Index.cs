@@ -698,6 +698,34 @@ public partial class TypeChecker
             System.Globalization.CultureInfo.InvariantCulture, out double numericKey) &&
         Runtime.PropertyKeyConverter.ToPropertyKeyString(numericKey) == literal.Value;
 
+    private void EnsureWritableInterfaceNumberIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
+    {
+        if (receiver is TypeInfo.InstantiatedGeneric generic && FlattenInstantiatedInterface(generic) is { } flattened)
+            receiver = flattened;
+        if (receiver is TypeInfo.Union union)
+        {
+            foreach (var member in union.FlattenedTypes) EnsureWritableInterfaceNumberIndex(member, index, syntax);
+            return;
+        }
+        if (receiver is not TypeInfo.Interface { ReadonlyNumberIndex: true } itf) return;
+        if (index is TypeInfo.Union keys)
+        {
+            foreach (var key in keys.FlattenedTypes) EnsureWritableInterfaceNumberIndex(itf, key, syntax);
+            return;
+        }
+        if (index is TypeInfo.KeyOf keyOf)
+        {
+            EnsureWritableInterfaceNumberIndex(itf, EvaluateKeyOf(keyOf.SourceType), syntax);
+            return;
+        }
+        if (!IsNumericConstructorIndex(index)) return;
+        // A concrete named declaration takes precedence over an index signature and
+        // carries its own readonly modifier, independently of the remaining numeric slots.
+        if (TryGetLiteralPropertyKeys(index, out var names) && GetMemberType(itf, names[0]) is not null) return;
+        throw new TypeCheckException($" Index signature in type '{itf}' only permits reading.",
+            TryGetExprLine(syntax), tsCode: "TS2542");
+    }
+
     private void EnsureWritableClassIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
     {
         if (receiver is TypeInfo.Union union)
@@ -876,14 +904,7 @@ public partial class TypeChecker
         // Reject a readonly numeric slot before the generic index-signature write helper can
         // accept its value type. Read and write signatures share the same value type; mutability
         // is independent metadata and therefore must be checked first.
-        if ((IsNumber(indexType) || indexType is TypeInfo.NumberLiteral) &&
-            objType is TypeInfo.Interface { ReadonlyNumberIndex: true })
-        {
-            throw new TypeCheckException(
-                $" Index signature in type '{objType}' only permits reading.",
-                TryGetExprLine(setIndex.Index),
-                tsCode: "TS2542");
-        }
+        EnsureWritableInterfaceNumberIndex(objType, indexType, setIndex.Index);
 
         // Writes through a type parameter are deliberately stricter than reads. Even when the
         // constraint makes a key readable, an instantiation can narrow the selected property's
@@ -1737,6 +1758,7 @@ public partial class TypeChecker
     private TypeInfo? CheckSetIndexOnType(TypeInfo objType, TypeInfo indexType, TypeInfo valueType, Expr.SetIndex setIndex)
     {
         EnsureWritableClassIndex(objType, indexType, setIndex.Index);
+        EnsureWritableInterfaceNumberIndex(objType, indexType, setIndex.Index);
         // Recursive case for nested type parameters
         if (objType is TypeInfo.TypeParameter tp && tp.Constraint != null)
         {

@@ -72,7 +72,8 @@ public partial class TypeChecker
                 : (record.ReadonlyFields ?? FrozenSet<string>.Empty)
                     .Concat(record.GetterOnlyFields ?? FrozenSet<string>.Empty)
                     .ToFrozenSet(StringComparer.Ordinal),
-            MethodMembers: record.MethodMembers);
+            MethodMembers: record.MethodMembers,
+            ReadonlyNumberIndex: record.IsReadonly && record.NumberIndexType is not null);
 
     private static HashSet<Stmt.Interface> InterfaceDeclarationsFor(
         Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> declarations,
@@ -814,6 +815,17 @@ public partial class TypeChecker
         using (new EnvironmentScope(this, interfaceTypeEnv))
         {
             var extendsList = new HashSet<TypeInfo.Interface>();
+            void AddBase(TypeInfo.Interface baseInterface)
+            {
+                extendsList.Add(baseInterface);
+                // Index mutability travels with the selected value type. An own index
+                // declaration, including a mutable override, wins over inherited indices.
+                if (numberIndexType is null && baseInterface.NumberIndexType is { } inheritedIndex)
+                {
+                    numberIndexType = inheritedIndex;
+                    readonlyNumberIndex = baseInterface.ReadonlyNumberIndex;
+                }
+            }
             // Resolving `extends A<Base>` instantiates the generic base; a type-argument constraint
             // violation (TS2344) is recorded at the interface name's line and resolution continues
             // with the offending argument, so sibling declarations in the enclosing module/block and
@@ -830,14 +842,14 @@ public partial class TypeChecker
                     interfaceStmt.ExtendsNodes != null && i < interfaceStmt.ExtendsNodes.Count ? interfaceStmt.ExtendsNodes[i] : null)!;
                 if (extendType is TypeInfo.Interface extendInterface)
                 {
-                    extendsList.Add(extendInterface);
+                    AddBase(extendInterface);
                 }
                 else if (extendType is TypeInfo.InstantiatedGeneric extendIG &&
                          FlattenInstantiatedInterface(extendIG) is { } flattened)
                 {
                     // `extends A<Base>` — substitute the type arguments into the generic
                     // interface's members so the base behaves like a concrete interface.
-                    extendsList.Add(flattened);
+                    AddBase(flattened);
                 }
                 else if ((extendType is TypeInfo.Instance inst ? inst.ResolvedClassType : extendType)
                          is TypeInfo.Class extendClass)
@@ -845,14 +857,14 @@ public partial class TypeChecker
                     // TypeScript allows an interface to extend a CLASS: it inherits the class's
                     // member types as if they were interface members. (A class name in type
                     // position resolves to its Instance type, so unwrap that first.)
-                    extendsList.Add(ClassAsInterfaceBase(extendClass));
+                    AddBase(ClassAsInterfaceBase(extendClass));
                 }
                 else if (extendType is TypeInfo.InstantiatedGeneric
                          { GenericDefinition: TypeInfo.GenericClass genericClass } instantiatedClass)
                 {
                     var inheritedMembers = CollectGenericClassMembers(
                         genericClass, instantiatedClass.TypeArguments);
-                    extendsList.Add(new TypeInfo.Interface(
+                    AddBase(new TypeInfo.Interface(
                         genericClass.Name,
                         inheritedMembers.ToFrozenDictionary(StringComparer.Ordinal),
                         FrozenSet<string>.Empty));
@@ -863,7 +875,7 @@ public partial class TypeChecker
                         genericClassWithDefaults.TypeParams, [], genericClassWithDefaults.Name);
                     var inheritedMembers = CollectGenericClassMembers(
                         genericClassWithDefaults, defaultArguments);
-                    extendsList.Add(new TypeInfo.Interface(
+                    AddBase(new TypeInfo.Interface(
                         genericClassWithDefaults.Name,
                         inheritedMembers.ToFrozenDictionary(StringComparer.Ordinal),
                         FrozenSet<string>.Empty));
@@ -875,14 +887,17 @@ public partial class TypeChecker
                     // This is what lets DeepReadonlyArray index-access resolve and reject writes
                     // (#337 item 2). The element type carries the interface's own type parameters
                     // and is substituted at instantiation by FlattenInstantiatedInterface.
-                    numberIndexType = extendArray.ElementType;
-                    if (extendArray.IsReadonly) readonlyNumberIndex = true;
+                    if (numberIndexType is null)
+                    {
+                        numberIndexType = extendArray.ElementType;
+                        readonlyNumberIndex = extendArray.IsReadonly;
+                    }
                 }
                 else if (extendType is TypeInfo.Record extendRecord)
                 {
                     // An object-literal type alias has statically known members and is a legal
                     // interface base. Adapt the internal Record shape to the inheritance pipeline.
-                    extendsList.Add(RecordAsInterfaceBase(extendTypeName, extendRecord));
+                    AddBase(RecordAsInterfaceBase(extendTypeName, extendRecord));
                 }
                 else
                 {

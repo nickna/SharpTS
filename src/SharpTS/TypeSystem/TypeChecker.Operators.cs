@@ -748,6 +748,7 @@ public partial class TypeChecker
         TypeInfo indexType = CheckExpr(compound.Index);
         CheckReadonlyRecordIndex(objType, indexType, compound.Operator.Line);
         EnsureWritableClassIndex(objType, indexType, compound.Index);
+        EnsureWritableInterfaceNumberIndex(objType, indexType, compound.Index);
         TypeInfo valueType = CheckExpr(compound.Value);
 
         // Invalidate any narrowings affected by this index assignment
@@ -1042,6 +1043,7 @@ public partial class TypeChecker
         TypeInfo indexType = CheckExpr(logical.Index);
         CheckReadonlyRecordIndex(objType, indexType, logical.Operator.Line);
         EnsureWritableClassIndex(objType, indexType, logical.Index);
+        EnsureWritableInterfaceNumberIndex(objType, indexType, logical.Index);
         CheckExpr(logical.Value);
 
         // Invalidate any narrowings affected by this index assignment
@@ -1078,6 +1080,7 @@ public partial class TypeChecker
         {
             case Expr.GetIndex index when _typeMap.Get(index.Object) is { } receiver && _typeMap.Get(index.Index) is { } key:
                 EnsureWritableClassIndex(receiver, key, index.Index);
+                EnsureWritableInterfaceNumberIndex(receiver, key, index.Index);
                 break;
             case Expr.Get member when _typeMap.Get(member.Object) is { } receiver:
                 EnsureWritableClassIndex(receiver, new TypeInfo.StringLiteral(member.Name.Lexeme), new Expr.Literal(member.Name.Lexeme));
