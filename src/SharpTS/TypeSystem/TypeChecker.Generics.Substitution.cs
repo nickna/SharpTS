@@ -97,7 +97,7 @@ public partial class TypeChecker
                     // assignability path (evalConditionals) needs it. The conditional path leaves them unmarked.
                     InstantiatedTypeParamPositions: evalConditionals
                         ? MarkInstantiatedParamPositions(func, substitutions)
-                        : null),
+                        : null) { WrittenCallSignature = func.WrittenCallSignature },
             TypeInfo.Tuple tuple =>
                 SubstituteTupleWithFlattening(tuple, substitutions, evalConditionals),
             TypeInfo.SpreadType spread =>

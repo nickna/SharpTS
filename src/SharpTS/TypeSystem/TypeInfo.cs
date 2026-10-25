@@ -174,6 +174,9 @@ public abstract record TypeInfo
     /// </summary>
     public record Function(List<TypeInfo> ParamTypes, TypeInfo ReturnType, int RequiredParams = -1, bool HasRestParam = false, TypeInfo? ThisType = null, List<string>? ParamNames = null, FrozenSet<int>? InstantiatedTypeParamPositions = null) : TypeInfo
     {
+        // A pure object call signature shares the function representation, but its written
+        // protocol retains strict call arity even when every parameter is any.
+        public CallSignature? WrittenCallSignature { get; init; }
         // RequiredParams defaults to -1 meaning all params are required (for backwards compat)
         public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;
         public override string ToString() =>
@@ -1531,6 +1534,7 @@ public abstract record TypeInfo
         List<string>? ParamNames = null
     ) : TypeInfo
     {
+        public CallSignature? WrittenCallSignature { get; init; }
         public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;
         public override string ToString() =>
             ThisType != null
