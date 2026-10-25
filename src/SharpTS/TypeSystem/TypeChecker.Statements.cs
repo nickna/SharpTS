@@ -103,13 +103,16 @@ public partial class TypeChecker
             Stmt.ForIn loop => loop.Body,
             _ => null
         };
-        var flowTarget = new ValueFlowTarget(labelName, isOnLoop, false, loopBody);
+        // Continue validation permits a chain before its final statement is checked.
+        // Flow exits belong to a loop only when that final statement really is one.
+        bool hasLoopFlow = loopBody is not null;
+        var flowTarget = new ValueFlowTarget(labelName, hasLoopFlow, false, loopBody);
         var incomingFlow = CaptureValueFlow();
         _valueFlowTargets.Push(flowTarget);
         try
         {
             CheckStmt(stmt.Statement);
-            if (!isOnLoop && flowTarget.Breaks.Count > 0)
+            if (!hasLoopFlow && flowTarget.Breaks.Count > 0)
             {
                 var exits = flowTarget.Breaks.ToList();
                 if (!AlwaysTerminates(stmt.Statement)) exits.Add(CaptureValueFlow());

@@ -1936,12 +1936,12 @@ public partial class TypeChecker
             _immediateClassFlows[classBodyFlow] = callerFlow;
 
         _classFieldDeferredReadDepth++;
-        RecordStableCaptureParameters(arrow.Parameters, arrow.BlockBody, arrow.ExpressionBody);
         var valueFlowReturns = BeginArrowValueFlow();
         try
         {
             if (arrow.ExpressionBody != null)
             {
+                RecordStableCaptureParameters(arrow.Parameters, null, arrow.ExpressionBody);
                 // Expression body - infer return type if not specified
                 TypeInfo exprType = CheckExpr(arrow.ExpressionBody);
                 if (arrow.ReturnType == null && expectedFuncType is not null && useContextualReturnType)
