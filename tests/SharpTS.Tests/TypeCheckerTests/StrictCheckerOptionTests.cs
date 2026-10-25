@@ -60,7 +60,8 @@ public class StrictCheckerOptionTests
         var exact = Diagnose(
             source,
             TypeCheckerOptions.Strict with { ExactOptionalPropertyTypes = true });
-        Assert.Equal(2, exact.Count(d => d.TsCode == "TS2322"));
+        Assert.Single(exact, d => d.TsCode == "TS2322");
+        Assert.Single(exact, d => d.TsCode == "TS2412");
     }
 
     [Fact]

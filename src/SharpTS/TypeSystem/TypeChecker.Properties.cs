@@ -884,7 +884,8 @@ public partial class TypeChecker
                 TypeInfo valueType = CheckExpr(set.Value);
                 if (!IsCompatible(propType, valueType))
                 {
-                    throw new TypeCheckException($" Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{propType}'.", tsCode: "TS2322");
+                    throw DottedPropertyWriteError(objType, set.Name, propType, valueType,
+                        $" Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{propType}'.");
                 }
                 if (assignedPath != null) InstallPostAssignmentNarrowing(assignedPath, propType, valueType);
                 return valueType;
@@ -925,7 +926,8 @@ public partial class TypeChecker
                     TypeInfo valueType = CheckExpr(set.Value);
                     if (!IsCompatible(writeType, valueType))
                     {
-                        throw new TypeCheckException($" Cannot assign '{valueType}' to static property '{set.Name.Lexeme}' of type '{writeType}'.", tsCode: "TS2322");
+                        throw DottedPropertyWriteError(objType, set.Name, writeType, valueType,
+                            $" Cannot assign '{valueType}' to static property '{set.Name.Lexeme}' of type '{writeType}'.");
                     }
                     if (assignedPath != null && GetStaticSetters(current)?.ContainsKey(set.Name.Lexeme) != true)
                         InstallPostAssignmentNarrowing(assignedPath, staticPropType, valueType);
@@ -989,7 +991,8 @@ public partial class TypeChecker
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(substitutedType, valueType))
                      {
-                         throw new TypeCheckException($" Cannot assign '{valueType}' to field '{memberName}' of type '{substitutedType}'.", tsCode: "TS2322");
+                         throw DottedPropertyWriteError(objType, set.Name, substitutedType, valueType,
+                             $" Cannot assign '{valueType}' to field '{memberName}' of type '{substitutedType}'.");
                      }
                      if (assignedPath != null) InstallPostAssignmentNarrowing(assignedPath, substitutedType, valueType);
                      return valueType;
@@ -1081,7 +1084,8 @@ public partial class TypeChecker
                      if (fieldDeclType is not (TypeInfo.Inferred or TypeInfo.Any)
                          && !IsCompatible(fieldDeclType, fieldValueType))
                      {
-                         throw new TypeCheckException($" Cannot assign type '{fieldValueType}' to field '{memberName}' of type '{fieldDeclType}'.", tsCode: "TS2322");
+                         throw DottedPropertyWriteError(objType, set.Name, fieldDeclType, fieldValueType,
+                             $" Cannot assign type '{fieldValueType}' to field '{memberName}' of type '{fieldDeclType}'.");
                      }
                      if (assignedPath != null) InstallPostAssignmentNarrowing(assignedPath, fieldDeclType, fieldValueType);
                      break;
@@ -1116,7 +1120,8 @@ public partial class TypeChecker
                      : fieldType;
                  if (!IsCompatible(writeType, valueType))
                  {
-                     throw new TypeCheckException($" Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{fieldType}'.", tsCode: "TS2322");
+                     throw DottedPropertyWriteError(objType, set.Name, fieldType, valueType,
+                         $" Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{fieldType}'.");
                  }
                  if (assignedPath != null) InstallPostAssignmentNarrowing(assignedPath, fieldType, valueType);
                  return valueType;
@@ -1156,7 +1161,8 @@ public partial class TypeChecker
                             : member.Value;
                     if (!IsCompatible(writeType, valueType))
                     {
-                        throw new TypeCheckException($" Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{member.Value}'.", tsCode: "TS2322");
+                        throw DottedPropertyWriteError(objType, set.Name, member.Value, valueType,
+                            $" Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{member.Value}'.");
                     }
                     if (assignedPath != null) InstallPostAssignmentNarrowing(assignedPath, member.Value, valueType);
                     return valueType;
@@ -1267,7 +1273,8 @@ public partial class TypeChecker
             var memberUnion = memberTypes.Aggregate(CreateUnion);
             TypeInfo unionValueType = CheckExpr(set.Value);
             if (!IsCompatible(memberUnion, unionValueType))
-                throw new TypeCheckException($" Cannot assign '{unionValueType}' to property '{set.Name.Lexeme}' of type '{memberUnion}'.", tsCode: "TS2322");
+                throw DottedPropertyWriteError(objType, set.Name, memberUnion, unionValueType,
+                    $" Cannot assign '{unionValueType}' to property '{set.Name.Lexeme}' of type '{memberUnion}'.");
             return unionValueType;
         }
         throw new TypeCheckException("Only instances and objects have properties.", tsCode: "TS2339");

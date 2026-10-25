@@ -62,7 +62,7 @@ public sealed class IntersectionWritePrivateBrandTests
     public void OptionalIntersectionSlotsRespectTheExactWriteOption(bool exact, bool modules)
     {
         var diagnostics = Check("function write<T>(box:T&{value?:number}){box.value=undefined;}", modules, exact);
-        if (exact) Assert.Equal("TS2322", Assert.Single(diagnostics).TsCode);
+        if (exact) Assert.Equal("TS2412", Assert.Single(diagnostics).TsCode);
         else Assert.Empty(diagnostics);
     }
 
