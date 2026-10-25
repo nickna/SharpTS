@@ -42,6 +42,7 @@ public partial class TypeChecker
 
         if (call.OriginalGeneratorCallee is { } originalGenerator)
             CheckClassOrderCallTarget(originalGenerator);
+        using var immediateArguments = BeginImmediateArrowArguments(call);
         TypeInfo calleeType = CheckClassOrderCallTarget(call.Callee);
         if (call.Callee is Expr.Get extensionGet &&
             calleeType is not (TypeInfo.Function or TypeInfo.OverloadedFunction or

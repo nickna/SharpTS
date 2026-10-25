@@ -24,11 +24,15 @@ public partial class TypeChecker
     /// <returns>The resolved TypeInfo for the expression.</returns>
     private TypeInfo CheckExpr(Expr expr)
     {
+        var immediateArguments = ActiveImmediateArgumentCache;
+        if (immediateArguments is { Capturing: false } && !immediateArguments.Refresh.Contains(expr) &&
+            immediateArguments.Types.TryGetValue(expr, out var checkedArgument)) return checkedArgument;
         if (!EditorFacts.IsEnabled)
         {
             TypeInfo ordinaryResult = RefreshForwardClassConstructor(DispatchExpr(expr));
             _typeMap.Set(expr, ordinaryResult);
             RecordTryValueMutation(expr);
+            RecordImmediateArgumentType(immediateArguments, expr, ordinaryResult);
             return ordinaryResult;
         }
         BeginEditorExpression(expr);
@@ -38,6 +42,7 @@ public partial class TypeChecker
             _typeMap.Set(expr, result);
             RecordTryValueMutation(expr);
             RecordEditorExpressionType(expr, result);
+            RecordImmediateArgumentType(immediateArguments, expr, result);
             return result;
         }
         catch
@@ -1644,13 +1649,15 @@ public partial class TypeChecker
         string contextualReturnTsCode = "TS2322",
         bool useContextualReturnType = true)
     {
+        bool signatureOnly = _immediateArrowArguments is { Capturing: true } arguments && arguments.DeferredArrows.Contains(arrow);
+        using var argumentCache = new ImmediateArgumentCacheSuspension(this);
         using var deferredFlow = new DeferredValueFlowScope(this, _immediateClassCallables.ContainsKey(arrow));
         if (!EditorFacts.IsEnabled)
-            return CheckArrowFunctionCore(arrow, expectedType, contextualReturnTsCode, useContextualReturnType);
+            return CheckArrowFunctionCore(arrow, expectedType, contextualReturnTsCode, useContextualReturnType, signatureOnly);
         BeginEditorExpression(arrow);
         try
         {
-            TypeInfo result = CheckArrowFunctionCore(arrow, expectedType, contextualReturnTsCode, useContextualReturnType);
+            TypeInfo result = CheckArrowFunctionCore(arrow, expectedType, contextualReturnTsCode, useContextualReturnType, signatureOnly);
             RecordEditorExpressionType(arrow, result);
             return result;
         }
@@ -1665,7 +1672,8 @@ public partial class TypeChecker
         Expr.ArrowFunction arrow,
         TypeInfo? expectedType,
         string contextualReturnTsCode,
-        bool useContextualReturnType)
+        bool useContextualReturnType,
+        bool signatureOnly = false)
     {
         // Extract expected function type for parameter inference
         TypeInfo.Function? expectedFuncType = GetContextualFunctionType(expectedType);
@@ -1761,6 +1769,7 @@ public partial class TypeChecker
             funcType = (typeParams != null && typeParams.Count > 0)
                 ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
                 : new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
+            if (signatureOnly) return funcType;
 
             TypeEnvironment defaultParent = _environment;
             if (arrow.Name is { } privateName)

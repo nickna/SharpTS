@@ -204,16 +204,9 @@ public partial class TypeChecker
         while (callee is SharpTS.Parsing.Expr.Grouping grouping) callee = grouping.Expression;
         if (callee is not SharpTS.Parsing.Expr.ArrowFunction { IsAsync: false, IsGenerator: false } arrow)
             return result;
-        if (call.Arguments.Count == 0)
-        {
-            if (_arrowExitValueFlows.TryGetValue(arrow, out var immediateExit)) ApplyValueFlow(immediateExit);
-            return result;
-        }
-        // Arguments execute before the body. Recheck this eager body against their checked
-        // exit state; a summary taken while first resolving the callee would precede them.
-        TypeInfo checkedCallee = CheckClassOrderCallTarget(call.Callee);
+        // The call checks eager arguments before this body's single authoritative pass.
         if (_arrowExitValueFlows.TryGetValue(arrow, out var exit)) ApplyValueFlow(exit);
-        return checkedCallee is TypeInfo.Function function ? function.ReturnType : result;
+        return result;
     }
 
     private (ValueFlowTryWrites Owner, Dictionary<BindingSymbol, ValueFlowBinding> Writes)? CaptureTryValueWrites() =>
