@@ -604,7 +604,8 @@ public partial class TypeChecker
         BindingSymbol? assignedBinding = _environment.GetValueBinding(name);
         for (TypeEnvironment? env = _environment.Enclosing; env != null; env = env.Enclosing)
         {
-            if (ReferenceEquals(env, _deferredInitializerFlowBoundary))
+            if (ReferenceEquals(env, _deferredInitializerFlowBoundary) ||
+                ReferenceEquals(env, _classFieldBindingFlowBoundary))
                 return;
 
             if (!env.IsDefinedLocally(name))

@@ -43,12 +43,12 @@ public class DeferredClassFieldFlowTests
     [Theory]
     [InlineData("class C", "")]
     [InlineData("const C = class", ";")]
-    public void StaticDependencyRetainsOuterFlowNarrowing(string declaration, string ending)
+    public void StaticDependencyUsesTheOuterBindingsDeclaredType(string declaration, string ending)
     {
         string source = "function create(value: string | number) { if (typeof value === 'string') { " +
             declaration + " { static read = () => C.later; static later = value; }" + ending +
             " const result: string = C.read(); } }";
-        Assert.Empty(Check(source).Diagnostics);
+        Assert.Equal("TS2322", Assert.Single(Check(source).Diagnostics).TsCode);
     }
 
     [Theory]
