@@ -29,7 +29,19 @@ public partial class TypeChecker
         if (signature is not { TypeParams.Count: > 0, HasRestParam: true } || signature.ParamTypes.LastOrDefault() is not TypeInfo.Tuple)
             return false;
         if (callee is TypeInfo.InstantiatedGeneric instantiated)
+        {
             signature = FlattenInstantiatedInterface(instantiated)!.CallSignatures![0];
+            var outer = GenericInterfaceSubs((TypeInfo.GenericInterface)instantiated.GenericDefinition, instantiated.TypeArguments)
+                .Where(pair => signature.TypeParams!.All(parameter => parameter.Name != pair.Key)).ToDictionary();
+            signature = signature with
+            {
+                TypeParams = signature.TypeParams!.Select(parameter => parameter with
+                {
+                    Constraint = parameter.Constraint is null ? null : SubstitutePreservingSignatures(parameter.Constraint, outer),
+                    Default = parameter.Default is null ? null : SubstitutePreservingSignatures(parameter.Default, outer)
+                }).ToList()
+            };
+        }
         generic = CopyEditorSignatureMetadata(original, new TypeInfo.GenericFunction(signature.TypeParams!,
             signature.ParamTypes, signature.ReturnType, signature.RequiredParams, signature.HasRestParam, ParamNames: signature.ParamNames));
         return true;
@@ -60,13 +72,16 @@ public partial class TypeChecker
         return signature;
     }
 
-    private List<GenericTupleCallSlot> GenericTupleCallArguments(Expr.Call call, IReadOnlyList<TypeInfo> types)
+    private List<GenericTupleCallSlot> GenericTupleCallArguments(Expr.Call call, IReadOnlyList<TypeInfo> types) =>
+        GenericTupleArguments(call.Arguments, types, call.Paren.Line);
+
+    private List<GenericTupleCallSlot> GenericTupleArguments(IReadOnlyList<Expr> arguments, IReadOnlyList<TypeInfo> types, int? line)
     {
         List<GenericTupleCallSlot> result = [];
-        for (int i = 0; i < call.Arguments.Count; i++)
+        for (int i = 0; i < arguments.Count; i++)
         {
-            if (call.Arguments[i] is Expr.Spread spread) AppendSpread(spread.Expression, types[i]);
-            else result.Add(new(types[i], Expression: call.Arguments[i]));
+            if (arguments[i] is Expr.Spread spread) AppendSpread(spread.Expression, types[i]);
+            else result.Add(new(types[i], Expression: arguments[i]));
         }
         return result;
 
@@ -96,7 +111,7 @@ public partial class TypeChecker
                 return;
             }
             if (!TryGetSpreadElementType(type, out var elementType))
-                throw new TypeCheckException($"Spread argument must be an iterable type, got '{type}'.", call.Paren.Line, tsCode: "TS2488");
+                throw new TypeCheckException($"Spread argument must be an iterable type, got '{type}'.", line, tsCode: "TS2488");
             result.Add(new(elementType, Spread: true));
         }
     }
@@ -106,15 +121,27 @@ public partial class TypeChecker
         var elements = slots.Select((slot, i) => new TypeInfo.TupleElement(
             slot.Spread ? new TypeInfo.Array(slot.Type) :
                 pattern is not null && i < pattern.Elements.Count && pattern.Elements[i].Type is TypeInfo.Tuple &&
-                slot.Expression is Expr.ArrayLiteral literal ? GenericTupleLiteralType(literal) : slot.Type,
+                slot.Expression is { } expression && UngroupGenericTupleExpression(expression) is Expr.ArrayLiteral literal
+                    ? GenericTupleLiteralType(literal) : slot.Type,
             slot.Spread ? TupleElementKind.Spread : slot.Optional ? TupleElementKind.Optional : TupleElementKind.Required)).ToList();
         return new(elements, elements.Count(element => element.IsRequired));
     }
 
-    private TypeInfo.Tuple GenericTupleLiteralType(Expr.ArrayLiteral literal) => new(
-        literal.Elements.Select(element => new TypeInfo.TupleElement(
-            element is Expr.ArrayLiteral nested ? GenericTupleLiteralType(nested) : _typeMap.Get(element) ?? TypeInfo.Any.Shared,
-            TupleElementKind.Required)).ToList(), literal.Elements.Count);
+    private static Expr UngroupGenericTupleExpression(Expr expression)
+    {
+        while (expression is Expr.Grouping grouping) expression = grouping.Expression;
+        return expression;
+    }
+
+    private List<GenericTupleCallSlot> GenericTupleLiteralSlots(Expr.ArrayLiteral literal) =>
+        GenericTupleArguments(literal.Elements, literal.Elements.Select(element =>
+            _typeMap.Get(element is Expr.Spread spread ? spread.Expression : element) ?? TypeInfo.Any.Shared).ToList(),
+            TryGetExprLine(literal));
+
+    private TypeInfo.Tuple GenericTupleLiteralType(Expr.ArrayLiteral literal) => GenericTupleCallType(
+        GenericTupleLiteralSlots(literal).Select(slot =>
+            slot.Expression is { } expression && UngroupGenericTupleExpression(expression) is Expr.ArrayLiteral nested
+                ? slot with { Type = GenericTupleLiteralType(nested) } : slot));
 
     private void CheckGenericTupleRestCall(Expr.Call call, TypeInfo.Function signature, List<GenericTupleCallSlot> arguments,
         bool validate = true, bool contextualizeCallbacks = true)
@@ -137,8 +164,23 @@ public partial class TypeChecker
         foreach (var (index, expected) in contexts)
             if (arguments[index].Expression is { } expression)
             {
-                if (expected is TypeInfo.Tuple expectedTuple && expression is Expr.ArrayLiteral literal)
-                    CheckArrayLiteralAgainstTuple(literal, expectedTuple, "argument");
+                if (expected is TypeInfo.Tuple expectedTuple && UngroupGenericTupleExpression(expression) is Expr.ArrayLiteral literal)
+                {
+                    if (!literal.Elements.Any(element => element is Expr.Spread))
+                        CheckArrayLiteralAgainstTuple(literal, expectedTuple, "argument");
+                    else
+                    {
+                        try
+                        {
+                            CheckGenericTupleRestCall(call, new TypeInfo.Function([expectedTuple], TypeInfo.Void.Shared,
+                                HasRestParam: true), GenericTupleLiteralSlots(literal));
+                        }
+                        catch (TypeCheckException error) when (error.Diagnostic.TsCode is "TS2554" or "TS2556")
+                        {
+                            throw new TypeCheckException(error.Message, call.Paren.Line, tsCode: "TS2345");
+                        }
+                    }
+                }
                 else ContextualizeNestedGenericCallback(expression, expected);
             }
         if (!validate) return;
@@ -195,9 +237,11 @@ public partial class TypeChecker
         bool Compatible(GenericTupleCallSlot expected, GenericTupleCallSlot actual, bool contextualize)
         {
             if (contextualize && actual.Expression is { } expression && ContainsGenericTupleCallback(expression)) return true;
-            if (contextualize && expected.Type is TypeInfo.Tuple && actual.Expression is Expr.ArrayLiteral) return true;
+            if (contextualize && expected.Type is TypeInfo.Tuple && actual.Expression is { } literalExpression &&
+                UngroupGenericTupleExpression(literalExpression) is Expr.ArrayLiteral) return true;
             TypeInfo type = actual.Expression is null ? actual.Type : ActualType(actual.Expression, actual.Type);
-            if (expected.Type is TypeInfo.Tuple && actual.Expression is Expr.ArrayLiteral literal)
+            if (expected.Type is TypeInfo.Tuple && actual.Expression is { } arrayExpression &&
+                UngroupGenericTupleExpression(arrayExpression) is Expr.ArrayLiteral literal)
                 type = GenericTupleLiteralType(literal);
             if (actual.Optional) type = CreateUnion(type, TypeInfo.Undefined.Shared);
             return IsArgumentCompatible(expected.Type, type, expected.Optional);

@@ -29,7 +29,10 @@ public sealed class GenericTupleRestCallTests
             ("declare function same<T>(...args:[...T[],number]):void; same<string>('ok',true,1);", "TS2345"),
             ("interface F { <T>(...args:[T,T]):void; } declare const f:F; f(1,'bad');", "TS2345"),
             ("declare const f: { <T>(...args:[T,T]):void; }; f(1,'bad');", "TS2345"),
-            ("declare function f<T>(...args:[T,T]):void; declare function f<T>(...args:[T,T,T]):void; f(1,'bad');", "TS2345")
+            ("declare function f<T>(...args:[T,T]):void; declare function f<T>(...args:[T,T,T]):void; f(1,'bad');", "TS2345"),
+            ("declare function f<T>(first:T,...rest:[T,T]):T; f(...[1,2,'bad']);", "TS2345"),
+            ("declare function f<T>(first:T,...rest:[T,T]):T; const values:[number,number,string]=[1,2,'bad']; f(...values);", "TS2345"),
+            ("declare function f<T>(...args:[[T,T]]):T; const values:[number,string]=[1,'bad']; f<number>([...values]);", "TS2345")
         })
             foreach (bool modules in new[] { false, true }) yield return [source, code, modules];
     }
@@ -60,7 +63,15 @@ public sealed class GenericTupleRestCallTests
             "declare function same<T>(...args:[T,T]):void; same(...[1,2]);",
             "interface F { <T>(...args:[T,T]):T; } declare const f:F; const value:number=f(1,2);",
             "declare const f: { <T>(...args:[T,T]):T; }; const value:number=f(1,2);",
-            "declare function f<T>(...args:[T,T]):T; declare function f<T>(...args:[T,T,T]):T; const value:number=f(1,2,3);"
+            "declare function f<T>(...args:[T,T]):T; declare function f<T>(...args:[T,T,T]):T; const value:number=f(1,2,3);",
+            "declare function f<T>(...args:[T?,T?]):void; const values:number[]=[1,2]; f(...values,2);",
+            "declare function f<T>(...args:[T?,string?]):void; const values:number[]=[1,2]; f(...values);",
+            "declare function f<T>(...args:[T?,...string[]]):void; const values:number[]=[1,2]; f(...values);",
+            "declare function f<T>(first:T,...rest:[T,T]):T; const value:number=f(...[1,2,3]);",
+            "declare function f<T>(first:T,...rest:[T,T]):T; const values:[number,number,number]=[1,2,3]; const value:number=f(...values);",
+            "declare function f<T>(...args:[[T,T]]):T; const values:[number,number]=[1,2]; const value:number=f<number>([...values]);",
+            "declare function f<T>(...args:[[T,T]]):T; const value:number=f<number>(([1,2]));",
+            "interface F<A> { <T extends A>(...args:[T,T]):T; } declare const f:F<number>; const value:number=f<number>(1,2);"
         })
             foreach (bool modules in new[] { false, true }) yield return [source, modules];
     }
@@ -74,7 +85,7 @@ public sealed class GenericTupleRestCallTests
     [InlineData("declare function f<T>(...args:[T,T]):T; declare function f<T>(...args:[T,T,T]):T; f<number>(1,2,3);", 1)]
     public void TupleCallsRetainTheirOriginalEditorCandidateAndInstantiation(string source, int ordinal)
     {
-        var document = new SharpTS.Diagnostics.SourceDocument("tuple-call.ts", source);
+        var document = new SourceDocument("tuple-call.ts", source);
         var statements = new Parser(new Lexer(source).ScanTokens()).WithSourceDocument(document).WithEditorSyntax().ParseOrThrow();
         var checker = new TypeChecker(TypeCheckerOptions.Strict).WithEditorMetadata(true);
         Assert.Empty(checker.CheckWithRecovery(statements, document).Diagnostics);
@@ -82,7 +93,7 @@ public sealed class GenericTupleRestCallTests
         var fact = checker.EditorFacts.Freeze().GetInvocation(document, syntax.Owner)!;
         Assert.Equal(EditorInvocationStatus.Selected, fact.Status);
         Assert.Equal(ordinal, fact.SelectedOrdinal);
-        Assert.True(fact.Candidates[ordinal].IsInstantiationProven);
+        Assert.True(fact.Candidates[ordinal].Instantiated!.IsAvailable);
         Assert.Equal("number", fact.SelectedSignature!.ReturnType.Text);
     }
 
