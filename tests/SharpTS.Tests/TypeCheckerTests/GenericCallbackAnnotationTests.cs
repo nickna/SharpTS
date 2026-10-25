@@ -12,6 +12,7 @@ public sealed class GenericCallbackAnnotationTests
         foreach (string call in new[]
         {
             "same<number>((x: number) => {}, (x: string) => {});",
+            "same<number>((x: number) => 1, (x: string) => 2);",
             "same((x: number) => {}, (x: string) => {});",
             "same<number>((x: number) => {}, function (x: string) {});",
             "same<number>((x: number) => {}, ((x: string) => {}));",

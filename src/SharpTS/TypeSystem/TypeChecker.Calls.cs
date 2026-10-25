@@ -1179,6 +1179,11 @@ public partial class TypeChecker
             case Expr.ArrowFunction arrow:
             {
                 TypeInfo checkedType = CheckArrowFunction(arrow, contextualType);
+                // Void sinks select CLR Action delegates. Preserve the callback's checked
+                // parameters so explicit annotations still participate in argument validation.
+                if (checkedType is TypeInfo.Function function &&
+                    GetContextualFunctionType(contextualType)?.ReturnType is TypeInfo.Void)
+                    checkedType = function with { ReturnType = TypeInfo.Void.Shared };
                 _typeMap.Set(arrow, checkedType);
                 RecordEditorExpressionType(arrow, checkedType);
                 return;
