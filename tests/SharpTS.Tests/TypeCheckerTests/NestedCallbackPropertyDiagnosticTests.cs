@@ -12,6 +12,11 @@ public sealed class NestedCallbackPropertyDiagnosticTests
     {
         foreach (var (source, code) in new[]
         {
+            ("interface F{<T>(value:T,options:{transform:(value:T)=>T}):T;} declare const f:F; f<number>(1,{transform:(x:string)=>1});", "TS2322"),
+            ("interface F{(value:number,options:{transform:(value:number)=>number}):number;} declare const f:F; f(1,{transform:(x:string)=>1});", "TS2322"),
+            ("declare const f:{<T>(value:T,options:{transform:(value:T)=>T}):T;}; f<number>(1,{transform:(x:string)=>1});", "TS2322"),
+            ("interface F{<T>(value:T,options:{transform:(value:T)=>T}):T; <T>(a:T,b:T,c:T):T;} declare const f:F; f<number>(1,{transform:(x:string)=>1});", "TS2322"),
+            ("interface F{<T>(value:T,options:{transform:(value:T)=>T}):T; <T>(value:T,options:{transform:(value:boolean)=>T}):T;} declare const f:F; f<number>(1,{transform:(x:string)=>1});", "TS2769"),
             ("declare function map<T>(value:T,options:{transform:(value:T)=>T}):T;\nmap<number>(1,{\n transform:(x:string)=>1\n});", "TS2322"),
             ("declare function map<T>(value:T,options:{transform:(value:T)=>T}):T; map(1,{transform:(x:string)=>1});", "TS2345"),
             ("declare function map<T>(...args:[T,{transform:(value:T)=>T}]):T; map<number>(1,{transform:(x:string)=>1});", "TS2322"),
@@ -63,6 +68,9 @@ public sealed class NestedCallbackPropertyDiagnosticTests
             const bivariant:number=method<number>(1,{transform:(value:number)=>value+1});
             declare function sink<T>(value:T,options:{callback:(value:T)=>void}):void;
             sink<number>(1,{callback:value=>value+1});
+            interface F { <T>(value:T,options:{transform:(value:T)=>T}):T; }
+            declare const f:F;
+            const throughInterface:number=f<number>(1,{transform:(value:number)=>value+1});
             """, modules));
 
     [Theory, ModeData]

@@ -518,7 +518,7 @@ public partial class TypeChecker
         // Handle interfaces with call signatures (callable interfaces)
         if (calleeType is TypeInfo.Interface itf && itf.IsCallable)
         {
-            return CheckCallableInterfaceCall(itf, call.TypeArgs, call.Arguments, call.TypeArgNodes);
+            return CheckCallableInterfaceCall(itf, call);
         }
         if (calleeType is TypeInfo.GenericInterface gi && gi.IsCallable)
         {
@@ -527,7 +527,7 @@ public partial class TypeChecker
         // Handle callable inline object types: `{ (x): T }`
         if (calleeType is TypeInfo.Record callableRec && callableRec.IsCallable)
         {
-            return CheckCallSignaturesCall(callableRec.CallSignatures!, "object type", call.TypeArgs, call.Arguments, call.TypeArgNodes);
+            return CheckCallSignaturesCall(callableRec.CallSignatures!, "object type", call.TypeArgs, call.Arguments, call.TypeArgNodes, call);
         }
 
         // Handle union types containing functions (e.g., from property access on union type)
@@ -1316,16 +1316,14 @@ public partial class TypeChecker
 
     private TypeInfo CheckCallableInterfaceCall(
         TypeInfo.Interface itf,
-        List<string>? typeArgs,
-        List<Expr> arguments,
-        List<TypeNode?>? typeArgNodes = null)
+        Expr.Call call)
     {
         if (itf.CallSignatures == null || itf.CallSignatures.Count == 0)
         {
             throw new TypeCheckException($"Interface '{itf.Name}' is not callable.", tsCode: "TS2349");
         }
 
-        return CheckCallSignaturesCall(itf.CallSignatures, $"interface '{itf.Name}'", typeArgs, arguments, typeArgNodes);
+        return CheckCallSignaturesCall(itf.CallSignatures, $"interface '{itf.Name}'", call.TypeArgs, call.Arguments, call.TypeArgNodes, call);
     }
 
     /// <summary>
@@ -1337,11 +1335,13 @@ public partial class TypeChecker
         string calleeDescription,
         List<string>? typeArgs,
         List<Expr> arguments,
-        List<TypeNode?>? typeArgNodes = null)
+        List<TypeNode?>? typeArgNodes = null,
+        Expr.Call? sourceCall = null)
     {
         List<TypeInfo> argTypes = callSignatures.Any(signature => signature.IsGeneric)
             ? CheckGenericInferenceArguments(arguments)
             : arguments.Select(CheckExpr).ToList();
+        List<TypeInfo.Function> rejectedSignatures = [];
 
         // Try each call signature
         foreach (var callSig in callSignatures)
@@ -1350,21 +1350,38 @@ public partial class TypeChecker
             {
                 // Generic call signature - try to instantiate
                 var result = TryMatchGenericCallSignature(
-                    callSig, typeArgs, argTypes, typeArgNodes, arguments);
+                    callSig, typeArgs, argTypes, out var rejected, typeArgNodes, arguments);
                 if (result != null)
                     return result;
+                if (rejected is not null && typeArgs is { Count: > 0 }) rejectedSignatures.Add(rejected);
             }
             else
             {
                 // Non-generic - direct matching
-                if (TryMatchSignature(new TypeInfo.Function(callSig.ParamTypes, callSig.ReturnType, callSig.MinArity, callSig.HasRestParam), argTypes))
+                var signature = new TypeInfo.Function(callSig.ParamTypes, callSig.ReturnType, callSig.MinArity, callSig.HasRestParam);
+                if (TryMatchSignature(signature, argTypes))
                 {
                     RecordEditorInvocationSelection(callSig);
                     return callSig.ReturnType;
                 }
+                rejectedSignatures.Add(signature);
             }
         }
 
+        // A single applicable arity has an assignment context for a written callback
+        // property. Multiple failed overloads retain the family-level TS2769 diagnostic.
+        if (sourceCall is not null && !arguments.Any(argument => argument is Expr.Spread))
+        {
+            var slots = GenericTupleCallArguments(sourceCall, argTypes);
+            int arityCandidates = callSignatures.Count(signature =>
+                (signature.IsGeneric || typeArgs is not { Count: > 0 }) &&
+                GenericTupleCallArityCouldMatch(new(signature.ParamTypes, signature.ReturnType,
+                    signature.RequiredParams, signature.HasRestParam), slots));
+            if (arityCandidates == 1)
+                foreach (var signature in rejectedSignatures)
+                    if (GenericTupleCallArityCouldMatch(signature, slots) &&
+                        GetCallCallbackPropertyError(sourceCall, signature, argTypes) is { } error) throw error;
+        }
         throw new TypeCheckException($"No call signature matches the call for {calleeDescription}.", tsCode: "TS2769");
     }
 
@@ -1422,9 +1439,11 @@ public partial class TypeChecker
         TypeInfo.CallSignature callSig,
         List<string>? explicitTypeArgs,
         List<TypeInfo> argTypes,
+        out TypeInfo.Function? rejectedSignature,
         List<TypeNode?>? explicitTypeArgNodes = null,
         IReadOnlyList<Expr>? arguments = null)
     {
+        rejectedSignature = null;
         if (callSig.TypeParams == null || callSig.TypeParams.Count == 0)
             return null;
 
@@ -1477,8 +1496,12 @@ public partial class TypeChecker
                 callSig.MinArity, callSig.HasRestParam, ParamNames: callSig.ParamNames);
             RecordEditorInvocationInstantiation(callSig, editorSignature);
         }
-        if (!TryMatchSignature(new TypeInfo.Function(substitutedParamTypes, matchedReturn, callSig.MinArity, callSig.HasRestParam), argTypes))
+        var checkedSignature = new TypeInfo.Function(substitutedParamTypes, matchedReturn, callSig.MinArity, callSig.HasRestParam);
+        if (!TryMatchSignature(checkedSignature, argTypes))
+        {
+            rejectedSignature = checkedSignature;
             return null;
+        }
 
         if (arguments is not null)
             ContextualizeGenericCallArguments(arguments, substitutedParamTypes);
