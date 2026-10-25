@@ -170,7 +170,7 @@ public partial class TypeChecker
                 if (enforceAccessibility)
                     EnforceStaticMemberAccess(current, lookupMember);
                 ObserveSourceMemberSelection(memberName, current, MemberFacet.Static);
-                return staticMethodType;
+                return WithStaticMemberOptionality(current, lookupName, staticMethodType);
             }
             if (staticProps != null && staticProps.TryGetValue(lookupName, out var staticPropType))
             {
@@ -186,8 +186,9 @@ public partial class TypeChecker
                     ObservePendingGetterFieldRead(current, isStatic: true, lookupName);
                 }
                 ObserveSourceMemberSelection(memberName, current, MemberFacet.Static);
-                return ResolveFieldStageGetter(current, isStatic: true, lookupName,
-                    CompletedFieldDependencyType(current, true, lookupName, staticPropType));
+                return WithStaticMemberOptionality(current, lookupName,
+                    ResolveFieldStageGetter(current, isStatic: true, lookupName,
+                        CompletedFieldDependencyType(current, true, lookupName, staticPropType)));
             }
             current = GetSuperclass(current);
         }
@@ -225,6 +226,15 @@ public partial class TypeChecker
         throw new TypeCheckException(
             $"Property '{memberName.Lexeme}' does not exist on type 'typeof {GetClassName(classType)}'.",
             memberName.Line, tsCode: "TS2339");
+    }
+
+    private TypeInfo WithStaticMemberOptionality(TypeInfo owner, string name, TypeInfo type)
+    {
+        bool optional = owner is TypeInfo.MutableClass mutable
+            ? mutable.OrdinaryOptionalMembers.Contains((true, name))
+            : ClassInfoAccessor.Get(owner, cls => cls.Core.OrdinaryOptionalMembers,
+                generic => generic.Core.OrdinaryOptionalMembers)?.Contains((true, name)) == true;
+        return WithOptionalPropertyUndefined(type, optional);
     }
 
     private static string ResolveDotNetStaticMemberName(TypeInfo owner, string requested,
