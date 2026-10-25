@@ -131,8 +131,9 @@ public partial class TypeChecker
                 {
                     typeArgs = InferTypeArguments(
                         genericFunc,
-                        PrepareFreshCallArgumentsForInference(
-                            genericFunc.ParamTypes, call.Arguments, argTypes),
+                        tupleSlots is null
+                            ? PrepareFreshCallArgumentsForInference(genericFunc.ParamTypes, call.Arguments, argTypes)
+                            : PrepareGenericTupleInferenceArguments(genericFunc, tupleSlots),
                         contextualResultType,
                         tupleRestArguments: tupleSlots is null ? null : GenericTupleCallType(
                             tupleSlots.Skip(genericFunc.ParamTypes.Count - 1), (TypeInfo.Tuple)genericFunc.ParamTypes[^1]));
@@ -1594,8 +1595,9 @@ public partial class TypeChecker
                     ? call.TypeArgs.Select((_, i) => ResolveTypeArg(call.TypeArgs, call.TypeArgNodes, i)).ToList()
                     : InferTypeArguments(
                         candidate,
-                        PrepareFreshCallArgumentsForInference(
-                            candidate.ParamTypes, call.Arguments, argTypes),
+                        tupleArguments is null
+                            ? PrepareFreshCallArgumentsForInference(candidate.ParamTypes, call.Arguments, argTypes)
+                            : PrepareGenericTupleInferenceArguments(candidate, tupleArguments),
                         tupleRestArguments: tupleArguments is null ? null : GenericTupleCallType(
                             tupleArguments.Skip(candidate.ParamTypes.Count - 1), (TypeInfo.Tuple)candidate.ParamTypes[^1]));
                 instantiatedSig = (TypeInfo.Function)InstantiateGenericFunction(candidate, typeArgs);

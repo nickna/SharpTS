@@ -6,7 +6,13 @@ namespace SharpTS.TypeSystem;
 public partial class TypeChecker
 {
     private sealed record GenericTupleCallSlot(TypeInfo Type, bool Optional = false, bool Spread = false, Expr? Expression = null);
-    private readonly record struct GenericTupleMatchState(int Parameter, int Argument, bool OptionalOpen = false);
+    private readonly record struct GenericTupleMatchState(int Parameter, int Argument);
+
+    private List<TypeInfo> PrepareGenericTupleInferenceArguments(TypeInfo.GenericFunction generic,
+        IReadOnlyList<GenericTupleCallSlot> slots) => slots.Select((slot, position) =>
+            position < generic.ParamTypes.Count - 1 && slot.Expression is { } expression
+                ? PrepareFreshCallArgumentForInference(generic.ParamTypes[position], expression, slot.Type)
+                : slot.Type).ToList();
 
     private bool TryGetGenericTupleCallSignature(TypeInfo callee, out TypeInfo.CallSignature original,
         out TypeInfo.GenericFunction generic)
@@ -41,7 +47,7 @@ public partial class TypeChecker
             try
             {
                 signature = (TypeInfo.Function)InstantiateGenericFunction(generic, InferTypeArguments(generic,
-                    PrepareFreshCallArgumentsForInference(generic.ParamTypes, call.Arguments, argumentTypes),
+                    PrepareGenericTupleInferenceArguments(generic, slots),
                     contextualResult, tupleRestArguments: GenericTupleCallType(
                         slots.Skip(generic.ParamTypes.Count - 1), (TypeInfo.Tuple)generic.ParamTypes[^1])));
             }
@@ -152,8 +158,7 @@ public partial class TypeChecker
                 int parameter = state.Parameter, argument = state.Argument;
                 if (parameter == parameters.Count)
                 {
-                    if (argument != arguments.Count &&
-                        !(state.OptionalOpen && arguments.Skip(argument).All(slot => slot.Spread))) continue;
+                    if (argument != arguments.Count) continue;
                     winningContexts = [];
                     for (var current = state; current != initial; current = paths[current].Parent)
                         if (paths[current] is { Argument: >= 0, Type: { } type } step)
@@ -175,7 +180,7 @@ public partial class TypeChecker
                 }
                 var actual = arguments[argument];
                 if (actual.Spread && !expected.Optional || !Compatible(expected, actual, contextualize)) continue;
-                Add(new(parameter + 1, actual.Spread ? argument : argument + 1, actual.Spread), state, argument, expected.Type);
+                Add(new(parameter + 1, argument + 1), state, argument, expected.Type);
             }
             winningContexts = [];
             return false;
