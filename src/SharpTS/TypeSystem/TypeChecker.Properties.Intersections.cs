@@ -13,10 +13,18 @@ public partial class TypeChecker
     {
         Dictionary<string, TypeInfo> fields = [];
         HashSet<string> readonlyFields = [], optionalFields = [];
+        bool impossibleBrands = HasImpossibleIntersectionWriteBrands(receiver);
         foreach (string name in names)
         {
             var token = new Token(TokenType.IDENTIFIER, name, null, line);
-            if (receiver.FlattenedTypes.Any(IsImpossibleIntersectionConstraint) ||
+            if (impossibleBrands && missingCode == "TS7053")
+            {
+                // Indexed writes to a reduced-never receiver compare against never;
+                // dotted access instead reports that its named property is absent.
+                fields[name] = TypeInfo.Never.Shared;
+                continue;
+            }
+            if (impossibleBrands || receiver.FlattenedTypes.Any(IsImpossibleIntersectionConstraint) ||
                 IntersectionWriteMemberOf(receiver, token, enforceAccessibility,
                     new HashSet<TypeInfo>(ReferenceEqualityComparer.Instance)) is not { } member)
                 throw new TypeCheckException($"Property '{name}' does not exist on type '{receiver}'.", line, tsCode: missingCode);

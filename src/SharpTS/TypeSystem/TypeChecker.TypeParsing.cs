@@ -369,9 +369,10 @@ public partial class TypeChecker
                 IReadOnlyDictionary<string, TypeInfo>? fields = type switch
                 {
                     TypeInfo.Record r => r.Fields,
-                    TypeInfo.Interface i => i.GetAllMembers().GroupBy(member => member.Key)
+                    TypeInfo.Interface i when !InterfaceHasNominalIntersectionMembers(i) => i.GetAllMembers().GroupBy(member => member.Key)
                         .ToDictionary(group => group.Key, group => group.First().Value),
-                    // Class constituents retain their declaring owners, visibility, and setters.
+                    // Class and class-derived branded interface constituents retain their
+                    // declaring owners, visibility, and setters.
                     // Their apparent fields cannot replace the nominal constituent with a record.
                     _ => null
                 };
