@@ -158,13 +158,16 @@ public partial class TypeChecker
             using var editorScope = EnterEditorLexicalScope(tryCatch, keyword: TokenType.CATCH);
             TypeEnvironment catchEnv = new(_environment);
             if (tryCatch.CatchParam is not null)
+            {
+                TypeInfo catchType = tryCatch.CatchParamType == "unknown" ||
+                    (tryCatch.CatchParamType is null && Options.UseUnknownInCatchVariables)
+                    ? TypeInfo.Unknown.Shared : TypeInfo.Any.Shared;
                 DeclareValue(
                     catchEnv,
                     tryCatch.CatchParam,
-                    tryCatch.CatchParamType == "unknown" ||
-                        (tryCatch.CatchParamType is null && Options.UseUnknownInCatchVariables)
-                        ? TypeInfo.Unknown.Shared
-                        : TypeInfo.Any.Shared);
+                    catchType);
+                RecordDeclaredType(catchEnv, tryCatch.CatchParam.Lexeme, catchType);
+            }
 
             CheckBlock(tryCatch.CatchBlock, catchEnv);
             var catchExit = CaptureValueFlow();

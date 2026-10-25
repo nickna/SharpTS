@@ -1638,6 +1638,9 @@ public partial class TypeChecker
         }
 
         TypeInfo iterableType = CheckExpr(stmt.Iterable);
+        // A fresh mutable array infers widened element types. Retain fixed literal
+        // types from assertions/aliases, using the completed child checks only.
+        iterableType = WidenClassFieldInitializerType(stmt.Iterable, iterableType);
 
         // Now that generator yield-type inference draws from the `yield` / `yield*` operands (#548), the
         // Generator/AsyncGenerator yield type is real (a delegating-only generator infers its delegate's
@@ -1647,6 +1650,7 @@ public partial class TypeChecker
         TypeInfo elementType = iterableType switch
         {
             TypeInfo.Array arr => arr.ElementType,
+            TypeInfo.Tuple tuple => ComputeTupleElementUnion(tuple),
             TypeInfo.Map mapType => TypeInfo.Tuple.FromTypes([mapType.KeyType, mapType.ValueType], 2),
             TypeInfo.Set setType => setType.ElementType,
             TypeInfo.Iterator iterType => iterType.ElementType,
@@ -1693,6 +1697,9 @@ public partial class TypeChecker
         }
         else
             DeclareValue(forOfEnv, stmt.Variable, elementType);
+
+        if (stmt.IsDeclaration && hoistedVar is null)
+            RecordDeclaredType(forOfEnv, stmt.Variable.Lexeme, elementType);
 
         try
         {
@@ -1752,6 +1759,7 @@ public partial class TypeChecker
                     stringKeys.Count == 1 ? stringKeys[0] : new TypeInfo.Union(stringKeys),
             _ => TypeInfo.String.Shared,
         };
+        loopKeyType = WidenLiteralType(loopKeyType);
 
         BindingSymbol? hoistedVar = stmt.IsDeclaration && stmt.IsVar
             ? DeclareHoistedLoopHead(stmt.Variable, loopKeyType)
@@ -1768,7 +1776,10 @@ public partial class TypeChecker
             MarkDefinitelyAssigned(stmt.Variable);
         }
         else if (stmt.IsDeclaration)
+        {
             DeclareValue(forInEnv, stmt.Variable, loopKeyType);
+            RecordDeclaredType(forInEnv, stmt.Variable.Lexeme, loopKeyType);
+        }
         else
         {
             BindValueUse(stmt.Variable);

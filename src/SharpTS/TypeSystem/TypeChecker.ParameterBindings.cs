@@ -54,11 +54,11 @@ public partial class TypeChecker
         internal void Initialize(Stmt.Parameter parameter, TypeEnvironment environment, TypeInfo type)
         {
             if (_initializers is null) return;
+            using var scope = new EnvironmentScope(_checker, environment);
             _checker.RecordDeclaredType(parameter.Name.Lexeme, type);
             _checker._escapeAnalyzer.DefineVariable(parameter.Name.Lexeme);
             if (!_initializers.TryGetValue(parameter.Name, out var initializer)) return;
 
-            using var scope = new EnvironmentScope(_checker, environment);
             if (_deferClassContext)
             {
                 var visitor = new MethodDefaultClassContextVisitor();

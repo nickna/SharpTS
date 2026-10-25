@@ -14,11 +14,8 @@ public partial class TypeChecker
     private readonly ConditionalWeakTable<BindingSymbol, ClassFieldConstWidening> _classFieldDeclaredBindingTypes = new();
     private TypeEnvironment? _classFieldBindingFlowBoundary;
 
-    private void RecordClassFieldBindingType(string name, TypeInfo type)
-    {
-        if (_environment.GetValueBinding(name) is { } binding)
-            _classFieldDeclaredBindingTypes.AddOrUpdate(binding, new ClassFieldConstWidening(type));
-    }
+    private void RecordClassFieldBindingType(BindingSymbol binding, TypeInfo type) =>
+        _classFieldDeclaredBindingTypes.AddOrUpdate(binding, new ClassFieldConstWidening(type));
 
     private TypeInfo GetClassFieldOuterBindingType(Token name, TypeInfo current)
     {
