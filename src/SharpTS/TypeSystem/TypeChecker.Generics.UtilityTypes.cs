@@ -827,6 +827,23 @@ public partial class TypeChecker
                     props[name] = propType;
                 break;
 
+            case TypeInfo.Union union:
+                // Pick/Omit map keyof a union. A named key must be supplied by every
+                // constituent, either explicitly or through its index signature.
+                var parts = union.FlattenedTypes.Select(part => (Type: part, Properties: ExtractPropertiesWithTypes(part))).ToList();
+                foreach (string name in parts.SelectMany(part => part.Properties.Keys).Distinct(StringComparer.Ordinal))
+                {
+                    TypeInfo? value = null;
+                    foreach (var part in parts)
+                    {
+                        TypeInfo? next = part.Properties.GetValueOrDefault(name) ?? UtilityPropertyIndexType(part.Type, name);
+                        if (next is null) { value = null; break; }
+                        value = value is null ? next : CreateUnion(value, next);
+                    }
+                    if (value is not null) props[name] = value;
+                }
+                break;
+
             case TypeInfo.Class cls:
                 // Public fields
                 foreach (var (name, propType) in cls.FieldTypes)
@@ -853,6 +870,13 @@ public partial class TypeChecker
 
         return props;
     }
+
+    private static bool IsUtilityNumericProperty(string name) =>
+        double.TryParse(name, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double number)
+        && Compilation.RuntimeTypes.FormatNumber(number) == name;
+
+    private TypeInfo? UtilityPropertyIndexType(TypeInfo type, string name) =>
+        (IsUtilityNumericProperty(name) ? NumberIndexOf(type) : null) ?? StringIndexOf(type);
 
     /// <summary>
     /// Utility projections expose the public instance surface, including inherited members.
@@ -926,6 +950,8 @@ public partial class TypeChecker
             TypeInfo.Intersection intersection => intersection.FlattenedTypes
                 .SelectMany(ExtractOptionalProperties)
                 .ToHashSet(StringComparer.Ordinal),
+            TypeInfo.Union union => union.FlattenedTypes.SelectMany(ExtractOptionalProperties)
+                .ToHashSet(StringComparer.Ordinal),
             TypeInfo.MappedType mapped => ExtractOptionalProperties(ExpandMappedType(mapped)),
             TypeInfo.InstantiatedGeneric ig => ExtractOptionalProperties(ExpandInstantiatedGenericForKeyOf(ig)),
             _ => []
@@ -941,10 +967,28 @@ public partial class TypeChecker
             .ToHashSet(StringComparer.Ordinal),
         TypeInfo.Instance instance => ExtractReadonlyProperties(instance.ResolvedClassType),
         TypeInfo.Intersection intersection => ExtractIntersectionReadonlyProperties(intersection),
+        TypeInfo.Union union => ExtractUnionReadonlyProperties(union),
         TypeInfo.MappedType mapped => ExtractReadonlyProperties(ExpandMappedType(mapped)),
         TypeInfo.InstantiatedGeneric generic => ExtractReadonlyProperties(ExpandInstantiatedGenericForKeyOf(generic)),
         _ => []
     };
+
+    private HashSet<string> ExtractUnionReadonlyProperties(TypeInfo.Union union)
+    {
+        var names = ExtractPropertiesWithTypes(union).Keys;
+        var result = union.FlattenedTypes.SelectMany(ExtractReadonlyProperties).ToHashSet(StringComparer.Ordinal);
+        foreach (var part in union.FlattenedTypes)
+        {
+            var named = ExtractPropertiesWithTypes(part);
+            foreach (string name in names.Where(name => !named.ContainsKey(name)))
+            {
+                if (part is TypeInfo.Record { IsReadonly: true } && UtilityPropertyIndexType(part, name) is not null ||
+                    part is TypeInfo.Interface { ReadonlyNumberIndex: true } && IsUtilityNumericProperty(name) && NumberIndexOf(part) is not null)
+                    result.Add(name);
+            }
+        }
+        return result;
+    }
 
     private HashSet<string> ExtractIntersectionReadonlyProperties(TypeInfo.Intersection intersection)
     {
