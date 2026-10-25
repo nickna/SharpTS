@@ -59,8 +59,10 @@ public partial class TypeChecker
             _typeMap.Set(call.Callee, extensionMember);
             RecordEditorExpressionType(call.Callee, extensionMember);
         }
-        calleeType = IntersectionCallTarget(calleeType);
-        RecordEditorCallCandidates(calleeType, call.Optional);
+        calleeType = IntersectionCallTarget(calleeType, out var intersectionCallOriginals);
+        RecordEditorCallCandidates(IntersectionCallCandidateSurface(calleeType, intersectionCallOriginals), call.Optional);
+        if (intersectionCallOriginals is not null)
+            foreach (var (adapted, original) in intersectionCallOriginals) RecordEditorInvocationInstantiation(original, adapted);
 
         // Resolve the callee before invalidating receiver-property narrowings. A guard may narrow
         // the callable property itself (`obj.callback === undefined ? ... : obj.callback()`), and
@@ -103,10 +105,11 @@ public partial class TypeChecker
              return new TypeInfo.Instance(classType);
         }
 
-        if (TryNormalizeOrdinaryTupleCallable(calleeType, out var ordinaryTupleCallable, out var tupleCallableOriginals))
-            calleeType = ordinaryTupleCallable;
+        if (TryNormalizeCallableObject(calleeType, out var objectCallable, out var tupleCallableOriginals))
+            calleeType = objectCallable;
+        tupleCallableOriginals ??= intersectionCallOriginals;
 
-        TypeInfo? genericTupleOriginal = null;
+        TypeInfo? genericTupleOriginal = tupleCallableOriginals?.GetValueOrDefault(calleeType);
         if (TryGetGenericTupleCallSignature(calleeType, out var tupleOriginal, out var tupleCallable))
         {
             genericTupleOriginal = tupleOriginal;
@@ -199,7 +202,8 @@ public partial class TypeChecker
                 // An explicit instantiation establishes the callback property's assignment
                 // context. Conflicting inferred sibling candidates retain argument diagnostics.
                 CheckInstantiatedGenericCallArguments(call, instFunc, argTypes,
-                    reportCallbackProperties: call.TypeArgs is { Count: > 0 });
+                    reportCallbackProperties: call.TypeArgs is { Count: > 0 },
+                    enforceArity: genericTupleOriginal is not null);
                 RecordEditorInvocationInstantiation(originalSignature, instFunc);
                 RecordEditorInvocationSelection(originalSignature, instFunc);
                 return instFunc.ReturnType;
@@ -245,8 +249,8 @@ public partial class TypeChecker
             // untyped functions also count (the `.All` on an empty list is true
             // but the old `Count > 0` guard excluded them; lodash `function
             // shortOut() { return func.apply(undefined, arguments); }` falls here).
-            bool allParamsAny = funcType.ParamTypes.Count == 0
-                || funcType.ParamTypes.All(p => p is TypeInfo.Any);
+            bool allParamsAny = tupleCallableOriginals?.ContainsKey(funcType) != true &&
+                (funcType.ParamTypes.Count == 0 || funcType.ParamTypes.All(p => p is TypeInfo.Any));
             if (funcType.ParamTypes.Count == 0 && call.Callee is Expr.GetIndex)
                 allParamsAny = false;
 
@@ -434,6 +438,11 @@ public partial class TypeChecker
                         else
                         {
                             argType = CheckExpr(arg);
+                            if (tupleCallableOriginals is not null && ContainsGenericTupleCallback(arg))
+                            {
+                                ContextualizeNestedGenericCallback(arg, expectedParamType);
+                                argType = RefreshContextualizedGenericArgument(arg, argType);
+                            }
                         }
                         if (paramIndex < regularParamCount)
                         {
@@ -1119,8 +1128,10 @@ public partial class TypeChecker
         Expr.Call call,
         TypeInfo.Function signature,
         IReadOnlyList<TypeInfo> inferenceArgumentTypes,
-        bool reportCallbackProperties = true)
+        bool reportCallbackProperties = true,
+        bool enforceArity = false)
     {
+        if (enforceArity) CheckNormalizedCallableArity(call, signature, inferenceArgumentTypes);
         int regularCount = signature.ParamTypes.Count - (signature.HasRestParam ? 1 : 0);
         TypeInfo? restElement = signature.HasRestParam && signature.ParamTypes.Count > 0 &&
             signature.ParamTypes[^1] is TypeInfo.Array restArray ? restArray.ElementType : null;
@@ -1156,8 +1167,11 @@ public partial class TypeChecker
                         $"Spread argument must be an iterable type (array, iterator, set, map, string, or generator), got '{spreadType}'.",
                         call.Paren.Line, tsCode: "TS2488");
 
-                // An unknown-length spread prevents reliable positional matching afterwards,
-                // as in the ordinary function-call path. Do not treat its array as one argument.
+                // Within an array rest parameter every later argument has the same
+                // element context, regardless of how many values this spread supplies.
+                if (restElement is not null && parameterIndex >= regularCount) continue;
+                // Before that boundary an unknown length prevents reliable positional
+                // matching. Do not treat its array as one argument.
                 return;
             }
 
@@ -1197,6 +1211,33 @@ public partial class TypeChecker
                     $"Spread element type '{actual}' not compatible with rest parameter type '{restElement}'.",
                     call.Paren.Line, tsCode: "TS2345");
         }
+    }
+
+    // Callable-object adapters have declaration-owned arity, including zero/any
+    // parameters. Count only already-checked slots; ordinary JS functions retain
+    // their existing permissive policy and no argument or callback is replayed.
+    private void CheckNormalizedCallableArity(Expr.Call call, TypeInfo.Function signature,
+        IReadOnlyList<TypeInfo> argumentTypes)
+    {
+        var slots = GenericTupleCallArguments(call, argumentTypes.ToList());
+        int position = 0;
+        bool openSpread = false;
+        foreach (var slot in slots)
+        {
+            if (slot.Spread)
+            {
+                if (!openSpread && (position < signature.MinArity ||
+                    !signature.HasRestParam && position >= signature.ParamTypes.Count))
+                    throw new TypeCheckException("A spread argument must either have a tuple type or be passed to a rest parameter.",
+                        call.Paren.Line, tsCode: "TS2556");
+                openSpread = true;
+            }
+            position++;
+        }
+        if (!openSpread && (position < signature.MinArity ||
+            !signature.HasRestParam && position > signature.ParamTypes.Count))
+            throw new TypeCheckException($"Expected {signature.MinArity} to {signature.ParamTypes.Count} arguments but got {position}.",
+                call.Paren.Line, tsCode: "TS2554");
     }
 
     private void ContextualizeNestedGenericCallback(Expr expression, TypeInfo? contextualType)
@@ -1870,7 +1911,7 @@ public partial class TypeChecker
             CheckGenericTupleRestCall(call, bestMatch, GenericTupleCallArguments(call, argTypes));
             InvalidateTupleCallArgumentNarrowings(call.Arguments);
         }
-        else if (hasTupleRest)
+        else if (hasTupleRest || originalSignatures is not null)
         {
             ContextualizeGenericCallArguments(call.Arguments, bestMatch.ParamTypes);
             argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);

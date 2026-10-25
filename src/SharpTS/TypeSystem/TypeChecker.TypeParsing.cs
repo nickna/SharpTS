@@ -362,10 +362,22 @@ public partial class TypeChecker
             HashSet<string> requiredInAny = []; // Track if property is required in any type
             HashSet<string> readonlyFields = [];
             HashSet<string> mutableInAny = [];
+            List<TypeInfo.CallSignature> callSignatures = [];
             List<TypeInfo> nonObjectTypes = [];
 
             foreach (var type in types)
             {
+                // Retain declaration-owned signatures even when a callable interface has
+                // no named members. Reconstructing only its fields erases callability.
+                var sourceCalls = type switch
+                {
+                    TypeInfo.Record record => record.CallSignatures,
+                    TypeInfo.Interface iface when !InterfaceHasNominalIntersectionMembers(iface) => CallableObjectSignatures(iface),
+                    _ => null
+                };
+                if (sourceCalls is not null)
+                    foreach (var signature in sourceCalls)
+                        if (!callSignatures.Any(existing => ReferenceEquals(existing, signature))) callSignatures.Add(signature);
                 IReadOnlyDictionary<string, TypeInfo>? fields = type switch
                 {
                     TypeInfo.Record r => r.Fields,
@@ -453,9 +465,11 @@ public partial class TypeChecker
                         containsGlobalThis ? "typeof globalThis" : "",
                         mergedFields.ToFrozenDictionary(),
                         optionalFields.ToFrozenSet(),
+                        CallSignatures: callSignatures.Count == 0 ? null : callSignatures,
                         ReadonlyMembers: readonlyFields.ToFrozenSet(StringComparer.Ordinal));
                 }
                 return new TypeInfo.Record(mergedFields.ToFrozenDictionary(),
+                    CallSignatures: callSignatures.Count == 0 ? null : callSignatures,
                     ReadonlyFields: readonlyFields.ToFrozenSet(StringComparer.Ordinal));
             }
 
@@ -465,8 +479,10 @@ public partial class TypeChecker
             // `(PropsA | PropsB) & { children?: ReactNode }` retain optional children.
             TypeInfo mergedObject = optionalFields.Count > 0
                 ? new TypeInfo.Interface("", mergedFields.ToFrozenDictionary(), optionalFields.ToFrozenSet(),
+                    CallSignatures: callSignatures.Count == 0 ? null : callSignatures,
                     ReadonlyMembers: readonlyFields.ToFrozenSet(StringComparer.Ordinal))
                 : new TypeInfo.Record(mergedFields.ToFrozenDictionary(),
+                    CallSignatures: callSignatures.Count == 0 ? null : callSignatures,
                     ReadonlyFields: readonlyFields.ToFrozenSet(StringComparer.Ordinal));
             var resultTypes = new List<TypeInfo>(nonObjectTypes) { mergedObject };
             return new TypeInfo.Intersection(resultTypes);

@@ -433,7 +433,7 @@ public partial class TypeChecker
     // Track declared variable types separately from potentially narrowed types
     // This allows assignments to check against the original declared type, not the narrowed type
     // Stack of dictionaries to handle function scope boundaries
-    private readonly Stack<Dictionary<string, TypeInfo>> _declaredVariableTypesStack = new();
+    private readonly Stack<Dictionary<BindingSymbol, TypeInfo>> _declaredVariableTypesStack = new();
 
     // Flow state for TS2454 ("variable is used before being assigned"). Each callable/module
     // frame owns its own binding-identity map so a deferred closure read of an outer variable is
@@ -641,7 +641,7 @@ public partial class TypeChecker
     /// </summary>
     private void PushDeclaredVariableScope()
     {
-        _declaredVariableTypesStack.Push(new Dictionary<string, TypeInfo>());
+        _declaredVariableTypesStack.Push(new Dictionary<BindingSymbol, TypeInfo>(ReferenceEqualityComparer.Instance));
         PushDefiniteAssignmentScope();
     }
 
@@ -780,12 +780,15 @@ public partial class TypeChecker
     /// <summary>
     /// Records the declared type of a variable for assignment checking.
     /// </summary>
-    private void RecordDeclaredType(string name, TypeInfo type)
+    private void RecordDeclaredType(string name, TypeInfo type) => RecordDeclaredType(_environment, name, type);
+
+    private void RecordDeclaredType(TypeEnvironment environment, string name, TypeInfo type)
     {
-        RecordClassFieldBindingType(name, type);
+        if (environment.GetValueBinding(name) is not { } binding) return;
+        RecordClassFieldBindingType(binding, type);
         if (_declaredVariableTypesStack.Count > 0)
         {
-            _declaredVariableTypesStack.Peek()[name] = type;
+            _declaredVariableTypesStack.Peek()[binding] = type;
         }
     }
 
@@ -795,12 +798,10 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo? GetDeclaredType(string name)
     {
-        // Search through scopes from innermost to outermost
-        foreach (var scope in _declaredVariableTypesStack)
-        {
-            if (scope.TryGetValue(name, out var type))
-                return type;
-        }
+        // A lexical shadow must never inherit an outer declaration's assignment type.
+        if (_environment.GetValueBinding(name) is { } binding)
+            foreach (var scope in _declaredVariableTypesStack)
+                if (scope.TryGetValue(binding, out var type)) return type;
         // Fall back to environment (this handles globals and cases where we didn't track)
         return _environment.Get(name);
     }
@@ -816,8 +817,9 @@ public partial class TypeChecker
     /// </summary>
     private bool IsDeclaredTypeTracked(string name)
     {
+        if (_environment.GetValueBinding(name) is not { } binding) return false;
         foreach (var scope in _declaredVariableTypesStack)
-            if (scope.ContainsKey(name)) return true;
+            if (scope.ContainsKey(binding)) return true;
         return false;
     }
 

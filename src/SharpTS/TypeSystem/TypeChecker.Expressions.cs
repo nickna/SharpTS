@@ -27,10 +27,12 @@ public partial class TypeChecker
         var immediateArguments = ActiveImmediateArgumentCache;
         if (immediateArguments is { Capturing: false } && !immediateArguments.Refresh.Contains(expr) &&
             immediateArguments.Types.TryGetValue(expr, out var checkedArgument)) return checkedArgument;
+        using var loopReads = BeginLoopValueReads(expr);
         if (!EditorFacts.IsEnabled)
         {
             TypeInfo ordinaryResult = RefreshForwardClassConstructor(DispatchExpr(expr));
             _typeMap.Set(expr, ordinaryResult);
+            loopReads?.Complete(ordinaryResult);
             RecordTryValueMutation(expr);
             RecordImmediateArgumentType(immediateArguments, expr, ordinaryResult);
             return ordinaryResult;
@@ -40,6 +42,7 @@ public partial class TypeChecker
         {
             TypeInfo result = RefreshForwardClassConstructor(DispatchExpr(expr));
             _typeMap.Set(expr, result);
+            loopReads?.Complete(result);
             RecordTryValueMutation(expr);
             RecordEditorExpressionType(expr, result);
             RecordImmediateArgumentType(immediateArguments, expr, result);
@@ -67,11 +70,18 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckExprWithContext(Expr expr, TypeInfo? contextualType)
     {
-        if (!EditorFacts.IsEnabled) return CheckExprWithContextCore(expr, contextualType);
+        using var loopReads = BeginLoopValueReads(expr);
+        if (!EditorFacts.IsEnabled)
+        {
+            var result = CheckExprWithContextCore(expr, contextualType);
+            loopReads?.Complete(result);
+            return result;
+        }
         BeginEditorExpression(expr);
         try
         {
             TypeInfo result = CheckExprWithContextCore(expr, contextualType);
+            loopReads?.Complete(result);
             RecordEditorExpressionType(expr, result);
             return result;
         }
@@ -1871,6 +1881,7 @@ public partial class TypeChecker
                 arrow.Parameters[i].Name,
                 bodyParamTypes[i]);
         }
+        RecordLoopImmediateParameters(arrow, arrowEnv, bodyParamTypes);
 
         // Save and set context - function bodies are isolated from outer loop/switch/label context
         TypeEnvironment previousEnv = _environment;

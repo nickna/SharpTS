@@ -174,6 +174,9 @@ public partial class TypeChecker
                 case TypeInfo.GenericFunction generic:
                     Add(generic, generic.TypeParams);
                     break;
+                case TypeInfo.CallSignature signature:
+                    Add(signature, signature.TypeParams);
+                    break;
                 case TypeInfo.OverloadedFunction overloaded:
                     foreach (var signature in overloaded.Signatures) if (!Add(signature)) break;
                     break;
@@ -187,12 +190,18 @@ public partial class TypeChecker
                         AddCallCandidates(signature, optional, depth + 1);
                     }
                     break;
-                case TypeInfo.Interface { CallSignatures: { } signatures }:
-                    foreach (var signature in signatures) if (!Add(signature, signature.TypeParams)) break;
+                case TypeInfo.Interface iface:
+                    var interfaceSignatures = _checker.CallableObjectSignatures(iface);
+                    if (interfaceSignatures.Count == 0) _complete = false;
+                    foreach (var signature in interfaceSignatures) if (!Add(signature, signature.TypeParams)) break;
                     break;
                 case TypeInfo.GenericInterface { CallSignatures: { } signatures } generic:
                     foreach (var signature in signatures)
                         if (!Add(signature, CombineParameters(generic.TypeParams, signature.TypeParams))) break;
+                    break;
+                case TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface generic }:
+                    foreach (var signature in _checker.CallableObjectSignatures(generic))
+                        if (!Add(signature, signature.TypeParams)) break;
                     break;
                 case TypeInfo.Record { CallSignatures: { } signatures }:
                     foreach (var signature in signatures) if (!Add(signature, signature.TypeParams)) break;

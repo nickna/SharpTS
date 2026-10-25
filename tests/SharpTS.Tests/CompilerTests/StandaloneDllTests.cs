@@ -13515,7 +13515,7 @@ public partial class StandaloneDllTests
             const value:any=Reflect.construct(constructor,['en-US',{minimumFractionDigits:2,maximumFractionDigits:2,useGrouping:false}]);
             console.log(value.format(1234.5));
             """,
-            "1,234.5\n", "main.ts", false
+            "1234.50\n", "main.ts", false
         },
         new object[]
         {

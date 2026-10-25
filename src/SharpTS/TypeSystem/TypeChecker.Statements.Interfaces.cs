@@ -788,6 +788,7 @@ public partial class TypeChecker
                         if (numberIndexType != null)
                             throw new TypeCheckException($" Duplicate number index signature in interface '{interfaceStmt.Name.Lexeme}'.", tsCode: "TS2374");
                         numberIndexType = valueType;
+                        readonlyNumberIndex = indexSig.IsReadonly;
                         break;
                     case TokenType.TYPE_SYMBOL:
                         if (symbolIndexType != null)
@@ -995,7 +996,7 @@ public partial class TypeChecker
                 {
                     var paramTypes = sig.Parameters.Select(p => ResolveAnnotation(p.Type, p.TypeAnnotationNode) ?? TypeInfo.Any.Shared).ToList();
                     var returnType = ResolveAnnotation(sig.ReturnType, sig.ReturnTypeNode)!;
-                    int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && p.DefaultValue == null).Count();
+                    int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && !p.IsRest && p.DefaultValue == null).Count();
                     bool hasRestParam = sig.Parameters.Any(p => p.IsRest);
                     var paramNames = sig.Parameters.Select(p => p.Name.Lexeme).ToList();
                     var signature = new TypeInfo.CallSignature(sigTypeParams, paramTypes, returnType, requiredParams, hasRestParam, paramNames);
@@ -1250,6 +1251,11 @@ public partial class TypeChecker
                     .ToDictionary(StringComparer.Ordinal);
             return CopyEditorSignatureMetadata(signature, signature with
             {
+                TypeParams = signature.TypeParams?.Select(parameter => parameter with
+                {
+                    Constraint = parameter.Constraint is null ? null : SubstitutePreservingSignatures(parameter.Constraint, signatureSubs),
+                    Default = parameter.Default is null ? null : SubstitutePreservingSignatures(parameter.Default, signatureSubs)
+                }).ToList(),
                 ParamTypes = signature.ParamTypes
                     .Select(type => SubstitutePreservingSignatures(type, signatureSubs)).ToList(),
                 ReturnType = SubstitutePreservingSignatures(signature.ReturnType, signatureSubs),

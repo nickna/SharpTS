@@ -36,7 +36,6 @@ public partial class TypeChecker
         private readonly TypeEnvironment _previousEnvironment;
         private readonly TypeEnvironment _loopEnvironment;
         private readonly EnvironmentScope _environmentScope;
-        private readonly (Dictionary<string, TypeInfo> Frame, Dictionary<string, TypeInfo?> Types)[] _declaredFrames;
         private readonly Dictionary<string, string?> _aliases = new(StringComparer.Ordinal);
         private readonly NarrowingContext[] _narrowings;
         private readonly IDisposable _escapeScope;
@@ -49,13 +48,6 @@ public partial class TypeChecker
             _loopEnvironment = new(_previousEnvironment);
             checker.RegisterEditorScope(statement, _loopEnvironment, EditorScopeKind.Block, EditorSyntaxRole.Whole);
             _environmentScope = new(checker, _loopEnvironment);
-            // Initializer closures may refer to the header's provisional type before
-            // VisitVar records it, so no same-named outer declared type may win lookup.
-            _declaredFrames = checker._declaredVariableTypesStack.Select(frame =>
-                (frame, names.ToDictionary(name => name, name => frame.GetValueOrDefault(name), StringComparer.Ordinal))).ToArray();
-            foreach (var (frame, _) in _declaredFrames)
-                foreach (var name in names)
-                    frame.Remove(name);
             foreach (var name in names)
             {
                 _aliases[name] = checker._variableAliases.GetValueOrDefault(name);
@@ -84,12 +76,6 @@ public partial class TypeChecker
                         _previousEnvironment.Define(name, type);
             }
 
-            foreach (var (frame, types) in _declaredFrames)
-                foreach (var name in _names)
-                    if (types[name] is { } type)
-                        frame[name] = type;
-                    else
-                        frame.Remove(name);
             foreach (var name in _names)
             {
                 if (_aliases[name] is { } alias)

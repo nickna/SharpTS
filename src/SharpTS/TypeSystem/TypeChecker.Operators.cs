@@ -266,6 +266,11 @@ public partial class TypeChecker
     {
         ReportPossiblyUndefinedEvolvingAny(leftExpression);
         ReportPossiblyUndefinedEvolvingAny(rightExpression);
+        return CheckComparisonOperandTypes(left, right, op, line);
+    }
+
+    private TypeInfo CheckComparisonOperandTypes(TypeInfo left, TypeInfo right, string op, int line = 0)
+    {
         // Any/Inferred (incl. in unions) bypasses type checking
         if (IsAnyPermissive(left) || IsAnyPermissive(right))
             return TypeInfo.Primitive.Boolean;
@@ -362,6 +367,10 @@ public partial class TypeChecker
         //   a and b for the last operand (#216). An && LHS contributes nothing
         //   to || — its negation is itself a disjunction.
         TypeInfo rightType;
+        var loopGuards = AnalyzeLoopExitGuards(logical.Left);
+        var rightLoopGuards = logical.Operator.Type == TokenType.AND_AND ? loopGuards?.Then : loopGuards?.Else;
+        var skippedLoopFlow = ApplyLoopExitGuards(incomingFlow,
+            logical.Operator.Type == TokenType.AND_AND ? loopGuards?.Else : loopGuards?.Then);
         var narrowings = logical.Operator.Type == TokenType.OR_OR
             ? CollectDisjunctGuards(logical.Left)
             : AnalyzeCompoundTypeGuards(logical.Left);
@@ -399,7 +408,7 @@ public partial class TypeChecker
                 }
                 try
                 {
-                    rightType = CheckValueFlowExpression(logical.Right, null, out rightFlow);
+                    rightType = CheckValueFlowExpression(logical.Right, null, out rightFlow, rightLoopGuards);
                 }
                 finally
                 {
@@ -412,19 +421,19 @@ public partial class TypeChecker
         }
         else
         {
-            rightType = CheckValueFlowExpression(logical.Right, null, out rightFlow);
+            rightType = CheckValueFlowExpression(logical.Right, null, out rightFlow, rightLoopGuards);
         }
 
         bool? leftTruth = IsAlwaysFalsy(leftType) ? false : IsAlwaysTruthy(leftType) ? true : null;
         bool? runsRight = logical.Operator.Type == TokenType.AND_AND ? leftTruth : leftTruth is null ? null : !leftTruth;
         if (runsRight == false)
         {
-            JoinValueFlow(incomingFlow, incomingFlow);
+            JoinValueFlow(incomingFlow, skippedLoopFlow);
             RestoreTryValueWrites(tryWrites);
             RestoreValueFlowJumps(jumps);
         }
         else if (runsRight == true) JoinValueFlow(incomingFlow, rightFlow);
-        else JoinValueFlow(incomingFlow, incomingFlow, rightFlow);
+        else JoinValueFlow(incomingFlow, skippedLoopFlow, rightFlow);
 
         // In JavaScript/TypeScript, || and && return one of their operands, not a boolean.
         // - `a || b` returns `a` if truthy, otherwise `b`. Type is A | B.
@@ -502,7 +511,8 @@ public partial class TypeChecker
             };
             skippedFlow = incomingFlow with { Bindings = bindings };
         }
-        TypeInfo rightType = CheckValueFlowExpression(nc.Right, null, out var rightFlow);
+        skippedFlow = ApplyLoopExitGuards(skippedFlow, LoopNullishGuard(nc.Left, nullish: false));
+        TypeInfo rightType = CheckValueFlowExpression(nc.Right, null, out var rightFlow, LoopNullishGuard(nc.Left, nullish: true));
         if (skippedLeftType is TypeInfo.Never) JoinValueFlow(incomingFlow, rightFlow);
         else JoinValueFlow(incomingFlow, skippedFlow, rightFlow);
 
@@ -540,6 +550,7 @@ public partial class TypeChecker
     {
         CheckExpr(ternary.Condition);
         var incomingFlow = CaptureValueFlow();
+        var loopGuards = AnalyzeLoopExitGuards(ternary.Condition);
         ValueFlowState? thenFlow = null, elseFlow = null;
 
         TypeInfo CheckBranch(bool then)
@@ -548,7 +559,7 @@ public partial class TypeChecker
             var tryWrites = CaptureTryValueWrites();
             var jumps = CaptureValueFlowJumps();
             TypeInfo result = CheckValueFlowExpression(then ? ternary.ThenBranch : ternary.ElseBranch,
-                contextualType, out var exit);
+                contextualType, out var exit, then ? loopGuards?.Then : loopGuards?.Else);
             if (then) thenFlow = exit; else elseFlow = exit;
             if (CheckedConditionTruthiness(ternary.Condition) == !then)
             {
@@ -801,7 +812,9 @@ public partial class TypeChecker
     {
         TypeInfo objType = CheckExpr(compound.Object);
         TypeInfo indexType = CheckExpr(compound.Index);
-        CheckReadonlyRecordIndex(objType, indexType, compound.Operator.Line);
+        TypeInfo writeTarget = TryGetLiteralPropertyKeys(indexType, out var writeKeys)
+            ? CompoundMemberWriteTarget(objType, writeKeys, compound.Operator.Line, enforceAccessibility: false)! : objType;
+        CheckReadonlyRecordIndex(writeTarget, indexType, compound.Operator.Line);
         EnsureWritableClassIndex(objType, indexType, compound.Index);
         EnsureWritableInterfaceNumberIndex(objType, indexType, compound.Index);
         TypeInfo valueType = CheckExpr(compound.Value);
@@ -861,7 +874,7 @@ public partial class TypeChecker
         bool canonicalArrayStringIndex = objType is TypeInfo.Array &&
             TryGetStringLiteralKeys(indexType, out var stringKeys) &&
             stringKeys.All(key => Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _));
-        bool ordinaryPropertyKey = (IsObjectType(objType) ||
+        bool ordinaryPropertyKey = (IsObjectType(writeTarget) ||
             objType is TypeInfo.Any or TypeInfo.Object or TypeInfo.MutableClass or
                 TypeInfo.Function or TypeInfo.GenericFunction or TypeInfo.OverloadedFunction or TypeInfo.OverloadSet) &&
             objType is not (TypeInfo.Array or TypeInfo.Tuple or TypeInfo.TypedArray) &&
@@ -1173,9 +1186,32 @@ public partial class TypeChecker
         return TypeInfo.Primitive.Number;
     }
 
-    private static void CheckReadonlyRecordProperty(TypeInfo? receiver, string name, int line)
+    private TypeInfo? CompoundMemberWriteTarget(TypeInfo? receiver, IEnumerable<string> names, int line, bool enforceAccessibility)
     {
+        HashSet<TypeInfo> active = new(ReferenceEqualityComparer.Instance);
+        while (receiver is not null && active.Add(receiver))
+        {
+            TypeInfo resolved = receiver switch
+            {
+                TypeInfo.TypeParameter { Constraint: { } constraint } => constraint,
+                TypeInfo.RecursiveTypeAlias alias => ExpandRecursiveTypeAlias(alias),
+                TypeInfo.MappedType => ResolveMappedTypeForAccess(receiver),
+                _ => receiver
+            };
+            if (ReferenceEquals(resolved, receiver)) break;
+            receiver = resolved;
+        }
+        return receiver is TypeInfo.Intersection intersection
+            ? IntersectionWriteTarget(intersection, names, line, enforceAccessibility,
+                missingCode: enforceAccessibility ? "TS2339" : "TS7053") : receiver;
+    }
+
+    private void CheckReadonlyRecordProperty(TypeInfo? receiver, string name, int line, bool enforceAccessibility = true)
+    {
+        receiver = CompoundMemberWriteTarget(receiver, [name], line, enforceAccessibility);
         if (receiver is TypeInfo.Record record && record.IsFieldReadonly(name))
+            throw new TypeCheckException($"Cannot assign to '{name}' because it is a read-only property.", line, tsCode: "TS2540");
+        if (receiver is TypeInfo.Interface iface && iface.IsMemberReadonly(name))
             throw new TypeCheckException($"Cannot assign to '{name}' because it is a read-only property.", line, tsCode: "TS2540");
     }
 
@@ -1184,7 +1220,7 @@ public partial class TypeChecker
         if (index is TypeInfo.NumberLiteral number)
         {
             CheckReadonlyRecordProperty(receiver,
-                number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), line);
+                number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), line, enforceAccessibility: false);
             return;
         }
         if (index is TypeInfo.Union union)
@@ -1193,7 +1229,7 @@ public partial class TypeChecker
             return;
         }
         if (index is not null && TryGetStringLiteralKeys(index, out var keys))
-            foreach (string key in keys) CheckReadonlyRecordProperty(receiver, key, line);
+            foreach (string key in keys) CheckReadonlyRecordProperty(receiver, key, line, enforceAccessibility: false);
     }
 
     private void CheckReadonlyRecordUpdate(Expr operand, int line)
@@ -1290,16 +1326,23 @@ public partial class TypeChecker
             return TypeInfo.String.Shared;
         }
         TypeInfo right = CheckExpr(unary.Right);
-        if (unary.Operator.Type == TokenType.INTERNAL_TO_PROPERTY_KEY)
+        return CheckUnaryOperandType(right, unary.Operator.Type);
+    }
+
+    // Loop-domain transfer also validates already-checked input types here. No
+    // source expression or diagnostic/editor collection is visited by this helper.
+    private TypeInfo CheckUnaryOperandType(TypeInfo right, TokenType operatorType)
+    {
+        if (operatorType == TokenType.INTERNAL_TO_PROPERTY_KEY)
             return ComputedBindingKeyType(right);
         if (DotNetTypeSynthesizer.TryResolveUnaryOperator(
-                right, unary.Operator.Type, out var clrResult))
+                right, operatorType, out var clrResult))
         {
             return clrResult;
         }
-        if (unary.Operator.Type == TokenType.VOID)
+        if (operatorType == TokenType.VOID)
             return TypeInfo.Undefined.Shared;
-        if (unary.Operator.Type == TokenType.MINUS)
+        if (operatorType == TokenType.MINUS)
         {
             // tsc types -x as number when x is any; IsBigInt(any) is true via
             // IsTypeOfKind, which would mis-type -x as bigint and make any
@@ -1312,9 +1355,9 @@ public partial class TypeChecker
                 throw new TypeCheckException("The '-' operator cannot be applied to type 'symbol'.", tsCode: "TS2469");
             throw new TypeCheckException("Unary '-' expects a number or bigint.", tsCode: "TS2362");
         }
-        if (unary.Operator.Type == TokenType.BANG)
+        if (operatorType == TokenType.BANG)
              return TypeInfo.Primitive.Boolean;
-        if (unary.Operator.Type == TokenType.TILDE)
+        if (operatorType == TokenType.TILDE)
         {
             // Same any→number rule as unary minus above.
             if (right is TypeInfo.Any) return TypeInfo.Primitive.Number;
@@ -1324,7 +1367,7 @@ public partial class TypeChecker
                 throw new TypeCheckException("The '~' operator cannot be applied to type 'symbol'.", tsCode: "TS2469");
             throw new TypeCheckException("Bitwise NOT requires a numeric operand.", tsCode: "TS2362");
         }
-        if (unary.Operator.Type == TokenType.PLUS)
+        if (operatorType == TokenType.PLUS)
         {
             // IsBigInt(any) is permissively true, but unary plus on `any` is valid and yields number.
             if (right is TypeInfo.Any) return TypeInfo.Primitive.Number;

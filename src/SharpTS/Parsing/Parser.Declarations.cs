@@ -330,7 +330,7 @@ public partial class Parser
                 var roIndexSig = TryParseIndexSignature();
                 if (roIndexSig != null)
                 {
-                    indexSignatures.Add(roIndexSig);
+                    indexSignatures.Add(roIndexSig with { IsReadonly = true });
                     continue;
                 }
             }

@@ -14,6 +14,17 @@ public partial class TypeChecker
     // overload set.
     private readonly Dictionary<TypeEnvironment, HashSet<Stmt.Function>> _completedBodylessFunctions =
         new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<(TypeEnvironment Environment, string Name), List<(Stmt.Function Declaration, TypeInfo Signature)>>
+        _pendingOverloadCallables = [];
+
+    private static bool SameOverloadTypeParameters(Stmt.Function first, Stmt.Function second)
+    {
+        if (first.TypeParams is not { } left || second.TypeParams is not { } right) return first.TypeParams == second.TypeParams;
+        return left.Count == right.Count && left.Zip(right).All(pair =>
+            pair.First.Name.Lexeme == pair.Second.Name.Lexeme && pair.First.Constraint == pair.Second.Constraint &&
+            pair.First.Default == pair.Second.Default && pair.First.IsConst == pair.Second.IsConst &&
+            pair.First.Variance == pair.Second.Variance);
+    }
 
     // Loop-head vars belong to the module/function being hoisted, even through ordinary blocks.
     private readonly Dictionary<Token, TypeEnvironment> _loopHeadVarOwners =
@@ -23,6 +34,16 @@ public partial class TypeChecker
     private void ResetFunctionDeclarationTracking()
     {
         _completedBodylessFunctions.Clear();
+        // Pending signatures belong to the source entry that supplied their declarations.
+        // Keep already-published value bindings across REPL checks, but do not retain unfinished
+        // declaration groups (and their AST owners) when a new entry begins.
+        foreach (var key in _pendingOverloadCallables.Keys)
+        {
+            _pendingOverloadSignatures.Remove(key);
+            _pendingOverloadTypeParams.Remove(key);
+        }
+        _pendingOverloadCallables.Clear();
+        _annotatedParameterBindings.Clear();
         _loopHeadVarOwners.Clear();
         _hoistedVarPlaceholders.Clear();
         _forwardClassDeclarations.Clear();
@@ -724,6 +745,13 @@ public partial class TypeChecker
                 _pendingOverloadSignatures[overloadKey] = signatures;
             }
             signatures.Add(thisFuncType);
+            TypeInfo declaredSignature = typeParams is { Count: > 0 }
+                ? CopyEditorSignatureMetadata(thisFuncType, new TypeInfo.GenericFunction(typeParams, paramTypes, returnType,
+                    requiredParams, hasRest, thisType, paramNames)) : thisFuncType;
+            RegisterEditorSignature(declaredSignature, funcStmt, funcStmt.Name);
+            if (!_pendingOverloadCallables.TryGetValue(overloadKey, out var callables))
+                _pendingOverloadCallables[overloadKey] = callables = [];
+            callables.Add((funcStmt, declaredSignature));
 
             // Also save type parameters if this is a generic overload
             if (typeParams != null && typeParams.Count > 0)
@@ -741,9 +769,7 @@ public partial class TypeChecker
                     ambientSignatures = [];
                     _ambientOverloadSignatures[overloadKey] = ambientSignatures;
                 }
-                TypeInfo ambientSignature = typeParams is { Count: > 0 }
-                    ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
-                    : thisFuncType;
+                TypeInfo ambientSignature = declaredSignature;
                 ambientSignatures.Add(ambientSignature);
                 RegisterEditorSignature(ambientSignature, funcStmt, funcStmt.Name);
                 TypeInfo ambientType = ambientSignatures.Count == 1
@@ -774,8 +800,13 @@ public partial class TypeChecker
             // Check if we have type parameters (generic overloaded function)
             if (_pendingOverloadTypeParams.TryGetValue(overloadKey, out var overloadTypeParams))
             {
-                // Create generic overloaded function type
-                funcType = new TypeInfo.GenericOverloadedFunction(overloadTypeParams, pendingSignatures, thisFuncType);
+                // A common parameter list represents only homogeneous declarations. Mixed
+                // groups retain each declaration's own generic scope, including nongeneric
+                // fallbacks that must not acquire another overload's dependent parameters.
+                var declarations = _pendingOverloadCallables[overloadKey];
+                funcType = declarations.All(candidate => SameOverloadTypeParameters(declarations[0].Declaration, candidate.Declaration))
+                    ? new TypeInfo.GenericOverloadedFunction(overloadTypeParams, pendingSignatures, thisFuncType)
+                    : new TypeInfo.OverloadSet(declarations.Select(candidate => candidate.Signature).ToList());
                 _pendingOverloadTypeParams.Remove(overloadKey);
             }
             else
@@ -786,6 +817,7 @@ public partial class TypeChecker
 
             // Clear pending signatures
             _pendingOverloadSignatures.Remove(overloadKey);
+            _pendingOverloadCallables.Remove(overloadKey);
         }
         else if (typeParams != null && typeParams.Count > 0)
         {
@@ -804,8 +836,10 @@ public partial class TypeChecker
             RegisterEditorPublicSignatures(funcType, publicOverload.Signatures);
         else if (funcType is TypeInfo.GenericOverloadedFunction publicGenericOverload)
             RegisterEditorPublicSignatures(funcType, publicGenericOverload.Signatures);
+        else if (funcType is TypeInfo.OverloadSet publicMixedOverload)
+            RegisterEditorPublicSignatures(funcType, publicMixedOverload.Signatures);
         // For overloaded functions, we need to update with the complete type
-        if (!_environment.IsDefinedLocally(funcName) || funcType is TypeInfo.OverloadedFunction or TypeInfo.GenericOverloadedFunction)
+        if (!_environment.IsDefinedLocally(funcName) || funcType is TypeInfo.OverloadedFunction or TypeInfo.GenericOverloadedFunction or TypeInfo.OverloadSet)
         {
             _environment.Define(funcName, funcType);
         }
@@ -825,6 +859,8 @@ public partial class TypeChecker
             // For generic overloaded functions, use the implementation type
             _typeMap.SetFunctionType(funcName, gof.Implementation);
         }
+        else if (funcType is TypeInfo.OverloadSet)
+            _typeMap.SetFunctionType(funcName, thisFuncType);
         else if (funcType is TypeInfo.GenericFunction gf)
         {
             // For generic functions, store a function type with the unsubstituted types
@@ -1007,7 +1043,8 @@ public partial class TypeChecker
                     : new TypeInfo.Function(paramTypes, inferredReturn, requiredParams, hasRest, thisType, paramNames);
                 if (EditorFacts.IsEnabled && previousEnv.Get(funcName) is { } oldFunction)
                     CopyEditorPublicSignatures(oldFunction, updatedFuncType);
-                previousEnv.Define(funcName, updatedFuncType);
+                if (previousEnv.Get(funcName) is not TypeInfo.OverloadSet)
+                    previousEnv.Define(funcName, updatedFuncType);
                 RegisterEditorSignature(updatedFuncType, funcStmt, funcStmt.Name);
                 if (suppress)
                 {

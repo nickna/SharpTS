@@ -32,7 +32,8 @@ public partial class TypeChecker
             ? EnterEditorLexicalScope(stmt, EditorSyntaxRole.Whole) : null;
         if (EditorFacts.IsEnabled) BeginEditorDeclaration(stmt);
         DispatchStmt(stmt);
-        if (stmt is Stmt.Return) RecordReturnedValueFlow();
+        RecordLoopValueDeclaration(stmt);
+        if (stmt is Stmt.Return returned) RecordReturnedValueFlow(returned.Value);
         if (EditorFacts.IsEnabled) CompleteEditorDeclaration(stmt);
     }
 
@@ -423,7 +424,8 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    initializerType = WidenLiteralType(initializerType);
+                    if (!_annotatedParameterBindings.Contains(stmt))
+                        initializerType = WidenLiteralType(initializerType);
                     // JS: `let x = null` / `let x = undefined` leave x freely reassignable.
                     // Widen top-level null/undefined to any for untyped let/var.
                     if (initializerType is TypeInfo.Null or TypeInfo.Undefined)
@@ -1131,6 +1133,7 @@ public partial class TypeChecker
             GetTypeofDefiniteAssignmentAssumptions(stmt.Condition);
         var incomingAssignments = SnapshotDefiniteAssignmentState();
         var incomingFlow = CaptureValueFlow();
+        var loopGuards = AnalyzeLoopExitGuards(stmt.Condition);
         ValueFlowState? thenFlow = null;
         ValueFlowState? elseFlow = null;
         Dictionary<BindingSymbol, bool>? thenAssignments = null;
@@ -1142,6 +1145,7 @@ public partial class TypeChecker
             var jumps = CaptureValueFlowJumps();
             RestoreValueFlow(incomingFlow);
             using var branchScope = new EnvironmentScope(this, new TypeEnvironment(_environment));
+            ApplyLoopExitGuards(loopGuards?.Then);
             RestoreDefiniteAssignmentState(incomingAssignments);
             bool addedAssumption = thenAssignmentAssumption != null &&
                 _definiteAssignmentReadAssumptions.Add(thenAssignmentAssumption);
@@ -1180,6 +1184,7 @@ public partial class TypeChecker
             var jumps = CaptureValueFlowJumps();
             RestoreValueFlow(incomingFlow);
             using var branchScope = new EnvironmentScope(this, new TypeEnvironment(_environment));
+            ApplyLoopExitGuards(loopGuards?.Else);
             RestoreDefiniteAssignmentState(incomingAssignments);
             bool addedAssumption = elseAssignmentAssumption != null &&
                 _definiteAssignmentReadAssumptions.Add(elseAssignmentAssumption);
@@ -1223,6 +1228,7 @@ public partial class TypeChecker
                 ? CollectDisjunctGuards(stmt.Condition)
                 : compoundGuards.Count == 1 ? compoundGuards : [];
             missingElseFlow = ExcludedValueFlow(incomingFlow, falseGuards);
+            missingElseFlow = ApplyLoopExitGuards(missingElseFlow, loopGuards?.Else);
         }
 
         if (compoundGuards.Count > 0)
@@ -1293,9 +1299,11 @@ public partial class TypeChecker
             }
         }
 
-        var guardedExit = CaptureValueFlow();
         bool thenTerminates = AlwaysTerminates(stmt.ThenBranch);
         bool elseTerminates = stmt.ElseBranch is not null && AlwaysTerminates(stmt.ElseBranch);
+        if (thenTerminates && !elseTerminates) ApplyLoopExitGuards(loopGuards?.Else);
+        else if (elseTerminates && !thenTerminates) ApplyLoopExitGuards(loopGuards?.Then);
+        var guardedExit = CaptureValueFlow();
         var checkedThen = thenFlow ?? incomingFlow;
         var checkedElse = elseFlow ?? missingElseFlow;
         switch (CheckedConditionTruthiness(stmt.Condition))
@@ -1551,13 +1559,21 @@ public partial class TypeChecker
         var conditionWrites = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
             new Stmt.Expression(stmt.Condition), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
         var incomingFlow = CaptureValueFlow();
-        var bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings: null, conditionAssignedPaths: conditionWrites);
+        // tsc's do-loop flow recognizes the written true keyword here; grouping
+        // and numeric truthy expressions retain its conservative continuing edge.
+        LoopValueDomain? domain = stmt.Condition is Expr.Literal { Value: true }
+            ? BeginLoopValueDomain(incomingFlow) : null;
+        ValueFlowLoopExit bodyFlow;
+        try { bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings: null, conditionAssignedPaths: conditionWrites); }
+        finally { if (domain is not null) _loopValueDomains.Pop(); }
         bool conditionRuns = ApplyLoopContinuingValueFlow(incomingFlow, bodyFlow);
         var tryWrites = CaptureTryValueWrites();
         CheckExpr(stmt.Condition);
         var conditionExit = CaptureValueFlow();
         if (!conditionRuns) RestoreTryValueWrites(tryWrites);
-        JoinLoopValueFlow(incomingFlow, bodyFlow with
+        if (domain is not null && bodyFlow.Breaks.Length > 0)
+            JoinValueFlow(incomingFlow, LiteralTrueDoWhileExits(domain, bodyFlow));
+        else JoinLoopValueFlow(incomingFlow, bodyFlow with
         {
             Body = conditionExit,
             Continues = [],
@@ -1638,6 +1654,9 @@ public partial class TypeChecker
         }
 
         TypeInfo iterableType = CheckExpr(stmt.Iterable);
+        // A fresh mutable array infers widened element types. Retain fixed literal
+        // types from assertions/aliases, using the completed child checks only.
+        iterableType = WidenClassFieldInitializerType(stmt.Iterable, iterableType);
 
         // Now that generator yield-type inference draws from the `yield` / `yield*` operands (#548), the
         // Generator/AsyncGenerator yield type is real (a delegating-only generator infers its delegate's
@@ -1647,6 +1666,7 @@ public partial class TypeChecker
         TypeInfo elementType = iterableType switch
         {
             TypeInfo.Array arr => arr.ElementType,
+            TypeInfo.Tuple tuple => ComputeTupleElementUnion(tuple),
             TypeInfo.Map mapType => TypeInfo.Tuple.FromTypes([mapType.KeyType, mapType.ValueType], 2),
             TypeInfo.Set setType => setType.ElementType,
             TypeInfo.Iterator iterType => iterType.ElementType,
@@ -1693,6 +1713,9 @@ public partial class TypeChecker
         }
         else
             DeclareValue(forOfEnv, stmt.Variable, elementType);
+
+        if (stmt.IsDeclaration && hoistedVar is null)
+            RecordDeclaredType(forOfEnv, stmt.Variable.Lexeme, elementType);
 
         try
         {
@@ -1752,6 +1775,7 @@ public partial class TypeChecker
                     stringKeys.Count == 1 ? stringKeys[0] : new TypeInfo.Union(stringKeys),
             _ => TypeInfo.String.Shared,
         };
+        loopKeyType = WidenLiteralType(loopKeyType);
 
         BindingSymbol? hoistedVar = stmt.IsDeclaration && stmt.IsVar
             ? DeclareHoistedLoopHead(stmt.Variable, loopKeyType)
@@ -1768,7 +1792,10 @@ public partial class TypeChecker
             MarkDefinitelyAssigned(stmt.Variable);
         }
         else if (stmt.IsDeclaration)
+        {
             DeclareValue(forInEnv, stmt.Variable, loopKeyType);
+            RecordDeclaredType(forInEnv, stmt.Variable.Lexeme, loopKeyType);
+        }
         else
         {
             BindValueUse(stmt.Variable);

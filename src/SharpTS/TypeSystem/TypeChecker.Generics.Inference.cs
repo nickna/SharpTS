@@ -23,6 +23,7 @@ public partial class TypeChecker
         TypeInfo.Tuple? tupleRestArguments = null)
     {
         Dictionary<string, TypeInfo> inferred = [];
+        HashSet<string> contextualOnly = [];
 
         // Try to infer each type parameter from the corresponding argument
         int regularParams = gf.HasRestParam ? gf.ParamTypes.Count - 1 : gf.ParamTypes.Count;
@@ -62,7 +63,8 @@ public partial class TypeChecker
         {
             Dictionary<string, TypeInfo> contextualInferences = [];
             InferFromType(gf.ReturnType, contextualResultType, contextualInferences, combineCandidates);
-            foreach (var (name, candidate) in contextualInferences) inferred.TryAdd(name, candidate);
+            foreach (var (name, candidate) in contextualInferences)
+                if (inferred.TryAdd(name, candidate)) contextualOnly.Add(name);
         }
 
         // Build result list in order of type parameters
@@ -77,6 +79,16 @@ public partial class TypeChecker
                     // Substitute already-inferred type parameters in the constraint
                     // This handles cases like K extends keyof T where T is already inferred
                     var substitutedConstraint = Substitute(tp.Constraint, inferred);
+
+                    // Return context is a lower-priority candidate, not an argument that
+                    // violates the call's constraint. Keep compatible union alternatives,
+                    // or use the constraint so the enclosing assignment checks the result.
+                    if (contextualOnly.Contains(tp.Name) && !IsCompatible(substitutedConstraint, inferredType))
+                    {
+                        var candidates = inferredType is TypeInfo.Union union ? union.FlattenedTypes : [inferredType];
+                        var compatible = candidates.Where(candidate => IsCompatible(substitutedConstraint, candidate)).ToList();
+                        inferredType = compatible.Count == 0 ? substitutedConstraint : CollapseOrCreateUnion(compatible);
+                    }
 
                     // For Record constraints, check that actual type has all required fields
                     if (substitutedConstraint is TypeInfo.Record constraintRecord && inferredType is TypeInfo.Record actualRecord)
@@ -103,6 +115,7 @@ public partial class TypeChecker
                     }
                 }
                 result.Add(inferredType);
+                inferred[tp.Name] = inferredType;
             }
             else
             {
@@ -114,9 +127,11 @@ public partial class TypeChecker
                 });
                 // Callback result inference is deferred until contextualization. Preserve its
                 // fallback here; defaults for return-only parameters are already authoritative.
-                result.Add(tp.Default is { } defaultType && (fallbackToConstraints || !dependsOnSuppliedArgument)
+                TypeInfo fallback = tp.Default is { } defaultType && (fallbackToConstraints || !dependsOnSuppliedArgument)
                     ? Substitute(defaultType, inferred)
-                    : tp.Constraint ?? TypeInfo.Any.Shared);
+                    : tp.Constraint is { } constraint ? Substitute(constraint, inferred) : TypeInfo.Any.Shared;
+                result.Add(fallback);
+                inferred[tp.Name] = fallback;
             }
         }
 
