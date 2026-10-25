@@ -8,6 +8,85 @@ public partial class TypeChecker
     private sealed record GenericTupleCallSlot(TypeInfo Type, bool Optional = false, bool Spread = false, Expr? Expression = null);
     private readonly record struct GenericTupleMatchState(int Parameter, int Argument);
 
+    private static bool HasTupleRestParameter(TypeInfo.Function signature) =>
+        signature.HasRestParam && signature.ParamTypes.LastOrDefault() is TypeInfo.Tuple;
+
+    private bool TupleRestArgsSubtypeMatch(Expr.Call call, TypeInfo.Function signature, List<TypeInfo> argumentTypes)
+    {
+        try
+        {
+            CheckGenericTupleRestCall(call, signature, GenericTupleCallArguments(call, argumentTypes),
+                contextualizeCallbacks: false, subtypeMatch: true);
+            return true;
+        }
+        catch (TypeCheckException)
+        {
+            return false;
+        }
+    }
+
+    private bool TryNormalizeOrdinaryTupleCallable(TypeInfo callee, out TypeInfo callable,
+        out IReadOnlyDictionary<TypeInfo, TypeInfo>? originalSignatures)
+    {
+        List<TypeInfo.CallSignature>? originals = callee switch
+        {
+            TypeInfo.Interface iface => iface.CallSignatures,
+            TypeInfo.Record record => record.CallSignatures,
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface generic } => generic.CallSignatures,
+            _ => null
+        };
+        callable = null!;
+        originalSignatures = null;
+        if (originals is not { Count: > 0 } ||
+            !originals.Any(signature => !signature.IsGeneric && signature.HasRestParam && signature.ParamTypes.LastOrDefault() is TypeInfo.Tuple))
+            return false;
+
+        var signatures = callee is TypeInfo.InstantiatedGeneric instantiated
+            ? FlattenInstantiatedInterface(instantiated)!.CallSignatures! : originals;
+        List<TypeInfo> functions = [];
+        Dictionary<TypeInfo, TypeInfo> sourceSignatures = new(ReferenceEqualityComparer.Instance);
+        for (int i = 0; i < signatures.Count; i++)
+        {
+            var signature = signatures[i];
+            if (signature.IsGeneric && callee is TypeInfo.InstantiatedGeneric instance)
+            {
+                var outer = GenericInterfaceSubs((TypeInfo.GenericInterface)instance.GenericDefinition, instance.TypeArguments)
+                    .Where(pair => signature.TypeParams!.All(parameter => parameter.Name != pair.Key)).ToDictionary();
+                signature = signature with
+                {
+                    TypeParams = signature.TypeParams!.Select(parameter => parameter with
+                    {
+                        Constraint = parameter.Constraint is null ? null : SubstitutePreservingSignatures(parameter.Constraint, outer),
+                        Default = parameter.Default is null ? null : SubstitutePreservingSignatures(parameter.Default, outer)
+                    }).ToList()
+                };
+            }
+            TypeInfo function = signature.IsGeneric
+                ? new TypeInfo.GenericFunction(signature.TypeParams!, signature.ParamTypes, signature.ReturnType,
+                    signature.RequiredParams, signature.HasRestParam, ParamNames: signature.ParamNames)
+                : new TypeInfo.Function(signature.ParamTypes, signature.ReturnType, signature.RequiredParams,
+                    signature.HasRestParam, ParamNames: signature.ParamNames);
+            CopyEditorSignatureMetadata(originals[i], function);
+            RecordEditorInvocationInstantiation(originals[i], function);
+            functions.Add(function);
+            sourceSignatures[function] = originals[i];
+        }
+        originalSignatures = sourceSignatures;
+        callable = functions.Count == 1 ? functions[0] : new TypeInfo.OverloadSet(functions);
+        return true;
+    }
+
+    private void InvalidateTupleCallArgumentNarrowings(IReadOnlyList<Expr> arguments)
+    {
+        foreach (var argument in arguments)
+        {
+            if (_typeMap.Get(argument) is not { } type || !IsObjectType(type) || GetNarrowingPath(argument) is not { } path)
+                continue;
+            InvalidatePropertiesForFunctionArg(path);
+            if (path is Narrowing.NarrowingPath.Variable variable) _escapeAnalyzer.MarkEscaped(variable.Name);
+        }
+    }
+
     private static bool GenericTupleCallArityCouldMatch(TypeInfo.Function signature, IReadOnlyList<GenericTupleCallSlot> arguments)
     {
         int minimum = signature.MinArity;
@@ -159,7 +238,7 @@ public partial class TypeChecker
                 ? slot with { Type = GenericTupleLiteralType(nested) } : slot));
 
     private void CheckGenericTupleRestCall(Expr.Call call, TypeInfo.Function signature, List<GenericTupleCallSlot> arguments,
-        bool validate = true, bool contextualizeCallbacks = true)
+        bool validate = true, bool contextualizeCallbacks = true, bool subtypeMatch = false)
     {
         var tuple = (TypeInfo.Tuple)FlattenTupleSpreads(signature.ParamTypes[^1]);
         List<GenericTupleCallSlot> parameters = signature.ParamTypes.Take(signature.ParamTypes.Count - 1)
@@ -260,6 +339,7 @@ public partial class TypeChecker
                 UngroupGenericTupleExpression(arrayExpression) is Expr.ArrayLiteral literal)
                 type = GenericTupleLiteralType(literal);
             if (actual.Optional) type = CreateUnion(type, TypeInfo.Undefined.Shared);
+            if (subtypeMatch && type is TypeInfo.Any && expected.Type is not (TypeInfo.Any or TypeInfo.Unknown)) return false;
             return IsArgumentCompatible(expected.Type, type, expected.Optional);
         }
 
