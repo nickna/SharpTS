@@ -18,7 +18,9 @@ public sealed class UtilityProjectionReadonlyMemberTests
             "interface Base<T> { readonly value: T; } interface Child<T> extends Base<T> { mutable: T; other: string; } type Box = Child<number>;",
             "class Box { readonly value = 1; mutable = 1; other = 'ok'; }",
             "class Box { get value(): number { return 1; } mutable = 1; other = 'ok'; }",
-            "type Box = { readonly value: number } & { mutable: number; other: string; };"
+            "type Box = { readonly value: number } & { mutable: number; other: string; };",
+            "type Box = { readonly value: number; mutable: number; other: string } | { value: number; mutable: number; other: string };",
+            "interface Base { readonly value: number; } interface Child extends Base { mutable: number; other: string; } type Box = Child | { value: number; mutable: number; other: string };"
         })
             foreach (string projection in new[] { "Pick<Box, 'value' | 'mutable'>", "Omit<Box, 'other'>" })
                 yield return [declaration, projection];
@@ -39,7 +41,8 @@ public sealed class UtilityProjectionReadonlyMemberTests
         foreach (string declaration in new[]
         {
             "interface Base { readonly value?: number; } interface Box extends Base { value: number; mutable: number; other: string; }",
-            "type Box = { readonly value: number } & { value: number; mutable: number; other: string; };"
+            "type Box = { readonly value: number } & { value: number; mutable: number; other: string; };",
+            "type Box = { value: number; mutable: number; other: string } | { value: number; mutable: number; other: string; extra?: boolean };"
         })
             Assert.Empty(Check(declaration + $" declare let box: {projection}; box.mutable = 2; box.value = 2;"));
     }

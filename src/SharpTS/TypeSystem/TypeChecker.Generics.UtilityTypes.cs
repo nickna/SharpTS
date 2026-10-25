@@ -904,6 +904,9 @@ public partial class TypeChecker
         TypeInfo.Class cls => cls.ReadonlyFields.Concat(cls.Getters.Keys.Where(name => !cls.Setters.ContainsKey(name)))
             .ToHashSet(StringComparer.Ordinal),
         TypeInfo.Instance instance => ExtractReadonlyProperties(instance.ResolvedClassType),
+        // A write through a union must be permitted by every constituent.
+        TypeInfo.Union union => union.FlattenedTypes.SelectMany(ExtractReadonlyProperties)
+            .ToHashSet(StringComparer.Ordinal),
         TypeInfo.Intersection intersection => ExtractIntersectionReadonlyProperties(intersection),
         TypeInfo.MappedType mapped => ExtractReadonlyProperties(ExpandMappedType(mapped)),
         TypeInfo.InstantiatedGeneric generic => ExtractReadonlyProperties(ExpandInstantiatedGenericForKeyOf(generic)),
