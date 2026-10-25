@@ -58,6 +58,7 @@ public partial class TypeChecker
             _checker.RecordDeclaredType(parameter.Name.Lexeme, type);
             _checker._escapeAnalyzer.DefineVariable(parameter.Name.Lexeme);
             if (!_initializers.TryGetValue(parameter.Name, out var initializer)) return;
+            _checker.RetainAnnotatedParameterBindingTypes(parameter, initializer);
 
             if (_deferClassContext)
             {

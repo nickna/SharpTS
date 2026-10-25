@@ -23,6 +23,7 @@ public partial class TypeChecker
     private void ResetFunctionDeclarationTracking()
     {
         _completedBodylessFunctions.Clear();
+        _annotatedParameterBindings.Clear();
         _loopHeadVarOwners.Clear();
         _hoistedVarPlaceholders.Clear();
         _forwardClassDeclarations.Clear();
