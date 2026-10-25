@@ -69,7 +69,9 @@ public partial class TypeChecker
             ConstructorSignatures: record.ConstructorSignatures,
             ReadonlyMembers: record.IsReadonly
                 ? record.Fields.Keys.ToFrozenSet(StringComparer.Ordinal)
-                : record.GetterOnlyFields,
+                : (record.ReadonlyFields ?? FrozenSet<string>.Empty)
+                    .Concat(record.GetterOnlyFields ?? FrozenSet<string>.Empty)
+                    .ToFrozenSet(StringComparer.Ordinal),
             MethodMembers: record.MethodMembers);
 
     private static HashSet<Stmt.Interface> InterfaceDeclarationsFor(
