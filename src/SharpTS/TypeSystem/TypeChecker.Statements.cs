@@ -1283,6 +1283,7 @@ public partial class TypeChecker
         // can otherwise only have been widened by a checked branch, never narrowed by it.
         foreach (var binding in incomingFlow.Bindings.Values)
             if (guardedExit.Bindings.GetValueOrDefault(binding.Symbol) is { } guarded &&
+                !ReferenceEquals(binding.Type, guarded.Type) &&
                 !TypeInfoEqualityComparer.Instance.Equals(binding.Type, guarded.Type) &&
                 IsCompatible(binding.Type, guarded.Type) &&
                 ReferenceEquals(_environment.GetValueBinding(binding.Name), binding.Symbol))

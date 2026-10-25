@@ -247,6 +247,7 @@ public partial class TypeChecker
         else if (expression is SharpTS.Parsing.Expr.Call or SharpTS.Parsing.Expr.ClassExpr)
             foreach (var binding in CaptureValueFlow().Bindings.Values)
                 if (writes.Incoming.Bindings.TryGetValue(binding.Symbol, out var incoming) &&
+                    !ReferenceEquals(incoming.Type, binding.Type) &&
                     !TypeInfoEqualityComparer.Instance.Equals(incoming.Type, binding.Type))
                     AddTryValueWrite(writes, binding);
     }
