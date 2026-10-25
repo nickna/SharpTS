@@ -199,6 +199,7 @@ public partial class TypeChecker
         BindingSymbol variableSymbol = RegisterValueDeclaration(
             stmt.Name,
             mergeWithLocal: stmt.IsVar);
+        if (stmt.IsSourceConst) _typeMap.MarkSourceConstCaptureBinding(variableSymbol);
         _hoistedVarPlaceholders.Remove((_environment, variableSymbol));
         if (stmt.TypeAnnotationNode is IntersectionTypeNode)
             _intersectionDeclaredVariables.Add(variableSymbol);
