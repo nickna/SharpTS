@@ -354,9 +354,12 @@ public partial class TypeChecker
 
         if (pickedProps.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
 
+        var pickedReadonly = ExtractReadonlyProperties(sourceType)
+            .Where(pickedProps.ContainsKey).ToFrozenSet(StringComparer.Ordinal);
         return pickedOptionals.Count > 0
-            ? new TypeInfo.Interface("", pickedProps.ToFrozenDictionary(), pickedOptionals.ToFrozenSet())
-            : new TypeInfo.Record(pickedProps.ToFrozenDictionary());
+            ? new TypeInfo.Interface("", pickedProps.ToFrozenDictionary(), pickedOptionals.ToFrozenSet(),
+                ReadonlyMembers: pickedReadonly)
+            : new TypeInfo.Record(pickedProps.ToFrozenDictionary(), ReadonlyFields: pickedReadonly);
     }
 
     /// <summary>
@@ -399,9 +402,12 @@ public partial class TypeChecker
 
         if (remainingProps.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
 
+        var remainingReadonly = ExtractReadonlyProperties(sourceType)
+            .Where(remainingProps.ContainsKey).ToFrozenSet(StringComparer.Ordinal);
         return remainingOptionals.Count > 0
-            ? new TypeInfo.Interface("", remainingProps.ToFrozenDictionary(), remainingOptionals.ToFrozenSet())
-            : new TypeInfo.Record(remainingProps.ToFrozenDictionary());
+            ? new TypeInfo.Interface("", remainingProps.ToFrozenDictionary(), remainingOptionals.ToFrozenSet(),
+                ReadonlyMembers: remainingReadonly)
+            : new TypeInfo.Record(remainingProps.ToFrozenDictionary(), ReadonlyFields: remainingReadonly);
     }
 
     /// <summary>
