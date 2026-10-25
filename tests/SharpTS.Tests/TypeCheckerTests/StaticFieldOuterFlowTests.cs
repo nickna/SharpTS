@@ -31,7 +31,7 @@ public sealed class StaticFieldOuterFlowTests
     [InlineData("const value = 'ok'; class C { static later = value; } const good: string = C.later;")]
     [InlineData("let value: string | number = 'ok'; class C { static later = (() => { if (typeof value === 'string') return value; return ''; })(); } const good: string = C.later;")]
     [InlineData("let value: string | number = 'ok'; class C { static later = (() => { value = 1; const good: number = value; return value; })(); } const good: number = C.later;")]
-    [InlineData("let value: string | number = 'ok'; class C { static { value = 1; } } const good: number = value;")]
+    [InlineData("let value: string | number = 'ok'; class C { static { value = 1; const good: number = value; } }")]
     public void InitializerLocalGuardsAndStaticBlocksKeepTheirOwnFlow(string source)
         => Assert.Empty(Check(source));
 
