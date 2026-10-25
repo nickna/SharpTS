@@ -209,6 +209,8 @@ public partial class TypeChecker
 
         if (objType is TypeInfo.Intersection objectIntersection)
         {
+            if (ReadLiteralIntersectionIndex(objectIntersection, indexType, getIndex) is { } literalResult)
+                return literalResult;
             List<TypeInfo> intersectionResults = [];
             foreach (TypeInfo member in objectIntersection.FlattenedTypes)
             {
@@ -1539,6 +1541,8 @@ public partial class TypeChecker
 
         if (objType is TypeInfo.Intersection intersection)
         {
+            if (ReadLiteralIntersectionIndex(intersection, indexType, getIndex) is { } literalResult)
+                return literalResult;
             foreach (TypeInfo member in intersection.FlattenedTypes)
                 if (CheckGetIndexOnType(member, indexType, getIndex) is { } result)
                     return result;

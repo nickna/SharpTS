@@ -621,22 +621,17 @@ public partial class TypeChecker
 
     /// <summary>
     /// Type checks property access on an intersection type.
-    /// The property is looked up on each member type until found.
+    /// Combines the declared property slots contributed by its constituent types.
     /// </summary>
-    private TypeInfo CheckGetOnIntersection(TypeInfo.Intersection intersection, Token memberName)
+    private TypeInfo CheckGetOnIntersection(TypeInfo.Intersection intersection, Token memberName, bool enforceAccessibility = true)
     {
-        foreach (var member in intersection.FlattenedTypes)
-        {
-            try
-            {
-                return CheckGetOnType(member, memberName);
-            }
-            catch (TypeCheckException)
-            {
-                // Continue to next type in intersection
-            }
-        }
-        throw new TypeCheckException($"Property '{memberName.Lexeme}' does not exist on type '{intersection}'.", tsCode: "TS2339");
+        if (!HasImpossibleIntersectionWriteBrands(intersection) &&
+            !intersection.FlattenedTypes.Any(IsImpossibleIntersectionConstraint) &&
+            IntersectionReadMemberOf(intersection, memberName, enforceAccessibility,
+                new HashSet<TypeInfo>(ReferenceEqualityComparer.Instance), intersection) is { } member)
+            return member.Type;
+        throw new TypeCheckException($"Property '{memberName.Lexeme}' does not exist on type '{intersection}'.",
+            memberName.Line, tsCode: "TS2339");
     }
 
     /// <summary>
@@ -1360,19 +1355,7 @@ public partial class TypeChecker
         // Handle Intersection type - merge members from all types
         if (objType is TypeInfo.Intersection intersection)
         {
-            // Try each type in the intersection - first match wins
-            foreach (var member in intersection.FlattenedTypes)
-            {
-                try
-                {
-                    return CheckGetOnType(member, memberName);
-                }
-                catch (TypeCheckException)
-                {
-                    // Continue to next type in intersection
-                }
-            }
-            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type '{intersection}'.", tsCode: "TS2339");
+            return CheckGetOnIntersection(intersection, memberName);
         }
 
         // Handle Any type
