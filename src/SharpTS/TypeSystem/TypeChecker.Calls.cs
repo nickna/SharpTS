@@ -100,6 +100,13 @@ public partial class TypeChecker
              return new TypeInfo.Instance(classType);
         }
 
+        TypeInfo? genericTupleOriginal = null;
+        if (TryGetGenericTupleCallSignature(calleeType, out var tupleOriginal, out var tupleCallable))
+        {
+            genericTupleOriginal = tupleOriginal;
+            calleeType = tupleCallable;
+        }
+
         // Handle generic function calls
         if (calleeType is TypeInfo.GenericFunction genericFunc)
         {
@@ -153,22 +160,13 @@ public partial class TypeChecker
             }
             if (instantiatedFunc is TypeInfo.Function instFunc)
             {
-                RecordEditorInvocationInstantiation(genericFunc, instFunc);
+                TypeInfo originalSignature = genericTupleOriginal ?? genericFunc;
+                RecordEditorInvocationInstantiation(originalSignature, instFunc);
                 if (tupleSlots is not null)
                 {
-                    if (call.TypeArgs is not { Count: > 0 } && call.Arguments.Any(ContainsGenericTupleCallback))
-                    {
-                        CheckGenericTupleRestCall(call, instFunc, tupleSlots, validate: false);
-                        argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
-                        tupleSlots = GenericTupleCallArguments(call, argTypes);
-                        instFunc = (TypeInfo.Function)InstantiateGenericFunction(genericFunc,
-                            InferTypeArguments(genericFunc,
-                                PrepareFreshCallArgumentsForInference(genericFunc.ParamTypes, call.Arguments, argTypes),
-                                contextualResultType, tupleRestArguments: GenericTupleCallType(
-                                    tupleSlots.Skip(genericFunc.ParamTypes.Count - 1), (TypeInfo.Tuple)genericFunc.ParamTypes[^1])));
-                    }
-                    CheckGenericTupleRestCall(call, instFunc, tupleSlots);
-                    RecordEditorInvocationSelection(genericFunc, instFunc);
+                    instFunc = CompleteGenericTupleRestCall(call, genericFunc, instFunc, argTypes, contextualResultType);
+                    RecordEditorInvocationInstantiation(originalSignature, instFunc);
+                    RecordEditorInvocationSelection(originalSignature, instFunc);
                     return instFunc.ReturnType;
                 }
                 for (int i = 0; i < call.Arguments.Count && i < instFunc.ParamTypes.Count; i++)
@@ -191,7 +189,8 @@ public partial class TypeChecker
                     ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
                 }
                 CheckInstantiatedGenericCallArguments(call, instFunc, argTypes);
-                RecordEditorInvocationSelection(genericFunc, instFunc);
+                RecordEditorInvocationInstantiation(originalSignature, instFunc);
+                RecordEditorInvocationSelection(originalSignature, instFunc);
                 return instFunc.ReturnType;
             }
             return TypeInfo.Any.Shared;
@@ -1525,6 +1524,7 @@ public partial class TypeChecker
         // Find matching signatures
         List<TypeInfo.Function> matchingSignatures = [];
 
+
         foreach (var signature in overloadedFunc.Signatures)
         {
             if (TryMatchSignature(signature, argTypes))
@@ -1571,10 +1571,14 @@ public partial class TypeChecker
         // intentionally broad (`any`, rest args) and is not an inference source; using it once
         // for the entire group loses literal key arguments and rejects otherwise-valid overloads.
         List<TypeInfo.Function> matchingSignatures = [];
+        Dictionary<TypeInfo.Function, (TypeInfo.GenericFunction Generic, TypeInfo.Function Original)> tupleCandidates =
+            new(ReferenceEqualityComparer.Instance);
+        List<TypeCheckException> tupleFailures = [];
 
         foreach (var signature in genericOverloadedFunc.Signatures)
         {
             TypeInfo.Function instantiatedSig;
+            bool validatingTuple = false;
             try
             {
                 var candidate = new TypeInfo.GenericFunction(
@@ -1584,17 +1588,30 @@ public partial class TypeChecker
                     signature.RequiredParams,
                     signature.HasRestParam,
                     signature.ThisType);
+                var tupleArguments = candidate.HasRestParam && candidate.ParamTypes.LastOrDefault() is TypeInfo.Tuple
+                    ? GenericTupleCallArguments(call, argTypes) : null;
                 List<TypeInfo> typeArgs = call.TypeArgs is { Count: > 0 }
                     ? call.TypeArgs.Select((_, i) => ResolveTypeArg(call.TypeArgs, call.TypeArgNodes, i)).ToList()
                     : InferTypeArguments(
                         candidate,
                         PrepareFreshCallArgumentsForInference(
-                            candidate.ParamTypes, call.Arguments, argTypes));
+                            candidate.ParamTypes, call.Arguments, argTypes),
+                        tupleRestArguments: tupleArguments is null ? null : GenericTupleCallType(
+                            tupleArguments.Skip(candidate.ParamTypes.Count - 1), (TypeInfo.Tuple)candidate.ParamTypes[^1]));
                 instantiatedSig = (TypeInfo.Function)InstantiateGenericFunction(candidate, typeArgs);
                 RecordEditorInvocationInstantiation(signature, instantiatedSig);
+                if (tupleArguments is not null)
+                {
+                    validatingTuple = true;
+                    CheckGenericTupleRestCall(call, instantiatedSig, tupleArguments, contextualizeCallbacks: false);
+                    tupleCandidates[instantiatedSig] = (candidate, signature);
+                    matchingSignatures.Add(instantiatedSig);
+                    continue;
+                }
             }
-            catch (TypeCheckException)
+            catch (TypeCheckException error)
             {
+                if (validatingTuple && error.Diagnostic.TsCode != "TS2554") tupleFailures.Add(error);
                 continue;
             }
 
@@ -1607,6 +1624,7 @@ public partial class TypeChecker
 
         if (matchingSignatures.Count == 0)
         {
+            if (tupleFailures.Count == 1) throw tupleFailures[0];
             string argTypesStr = string.Join(", ", argTypes);
             throw new TypeCheckException($"No overload matches call with arguments ({argTypesStr}).", tsCode: "TS2769");
         }
@@ -1637,6 +1655,13 @@ public partial class TypeChecker
                 CheckExcessProperties(freshRecord, bestMatch.ParamTypes[i], call.Arguments[i]);
         }
 
+        if (tupleCandidates.TryGetValue(bestMatch, out var tupleCandidate))
+        {
+            bestMatch = CompleteGenericTupleRestCall(call, tupleCandidate.Generic, bestMatch, argTypes);
+            RecordEditorInvocationInstantiation(tupleCandidate.Original, bestMatch);
+            RecordEditorInvocationSelection(tupleCandidate.Original, bestMatch);
+            return bestMatch.ReturnType;
+        }
         ContextualizeGenericCallArguments(call.Arguments, bestMatch.ParamTypes);
 
         RecordEditorInvocationSelection(bestMatch);

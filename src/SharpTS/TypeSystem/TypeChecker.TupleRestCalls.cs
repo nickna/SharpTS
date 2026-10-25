@@ -6,6 +6,53 @@ namespace SharpTS.TypeSystem;
 public partial class TypeChecker
 {
     private sealed record GenericTupleCallSlot(TypeInfo Type, bool Optional = false, bool Spread = false, Expr? Expression = null);
+    private readonly record struct GenericTupleMatchState(int Parameter, int Argument, bool OptionalOpen = false);
+
+    private bool TryGetGenericTupleCallSignature(TypeInfo callee, out TypeInfo.CallSignature original,
+        out TypeInfo.GenericFunction generic)
+    {
+        TypeInfo.CallSignature? signature = callee switch
+        {
+            TypeInfo.Interface { CallSignatures: [var single] } => single,
+            TypeInfo.Record { CallSignatures: [var single] } => single,
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface { CallSignatures: [var single] } } => single,
+            _ => null
+        };
+        original = signature!;
+        generic = null!;
+        if (signature is not { TypeParams.Count: > 0, HasRestParam: true } || signature.ParamTypes.LastOrDefault() is not TypeInfo.Tuple)
+            return false;
+        if (callee is TypeInfo.InstantiatedGeneric instantiated)
+            signature = FlattenInstantiatedInterface(instantiated)!.CallSignatures![0];
+        generic = CopyEditorSignatureMetadata(original, new TypeInfo.GenericFunction(signature.TypeParams!,
+            signature.ParamTypes, signature.ReturnType, signature.RequiredParams, signature.HasRestParam, ParamNames: signature.ParamNames));
+        return true;
+    }
+
+    private TypeInfo.Function CompleteGenericTupleRestCall(Expr.Call call, TypeInfo.GenericFunction generic,
+        TypeInfo.Function signature, List<TypeInfo> argumentTypes, TypeInfo? contextualResult = null)
+    {
+        var slots = GenericTupleCallArguments(call, argumentTypes);
+        if (call.TypeArgs is not { Count: > 0 } && call.Arguments.Any(ContainsGenericTupleCallback))
+        {
+            CheckGenericTupleRestCall(call, signature, slots, validate: false);
+            argumentTypes = RefreshContextualizedGenericArguments(call.Arguments, argumentTypes);
+            slots = GenericTupleCallArguments(call, argumentTypes);
+            try
+            {
+                signature = (TypeInfo.Function)InstantiateGenericFunction(generic, InferTypeArguments(generic,
+                    PrepareFreshCallArgumentsForInference(generic.ParamTypes, call.Arguments, argumentTypes),
+                    contextualResult, tupleRestArguments: GenericTupleCallType(
+                        slots.Skip(generic.ParamTypes.Count - 1), (TypeInfo.Tuple)generic.ParamTypes[^1])));
+            }
+            catch (TypeCheckException error) when (error.Diagnostic.TsCode == "TS2344")
+            {
+                throw new TypeCheckException(error.Message, call.Paren.Line, tsCode: "TS2345");
+            }
+        }
+        CheckGenericTupleRestCall(call, signature, slots);
+        return signature;
+    }
 
     private List<GenericTupleCallSlot> GenericTupleCallArguments(Expr.Call call, IReadOnlyList<TypeInfo> types)
     {
@@ -64,7 +111,7 @@ public partial class TypeChecker
             TupleElementKind.Required)).ToList(), literal.Elements.Count);
 
     private void CheckGenericTupleRestCall(Expr.Call call, TypeInfo.Function signature, List<GenericTupleCallSlot> arguments,
-        bool validate = true)
+        bool validate = true, bool contextualizeCallbacks = true)
     {
         var tuple = (TypeInfo.Tuple)FlattenTupleSpreads(signature.ParamTypes[^1]);
         List<GenericTupleCallSlot> parameters = signature.ParamTypes.Take(signature.ParamTypes.Count - 1)
@@ -79,37 +126,71 @@ public partial class TypeChecker
             throw new TypeCheckException($"Expected {(parameters.Any(parameter => parameter.Spread) ? "at least " : "")}{required} arguments but got {arguments.Count}.",
                 call.Paren.Line, tsCode: "TS2554");
 
-        Dictionary<int, TypeInfo> contexts = [];
-        if (!Match(0, 0, contextualize: true)) Fail();
+        if (!Match(contextualizeCallbacks, out var contexts)) Fail();
+        if (!contextualizeCallbacks) return;
         foreach (var (index, expected) in contexts)
-            if (arguments[index].Expression is { } expression) ContextualizeNestedGenericCallback(expression, expected);
-        if (!validate) return;
-        if (!Match(0, 0, contextualize: false)) Fail();
-
-        bool Match(int parameter, int argument, bool contextualize, bool optionalOpen = false)
-        {
-            if (parameter == parameters.Count)
-                return argument == arguments.Count || optionalOpen && arguments.Skip(argument).All(slot => slot.Spread);
-            var expected = parameters[parameter];
-            if (expected.Spread)
+            if (arguments[index].Expression is { } expression)
             {
-                if (Match(parameter + 1, argument, contextualize)) return true;
-                if (argument == arguments.Count || !Compatible(expected, arguments[argument], contextualize)) return false;
-                contexts[argument] = expected.Type;
-                return Match(parameter, argument + 1, contextualize);
+                if (expected is TypeInfo.Tuple expectedTuple && expression is Expr.ArrayLiteral literal)
+                    CheckArrayLiteralAgainstTuple(literal, expectedTuple, "argument");
+                else ContextualizeNestedGenericCallback(expression, expected);
             }
-            if (argument == arguments.Count)
-                return expected.Optional && Match(parameter + 1, argument, contextualize);
-            var actual = arguments[argument];
-            if (actual.Spread && !expected.Optional) return false;
-            if (!Compatible(expected, actual, contextualize)) return false;
-            contexts[argument] = expected.Type;
-            return Match(parameter + 1, actual.Spread ? argument : argument + 1, contextualize, actual.Spread);
+        if (!validate) return;
+        if (!Match(false, out _)) Fail();
+
+        bool Match(bool contextualize, out Dictionary<int, TypeInfo> winningContexts)
+        {
+            // A finite state graph bounds variadic alternatives without recursive backtracking.
+            // Contexts come only from the successful path, never from rejected alternatives.
+            GenericTupleMatchState initial = new(0, 0);
+            Queue<GenericTupleMatchState> pending = new();
+            Dictionary<GenericTupleMatchState, (GenericTupleMatchState Parent, int Argument, TypeInfo? Type)> paths =
+                new() { [initial] = (initial, -1, null) };
+            pending.Enqueue(initial);
+            while (pending.TryDequeue(out var state))
+            {
+                int parameter = state.Parameter, argument = state.Argument;
+                if (parameter == parameters.Count)
+                {
+                    if (argument != arguments.Count &&
+                        !(state.OptionalOpen && arguments.Skip(argument).All(slot => slot.Spread))) continue;
+                    winningContexts = [];
+                    for (var current = state; current != initial; current = paths[current].Parent)
+                        if (paths[current] is { Argument: >= 0, Type: { } type } step)
+                            winningContexts[step.Argument] = type;
+                    return true;
+                }
+                var expected = parameters[parameter];
+                if (expected.Spread)
+                {
+                    Add(new(parameter + 1, argument), state);
+                    if (argument < arguments.Count && Compatible(expected, arguments[argument], contextualize))
+                        Add(new(parameter, argument + 1), state, argument, expected.Type);
+                    continue;
+                }
+                if (argument == arguments.Count)
+                {
+                    if (expected.Optional) Add(new(parameter + 1, argument), state);
+                    continue;
+                }
+                var actual = arguments[argument];
+                if (actual.Spread && !expected.Optional || !Compatible(expected, actual, contextualize)) continue;
+                Add(new(parameter + 1, actual.Spread ? argument : argument + 1, actual.Spread), state, argument, expected.Type);
+            }
+            winningContexts = [];
+            return false;
+
+            void Add(GenericTupleMatchState next, GenericTupleMatchState parent, int argument = -1, TypeInfo? type = null)
+            {
+                if (!paths.TryAdd(next, (parent, argument, type))) return;
+                pending.Enqueue(next);
+            }
         }
 
         bool Compatible(GenericTupleCallSlot expected, GenericTupleCallSlot actual, bool contextualize)
         {
             if (contextualize && actual.Expression is { } expression && ContainsGenericTupleCallback(expression)) return true;
+            if (contextualize && expected.Type is TypeInfo.Tuple && actual.Expression is Expr.ArrayLiteral) return true;
             TypeInfo type = actual.Expression is null ? actual.Type : ActualType(actual.Expression, actual.Type);
             if (expected.Type is TypeInfo.Tuple && actual.Expression is Expr.ArrayLiteral literal)
                 type = GenericTupleLiteralType(literal);

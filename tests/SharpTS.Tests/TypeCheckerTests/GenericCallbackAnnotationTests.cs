@@ -41,6 +41,7 @@ public sealed class GenericCallbackAnnotationTests
             use<number>(1, (value: number | string) => 2);
             declare function map<T>(value: T, callback: (value: T) => T): T;
             const result: number = map<number>(1, value => value + 1);
+            const inferred: number = map(1, value => value + 1);
             declare function nested<T>(value: T, options: { callback: (value: T) => void }): void;
             nested<number>(1, { callback: value => value + 1 });
             """, modules));
