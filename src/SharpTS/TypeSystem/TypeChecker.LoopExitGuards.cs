@@ -35,6 +35,7 @@ public partial class TypeChecker
 
         LoopConditionalGuards Collect(Expr expression)
         {
+            expression = FinalConditionOperand(expression);
             if (expression is Expr.Grouping grouping) return Collect(grouping.Expression);
             if (expression is Expr.Unary { Operator.Type: TokenType.BANG } negation)
             {

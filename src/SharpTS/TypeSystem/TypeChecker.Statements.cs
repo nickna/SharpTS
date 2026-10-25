@@ -1339,6 +1339,7 @@ public partial class TypeChecker
     private (BindingSymbol? Then, BindingSymbol? Else) GetTypeofDefiniteAssignmentAssumptions(
         Expr condition)
     {
+        condition = FinalConditionOperand(condition);
         Expr.Variable? variable = null;
         string? comparedType = null;
         TokenType comparison = TokenType.EOF;

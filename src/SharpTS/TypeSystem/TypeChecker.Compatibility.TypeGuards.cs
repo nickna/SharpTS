@@ -7,8 +7,20 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    private static Expr FinalConditionOperand(Expr expression)
+    {
+        while (true)
+            switch (expression)
+            {
+                case Expr.Grouping grouping: expression = grouping.Expression; break;
+                case Expr.Comma comma: expression = comma.Right; break;
+                default: return expression;
+            }
+    }
+
     private (string? VarName, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzeTypeGuard(Expr condition)
     {
+        condition = FinalConditionOperand(condition);
         // Pattern 1: typeof x === "string" or typeof x == "string"
         if (condition is Expr.Binary bin &&
             bin.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
@@ -714,6 +726,7 @@ public partial class TypeChecker
     /// </remarks>
     private (Narrowing.NarrowingPath? Path, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzePathTypeGuard(Expr condition)
     {
+        condition = FinalConditionOperand(condition);
         if (condition is Expr.Binary comparison && comparison.Operator.Type is
             TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL or TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL)
         {
@@ -900,6 +913,7 @@ public partial class TypeChecker
 
         void CollectNarrowings(Expr expr)
         {
+            expr = FinalConditionOperand(expr);
             // For &&, collect narrowings from both sides. Apply LHS narrowings while
             // analyzing the RHS so CheckExpr calls inside the RHS (e.g. inside
             // AnalyzePathNullCheck) see the narrowed receiver. Without this,
@@ -1111,6 +1125,7 @@ public partial class TypeChecker
 
         void Walk(Expr expr)
         {
+            expr = FinalConditionOperand(expr);
             if (expr is Expr.Logical orExpr && orExpr.Operator.Type == TokenType.OR_OR)
             {
                 Walk(orExpr.Left);
