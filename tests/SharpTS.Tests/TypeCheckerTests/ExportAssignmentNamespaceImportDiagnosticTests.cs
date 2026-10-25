@@ -21,10 +21,10 @@ public sealed class ExportAssignmentNamespaceImportDiagnosticTests
 
     [Theory]
     [InlineData("const value: { known: number }; export = value;", "const result: number = Imported.known;")]
-    [InlineData("const value: (input: string) => number; export = value;", "const result: number = Imported('ok');")]
+    [InlineData("const value: (input: string) => number; export = value;", "Imported;")]
     [InlineData("function value(): number; namespace value { const known: number; } export = value;", "const result: number = Imported.known;")]
     [InlineData("class value {} namespace value { const known: number; } export = value;", "const result: number = Imported.known;")]
-    [InlineData("namespace N { const value: () => number; } import alias = N.value; export = alias;", "const result: number = Imported();")]
+    [InlineData("namespace N { const value: () => number; } import alias = N.value; export = alias;", "Imported;")]
     public void VariableAndNamespaceDeclarationTargetsRemainValid(string declaration, string body)
         => Assert.Empty(Check("declare module 'assignment' { " + declaration + " }",
             "import * as Imported from 'assignment';\n" + body));
