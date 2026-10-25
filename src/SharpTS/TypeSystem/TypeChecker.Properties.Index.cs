@@ -736,7 +736,7 @@ public partial class TypeChecker
                 ? core.StaticMethods.ContainsKey(name) || core.StaticProperties.ContainsKey(name)
                 : core.Methods.ContainsKey(name) || core.FieldTypes.ContainsKey(name) || core.Getters.ContainsKey(name) || core.Setters.ContainsKey(name)))
             {
-                if (isStatic && core.StaticReadonlyFields.Contains(name))
+                if (isStatic && core.StaticReadonlyFields?.Contains(name) == true)
                     throw new TypeCheckException($"Cannot assign to '{name}' because it is a read-only property.",
                         TryGetExprLine(syntax), tsCode: "TS2540");
                 return;
