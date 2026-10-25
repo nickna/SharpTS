@@ -893,16 +893,30 @@ public partial class TypeChecker
     private HashSet<string> ExtractReadonlyProperties(TypeInfo type) => type switch
     {
         TypeInfo.Interface itf => itf.GetAllReadonlyMembers().ToHashSet(StringComparer.Ordinal),
-        TypeInfo.Record record => record.Fields.Keys.Where(record.IsFieldReadonly).ToHashSet(StringComparer.Ordinal),
+        TypeInfo.Record record => record.Fields.Keys.Where(name => record.IsFieldReadonly(name) || record.IsGetterOnly(name))
+            .ToHashSet(StringComparer.Ordinal),
         TypeInfo.Class cls => cls.ReadonlyFields.Concat(cls.Getters.Keys.Where(name => !cls.Setters.ContainsKey(name)))
             .ToHashSet(StringComparer.Ordinal),
         TypeInfo.Instance instance => ExtractReadonlyProperties(instance.ResolvedClassType),
-        TypeInfo.Intersection intersection => intersection.FlattenedTypes
-            .SelectMany(ExtractReadonlyProperties).ToHashSet(StringComparer.Ordinal),
+        TypeInfo.Intersection intersection => ExtractIntersectionReadonlyProperties(intersection),
         TypeInfo.MappedType mapped => ExtractReadonlyProperties(ExpandMappedType(mapped)),
         TypeInfo.InstantiatedGeneric generic => ExtractReadonlyProperties(ExpandInstantiatedGenericForKeyOf(generic)),
         _ => []
     };
+
+    private HashSet<string> ExtractIntersectionReadonlyProperties(TypeInfo.Intersection intersection)
+    {
+        HashSet<string> readOnly = [];
+        HashSet<string> mutable = [];
+        foreach (var part in intersection.FlattenedTypes)
+        {
+            var partReadonly = ExtractReadonlyProperties(part);
+            readOnly.UnionWith(partReadonly);
+            mutable.UnionWith(ExtractPropertiesWithTypes(part).Keys.Where(name => !partReadonly.Contains(name)));
+        }
+        readOnly.ExceptWith(mutable);
+        return readOnly;
+    }
 
     /// <summary>
     /// Extracts key names from a key type (union of string literals, keyof result, etc.)

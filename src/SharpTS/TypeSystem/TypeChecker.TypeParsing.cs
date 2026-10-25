@@ -360,6 +360,8 @@ public partial class TypeChecker
             Dictionary<string, TypeInfo> mergedFields = [];
             HashSet<string> optionalFields = [];
             HashSet<string> requiredInAny = []; // Track if property is required in any type
+            HashSet<string> readonlyFields = [];
+            HashSet<string> mutableInAny = [];
             List<TypeInfo> nonObjectTypes = [];
 
             foreach (var type in types)
@@ -367,7 +369,8 @@ public partial class TypeChecker
                 IReadOnlyDictionary<string, TypeInfo>? fields = type switch
                 {
                     TypeInfo.Record r => r.Fields,
-                    TypeInfo.Interface i => i.Members,
+                    TypeInfo.Interface i => i.GetAllMembers().GroupBy(member => member.Key)
+                        .ToDictionary(group => group.Key, group => group.First().Value),
                     TypeInfo.Class c => c.FieldTypes,
                     TypeInfo.Instance inst => inst.ClassType switch
                     {
@@ -379,7 +382,7 @@ public partial class TypeChecker
 
                 IReadOnlySet<string>? optionals = type switch
                 {
-                    TypeInfo.Interface i => i.OptionalMembers,
+                    TypeInfo.Interface i => i.GetAllOptionalMembers().ToHashSet(StringComparer.Ordinal),
                     TypeInfo.Record r => r.OptionalFields,
                     _ => null
                 };
@@ -399,9 +402,12 @@ public partial class TypeChecker
                     continue;
                 }
 
+                var sourceReadonly = ExtractReadonlyProperties(type);
                 foreach (var (name, fieldType) in fields)
                 {
                     bool isOptionalInThisType = optionals?.Contains(name) ?? false;
+                    if (sourceReadonly.Contains(name)) readonlyFields.Add(name);
+                    else mutableInAny.Add(name);
 
                     if (mergedFields.TryGetValue(name, out var existingType))
                     {
@@ -438,6 +444,7 @@ public partial class TypeChecker
             // A property is optional in the intersection only if it's optional in ALL types that have it
             // (or if it only appears in types where it's optional)
             optionalFields.ExceptWith(requiredInAny);
+            readonlyFields.ExceptWith(mutableInAny);
 
             // If all types were object-like, return merged interface (to preserve optional info)
             if (nonObjectTypes.Count == 0)
@@ -448,9 +455,11 @@ public partial class TypeChecker
                     return new TypeInfo.Interface(
                         containsGlobalThis ? "typeof globalThis" : "",
                         mergedFields.ToFrozenDictionary(),
-                        optionalFields.ToFrozenSet());
+                        optionalFields.ToFrozenSet(),
+                        ReadonlyMembers: readonlyFields.ToFrozenSet(StringComparer.Ordinal));
                 }
-                return new TypeInfo.Record(mergedFields.ToFrozenDictionary());
+                return new TypeInfo.Record(mergedFields.ToFrozenDictionary(),
+                    ReadonlyFields: readonlyFields.ToFrozenSet(StringComparer.Ordinal));
             }
 
             // Otherwise, return an intersection with the merged object member. Preserve the
@@ -458,8 +467,10 @@ public partial class TypeChecker
             // retain the open `T` arm, while JSX shapes such as
             // `(PropsA | PropsB) & { children?: ReactNode }` retain optional children.
             TypeInfo mergedObject = optionalFields.Count > 0
-                ? new TypeInfo.Interface("", mergedFields.ToFrozenDictionary(), optionalFields.ToFrozenSet())
-                : new TypeInfo.Record(mergedFields.ToFrozenDictionary());
+                ? new TypeInfo.Interface("", mergedFields.ToFrozenDictionary(), optionalFields.ToFrozenSet(),
+                    ReadonlyMembers: readonlyFields.ToFrozenSet(StringComparer.Ordinal))
+                : new TypeInfo.Record(mergedFields.ToFrozenDictionary(),
+                    ReadonlyFields: readonlyFields.ToFrozenSet(StringComparer.Ordinal));
             var resultTypes = new List<TypeInfo>(nonObjectTypes) { mergedObject };
             return new TypeInfo.Intersection(resultTypes);
         }

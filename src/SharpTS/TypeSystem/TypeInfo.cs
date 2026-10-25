@@ -629,7 +629,7 @@ public abstract record TypeInfo
                 {
                     foreach (var name in baseInterface.GetAllOptionalMembers())
                     {
-                        if (!OptionalMembers.Contains(name))
+                        if (!Members.ContainsKey(name))
                         {
                             yield return name;
                         }
