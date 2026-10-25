@@ -11,6 +11,33 @@ public partial class TypeChecker
     private sealed record ClassFieldConstWidening(TypeInfo Type);
     private readonly ConditionalWeakTable<BindingSymbol, ClassFieldConstWidening> _classFieldConstWidening = new();
     private readonly ConditionalWeakTable<TypeInfo, ClassFieldConstWidening> _classFieldReadonlyWidening = new();
+    private readonly ConditionalWeakTable<BindingSymbol, ClassFieldConstWidening> _classFieldDeclaredBindingTypes = new();
+
+    private void RecordClassFieldBindingType(string name, TypeInfo type)
+    {
+        if (_environment.GetValueBinding(name) is { } binding)
+            _classFieldDeclaredBindingTypes.AddOrUpdate(binding, new ClassFieldConstWidening(type));
+    }
+
+    private TypeInfo GetClassFieldOuterBindingType(Token name, TypeInfo current)
+    {
+        if (_deferredInitializerFlowBoundary is not { } boundary ||
+            boundary.GetValueBinding(name.Lexeme) is not { } binding ||
+            !ReferenceEquals(binding, _environment.GetValueBinding(name.Lexeme)) ||
+            !_classFieldDeclaredBindingTypes.TryGetValue(binding, out var declared))
+            return current;
+
+        // Preserve assignments and guards checked within the initializer itself. Only the
+        // enclosing binding's declaration-time flow is unavailable at construction.
+        for (TypeEnvironment? environment = _environment; environment is not null; environment = environment.Enclosing)
+        {
+            if (ReferenceEquals(environment, boundary))
+                return declared.Type;
+            if (environment.IsDefinedLocally(name.Lexeme))
+                return current;
+        }
+        return current;
+    }
 
     private sealed class FieldGetterDependency(Stmt.Accessor accessor)
     {

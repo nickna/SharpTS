@@ -210,14 +210,8 @@ public partial class TypeChecker
 
         switch (ig.GenericDefinition)
         {
-            case TypeInfo.GenericInterface gi:
-                for (int i = 0; i < gi.TypeParams.Count && i < ig.TypeArguments.Count; i++)
-                    subs[gi.TypeParams[i].Name] = ig.TypeArguments[i];
-
-                var substitutedMembers = gi.Members.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => Substitute(kvp.Value, subs));
-                return new TypeInfo.Interface(gi.Name, substitutedMembers.ToFrozenDictionary(), gi.OptionalMembers);
+            case TypeInfo.GenericInterface:
+                return FlattenInstantiatedInterface(ig)!;
 
             case TypeInfo.GenericClass gc:
                 for (int i = 0; i < gc.TypeParams.Count && i < ig.TypeArguments.Count; i++)
@@ -250,6 +244,7 @@ public partial class TypeChecker
         // Evaluate keyof if present. A homomorphic mapped type preserves optionality unless
         // it explicitly adds/removes `?` (Readonly<T> is the common case).
         HashSet<string>? homomorphicOptional = null;
+        HashSet<string>? homomorphicReadonly = null;
         if (constraint is TypeInfo.KeyOf keyOf)
         {
             TypeInfo sourceType = Substitute(keyOf.SourceType, outerSubstitutions);
@@ -272,6 +267,7 @@ public partial class TypeChecker
                     return array with { IsReadonly = Readonly(array.IsReadonly) };
             }
             homomorphicOptional = ExtractOptionalProperties(sourceType).ToHashSet(StringComparer.Ordinal);
+            homomorphicReadonly = ExtractReadonlyProperties(sourceType);
             constraint = EvaluateKeyOf(sourceType);
         }
 
@@ -372,7 +368,8 @@ public partial class TypeChecker
                 optionalFields.Add(finalKeyName);
             }
             // For -?, we don't add to optionalFields (making it required)
-            if (addsReadonly)
+            if (addsReadonly || (!mapped.Modifiers.HasFlag(MappedTypeModifiers.RemoveReadonly) &&
+                keyName is not null && homomorphicReadonly?.Contains(keyName) == true))
             {
                 readonlyFields.Add(finalKeyName);
             }

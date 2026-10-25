@@ -1318,12 +1318,6 @@ public partial class TypeChecker
             throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type '{GetTypeDisplayName(builtInCategory, objType)}'.", tsCode: "TS2339");
         }
 
-        // Handle primitive number type - no methods
-        if (objType is TypeInfo.Primitive p && p.Type == TokenType.TYPE_NUMBER)
-        {
-            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'number'.", tsCode: "TS2339");
-        }
-
         // Handle Class type - check static members
         if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
         {

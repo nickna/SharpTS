@@ -7,8 +7,8 @@ namespace SharpTS.Tests.TypeCheckerTests;
 public sealed class AnyExportNamespaceImportTests
 {
     [Theory]
-    [InlineData(false, "Dynamic.missing;", "TS2304")]
-    [InlineData(true, "Dynamic.missing;", "TS2304")]
+    [InlineData(false, "Dynamic.missing;", "TS1361")]
+    [InlineData(true, "Dynamic.missing;", "TS1361")]
     [InlineData(false, "declare const value: typeof Dynamic;", null)]
     [InlineData(true, "declare const value: typeof Dynamic;", null)]
     [InlineData(false, "function read(Dynamic: { value: number }): number { return Dynamic.value; }", null)]
@@ -40,7 +40,6 @@ public sealed class AnyExportNamespaceImportTests
         if (code is null)
             Assert.Empty(checker.GetDiagnostics());
         else
-            // Type-only value uses currently receive TS2304; tsc specializes this to TS1361.
             Assert.Contains(checker.GetDiagnostics(), diagnostic => diagnostic.TsCode == code);
     }
 

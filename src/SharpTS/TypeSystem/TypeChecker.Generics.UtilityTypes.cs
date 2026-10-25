@@ -64,7 +64,8 @@ public partial class TypeChecker
                     mergedProps[key] = value;
             }
             if (mergedProps.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
-            return new TypeInfo.Interface("", mergedProps.ToFrozenDictionary(), mergedProps.Keys.ToFrozenSet());
+            return new TypeInfo.Interface("", mergedProps.ToFrozenDictionary(), mergedProps.Keys.ToFrozenSet(),
+                ReadonlyMembers: ExtractReadonlyProperties(sourceType).ToFrozenSet());
         }
 
         // Otherwise, expand immediately
@@ -72,7 +73,8 @@ public partial class TypeChecker
         if (props.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
 
         // All properties become optional
-        return new TypeInfo.Interface("", props.ToFrozenDictionary(), props.Keys.ToFrozenSet());
+        return new TypeInfo.Interface("", props.ToFrozenDictionary(), props.Keys.ToFrozenSet(),
+            ReadonlyMembers: ExtractReadonlyProperties(sourceType).ToFrozenSet());
     }
 
     /// <summary>
@@ -885,6 +887,19 @@ public partial class TypeChecker
             _ => []
         };
     }
+
+    private HashSet<string> ExtractReadonlyProperties(TypeInfo type) => type switch
+    {
+        TypeInfo.Interface itf => itf.GetAllReadonlyMembers().ToHashSet(StringComparer.Ordinal),
+        TypeInfo.Record record => record.Fields.Keys.Where(record.IsFieldReadonly).ToHashSet(StringComparer.Ordinal),
+        TypeInfo.Class cls => [.. cls.ReadonlyFields],
+        TypeInfo.Instance instance => ExtractReadonlyProperties(instance.ResolvedClassType),
+        TypeInfo.Intersection intersection => intersection.FlattenedTypes
+            .SelectMany(ExtractReadonlyProperties).ToHashSet(StringComparer.Ordinal),
+        TypeInfo.MappedType mapped => ExtractReadonlyProperties(ExpandMappedType(mapped)),
+        TypeInfo.InstantiatedGeneric generic => ExtractReadonlyProperties(ExpandInstantiatedGenericForKeyOf(generic)),
+        _ => []
+    };
 
     /// <summary>
     /// Extracts key names from a key type (union of string literals, keyof result, etc.)

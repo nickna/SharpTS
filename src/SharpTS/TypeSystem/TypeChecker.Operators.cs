@@ -326,7 +326,7 @@ public partial class TypeChecker
             return TypeInfo.Any.Shared;
         // Unsigned right shift - NOT SUPPORTED for bigint in TypeScript!
         if (IsBigInt(left) || IsBigInt(right))
-            throw new TypeCheckException("Unsigned right shift (>>>) is not supported for bigint.", line > 0 ? line : null, tsCode: "TS2791");
+            throw new TypeCheckException("Unsigned right shift (>>>) is not supported for bigint.", line > 0 ? line : null, tsCode: "TS2365");
         if (NumericBinaryResult(left, right) is null)
         {
             // Bigint has already been rejected; retain the ordinary per-side

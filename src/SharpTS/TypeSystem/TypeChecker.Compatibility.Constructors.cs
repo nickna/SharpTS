@@ -176,7 +176,7 @@ public partial class TypeChecker
         Dictionary<string, TypeInfo> substitutions = [];
         HashSet<ClassMetadataCore> seen = new(ReferenceEqualityComparer.Instance);
         TypeInfo? current = type;
-        for (int guard = 0; current is not null && guard < 256; guard++)
+        while (current is not null)
         {
             ClassMetadataCore? core;
             if (current is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass generic } instance)

@@ -377,14 +377,14 @@ public partial class TypeChecker
             if (objType is TypeInfo.Interface { StringIndexType: { } itfIdxType }) return WithUncheckedUndefined(itfIdxType);
         }
 
-        if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
-            getIndex.Index is Expr.Literal { Value: string constructorMember } &&
-            (constructorMember == "prototype" || HasKnownConstructorMember(objType, constructorMember)))
-            return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, constructorMember, null,
-                TryGetExprLine(getIndex.Index) ?? 0));
+        if (TryReadKnownIndexedConstructorMember(objType, indexType, getIndex) is { } knownConstructorMember)
+            return knownConstructorMember;
 
         if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
             return knownInstanceMember;
+
+        if (TryReadKnownIndexedRecordMember(objType, indexType) is { } knownRecordMember)
+            return knownRecordMember;
 
         if (getIndex.Index is Expr.Literal { Value: string functionMemberName } &&
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
@@ -555,7 +555,7 @@ public partial class TypeChecker
             // would lose per-symbol precision when an object defines several distinct well-known
             // symbol members (#99 Cluster B).
             if (wellKnownName is not null &&
-                GetMemberType(objType, wellKnownName) is { } wellKnownType)
+                GetSymbolIndexedMemberType(objType, wellKnownName) is { } wellKnownType)
                 return wellKnownType;
 
             if (objType is TypeInfo.Interface itf4 && itf4.SymbolIndexType != null)
@@ -588,6 +588,19 @@ public partial class TypeChecker
                 TryGetExprLine(getIndex.Index) ?? TryGetExprLine(getIndex.Object), tsCode: "TS7015");
 
         throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing '{objType}'.", tsCode: "TS7053");
+    }
+
+    private TypeInfo? GetSymbolIndexedMemberType(TypeInfo receiver, string name)
+    {
+        if (receiver is not (TypeInfo.Class or TypeInfo.GenericClass))
+            return GetMemberType(receiver, name);
+
+        TypeInfo? current = receiver;
+        for (int depth = 0; current is not null && depth < 256; depth++, current = GetSuperclass(current))
+            if ((GetStaticMethods(current)?.GetValueOrDefault(name)
+                ?? GetStaticProperties(current)?.GetValueOrDefault(name)) is { } member)
+                return member;
+        return null;
     }
 
     private static bool TryGetBuiltInArraySubclassElement(
@@ -916,13 +929,16 @@ public partial class TypeChecker
         // A write through a known literal-key domain must be valid for every property that the
         // key may select. Reads use a union of the property types; writes use their intersection,
         // represented here by checking the assigned value against each candidate slot.
-        if (TryGetStringLiteralKeys(indexType, out var literalKeys) &&
+        if (TryGetLiteralPropertyKeys(indexType, out var literalKeys) &&
             objType is TypeInfo.Record or TypeInfo.Interface)
         {
             List<TypeInfo> propertyTypes = [];
             foreach (string key in literalKeys)
             {
                 if (objType is TypeInfo.Record recordTarget && recordTarget.IsFieldReadonly(key))
+                    throw new TypeCheckException($"Cannot assign to '{key}' because it is a read-only property.",
+                        TryGetExprLine(setIndex.Index), tsCode: "TS2540");
+                if (objType is TypeInfo.Interface interfaceTarget && interfaceTarget.IsMemberReadonly(key))
                     throw new TypeCheckException($"Cannot assign to '{key}' because it is a read-only property.",
                         TryGetExprLine(setIndex.Index), tsCode: "TS2540");
                 if (GetMemberType(objType, key) is not { } propertyType)
@@ -1273,6 +1289,47 @@ public partial class TypeChecker
         return keys.Count > 0;
     }
 
+    private static bool TryGetLiteralPropertyKeys(TypeInfo indexType, out List<string> keys)
+    {
+        keys = [];
+        IEnumerable<TypeInfo> candidates = indexType is TypeInfo.Union union
+            ? union.FlattenedTypes : [indexType];
+        foreach (TypeInfo candidate in candidates)
+        {
+            string? key = candidate switch
+            {
+                TypeInfo.NumberLiteral number => Runtime.PropertyKeyConverter.ToPropertyKeyString(number.Value),
+                TypeInfo.StringLiteral text => text.Value,
+                _ => null
+            };
+            if (key is null)
+            {
+                keys.Clear();
+                return false;
+            }
+            keys.Add(key);
+        }
+        return keys.Count > 0;
+    }
+
+    private TypeInfo? TryReadKnownIndexedRecordMember(TypeInfo receiver, TypeInfo index)
+    {
+        if (receiver is TypeInfo.InstantiatedGeneric instantiated &&
+            FlattenInstantiatedInterface(instantiated) is { } flattened)
+            receiver = flattened;
+        if (receiver is not (TypeInfo.Record or TypeInfo.Interface) ||
+            !TryGetLiteralPropertyKeys(index, out var names))
+            return null;
+        List<TypeInfo> members = [];
+        foreach (string name in names)
+        {
+            if (GetMemberTypeWithOptionality(receiver, name) is not { } member)
+                return null;
+            members.Add(WithOptionalPropertyUndefined(member.Type, member.IsOptional));
+        }
+        return members.Aggregate(CreateUnion);
+    }
+
     private bool TryGetIndexSignatureWriteTypes(
         TypeInfo objectType, TypeInfo indexType, out List<TypeInfo> signatureTypes)
     {
@@ -1457,14 +1514,14 @@ public partial class TypeChecker
             return GetFunctionHasInstanceReadType(objType, getIndex.Index)
                 ?? GetMemberType(objType, "@@hasInstance");
 
-        if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
-            getIndex.Index is Expr.Literal { Value: string constructorMember } &&
-            (constructorMember == "prototype" || HasKnownConstructorMember(objType, constructorMember)))
-            return CheckGetOnClass(objType, new Token(TokenType.IDENTIFIER, constructorMember, null,
-                TryGetExprLine(getIndex.Index) ?? 0));
+        if (TryReadKnownIndexedConstructorMember(objType, indexType, getIndex) is { } knownConstructorMember)
+            return knownConstructorMember;
 
         if (TryReadKnownIndexedInstanceMember(objType, indexType, getIndex) is { } knownInstanceMember)
             return knownInstanceMember;
+
+        if (TryReadKnownIndexedRecordMember(objType, indexType) is { } knownRecordMember)
+            return knownRecordMember;
 
         if (getIndex.Index is Expr.Literal { Value: string functionMemberName } &&
             ResolveFunctionShapeMember(objType, functionMemberName) is { } apparentNamedMember)
@@ -1562,6 +1619,19 @@ public partial class TypeChecker
         }
 
         return null;
+    }
+
+    private TypeInfo? TryReadKnownIndexedConstructorMember(TypeInfo receiver, TypeInfo index, Expr.GetIndex syntax)
+    {
+        if (receiver is not (TypeInfo.Class or TypeInfo.GenericClass or
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass }) ||
+            !TryGetLiteralPropertyKeys(index, out var names) ||
+            names.Any(name => name != "prototype" && !HasKnownConstructorMember(receiver, name)))
+            return null;
+
+        return names.Select(name => CheckGetOnClass(receiver,
+            new Token(TokenType.IDENTIFIER, name, null, TryGetExprLine(syntax.Index) ?? 0)))
+            .Aggregate(CreateUnion);
     }
 
     private bool HasKnownConstructorMember(TypeInfo receiver, string name)

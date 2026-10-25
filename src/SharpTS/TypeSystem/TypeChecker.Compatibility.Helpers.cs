@@ -129,27 +129,6 @@ public partial class TypeChecker
         return null;
     }
 
-    /// <summary>
-    /// True when <paramref name="cls"/> (or any class in its hierarchy) carries a nominal brand,
-    /// i.e. declares a private or protected member. TypeScript compares classes structurally for
-    /// assignment except when the target type is so branded, in which case it requires the source
-    /// to originate from the same class.
-    /// </summary>
-    private static bool HasNominalClassBrand(TypeInfo.Class cls)
-    {
-        TypeInfo? current = cls;
-        while (current is TypeInfo.Class c)
-        {
-            if (CoreHasNominalBrand(c.Core)) return true;
-            current = GetSuperclass(current);
-        }
-        return HasComputedConstructorMethodBrand(current);
-    }
-
-    private static bool HasComputedConstructorMethodBrand(TypeInfo? type) =>
-        EnumerateClassCores(type).Any(core => core.ComputedConstructorMethodType is not null &&
-            core.ComputedConstructorMethodAccess != AccessModifier.Public);
-
     private static bool IsPublicMember(FrozenDictionary<string, AccessModifier> access, string name)
         => !access.TryGetValue(name, out var mod) || mod == AccessModifier.Public;
 
@@ -176,7 +155,8 @@ public partial class TypeChecker
     private static IEnumerable<ClassMetadataCore> EnumerateClassCores(TypeInfo? type)
     {
         TypeInfo? current = ResolveToClassLike(type);
-        for (int guard = 0; current is not null && guard < 256; guard++)
+        HashSet<ClassMetadataCore> seen = new(ReferenceEqualityComparer.Instance);
+        while (current is not null)
         {
             ClassMetadataCore? core = current switch
             {
@@ -185,7 +165,7 @@ public partial class TypeChecker
                 TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass igc } => igc.Core,
                 _ => null,
             };
-            if (core is null) yield break;
+            if (core is null || !seen.Add(core)) yield break;
             yield return core;
             current = core.Superclass;
         }
@@ -370,16 +350,8 @@ public partial class TypeChecker
 
     /// <summary>True when a class declares an ES <c>#private</c> field/method anywhere in its hierarchy.
     /// Such classes stay strictly nominal — a <c>#</c>-member has no structural surface to relate.</summary>
-    private static bool HasEsPrivateBrand(TypeInfo.Class cls)
-    {
-        TypeInfo? current = cls;
-        while (current is TypeInfo.Class c)
-        {
-            if (c.Core.PrivateFieldTypes.Count > 0 || c.Core.PrivateMethodTypes.Count > 0) return true;
-            current = GetSuperclass(current);
-        }
-        return false;
-    }
+    private static bool HasEsPrivateBrand(TypeInfo.Class cls) =>
+        EnumerateClassCores(cls).Any(core => core.PrivateFieldTypes.Count > 0 || core.PrivateMethodTypes.Count > 0);
 
     /// <summary>
     /// Collects all instance members (public and TypeScript private/protected) of a class and its
@@ -773,14 +745,9 @@ public partial class TypeChecker
         return false;
     }
 
-    /// <summary>Checks a generic class's own brands and inherited computed constructor method brands.</summary>
-    private static bool GenericClassHasNominalBrand(TypeInfo.GenericClass gc)
-    {
-        if (CoreHasNominalBrand(gc.Core)) return true;
-        return gc.Superclass is TypeInfo.Class sc
-            ? HasNominalClassBrand(sc)
-            : HasComputedConstructorMethodBrand(gc.Superclass);
-    }
+    /// <summary>Checks a generic class's own and inherited instance brands.</summary>
+    private static bool GenericClassHasNominalBrand(TypeInfo.GenericClass gc) =>
+        EnumerateClassCores(gc).Any(CoreHasNominalBrand);
 
     /// <summary>
     /// Collects the instance members of a generic class with its type arguments substituted

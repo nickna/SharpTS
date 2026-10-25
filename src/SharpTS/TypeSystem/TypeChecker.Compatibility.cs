@@ -122,6 +122,8 @@ public partial class TypeChecker
     /// </summary>
     private bool IsCompatible(TypeInfo expected, TypeInfo actual)
     {
+        expected = RefreshForwardClassConstructor(expected);
+        actual = RefreshForwardClassConstructor(actual);
         // Under strictFunctionTypes the verdict for a function-typed pair depends on whether the
         // comparison happens inside a method member (bivariant) or not (strict) — the same pair
         // can legitimately differ between the two contexts, so bivariant-context results must not
@@ -138,6 +140,8 @@ public partial class TypeChecker
         // parent cache entry that could later match a different same-named class.
         if (ordinaryConstructorPair) unchecked { _ordinaryConstructorComparisonEpoch++; }
         bool ordinaryConstructorContext = _ordinaryConstructorRelationDepth > 0 || ordinaryConstructorPair;
+        // An inferred argument retains its exact type object, including recursive generic members.
+        if (ReferenceEquals(expected, actual)) return true;
         // Mutable self types and recursive constructor facets are compared against
         // their current view. Neither provisional success nor a name-based key is
         // authoritative for another constructor comparison.

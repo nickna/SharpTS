@@ -116,14 +116,23 @@ public partial class TypeChecker
         // validation string-named methods get, rather than silently "last one wins" registration.
         // Arbitrary computed keys (e.g. `[v]()`) aren't statically named members and are skipped
         // (still parsed/checked, just untyped — like computed accessors).
-        var computedMethodGroups = methods
+        var computedMethods = methods
             .Where(m => m.ComputedKey != null)
             .Select(m => (Method: m, Name: TryGetComputedClassMemberName(m.ComputedKey),
                 IsLiteral: IsLiteralComputedClassMemberKey(m.ComputedKey)))
             .Where(x => x.Name != null)
+            .ToList();
+        var independentlyImplementedSymbols = computedMethods.GroupBy(x => x.Name)
+            .Where(group => group.Any(x => x.Method.IsStatic && x.Method.Body != null) &&
+                group.Any(x => !x.Method.IsStatic && x.Method.Body != null))
+            .Select(group => group.Key!)
+            .ToHashSet(StringComparer.Ordinal);
+        var computedMethodGroups = computedMethods
             // Ordinary property names have independent static and instance overload groups.
-            // Symbol overloads retain the cross-facet group needed for TS2387/TS2388.
-            .GroupBy(x => (Name: x.Name!, IsStatic: x.IsLiteral ? x.Method.IsStatic : (bool?)null))
+            // A symbol with implementations on both objects does too. A declaration-only
+            // opposite facet still belongs to the malformed overload group (TS2387/TS2388).
+            .GroupBy(x => (Name: x.Name!, IsStatic: x.IsLiteral || independentlyImplementedSymbols.Contains(x.Name!)
+                ? x.Method.IsStatic : (bool?)null))
             .ToList();
 
         foreach (var group in computedMethodGroups)
@@ -742,6 +751,8 @@ public partial class TypeChecker
     private void CheckClassDeclaration(Stmt.Class classStmt)
     {
         bool previousRecoveryMode = _recoveryMode;
+        ForwardClassDeclaration? checkingForward = null;
+        bool wasCheckingDeclaration = false;
         // Match generic-function diagnostics in module mode: independent class fields and members
         // must still be checked after one generic relationship error.
         if (_currentModule != null && classStmt.TypeParams is { Count: > 0 })
@@ -749,6 +760,13 @@ public partial class TypeChecker
         try
         {
             BindingSymbol classSymbol = RegisterValueDeclaration(classStmt.Name);
+            if (_forwardClassDeclarations.TryGetValue(classSymbol, out var forwardDeclaration) &&
+                ReferenceEquals(forwardDeclaration.Environment, _environment))
+            {
+                checkingForward = forwardDeclaration;
+                wasCheckingDeclaration = checkingForward.IsCheckingDeclaration;
+                checkingForward.IsCheckingDeclaration = true;
+            }
             // The same AST declaration is checked in preparatory and authoritative module passes.
             // Derive its nominal class identity from the stable binding rather than allocating a new
             // identity per pass; otherwise `var s: S` looks like a conflicting TS2403 redeclaration
@@ -778,8 +796,8 @@ public partial class TypeChecker
             // Create mutable class early so self-references in method return types work.
             // This allows methods like "next(): Node" to correctly resolve the return type.
             // The mutable class is populated during signature collection and frozen at the end.
-            var mutableClass = _environment.GetTypeBinding(classStmt.Name.Lexeme) is
-                TypeInfo.MutableClass preregisteredClass
+            var mutableClass = _environment.GetLocalTypeBinding(classStmt.Name.Lexeme) is
+                TypeInfo.MutableClass preregisteredClass && preregisteredClass.DeclarationId == declarationId
                     ? preregisteredClass
                     : new TypeInfo.MutableClass(classStmt.Name.Lexeme, declarationId);
             mutableClass.Superclass = superclass;
@@ -803,7 +821,10 @@ public partial class TypeChecker
             _forwardClassTypeShadows.TryGetValue(mutableClass, out var ownedForward);
             bool wasResolving = ownedForward?.IsResolving ?? false;
             if (ownedForward is not null)
+            {
+                ownedForward.TypeParameters = classTypeParams;
                 ownedForward.IsResolving = true;
+            }
             try
             {
                 using (new EnvironmentScope(this, classTypeEnv))
@@ -890,9 +911,13 @@ public partial class TypeChecker
             var resolvedClass = mutableClass.Freeze();
             ValidateClassMembersAgainstSymbolIndex(classStmt, resolvedClass);
             ValidateStaticOverrideCompatibility(classStmt, resolvedClass);
+            PublishForwardClassConstructor(mutableClass,
+                classTypeParams is { Count: > 0 } ? mutableClass.FreezeGeneric(classTypeParams) : resolvedClass,
+                complete: true);
         }
         finally
         {
+            if (checkingForward is not null) checkingForward.IsCheckingDeclaration = wasCheckingDeclaration;
             _recoveryMode = previousRecoveryMode;
         }
     }

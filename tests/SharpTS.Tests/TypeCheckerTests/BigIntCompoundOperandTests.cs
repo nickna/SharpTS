@@ -41,10 +41,29 @@ public sealed class BigIntCompoundOperandTests
     [Theory]
     [InlineData("let value: bigint = 2n; value *= 3;", "TS2365")]
     [InlineData("let value: number = 2; value *= 3n;", "TS2365")]
-    [InlineData("let value: bigint = 2n; value >>>= 1n;", "TS2791")]
+    [InlineData("let value: bigint = 2n; value >>>= 1n;", "TS2365")]
     [InlineData("let value: bigint = 2n; value *= true;", "TS2363")]
     [InlineData("let value = 0; if (value === 0) value += 'next';", "TS2365")]
     [InlineData("let value: bigint = 0n; if (value === 0n) value += 1;", "TS2365")]
     public void InvalidNumericPairingsRemainRejected(string source, string code)
         => Assert.Equal(code, Assert.ThrowsAny<TypeCheckException>(() => Check(source)).Diagnostic.TsCode);
+
+    [Theory]
+    [InlineData("big >>> 1n")]
+    [InlineData("big >>> bottom")]
+    [InlineData("bottom >>> big")]
+    [InlineData("big >>>= 1n")]
+    [InlineData("big >>>= bottom")]
+    public void UnsignedBigIntShiftsUseTypeScriptSixDiagnostic(string expression)
+    {
+        string source = $"function probe(big: bigint, bottom: never) {{ {expression}; }}";
+        Assert.Equal("TS2365", Assert.ThrowsAny<TypeCheckException>(() => Check(source)).Diagnostic.TsCode);
+        var diagnostics = new TypeChecker(strictNullChecks: true)
+            .CheckWithRecovery(new Parser(new Lexer(source).ScanTokens()).Parse().Statements).Diagnostics;
+        Assert.Equal("TS2365", Assert.Single(diagnostics).TsCode);
+    }
+
+    [Fact]
+    public void UnsignedNumberAndNeverShiftsRemainValid()
+        => Check("function probe(value: number, bottom: never) { value >>> 1; value >>>= 1; value >>> bottom; }");
 }
