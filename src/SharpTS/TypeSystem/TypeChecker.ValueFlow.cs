@@ -2,6 +2,27 @@ namespace SharpTS.TypeSystem;
 
 public partial class TypeChecker
 {
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<TypeEnvironment, HashSet<BindingSymbol>>
+        _pendingLexicalValueFlow = new();
+
+    private void MarkPendingLexicalValueFlow(BindingSymbol symbol) =>
+        _pendingLexicalValueFlow.GetValue(_environment, static _ => new(ReferenceEqualityComparer.Instance)).Add(symbol);
+
+    private void ReachLexicalValueFlow(BindingSymbol symbol)
+    {
+        if (_pendingLexicalValueFlow.TryGetValue(_environment, out var pending)) pending.Remove(symbol);
+    }
+
+    private bool IsPendingLexicalValueFlow(ValueFlowBinding binding)
+    {
+        if (binding.Type is not TypeInfo.Any) return false;
+        for (TypeEnvironment? environment = _environment; environment is not null; environment = environment.Enclosing)
+            if (ReferenceEquals(environment.GetLocalValueBinding(binding.Name), binding.Symbol) &&
+                _pendingLexicalValueFlow.TryGetValue(environment, out var pending) && pending.Contains(binding.Symbol))
+                return true;
+        return false;
+    }
+
     private sealed record ValueFlowBinding(string Name, BindingSymbol Symbol, TypeInfo Type);
     private sealed record ValueFlowEnvironment(TypeEnvironment Environment, Dictionary<string, ValueFlowBinding> Locals);
     private sealed record ValueFlowState(List<ValueFlowEnvironment> Environments,
@@ -162,6 +183,7 @@ public partial class TypeChecker
                 foreach (var binding in _incoming.Bindings.Values)
                     if (!checker._typeMap.IsConstCaptureBinding(binding.Symbol) &&
                         !checker._stableCaptureParameters.TryGetValue(binding.Symbol, out _) &&
+                        !checker.IsPendingLexicalValueFlow(binding) &&
                         checker._classFieldDeclaredBindingTypes.TryGetValue(binding.Symbol, out var declared) &&
                         ReferenceEquals(checker._environment.GetValueBinding(binding.Name), binding.Symbol))
                         checker._environment.Define(binding.Name, declared.Type);

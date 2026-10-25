@@ -350,24 +350,36 @@ public partial class TypeChecker
             {
                 // `let` is Stmt.Var with IsVar == false; `var` is handled by HoistVarDeclarations.
                 case Stmt.Var v when !v.IsVar:
-                    RegisterValueDeclaration(v.Name);
+                    BindingSymbol lexicalSymbol = RegisterValueDeclaration(v.Name);
                     if (!_environment.IsDefinedLocally(v.Name.Lexeme))
+                    {
                         _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
+                        MarkPendingLexicalValueFlow(lexicalSymbol);
+                    }
                     break;
                 case Stmt.Const c:
-                    RegisterValueDeclaration(c.Name);
+                    BindingSymbol constSymbol = RegisterValueDeclaration(c.Name);
                     if (!_environment.IsDefinedLocally(c.Name.Lexeme))
+                    {
                         _environment.Define(c.Name.Lexeme, TypeInfo.Any.Shared);
+                        MarkPendingLexicalValueFlow(constSymbol);
+                    }
                     break;
                 case Stmt.Export { Declaration: Stmt.Var v } when !v.IsVar:
-                    RegisterValueDeclaration(v.Name);
+                    BindingSymbol exportedLexicalSymbol = RegisterValueDeclaration(v.Name);
                     if (!_environment.IsDefinedLocally(v.Name.Lexeme))
+                    {
                         _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
+                        MarkPendingLexicalValueFlow(exportedLexicalSymbol);
+                    }
                     break;
                 case Stmt.Export { Declaration: Stmt.Const c }:
-                    RegisterValueDeclaration(c.Name);
+                    BindingSymbol exportedConstSymbol = RegisterValueDeclaration(c.Name);
                     if (!_environment.IsDefinedLocally(c.Name.Lexeme))
+                    {
                         _environment.Define(c.Name.Lexeme, TypeInfo.Any.Shared);
+                        MarkPendingLexicalValueFlow(exportedConstSymbol);
+                    }
                     break;
             }
         }

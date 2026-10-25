@@ -199,6 +199,7 @@ public partial class TypeChecker
         BindingSymbol variableSymbol = RegisterValueDeclaration(
             stmt.Name,
             mergeWithLocal: stmt.IsVar);
+        ReachLexicalValueFlow(variableSymbol);
         if (stmt.IsSourceConst) _typeMap.MarkSourceConstCaptureBinding(variableSymbol);
         _hoistedVarPlaceholders.Remove((_environment, variableSymbol));
         if (stmt.TypeAnnotationNode is IntersectionTypeNode)
@@ -710,9 +711,9 @@ public partial class TypeChecker
 
     internal VoidResult VisitConst(Stmt.Const stmt)
     {
-        RegisterValueDeclaration(stmt.Name);
-        if (Bindings.GetSymbol(stmt.Name) is { } constBinding)
-            _typeMap.MarkConstBinding(constBinding);
+        BindingSymbol constBinding = RegisterValueDeclaration(stmt.Name);
+        ReachLexicalValueFlow(constBinding);
+        _typeMap.MarkConstBinding(constBinding);
 
         TypeInfo constDeclaredType;
         TypeInfo? initializerFlowType = null;
