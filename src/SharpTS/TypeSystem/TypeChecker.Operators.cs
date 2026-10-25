@@ -488,8 +488,23 @@ public partial class TypeChecker
     {
         TypeInfo leftType = CheckExpr(nc.Left);
         var incomingFlow = CaptureValueFlow();
+        var skippedFlow = incomingFlow;
+        Expr left = nc.Left;
+        while (left is Expr.Grouping grouping) left = grouping.Expression;
+        TypeInfo? skippedLeftType = null;
+        if (left is Expr.Variable variable && _environment.GetValueBinding(variable.Name.Lexeme) is { } symbol &&
+            incomingFlow.Bindings.TryGetValue(symbol, out var binding))
+        {
+            skippedLeftType = ExcludeNullUndefined(leftType);
+            var bindings = new Dictionary<BindingSymbol, ValueFlowBinding>(incomingFlow.Bindings, ReferenceEqualityComparer.Instance)
+            {
+                [symbol] = binding with { Type = skippedLeftType }
+            };
+            skippedFlow = incomingFlow with { Bindings = bindings };
+        }
         TypeInfo rightType = CheckValueFlowExpression(nc.Right, null, out var rightFlow);
-        JoinValueFlow(incomingFlow, incomingFlow, rightFlow);
+        if (skippedLeftType is TypeInfo.Never) JoinValueFlow(incomingFlow, rightFlow);
+        else JoinValueFlow(incomingFlow, skippedFlow, rightFlow);
 
         // Remove null and undefined from left type since ?? handles both cases
         TypeInfo nonNullishLeft = leftType;

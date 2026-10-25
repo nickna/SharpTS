@@ -81,6 +81,30 @@ public sealed class StaticBlockOuterFlowTests
         else Assert.Equal(code, Assert.Single(diagnostics).TsCode);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NullishSkippedBranchProvesItsSelectedVariableNonNullish(bool modules)
+        => Assert.Empty(Check("""
+            let source: string | undefined;
+            let value: string | undefined;
+            value ?? (value = source ?? 'fallback');
+            const good: string = value;
+            let assigned: string | undefined;
+            assigned ??= source ?? 'fallback';
+            const alsoGood: string = assigned;
+            """, modules));
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NullishFallbackWithoutAssignmentDoesNotProveTheSelectedVariable(bool modules)
+        => Assert.Equal("TS2322", Assert.Single(Check("""
+            let value: string | undefined;
+            value ?? 'fallback';
+            const wrong: string = value;
+            """, modules)).TsCode);
+
     private static IReadOnlyList<SharpTS.Diagnostics.Diagnostic> Check(string source, bool modules)
     {
         var checker = new TypeChecker(TypeCheckerOptions.Strict);
