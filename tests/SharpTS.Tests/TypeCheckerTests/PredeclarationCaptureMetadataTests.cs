@@ -28,7 +28,7 @@ public sealed class PredeclarationCaptureMetadataTests
         var (statements, map) = Check(source, modules);
         var function = Assert.Single(statements.OfType<Stmt.Function>());
         var block = Assert.Single(function.Body!.OfType<Stmt.Block>());
-        var read = Assert.Single(block.Statements.OfType<Stmt.Const>().Where(declaration => declaration.Name.Lexeme == "read"));
+        var read = Assert.Single(block.Statements.OfType<Stmt.Const>(), declaration => declaration.Name.Lexeme == "read");
         var arrow = Assert.IsType<Expr.ArrowFunction>(read.Initializer);
         Assert.IsType<TypeInfo.Any>(Assert.IsType<TypeInfo.Function>(map.Get(arrow)).ReturnType);
         Assert.IsType<TypeInfo.Any>(map.Get(arrow.ExpressionBody!));
