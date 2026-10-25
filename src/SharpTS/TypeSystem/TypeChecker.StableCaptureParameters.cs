@@ -19,8 +19,11 @@ public partial class TypeChecker
         if (body is not null)
             foreach (var initializer in body.OfType<Stmt.Sequence>().Where(sequence => sequence.ParameterName is not null))
                 foreach (var name in LexicalDeclarationBindings.Collect(initializer.Statements))
-                    if (name.Start >= 0 && _environment.GetLocalValueBinding(name.Lexeme) is { } symbol)
-                        candidates[name.Lexeme] = symbol;
+                    if (name.Start >= 0)
+                        // The prologue's source leaves are checked after this proof. Anchor
+                        // their identity now without publishing their value or consulting an
+                        // enclosing same-named binding in the fresh body environment.
+                        candidates[name.Lexeme] = Bindings.Declare(name, CurrentSourceDocument, BindingNamespace.Value);
         if (candidates.Count == 0) return;
         var writes = new ParameterCaptureWrites(this, candidates);
         if (body is not null) writes.VisitBody(body, ownsParameters: true);

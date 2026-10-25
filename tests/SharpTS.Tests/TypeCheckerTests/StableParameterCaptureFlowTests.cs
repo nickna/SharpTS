@@ -16,13 +16,13 @@ public sealed class StableParameterCaptureFlowTests
             "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;const shadow=(action:number)=>{action=2;};}}",
             "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;{let action=1;action=2;}}}",
             "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;function shadow(){var action=1;action=2;}}}",
-            "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;try{}catch(action){action=1;}}}",
-            "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;for(let action of [1,2]){action=2;}}}",
+            "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;try{}catch(action){action={kind:'other'};}}}",
+            "type Action={kind:'move',layerId:number}|{kind:'other'}; declare const actions:Action[]; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;for(let action of actions){action={kind:'other'};}}}",
             "type Action={kind:'move',layerId:number}|{kind:'other'}; class Reducer{read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;}}}",
             "type Action={kind:'move',layerId:number}|{kind:'other'}; const Reducer=class{read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;}}};",
             "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;function shadow(){for(var action of [1,2])action=2;}}}",
-            "type Action={kind:'move',layerId:number}|{kind:'other'}; function read({action}:{action:Action}){if(action.kind==='move'){const callback=()=>action.layerId;}}",
-            "type Action={kind:'move',layerId:number}|{kind:'other'}; const read=({action}:{action:Action})=>{if(action.kind==='move'){const callback=()=>action.layerId;}};"
+            "function read({action}:{action:number|null}){if(action!==null){const callback=()=>{const value:number=action;};}}",
+            "const read=({action}:{action:number|null})=>{if(action!==null){const callback=()=>{const value:number=action;};}};"
         })
             foreach (bool modules in new[] { false, true }) yield return [source, modules];
     }
@@ -39,7 +39,7 @@ public sealed class StableParameterCaptureFlowTests
             "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;function mutate(){action={kind:'other'};}}}",
             "type Action={kind:'move',layerId:number}|{kind:'other'}; let action:Action={kind:'move',layerId:1}; const callback=()=>action.layerId; action={kind:'other'};",
             "let value:string|number='ok'; const callback=()=>{const wrong:string=value;}; value=1;",
-            "type Action={kind:'move',layerId:number}|{kind:'other'}; function read({action}:{action:Action}){if(action.kind==='move'){const callback=()=>action.layerId;action={kind:'other'};}}"
+            "function read({action}:{action:number|null}){if(action!==null){const callback=()=>{const value:number=action;};action=null;}}"
         })
             foreach (bool modules in new[] { false, true }) yield return [source, modules];
     }
