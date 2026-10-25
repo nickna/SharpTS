@@ -66,10 +66,13 @@ public sealed class GenericIntersectionWriteTests
     public void IntersectionWritesExecuteWithVerifiedCompilerIl(ExecutionMode mode)
     {
         const string source = """
-            function write<T>(box:T&{value:number}) { box.value=3; box['value']=4; }
+            function write<T>(box:T&{value:number}) {
+                box.value=3;
+                box['value']=4;
+                console.log(box.value);
+            }
             const box={value:1,label:'kept'};
             write(box);
-            console.log(box.value);
             console.log(box.label);
             """;
         Assert.Equal("4\nkept\n", TestHarness.Run(source, mode));
