@@ -92,8 +92,10 @@ public partial class TypeChecker
                     };
                     EnforceIntersectionMemberAccess(access, core.DeclarationId, core.Name, receiver, name);
                 }
-                return new(isStatic ? CheckGetOnClass(type, name, enforceAccessibility: false)
-                    : CheckGetOnInstance((TypeInfo.Instance)type, name, enforceAccessibility: false), true);
+                TypeInfo value = isStatic ? CheckGetOnClass(type, name, enforceAccessibility: false)
+                    : CheckGetOnInstance((TypeInfo.Instance)type, name, enforceAccessibility: false);
+                return new(WithOptionalPropertyUndefined(value,
+                    declaring.Core.OrdinaryOptionalMembers?.Contains((isStatic, name.Lexeme)) == true), true);
             }
             // Unknown generic contributions must not erase an independently known slot.
             // Keep index/prototype/dynamic fallbacks only when no constituent declares it.
