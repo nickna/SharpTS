@@ -22,7 +22,7 @@ namespace SharpTS.Compilation;
 /// <para><c>$Runtime</c> itself remains unconditional, but optional type and
 /// method families within it are feature-gated.</para>
 /// </summary>
-public sealed class RuntimeFeatureDetector
+public sealed partial class RuntimeFeatureDetector
 {
     private readonly RuntimeFeatureSet _set;
     private readonly HashSet<string> _sourceFunctions = new(StringComparer.Ordinal);
@@ -140,6 +140,7 @@ public sealed class RuntimeFeatureDetector
         CollectCanonicalCompactRecordShapes(statements);
         foreach (var stmt in statements)
             VisitStmt(stmt);
+        ExpandStructuralMaterializationShapes();
         StableCompactRecordLocalAnalyzer.Analyze(statements, typeMap, _set);
         LocalRecordArrayAnalyzer.Analyze(statements, typeMap, _set);
 
@@ -1762,6 +1763,8 @@ public sealed class RuntimeFeatureDetector
                 VisitExpr(instantiation.Expression);
                 break;
             case Expr.TypeAssertion ta:
+                if (ChangesStructuralView(_typeMap?.Get(ta.Expression), _typeMap?.Get(ta)))
+                    MarkPotentiallyMaterialized(ta.Expression);
                 VisitExpr(ta.Expression);
                 break;
             case Expr.Satisfies sat:
@@ -2580,6 +2583,7 @@ public sealed class RuntimeFeatureDetector
         switch (type)
         {
             case TypeInfo.Record record:
+                RecordStructuralMaterializationView(record);
                 if (JsonSerializationShapeAnalyzer.TryAnalyze(record, out var analyzed) &&
                     analyzed is JsonSerializationShape.Record shape &&
                     shape.Fields.Count is >= 1 and <= 4)
@@ -2595,6 +2599,29 @@ public sealed class RuntimeFeatureDetector
                     MarkPotentiallyMaterialized(record.NumberIndexType, visited);
                 if (record.SymbolIndexType is not null)
                     MarkPotentiallyMaterialized(record.SymbolIndexType, visited);
+                break;
+            case TypeInfo.Interface itf:
+                RecordStructuralMaterializationView(itf);
+                foreach (var member in itf.Members.Values)
+                    MarkPotentiallyMaterialized(member, visited);
+                if (itf.Extends is not null)
+                    foreach (var parent in itf.Extends)
+                        MarkPotentiallyMaterialized(parent, visited);
+                break;
+            case TypeInfo.Intersection intersection:
+                RecordStructuralMaterializationView(intersection);
+                foreach (var part in intersection.FlattenedTypes)
+                    if (part is not TypeInfo.TypeParameter { Constraint: null })
+                        MarkPotentiallyMaterialized(part, visited);
+                break;
+            case TypeInfo.TypeParameter parameter:
+                if (parameter.Constraint is not null)
+                    MarkPotentiallyMaterialized(parameter.Constraint, visited);
+                else
+                    _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
+                break;
+            case TypeInfo.Object:
+                _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
                 break;
             case TypeInfo.Union union:
                 foreach (var member in union.Types)
