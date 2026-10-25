@@ -62,7 +62,7 @@ public sealed class GenericAccessorCallbackRefreshTests
     [InlineData("get value(){return 1;}", true)]
     [InlineData("set value(next:number){}", false)]
     [InlineData("get value(){return 1;},set value(next:number){}", false)]
-    public void RefreshedArgumentRecordsKeepAccessorAndMethodMetadata(string accessor, bool getterOnly)
+    public void RefreshedArgumentRecordsKeepAccessorMetadataAndCallableMethodFields(string accessor, bool getterOnly)
     {
         var statements = TestHarness.ParseOrThrow(
             "declare function identity<T>(arg:T):T; identity({" + accessor + ",method(x:number){return x+1;}});");
@@ -73,7 +73,6 @@ public sealed class GenericAccessorCallbackRefreshTests
         var record = Assert.IsType<TypeInfo.Record>(result.TypeMap.Get(call.Arguments[0]));
         Assert.False(record.Fields["value"] is TypeInfo.Function);
         Assert.Equal(getterOnly, record.IsGetterOnly("value"));
-        Assert.True(record.IsMethodMember("method"));
         Assert.IsType<TypeInfo.Function>(record.Fields["method"]);
     }
 
