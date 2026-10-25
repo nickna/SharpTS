@@ -801,7 +801,9 @@ public partial class TypeChecker
     {
         TypeInfo objType = CheckExpr(compound.Object);
         TypeInfo indexType = CheckExpr(compound.Index);
-        CheckReadonlyRecordIndex(objType, indexType, compound.Operator.Line);
+        TypeInfo writeTarget = TryGetLiteralPropertyKeys(indexType, out var writeKeys)
+            ? CompoundMemberWriteTarget(objType, writeKeys, compound.Operator.Line, enforceAccessibility: false)! : objType;
+        CheckReadonlyRecordIndex(writeTarget, indexType, compound.Operator.Line);
         EnsureWritableClassIndex(objType, indexType, compound.Index);
         EnsureWritableInterfaceNumberIndex(objType, indexType, compound.Index);
         TypeInfo valueType = CheckExpr(compound.Value);
@@ -861,7 +863,7 @@ public partial class TypeChecker
         bool canonicalArrayStringIndex = objType is TypeInfo.Array &&
             TryGetStringLiteralKeys(indexType, out var stringKeys) &&
             stringKeys.All(key => Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _));
-        bool ordinaryPropertyKey = (IsObjectType(objType) ||
+        bool ordinaryPropertyKey = (IsObjectType(writeTarget) ||
             objType is TypeInfo.Any or TypeInfo.Object or TypeInfo.MutableClass or
                 TypeInfo.Function or TypeInfo.GenericFunction or TypeInfo.OverloadedFunction or TypeInfo.OverloadSet) &&
             objType is not (TypeInfo.Array or TypeInfo.Tuple or TypeInfo.TypedArray) &&
@@ -1173,9 +1175,32 @@ public partial class TypeChecker
         return TypeInfo.Primitive.Number;
     }
 
-    private static void CheckReadonlyRecordProperty(TypeInfo? receiver, string name, int line)
+    private TypeInfo? CompoundMemberWriteTarget(TypeInfo? receiver, IEnumerable<string> names, int line, bool enforceAccessibility)
     {
+        HashSet<TypeInfo> active = new(ReferenceEqualityComparer.Instance);
+        while (receiver is not null && active.Add(receiver))
+        {
+            TypeInfo resolved = receiver switch
+            {
+                TypeInfo.TypeParameter { Constraint: { } constraint } => constraint,
+                TypeInfo.RecursiveTypeAlias alias => ExpandRecursiveTypeAlias(alias),
+                TypeInfo.MappedType => ResolveMappedTypeForAccess(receiver),
+                _ => receiver
+            };
+            if (ReferenceEquals(resolved, receiver)) break;
+            receiver = resolved;
+        }
+        return receiver is TypeInfo.Intersection intersection
+            ? IntersectionWriteTarget(intersection, names, line, enforceAccessibility,
+                missingCode: enforceAccessibility ? "TS2339" : "TS7053") : receiver;
+    }
+
+    private void CheckReadonlyRecordProperty(TypeInfo? receiver, string name, int line, bool enforceAccessibility = true)
+    {
+        receiver = CompoundMemberWriteTarget(receiver, [name], line, enforceAccessibility);
         if (receiver is TypeInfo.Record record && record.IsFieldReadonly(name))
+            throw new TypeCheckException($"Cannot assign to '{name}' because it is a read-only property.", line, tsCode: "TS2540");
+        if (receiver is TypeInfo.Interface iface && iface.IsMemberReadonly(name))
             throw new TypeCheckException($"Cannot assign to '{name}' because it is a read-only property.", line, tsCode: "TS2540");
     }
 
@@ -1184,7 +1209,7 @@ public partial class TypeChecker
         if (index is TypeInfo.NumberLiteral number)
         {
             CheckReadonlyRecordProperty(receiver,
-                number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), line);
+                number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), line, enforceAccessibility: false);
             return;
         }
         if (index is TypeInfo.Union union)
@@ -1193,7 +1218,7 @@ public partial class TypeChecker
             return;
         }
         if (index is not null && TryGetStringLiteralKeys(index, out var keys))
-            foreach (string key in keys) CheckReadonlyRecordProperty(receiver, key, line);
+            foreach (string key in keys) CheckReadonlyRecordProperty(receiver, key, line, enforceAccessibility: false);
     }
 
     private void CheckReadonlyRecordUpdate(Expr operand, int line)
