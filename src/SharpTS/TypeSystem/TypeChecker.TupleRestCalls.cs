@@ -147,7 +147,8 @@ public partial class TypeChecker
         var slots = GenericTupleCallArguments(call, argumentTypes);
         if (call.TypeArgs is not { Count: > 0 } && call.Arguments.Any(ContainsGenericTupleCallback))
         {
-            CheckGenericTupleRestCall(call, signature, slots, validate: false);
+            CheckGenericTupleRestCall(call, signature, slots, validate: false,
+                reportCallbackProperties: call.TypeArgs is { Count: > 0 });
             argumentTypes = RefreshContextualizedGenericArguments(call.Arguments, argumentTypes);
             slots = GenericTupleCallArguments(call, argumentTypes);
             try
@@ -162,7 +163,7 @@ public partial class TypeChecker
                 throw new TypeCheckException(error.Message, call.Paren.Line, tsCode: "TS2345");
             }
         }
-        CheckGenericTupleRestCall(call, signature, slots);
+        CheckGenericTupleRestCall(call, signature, slots, reportCallbackProperties: call.TypeArgs is { Count: > 0 });
         return signature;
     }
 
@@ -238,7 +239,8 @@ public partial class TypeChecker
                 ? slot with { Type = GenericTupleLiteralType(nested) } : slot));
 
     private void CheckGenericTupleRestCall(Expr.Call call, TypeInfo.Function signature, List<GenericTupleCallSlot> arguments,
-        bool validate = true, bool contextualizeCallbacks = true, bool subtypeMatch = false)
+        bool validate = true, bool contextualizeCallbacks = true, bool subtypeMatch = false,
+        bool reportCallbackProperties = true)
     {
         var tuple = (TypeInfo.Tuple)FlattenTupleSpreads(signature.ParamTypes[^1]);
         List<GenericTupleCallSlot> parameters = signature.ParamTypes.Take(signature.ParamTypes.Count - 1)
@@ -253,7 +255,11 @@ public partial class TypeChecker
             throw new TypeCheckException($"Expected {(parameters.Any(parameter => parameter.Spread) ? "at least " : "")}{required} arguments but got {arguments.Count}.",
                 call.Paren.Line, tsCode: "TS2554");
 
-        if (!Match(contextualizeCallbacks, out var contexts)) Fail();
+        if (!Match(contextualizeCallbacks, out var contexts))
+        {
+            if (reportCallbackProperties && Match(true, out var failedContexts)) CheckPropertyDiagnostics(failedContexts);
+            Fail();
+        }
         if (!contextualizeCallbacks) return;
         foreach (var (index, expected) in contexts)
             if (arguments[index].Expression is { } expression)
@@ -267,7 +273,7 @@ public partial class TypeChecker
                         try
                         {
                             CheckGenericTupleRestCall(call, new TypeInfo.Function([expectedTuple], TypeInfo.Void.Shared,
-                                HasRestParam: true), GenericTupleLiteralSlots(literal));
+                                HasRestParam: true), GenericTupleLiteralSlots(literal), reportCallbackProperties: reportCallbackProperties);
                         }
                         catch (TypeCheckException error) when (error.Diagnostic.TsCode is "TS2554" or "TS2556")
                         {
@@ -279,7 +285,18 @@ public partial class TypeChecker
                 RefreshContextualizedGenericArgument(expression, arguments[index].Type);
             }
         if (!validate) return;
-        if (!Match(false, out _)) Fail();
+        if (!Match(false, out _))
+        {
+            if (reportCallbackProperties) CheckPropertyDiagnostics(contexts);
+            Fail();
+        }
+
+        void CheckPropertyDiagnostics(Dictionary<int, TypeInfo> expectedTypes)
+        {
+            foreach (var (index, expected) in expectedTypes.OrderBy(pair => pair.Key))
+                if (arguments[index].Expression is { } expression && GetNestedCallbackPropertyError(expression, expected) is { } error)
+                    throw error;
+        }
 
         bool Match(bool contextualize, out Dictionary<int, TypeInfo> winningContexts)
         {

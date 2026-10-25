@@ -193,7 +193,10 @@ public partial class TypeChecker
                     ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
                 }
                 argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
-                CheckInstantiatedGenericCallArguments(call, instFunc, argTypes);
+                // An explicit instantiation establishes the callback property's assignment
+                // context. Conflicting inferred sibling candidates retain argument diagnostics.
+                CheckInstantiatedGenericCallArguments(call, instFunc, argTypes,
+                    reportCallbackProperties: call.TypeArgs is { Count: > 0 });
                 RecordEditorInvocationInstantiation(originalSignature, instFunc);
                 RecordEditorInvocationSelection(originalSignature, instFunc);
                 return instFunc.ReturnType;
@@ -436,6 +439,8 @@ public partial class TypeChecker
                             bool optional = paramIndex >= funcType.MinArity;
                             if (!IsArgumentCompatible(funcType.ParamTypes[paramIndex], argType, optional))
                             {
+                                if (GetNestedCallbackPropertyError(arg, funcType.ParamTypes[paramIndex]) is { } propertyError)
+                                    throw propertyError;
                                 throw new TypeCheckException($"Argument {argIndex + 1} expected type '{funcType.ParamTypes[paramIndex]}' but got '{argType}'.",
                                     line: call.Callee is Expr.Super { Method: null } ? call.Paren.Line : null, tsCode: "TS2345");
                             }
@@ -1110,7 +1115,8 @@ public partial class TypeChecker
     private void CheckInstantiatedGenericCallArguments(
         Expr.Call call,
         TypeInfo.Function signature,
-        IReadOnlyList<TypeInfo> inferenceArgumentTypes)
+        IReadOnlyList<TypeInfo> inferenceArgumentTypes,
+        bool reportCallbackProperties = true)
     {
         int regularCount = signature.ParamTypes.Count - (signature.HasRestParam ? 1 : 0);
         TypeInfo? restElement = signature.HasRestParam && signature.ParamTypes.Count > 0 &&
@@ -1162,18 +1168,22 @@ public partial class TypeChecker
                 parameterIndex++;
             }
             else
-                CheckElement(_typeMap.Get(argument) ?? inferenceArgumentTypes[i]);
+                CheckElement(_typeMap.Get(argument) ?? inferenceArgumentTypes[i], argument);
         }
 
-        void CheckElement(TypeInfo actual)
+        void CheckElement(TypeInfo actual, Expr? expression = null)
         {
             TypeInfo? expected = parameterIndex < regularCount
                 ? signature.ParamTypes[parameterIndex] : restElement;
             bool optional = parameterIndex < regularCount && parameterIndex >= signature.MinArity;
             if (expected is not null && !IsArgumentCompatible(expected, actual, optional))
+            {
+                if (reportCallbackProperties && expression is not null && GetNestedCallbackPropertyError(expression, expected) is { } propertyError)
+                    throw propertyError;
                 throw new TypeCheckException(
                     $"Argument {parameterIndex + 1} expected type '{expected}' but got '{actual}'.",
                     call.Paren.Line, tsCode: "TS2345");
+            }
             parameterIndex++;
         }
 
@@ -1597,7 +1607,8 @@ public partial class TypeChecker
         Dictionary<TypeInfo.Function, (TypeInfo.GenericFunction Generic, TypeInfo.Function Original)> tupleCandidates =
             new(ReferenceEqualityComparer.Instance);
         List<TypeCheckException> tupleFailures = [];
-        var tupleArityArguments = genericOverloadedFunc.Signatures.Any(signature =>
+        List<TypeCheckException> propertyFailures = [];
+        var tupleArityArguments = !call.Arguments.Any(argument => argument is Expr.Spread) || genericOverloadedFunc.Signatures.Any(signature =>
             signature.HasRestParam && signature.ParamTypes.LastOrDefault() is TypeInfo.Tuple)
                 ? GenericTupleCallArguments(call, argTypes) : null;
         int arityCandidates = tupleArityArguments is null ? 0 : genericOverloadedFunc.Signatures.Count(signature =>
@@ -1632,7 +1643,8 @@ public partial class TypeChecker
                 if (tupleArguments is not null)
                 {
                     validatingTuple = true;
-                    CheckGenericTupleRestCall(call, instantiatedSig, tupleArguments, contextualizeCallbacks: false);
+                    CheckGenericTupleRestCall(call, instantiatedSig, tupleArguments, contextualizeCallbacks: false,
+                        reportCallbackProperties: call.TypeArgs is { Count: > 0 });
                     tupleCandidates[instantiatedSig] = (candidate, signature);
                     matchingSignatures.Add(instantiatedSig);
                     continue;
@@ -1649,11 +1661,16 @@ public partial class TypeChecker
             {
                 matchingSignatures.Add(instantiatedSig);
             }
+            else if (call.TypeArgs is { Count: > 0 } && tupleArityArguments is not null &&
+                GenericTupleCallArityCouldMatch(instantiatedSig, tupleArityArguments) &&
+                GetCallCallbackPropertyError(call, instantiatedSig, argTypes) is { } propertyError)
+                propertyFailures.Add(propertyError);
         }
 
         if (matchingSignatures.Count == 0)
         {
             if (tupleFailures.Count == 1 && arityCandidates == 1) throw tupleFailures[0];
+            if (propertyFailures.Count == 1 && arityCandidates == 1) throw propertyFailures[0];
             string argTypesStr = string.Join(", ", argTypes);
             throw new TypeCheckException($"No overload matches call with arguments ({argTypesStr}).", tsCode: "TS2769");
         }
@@ -1740,9 +1757,12 @@ public partial class TypeChecker
         List<TypeInfo> argTypes = hasTupleRest ? CheckGenericInferenceArguments(call.Arguments) : call.Arguments.Select(arg =>
             arg is Expr.Spread spread ? CheckExpr(spread.Expression) : CheckExpr(arg)).ToList();
         List<TypeInfo.Function> matches = [];
+        HashSet<TypeInfo.Function> genericMatches = new(ReferenceEqualityComparer.Instance);
         Dictionary<TypeInfo.Function, TypeInfo.GenericFunction> tupleCandidates = new(ReferenceEqualityComparer.Instance);
         List<TypeCheckException> tupleFailures = [];
-        var tupleArityArguments = hasTupleRest ? GenericTupleCallArguments(call, argTypes) : null;
+        List<TypeCheckException> propertyFailures = [];
+        var tupleArityArguments = hasTupleRest || !call.Arguments.Any(argument => argument is Expr.Spread)
+            ? GenericTupleCallArguments(call, argTypes) : null;
         int arityCandidates = 0;
         if (tupleArityArguments is not null)
             foreach (var candidate in overloadSet.Signatures)
@@ -1769,10 +1789,12 @@ public partial class TypeChecker
                     _ => null,
                 };
                 if (signature is not null) RecordEditorInvocationInstantiation(Original(candidate), signature);
+                if (signature is not null && candidate is TypeInfo.GenericFunction) genericMatches.Add(signature);
                 if (signature is not null && HasTupleRestParameter(signature))
                 {
                     validatingTuple = true;
-                    CheckGenericTupleRestCall(call, signature, GenericTupleCallArguments(call, argTypes), contextualizeCallbacks: false);
+                    CheckGenericTupleRestCall(call, signature, GenericTupleCallArguments(call, argTypes), contextualizeCallbacks: false,
+                        reportCallbackProperties: candidate is not TypeInfo.GenericFunction || call.TypeArgs is { Count: > 0 });
                     if (candidate is TypeInfo.GenericFunction tupleGeneric) tupleCandidates[signature] = tupleGeneric;
                     matches.Add(signature);
                     continue;
@@ -1792,11 +1814,16 @@ public partial class TypeChecker
             {
                 matches.Add(signature);
             }
+            else if (signature is not null && (candidate is not TypeInfo.GenericFunction || call.TypeArgs is { Count: > 0 }) &&
+                tupleArityArguments is not null && GenericTupleCallArityCouldMatch(signature, tupleArityArguments) &&
+                GetCallCallbackPropertyError(call, signature, argTypes) is { } propertyError)
+                propertyFailures.Add(propertyError);
         }
 
         if (matches.Count == 0)
         {
             if (tupleFailures.Count == 1 && arityCandidates == 1) throw tupleFailures[0];
+            if (propertyFailures.Count == 1 && arityCandidates == 1) throw propertyFailures[0];
             string rendered = string.Join(", ", argTypes);
             throw new TypeCheckException(
                 $"No overload matches call with arguments ({rendered}).", tsCode: "TS2769");
@@ -1821,7 +1848,8 @@ public partial class TypeChecker
         {
             ContextualizeGenericCallArguments(call.Arguments, bestMatch.ParamTypes);
             argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
-            CheckInstantiatedGenericCallArguments(call, bestMatch, argTypes);
+            CheckInstantiatedGenericCallArguments(call, bestMatch, argTypes,
+                reportCallbackProperties: !genericMatches.Contains(bestMatch) || call.TypeArgs is { Count: > 0 });
         }
         RecordEditorInvocationSelection(bestMatch);
         return bestMatch.ReturnType;
