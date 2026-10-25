@@ -1477,6 +1477,14 @@ public partial class TypeChecker
         }
     }
 
+    private static bool? LiteralLoopConditionTruthiness(Expr condition)
+    {
+        while (condition is Expr.Grouping grouping) condition = grouping.Expression;
+        // A flow-narrowed binding can change on the next iteration. TypeScript's
+        // special always/never-entered loop edges come from boolean literal syntax.
+        return condition is Expr.Literal { Value: bool value } ? value : null;
+    }
+
     internal VoidResult VisitWhile(Stmt.While stmt)
     {
         CheckExpr(stmt.Condition);
@@ -1496,14 +1504,14 @@ public partial class TypeChecker
         {
             RestoreDefiniteAssignmentState(incomingAssignments);
         }
-        if (CheckedConditionTruthiness(stmt.Condition) == false)
+        bool? loopTruth = LiteralLoopConditionTruthiness(stmt.Condition);
+        if (loopTruth == false)
         {
             RestoreValueFlow(incomingFlow);
             RestoreTryValueWrites(tryWrites);
             RestoreValueFlowJumps(flowJumps);
         }
-        else JoinLoopValueFlow(incomingFlow, bodyFlow, CheckedConditionTruthiness(stmt.Condition) != true,
-            CheckedConditionTruthiness(stmt.Condition) == true);
+        else JoinLoopValueFlow(incomingFlow, bodyFlow, loopTruth != true, loopTruth == true);
         ApplyLoopExitNarrowings(conditionNarrowings);
         return VoidResult.Instance;
     }
@@ -1573,13 +1581,14 @@ public partial class TypeChecker
         {
             RestoreDefiniteAssignmentState(incomingAssignments);
         }
-        if (stmt.Condition is not null && CheckedConditionTruthiness(stmt.Condition) == false)
+        bool? loopTruth = stmt.Condition is null ? true : LiteralLoopConditionTruthiness(stmt.Condition);
+        if (loopTruth == false)
         {
             RestoreValueFlow(incomingFlow);
             RestoreTryValueWrites(tryWrites);
             RestoreValueFlowJumps(flowJumps);
         }
-        else if (stmt.Condition is null || CheckedConditionTruthiness(stmt.Condition) == true)
+        else if (loopTruth == true)
             JoinLoopValueFlow(incomingFlow, bodyFlow, canSkip: false, alwaysTrue: true);
         else JoinLoopValueFlow(incomingFlow, bodyFlow, canSkip: true);
         ApplyLoopExitNarrowings(conditionNarrowings);
