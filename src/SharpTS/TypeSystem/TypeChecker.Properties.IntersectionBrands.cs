@@ -12,9 +12,20 @@ public partial class TypeChecker
     private sealed record IntersectionWriteBrandShape(
         Dictionary<string, List<IntersectionWriteBrand>> Members, bool Impossible = false);
 
-    private static bool InterfaceHasNominalIntersectionMembers(TypeInfo.Interface type) =>
-        type.GetAllMembers().Any(member => TryGetInterfaceMemberBrand(type, member.Key, out var access, out _) &&
-            access != AccessModifier.Public);
+    private static bool InterfaceHasNominalIntersectionMembers(TypeInfo.Interface type)
+    {
+        Stack<TypeInfo.Interface> pending = new();
+        HashSet<TypeInfo.Interface> visited = new(ReferenceEqualityComparer.Instance);
+        pending.Push(type);
+        while (pending.TryPop(out var current))
+        {
+            if (!visited.Add(current)) continue;
+            if (current.ClassOrigin is not null || current.MemberBrands?.Values.Any(brand => brand.Access != AccessModifier.Public) == true)
+                return true;
+            foreach (var parent in current.Extends ?? []) pending.Push(parent);
+        }
+        return false;
+    }
 
     private bool HasImpossibleIntersectionWriteBrands(TypeInfo type)
     {
@@ -77,6 +88,8 @@ public partial class TypeChecker
                 if (current is TypeInfo.Record record)
                     foreach (string name in record.Fields.Keys) declarations[name] = [new()];
                 else if (current is TypeInfo.Interface iface)
+                {
+                    if (iface.ClassOrigin is { } origin) return Shape(new TypeInfo.Instance(origin));
                     foreach (string name in iface.GetAllMembers().Select(member => member.Key).Distinct(StringComparer.Ordinal))
                     {
                         TryGetInterfaceMemberBrand(iface, name, out var access, out int owner);
@@ -84,6 +97,22 @@ public partial class TypeChecker
                         if (access != AccessModifier.Private || owner != 0)
                             declarations[name] = [access == AccessModifier.Private ? new(owner) : new()];
                     }
+                    foreach (var parent in iface.Extends ?? [])
+                    {
+                        var inherited = Shape(parent);
+                        if (inherited.Impossible) return inherited;
+                        foreach (var (name, brands) in inherited.Members)
+                        {
+                            if (!declarations.TryGetValue(name, out var existing)) declarations[name] = brands;
+                            else
+                            {
+                                var common = existing.Where(brand => brands.Any(other => SameBrand(brand, other))).ToList();
+                                if (common.Count == 0) return new([], true);
+                                declarations[name] = common;
+                            }
+                        }
+                    }
+                }
                 else
                 {
                     TypeInfo classType = current is TypeInfo.Instance instance ? instance.ResolvedClassType : current;

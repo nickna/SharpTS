@@ -11,6 +11,9 @@ public sealed class IntersectionWritePrivateBrandTests
     {
         foreach (var (source, code) in new (string, string)[]
         {
+            ("class A{get value():number{return 1;} set value(next:number|string){}} interface I extends A{} function write<T>(box:T&Readonly<I>){box.value=1;}", "TS2540"),
+            ("class A{get value():number{return 1;} set value(next:number|string){}} interface I extends A{} function write<T>(box:T&Readonly<I>&{value:number}){box.value=2;}", ""),
+            ("class A{get value():number{return 1;}} interface I extends A{} function write<T>(box:T&I&{value:number}){box.value=2;}", ""),
             ("class A{private value=1;} interface I extends A{} function write<T>(box:T&I){box.value=2;}", "TS2341"),
             ("class A{protected value=1;} interface I extends A{} function write<T>(box:T&I){box.value=2;}", "TS2445"),
             ("class A{protected value=1;} class B extends A{write<T>(box:T&I){box.value=2;}} interface I extends A{}", "TS2446"),

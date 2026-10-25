@@ -544,6 +544,16 @@ public partial class TypeChecker
                     {
                         extendsList.Add(extendInterface);
                     }
+                    else if (extendType is TypeInfo.Instance { ClassType: TypeInfo.MutableClass origin })
+                    {
+                        // Retain the exact preregistered class shell. Its field/accessor surface
+                        // is populated before deferred method bodies are checked; freezing an
+                        // empty member dictionary here would lose that source-owned publication.
+                        extendsList.Add(new TypeInfo.Interface(origin.Name, FrozenDictionary<string, TypeInfo>.Empty,
+                            FrozenSet<string>.Empty) { ClassOrigin = origin });
+                    }
+                    else if ((extendType is TypeInfo.Instance instance ? instance.ResolvedClassType : extendType) is TypeInfo.Class originClass)
+                        extendsList.Add(ClassAsInterfaceBase(originClass));
                 }
                 catch
                 {
