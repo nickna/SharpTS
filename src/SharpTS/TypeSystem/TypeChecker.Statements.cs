@@ -32,7 +32,8 @@ public partial class TypeChecker
             ? EnterEditorLexicalScope(stmt, EditorSyntaxRole.Whole) : null;
         if (EditorFacts.IsEnabled) BeginEditorDeclaration(stmt);
         DispatchStmt(stmt);
-        if (stmt is Stmt.Return) RecordReturnedValueFlow();
+        RecordLoopValueDeclaration(stmt);
+        if (stmt is Stmt.Return returned) RecordReturnedValueFlow(returned.Value);
         if (EditorFacts.IsEnabled) CompleteEditorDeclaration(stmt);
     }
 
@@ -1132,6 +1133,7 @@ public partial class TypeChecker
             GetTypeofDefiniteAssignmentAssumptions(stmt.Condition);
         var incomingAssignments = SnapshotDefiniteAssignmentState();
         var incomingFlow = CaptureValueFlow();
+        var loopGuards = AnalyzeLoopExitGuards(stmt.Condition);
         ValueFlowState? thenFlow = null;
         ValueFlowState? elseFlow = null;
         Dictionary<BindingSymbol, bool>? thenAssignments = null;
@@ -1143,6 +1145,7 @@ public partial class TypeChecker
             var jumps = CaptureValueFlowJumps();
             RestoreValueFlow(incomingFlow);
             using var branchScope = new EnvironmentScope(this, new TypeEnvironment(_environment));
+            ApplyLoopExitGuards(loopGuards?.Then);
             RestoreDefiniteAssignmentState(incomingAssignments);
             bool addedAssumption = thenAssignmentAssumption != null &&
                 _definiteAssignmentReadAssumptions.Add(thenAssignmentAssumption);
@@ -1181,6 +1184,7 @@ public partial class TypeChecker
             var jumps = CaptureValueFlowJumps();
             RestoreValueFlow(incomingFlow);
             using var branchScope = new EnvironmentScope(this, new TypeEnvironment(_environment));
+            ApplyLoopExitGuards(loopGuards?.Else);
             RestoreDefiniteAssignmentState(incomingAssignments);
             bool addedAssumption = elseAssignmentAssumption != null &&
                 _definiteAssignmentReadAssumptions.Add(elseAssignmentAssumption);
@@ -1224,6 +1228,7 @@ public partial class TypeChecker
                 ? CollectDisjunctGuards(stmt.Condition)
                 : compoundGuards.Count == 1 ? compoundGuards : [];
             missingElseFlow = ExcludedValueFlow(incomingFlow, falseGuards);
+            missingElseFlow = ApplyLoopExitGuards(missingElseFlow, loopGuards?.Else);
         }
 
         if (compoundGuards.Count > 0)
@@ -1294,9 +1299,11 @@ public partial class TypeChecker
             }
         }
 
-        var guardedExit = CaptureValueFlow();
         bool thenTerminates = AlwaysTerminates(stmt.ThenBranch);
         bool elseTerminates = stmt.ElseBranch is not null && AlwaysTerminates(stmt.ElseBranch);
+        if (thenTerminates && !elseTerminates) ApplyLoopExitGuards(loopGuards?.Else);
+        else if (elseTerminates && !thenTerminates) ApplyLoopExitGuards(loopGuards?.Then);
+        var guardedExit = CaptureValueFlow();
         var checkedThen = thenFlow ?? incomingFlow;
         var checkedElse = elseFlow ?? missingElseFlow;
         switch (CheckedConditionTruthiness(stmt.Condition))
@@ -1552,13 +1559,21 @@ public partial class TypeChecker
         var conditionWrites = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
             new Stmt.Expression(stmt.Condition), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
         var incomingFlow = CaptureValueFlow();
-        var bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings: null, conditionAssignedPaths: conditionWrites);
+        // tsc's do-loop flow recognizes the written true keyword here; grouping
+        // and numeric truthy expressions retain its conservative continuing edge.
+        LoopValueDomain? domain = stmt.Condition is Expr.Literal { Value: true }
+            ? BeginLoopValueDomain(incomingFlow) : null;
+        ValueFlowLoopExit bodyFlow;
+        try { bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings: null, conditionAssignedPaths: conditionWrites); }
+        finally { if (domain is not null) _loopValueDomains.Pop(); }
         bool conditionRuns = ApplyLoopContinuingValueFlow(incomingFlow, bodyFlow);
         var tryWrites = CaptureTryValueWrites();
         CheckExpr(stmt.Condition);
         var conditionExit = CaptureValueFlow();
         if (!conditionRuns) RestoreTryValueWrites(tryWrites);
-        JoinLoopValueFlow(incomingFlow, bodyFlow with
+        if (domain is not null && bodyFlow.Breaks.Length > 0)
+            JoinValueFlow(incomingFlow, LiteralTrueDoWhileExits(domain, bodyFlow));
+        else JoinLoopValueFlow(incomingFlow, bodyFlow with
         {
             Body = conditionExit,
             Continues = [],

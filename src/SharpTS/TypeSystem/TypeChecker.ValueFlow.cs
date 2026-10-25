@@ -23,11 +23,11 @@ public partial class TypeChecker
         return false;
     }
 
-    private sealed record ValueFlowBinding(string Name, BindingSymbol Symbol, TypeInfo Type);
+    private sealed record ValueFlowBinding(string Name, BindingSymbol Symbol, TypeInfo Type, LoopWrittenOrigin[]? LoopWrites = null);
     private sealed record ValueFlowEnvironment(TypeEnvironment Environment, Dictionary<string, ValueFlowBinding> Locals);
     private sealed record ValueFlowState(List<ValueFlowEnvironment> Environments,
         Dictionary<BindingSymbol, ValueFlowBinding> Bindings, ValueFlowReturns? ReturnOwner,
-        ValueFlowState[] Returns);
+        ValueFlowState[] Returns, LoopOriginSnapshot[] LoopOrigins);
     private sealed class ValueFlowReturns(int depth)
     {
         internal int Depth { get; } = depth;
@@ -86,11 +86,12 @@ public partial class TypeChecker
         foreach (var symbol in bindings.Keys.ToArray())
             if (!tracked.Contains(symbol)) bindings.Remove(symbol);
         _valueFlowReturns.TryPeek(out var returns);
-        return new(environments, bindings, returns, returns?.Exits.ToArray() ?? []);
+        return new(environments, bindings, returns, returns?.Exits.ToArray() ?? [], CaptureLoopValueOrigins());
     }
 
     private void RestoreValueFlow(ValueFlowState state)
     {
+        RestoreLoopValueOrigins(state);
         if (_valueFlowReturns.TryPeek(out var returns) && ReferenceEquals(returns, state.ReturnOwner))
         {
             returns.Exits.Clear();
@@ -117,6 +118,7 @@ public partial class TypeChecker
 
     private void ApplyValueFlow(ValueFlowState state)
     {
+        RestoreLoopValueOrigins(state);
         foreach (var binding in state.Bindings.Values)
             if (ReferenceEquals(_environment.GetValueBinding(binding.Name), binding.Symbol))
                 _environment.Define(binding.Name, binding.Type);
@@ -126,6 +128,7 @@ public partial class TypeChecker
     {
         RestoreValueFlow(incoming);
         if (exits.Length == 0) return;
+        JoinLoopValueOrigins(incoming, exits);
         if (_valueFlowReturns.TryPeek(out var returns) && ReferenceEquals(returns, incoming.ReturnOwner))
         {
             HashSet<ValueFlowState> returned = new(returns.Exits, ReferenceEqualityComparer.Instance);
@@ -196,10 +199,14 @@ public partial class TypeChecker
         }
     }
 
-    private void RecordReturnedValueFlow()
+    private void RecordReturnedValueFlow(SharpTS.Parsing.Expr? value)
     {
         if (_valueFlowReturns.TryPeek(out var returns) && returns.Depth == _definiteAssignmentStack.Count)
-            returns.Exits.Add(CaptureValueFlow());
+        {
+            var state = CaptureValueFlow();
+            RecordLoopReturnValue(state, value);
+            returns.Exits.Add(state);
+        }
     }
 
     private ValueFlowReturns BeginArrowValueFlow()
@@ -215,6 +222,7 @@ public partial class TypeChecker
         var exits = returns.Exits.ToList();
         if (arrow.ExpressionBody is not null || arrow.BlockBody is null || !arrow.BlockBody.Any(AlwaysTerminates))
             exits.Add(CaptureValueFlow());
+        RecordLoopArrowReturnValues(arrow, exits);
         JoinValueFlow(returns.Entry, exits.ToArray());
         _arrowExitValueFlows.AddOrUpdate(arrow, CaptureValueFlow());
         _valueFlowReturns.Pop();
@@ -259,13 +267,13 @@ public partial class TypeChecker
         };
         if (target is not null && _environment.GetValueBinding(target.Lexeme) is { } symbol &&
             writes.Incoming.Bindings.ContainsKey(symbol) && _environment.Get(target.Lexeme) is { } type)
-            AddTryValueWrite(writes, new(target.Lexeme, symbol, type));
+            AddTryValueWrite(writes, new(target.Lexeme, symbol, type, CaptureLoopWrittenOrigins(symbol)));
         else if (expression is SharpTS.Parsing.Expr.Call or SharpTS.Parsing.Expr.ClassExpr)
             foreach (var binding in CaptureValueFlow().Bindings.Values)
                 if (writes.Incoming.Bindings.TryGetValue(binding.Symbol, out var incoming) &&
                     !ReferenceEquals(incoming.Type, binding.Type) &&
                     !TypeInfoEqualityComparer.Instance.Equals(incoming.Type, binding.Type))
-                    AddTryValueWrite(writes, binding);
+                    AddTryValueWrite(writes, binding with { LoopWrites = CaptureLoopWrittenOrigins(binding.Symbol) });
     }
 
     private static void AddTryValueWrite(ValueFlowTryWrites writes, ValueFlowBinding binding)
@@ -274,7 +282,8 @@ public partial class TypeChecker
         // Those writes belong to the inner scope and cannot enter the parent's catch flow.
         if (!writes.Incoming.Bindings.ContainsKey(binding.Symbol)) return;
         if (writes.Writes.TryGetValue(binding.Symbol, out var previous))
-            binding = binding with { Type = CreateUnion(previous.Type, binding.Type) };
+            binding = binding with { Type = CreateUnion(previous.Type, binding.Type),
+                LoopWrites = MergeLoopWrittenOrigins(previous.LoopWrites, binding.LoopWrites) };
         writes.Writes[binding.Symbol] = binding;
     }
 
@@ -283,7 +292,7 @@ public partial class TypeChecker
         var bindings = new Dictionary<BindingSymbol, ValueFlowBinding>(writes.Incoming.Bindings, ReferenceEqualityComparer.Instance);
         foreach (var (symbol, binding) in writes.Writes)
             bindings[symbol] = binding with { Type = CreateUnion(bindings[symbol].Type, binding.Type) };
-        return writes.Incoming with { Bindings = bindings };
+        return writes.Incoming with { Bindings = bindings, LoopOrigins = ExceptionLoopOrigins(writes) };
     }
 
     private (ValueFlowTarget Target, int Breaks, int Continues)[] CaptureValueFlowJumps() =>
@@ -331,9 +340,11 @@ public partial class TypeChecker
         JoinValueFlow(incoming, exits.ToArray());
     }
 
-    private TypeInfo CheckValueFlowExpression(SharpTS.Parsing.Expr expression, TypeInfo? contextualType, out ValueFlowState exit)
+    private TypeInfo CheckValueFlowExpression(SharpTS.Parsing.Expr expression, TypeInfo? contextualType,
+        out ValueFlowState exit, LoopGuardFact[]? loopGuards = null)
     {
         using var branch = new EnvironmentScope(this, new TypeEnvironment(_environment));
+        ApplyLoopExitGuards(loopGuards);
         var result = CheckExprWithContext(expression, contextualType);
         exit = CaptureValueFlow();
         return result;
