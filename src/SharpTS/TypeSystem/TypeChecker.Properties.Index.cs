@@ -804,7 +804,8 @@ public partial class TypeChecker
         if (objType is TypeInfo.Intersection intersection && TryGetLiteralPropertyKeys(indexType, out var writeKeys))
         {
             var target = IntersectionWriteTarget(intersection, writeKeys,
-                TryGetExprLine(setIndex.Index) ?? 0, enforceAccessibility: false, missingCode: "TS7053");
+                TryGetExprLine(setIndex.Index) ?? TryGetExprLine(setIndex.Object) ?? _currentStatementLine ?? 0,
+                enforceAccessibility: false, missingCode: "TS7053");
             objType = target;
             intersectionWriteContext = SimplifyIntersection(target.Fields.Values.Distinct(TypeInfoEqualityComparer.Instance).ToList());
         }
