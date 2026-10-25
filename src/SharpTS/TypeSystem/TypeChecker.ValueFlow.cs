@@ -255,6 +255,9 @@ public partial class TypeChecker
 
     private static void AddTryValueWrite(ValueFlowTryWrites writes, ValueFlowBinding binding)
     {
+        // An inner try can declare bindings that never existed at the parent's entry.
+        // Those writes belong to the inner scope and cannot enter the parent's catch flow.
+        if (!writes.Incoming.Bindings.ContainsKey(binding.Symbol)) return;
         if (writes.Writes.TryGetValue(binding.Symbol, out var previous))
             binding = binding with { Type = CreateUnion(previous.Type, binding.Type) };
         writes.Writes[binding.Symbol] = binding;
