@@ -708,6 +708,9 @@ public partial class TypeChecker
             return;
         }
         if (receiver is not TypeInfo.Interface { ReadonlyNumberIndex: true } itf) return;
+        // TypeScript keeps writes through an unresolved generic key admissible here,
+        // even when its constraint is number; do not classify the constraint as the key.
+        if (index is TypeInfo.TypeParameter) return;
         if (index is TypeInfo.Union keys)
         {
             foreach (var key in keys.FlattenedTypes) EnsureWritableInterfaceNumberIndex(itf, key, syntax);

@@ -57,15 +57,8 @@ public partial class TypeChecker
         // Handle intersections: Partial<A & B> -> merge properties then make optional
         if (sourceType is TypeInfo.Intersection intersection)
         {
-            var mergedProps = new Dictionary<string, TypeInfo>();
-            foreach (var t in intersection.FlattenedTypes)
-            {
-                foreach (var (key, value) in ExtractPropertiesWithTypes(t))
-                    mergedProps[key] = value;
-            }
-            if (mergedProps.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
-            return new TypeInfo.Interface("", mergedProps.ToFrozenDictionary(), mergedProps.Keys.ToFrozenSet(),
-                ReadonlyMembers: ExtractReadonlyProperties(sourceType).ToFrozenSet());
+            var shape = ExtractUtilityIntersectionShape(intersection);
+            return shape with { OptionalFields = shape.Fields.Keys.ToFrozenSet(StringComparer.Ordinal) };
         }
 
         // Otherwise, expand immediately
@@ -106,15 +99,7 @@ public partial class TypeChecker
         // Handle intersections
         if (sourceType is TypeInfo.Intersection intersection)
         {
-            var mergedProps = new Dictionary<string, TypeInfo>();
-            foreach (var t in intersection.FlattenedTypes)
-            {
-                foreach (var (key, value) in ExtractPropertiesWithTypes(t))
-                    mergedProps[key] = value;
-            }
-            if (mergedProps.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
-            return new TypeInfo.Record(mergedProps.ToFrozenDictionary(),
-                ReadonlyFields: ExtractReadonlyProperties(sourceType).ToFrozenSet(StringComparer.Ordinal));
+            return ExtractUtilityIntersectionShape(intersection) with { OptionalFields = null };
         }
 
         var props = ExtractPropertiesWithTypes(sourceType);
@@ -146,7 +131,11 @@ public partial class TypeChecker
         }
 
         if (ExtractUtilityClassShape(sourceType) is { } classShape)
+        {
+            if (classShape.NumberIndexType is not null)
+                return RecordAsInterfaceBase("", classShape with { IsReadonly = true });
             sourceType = classShape;
+        }
 
         // Preserve index signatures even when there are no named properties. Readonly<Dict>
         // remains a readonly string-indexed object; collapsing it to `{}` loses both the key
@@ -185,21 +174,7 @@ public partial class TypeChecker
         // Handle intersections
         if (sourceType is TypeInfo.Intersection intersection)
         {
-            var mergedProps = new Dictionary<string, TypeInfo>();
-            var mergedOptionals = new HashSet<string>();
-            foreach (var t in intersection.FlattenedTypes)
-            {
-                var part = ExtractUtilityClassShape(t) ?? t;
-                foreach (var (key, value) in ExtractPropertiesWithTypes(part))
-                    mergedProps[key] = value;
-                foreach (var opt in ExtractOptionalProperties(part))
-                    mergedOptionals.Add(opt);
-            }
-            if (mergedProps.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
-            return mergedOptionals.Count > 0
-                ? new TypeInfo.Interface("", mergedProps.ToFrozenDictionary(), mergedOptionals.ToFrozenSet(),
-                    ReadonlyMembers: mergedProps.Keys.ToFrozenSet(StringComparer.Ordinal))
-                : new TypeInfo.Record(mergedProps.ToFrozenDictionary(), IsReadonly: true);
+            return ExtractUtilityIntersectionShape(intersection) with { IsReadonly = true };
         }
 
         var props = ExtractPropertiesWithTypes(sourceType);
@@ -337,6 +312,9 @@ public partial class TypeChecker
             );
         }
 
+        if (sourceType is TypeInfo.Intersection intersection && !IsAbstractTypeReference(intersection))
+            sourceType = ExtractUtilityIntersectionShape(intersection);
+
         // Get the keys to pick
         var keysToPick = ExtractKeyNames(keysType);
         if (keysToPick.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
@@ -363,10 +341,11 @@ public partial class TypeChecker
 
         var pickedReadonly = ExtractReadonlyProperties(sourceType)
             .Where(pickedProps.ContainsKey).ToFrozenSet(StringComparer.Ordinal);
+        var pickedMethods = ExtractUtilityMethodMembers(sourceType).Where(pickedProps.ContainsKey).ToFrozenSet(StringComparer.Ordinal);
         return pickedOptionals.Count > 0
             ? new TypeInfo.Interface("", pickedProps.ToFrozenDictionary(), pickedOptionals.ToFrozenSet(),
-                ReadonlyMembers: pickedReadonly)
-            : new TypeInfo.Record(pickedProps.ToFrozenDictionary(), ReadonlyFields: pickedReadonly);
+                ReadonlyMembers: pickedReadonly, MethodMembers: pickedMethods)
+            : new TypeInfo.Record(pickedProps.ToFrozenDictionary(), ReadonlyFields: pickedReadonly, MethodMembers: pickedMethods);
     }
 
     /// <summary>
@@ -385,6 +364,9 @@ public partial class TypeChecker
                 new TypeInfo.IndexedAccess(sourceType, new TypeInfo.TypeParameter("P"))
             );
         }
+
+        if (sourceType is TypeInfo.Intersection intersection && !IsAbstractTypeReference(intersection))
+            sourceType = ExtractUtilityIntersectionShape(intersection);
 
         // Get the keys to omit
         var keysToOmit = ExtractKeyNames(keysType);
@@ -411,10 +393,11 @@ public partial class TypeChecker
 
         var remainingReadonly = ExtractReadonlyProperties(sourceType)
             .Where(remainingProps.ContainsKey).ToFrozenSet(StringComparer.Ordinal);
+        var remainingMethods = ExtractUtilityMethodMembers(sourceType).Where(remainingProps.ContainsKey).ToFrozenSet(StringComparer.Ordinal);
         return remainingOptionals.Count > 0
             ? new TypeInfo.Interface("", remainingProps.ToFrozenDictionary(), remainingOptionals.ToFrozenSet(),
-                ReadonlyMembers: remainingReadonly)
-            : new TypeInfo.Record(remainingProps.ToFrozenDictionary(), ReadonlyFields: remainingReadonly);
+                ReadonlyMembers: remainingReadonly, MethodMembers: remainingMethods)
+            : new TypeInfo.Record(remainingProps.ToFrozenDictionary(), ReadonlyFields: remainingReadonly, MethodMembers: remainingMethods);
     }
 
     /// <summary>
@@ -878,6 +861,62 @@ public partial class TypeChecker
     private TypeInfo? UtilityPropertyIndexType(TypeInfo type, string name) =>
         (IsUtilityNumericProperty(name) ? NumberIndexOf(type) : null) ?? StringIndexOf(type);
 
+    private static IEnumerable<string> ExtractUtilityMethodMembers(TypeInfo type) => type switch
+    {
+        TypeInfo.Record record => record.MethodMembers ?? FrozenSet<string>.Empty,
+        TypeInfo.Interface itf => itf.GetAllMembers().Select(member => member.Key).Where(itf.IsMethodMember),
+        _ => []
+    };
+
+    /// <summary>
+    /// Projects a concrete intersection's public property surface without replacing its
+    /// nominal class constituents. Duplicate value slots intersect; a required or mutable
+    /// declaration wins over an optional or readonly declaration of the same property.
+    /// </summary>
+    private TypeInfo.Record ExtractUtilityIntersectionShape(TypeInfo.Intersection intersection)
+    {
+        Dictionary<string, TypeInfo> fields = [];
+        HashSet<string> optional = [], required = [], readOnly = [], mutable = [], methods = [], properties = [];
+        TypeInfo? stringIndex = null, numberIndex = null, symbolIndex = null;
+        TypeInfo? MergeIndex(TypeInfo? existing, TypeInfo? next) => existing is null ? next
+            : next is null ? existing : SimplifyIntersection([existing, next]);
+
+        foreach (var constituent in intersection.FlattenedTypes)
+        {
+            TypeInfo part = ExtractUtilityClassShape(constituent) ?? constituent;
+            if (part is TypeInfo.InstantiatedGeneric generic) part = ExpandInstantiatedGenericForKeyOf(generic);
+            var partFields = ExtractPropertiesWithTypes(part);
+            if (part is TypeInfo.Interface nominalInterface)
+                foreach (string name in partFields.Keys.Where(name =>
+                    TryGetInterfaceMemberBrand(nominalInterface, name, out var access, out _) && access != Parsing.AccessModifier.Public).ToList())
+                    partFields.Remove(name);
+            var partOptional = ExtractOptionalProperties(part);
+            var partReadonly = ExtractReadonlyProperties(part);
+            var partMethods = ExtractUtilityMethodMembers(part).ToHashSet(StringComparer.Ordinal);
+            foreach (var (name, type) in partFields)
+            {
+                fields[name] = fields.TryGetValue(name, out var previous) ? SimplifyIntersection([previous, type]) : type;
+                if (partOptional.Contains(name)) optional.Add(name); else required.Add(name);
+                if (partReadonly.Contains(name)) readOnly.Add(name); else mutable.Add(name);
+                if (partMethods.Contains(name)) methods.Add(name); else properties.Add(name);
+            }
+            stringIndex = MergeIndex(stringIndex, StringIndexOf(part));
+            numberIndex = MergeIndex(numberIndex, NumberIndexOf(part));
+            symbolIndex = MergeIndex(symbolIndex, part switch
+            {
+                TypeInfo.Record record => record.SymbolIndexType,
+                TypeInfo.Interface itf => itf.SymbolIndexType,
+                _ => null
+            });
+        }
+        optional.ExceptWith(required);
+        readOnly.ExceptWith(mutable);
+        methods.ExceptWith(properties);
+        return new TypeInfo.Record(fields.ToFrozenDictionary(StringComparer.Ordinal), stringIndex, numberIndex, symbolIndex,
+            OptionalFields: optional.ToFrozenSet(StringComparer.Ordinal), ReadonlyFields: readOnly.ToFrozenSet(StringComparer.Ordinal),
+            MethodMembers: methods.ToFrozenSet(StringComparer.Ordinal));
+    }
+
     /// <summary>
     /// Utility projections expose the public instance surface, including inherited members.
     /// Select the nearest declaration before filtering visibility so a non-public override
@@ -897,7 +936,8 @@ public partial class TypeChecker
         var shape = OrdinaryConstructorInstanceShape(levels, members);
         return shape with
         {
-            ReadonlyFields = members.Where(member => member.Value.DeclaringCore.ReadonlyFields.Contains(member.Key))
+            ReadonlyFields = members.Where(member => member.Value.DeclaringCore.ReadonlyFields.Contains(member.Key)
+                    || member.Value.DeclaringCore.Getters.ContainsKey(member.Key) && !member.Value.DeclaringCore.Setters.ContainsKey(member.Key))
                 .Select(member => member.Key).ToFrozenSet(StringComparer.Ordinal),
             GetterOnlyFields = members.Where(member => member.Value.DeclaringCore.Getters.ContainsKey(member.Key)
                     && !member.Value.DeclaringCore.Setters.ContainsKey(member.Key))
