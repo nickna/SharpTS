@@ -119,6 +119,14 @@ public partial class TypeChecker
             }
             var simplified = SimplifyIntersection(types);
             if (simplified is not TypeInfo.Intersection || --budget < 0) return simplified;
+            // Optional slots add undefined to their read type. It cannot survive an
+            // intersection with a required callable/object slot; two optional slots
+            // still retain their shared undefined branch below.
+            if (types.Any(type => type is TypeInfo.Null or TypeInfo.Undefined) &&
+                types.Any(type => type is TypeInfo.Function or TypeInfo.GenericFunction or TypeInfo.OverloadedFunction
+                    or TypeInfo.OverloadSet or TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance
+                    or TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.Array or TypeInfo.Tuple))
+                return TypeInfo.Never.Shared;
             for (int i = 0; i < types.Count; i++)
                 if (types[i] is TypeInfo.Union union)
                 {

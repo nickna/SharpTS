@@ -81,6 +81,23 @@ public sealed class IntersectionMemberReadAggregationTests
                 const text: string = box.read('ok');
                 """, []),
             ("""
+                class Box { read(input: number): number { return input; } }
+                declare let box: Box & { read?: (input: string) => string };
+                const numeric: number = box.read(1);
+                const text: string = box.read('ok');
+                """, []),
+            ("""
+                class Box { read?: (input: number) => number; }
+                declare let box: Box & { read?: (input: string) => string };
+                box.read(1);
+                """, ["TS2722"]),
+            ("""
+                class Box { read(input: number): number { return input; } }
+                declare let box: Box & { read: unknown };
+                const numeric: number = box.read(1);
+                box.read('wrong');
+                """, ["TS2345"]),
+            ("""
                 class Box { value: number = 1; }
                 function read<T extends Record<string, string>>(box: T & Box): number { return box.value; }
                 function indexed<T extends Record<string, string>>(box: T & Box): number { return box['value']; }
