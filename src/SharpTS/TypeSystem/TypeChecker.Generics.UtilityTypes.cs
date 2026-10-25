@@ -145,6 +145,9 @@ public partial class TypeChecker
             );
         }
 
+        if (ExtractUtilityClassShape(sourceType) is { } classShape)
+            sourceType = classShape;
+
         // Preserve index signatures even when there are no named properties. Readonly<Dict>
         // remains a readonly string-indexed object; collapsing it to `{}` loses both the key
         // domain and the write restriction.
@@ -186,15 +189,17 @@ public partial class TypeChecker
             var mergedOptionals = new HashSet<string>();
             foreach (var t in intersection.FlattenedTypes)
             {
-                foreach (var (key, value) in ExtractPropertiesWithTypes(t))
+                var part = ExtractUtilityClassShape(t) ?? t;
+                foreach (var (key, value) in ExtractPropertiesWithTypes(part))
                     mergedProps[key] = value;
-                foreach (var opt in ExtractOptionalProperties(t))
+                foreach (var opt in ExtractOptionalProperties(part))
                     mergedOptionals.Add(opt);
             }
             if (mergedProps.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
             return mergedOptionals.Count > 0
-                ? new TypeInfo.Interface("", mergedProps.ToFrozenDictionary(), mergedOptionals.ToFrozenSet())
-                : new TypeInfo.Record(mergedProps.ToFrozenDictionary());
+                ? new TypeInfo.Interface("", mergedProps.ToFrozenDictionary(), mergedOptionals.ToFrozenSet(),
+                    ReadonlyMembers: mergedProps.Keys.ToFrozenSet(StringComparer.Ordinal))
+                : new TypeInfo.Record(mergedProps.ToFrozenDictionary(), IsReadonly: true);
         }
 
         var props = ExtractPropertiesWithTypes(sourceType);
@@ -202,11 +207,10 @@ public partial class TypeChecker
 
         if (props.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
 
-        // Note: Readonly modifier is semantic - affects assignment checks
-        // The actual enforcement would be at assignment validation time
         return optionals.Count > 0
-            ? new TypeInfo.Interface("", props.ToFrozenDictionary(), optionals.ToFrozenSet())
-            : new TypeInfo.Record(props.ToFrozenDictionary());
+            ? new TypeInfo.Interface("", props.ToFrozenDictionary(), optionals.ToFrozenSet(),
+                ReadonlyMembers: props.Keys.ToFrozenSet(StringComparer.Ordinal))
+            : new TypeInfo.Record(props.ToFrozenDictionary(), IsReadonly: true);
     }
 
     /// <summary>
