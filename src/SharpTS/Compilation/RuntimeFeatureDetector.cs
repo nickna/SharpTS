@@ -2600,6 +2600,12 @@ public sealed partial class RuntimeFeatureDetector
                 if (record.SymbolIndexType is not null)
                     MarkPotentiallyMaterialized(record.SymbolIndexType, visited);
                 break;
+            case TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface } instantiated:
+                if (TryProjectMaterializationInterface(instantiated, out var projected))
+                    MarkPotentiallyMaterialized(projected, visited);
+                else
+                    _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
+                break;
             case TypeInfo.Interface itf:
                 RecordStructuralMaterializationView(itf);
                 foreach (var member in itf.Members.Values)
