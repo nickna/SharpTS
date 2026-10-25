@@ -460,8 +460,9 @@ public partial class TypeChecker
         if (call.Construct) return EvaluateLoopConstructor(callee, call, arguments, fallback);
         var functions = callee is TypeInfo.Union union ? union.FlattenedTypes : [callee];
         List<TypeInfo> results = [];
-        foreach (var function in functions)
+        foreach (var sourceFunction in functions)
         {
+            var function = LoopCallableDomainSignature(sourceFunction);
             if (function is TypeInfo.Function ordinary) results.Add(ordinary.ReturnType);
             else if (function is TypeInfo.GenericFunction generic)
             {
@@ -479,6 +480,41 @@ public partial class TypeChecker
             else return fallback;
         }
         return UnionLoopDomainTypes(results);
+    }
+
+    private TypeInfo LoopCallableDomainSignature(TypeInfo type)
+    {
+        var signatures = type switch
+        {
+            TypeInfo.Record record => record.CallSignatures,
+            TypeInfo.Interface iface => CallableObjectSignatures(iface),
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface generic } => CallableObjectSignatures(generic),
+            _ => null
+        };
+        if (signatures is not [{ } signature]) return type;
+        if (type is TypeInfo.InstantiatedGeneric instance)
+        {
+            var substitutions = GenericInterfaceSubs((TypeInfo.GenericInterface)instance.GenericDefinition, instance.TypeArguments)
+                .Where(pair => signature.TypeParams is null || signature.TypeParams.All(parameter => parameter.Name != pair.Key))
+                .ToDictionary(StringComparer.Ordinal);
+            signature = CopyEditorSignatureMetadata(signature, signature with
+            {
+                TypeParams = signature.TypeParams?.Select(parameter => parameter with
+                {
+                    Constraint = parameter.Constraint is null ? null : SubstitutePreservingSignatures(parameter.Constraint, substitutions),
+                    Default = parameter.Default is null ? null : SubstitutePreservingSignatures(parameter.Default, substitutions)
+                }).ToList(),
+                ParamTypes = signature.ParamTypes.Select(parameter => SubstitutePreservingSignatures(parameter, substitutions)).ToList(),
+                ReturnType = SubstitutePreservingSignatures(signature.ReturnType, substitutions)
+            });
+        }
+        // This is the same declaration-owned call surface as the ordinary adapter,
+        // projected only as types. Do not publish an invocation or choose a candidate.
+        return CopyEditorSignatureMetadata(signature, signature.IsGeneric
+            ? (TypeInfo)new TypeInfo.GenericFunction(signature.TypeParams!, signature.ParamTypes, signature.ReturnType,
+                signature.RequiredParams, signature.HasRestParam, ParamNames: signature.ParamNames)
+            : new TypeInfo.Function(signature.ParamTypes, signature.ReturnType, signature.RequiredParams,
+                signature.HasRestParam, ParamNames: signature.ParamNames));
     }
 
     private TypeInfo EvaluateLoopConstructor(TypeInfo callee, LoopCallValue call, List<TypeInfo> arguments, TypeInfo fallback)
