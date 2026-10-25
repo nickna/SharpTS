@@ -40,6 +40,12 @@ public sealed class NormalizedCallableArityTests
             ("declare const f:{<T>():T;tag:string};const value:number=f<number>();", []),
             ("declare const f:{<T>(value:T):T;tag:string};const value:number=f(...[1]);", []),
             ("declare const f:{<T>(value:T,...rest:T[]):T;tag:string};declare const values:number[];const value:number=f(1,...values);", []),
+            ("interface Callable{<T>(value:T,...rest:number[]):void;}declare const f:Callable;declare const values:number[];f(1,...values,'wrong');", ["TS2345"]),
+            ("interface Callable{<T>(value:T,...rest:number[]):void;}declare const f:Callable;declare const values:number[];declare const wrong:string[];f(1,...values,...wrong);", ["TS2345"]),
+            ("declare const f:{<T>(value:T,...rest:number[]):void;tag:string};declare const values:number[];f(1,...values,'wrong');", ["TS2345"]),
+            ("declare const f:{<T>(value:T,...rest:number[]):void;tag:string};declare const values:number[];declare const wrong:string[];f(1,...values,...wrong);", ["TS2345"]),
+            ("interface Callable{<T>(value:T,...rest:number[]):void;}declare const f:Callable;declare const values:number[];f(1,...values,2,...values,3);", []),
+            ("declare const f:{<T>(value:T,...rest:number[]):void;tag:string};declare const values:number[];f(1,...values,2,...values,3);", []),
         })
             foreach (bool modules in new[] { false, true }) yield return [source, codes, modules];
     }
@@ -71,6 +77,27 @@ public sealed class NormalizedCallableArityTests
         Assert.Equal(first.OriginalSignatureId, rejected.OriginalSignatureId);
         if (first.Origin is { } sourceOrigin) Assert.Same(sourceOrigin.Owner, rejected.Origin!.Owner);
         else Assert.Null(rejected.Origin);
+        Assert.True(rejected.Declared.IsAvailable);
+        Assert.Null(calls[1].SelectedOrdinal);
+    }
+
+    [Fact]
+    public void ArgumentAfterRestSpreadKeepsTheCheckedCandidateWithoutPublishingASelection()
+    {
+        const string source = "interface Callable{<T>(value:T,...rest:number[]):void;}declare const f:Callable;declare const values:number[];f(1,...values,2);f(1,...values,'wrong');";
+        var document = new SourceDocument("normalized-callable-rest-spread.ts", source);
+        var statements = new Parser(new Lexer(source).ScanTokens()).WithSourceDocument(document).WithEditorSyntax().ParseOrThrow();
+        var checker = new TypeChecker(TypeCheckerOptions.Strict).WithEditorMetadata();
+        Assert.Equal("TS2345", Assert.Single(checker.CheckWithRecovery(statements, document).Diagnostics).TsCode);
+        var facts = checker.EditorFacts.Freeze();
+        Assert.Equal(2, facts.Invocations.Count);
+        var calls = document.EditorSyntax!.Invocations.Select(invocation =>
+            Assert.IsType<EditorInvocationFact>(facts.GetInvocation(document, invocation.Owner))).ToArray();
+        Assert.Equal(EditorInvocationStatus.Selected, calls[0].Status);
+        Assert.Equal(EditorInvocationStatus.CandidatesOnly, calls[1].Status);
+        var valid = Assert.Single(calls[0].Candidates);
+        var rejected = Assert.Single(calls[1].Candidates);
+        Assert.Equal(valid.OriginalSignatureId, rejected.OriginalSignatureId);
         Assert.True(rejected.Declared.IsAvailable);
         Assert.Null(calls[1].SelectedOrdinal);
     }

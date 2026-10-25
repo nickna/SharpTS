@@ -1167,8 +1167,11 @@ public partial class TypeChecker
                         $"Spread argument must be an iterable type (array, iterator, set, map, string, or generator), got '{spreadType}'.",
                         call.Paren.Line, tsCode: "TS2488");
 
-                // An unknown-length spread prevents reliable positional matching afterwards,
-                // as in the ordinary function-call path. Do not treat its array as one argument.
+                // Within an array rest parameter every later argument has the same
+                // element context, regardless of how many values this spread supplies.
+                if (restElement is not null && parameterIndex >= regularCount) continue;
+                // Before that boundary an unknown length prevents reliable positional
+                // matching. Do not treat its array as one argument.
                 return;
             }
 
