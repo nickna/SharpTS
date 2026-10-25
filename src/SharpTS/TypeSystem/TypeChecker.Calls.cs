@@ -59,6 +59,7 @@ public partial class TypeChecker
             _typeMap.Set(call.Callee, extensionMember);
             RecordEditorExpressionType(call.Callee, extensionMember);
         }
+        calleeType = IntersectionCallTarget(calleeType);
         RecordEditorCallCandidates(calleeType, call.Optional);
 
         // Resolve the callee before invalidating receiver-property narrowings. A guard may narrow
