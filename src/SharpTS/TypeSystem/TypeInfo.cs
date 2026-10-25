@@ -657,7 +657,7 @@ public abstract record TypeInfo
                 {
                     foreach (var name in baseInterface.GetAllReadonlyMembers())
                     {
-                        if (ReadonlyMembers == null || !ReadonlyMembers.Contains(name))
+                        if (!Members.ContainsKey(name))
                         {
                             yield return name;
                         }

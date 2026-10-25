@@ -110,14 +110,16 @@ public partial class TypeChecker
                     mergedProps[key] = value;
             }
             if (mergedProps.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
-            return new TypeInfo.Record(mergedProps.ToFrozenDictionary());
+            return new TypeInfo.Record(mergedProps.ToFrozenDictionary(),
+                ReadonlyFields: ExtractReadonlyProperties(sourceType).ToFrozenSet(StringComparer.Ordinal));
         }
 
         var props = ExtractPropertiesWithTypes(sourceType);
         if (props.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
 
         // All properties are required (empty optional set)
-        return new TypeInfo.Record(props.ToFrozenDictionary());
+        return new TypeInfo.Record(props.ToFrozenDictionary(),
+            ReadonlyFields: ExtractReadonlyProperties(sourceType).ToFrozenSet(StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -803,7 +805,7 @@ public partial class TypeChecker
         switch (type)
         {
             case TypeInfo.Interface itf:
-                foreach (var (name, propType) in itf.Members)
+                foreach (var (name, propType) in itf.GetAllMembers())
                     props[name] = propType;
                 break;
 
@@ -892,7 +894,8 @@ public partial class TypeChecker
     {
         TypeInfo.Interface itf => itf.GetAllReadonlyMembers().ToHashSet(StringComparer.Ordinal),
         TypeInfo.Record record => record.Fields.Keys.Where(record.IsFieldReadonly).ToHashSet(StringComparer.Ordinal),
-        TypeInfo.Class cls => [.. cls.ReadonlyFields],
+        TypeInfo.Class cls => cls.ReadonlyFields.Concat(cls.Getters.Keys.Where(name => !cls.Setters.ContainsKey(name)))
+            .ToHashSet(StringComparer.Ordinal),
         TypeInfo.Instance instance => ExtractReadonlyProperties(instance.ResolvedClassType),
         TypeInfo.Intersection intersection => intersection.FlattenedTypes
             .SelectMany(ExtractReadonlyProperties).ToHashSet(StringComparer.Ordinal),
