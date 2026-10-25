@@ -19,7 +19,10 @@ public sealed class StableParameterCaptureFlowTests
             "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;try{}catch(action){action=1;}}}",
             "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;for(let action of [1,2]){action=2;}}}",
             "type Action={kind:'move',layerId:number}|{kind:'other'}; class Reducer{read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;}}}",
-            "type Action={kind:'move',layerId:number}|{kind:'other'}; const Reducer=class{read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;}}};"
+            "type Action={kind:'move',layerId:number}|{kind:'other'}; const Reducer=class{read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;}}};",
+            "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;function shadow(){for(var action of [1,2])action=2;}}}",
+            "type Action={kind:'move',layerId:number}|{kind:'other'}; function read({action}:{action:Action}){if(action.kind==='move'){const callback=()=>action.layerId;}}",
+            "type Action={kind:'move',layerId:number}|{kind:'other'}; const read=({action}:{action:Action})=>{if(action.kind==='move'){const callback=()=>action.layerId;}};"
         })
             foreach (bool modules in new[] { false, true }) yield return [source, modules];
     }
@@ -35,7 +38,8 @@ public sealed class StableParameterCaptureFlowTests
             "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;action={kind:'other'};}}",
             "type Action={kind:'move',layerId:number}|{kind:'other'}; function read(action:Action){if(action.kind==='move'){const callback=()=>action.layerId;function mutate(){action={kind:'other'};}}}",
             "type Action={kind:'move',layerId:number}|{kind:'other'}; let action:Action={kind:'move',layerId:1}; const callback=()=>action.layerId; action={kind:'other'};",
-            "let value:string|number='ok'; const callback=()=>{const wrong:string=value;}; value=1;"
+            "let value:string|number='ok'; const callback=()=>{const wrong:string=value;}; value=1;",
+            "type Action={kind:'move',layerId:number}|{kind:'other'}; function read({action}:{action:Action}){if(action.kind==='move'){const callback=()=>action.layerId;action={kind:'other'};}}"
         })
             foreach (bool modules in new[] { false, true }) yield return [source, modules];
     }

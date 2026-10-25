@@ -14,11 +14,16 @@ public partial class TypeChecker
     {
         Dictionary<string, BindingSymbol> candidates = new(StringComparer.Ordinal);
         foreach (var parameter in parameters)
-            if (_environment.GetLocalValueBinding(parameter.Name.Lexeme) is { } symbol)
+            if (Bindings.GetSymbol(parameter.Name) is { } symbol)
                 candidates[parameter.Name.Lexeme] = symbol;
+        if (body is not null)
+            foreach (var initializer in body.OfType<Stmt.Sequence>().Where(sequence => sequence.ParameterName is not null))
+                foreach (var name in LexicalDeclarationBindings.Collect(initializer.Statements))
+                    if (name.Start >= 0 && _environment.GetLocalValueBinding(name.Lexeme) is { } symbol)
+                        candidates[name.Lexeme] = symbol;
         if (candidates.Count == 0) return;
         var writes = new ParameterCaptureWrites(this, candidates);
-        if (body is not null) writes.VisitBody(body);
+        if (body is not null) writes.VisitBody(body, ownsParameters: true);
         if (expression is not null) writes.Visit(expression);
         foreach (var symbol in candidates.Values)
         {
@@ -66,8 +71,15 @@ public partial class TypeChecker
                 _ => []
             }));
 
-        internal void VisitBody(IReadOnlyList<Stmt> body) =>
-            InScope(LexicalNames(body), () => { foreach (var statement in body) Visit(statement); });
+        internal void VisitBody(IReadOnlyList<Stmt> body, bool ownsParameters = false)
+        {
+            var owned = ownsParameters
+                ? LexicalDeclarationBindings.Collect(body).Where(name => candidates.TryGetValue(name.Lexeme, out var candidate) &&
+                    ReferenceEquals(checker.Bindings.GetSymbol(name), candidate)).Select(name => name.Lexeme).ToHashSet(StringComparer.Ordinal)
+                : [];
+            InScope(LexicalNames(body).Where(name => !owned.Contains(name)),
+                () => { foreach (var statement in body) Visit(statement); });
+        }
 
         private void VisitCallable(IReadOnlyList<Stmt.Parameter> parameters, IReadOnlyList<Stmt>? body,
             Expr? expression, Token? name = null)
@@ -181,6 +193,16 @@ public partial class TypeChecker
             protected override void VisitClass(Stmt.Class statement) { }
             protected override void VisitClassExpr(Expr.ClassExpr expression) { }
             protected override void VisitStaticBlock(Stmt.StaticBlock statement) { }
+            protected override void VisitForOf(Stmt.ForOf statement)
+            {
+                if (statement.IsDeclaration && statement.IsVar) Names.Add(statement.Variable.Lexeme);
+                base.VisitForOf(statement);
+            }
+            protected override void VisitForIn(Stmt.ForIn statement)
+            {
+                if (statement.IsDeclaration && statement.IsVar) Names.Add(statement.Variable.Lexeme);
+                base.VisitForIn(statement);
+            }
         }
     }
 }

@@ -2010,6 +2010,7 @@ public partial class TypeChecker
                 // Likewise hoist the body's own let/const (as `any`) so an inner function declared
                 // before a later block-scoped binding in the same body can forward-reference it (#533).
                 HoistLexicalDeclarations(arrow.BlockBody);
+                RecordStableCaptureParameters(arrow.Parameters, arrow.BlockBody);
 
                 // Block body - check statements
                 CheckStmtList(arrow.BlockBody);
