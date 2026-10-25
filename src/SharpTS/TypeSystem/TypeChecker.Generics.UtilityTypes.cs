@@ -110,14 +110,16 @@ public partial class TypeChecker
                     mergedProps[key] = value;
             }
             if (mergedProps.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
-            return new TypeInfo.Record(mergedProps.ToFrozenDictionary());
+            return new TypeInfo.Record(mergedProps.ToFrozenDictionary(),
+                ReadonlyFields: ExtractReadonlyProperties(sourceType).ToFrozenSet(StringComparer.Ordinal));
         }
 
         var props = ExtractPropertiesWithTypes(sourceType);
         if (props.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
 
         // All properties are required (empty optional set)
-        return new TypeInfo.Record(props.ToFrozenDictionary());
+        return new TypeInfo.Record(props.ToFrozenDictionary(),
+            ReadonlyFields: ExtractReadonlyProperties(sourceType).ToFrozenSet(StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -352,9 +354,12 @@ public partial class TypeChecker
 
         if (pickedProps.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
 
+        var pickedReadonly = ExtractReadonlyProperties(sourceType)
+            .Where(pickedProps.ContainsKey).ToFrozenSet(StringComparer.Ordinal);
         return pickedOptionals.Count > 0
-            ? new TypeInfo.Interface("", pickedProps.ToFrozenDictionary(), pickedOptionals.ToFrozenSet())
-            : new TypeInfo.Record(pickedProps.ToFrozenDictionary());
+            ? new TypeInfo.Interface("", pickedProps.ToFrozenDictionary(), pickedOptionals.ToFrozenSet(),
+                ReadonlyMembers: pickedReadonly)
+            : new TypeInfo.Record(pickedProps.ToFrozenDictionary(), ReadonlyFields: pickedReadonly);
     }
 
     /// <summary>
@@ -397,9 +402,12 @@ public partial class TypeChecker
 
         if (remainingProps.Count == 0) return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
 
+        var remainingReadonly = ExtractReadonlyProperties(sourceType)
+            .Where(remainingProps.ContainsKey).ToFrozenSet(StringComparer.Ordinal);
         return remainingOptionals.Count > 0
-            ? new TypeInfo.Interface("", remainingProps.ToFrozenDictionary(), remainingOptionals.ToFrozenSet())
-            : new TypeInfo.Record(remainingProps.ToFrozenDictionary());
+            ? new TypeInfo.Interface("", remainingProps.ToFrozenDictionary(), remainingOptionals.ToFrozenSet(),
+                ReadonlyMembers: remainingReadonly)
+            : new TypeInfo.Record(remainingProps.ToFrozenDictionary(), ReadonlyFields: remainingReadonly);
     }
 
     /// <summary>
@@ -803,7 +811,7 @@ public partial class TypeChecker
         switch (type)
         {
             case TypeInfo.Interface itf:
-                foreach (var (name, propType) in itf.Members)
+                foreach (var (name, propType) in itf.GetAllMembers())
                     props[name] = propType;
                 break;
 
@@ -875,7 +883,7 @@ public partial class TypeChecker
     {
         return type switch
         {
-            TypeInfo.Interface itf => [.. itf.OptionalMembers],
+            TypeInfo.Interface itf => [.. itf.GetAllOptionalMembers()],
             TypeInfo.Record record => record.OptionalFields is null
                 ? []
                 : [.. record.OptionalFields],
@@ -891,15 +899,30 @@ public partial class TypeChecker
     private HashSet<string> ExtractReadonlyProperties(TypeInfo type) => type switch
     {
         TypeInfo.Interface itf => itf.GetAllReadonlyMembers().ToHashSet(StringComparer.Ordinal),
-        TypeInfo.Record record => record.Fields.Keys.Where(record.IsFieldReadonly).ToHashSet(StringComparer.Ordinal),
-        TypeInfo.Class cls => [.. cls.ReadonlyFields],
+        TypeInfo.Record record => record.Fields.Keys.Where(name => record.IsFieldReadonly(name) || record.IsGetterOnly(name))
+            .ToHashSet(StringComparer.Ordinal),
+        TypeInfo.Class cls => cls.ReadonlyFields.Concat(cls.Getters.Keys.Where(name => !cls.Setters.ContainsKey(name)))
+            .ToHashSet(StringComparer.Ordinal),
         TypeInfo.Instance instance => ExtractReadonlyProperties(instance.ResolvedClassType),
-        TypeInfo.Intersection intersection => intersection.FlattenedTypes
-            .SelectMany(ExtractReadonlyProperties).ToHashSet(StringComparer.Ordinal),
+        TypeInfo.Intersection intersection => ExtractIntersectionReadonlyProperties(intersection),
         TypeInfo.MappedType mapped => ExtractReadonlyProperties(ExpandMappedType(mapped)),
         TypeInfo.InstantiatedGeneric generic => ExtractReadonlyProperties(ExpandInstantiatedGenericForKeyOf(generic)),
         _ => []
     };
+
+    private HashSet<string> ExtractIntersectionReadonlyProperties(TypeInfo.Intersection intersection)
+    {
+        HashSet<string> readOnly = [];
+        HashSet<string> mutable = [];
+        foreach (var part in intersection.FlattenedTypes)
+        {
+            var partReadonly = ExtractReadonlyProperties(part);
+            readOnly.UnionWith(partReadonly);
+            mutable.UnionWith(ExtractPropertiesWithTypes(part).Keys.Where(name => !partReadonly.Contains(name)));
+        }
+        readOnly.ExceptWith(mutable);
+        return readOnly;
+    }
 
     /// <summary>
     /// Extracts key names from a key type (union of string literals, keyof result, etc.)

@@ -222,6 +222,7 @@ public partial class TypeChecker
         // Handle Union types - distribute index access across all union members
         if (objType is TypeInfo.Union union)
         {
+            ValidateConstructorBracketUnionMembers(union, indexType, getIndex);
             if (IndexDomainIsKnownForUnion(indexType, union))
                 return TypeInfo.Any.Shared;
 
@@ -709,6 +710,11 @@ public partial class TypeChecker
             EnsureWritableClassIndex(constraint, index, syntax);
             return;
         }
+        if (index is TypeInfo.Union keyUnion && TryGetLiteralPropertyKeys(index, out _))
+        {
+            foreach (var key in keyUnion.FlattenedTypes) EnsureWritableClassIndex(receiver, key, syntax);
+            return;
+        }
         if (receiver is not TypeInfo.Instance && receiver is not (TypeInfo.Class or TypeInfo.GenericClass or
             TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })) return;
         bool isStatic = receiver is not TypeInfo.Instance;
@@ -729,7 +735,12 @@ public partial class TypeChecker
             if (name is not null && (isStatic
                 ? core.StaticMethods.ContainsKey(name) || core.StaticProperties.ContainsKey(name)
                 : core.Methods.ContainsKey(name) || core.FieldTypes.ContainsKey(name) || core.Getters.ContainsKey(name) || core.Setters.ContainsKey(name)))
+            {
+                if (isStatic && core.StaticReadonlyFields?.Contains(name) == true)
+                    throw new TypeCheckException($"Cannot assign to '{name}' because it is a read-only property.",
+                        TryGetExprLine(syntax), tsCode: "TS2540");
                 return;
+            }
         }
         TokenType[] kinds = index is TypeInfo.Symbol or TypeInfo.UniqueSymbol ? [TokenType.TYPE_SYMBOL]
             : IsNumber(index) || index is TypeInfo.NumberLiteral || IsNumericConstructorIndex(index)
@@ -1630,7 +1641,8 @@ public partial class TypeChecker
             return null;
 
         return names.Select(name => CheckGetOnClass(receiver,
-            new Token(TokenType.IDENTIFIER, name, null, TryGetExprLine(syntax.Index) ?? 0)))
+            new Token(TokenType.IDENTIFIER, name, null, TryGetExprLine(syntax.Index) ?? 0),
+            enforceAccessibility: false))
             .Aggregate(CreateUnion);
     }
 
@@ -1641,6 +1653,37 @@ public partial class TypeChecker
             if (GetStaticMethods(owner)?.ContainsKey(name) == true || GetStaticProperties(owner)?.ContainsKey(name) == true)
                 return true;
         return false;
+    }
+
+    private void ValidateConstructorBracketUnionMembers(TypeInfo.Union receiver, TypeInfo index, Expr.GetIndex syntax)
+    {
+        if (!TryGetLiteralPropertyKeys(index, out var names)) return;
+        foreach (string name in names)
+        {
+            var members = receiver.FlattenedTypes.Where(type => type is not (TypeInfo.Null or TypeInfo.Undefined))
+                .Select(type => FindStaticMember(type, name)).ToList();
+            var restricted = members.FirstOrDefault(member => member is { Access: not AccessModifier.Public });
+            if (restricted is null) continue;
+            int ownerId = SelectedSourceClassId(restricted.Value.Owner);
+            if (members.Any(member => member is null || member.Value.Access == AccessModifier.Public ||
+                !IsSameAccessorSource(ownerId, SelectedSourceClassId(member.Value.Owner))))
+                throw new TypeCheckException(
+                    $"Property '{name}' does not exist on all members of type '{receiver}'.",
+                    TryGetExprLine(syntax.Index), tsCode: "TS7053");
+        }
+
+        (TypeInfo Owner, AccessModifier Access)? FindStaticMember(TypeInfo type, string name)
+        {
+            HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);
+            for (TypeInfo? owner = type; owner is not null && visited.Add(owner); owner = GetSuperclass(owner))
+            {
+                if (GetStaticMethods(owner)?.ContainsKey(name) == true)
+                    return (owner, GetStaticMethodAccess(owner)?.GetValueOrDefault(name) ?? AccessModifier.Public);
+                if (GetStaticProperties(owner)?.ContainsKey(name) == true)
+                    return (owner, GetStaticFieldAccess(owner)?.GetValueOrDefault(name) ?? AccessModifier.Public);
+            }
+            return null;
+        }
     }
 
     private TypeInfo? TryReadKnownIndexedInstanceMember(TypeInfo receiver, TypeInfo index, Expr.GetIndex syntax)

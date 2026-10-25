@@ -12,6 +12,7 @@ public partial class TypeChecker
     private readonly ConditionalWeakTable<BindingSymbol, ClassFieldConstWidening> _classFieldConstWidening = new();
     private readonly ConditionalWeakTable<TypeInfo, ClassFieldConstWidening> _classFieldReadonlyWidening = new();
     private readonly ConditionalWeakTable<BindingSymbol, ClassFieldConstWidening> _classFieldDeclaredBindingTypes = new();
+    private TypeEnvironment? _classFieldBindingFlowBoundary;
 
     private void RecordClassFieldBindingType(string name, TypeInfo type)
     {
@@ -21,14 +22,14 @@ public partial class TypeChecker
 
     private TypeInfo GetClassFieldOuterBindingType(Token name, TypeInfo current)
     {
-        if (_deferredInitializerFlowBoundary is not { } boundary ||
+        if ((_classFieldBindingFlowBoundary ?? _deferredInitializerFlowBoundary) is not { } boundary ||
             boundary.GetValueBinding(name.Lexeme) is not { } binding ||
             !ReferenceEquals(binding, _environment.GetValueBinding(name.Lexeme)) ||
             !_classFieldDeclaredBindingTypes.TryGetValue(binding, out var declared))
             return current;
 
         // Preserve assignments and guards checked within the initializer itself. Only the
-        // enclosing binding's declaration-time flow is unavailable at construction.
+        // enclosing binding's flow is outside the class field's control-flow container.
         for (TypeEnvironment? environment = _environment; environment is not null; environment = environment.Enclosing)
         {
             if (ReferenceEquals(environment, boundary))
@@ -69,7 +70,7 @@ public partial class TypeChecker
     private Narrowing.NarrowingContext[] PushIsolatedClassFieldNarrowingScope()
     {
         // An empty top frame still lets GetNarrowing search parent frames.
-        // Instance initializers execute later, outside their caller's flow.
+        // Each class field has its own control-flow container, including static fields.
         var previous = _narrowingContextStack.ToArray();
         _narrowingContextStack.Clear();
         PushEmptyNarrowingScope();
@@ -173,13 +174,13 @@ public partial class TypeChecker
         bool previousStatic = _inStaticMethod;
         bool previousStaticBlock = _inStaticBlock;
         var previousFlowBoundary = _deferredInitializerFlowBoundary;
+        var previousBindingFlowBoundary = _classFieldBindingFlowBoundary;
         var assignmentState = SnapshotDefiniteAssignmentState();
         var aliases = new Dictionary<string, string>(_variableAliases, StringComparer.Ordinal);
         var environments = new Dictionary<TypeEnvironment, Dictionary<string, TypeInfo>?>(ReferenceEqualityComparer.Instance);
         for (TypeEnvironment? environment = scope.Environment; environment is not null; environment = environment.Enclosing)
             environments[environment] = environment.SnapshotLocalValueTypes();
-        var previousNarrowings = field.IsStatic ? null : PushIsolatedClassFieldNarrowingScope();
-        if (field.IsStatic) PushNarrowingScope();
+        var previousNarrowings = PushIsolatedClassFieldNarrowingScope();
         _privateNameEnclosingClasses.Push(previousClass);
         _environment = new TypeEnvironment(scope.Environment);
         _currentClass = scope.Owner.Freeze();
@@ -188,6 +189,7 @@ public partial class TypeChecker
         _inStaticMethod = field.IsStatic;
         _inStaticBlock = false;
         if (!field.IsStatic) _deferredInitializerFlowBoundary = scope.InitializerFlowBoundary;
+        _classFieldBindingFlowBoundary = scope.InitializerFlowBoundary;
         try
         {
             // Only a field requested by a deferred callback is inferred early. Restore
@@ -198,8 +200,7 @@ public partial class TypeChecker
         finally
         {
             _privateNameEnclosingClasses.Pop();
-            if (previousNarrowings is not null) RestoreClassFieldNarrowingScope(previousNarrowings);
-            else PopNarrowingScope();
+            RestoreClassFieldNarrowingScope(previousNarrowings);
             RestoreDefiniteAssignmentState(assignmentState);
             _variableAliases.Clear();
             foreach (var (name, alias) in aliases) _variableAliases.Add(name, alias);
@@ -210,6 +211,7 @@ public partial class TypeChecker
             _inStaticMethod = previousStatic;
             _inStaticBlock = previousStaticBlock;
             _deferredInitializerFlowBoundary = previousFlowBoundary;
+            _classFieldBindingFlowBoundary = previousBindingFlowBoundary;
             scope.ActiveFields.Remove(field);
         }
     }

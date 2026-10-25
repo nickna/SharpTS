@@ -106,6 +106,10 @@ public partial class TypeChecker
             // not a same-named one from an enclosing or earlier sibling scope.
             PreRegisterTypeDeclarations(ns.Members);
 
+            // Earlier member bodies may name later namespace-local class constructors.
+            // Keep their type shells and value-order checks in this declaration's scope.
+            HoistClassDeclarations(ns.Members);
+
             // Hoist function declarations into the namespace scope before the first pass, mirroring
             // the top-level pass. The first pass fully checks any NESTED namespace (its bodies
             // resolve here), so a nested member's bare reference to an enclosing-namespace function

@@ -69,7 +69,9 @@ public partial class TypeChecker
             ConstructorSignatures: record.ConstructorSignatures,
             ReadonlyMembers: record.IsReadonly
                 ? record.Fields.Keys.ToFrozenSet(StringComparer.Ordinal)
-                : record.GetterOnlyFields,
+                : (record.ReadonlyFields ?? FrozenSet<string>.Empty)
+                    .Concat(record.GetterOnlyFields ?? FrozenSet<string>.Empty)
+                    .ToFrozenSet(StringComparer.Ordinal),
             MethodMembers: record.MethodMembers);
 
     private static HashSet<Stmt.Interface> InterfaceDeclarationsFor(
@@ -1167,10 +1169,17 @@ public partial class TypeChecker
         // non-Record value the helper is identical to Substitute.
         var members = gi.Members.ToDictionary(kv => kv.Key, kv => SubstitutePreservingSignatures(kv.Value, subs));
         var optionalMembers = gi.OptionalMembers.ToHashSet(StringComparer.Ordinal);
+        var readonlyMembers = gi.ReadonlyMembers?.ToHashSet(StringComparer.Ordinal) ?? [];
         foreach (TypeInfo.Interface baseInterface in gi.Extends ?? [])
         {
+            var inheritedReadonly = baseInterface.GetAllReadonlyMembers().ToHashSet(StringComparer.Ordinal);
             foreach ((string name, TypeInfo member) in baseInterface.GetAllMembers())
-                members.TryAdd(name, SubstitutePreservingSignatures(member, subs));
+            {
+                // Flattened members become own members, so their winning owner's readonly
+                // facet must move with them; inherited lookup will no longer supply it.
+                if (members.TryAdd(name, SubstitutePreservingSignatures(member, subs)) && inheritedReadonly.Contains(name))
+                    readonlyMembers.Add(name);
+            }
             foreach (string name in baseInterface.GetAllOptionalMembers())
                 optionalMembers.Add(name);
         }
@@ -1210,7 +1219,7 @@ public partial class TypeChecker
             gi.Extends,
             callSignatures,
             constructorSignatures,
-            gi.ReadonlyMembers,
+            readonlyMembers.Count > 0 ? readonlyMembers.ToFrozenSet(StringComparer.Ordinal) : null,
             gi.MethodMembers,
             ReadonlyNumberIndex: gi.ReadonlyNumberIndex);
     }

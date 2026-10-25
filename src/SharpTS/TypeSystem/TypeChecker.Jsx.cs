@@ -1887,7 +1887,7 @@ public partial class TypeChecker
                 _ => FrozenDictionary<string, TypeInfo>.Empty,
             };
             int missing = expectedMembers.Keys.Count(name => !actualMembers.ContainsKey(name));
-            if (missing >= 4) return "TS2740";
+            if (missing >= 6) return "TS2740";
             if (missing >= 2) return "TS2739";
             if (missing == 1) return "TS2741";
         }

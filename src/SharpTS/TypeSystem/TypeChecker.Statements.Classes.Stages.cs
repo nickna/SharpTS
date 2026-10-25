@@ -299,7 +299,7 @@ public partial class TypeChecker
     }
 
     // Infer each initializer before publishing the class used by member bodies.
-    // Instance initializers are hypothetical here; static initializers retain outer flow.
+    // Each field has its own flow container; static initialization still retains value-order checks.
     private bool CheckClassFieldInitializers(
         object sourceOwner,
         IReadOnlyList<Stmt.Field> fields,
@@ -338,8 +338,12 @@ public partial class TypeChecker
                 bool previousStaticBlock = _inStaticBlock;
                 bool previousGlobalThis = _currentArrowCapturesScriptGlobalThis;
                 TypeEnvironment? previousFlowBoundary = _deferredInitializerFlowBoundary;
-                var previousAssignmentState = field.IsStatic ? null : SnapshotDefiniteAssignmentState();
+                TypeEnvironment? previousBindingFlowBoundary = _classFieldBindingFlowBoundary;
+                var previousAssignmentState = SnapshotDefiniteAssignmentState();
                 _environment = field.IsStatic ? staticEnvironment : instanceEnvironment;
+                var staticValues = field.IsStatic ? staticEnvironment.SnapshotLocalValueTypes() : null;
+                var staticAliases = field.IsStatic
+                    ? new Dictionary<string, string>(_variableAliases, StringComparer.Ordinal) : null;
                 _currentClass = currentClass;
                 // A mutable instance self lets callbacks inferred here observe the completed
                 // class after later fields and method returns have been published.
@@ -349,8 +353,9 @@ public partial class TypeChecker
                 _inStaticBlock = false;
                 _currentArrowCapturesScriptGlobalThis = false;
                 if (!field.IsStatic) _deferredInitializerFlowBoundary = outerEnvironment;
+                _classFieldBindingFlowBoundary = outerEnvironment;
                 _privateNameEnclosingClasses.Push(previousClass);
-                var previousNarrowings = field.IsStatic ? null : PushIsolatedClassFieldNarrowingScope();
+                var previousNarrowings = PushIsolatedClassFieldNarrowingScope();
                 try
                 {
                     getterScope.ActiveFields.Add(field);
@@ -362,10 +367,13 @@ public partial class TypeChecker
                 }
                 finally
                 {
-                    if (!field.IsStatic)
+                    RestoreClassFieldNarrowingScope(previousNarrowings);
+                    RestoreDefiniteAssignmentState(previousAssignmentState);
+                    if (field.IsStatic)
                     {
-                        RestoreClassFieldNarrowingScope(previousNarrowings!);
-                        RestoreDefiniteAssignmentState(previousAssignmentState);
+                        staticEnvironment.RestoreLocalValueTypes(staticValues);
+                        _variableAliases.Clear();
+                        foreach (var (name, alias) in staticAliases!) _variableAliases.Add(name, alias);
                     }
                     getterScope.ActiveFields.Remove(field);
                     _privateNameEnclosingClasses.Pop();
@@ -376,6 +384,7 @@ public partial class TypeChecker
                     _inStaticBlock = previousStaticBlock;
                     _currentArrowCapturesScriptGlobalThis = previousGlobalThis;
                     _deferredInitializerFlowBoundary = previousFlowBoundary;
+                    _classFieldBindingFlowBoundary = previousBindingFlowBoundary;
                 }
             }
             RefreshSelfBindings(mutableClass.Freeze());

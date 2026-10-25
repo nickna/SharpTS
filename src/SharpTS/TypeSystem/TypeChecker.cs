@@ -604,7 +604,8 @@ public partial class TypeChecker
         BindingSymbol? assignedBinding = _environment.GetValueBinding(name);
         for (TypeEnvironment? env = _environment.Enclosing; env != null; env = env.Enclosing)
         {
-            if (ReferenceEquals(env, _deferredInitializerFlowBoundary))
+            if (ReferenceEquals(env, _deferredInitializerFlowBoundary) ||
+                ReferenceEquals(env, _classFieldBindingFlowBoundary))
                 return;
 
             if (!env.IsDefinedLocally(name))
@@ -2945,6 +2946,12 @@ public partial class TypeChecker
                     // Namespace import: import * as Module from './file'
                     if (import.NamespaceImport != null)
                     {
+                        if (reportErrors && !isCjsImport && importedModule.HasExportAssignment &&
+                            ExportAssignmentRequiresDefaultImport(importedModule))
+                            RecordTypeError(new TypeCheckException(
+                                "This module can only be referenced with ECMAScript imports/exports by turning on " +
+                                "'allowSyntheticDefaultImports' and referencing its default export.",
+                                import.Keyword.Line, tsCode: "TS2497"));
                         TypeInfo? assignedType = importedModule.HasExportAssignment
                             ? ResolveDeferredModuleExportAssignment(importedModule, env)
                             : null;

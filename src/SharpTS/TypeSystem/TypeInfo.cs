@@ -584,7 +584,25 @@ public abstract record TypeInfo
         /// <summary>
         /// Checks if a member is readonly.
         /// </summary>
-        public bool IsMemberReadonly(string memberName) => ReadonlyMembers?.Contains(memberName) ?? false;
+        public bool IsMemberReadonly(string memberName)
+        {
+            if (Members.ContainsKey(memberName))
+                return ReadonlyMembers?.Contains(memberName) == true;
+            if (ReadonlyMembers?.Contains(memberName) == true) return true;
+            if (Extends is null) return false;
+
+            HashSet<Interface> visited = new(ReferenceEqualityComparer.Instance) { this };
+            return Extends.Any(Visit);
+
+            bool Visit(Interface current)
+            {
+                if (!visited.Add(current)) return false;
+                if (current.Members.ContainsKey(memberName))
+                    return current.ReadonlyMembers?.Contains(memberName) == true;
+                return current.ReadonlyMembers?.Contains(memberName) == true ||
+                    current.Extends?.Any(Visit) == true;
+            }
+        }
 
         /// <summary>
         /// Gets all members including inherited members from extended interfaces.
@@ -629,7 +647,7 @@ public abstract record TypeInfo
                 {
                     foreach (var name in baseInterface.GetAllOptionalMembers())
                     {
-                        if (!OptionalMembers.Contains(name))
+                        if (!Members.ContainsKey(name))
                         {
                             yield return name;
                         }
@@ -657,7 +675,7 @@ public abstract record TypeInfo
                 {
                     foreach (var name in baseInterface.GetAllReadonlyMembers())
                     {
-                        if (ReadonlyMembers == null || !ReadonlyMembers.Contains(name))
+                        if (!Members.ContainsKey(name))
                         {
                             yield return name;
                         }
