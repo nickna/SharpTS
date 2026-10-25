@@ -93,6 +93,9 @@ public partial class TypeChecker
             );
         }
 
+        if (ExtractUtilityClassShape(sourceType) is { } classShape)
+            return classShape with { OptionalFields = null };
+
         // Handle unions
         if (sourceType is TypeInfo.Union union)
         {
@@ -845,6 +848,35 @@ public partial class TypeChecker
         }
 
         return props;
+    }
+
+    /// <summary>
+    /// Utility projections expose the public instance surface, including inherited members.
+    /// Select the nearest declaration before filtering visibility so a non-public override
+    /// cannot reveal an older public declaration, and compose generic base substitutions.
+    /// </summary>
+    private TypeInfo.Record? ExtractUtilityClassShape(TypeInfo type)
+    {
+        if (type is TypeInfo.Instance instance) type = instance.ResolvedClassType;
+        if (type is not (TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.MutableClass
+            or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })) return null;
+
+        // An unresolved superclass can still have a known, useful derived prefix.
+        TryGetOrdinaryConstructorHierarchy(type, out var levels);
+        var members = OrdinaryConstructorMembers(levels, isStatic: false)
+            .Where(member => member.Value.Access == Parsing.AccessModifier.Public)
+            .ToDictionary();
+        var shape = OrdinaryConstructorInstanceShape(levels, members);
+        return shape with
+        {
+            ReadonlyFields = members.Where(member => member.Value.DeclaringCore.ReadonlyFields.Contains(member.Key))
+                .Select(member => member.Key).ToFrozenSet(StringComparer.Ordinal),
+            GetterOnlyFields = members.Where(member => member.Value.DeclaringCore.Getters.ContainsKey(member.Key)
+                    && !member.Value.DeclaringCore.Setters.ContainsKey(member.Key))
+                .Select(member => member.Key).ToFrozenSet(StringComparer.Ordinal),
+            MethodMembers = members.Where(member => member.Value.IsMethod).Select(member => member.Key)
+                .ToFrozenSet(StringComparer.Ordinal)
+        };
     }
 
     /// <summary>
