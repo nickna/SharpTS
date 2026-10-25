@@ -564,6 +564,10 @@ public abstract record TypeInfo
         bool ReadonlyNumberIndex = false
     ) : TypeInfo
     {
+        // Class-derived interface bases retain the exact source class for write access and
+        // protected receiver checks. Public mapped projections deliberately omit this origin.
+        internal TypeInfo? ClassOrigin { get; init; }
+
         /// <summary>True when the member (own or inherited) was declared with method syntax —
         /// method members keep bivariant parameter relating under strictFunctionTypes.</summary>
         public bool IsMethodMember(string name)

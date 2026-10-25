@@ -381,6 +381,7 @@ public partial class TypeChecker
             MethodMembers = MergeSet(left.MethodMembers, right.MethodMembers),
             MemberBrands = left.MemberBrands ?? right.MemberBrands,
             ReadonlyNumberIndex = left.ReadonlyNumberIndex || right.ReadonlyNumberIndex,
+            ClassOrigin = right.ClassOrigin ?? left.ClassOrigin,
         };
 
     private static TypeInfo.GenericInterface MergeGenericInterfaces(
@@ -1149,7 +1150,7 @@ public partial class TypeChecker
             FrozenSet<string>.Empty,
             cls.StringIndexType,
             cls.NumberIndexType,
-            MemberBrands: brands.Count == 0 ? null : brands.ToFrozenDictionary());
+            MemberBrands: brands.Count == 0 ? null : brands.ToFrozenDictionary()) { ClassOrigin = cls };
     }
 
     /// <summary>Records a member's brand when it is non-public (private/protected). Public members

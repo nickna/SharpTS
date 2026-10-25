@@ -46,8 +46,9 @@ public partial class TypeChecker
     };
 
     private IntersectionWriteMember? IntersectionWriteMemberOf(TypeInfo type, Token name, bool enforceAccessibility,
-        HashSet<TypeInfo> active)
+        HashSet<TypeInfo> active, TypeInfo? accessReceiver = null)
     {
+        accessReceiver ??= type;
         if (!active.Add(type)) return null;
         TypeInfo original = type;
         try
@@ -55,17 +56,17 @@ public partial class TypeChecker
             type = RefreshCompletedInterfaceBinding(type);
             if (type is TypeInfo.TypeParameter parameter)
                 return parameter.Constraint is { } constraint
-                    ? IntersectionWriteMemberOf(constraint, name, enforceAccessibility, active) : null;
+                    ? IntersectionWriteMemberOf(constraint, name, enforceAccessibility, active, accessReceiver) : null;
             if (type is TypeInfo.RecursiveTypeAlias alias)
-                return IntersectionWriteMemberOf(ExpandRecursiveTypeAlias(alias), name, enforceAccessibility, active);
+                return IntersectionWriteMemberOf(ExpandRecursiveTypeAlias(alias), name, enforceAccessibility, active, accessReceiver);
             if (type is TypeInfo.MappedType)
-                return IntersectionWriteMemberOf(ResolveMappedTypeForAccess(type), name, enforceAccessibility, active);
+                return IntersectionWriteMemberOf(ResolveMappedTypeForAccess(type), name, enforceAccessibility, active, accessReceiver);
             if (type is TypeInfo.InstantiatedGeneric generic && FlattenInstantiatedInterface(generic) is { } flattened)
-                return IntersectionWriteMemberOf(flattened, name, enforceAccessibility, active);
+                return IntersectionWriteMemberOf(flattened, name, enforceAccessibility, active, accessReceiver);
             if (type is TypeInfo.Intersection intersection)
             {
                 var members = intersection.FlattenedTypes
-                    .Select(part => IntersectionWriteMemberOf(part, name, enforceAccessibility, active))
+                    .Select(part => IntersectionWriteMemberOf(part, name, enforceAccessibility, active, accessReceiver))
                     .OfType<IntersectionWriteMember>().ToList();
                 return members.Count == 0 ? null : new(SimplifyIntersection(members.Select(member => member.Type)
                         .Distinct(TypeInfoEqualityComparer.Instance).ToList()),
@@ -74,7 +75,7 @@ public partial class TypeChecker
             if (type is TypeInfo.Union union)
             {
                 var members = union.FlattenedTypes
-                    .Select(part => IntersectionWriteMemberOf(part, name, enforceAccessibility, active)).ToList();
+                    .Select(part => IntersectionWriteMemberOf(part, name, enforceAccessibility, active, accessReceiver)).ToList();
                 return members.Any(member => member is null) ? null : new(
                     members.Select(member => member!.Type).Aggregate(CreateUnion),
                     members.Any(member => member!.Readonly), members.Any(member => member!.Optional));
@@ -83,10 +84,23 @@ public partial class TypeChecker
                 return Slot(field, record.IsFieldReadonly(name.Lexeme) || record.IsGetterOnly(name.Lexeme),
                     record.IsFieldOptional(name.Lexeme));
             if (type is TypeInfo.Interface iface)
+            {
+                if (iface.ClassOrigin is { } origin &&
+                    IntersectionWriteMemberOf(new TypeInfo.Instance(origin), name, enforceAccessibility, active, accessReceiver) is { } classMember)
+                    return classMember with { Readonly = classMember.Readonly || iface.IsMemberReadonly(name.Lexeme) };
+                TryGetInterfaceMemberBrand(iface, name.Lexeme, out var access, out int declaringId);
+                if (!iface.Members.ContainsKey(name.Lexeme) || access != AccessModifier.Public)
+                    foreach (var parent in iface.Extends ?? [])
+                        if (IntersectionWriteMemberOf(parent, name, enforceAccessibility, active, accessReceiver) is { } inherited)
+                            return inherited with { Readonly = inherited.Readonly || iface.IsMemberReadonly(name.Lexeme) };
                 foreach (var member in iface.GetAllMembers())
                     if (member.Key == name.Lexeme)
+                    {
+                        if (enforceAccessibility) EnforceIntersectionMemberAccess(access, declaringId, iface.Name, accessReceiver, name);
                         return Slot(member.Value, iface.IsMemberReadonly(name.Lexeme),
                             iface.GetAllOptionalMembers().Contains(name.Lexeme));
+                    }
+            }
             bool isStatic = type is not TypeInfo.Instance;
             TypeInfo classType = type is TypeInfo.Instance instance ? instance.ResolvedClassType : type;
             if (TryGetOrdinaryConstructorHierarchy(classType, out var levels) &&
@@ -101,7 +115,7 @@ public partial class TypeChecker
                     if (enforceAccessibility)
                     {
                         if (setter is not null || getterOnly)
-                            EnforceAccessorAccess(owner, classType, name, isStatic: true, isWrite: setter is not null);
+                            EnforceAccessorAccess(owner, accessReceiver, name, isStatic: true, isWrite: setter is not null);
                         else EnforceStaticMemberAccess(owner, name);
                     }
                     var substitutions = levels.First(level => ReferenceEquals(level.Core, selected.DeclaringCore)).Substitutions;
@@ -111,12 +125,12 @@ public partial class TypeChecker
                 if (TrySelectInstanceAccessor((TypeInfo.Instance)type, name.Lexeme, out var accessor))
                 {
                     if (enforceAccessibility)
-                        EnforceAccessorAccess(accessor.DeclaringType, classType, name,
+                        EnforceAccessorAccess(accessor.DeclaringType, accessReceiver, name,
                             isStatic: false, isWrite: accessor.SetterType is not null);
                     return Slot(accessor.SetterType ?? accessor.GetterType!, accessor.SetterType is null, false);
                 }
                 if (enforceAccessibility)
-                    EnforceIntersectionMemberAccess(selected.Access, owner, classType, name);
+                    EnforceIntersectionMemberAccess(selected.Access, owner, accessReceiver, name);
                 return Slot(selected.Type, selected.DeclaringCore.ReadonlyFields.Contains(name.Lexeme), selected.IsOptional);
             }
             return null;
@@ -129,18 +143,20 @@ public partial class TypeChecker
     }
 
     private void EnforceIntersectionMemberAccess(AccessModifier access, TypeInfo owner, TypeInfo receiver, Token name)
+        => EnforceIntersectionMemberAccess(access, SelectedSourceClassId(owner), GetClassName(owner), receiver, name);
+
+    private void EnforceIntersectionMemberAccess(AccessModifier access, int ownerId, string ownerName, TypeInfo receiver, Token name)
     {
         if (access == AccessModifier.Public) return;
-        int ownerId = SelectedSourceClassId(owner);
         int lexicalId = _currentClass?.Core.DeclarationId ?? 0;
         bool sameOwner = IsSameAccessorSource(lexicalId, ownerId);
         if (access == AccessModifier.Private && !sameOwner)
-            throw new TypeCheckException($"Property '{name.Lexeme}' is private and only accessible within class '{GetClassName(owner)}'.",
+            throw new TypeCheckException($"Property '{name.Lexeme}' is private and only accessible within class '{ownerName}'.",
                 name.Line, tsCode: "TS2341");
         if (access == AccessModifier.Protected && !sameOwner)
         {
             if (_currentClass is null || !AccessorSourceDerivesFrom(_currentClass, ownerId))
-                throw new TypeCheckException($"Property '{name.Lexeme}' is protected and only accessible within class '{GetClassName(owner)}' and its subclasses.",
+                throw new TypeCheckException($"Property '{name.Lexeme}' is protected and only accessible within class '{ownerName}' and its subclasses.",
                     name.Line, tsCode: "TS2445");
             if (!AccessorSourceDerivesFrom(receiver, lexicalId))
                 throw new TypeCheckException($"Property '{name.Lexeme}' is protected and only accessible through an instance of class '{_currentClass.Name}'.",

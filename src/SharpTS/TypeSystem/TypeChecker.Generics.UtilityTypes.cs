@@ -161,7 +161,8 @@ public partial class TypeChecker
                 ReadonlyMembers: readonlyMembers,
                 MethodMembers: itf.MethodMembers,
                 MemberBrands: itf.MemberBrands,
-                ReadonlyNumberIndex: itf.NumberIndexType is not null || itf.ReadonlyNumberIndex);
+                ReadonlyNumberIndex: itf.NumberIndexType is not null || itf.ReadonlyNumberIndex)
+                { ClassOrigin = itf.ClassOrigin };
         }
 
         // Handle unions
