@@ -1,6 +1,7 @@
 using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns;
+using System.Collections.Frozen;
 
 namespace SharpTS.TypeSystem;
 
@@ -104,6 +105,9 @@ public partial class TypeChecker
         {
             // Check each argument and collect their types
             List<TypeInfo> argTypes = CheckGenericInferenceArguments(call.Arguments);
+            List<GenericTupleCallSlot>? tupleSlots = genericFunc.HasRestParam &&
+                genericFunc.ParamTypes.LastOrDefault() is TypeInfo.Tuple
+                    ? GenericTupleCallArguments(call, argTypes) : null;
 
             // Determine type arguments (explicit or inferred)
             List<TypeInfo> typeArgs;
@@ -122,7 +126,9 @@ public partial class TypeChecker
                         genericFunc,
                         PrepareFreshCallArgumentsForInference(
                             genericFunc.ParamTypes, call.Arguments, argTypes),
-                        contextualResultType);
+                        contextualResultType,
+                        tupleRestArguments: tupleSlots is null ? null : GenericTupleCallType(
+                            tupleSlots.Skip(genericFunc.ParamTypes.Count - 1), (TypeInfo.Tuple)genericFunc.ParamTypes[^1]));
                 }
                 catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2344")
                 {
@@ -148,6 +154,23 @@ public partial class TypeChecker
             if (instantiatedFunc is TypeInfo.Function instFunc)
             {
                 RecordEditorInvocationInstantiation(genericFunc, instFunc);
+                if (tupleSlots is not null)
+                {
+                    if (call.TypeArgs is not { Count: > 0 } && call.Arguments.Any(ContainsGenericTupleCallback))
+                    {
+                        CheckGenericTupleRestCall(call, instFunc, tupleSlots, validate: false);
+                        argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
+                        tupleSlots = GenericTupleCallArguments(call, argTypes);
+                        instFunc = (TypeInfo.Function)InstantiateGenericFunction(genericFunc,
+                            InferTypeArguments(genericFunc,
+                                PrepareFreshCallArgumentsForInference(genericFunc.ParamTypes, call.Arguments, argTypes),
+                                contextualResultType, tupleRestArguments: GenericTupleCallType(
+                                    tupleSlots.Skip(genericFunc.ParamTypes.Count - 1), (TypeInfo.Tuple)genericFunc.ParamTypes[^1])));
+                    }
+                    CheckGenericTupleRestCall(call, instFunc, tupleSlots);
+                    RecordEditorInvocationSelection(genericFunc, instFunc);
+                    return instFunc.ReturnType;
+                }
                 for (int i = 0; i < call.Arguments.Count && i < instFunc.ParamTypes.Count; i++)
                 {
                     if (call.Arguments[i] is Expr.ObjectLiteral && argTypes[i] is TypeInfo.Record freshRecord
@@ -158,6 +181,15 @@ public partial class TypeChecker
                 // Re-contextualize callbacks after inference. This includes callbacks nested in
                 // object/array arguments, whose parameter types depend on the instantiated props.
                 ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
+                if (call.TypeArgs is not { Count: > 0 } && call.Arguments.Any(ContainsGenericTupleCallback))
+                {
+                    argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
+                    instFunc = (TypeInfo.Function)InstantiateGenericFunction(genericFunc,
+                        InferTypeArguments(genericFunc,
+                            PrepareFreshCallArgumentsForInference(genericFunc.ParamTypes, call.Arguments, argTypes),
+                            contextualResultType));
+                    ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
+                }
                 CheckInstantiatedGenericCallArguments(call, instFunc, argTypes);
                 RecordEditorInvocationSelection(genericFunc, instFunc);
                 return instFunc.ReturnType;
@@ -1034,6 +1066,30 @@ public partial class TypeChecker
     {
         for (int i = 0; i < arguments.Count && i < parameterTypes.Count; i++)
             ContextualizeNestedGenericCallback(arguments[i], parameterTypes[i]);
+    }
+
+    private List<TypeInfo> RefreshContextualizedGenericArguments(IReadOnlyList<Expr> arguments, IReadOnlyList<TypeInfo> previous)
+    {
+        return arguments.Select((argument, i) => Refresh(argument, previous[i])).ToList();
+
+        TypeInfo Refresh(Expr expression, TypeInfo fallback)
+        {
+            if (expression is Expr.Grouping grouping) return Refresh(grouping.Expression, fallback);
+            if (expression is Expr.Spread spread) return Refresh(spread.Expression, fallback);
+            TypeInfo current = _typeMap.Get(expression) ?? fallback;
+            if (expression is Expr.ObjectLiteral literal && current is TypeInfo.Record record)
+            {
+                var fields = record.Fields.ToDictionary();
+                foreach (var property in literal.Properties.Where(property => !property.IsSpread && property.Key is not null))
+                {
+                    string name = GetPropertyKeyNameForTypeCheck(property.Key!);
+                    if (fields.TryGetValue(name, out var member)) fields[name] = Refresh(property.Value, member);
+                }
+                current = record with { Fields = fields.ToFrozenDictionary() };
+                _typeMap.Set(expression, current);
+            }
+            return current;
+        }
     }
 
     /// <summary>Checks provided arguments after generic substitution and callback contextualization.</summary>

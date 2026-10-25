@@ -19,7 +19,8 @@ public partial class TypeChecker
         List<TypeInfo> argTypes,
         TypeInfo? contextualResultType = null,
         bool fallbackToConstraints = false,
-        bool combineCandidates = false)
+        bool combineCandidates = false,
+        TypeInfo.Tuple? tupleRestArguments = null)
     {
         Dictionary<string, TypeInfo> inferred = [];
 
@@ -46,6 +47,11 @@ public partial class TypeChecker
             else if (restDeclared is TypeInfo.TypeParameter && restArgs.Count > 0)
             {
                 InferFromType(restDeclared, TypeInfo.Tuple.FromTypes(restArgs, restArgs.Count), inferred, combineCandidates);
+            }
+            else if (restDeclared is TypeInfo.Tuple tuple)
+            {
+                InferFromTupleRest(tuple, tupleRestArguments ?? TypeInfo.Tuple.FromTypes(restArgs, restArgs.Count),
+                    inferred, combineCandidates);
             }
         }
 
@@ -115,6 +121,46 @@ public partial class TypeChecker
         }
 
         return result;
+    }
+
+    private void InferFromTupleRest(TypeInfo.Tuple pattern, TypeInfo.Tuple arguments,
+        Dictionary<string, TypeInfo> inferred, bool combineCandidates)
+    {
+        int spread = pattern.Elements.FindIndex(element => element.IsSpread);
+        int prefix = spread < 0 ? pattern.Elements.Count : spread;
+        for (int i = 0; i < prefix && i < arguments.Elements.Count; i++)
+            InferElement(pattern.Elements[i], arguments.Elements[i]);
+        if (spread >= 0)
+        {
+            int suffix = pattern.Elements.Count - spread - 1;
+            for (int i = 0; i < suffix && arguments.Elements.Count - 1 - i >= prefix; i++)
+                InferElement(pattern.Elements[pattern.Elements.Count - 1 - i],
+                    arguments.Elements[arguments.Elements.Count - 1 - i]);
+            var middle = arguments.Elements.Skip(prefix)
+                .Take(Math.Max(0, arguments.Elements.Count - prefix - suffix)).ToList();
+            TypeInfo variable = pattern.Elements[spread].Type;
+            if (variable is TypeInfo.Array array)
+            {
+                foreach (var argument in middle) InferFromType(array.ElementType, ElementType(argument), inferred, combineCandidates);
+            }
+            else
+                InferFromType(variable, new TypeInfo.Tuple(middle, middle.Count(element => element.IsRequired)), inferred, combineCandidates);
+        }
+        else if (pattern.RestElementType is { } rest)
+        {
+            foreach (var argument in arguments.Elements.Skip(prefix))
+                InferFromType(rest, ElementType(argument), inferred, combineCandidates);
+        }
+
+        void InferElement(TypeInfo.TupleElement parameter, TypeInfo.TupleElement argument)
+        {
+            TypeInfo type = ElementType(argument);
+            if (parameter.IsOptional && type is TypeInfo.Undefined &&
+                parameter.Type is TypeInfo.TypeParameter parameterType && inferred.ContainsKey(parameterType.Name)) return;
+            InferFromType(parameter.Type, type, inferred, combineCandidates);
+        }
+        static TypeInfo ElementType(TypeInfo.TupleElement element) => element.IsSpread && element.Type is TypeInfo.Array array
+            ? array.ElementType : element.Type;
     }
 
     /// <summary>
@@ -202,6 +248,10 @@ public partial class TypeChecker
             {
                 inferred[tp.Name] = inferredType;
             }
+        }
+        else if (paramType is TypeInfo.Tuple tuplePattern && argType is TypeInfo.Tuple tupleArgument)
+        {
+            InferFromTupleRest(tuplePattern, tupleArgument, inferred, combineCandidates);
         }
         else if (paramType is TypeInfo.Array paramArr && argType is TypeInfo.Array argArr)
         {
