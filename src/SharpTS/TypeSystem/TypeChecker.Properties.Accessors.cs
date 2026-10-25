@@ -81,6 +81,8 @@ public partial class TypeChecker
             return source switch
             {
                 TypeInfo.TypeParameter { Constraint: { } constraint } => InterfaceReceiverDerivesFrom(constraint, ownerId, active),
+                TypeInfo.MutableClass mutable => IsSameAccessorSource(mutable.DeclarationId, ownerId) ||
+                    mutable.Superclass is { } parent && InterfaceReceiverDerivesFrom(parent, ownerId, active),
                 TypeInfo.Intersection intersection => intersection.FlattenedTypes.Any(part => InterfaceReceiverDerivesFrom(part, ownerId, active)),
                 TypeInfo.Union union => union.FlattenedTypes.All(part => InterfaceReceiverDerivesFrom(part, ownerId, active)),
                 TypeInfo.Interface iface => iface.ClassOrigin is { } origin && InterfaceReceiverDerivesFrom(origin, ownerId, active) ||
