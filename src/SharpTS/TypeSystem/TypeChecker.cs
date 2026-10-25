@@ -2336,6 +2336,10 @@ public partial class TypeChecker
             // Pre-register type declarations (interfaces, enums, type aliases)
             PreRegisterTypeDeclarations(script.Statements);
 
+            // Class bindings must precede function constraints and their alias expansion,
+            // matching the authoritative pass instead of caching unresolved classes as any.
+            HoistClassDeclarations(script.Statements);
+
             // Hoist function declarations
             HoistFunctionDeclarations(script.Statements);
 
