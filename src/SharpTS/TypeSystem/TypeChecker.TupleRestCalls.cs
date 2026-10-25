@@ -25,24 +25,32 @@ public partial class TypeChecker
         }
     }
 
-    private bool TryNormalizeOrdinaryTupleCallable(TypeInfo callee, out TypeInfo callable,
+    private bool TryNormalizeCallableObject(TypeInfo callee, out TypeInfo callable,
         out IReadOnlyDictionary<TypeInfo, TypeInfo>? originalSignatures)
     {
         List<TypeInfo.CallSignature>? originals = callee switch
         {
-            TypeInfo.Interface iface => iface.CallSignatures,
+            TypeInfo.Interface iface => CallableObjectSignatures(iface),
             TypeInfo.Record record => record.CallSignatures,
-            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface generic } => generic.CallSignatures,
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface generic } => CallableObjectSignatures(generic),
             _ => null
         };
         callable = null!;
         originalSignatures = null;
-        if (originals is not { Count: > 0 } ||
-            !originals.Any(signature => !signature.IsGeneric && signature.HasRestParam && signature.ParamTypes.LastOrDefault() is TypeInfo.Tuple))
+        if (originals is not { Count: > 0 })
             return false;
 
         var signatures = callee is TypeInfo.InstantiatedGeneric instantiated
-            ? FlattenInstantiatedInterface(instantiated)!.CallSignatures! : originals;
+            ? originals.Select(signature =>
+            {
+                var substitutions = GenericInterfaceSubs((TypeInfo.GenericInterface)instantiated.GenericDefinition, instantiated.TypeArguments)
+                    .Where(pair => signature.TypeParams is null || signature.TypeParams.All(parameter => parameter.Name != pair.Key)).ToDictionary();
+                return CopyEditorSignatureMetadata(signature, signature with
+                {
+                    ParamTypes = signature.ParamTypes.Select(type => SubstitutePreservingSignatures(type, substitutions)).ToList(),
+                    ReturnType = SubstitutePreservingSignatures(signature.ReturnType, substitutions)
+                });
+            }).ToList() : originals;
         List<TypeInfo> functions = [];
         Dictionary<TypeInfo, TypeInfo> sourceSignatures = new(ReferenceEqualityComparer.Instance);
         for (int i = 0; i < signatures.Count; i++)

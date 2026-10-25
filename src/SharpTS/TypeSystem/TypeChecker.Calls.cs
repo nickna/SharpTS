@@ -59,8 +59,10 @@ public partial class TypeChecker
             _typeMap.Set(call.Callee, extensionMember);
             RecordEditorExpressionType(call.Callee, extensionMember);
         }
-        calleeType = IntersectionCallTarget(calleeType);
-        RecordEditorCallCandidates(calleeType, call.Optional);
+        calleeType = IntersectionCallTarget(calleeType, out var intersectionCallOriginals);
+        RecordEditorCallCandidates(IntersectionCallCandidateSurface(calleeType, intersectionCallOriginals), call.Optional);
+        if (intersectionCallOriginals is not null)
+            foreach (var (adapted, original) in intersectionCallOriginals) RecordEditorInvocationInstantiation(original, adapted);
 
         // Resolve the callee before invalidating receiver-property narrowings. A guard may narrow
         // the callable property itself (`obj.callback === undefined ? ... : obj.callback()`), and
@@ -103,10 +105,11 @@ public partial class TypeChecker
              return new TypeInfo.Instance(classType);
         }
 
-        if (TryNormalizeOrdinaryTupleCallable(calleeType, out var ordinaryTupleCallable, out var tupleCallableOriginals))
-            calleeType = ordinaryTupleCallable;
+        if (TryNormalizeCallableObject(calleeType, out var objectCallable, out var tupleCallableOriginals))
+            calleeType = objectCallable;
+        tupleCallableOriginals ??= intersectionCallOriginals;
 
-        TypeInfo? genericTupleOriginal = null;
+        TypeInfo? genericTupleOriginal = tupleCallableOriginals?.GetValueOrDefault(calleeType);
         if (TryGetGenericTupleCallSignature(calleeType, out var tupleOriginal, out var tupleCallable))
         {
             genericTupleOriginal = tupleOriginal;
@@ -434,6 +437,11 @@ public partial class TypeChecker
                         else
                         {
                             argType = CheckExpr(arg);
+                            if (tupleCallableOriginals is not null && ContainsGenericTupleCallback(arg))
+                            {
+                                ContextualizeNestedGenericCallback(arg, expectedParamType);
+                                argType = RefreshContextualizedGenericArgument(arg, argType);
+                            }
                         }
                         if (paramIndex < regularParamCount)
                         {
@@ -1870,7 +1878,7 @@ public partial class TypeChecker
             CheckGenericTupleRestCall(call, bestMatch, GenericTupleCallArguments(call, argTypes));
             InvalidateTupleCallArgumentNarrowings(call.Arguments);
         }
-        else if (hasTupleRest)
+        else if (hasTupleRest || originalSignatures is not null)
         {
             ContextualizeGenericCallArguments(call.Arguments, bestMatch.ParamTypes);
             argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);

@@ -1251,6 +1251,11 @@ public partial class TypeChecker
                     .ToDictionary(StringComparer.Ordinal);
             return CopyEditorSignatureMetadata(signature, signature with
             {
+                TypeParams = signature.TypeParams?.Select(parameter => parameter with
+                {
+                    Constraint = parameter.Constraint is null ? null : SubstitutePreservingSignatures(parameter.Constraint, signatureSubs),
+                    Default = parameter.Default is null ? null : SubstitutePreservingSignatures(parameter.Default, signatureSubs)
+                }).ToList(),
                 ParamTypes = signature.ParamTypes
                     .Select(type => SubstitutePreservingSignatures(type, signatureSubs)).ToList(),
                 ReturnType = SubstitutePreservingSignatures(signature.ReturnType, signatureSubs),
