@@ -710,6 +710,11 @@ public partial class TypeChecker
             EnsureWritableClassIndex(constraint, index, syntax);
             return;
         }
+        if (index is TypeInfo.Union keyUnion && TryGetLiteralPropertyKeys(index, out _))
+        {
+            foreach (var key in keyUnion.FlattenedTypes) EnsureWritableClassIndex(receiver, key, syntax);
+            return;
+        }
         if (receiver is not TypeInfo.Instance && receiver is not (TypeInfo.Class or TypeInfo.GenericClass or
             TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })) return;
         bool isStatic = receiver is not TypeInfo.Instance;
@@ -730,7 +735,12 @@ public partial class TypeChecker
             if (name is not null && (isStatic
                 ? core.StaticMethods.ContainsKey(name) || core.StaticProperties.ContainsKey(name)
                 : core.Methods.ContainsKey(name) || core.FieldTypes.ContainsKey(name) || core.Getters.ContainsKey(name) || core.Setters.ContainsKey(name)))
+            {
+                if (isStatic && core.StaticReadonlyFields.Contains(name))
+                    throw new TypeCheckException($"Cannot assign to '{name}' because it is a read-only property.",
+                        TryGetExprLine(syntax), tsCode: "TS2540");
                 return;
+            }
         }
         TokenType[] kinds = index is TypeInfo.Symbol or TypeInfo.UniqueSymbol ? [TokenType.TYPE_SYMBOL]
             : IsNumber(index) || index is TypeInfo.NumberLiteral || IsNumericConstructorIndex(index)

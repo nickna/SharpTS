@@ -32,6 +32,9 @@ public sealed class PrivateStaticBracketAccessTests
     [InlineData("class C { private static read(value: number): number { return value; } } C['read']('bad');", "TS2345")]
     [InlineData("class C { static #value = 1; } C['#value'];", "TS7053")]
     [InlineData("class C { static readonly value = 1; } C.value = 2;", "TS2540")]
+    [InlineData("class C { private static readonly value = 1; } C['value']++;", "TS2540")]
+    [InlineData("class C { private static readonly '0' = 1; } C[0] = 2;", "TS2540")]
+    [InlineData("class C { private static readonly first = 1; private static second = 2; } declare const key: 'first' | 'second'; C[key]++;", "TS2540")]
     [InlineData("class C { private static value = 1; } class D { private static value = 2; } declare const constructor: typeof C | typeof D; constructor['value'];", "TS7053")]
     [InlineData("class C { private static value = 1; } class D { static value = 2; } declare const constructor: typeof C | typeof D; constructor['value'];", "TS7053")]
     public void BracketEscapePreservesDotVisibilityPrivateBrandsAndTypeChecks(string source, string code)
