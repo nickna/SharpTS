@@ -11,6 +11,8 @@ public sealed class IntersectionWritePrivateBrandTests
     {
         foreach (var (source, code) in new (string, string)[]
         {
+            ("class X{private x=1;value=1;} class Y{private y=1;} class A{private x=1;value=1;} class B{private y=1;} type U=(X&B)|(A&Y); function f<T extends U>(box:T&X&Y){box.value=2;}", "TS2339"),
+            ("class X{private x=1;value=1;} class Y{private y=1;} class A{private x=1;value=1;} type U=(X&Y)|(A&Y); function f<T extends U>(box:T&X&Y){box.value=2;}", ""),
             ("class A{get value():number{return 1;} set value(next:number|string){}} interface I extends A{} function write<T>(box:T&Readonly<I>){box.value=1;}", "TS2540"),
             ("class A{get value():number{return 1;} set value(next:number|string){}} interface I extends A{} function write<T>(box:T&Readonly<I>&{value:number}){box.value=2;}", ""),
             ("class A{get value():number{return 1;}} interface I extends A{} function write<T>(box:T&I&{value:number}){box.value=2;}", ""),

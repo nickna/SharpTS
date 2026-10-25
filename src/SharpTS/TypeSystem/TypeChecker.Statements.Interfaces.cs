@@ -603,6 +603,39 @@ public partial class TypeChecker
         InterfaceDeclarationsFor(_preRegisteredInterfaces, _environment).Add(interfaceStmt);
     }
 
+    private void RefreshPreRegisteredClassInterfaceHeritage()
+    {
+        // Plain-script type preregistration precedes class hoisting. Revisit only the
+        // declaration-owned pending interfaces once those exact class shells are bound,
+        // before deferred method signatures can collapse an empty interface intersection.
+        if (!_preRegisteredInterfaces.TryGetValue(_environment, out var declarations)) return;
+        foreach (var declaration in declarations)
+        {
+            if (declaration.TypeParams is { Count: > 0 } || declaration.Extends is not { Count: > 0 } ||
+                _completedInterfaces.GetValueOrDefault(_environment)?.Contains(declaration) == true ||
+                _environment.GetLocalTypeBinding(declaration.Name.Lexeme) is not TypeInfo.Interface current) continue;
+            HashSet<TypeInfo.Interface> parents = current.Extends?.ToHashSet() ?? [];
+            bool changed = false;
+            for (int i = 0; i < declaration.Extends.Count; i++)
+            {
+                // Read the declaration's actual binding, without resolving class signatures
+                // early (which would inspect method annotations before this link is installed).
+                string? declaredName = declaration.ExtendsNodes is { } nodes && i < nodes.Count
+                    ? (nodes[i] is NamedTypeNode { TypeArguments: null } named ? named.Name : null)
+                    : declaration.Extends[i];
+                if (declaredName is null || declaredName.Contains('.') || declaredName.Contains('<')) continue;
+                TypeInfo? origin = _environment.GetTypeBinding(declaredName);
+                if (origin is not (TypeInfo.MutableClass or TypeInfo.Class) ||
+                    parents.Any(parent => ReferenceEquals(parent.ClassOrigin, origin))) continue;
+                parents.Add(origin is TypeInfo.Class cls ? ClassAsInterfaceBase(cls) :
+                    new TypeInfo.Interface(GetClassName(origin) ?? "", FrozenDictionary<string, TypeInfo>.Empty,
+                        FrozenSet<string>.Empty) { ClassOrigin = origin });
+                changed = true;
+            }
+            if (changed) DefineInterfaceBinding(declaration.Name.Lexeme, current with { Extends = parents.ToFrozenSet() });
+        }
+    }
+
     private void CheckInterfaceDeclaration(Stmt.Interface interfaceStmt)
     {
         // An interface may not be named after a primitive type keyword (TS2427). `symbol` is a

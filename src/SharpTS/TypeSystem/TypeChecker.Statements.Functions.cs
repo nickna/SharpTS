@@ -400,6 +400,7 @@ public partial class TypeChecker
                     break;
             }
         }
+        RefreshPreRegisteredClassInterfaceHeritage();
     }
 
     /// <summary>

@@ -65,6 +65,8 @@ public partial class TypeChecker
                             }
                         }
                     }
+                    foreach (var part in intersection.FlattenedTypes)
+                        if (UnionArmsConflict(part, result, new(ReferenceEqualityComparer.Instance))) return new([], true);
                     return result;
                 }
                 if (current is TypeInfo.Union union)
@@ -130,5 +132,28 @@ public partial class TypeChecker
             !left.IsPrivate && !right.IsPrivate || left.IsPrivate && right.IsPrivate &&
                 (IsSameAccessorSource(left.DeclarationId, right.DeclarationId) ||
                  left.Core is not null && ReferenceEquals(left.Core, right.Core));
+
+        bool UnionArmsConflict(TypeInfo current, IntersectionWriteBrandShape context, HashSet<TypeInfo> visited)
+        {
+            if (!visited.Add(current)) return false;
+            try
+            {
+                return current switch
+                {
+                    TypeInfo.TypeParameter { Constraint: { } constraint } => UnionArmsConflict(constraint, context, visited),
+                    TypeInfo.RecursiveTypeAlias alias => UnionArmsConflict(ExpandRecursiveTypeAlias(alias), context, visited),
+                    TypeInfo.Intersection intersection => intersection.FlattenedTypes.Any(part => UnionArmsConflict(part, context, visited)),
+                    // Compare each complete arm against the guaranteed enclosing context.
+                    // Do not distribute several unions or materialize their cross-product.
+                    TypeInfo.Union union => union.FlattenedTypes.All(arm => ConflictsWithContext(Shape(arm), context)),
+                    _ => false
+                };
+            }
+            finally { visited.Remove(current); }
+        }
+
+        bool ConflictsWithContext(IntersectionWriteBrandShape arm, IntersectionWriteBrandShape context) =>
+            arm.Impossible || arm.Members.Any(member => context.Members.TryGetValue(member.Key, out var expected) &&
+                !member.Value.Any(brand => expected.Any(other => SameBrand(brand, other))));
     }
 }
