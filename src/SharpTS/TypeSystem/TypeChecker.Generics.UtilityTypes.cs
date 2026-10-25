@@ -877,7 +877,7 @@ public partial class TypeChecker
     {
         return type switch
         {
-            TypeInfo.Interface itf => [.. itf.OptionalMembers],
+            TypeInfo.Interface itf => [.. itf.GetAllOptionalMembers()],
             TypeInfo.Record record => record.OptionalFields is null
                 ? []
                 : [.. record.OptionalFields],
