@@ -1087,6 +1087,7 @@ public partial class TypeChecker
                     // declaration kinds before the source-order body pass.
                     HoistFunctionDeclarations(method.Body, hoistBodyVars: true);
                     HoistLexicalDeclarations(method.Body);
+                    RecordStableCaptureParameters(method.Parameters, method.Body);
                     CheckClassBodyStatements(method.Body, recoverComputedSymbolDiagnostics);
 
                     // #367/#372: object-slot number/boolean-typed locals, parameters, and returns

@@ -946,6 +946,8 @@ public partial class TypeChecker
                 // later block-scoped binding in the SAME body can forward-reference it (#533).
                 HoistLexicalDeclarations(body);
 
+                RecordStableCaptureParameters(funcStmt.Parameters, body);
+
                 CheckStmtList(body);
 
                 // #367/#372: object-slot any number/boolean-typed local, parameter, or return that an

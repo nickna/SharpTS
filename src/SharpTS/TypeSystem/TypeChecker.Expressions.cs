@@ -1927,6 +1927,7 @@ public partial class TypeChecker
             _immediateClassFlows[classBodyFlow] = callerFlow;
 
         _classFieldDeferredReadDepth++;
+        RecordStableCaptureParameters(arrow.Parameters, arrow.BlockBody, arrow.ExpressionBody);
         var valueFlowReturns = BeginArrowValueFlow();
         try
         {
@@ -3071,6 +3072,7 @@ public partial class TypeChecker
                         HoistClassDeclarations(method.Body);
                         HoistFunctionDeclarations(method.Body, hoistBodyVars: true);
                         HoistLexicalDeclarations(method.Body);
+                        RecordStableCaptureParameters(method.Parameters, method.Body);
                         CheckStmtList(method.Body);
 
                         // #367/#372: object-slot number/boolean-typed locals, parameters, and returns

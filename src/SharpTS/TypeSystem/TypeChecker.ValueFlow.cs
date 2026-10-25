@@ -160,7 +160,8 @@ public partial class TypeChecker
             checker._inStaticBlock = false;
             if (!preserveCapturedNarrowings)
                 foreach (var binding in _incoming.Bindings.Values)
-                    if (!checker._typeMap.IsConstBinding(binding.Symbol) &&
+                    if (!checker._typeMap.IsConstCaptureBinding(binding.Symbol) &&
+                        !checker._stableCaptureParameters.TryGetValue(binding.Symbol, out _) &&
                         checker._classFieldDeclaredBindingTypes.TryGetValue(binding.Symbol, out var declared) &&
                         ReferenceEquals(checker._environment.GetValueBinding(binding.Name), binding.Symbol))
                         checker._environment.Define(binding.Name, declared.Type);
