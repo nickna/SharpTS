@@ -15,7 +15,7 @@ public sealed class PrivateStaticBracketAccessTests
     [InlineData("class C { protected static value = 1; } const value: number = C['value'];")]
     [InlineData("class Base<T> { private static value = 1; } class C extends Base<number> {} const value: number = C['value'];")]
     [InlineData("class C { private static first = 1; private static second = 's'; } declare const key: 'first' | 'second'; const value: number | string = C[key];")]
-    [InlineData("class C { private static value = 1; } class D { private static value = 2; } declare const constructor: typeof C | typeof D; const value: number = constructor['value'];")]
+    [InlineData("class Base { private static value = 1; } class C extends Base {} class D extends Base {} declare const constructor: typeof C | typeof D; const value: number = constructor['value'];")]
     public void LiteralBracketReadsRetainOrdinaryPrivateMemberTypes(string source)
     {
         new TypeChecker(TypeCheckerOptions.Strict).Check(TestHarness.ParseOrThrow(source));
@@ -31,7 +31,9 @@ public sealed class PrivateStaticBracketAccessTests
     [InlineData("class C { private static value = 1; } const invalid: string = C['value'];", "TS2322")]
     [InlineData("class C { private static read(value: number): number { return value; } } C['read']('bad');", "TS2345")]
     [InlineData("class C { static #value = 1; } C['#value'];", "TS7053")]
-    [InlineData("class C { private static readonly value = 1; } C.value = 2;", "TS2540")]
+    [InlineData("class C { static readonly value = 1; } C.value = 2;", "TS2540")]
+    [InlineData("class C { private static value = 1; } class D { private static value = 2; } declare const constructor: typeof C | typeof D; constructor['value'];", "TS7053")]
+    [InlineData("class C { private static value = 1; } class D { static value = 2; } declare const constructor: typeof C | typeof D; constructor['value'];", "TS7053")]
     public void BracketEscapePreservesDotVisibilityPrivateBrandsAndTypeChecks(string source, string code)
         => Assert.Equal(code, Assert.ThrowsAny<TypeCheckException>(() =>
             new TypeChecker(TypeCheckerOptions.Strict).Check(TestHarness.ParseOrThrow(source))).Diagnostic.TsCode);
