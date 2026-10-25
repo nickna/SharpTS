@@ -1123,11 +1123,8 @@ public partial class TypeChecker
             case Expr.ArrowFunction arrow:
             {
                 TypeInfo checkedType = CheckArrowFunction(arrow, contextualType);
-                // Preserve the declared callback shape for downstream delegate inference (not
-                // merely a value-returning implementation type accepted by a void sink).
-                TypeInfo finalType = GetContextualFunctionType(contextualType) ?? checkedType;
-                _typeMap.Set(arrow, finalType);
-                RecordEditorExpressionType(arrow, finalType);
+                _typeMap.Set(arrow, checkedType);
+                RecordEditorExpressionType(arrow, checkedType);
                 return;
             }
 
