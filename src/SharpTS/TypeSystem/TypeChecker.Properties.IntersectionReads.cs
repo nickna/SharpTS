@@ -80,9 +80,9 @@ public partial class TypeChecker
                 if (enforceAccessibility)
                 {
                     var core = declaring.Core;
-                    bool field = isStatic ? core.StaticProperties.ContainsKey(name.Lexeme)
+                    bool isField = isStatic ? core.StaticProperties.ContainsKey(name.Lexeme)
                         : core.FieldTypes.ContainsKey(name.Lexeme) || core.Getters.ContainsKey(name.Lexeme) || core.Setters.ContainsKey(name.Lexeme);
-                    var access = (isStatic, field) switch
+                    var access = (isStatic, isField) switch
                     {
                         (true, true) => core.StaticFieldAccessMap.GetValueOrDefault(name.Lexeme, AccessModifier.Public),
                         (true, false) => core.StaticMethodAccessMap.GetValueOrDefault(name.Lexeme, AccessModifier.Public),
