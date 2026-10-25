@@ -88,7 +88,8 @@ public partial class TypeChecker
                 if (isStatic)
                 {
                     var setter = selected.DeclaringCore.StaticSetters?.GetValueOrDefault(name.Lexeme);
-                    bool getterOnly = selected.DeclaringCore.StaticGetters?.ContainsKey(name.Lexeme) == true && setter is null;
+                    bool getterOnly = TryGetAccessorSetterAccess(owner, isStatic: true, name.Lexeme,
+                        out var setterAccess) && setterAccess is null;
                     if (enforceAccessibility)
                     {
                         if (setter is not null || getterOnly)
