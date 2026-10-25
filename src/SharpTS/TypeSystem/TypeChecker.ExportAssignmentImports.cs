@@ -7,7 +7,7 @@ public partial class TypeChecker
 {
     private bool ExportAssignmentRequiresDefaultImport(ParsedModule module)
     {
-        var kind = new ExportAssignmentDeclarationResolver(_moduleResolver!).ResolveModule(module, []);
+        var kind = new ExportAssignmentDeclarationResolver(_moduleResolver!, _globalDeclarationEnvironment).ResolveModule(module, []);
         return kind.HasFlag(ExportAssignmentDeclarationKind.Other) &&
             (kind & (ExportAssignmentDeclarationKind.Variable | ExportAssignmentDeclarationKind.Module)) == 0;
     }
@@ -17,10 +17,11 @@ public partial class TypeChecker
 
     // TS2497 depends on the assigned symbol's declarations, not its callable/constructable
     // type. In particular, a callable variable is allowed while a bare function is not.
-    private sealed class ExportAssignmentDeclarationResolver(ModuleResolver resolver)
+    private sealed class ExportAssignmentDeclarationResolver(ModuleResolver resolver, TypeEnvironment? globalEnvironment)
     {
         private sealed record Scope(ParsedModule Module, IReadOnlyList<Stmt> Statements, Scope? Parent);
         private readonly Dictionary<ParsedModule, Scope> _modules = [];
+        private readonly Dictionary<ParsedModule, Scope> _globals = [];
         private readonly Dictionary<(Scope Scope, string Name), Scope> _namespaces = [];
         private readonly HashSet<(Scope Scope, string Path, bool Exported)> _active = [];
 
@@ -74,10 +75,31 @@ public partial class TypeChecker
                         _ => ExportAssignmentDeclarationKind.Unknown
                     };
                 }
-                return !found && searchParents && scope.Parent is { } parent
-                    ? ResolveLocal(parent, path) : result;
+                if (!found && searchParents)
+                    return scope.Parent is { } parent ? ResolveLocal(parent, path) : ResolveGlobal(path);
+                return result;
             }
             finally { _active.Remove((scope, string.Join('\0', path), false)); }
+        }
+
+        private ExportAssignmentDeclarationKind ResolveGlobal(string[] path)
+        {
+            if (globalEnvironment?.GetValueBinding(path[0]) is not { } binding)
+                return ExportAssignmentDeclarationKind.Unknown;
+            ExportAssignmentDeclarationKind result = 0;
+            foreach (var declaration in binding.Declarations)
+            {
+                if (resolver.GetCachedModule(declaration.Document.Path) is not { } source) continue;
+                if (!_globals.TryGetValue(source, out var scope))
+                {
+                    IEnumerable<Stmt> statements = source.IsScript ? source.Statements : [];
+                    _globals[source] = scope = new Scope(source,
+                        statements.Concat(source.Statements.OfType<Stmt.DeclareGlobal>()
+                            .SelectMany(global => global.Members)).ToList(), null);
+                }
+                result |= ResolveLocal(scope, path, searchParents: false);
+            }
+            return result;
         }
 
         private ExportAssignmentDeclarationKind ResolveExport(Scope scope, string[] path)

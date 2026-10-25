@@ -9,7 +9,6 @@ public sealed class ExportAssignmentNamespaceImportDiagnosticTests
     [Theory]
     [InlineData("function value(input: string): number; export = value;")]
     [InlineData("class value { static known: number; } export = value;")]
-    [InlineData("enum value { Known } export = value;")]
     [InlineData("namespace N { function value(): number; } import alias = N.value; export = alias;")]
     public void BareDeclarationTargetsReportOneImportDiagnostic(string declaration)
     {
@@ -18,6 +17,31 @@ public sealed class ExportAssignmentNamespaceImportDiagnosticTests
         Assert.Equal("TS2497", diagnostic.TsCode);
         Assert.Equal(2, diagnostic.Line);
     }
+
+    [Fact]
+    public void BareEnumTargetInAnExternalDeclarationFileReportsTS2497()
+    {
+        var diagnostics = Check("declare enum value { Known }\nexport = value;",
+            "import * as Imported from './assignment';\nImported;");
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal("TS2497", diagnostic.TsCode);
+        Assert.Equal(2, diagnostic.Line);
+    }
+
+    [Theory]
+    [InlineData("function value(): number;", "TS2497")]
+    [InlineData("const value: () => number;", null)]
+    [InlineData("namespace value { const known: number; }", null)]
+    public void GlobalAssignedSymbolsUseTheirOriginalDeclarationKind(string declaration, string? code)
+        => AssertCode(Check("declare " + declaration + "\ndeclare module 'assignment' { export = value; }",
+            "import * as Imported from 'assignment';\nImported;"), code);
+
+    [Theory]
+    [InlineData("function value(): number;", "const value: () => number;", null)]
+    [InlineData("const value: () => number;", "function value(): number;", "TS2497")]
+    public void LocalAssignedDeclarationsShadowGlobalNames(string global, string local, string? code)
+        => AssertCode(Check("declare " + global + "\ndeclare module 'assignment' { " + local + " export = value; }",
+            "import * as Imported from 'assignment';\nImported;"), code);
 
     [Theory]
     [InlineData("const value: { known: number }; export = value;", "const result: number = Imported.known;")]
