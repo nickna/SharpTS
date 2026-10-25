@@ -27,10 +27,12 @@ public partial class TypeChecker
     /// <param name="stmt">The statement AST node to type-check.</param>
     private void CheckStmt(Stmt stmt)
     {
+        using var deferredFlow = stmt is Stmt.Function { Body: not null } ? new DeferredValueFlowScope(this) : null;
         using var editorScope = stmt is Stmt.For or Stmt.ForOf or Stmt.ForIn
             ? EnterEditorLexicalScope(stmt, EditorSyntaxRole.Whole) : null;
         if (EditorFacts.IsEnabled) BeginEditorDeclaration(stmt);
         DispatchStmt(stmt);
+        if (stmt is Stmt.Return) RecordReturnedValueFlow();
         if (EditorFacts.IsEnabled) CompleteEditorDeclaration(stmt);
     }
 
@@ -90,13 +92,34 @@ public partial class TypeChecker
             CurrentSourceDocument,
             BindingNamespace.Label);
         _activeLabels[labelName] = new ActiveLabel(isOnLoop, labelSymbol);
+        Stmt labeled = stmt.Statement;
+        while (labeled is Stmt.LabeledStatement innerLabel) labeled = innerLabel.Statement;
+        Stmt? loopBody = labeled switch
+        {
+            Stmt.While loop => loop.Body,
+            Stmt.DoWhile loop => loop.Body,
+            Stmt.For loop => loop.Body,
+            Stmt.ForOf loop => loop.Body,
+            Stmt.ForIn loop => loop.Body,
+            _ => null
+        };
+        var flowTarget = new ValueFlowTarget(labelName, isOnLoop, false, loopBody);
+        var incomingFlow = CaptureValueFlow();
+        _valueFlowTargets.Push(flowTarget);
         try
         {
             CheckStmt(stmt.Statement);
+            if (!isOnLoop && flowTarget.Breaks.Count > 0)
+            {
+                var exits = flowTarget.Breaks.ToList();
+                if (!AlwaysTerminates(stmt.Statement)) exits.Add(CaptureValueFlow());
+                JoinValueFlow(incomingFlow, exits.ToArray());
+            }
         }
         finally
         {
             _activeLabels.Remove(labelName);
+            _valueFlowTargets.Pop();
         }
         return VoidResult.Instance;
     }
@@ -1087,11 +1110,18 @@ public partial class TypeChecker
         var (thenAssignmentAssumption, elseAssignmentAssumption) =
             GetTypeofDefiniteAssignmentAssumptions(stmt.Condition);
         var incomingAssignments = SnapshotDefiniteAssignmentState();
+        var incomingFlow = CaptureValueFlow();
+        ValueFlowState? thenFlow = null;
+        ValueFlowState? elseFlow = null;
         Dictionary<BindingSymbol, bool>? thenAssignments = null;
         Dictionary<BindingSymbol, bool>? elseAssignments = null;
 
         void CheckThenBranch()
         {
+            var tryWrites = CaptureTryValueWrites();
+            var jumps = CaptureValueFlowJumps();
+            RestoreValueFlow(incomingFlow);
+            using var branchScope = new EnvironmentScope(this, new TypeEnvironment(_environment));
             RestoreDefiniteAssignmentState(incomingAssignments);
             bool addedAssumption = thenAssignmentAssumption != null &&
                 _definiteAssignmentReadAssumptions.Add(thenAssignmentAssumption);
@@ -1099,11 +1129,13 @@ public partial class TypeChecker
             {
                 CheckStmt(stmt.ThenBranch);
                 thenAssignments = SnapshotDefiniteAssignmentState();
+                thenFlow = CaptureValueFlow();
             }
             catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2454")
             {
                 RecordTypeError(ex);
                 thenAssignments = SnapshotDefiniteAssignmentState();
+                thenFlow = CaptureValueFlow();
             }
             catch
             {
@@ -1112,6 +1144,11 @@ public partial class TypeChecker
             }
             finally
             {
+                if (CheckedConditionTruthiness(stmt.Condition) == false)
+                {
+                    RestoreTryValueWrites(tryWrites);
+                    RestoreValueFlowJumps(jumps);
+                }
                 if (addedAssumption)
                     _definiteAssignmentReadAssumptions.Remove(thenAssignmentAssumption!);
             }
@@ -1119,6 +1156,10 @@ public partial class TypeChecker
 
         void CheckElseBranch()
         {
+            var tryWrites = CaptureTryValueWrites();
+            var jumps = CaptureValueFlowJumps();
+            RestoreValueFlow(incomingFlow);
+            using var branchScope = new EnvironmentScope(this, new TypeEnvironment(_environment));
             RestoreDefiniteAssignmentState(incomingAssignments);
             bool addedAssumption = elseAssignmentAssumption != null &&
                 _definiteAssignmentReadAssumptions.Add(elseAssignmentAssumption);
@@ -1126,11 +1167,13 @@ public partial class TypeChecker
             {
                 CheckStmt(stmt.ElseBranch!);
                 elseAssignments = SnapshotDefiniteAssignmentState();
+                elseFlow = CaptureValueFlow();
             }
             catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2454")
             {
                 RecordTypeError(ex);
                 elseAssignments = SnapshotDefiniteAssignmentState();
+                elseFlow = CaptureValueFlow();
             }
             catch
             {
@@ -1139,6 +1182,11 @@ public partial class TypeChecker
             }
             finally
             {
+                if (CheckedConditionTruthiness(stmt.Condition) == true)
+                {
+                    RestoreTryValueWrites(tryWrites);
+                    RestoreValueFlowJumps(jumps);
+                }
                 if (addedAssumption)
                     _definiteAssignmentReadAssumptions.Remove(elseAssignmentAssumption!);
             }
@@ -1214,6 +1262,31 @@ public partial class TypeChecker
                 }
             }
         }
+
+        var guardedExit = CaptureValueFlow();
+        bool thenTerminates = AlwaysTerminates(stmt.ThenBranch);
+        bool elseTerminates = stmt.ElseBranch is not null && AlwaysTerminates(stmt.ElseBranch);
+        var checkedThen = thenFlow ?? incomingFlow;
+        var checkedElse = elseFlow ?? incomingFlow;
+        switch (CheckedConditionTruthiness(stmt.Condition))
+        {
+            case true: JoinValueFlow(incomingFlow, checkedThen); break;
+            case false: JoinValueFlow(incomingFlow, checkedElse); break;
+            default:
+                if (thenTerminates && !elseTerminates) JoinValueFlow(incomingFlow, checkedElse);
+                else if (elseTerminates && !thenTerminates) JoinValueFlow(incomingFlow, checkedThen);
+                else if (thenTerminates && elseTerminates) RestoreValueFlow(incomingFlow);
+                else JoinValueFlow(incomingFlow, checkedThen, checkedElse);
+                break;
+        }
+        // Existing guard analysis proves these facts on the surviving path. Parent scopes
+        // can otherwise only have been widened by a checked branch, never narrowed by it.
+        foreach (var binding in incomingFlow.Bindings.Values)
+            if (guardedExit.Bindings.GetValueOrDefault(binding.Symbol) is { } guarded &&
+                !TypeInfoEqualityComparer.Instance.Equals(binding.Type, guarded.Type) &&
+                IsCompatible(binding.Type, guarded.Type) &&
+                ReferenceEquals(_environment.GetValueBinding(binding.Name), binding.Symbol))
+                _environment.Define(binding.Name, guarded.Type);
 
         MergeDefiniteAssignmentBranches(
             incomingAssignments,
@@ -1405,18 +1478,30 @@ public partial class TypeChecker
     internal VoidResult VisitWhile(Stmt.While stmt)
     {
         CheckExpr(stmt.Condition);
+        var tryWrites = CaptureTryValueWrites();
+        var flowJumps = CaptureValueFlowJumps();
         var incomingAssignments = SnapshotDefiniteAssignmentState();
+        var incomingFlow = CaptureValueFlow();
+        ValueFlowLoopExit? bodyFlow = null;
         var conditionNarrowings = AnalyzeLoopConditionNarrowings(stmt.Condition);
         var conditionWrites = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
             new Stmt.Expression(stmt.Condition), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
         try
         {
-            CheckLoopBody(stmt.Body, conditionNarrowings, conditionAssignedPaths: conditionWrites);
+            bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings, conditionAssignedPaths: conditionWrites);
         }
         finally
         {
             RestoreDefiniteAssignmentState(incomingAssignments);
         }
+        if (CheckedConditionTruthiness(stmt.Condition) == false)
+        {
+            RestoreValueFlow(incomingFlow);
+            RestoreTryValueWrites(tryWrites);
+            RestoreValueFlowJumps(flowJumps);
+        }
+        else JoinLoopValueFlow(incomingFlow, bodyFlow, CheckedConditionTruthiness(stmt.Condition) != true,
+            CheckedConditionTruthiness(stmt.Condition) == true);
         ApplyLoopExitNarrowings(conditionNarrowings);
         return VoidResult.Instance;
     }
@@ -1426,8 +1511,19 @@ public partial class TypeChecker
         // Do-while runs body first, so no condition narrowings in body
         var conditionWrites = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
             new Stmt.Expression(stmt.Condition), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
-        CheckLoopBody(stmt.Body, conditionNarrowings: null, conditionAssignedPaths: conditionWrites);
+        var incomingFlow = CaptureValueFlow();
+        var bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings: null, conditionAssignedPaths: conditionWrites);
+        bool conditionRuns = ApplyLoopContinuingValueFlow(incomingFlow, bodyFlow);
+        var tryWrites = CaptureTryValueWrites();
         CheckExpr(stmt.Condition);
+        var conditionExit = CaptureValueFlow();
+        if (!conditionRuns) RestoreTryValueWrites(tryWrites);
+        JoinLoopValueFlow(incomingFlow, bodyFlow with
+        {
+            Body = conditionExit,
+            Continues = [],
+            HasNormalExit = conditionRuns
+        }, canSkip: false);
         return VoidResult.Instance;
     }
 
@@ -1444,6 +1540,11 @@ public partial class TypeChecker
             conditionNarrowings = AnalyzeLoopConditionNarrowings(stmt.Condition);
         }
         var incomingAssignments = SnapshotDefiniteAssignmentState();
+        var incomingFlow = CaptureValueFlow();
+        ValueFlowLoopExit? bodyFlow = null;
+
+        var tryWrites = CaptureTryValueWrites();
+        var flowJumps = CaptureValueFlowJumps();
 
         // Include increment expression in assigned paths analysis
         ControlFlow.LoopAssignmentAnalyzer.AssignmentAnalysis? incrementPaths = null;
@@ -1457,15 +1558,28 @@ public partial class TypeChecker
 
         try
         {
-            CheckLoopBody(stmt.Body, conditionNarrowings, incrementPaths, conditionAssignedPaths: conditionWrites);
+            bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings, incrementPaths, conditionAssignedPaths: conditionWrites);
+            bool incrementRuns = ApplyLoopContinuingValueFlow(incomingFlow, bodyFlow);
+            var beforeIncrementWrites = CaptureTryValueWrites();
 
             if (stmt.Increment != null)
                 CheckExpr(stmt.Increment);
+            bodyFlow = bodyFlow with { Body = CaptureValueFlow(), Continues = [], HasNormalExit = incrementRuns };
+            if (!incrementRuns) RestoreTryValueWrites(beforeIncrementWrites);
         }
         finally
         {
             RestoreDefiniteAssignmentState(incomingAssignments);
         }
+        if (stmt.Condition is not null && CheckedConditionTruthiness(stmt.Condition) == false)
+        {
+            RestoreValueFlow(incomingFlow);
+            RestoreTryValueWrites(tryWrites);
+            RestoreValueFlowJumps(flowJumps);
+        }
+        else if (stmt.Condition is null || CheckedConditionTruthiness(stmt.Condition) == true)
+            JoinLoopValueFlow(incomingFlow, bodyFlow, canSkip: false, alwaysTrue: true);
+        else JoinLoopValueFlow(incomingFlow, bodyFlow, canSkip: true);
         ApplyLoopExitNarrowings(conditionNarrowings);
         return VoidResult.Instance;
     }
@@ -1527,6 +1641,8 @@ public partial class TypeChecker
             ? DeclareHoistedLoopHead(stmt.Variable, elementType)
             : null;
         var incomingAssignments = SnapshotDefiniteAssignmentState();
+        var incomingFlow = CaptureValueFlow();
+        ValueFlowLoopExit? bodyFlow = null;
         TypeEnvironment forOfEnv = new(_environment);
         RegisterEditorScope(stmt, forOfEnv, EditorScopeKind.Block, EditorSyntaxRole.Whole);
         if (hoistedVar is not null)
@@ -1540,12 +1656,13 @@ public partial class TypeChecker
 
         try
         {
-            CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forOfEnv);
+            bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forOfEnv);
         }
         finally
         {
             RestoreDefiniteAssignmentState(incomingAssignments);
         }
+        JoinLoopValueFlow(incomingFlow, bodyFlow, canSkip: true);
         return VoidResult.Instance;
     }
 
@@ -1600,6 +1717,8 @@ public partial class TypeChecker
             ? DeclareHoistedLoopHead(stmt.Variable, loopKeyType)
             : null;
         var incomingAssignments = SnapshotDefiniteAssignmentState();
+        var incomingFlow = CaptureValueFlow();
+        ValueFlowLoopExit? bodyFlow = null;
         TypeEnvironment forInEnv = new(_environment);
         RegisterEditorScope(stmt, forInEnv, EditorScopeKind.Block, EditorSyntaxRole.Whole);
         if (hoistedVar is not null)
@@ -1624,12 +1743,13 @@ public partial class TypeChecker
 
         try
         {
-            CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forInEnv);
+            bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forInEnv);
         }
         finally
         {
             RestoreDefiniteAssignmentState(incomingAssignments);
         }
+        JoinLoopValueFlow(incomingFlow, bodyFlow, canSkip: true);
         return VoidResult.Instance;
     }
 
@@ -1688,7 +1808,7 @@ public partial class TypeChecker
     /// <param name="additionalAssignedPaths">Additional paths to consider as assigned (e.g., from increment)</param>
     /// <param name="loopEnvironment">Custom environment for the loop (e.g., for-of/for-in iterator variable)</param>
     /// <param name="conditionAssignedPaths">Condition effects used only to validate guard preservation</param>
-    private void CheckLoopBody(
+    private ValueFlowLoopExit CheckLoopBody(
         Stmt body,
         List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)>? conditionNarrowings,
         ControlFlow.LoopAssignmentAnalyzer.AssignmentAnalysis? additionalAssignedPaths = null,
@@ -1728,12 +1848,11 @@ public partial class TypeChecker
 
         // Set up loop environment if provided
         var prevEnv = _environment;
-        if (loopEnvironment != null)
-        {
-            _environment = loopEnvironment;
-        }
+        _environment = loopEnvironment ?? new TypeEnvironment(_environment);
 
         _loopDepth++;
+        var flowTarget = new ValueFlowTarget(null, true, false, body);
+        _valueFlowTargets.Push(flowTarget);
         try
         {
             PushNarrowingScope();
@@ -1764,6 +1883,9 @@ public partial class TypeChecker
                 }
 
                 CheckStmt(body);
+                var targets = _valueFlowTargets.Where(target => ReferenceEquals(target.LoopBody, body)).ToArray();
+                return new(CaptureValueFlow(), targets.SelectMany(target => target.Breaks).ToArray(),
+                    targets.SelectMany(target => target.Continues).ToArray(), !AlwaysTerminates(body));
             }
             finally
             {
@@ -1773,10 +1895,8 @@ public partial class TypeChecker
         finally
         {
             _loopDepth--;
-            if (loopEnvironment != null)
-            {
-                _environment = prevEnv;
-            }
+            _valueFlowTargets.Pop();
+            _environment = prevEnv;
         }
     }
 
@@ -1815,6 +1935,7 @@ public partial class TypeChecker
                 throw new TypeOperationException("'break' can only be used inside a loop or switch", tsCode: "TS1105");
             }
         }
+        RecordValueFlowJump(stmt.Label, isContinue: false);
         return VoidResult.Instance;
     }
 
@@ -1861,6 +1982,7 @@ public partial class TypeChecker
                 throw new TypeOperationException("'continue' can only be used inside a loop", tsCode: "TS1104");
             }
         }
+        RecordValueFlowJump(stmt.Label, isContinue: true);
         return VoidResult.Instance;
     }
 
@@ -2069,8 +2191,8 @@ public partial class TypeChecker
         Stmt.Throw => true,
         Stmt.Break => true,
         Stmt.Continue => true,
-        Stmt.Block block => block.Statements.Count > 0 && AlwaysTerminates(block.Statements[^1]),
-        Stmt.Sequence seq => seq.Statements.Count > 0 && AlwaysTerminates(seq.Statements[^1]),
+        Stmt.Block block => block.Statements.Any(AlwaysTerminates),
+        Stmt.Sequence seq => seq.Statements.Any(AlwaysTerminates),
         Stmt.If ifStmt => AlwaysTerminates(ifStmt.ThenBranch) &&
                          ifStmt.ElseBranch != null && AlwaysTerminates(ifStmt.ElseBranch),
         _ => false

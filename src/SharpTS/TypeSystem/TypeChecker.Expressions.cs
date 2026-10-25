@@ -28,6 +28,7 @@ public partial class TypeChecker
         {
             TypeInfo ordinaryResult = RefreshForwardClassConstructor(DispatchExpr(expr));
             _typeMap.Set(expr, ordinaryResult);
+            RecordTryValueMutation(expr);
             return ordinaryResult;
         }
         BeginEditorExpression(expr);
@@ -35,6 +36,7 @@ public partial class TypeChecker
         {
             TypeInfo result = RefreshForwardClassConstructor(DispatchExpr(expr));
             _typeMap.Set(expr, result);
+            RecordTryValueMutation(expr);
             RecordEditorExpressionType(expr, result);
             return result;
         }
@@ -1642,6 +1644,7 @@ public partial class TypeChecker
         string contextualReturnTsCode = "TS2322",
         bool useContextualReturnType = true)
     {
+        using var deferredFlow = new DeferredValueFlowScope(this, _immediateClassCallables.ContainsKey(arrow));
         if (!EditorFacts.IsEnabled)
             return CheckArrowFunctionCore(arrow, expectedType, contextualReturnTsCode, useContextualReturnType);
         BeginEditorExpression(arrow);
@@ -1924,6 +1927,7 @@ public partial class TypeChecker
             _immediateClassFlows[classBodyFlow] = callerFlow;
 
         _classFieldDeferredReadDepth++;
+        var valueFlowReturns = BeginArrowValueFlow();
         try
         {
             if (arrow.ExpressionBody != null)
@@ -2045,6 +2049,7 @@ public partial class TypeChecker
         }
         finally
         {
+            CompleteArrowValueFlow(arrow, valueFlowReturns);
             _classFieldDeferredReadDepth--;
             if (classBodyFlow is not null) _immediateClassFlows.Remove(classBodyFlow);
             PopDeclaredVariableScope();

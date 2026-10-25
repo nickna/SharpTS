@@ -870,6 +870,8 @@ public partial class TypeChecker
             ValidateDeclaredClassMembers(classStmt, classTypeForBody, classTypeParams, classTypeEnv);
 
             CheckClassStaticBlocks(classStmt, classTypeForBody);
+            var staticBlockExit = classStmt.StaticInitializers?.Any(initializer => initializer is Stmt.StaticBlock) == true
+                ? CaptureValueFlow() : null;
 
             TypeEnvironment classEnv = CreateClassBodyEnvironment(
                 classStmt, classTypeForBody, classTypeParams, superclass);
@@ -897,6 +899,9 @@ public partial class TypeChecker
                 _environment = prevEnv;
                 _privateNameEnclosingClasses.Pop();
                 _currentClass = prevClass;
+                // Method/accessor bodies are deferred; their checked writes cannot change
+                // the flow established by eagerly executed static blocks.
+                if (staticBlockExit is not null) RestoreValueFlow(staticBlockExit);
             }
 
             CheckStrictPropertyInitialization(classStmt, mutableClass);

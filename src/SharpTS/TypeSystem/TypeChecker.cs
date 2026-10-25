@@ -1014,12 +1014,31 @@ public partial class TypeChecker
     /// </summary>
     private void CheckStmtList(List<Stmt> statements)
     {
+        ValueFlowState? terminatedFlow = null;
+        (ValueFlowTryWrites Owner, Dictionary<BindingSymbol, ValueFlowBinding> Writes)? terminatedTryWrites = null;
+        (ValueFlowTarget Target, int Breaks, int Continues)[] terminatedJumps = [];
+        void PreserveTerminatedFlow(Stmt statement)
+        {
+            if (terminatedFlow is not null)
+            {
+                RestoreValueFlow(terminatedFlow);
+                RestoreTryValueWrites(terminatedTryWrites);
+                RestoreValueFlowJumps(terminatedJumps);
+            }
+            else if (AlwaysTerminates(statement))
+            {
+                terminatedFlow = CaptureValueFlow();
+                terminatedTryWrites = CaptureTryValueWrites();
+                terminatedJumps = CaptureValueFlowJumps();
+            }
+        }
         if (!_recoveryMode)
         {
             foreach (Stmt statement in statements)
             {
                 ThrowIfCancellationRequested();
                 CheckStmt(statement);
+                PreserveTerminatedFlow(statement);
             }
             return;
         }
@@ -1036,7 +1055,11 @@ public partial class TypeChecker
             }
             catch (TypeMismatchException ex) { RecordTypeError(ex); }
             catch (TypeCheckException ex) { RecordTypeError(ex); }
-            finally { _currentStatementLine = saved; }
+            finally
+            {
+                _currentStatementLine = saved;
+                PreserveTerminatedFlow(statement);
+            }
         }
     }
 

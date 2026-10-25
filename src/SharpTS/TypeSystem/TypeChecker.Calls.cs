@@ -21,6 +21,7 @@ public partial class TypeChecker
         using var invocationAttempt = BeginEditorInvocation(call, EditorInvocationKind.Call, call.Arguments);
         ForgetSourceMemberCall(call);
         TypeInfo result = CheckCallCore(call, contextualResultType);
+        result = ApplyImmediateArrowValueFlow(call, result);
         RecordSourceMemberCall(call);
         invocationAttempt?.Succeed(result);
         return result;

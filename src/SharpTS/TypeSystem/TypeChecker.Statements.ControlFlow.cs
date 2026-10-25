@@ -17,6 +17,8 @@ public partial class TypeChecker
             HoistClassDeclarations(statements);
             HoistLexicalDeclarations(statements);
             CheckStmtList(statements);
+            if (environment.Enclosing is { } parent)
+                PublishInheritedValueFlow(environment, parent);
         }
         finally
         {
@@ -27,6 +29,9 @@ public partial class TypeChecker
     private void CheckSwitch(Stmt.Switch switchStmt)
     {
         CheckExpr(switchStmt.Subject);
+        var incomingFlow = CaptureValueFlow();
+        List<ValueFlowState> exits = [];
+        ValueFlowState? fallthroughFlow = null;
         using var editorScope = EnterEditorLexicalScope(switchStmt);
 
         Expr.Variable? discriminatedVariable = null;
@@ -44,10 +49,13 @@ public partial class TypeChecker
         TypeInfo? fallthroughType = null;
 
         _switchDepth++;
+        var flowTarget = new ValueFlowTarget(null, false, true, null);
+        _valueFlowTargets.Push(flowTarget);
         try
         {
             foreach (var caseItem in switchStmt.Cases)
             {
+                JoinValueFlow(incomingFlow, incomingFlow, fallthroughFlow ?? incomingFlow);
                 CheckExpr(caseItem.Value);
 
                 TypeInfo? caseType = null;
@@ -74,36 +82,61 @@ public partial class TypeChecker
 
                 using (new EnvironmentScope(this, caseEnvironment))
                 {
-                    foreach (var stmt in caseItem.Body)
-                        CheckStmt(stmt);
+                    CheckStmtList(caseItem.Body);
+                    fallthroughFlow = CaptureValueFlow();
                 }
 
                 bool exitsCase = caseItem.Body.LastOrDefault() is Stmt.Break or Stmt.Continue ||
                     caseItem.Body.Count > 0 && AlwaysTerminates(caseItem.Body[^1]);
                 fallthroughType = exitsCase ? null : effectiveCaseType;
+                if (exitsCase)
+                {
+                    if (caseItem.Body.LastOrDefault() is Stmt.Break or Stmt.Continue)
+                        exits.Add(fallthroughFlow);
+                    fallthroughFlow = null;
+                }
             }
 
             if (switchStmt.DefaultBody != null)
             {
-                foreach (var stmt in switchStmt.DefaultBody)
-                {
-                    CheckStmt(stmt);
-                }
+                JoinValueFlow(incomingFlow, incomingFlow, fallthroughFlow ?? incomingFlow);
+                CheckBlock(switchStmt.DefaultBody, new TypeEnvironment(_environment));
+                if (switchStmt.DefaultBody.LastOrDefault() is Stmt.Break ||
+                    switchStmt.DefaultBody.Count == 0 || !AlwaysTerminates(switchStmt.DefaultBody[^1]))
+                    exits.Add(CaptureValueFlow());
+            }
+            else
+            {
+                exits.Add(incomingFlow);
+                if (fallthroughFlow is not null) exits.Add(fallthroughFlow);
             }
         }
         finally
         {
             _switchDepth--;
+            _valueFlowTargets.Pop();
         }
+        exits.AddRange(flowTarget.Breaks);
+        JoinValueFlow(incomingFlow, exits.ToArray());
     }
 
     private void CheckTryCatch(Stmt.TryCatch tryCatch)
     {
+        var incomingFlow = CaptureValueFlow();
+        var tryWrites = new ValueFlowTryWrites(_definiteAssignmentStack.Count, incomingFlow);
         // Check try block
         {
             using var editorScope = EnterEditorLexicalScope(tryCatch, keyword: TokenType.TRY);
-            CheckBlock(tryCatch.TryBlock, new TypeEnvironment(_environment));
+            _valueFlowTryWrites.Push(tryWrites);
+            try { CheckBlock(tryCatch.TryBlock, new TypeEnvironment(_environment)); }
+            finally
+            {
+                _valueFlowTryWrites.Pop();
+                if (_valueFlowTryWrites.TryPeek(out var parentWrites) && parentWrites.Depth == tryWrites.Depth)
+                    foreach (var binding in tryWrites.Writes.Values) AddTryValueWrite(parentWrites, binding);
+            }
         }
+        var tryExit = CaptureValueFlow();
 
         // TS1196: a catch-binding annotation must be exactly 'any' or 'unknown'.
         // The parser accepts any annotation (#215); the restriction is a
@@ -120,6 +153,8 @@ public partial class TypeChecker
         // Check catch block with its parameter in scope
         if (tryCatch.CatchBlock != null)
         {
+            bool tryTerminates = tryCatch.TryBlock.Count > 0 && AlwaysTerminates(tryCatch.TryBlock[^1]);
+            JoinValueFlow(incomingFlow, ExceptionValueFlow(tryWrites));
             using var editorScope = EnterEditorLexicalScope(tryCatch, keyword: TokenType.CATCH);
             TypeEnvironment catchEnv = new(_environment);
             if (tryCatch.CatchParam is not null)
@@ -132,6 +167,11 @@ public partial class TypeChecker
                         : TypeInfo.Any.Shared);
 
             CheckBlock(tryCatch.CatchBlock, catchEnv);
+            var catchExit = CaptureValueFlow();
+            if (tryTerminates) JoinValueFlow(incomingFlow, catchExit);
+            else if (tryCatch.CatchBlock.Count > 0 && AlwaysTerminates(tryCatch.CatchBlock[^1]))
+                JoinValueFlow(incomingFlow, tryExit);
+            else JoinValueFlow(incomingFlow, tryExit, catchExit);
         }
 
         // Check finally block
