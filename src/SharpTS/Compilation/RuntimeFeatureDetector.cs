@@ -2397,13 +2397,6 @@ public sealed partial class RuntimeFeatureDetector
         }
     }
 
-    private static bool ContainsOpaqueType(TypeInfo type) => type switch
-    {
-        TypeInfo.Any or TypeInfo.Unknown => true,
-        TypeInfo.Union union => union.Types.Any(ContainsOpaqueType),
-        _ => false
-    };
-
     private sealed class DeclaredNameCounter : AstVisitorBase
     {
         public Dictionary<string, int> Counts { get; } = [];
@@ -2541,6 +2534,22 @@ public sealed partial class RuntimeFeatureDetector
     {
         MarkObjectLiteralShape(expression);
         MarkPotentiallyMaterialized(_typeMap?.Get(expression));
+        // Contextual annotations can erase a nested argument's actual shape. Its
+        // checked child expressions still identify carriers crossing this boundary.
+        switch (expression)
+        {
+            case Expr.ObjectLiteral literal:
+                foreach (var property in literal.Properties) MarkPotentiallyMaterialized(property.Value);
+                break;
+            case Expr.ArrayLiteral array:
+                foreach (var element in array.Elements) MarkPotentiallyMaterialized(element);
+                break;
+            case Expr.Grouping grouping: MarkPotentiallyMaterialized(grouping.Expression); break;
+            case Expr.TypeAssertion assertion: MarkPotentiallyMaterialized(assertion.Expression); break;
+            case Expr.Satisfies satisfies: MarkPotentiallyMaterialized(satisfies.Expression); break;
+            case Expr.NonNullAssertion assertion: MarkPotentiallyMaterialized(assertion.Expression); break;
+            case Expr.Spread spread: MarkPotentiallyMaterialized(spread.Expression); break;
+        }
     }
 
     private void MarkObjectLiteralShape(Expr expression)
