@@ -996,7 +996,7 @@ public partial class TypeChecker
                 {
                     var paramTypes = sig.Parameters.Select(p => ResolveAnnotation(p.Type, p.TypeAnnotationNode) ?? TypeInfo.Any.Shared).ToList();
                     var returnType = ResolveAnnotation(sig.ReturnType, sig.ReturnTypeNode)!;
-                    int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && p.DefaultValue == null).Count();
+                    int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && !p.IsRest && p.DefaultValue == null).Count();
                     bool hasRestParam = sig.Parameters.Any(p => p.IsRest);
                     var paramNames = sig.Parameters.Select(p => p.Name.Lexeme).ToList();
                     var signature = new TypeInfo.CallSignature(sigTypeParams, paramTypes, returnType, requiredParams, hasRestParam, paramNames);
