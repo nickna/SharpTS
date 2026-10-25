@@ -831,6 +831,10 @@ public partial class TypeChecker
             objType = ExpandRecursiveTypeAlias(rtaObj);
         objType = ResolveMappedTypeForAccess(objType);
 
+        bool intersectionWrite = objType is TypeInfo.Intersection;
+        if (objType is TypeInfo.Intersection intersection)
+            objType = IntersectionWriteTarget(intersection, [set.Name.Lexeme], set.Name.Line, enforceAccessibility: true);
+
         // Extract the narrowing path for the written location, if narrowable.
         var basePath = ExtractNarrowingPath(set.Object);
         Narrowing.NarrowingPath.PropertyAccess? assignedPath = null;
@@ -1105,7 +1109,8 @@ public partial class TypeChecker
                          set.Name.Line,
                          tsCode: "TS2540");
                  }
-                 TypeInfo valueType = CheckExpr(set.Value);
+                 TypeInfo valueType = intersectionWrite
+                     ? CheckExprWithContext(set.Value, fieldType) : CheckExpr(set.Value);
                  // Getter-only properties: allow at type-check time, runtime handles sloppy/strict
                  if (record.IsGetterOnly(set.Name.Lexeme))
                  {

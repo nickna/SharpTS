@@ -769,7 +769,16 @@ public partial class TypeChecker
     {
         TypeInfo objType = CheckExpr(setIndex.Object);
         TypeInfo indexType = CheckExpr(setIndex.Index);
-        TypeInfo valueType = CheckExpr(setIndex.Value);
+        TypeInfo? intersectionWriteContext = null;
+        if (objType is TypeInfo.Intersection intersection && TryGetLiteralPropertyKeys(indexType, out var writeKeys))
+        {
+            var target = IntersectionWriteTarget(intersection, writeKeys,
+                TryGetExprLine(setIndex.Index) ?? 0, enforceAccessibility: false, missingCode: "TS7053");
+            objType = target;
+            intersectionWriteContext = SimplifyIntersection(target.Fields.Values.Distinct(TypeInfoEqualityComparer.Instance).ToList());
+        }
+        TypeInfo valueType = intersectionWriteContext is null
+            ? CheckExpr(setIndex.Value) : CheckExprWithContext(setIndex.Value, intersectionWriteContext);
 
         // Same enum-index widening as CheckGetIndex: `x[E.A] = v` uses the enum's key kind.
         if (indexType is TypeInfo.Enum indexEnum)

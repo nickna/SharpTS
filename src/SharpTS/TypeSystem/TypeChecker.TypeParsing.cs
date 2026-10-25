@@ -371,12 +371,8 @@ public partial class TypeChecker
                     TypeInfo.Record r => r.Fields,
                     TypeInfo.Interface i => i.GetAllMembers().GroupBy(member => member.Key)
                         .ToDictionary(group => group.Key, group => group.First().Value),
-                    TypeInfo.Class c => c.FieldTypes,
-                    TypeInfo.Instance inst => inst.ClassType switch
-                    {
-                        TypeInfo.Class c => c.FieldTypes,
-                        _ => null
-                    },
+                    // Class constituents retain their declaring owners, visibility, and setters.
+                    // Their apparent fields cannot replace the nominal constituent with a record.
                     _ => null
                 };
 
