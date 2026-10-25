@@ -86,10 +86,10 @@ public sealed class GenericTupleRestCallTests
         => Assert.Empty(Check(source, modules));
 
     [Theory]
-    [InlineData("interface F { <T>(...args:[T,T]):T; } declare const f:F; f<number>(1,2);", 0)]
-    [InlineData("declare function f<T>(...args:[T,T]):T; declare function f<T>(...args:[T,T,T]):T; f<number>(1,2,3);", 1)]
-    [InlineData("declare function f<T>(...args:[T,T]):void; declare function f(callback:(x:number)=>void):void; f(x=>{ const n:number=x; });", 1)]
-    public void TupleCallsRetainTheirOriginalEditorCandidateAndInstantiation(string source, int ordinal)
+    [InlineData("interface F { <T>(...args:[T,T]):T; } declare const f:F; f<number>(1,2);", 0, "number")]
+    [InlineData("declare function f<T>(...args:[T,T]):T; declare function f<T>(...args:[T,T,T]):T; f<number>(1,2,3);", 1, "number")]
+    [InlineData("declare function f<T>(...args:[T,T]):void; declare function f(callback:(x:number)=>void):void; f(x=>{ const n:number=x; });", 1, "void")]
+    public void TupleCallsRetainTheirOriginalEditorCandidateAndInstantiation(string source, int ordinal, string returnType)
     {
         var document = new SourceDocument("tuple-call.ts", source);
         var statements = new Parser(new Lexer(source).ScanTokens()).WithSourceDocument(document).WithEditorSyntax().ParseOrThrow();
@@ -100,7 +100,7 @@ public sealed class GenericTupleRestCallTests
         Assert.Equal(EditorInvocationStatus.Selected, fact.Status);
         Assert.Equal(ordinal, fact.SelectedOrdinal);
         Assert.True(fact.Candidates[ordinal].Instantiated!.IsAvailable);
-        Assert.Equal("number", fact.SelectedSignature!.ReturnType.Text);
+        Assert.Equal(returnType, fact.SelectedSignature!.ReturnType.Text);
     }
 
     private static IReadOnlyList<SharpTS.Diagnostics.Diagnostic> Check(string source, bool modules)
