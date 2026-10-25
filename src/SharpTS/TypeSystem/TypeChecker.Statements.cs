@@ -1092,6 +1092,21 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
+    private ValueFlowState ExcludedValueFlow(ValueFlowState incoming,
+        IEnumerable<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> guards)
+    {
+        Dictionary<BindingSymbol, ValueFlowBinding>? bindings = null;
+        foreach (var (path, _, excludedType) in guards)
+            if (path is Narrowing.NarrowingPath.Variable variable &&
+                _environment.GetValueBinding(variable.Name) is { } symbol &&
+                incoming.Bindings.TryGetValue(symbol, out var binding))
+            {
+                bindings ??= new(incoming.Bindings, ReferenceEqualityComparer.Instance);
+                bindings[symbol] = binding with { Type = excludedType };
+            }
+        return bindings is null ? incoming : incoming with { Bindings = bindings };
+    }
+
     internal VoidResult VisitIf(Stmt.If stmt)
     {
         try
@@ -1195,6 +1210,16 @@ public partial class TypeChecker
 
         // Try compound type guard analysis first (handles && conditions like x !== null && y !== null)
         var compoundGuards = AnalyzeCompoundTypeGuards(stmt.Condition);
+        var missingElseFlow = incomingFlow;
+        if (stmt.ElseBranch is null)
+        {
+            // The empty false edge still carries guard exclusions. In particular, the
+            // negation of an OR excludes every disjunct, even without a written else.
+            var falseGuards = stmt.Condition is Expr.Logical { Operator.Type: TokenType.OR_OR }
+                ? CollectDisjunctGuards(stmt.Condition)
+                : compoundGuards.Count == 1 ? compoundGuards : [];
+            missingElseFlow = ExcludedValueFlow(incomingFlow, falseGuards);
+        }
 
         if (compoundGuards.Count > 0)
         {
@@ -1268,7 +1293,7 @@ public partial class TypeChecker
         bool thenTerminates = AlwaysTerminates(stmt.ThenBranch);
         bool elseTerminates = stmt.ElseBranch is not null && AlwaysTerminates(stmt.ElseBranch);
         var checkedThen = thenFlow ?? incomingFlow;
-        var checkedElse = elseFlow ?? incomingFlow;
+        var checkedElse = elseFlow ?? missingElseFlow;
         switch (CheckedConditionTruthiness(stmt.Condition))
         {
             case true: JoinValueFlow(incomingFlow, checkedThen); break;
