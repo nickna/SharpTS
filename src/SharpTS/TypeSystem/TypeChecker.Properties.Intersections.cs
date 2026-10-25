@@ -143,7 +143,7 @@ public partial class TypeChecker
     }
 
     private void EnforceIntersectionMemberAccess(AccessModifier access, TypeInfo owner, TypeInfo receiver, Token name)
-        => EnforceIntersectionMemberAccess(access, SelectedSourceClassId(owner), GetClassName(owner), receiver, name);
+        => EnforceIntersectionMemberAccess(access, SelectedSourceClassId(owner), GetClassName(owner) ?? "<anonymous>", receiver, name);
 
     private void EnforceIntersectionMemberAccess(AccessModifier access, int ownerId, string ownerName, TypeInfo receiver, Token name)
     {
