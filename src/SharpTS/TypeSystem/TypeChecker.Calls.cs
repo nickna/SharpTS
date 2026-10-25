@@ -1580,6 +1580,11 @@ public partial class TypeChecker
         Dictionary<TypeInfo.Function, (TypeInfo.GenericFunction Generic, TypeInfo.Function Original)> tupleCandidates =
             new(ReferenceEqualityComparer.Instance);
         List<TypeCheckException> tupleFailures = [];
+        var tupleArityArguments = genericOverloadedFunc.Signatures.Any(signature =>
+            signature.HasRestParam && signature.ParamTypes.LastOrDefault() is TypeInfo.Tuple)
+                ? GenericTupleCallArguments(call, argTypes) : null;
+        int arityCandidates = tupleArityArguments is null ? 0 : genericOverloadedFunc.Signatures.Count(signature =>
+            GenericTupleCallArityCouldMatch(signature, tupleArityArguments));
 
         foreach (var signature in genericOverloadedFunc.Signatures)
         {
@@ -1631,7 +1636,7 @@ public partial class TypeChecker
 
         if (matchingSignatures.Count == 0)
         {
-            if (tupleFailures.Count == 1) throw tupleFailures[0];
+            if (tupleFailures.Count == 1 && arityCandidates == 1) throw tupleFailures[0];
             string argTypesStr = string.Join(", ", argTypes);
             throw new TypeCheckException($"No overload matches call with arguments ({argTypesStr}).", tsCode: "TS2769");
         }
@@ -1714,6 +1719,19 @@ public partial class TypeChecker
         List<TypeInfo.Function> matches = [];
         Dictionary<TypeInfo.Function, TypeInfo.GenericFunction> tupleCandidates = new(ReferenceEqualityComparer.Instance);
         List<TypeCheckException> tupleFailures = [];
+        var tupleArityArguments = hasTupleGeneric ? GenericTupleCallArguments(call, argTypes) : null;
+        int arityCandidates = 0;
+        if (tupleArityArguments is not null)
+            foreach (var candidate in overloadSet.Signatures)
+            {
+                TypeInfo.Function? signature = candidate switch
+                {
+                    TypeInfo.Function function when call.TypeArgs is not { Count: > 0 } => function,
+                    TypeInfo.GenericFunction generic => new(generic.ParamTypes, generic.ReturnType, generic.RequiredParams, generic.HasRestParam),
+                    _ => null
+                };
+                if (signature is not null && GenericTupleCallArityCouldMatch(signature, tupleArityArguments)) arityCandidates++;
+            }
 
         foreach (TypeInfo candidate in overloadSet.Signatures)
         {
@@ -1756,7 +1774,7 @@ public partial class TypeChecker
 
         if (matches.Count == 0)
         {
-            if (tupleFailures.Count == 1) throw tupleFailures[0];
+            if (tupleFailures.Count == 1 && arityCandidates == 1) throw tupleFailures[0];
             string rendered = string.Join(", ", argTypes);
             throw new TypeCheckException(
                 $"No overload matches call with arguments ({rendered}).", tsCode: "TS2769");
@@ -1770,6 +1788,11 @@ public partial class TypeChecker
             RecordEditorInvocationInstantiation(tupleCandidate, bestMatch);
             RecordEditorInvocationSelection(tupleCandidate, bestMatch);
             return bestMatch.ReturnType;
+        }
+        if (hasTupleGeneric)
+        {
+            ContextualizeGenericCallArguments(call.Arguments, bestMatch.ParamTypes);
+            CheckInstantiatedGenericCallArguments(call, bestMatch, argTypes);
         }
         RecordEditorInvocationSelection(bestMatch);
         return bestMatch.ReturnType;

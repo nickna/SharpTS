@@ -32,7 +32,10 @@ public sealed class GenericTupleRestCallTests
             ("declare function f<T>(...args:[T,T]):void; declare function f<T>(...args:[T,T,T]):void; f(1,'bad');", "TS2345"),
             ("declare function f<T>(first:T,...rest:[T,T]):T; f(...[1,2,'bad']);", "TS2345"),
             ("declare function f<T>(first:T,...rest:[T,T]):T; const values:[number,number,string]=[1,2,'bad']; f(...values);", "TS2345"),
-            ("declare function f<T>(...args:[[T,T]]):T; const values:[number,string]=[1,'bad']; f<number>([...values]);", "TS2345")
+            ("declare function f<T>(...args:[[T,T]]):T; const values:[number,string]=[1,'bad']; f<number>([...values]);", "TS2345"),
+            ("declare function f<T>(...args:[T,T]):void; declare function f(x:boolean,y:boolean):void; f(1,'bad');", "TS2769"),
+            ("declare function f<T>(...args:[T,T]):void; declare function f(x:boolean):void; f(1,'bad');", "TS2345"),
+            ("declare function f<T>(...args:[T,T]):void; declare function f(callback:(x:number)=>void):void; f(x=>x.notThere());", "TS2339")
         })
             foreach (bool modules in new[] { false, true }) yield return [source, code, modules];
     }
@@ -71,7 +74,9 @@ public sealed class GenericTupleRestCallTests
             "declare function f<T>(first:T,...rest:[T,T]):T; const values:[number,number,number]=[1,2,3]; const value:number=f(...values);",
             "declare function f<T>(...args:[[T,T]]):T; const values:[number,number]=[1,2]; const value:number=f<number>([...values]);",
             "declare function f<T>(...args:[[T,T]]):T; const value:number=f<number>(([1,2]));",
-            "interface F<A> { <T extends A>(...args:[T,T]):T; } declare const f:F<number>; const value:number=f<number>(1,2);"
+            "interface F<A> { <T extends A>(...args:[T,T]):T; } declare const f:F<number>; const value:number=f<number>(1,2);",
+            "declare function f<T>(...args:[T,T]):void; declare function f(callback:(x:number)=>void):void; f(x=>x.toFixed());",
+            "declare function f<T extends number>(...args:[T,T]):T; declare function f(x:boolean,y:boolean):boolean; const value:boolean=f(true,false);"
         })
             foreach (bool modules in new[] { false, true }) yield return [source, modules];
     }
@@ -83,6 +88,7 @@ public sealed class GenericTupleRestCallTests
     [Theory]
     [InlineData("interface F { <T>(...args:[T,T]):T; } declare const f:F; f<number>(1,2);", 0)]
     [InlineData("declare function f<T>(...args:[T,T]):T; declare function f<T>(...args:[T,T,T]):T; f<number>(1,2,3);", 1)]
+    [InlineData("declare function f<T>(...args:[T,T]):void; declare function f(callback:(x:number)=>void):void; f(x=>{ const n:number=x; });", 1)]
     public void TupleCallsRetainTheirOriginalEditorCandidateAndInstantiation(string source, int ordinal)
     {
         var document = new SourceDocument("tuple-call.ts", source);

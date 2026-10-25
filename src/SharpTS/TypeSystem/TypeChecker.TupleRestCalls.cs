@@ -8,6 +8,21 @@ public partial class TypeChecker
     private sealed record GenericTupleCallSlot(TypeInfo Type, bool Optional = false, bool Spread = false, Expr? Expression = null);
     private readonly record struct GenericTupleMatchState(int Parameter, int Argument);
 
+    private static bool GenericTupleCallArityCouldMatch(TypeInfo.Function signature, IReadOnlyList<GenericTupleCallSlot> arguments)
+    {
+        int minimum = signature.MinArity;
+        int? maximum = signature.HasRestParam ? null : signature.ParamTypes.Count;
+        if (signature.HasRestParam && signature.ParamTypes.LastOrDefault() is TypeInfo.Tuple tuple)
+        {
+            int prefix = signature.ParamTypes.Count - 1;
+            minimum = tuple.RequiredCount > 0 ? prefix + tuple.RequiredCount : minimum;
+            maximum = tuple.HasSpread || tuple.RestElementType is not null ? null : prefix + tuple.Elements.Count;
+        }
+        int fixedArguments = arguments.Count(argument => !argument.Spread);
+        return (arguments.Any(argument => argument.Spread) || fixedArguments >= minimum) &&
+            (maximum is null || fixedArguments <= maximum);
+    }
+
     private List<TypeInfo> PrepareGenericTupleInferenceArguments(TypeInfo.GenericFunction generic,
         IReadOnlyList<GenericTupleCallSlot> slots) => slots.Select((slot, position) =>
             position < generic.ParamTypes.Count - 1 && slot.Expression is { } expression
