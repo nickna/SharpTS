@@ -197,6 +197,7 @@ public partial class TypeChecker
                     }
                 }
                 else ContextualizeNestedGenericCallback(expression, expected);
+                RefreshContextualizedGenericArgument(expression, arguments[index].Type);
             }
         if (!validate) return;
         if (!Match(false, out _)) Fail();

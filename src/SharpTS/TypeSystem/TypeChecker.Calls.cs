@@ -189,6 +189,7 @@ public partial class TypeChecker
                             contextualResultType));
                     ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
                 }
+                argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
                 CheckInstantiatedGenericCallArguments(call, instFunc, argTypes);
                 RecordEditorInvocationInstantiation(originalSignature, instFunc);
                 RecordEditorInvocationSelection(originalSignature, instFunc);
@@ -1069,27 +1070,29 @@ public partial class TypeChecker
     }
 
     private List<TypeInfo> RefreshContextualizedGenericArguments(IReadOnlyList<Expr> arguments, IReadOnlyList<TypeInfo> previous)
-    {
-        return arguments.Select((argument, i) => Refresh(argument, previous[i])).ToList();
+        => arguments.Select((argument, i) => RefreshContextualizedGenericArgument(argument, previous[i])).ToList();
 
-        TypeInfo Refresh(Expr expression, TypeInfo fallback)
+    private TypeInfo RefreshContextualizedGenericArgument(Expr expression, TypeInfo fallback)
+    {
+        if (expression is Expr.Grouping grouping) return RefreshContextualizedGenericArgument(grouping.Expression, fallback);
+        if (expression is Expr.Spread spread) return RefreshContextualizedGenericArgument(spread.Expression, fallback);
+        TypeInfo current = _typeMap.Get(expression) ?? fallback;
+        if (expression is Expr.ObjectLiteral literal && current is TypeInfo.Record record)
         {
-            if (expression is Expr.Grouping grouping) return Refresh(grouping.Expression, fallback);
-            if (expression is Expr.Spread spread) return Refresh(spread.Expression, fallback);
-            TypeInfo current = _typeMap.Get(expression) ?? fallback;
-            if (expression is Expr.ObjectLiteral literal && current is TypeInfo.Record record)
+            var fields = record.Fields.ToDictionary();
+            foreach (var property in literal.Properties.Where(property => !property.IsSpread && property.Key is not null &&
+                property.Kind is Expr.ObjectPropertyKind.Value or Expr.ObjectPropertyKind.Method))
             {
-                var fields = record.Fields.ToDictionary();
-                foreach (var property in literal.Properties.Where(property => !property.IsSpread && property.Key is not null))
-                {
-                    string name = GetPropertyKeyNameForTypeCheck(property.Key!);
-                    if (fields.TryGetValue(name, out var member)) fields[name] = Refresh(property.Value, member);
-                }
-                current = record with { Fields = fields.ToFrozenDictionary() };
-                _typeMap.Set(expression, current);
+                string name = GetPropertyKeyNameForTypeCheck(property.Key!);
+                if (fields.TryGetValue(name, out var member))
+                    fields[name] = RefreshContextualizedGenericArgument(property.Value, member);
             }
-            return current;
+            // Accessor bodies have function types, while their fields contain the getter result
+            // or setter parameter type. Preserve those value types and all record metadata.
+            current = record with { Fields = fields.ToFrozenDictionary() };
+            _typeMap.Set(expression, current);
         }
+        return current;
     }
 
     /// <summary>Checks provided arguments after generic substitution and callback contextualization.</summary>
