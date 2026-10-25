@@ -788,6 +788,7 @@ public partial class TypeChecker
                         if (numberIndexType != null)
                             throw new TypeCheckException($" Duplicate number index signature in interface '{interfaceStmt.Name.Lexeme}'.", tsCode: "TS2374");
                         numberIndexType = valueType;
+                        readonlyNumberIndex = indexSig.IsReadonly;
                         break;
                     case TokenType.TYPE_SYMBOL:
                         if (symbolIndexType != null)
