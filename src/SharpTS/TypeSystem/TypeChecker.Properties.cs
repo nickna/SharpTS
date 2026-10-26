@@ -751,11 +751,10 @@ public partial class TypeChecker
         return objType;
     }
 
-    private TypeInfo ClassFieldWriteType(TypeInfo owner, string name, TypeInfo type) =>
-        !_exactOptionalPropertyTypes && ClassInfoAccessor.Get(owner,
+    private TypeInfo ClassFieldWriteType(TypeInfo owner, string name, TypeInfo type, bool isStatic = false) =>
+        OptionalPropertyWriteType(type, ClassInfoAccessor.Get(owner,
             c => c.Core.OrdinaryOptionalMembers,
-            gc => gc.Core.OrdinaryOptionalMembers)?.Contains((false, name)) == true
-                ? CreateUnion(type, TypeInfo.Undefined.Shared) : type;
+            gc => gc.Core.OrdinaryOptionalMembers)?.Contains((isStatic, name)) == true);
 
     private TypeInfo CheckSet(Expr.Set set)
     {
@@ -922,7 +921,7 @@ public partial class TypeChecker
                     if (ClassInfoAccessor.Get(current, c => c.Core.StaticReadonlyFields, gc => gc.Core.StaticReadonlyFields)?.Contains(set.Name.Lexeme) == true)
                         throw new TypeCheckException($" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.", tsCode: "TS2540");
                     ObserveSourceMemberSelection(set.Name, current, MemberFacet.Static);
-                    TypeInfo writeType = setterType ?? staticPropType;
+                    TypeInfo writeType = setterType ?? ClassFieldWriteType(current, set.Name.Lexeme, staticPropType, isStatic: true);
                     TypeInfo valueType = CheckExpr(set.Value);
                     if (!IsCompatible(writeType, valueType))
                     {
@@ -1268,7 +1267,7 @@ public partial class TypeChecker
                 if (constituent is TypeInfo.Any) { memberTypes.Add(constituent); continue; }
                 if (GetMemberTypeWithOptionality(constituent, set.Name.Lexeme) is not { } member)
                     throw new TypeCheckException($" Property '{set.Name.Lexeme}' does not exist on type '{unionObj}'.", tsCode: "TS2339");
-                memberTypes.Add(member.Type);
+                memberTypes.Add(OptionalPropertyWriteType(member.Type, member.IsOptional));
             }
             var memberUnion = memberTypes.Aggregate(CreateUnion);
             TypeInfo unionValueType = CheckExpr(set.Value);

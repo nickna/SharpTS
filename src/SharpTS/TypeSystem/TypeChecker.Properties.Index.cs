@@ -993,7 +993,8 @@ public partial class TypeChecker
                     propertyTypes.Clear();
                     break;
                 }
-                propertyTypes.Add(propertyType);
+                propertyTypes.Add(OptionalPropertyWriteType(propertyType,
+                    GetMemberTypeWithOptionality(objType, key)?.IsOptional == true));
             }
             if (propertyTypes.Count > 0)
             {
