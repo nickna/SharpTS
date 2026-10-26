@@ -55,7 +55,7 @@ public sealed class DefaultLibraryErrorHeritageTests
         yield return ["subtype-inherited-member", "class E extends TypeError {} const value: number = new E().name;", "TS2322"];
         yield return ["optional-instance-member", "class E extends Error {} const value: string = new E().stack;", "TS2322"];
         yield return ["unknown-member", "class E extends Error {} new E().missing;", "TS2339"];
-        yield return ["constructor-member-is-not-instance-member", "class E extends Error {} new E().prototype;", "TS2339"];
+        yield return ["constructor-member-is-not-instance-member", "class E extends Error {} new E().prototype;", "TS2576"];
         yield return ["inherited-readonly-instance-member", "class E extends TypeError {} new E().libraryCode = 1;", "TS2540"];
     }
 

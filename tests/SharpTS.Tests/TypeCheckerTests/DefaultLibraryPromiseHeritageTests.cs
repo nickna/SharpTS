@@ -170,7 +170,7 @@ public sealed class DefaultLibraryPromiseHeritageTests
 
         yield return ["selected-static-not-instance", """
             class P extends Promise<number> {} new P(resolve => resolve(1)).prototype;
-            """, "TS2339", 1];
+            """, "TS2576", 1];
 
         yield return ["selected-augmentation-valid", """
             interface Promise<T> { augmented: T; readonly extraCode: string; } class P<T> extends Promise<T> {} const p = new P<number>(resolve => resolve(1)); const value: number = p.augmented; const code: string = p.extraCode;
