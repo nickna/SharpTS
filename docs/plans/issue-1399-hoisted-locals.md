@@ -238,32 +238,37 @@ lexical cell had correct source naming and PDB ranges, but Roslyn discovers
 fields breadth-first: a direct state-machine field wins before a same-named
 field reached through a display-class holder.
 
-Debug builds now keep conflicting outer bindings in the existing authoritative
-function display class, placing both source bindings at the same discovery
-depth. Inner lexical-cell holders are defined before the function display-class
-holder. The evaluator can therefore choose the inner field while its slot is
-live and restore the outer field after scope exit. No value mirrors are used;
-debugger reads and guest execution share the same storage. Builds without
-symbols retain their existing storage selection and layout.
+Debug builds now expose each projected lexical cell through a scoped IL local
+holding a reference to the authoritative cell. The retained state-machine field
+has a scaffolding name, so Roslyn discovers the cell through the local instead
+of traversing the receiver. Roslyn gives these local display-class roots
+precedence over receiver-derived fields. The PDB local range matches the source
+binding's lexical scope, restoring the outer binding after scope exit. The alias
+is reloaded before every resumed state dispatch and after each cell allocation
+or iteration replacement. It copies a reference, never a source value, and adds
+no cell allocations or capture-routing changes. Builds without symbols retain
+their existing storage selection and layout.
 
-The new metadata regression checks both uncaptured and captured outer bindings,
-the actual holder ordering, lexical expiry, and verified debug/nondebug output.
-Exact cell-owned storage keys are excluded after rename expansion, avoiding two
-fields publishing the same PDB slot. Per-iteration storage remains excluded from
-the function display class; a runtime regression requires loop closures to retain
-independent values `0` and `1` in both symbol modes.
-The fresh primary run passes all 55 stops and matches debug/nondebug output;
-[its compact record](../../scripts/editor-smoke/compiled-debugger/lexical-cell-last-verified.json)
-identifies the exact binary, PE/PDB, fixture, and observations. The earlier
+Metadata regressions decode the alias's local-signature type and assert its
+identity with the retained cell field, lexical range, and hoisted slot. They keep
+the duplicate active-field-slot checks and inspect the IL reference reloads.
+Runtime regressions cover captured and uncaptured outer bindings, a parameter,
+and independent loop captures `0` and `1`, with verified debug/nondebug output.
+Exact cell-owned storage keys remain excluded after rename expansion, avoiding
+two fields publishing the same PDB slot.
+
+The fresh primary run passes all 55 existing stops. A separate
+[combined fixture](../../tests/fixtures/HoistedDebuggerLexicalCells/main.ts)
+passes ten more stops: two independent loop iterations each shadowed by an inner
+captured cell, followed by a captured cell shadowing a parameter. Every expected
+binding appears exactly once in Locals and resolves in Watch; expired bindings
+are absent. Both fixtures match debug/nondebug output after reference rewriting.
+The [compact record](../../scripts/editor-smoke/compiled-debugger/lexical-cell-last-verified.json)
+identifies the exact compiler, PE/PDB, source hashes, and observations. The final
+candidate also passes twelve focused metadata/runtime regressions. The earlier
 secondary comparison remains historical and was not rerun for this follow-up.
 
 ## Remaining limits
-
-Combining a same-named per-iteration loop binding with an inner captured lexical
-cell still needs a projection design. The outer loop binding must retain its
-independent capture storage; leaving it as a direct field lets Roslyn discover it
-before the inner cell. The root-local shadow repair above does not certify this
-combined shape, so #1399 remains open for that acceptance gap.
 
 The C# and netcoredbg expression evaluators have different presentation rules;
 the accepted target does not require their Locals views to be identical. Types

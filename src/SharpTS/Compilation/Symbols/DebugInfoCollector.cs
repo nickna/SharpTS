@@ -307,7 +307,7 @@ internal sealed class DebugInfoCollector
                 if (_locals.TryGetValue(method, out MethodLocalSymbols? symbols))
                 {
                     int rid = MetadataTokens.GetRowNumber(MetadataTokens.MethodDefinitionHandle(method.MetadataToken));
-                    var namedSlots = symbols.Scopes.SelectMany(scope => scope.Locals).Select(local => local.Slot).ToHashSet();
+                    var namedSlots = symbols.GetScopesWithProjections().SelectMany(scope => scope.Locals).Select(local => local.Slot).ToHashSet();
                     for (int slot = 0; slot < localSlotCount(rid); slot++)
                         if (!namedSlots.Contains(slot)) symbols.Scopes[0].Locals.Add(($"$scratch{slot}", slot, false));
                 }
@@ -319,7 +319,7 @@ internal sealed class DebugInfoCollector
         {
             int bodySize = methodIlSize?.Invoke(symbols.Rid) ?? 0;
 
-            foreach (var scope in symbols.Symbols.Scopes
+            foreach (var scope in symbols.Symbols.GetScopesWithProjections()
                 .Where(scope => scope.Locals.Count > 0)
                 .OrderBy(scope => scope.StartOffset)
                 .ThenByDescending(scope => EndOf(scope, bodySize) - scope.StartOffset))

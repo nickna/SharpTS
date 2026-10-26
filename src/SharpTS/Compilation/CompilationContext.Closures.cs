@@ -486,6 +486,7 @@ public partial class CompilationContext
     // same-spelled shadows on the exact cell selected by their owner. Empty outside debug builds.
     internal IReadOnlyDictionary<Token, LexicalCellStorage>? DebugLexicalCellStorages { get; set; }
     internal Dictionary<Token, FieldBuilder> ProjectedLexicalCellFields { get; } = new(ReferenceEqualityComparer.Instance);
+    internal Dictionary<Token, LocalBuilder> ProjectedLexicalCellLocals { get; } = new(ReferenceEqualityComparer.Instance);
 
     internal bool IsLoopBodyCellCapture(string name) =>
         LoopBodyCellCaptures?.ContainsKey(name) == true &&

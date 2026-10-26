@@ -1,0 +1,12 @@
+[
+  { "marker":"break:loop-before", "values":{"index":0}, "absent":["inner"] },
+  { "marker":"break:loop-inside", "values":{"index":99} },
+  { "marker":"break:loop-after", "values":{"index":0}, "absent":["inner"] },
+  { "marker":"break:loop-before", "values":{"index":1}, "absent":["inner"] },
+  { "marker":"break:loop-inside", "values":{"index":99} },
+  { "marker":"break:loop-after", "values":{"index":1}, "absent":["inner"] },
+  { "marker":"break:loop-done", "absent":["index","inner"] },
+  { "marker":"break:parameter-before", "values":{"value":11}, "absent":["inner"] },
+  { "marker":"break:parameter-inside", "values":{"value":99} },
+  { "marker":"break:parameter-after", "values":{"value":11}, "absent":["inner"] }
+]

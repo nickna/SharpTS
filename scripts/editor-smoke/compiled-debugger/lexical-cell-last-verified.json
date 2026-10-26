@@ -1,32 +1,59 @@
 {
   "issue": "https://github.com/nickna/SharpTS/issues/1399",
-  "scope": "Authoritative lexical-cell shadows precede outer display-class bindings",
-  "verifiedUtc": "2026-10-26T04:54:03.615Z",
-  "sourceCommit": "d14514cfa70b902cc25b59496db89f0061227ab2",
+  "scope": "Scoped IL-local aliases expose authoritative lexical cells before receiver-derived outer bindings, including independent loop captures and parameter shadows",
+  "verifiedUtc": "2026-10-26T06:03:22.299Z",
+  "sourceCommit": "664b3df8bd714229da542cf39b18b7a31c394399",
   "workingTreeChangesIncluded": true,
   "platform": "win32-x64",
   "dotnetSdk": "10.0.402",
   "sources": {
-    "src/SharpTS/Compilation/ILCompiler.Functions.cs": "26538f2d86d783b6fdacbfb13d0a404d20a9cbbf5b7e02280520a738312a23c4",
-    "src/SharpTS/Compilation/StateMachineBuilderBase.cs": "52f927f1cdc26adce01b14c904236450f76168917069396f65cf3d53102ceca8",
-    "src/SharpTS/Compilation/AsyncStateMachineBuilder.cs": "47706dea4d45107bbb2e86353274b365db29447bb201cb4efd63069c5ec4dcb0",
-    "tests/SharpTS.Tests/Compilation/DebugSymbolsLexicalShadowPrecedenceTests.cs": "fefee167aaedebfb8fb9e8b5dd3f3d34b8f48dd7be763b0c69812e95fb05741b",
+    "src/SharpTS/Compilation/CompilationContext.Closures.cs": "94898757afdda27df7b4ba0a7e962589ba7aa40a82f287ea7b7e0baf5c25e4ae",
+    "src/SharpTS/Compilation/ILCompiler.Functions.cs": "5baf57ba4f7e23bf115e0c74655959c867520f070d7715c93935a3944cbc6c3b",
+    "src/SharpTS/Compilation/StateMachineBuilderBase.cs": "0cf2c45b2283da0ebf35ff7bb295ba1493775e4a1a75f71eb9033dec80200c9c",
+    "src/SharpTS/Compilation/StatementEmitterBase.LexicalCells.cs": "d80b6f3996392ae689ca14dbf1153ae98775d503fc7b14201dccad75d93735f4",
+    "src/SharpTS/Compilation/Symbols/DebugInfoCollector.cs": "6fdb8483b149ad4115d23d6e6cc39128f5ca272ec40295b136d99d3931277887",
+    "src/SharpTS/Compilation/Symbols/MethodLocalSymbols.cs": "4c7d17aa3100dccb0728831a5fe8b6d2ce6663eaf5bf034e91ad9ffaf4d9d96d",
+    "tests/SharpTS.Tests/Compilation/DebugSymbolsHoistedLocalsTests.cs": "68c80089030fc4027f415b82504b0cae36292063e97a899680dd244c62938d92",
+    "tests/SharpTS.Tests/Compilation/DebugSymbolsLexicalShadowPrecedenceTests.cs": "1d34debb30ba0ed6a0ccb3188c0af4efba4dfec24d7806c23495225161b14b0d",
     "tests/fixtures/HoistedDebuggerAcceptance/main.ts": "ea16b4002d9d45dae849fad77bdae005d010f2d7dd8898726721830e6029a524",
     "tests/fixtures/HoistedDebuggerAcceptance/helper.ts": "28bfdc34df0b19a4b26cc7fcbb4757297f70578c81c3128bb3c5fce2766b1545",
-    "tests/fixtures/HoistedDebuggerAcceptance/expectations.json": "d968aaa56543ce2310ee441379e97a306966b5ed1b886d68bee649ba1f1f7914"
+    "tests/fixtures/HoistedDebuggerAcceptance/expectations.json": "d968aaa56543ce2310ee441379e97a306966b5ed1b886d68bee649ba1f1f7914",
+    "tests/fixtures/HoistedDebuggerLexicalCells/main.ts": "2f3d42f492f8237f00e73fff104cd9dc11e58329caebbb203bc0033e8d00c235",
+    "tests/fixtures/HoistedDebuggerLexicalCells/helper.ts": "84c1832d67a4bc27432151a64337cb3992500b8afc28c64720e104093bb1a555",
+    "tests/fixtures/HoistedDebuggerLexicalCells/expectations.json": "43b26d5a63fa3775dc2c3e59ba4f1a357799b1ee84f34a17c58d5b2b261f7c27",
+    "scripts/editor-smoke/compiled-debugger/run.mjs": "9734f54ea97c42b838afb164f6d04515345df6ce4a075b3fd72356a75ea93d92",
+    "scripts/editor-smoke/compiled-debugger/hoisted.test.cjs": "c5548199ff6ad37838939b1db06b14e475bc726df0dcbca51d791bcebe88859f"
+  },
+  "editorDistribution": {
+    "kind": "Official portable Windows x64 archive, isolated profile",
+    "version": "1.141.0",
+    "commit": "2a59476c9bfcb90b3ddc372c36762471b7dfad1c",
+    "archiveSha256": "30ef5f55c377452af33009d0a8ac29a15cf8f770782bff42fe987c30da272223"
   },
   "primary": {
     "status": "passed",
-    "artifacts": "artifacts/p3/hoisted-debugger-fixed/run-ayx0HV",
+    "artifacts": "artifacts/p3/hoisted-debugger-alias-portable/run-Oieu29",
+    "fixture": "tests/fixtures/HoistedDebuggerAcceptance",
+    "verifiedUtc": "2026-10-26T06:03:01.856Z",
     "editor": "VS Code 1.141.0",
     "csharpVersion": "2.140.9",
+    "extensionVersions": {
+      "ms-dotnettools.csharp": "2.140.9",
+      "ms-dotnettools.vscode-dotnet-runtime": "3.2.0"
+    },
     "stops": 55,
-    "compilerSha256": "a8bc155971a0edf69eec74c518670f3915652174652532f0e5cec06db64f821e",
-    "assemblySha256": "b14908987cf708e6e57075067a2f0c50c3370e89735762b786c061cbf16c176f",
-    "pdbSha256": "59cd1431cdb81686064bf5ec258d529bbe0f6ccec3a5c14523a7d775a657267e",
+    "compilerSha256": "a3c3cdc4af3ff07693306189decfaffe42d80c633f50a64072c54c9b27704dc2",
+    "assemblySha256": "9ac3a255cf4a8d2a0f50828cf71014c3ed3857dccc851fa97fc046c238a805a1",
+    "pdbSha256": "92d6050e98ac9751454c37a3052798c1a3f8f453b3d3faf856e609958ec8c28f",
     "debugAndNonDebugOutputMatch": true,
     "nonDebugPdbAbsent": true,
     "referenceAssemblyRewrite": true,
+    "sourceEncodings": {
+      "main.ts": "UTF-8 with BOM",
+      "helper.ts": "UTF-16 LE with BOM"
+    },
+    "strictUniqueExpectedLocals": true,
+    "outOfScopeLocalsAbsent": true,
     "observations": [
       {
         "marker": "break:async-before",
@@ -513,6 +540,133 @@
       }
     ]
   },
-  "secondary": "Not rerun; previous primary/secondary comparison remains in hoisted-last-verified.json and numeric-timer-last-verified.json",
-  "verificationScope": "Primary live record validates the initial authoritative-storage/holder-order repair; exact-cell and per-iteration safeguards were added afterward and require their separately recorded focused regressions. Combined loop-head and inner-cell source shadow projection remains open."
+  "combinedLexicalCells": {
+    "status": "passed",
+    "artifacts": "artifacts/p3/combined-debugger-alias-portable/run-9WUnD4",
+    "fixture": "tests/fixtures/HoistedDebuggerLexicalCells",
+    "verifiedUtc": "2026-10-26T06:03:22.299Z",
+    "editor": "VS Code 1.141.0",
+    "csharpVersion": "2.140.9",
+    "extensionVersions": {
+      "ms-dotnettools.csharp": "2.140.9",
+      "ms-dotnettools.vscode-dotnet-runtime": "3.2.0"
+    },
+    "stops": 10,
+    "compilerSha256": "a3c3cdc4af3ff07693306189decfaffe42d80c633f50a64072c54c9b27704dc2",
+    "assemblySha256": "e5840333201d719f99bc75e8dc6949f9f590a952dba60e3537f70804ca61d333",
+    "pdbSha256": "3b58f73d118bc7fad0f5367cd63afd7697aa4f29c23794a6f05d3fa275b18967",
+    "debugAndNonDebugOutputMatch": true,
+    "nonDebugPdbAbsent": true,
+    "referenceAssemblyRewrite": true,
+    "sourceEncodings": {
+      "main.ts": "UTF-8 with BOM",
+      "helper.ts": "UTF-16 LE with BOM"
+    },
+    "strictUniqueExpectedLocals": true,
+    "outOfScopeLocalsAbsent": true,
+    "observations": [
+      {
+        "marker": "break:loop-before",
+        "frame": "main.dll!$Program.$M_main_loop() Line 7",
+        "watches": {
+          "index": "0",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:loop-inside",
+        "frame": "main.dll!$Program.$M_main_loop() Line 13",
+        "watches": {
+          "index": "99"
+        }
+      },
+      {
+        "marker": "break:loop-after",
+        "frame": "main.dll!$Program.$M_main_loop() Line 15",
+        "watches": {
+          "index": "0",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:loop-before",
+        "frame": "main.dll!$Program.$M_main_loop() Line 7",
+        "watches": {
+          "index": "1",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:loop-inside",
+        "frame": "main.dll!$Program.$M_main_loop() Line 13",
+        "watches": {
+          "index": "99"
+        }
+      },
+      {
+        "marker": "break:loop-after",
+        "frame": "main.dll!$Program.$M_main_loop() Line 15",
+        "watches": {
+          "index": "1",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:loop-done",
+        "frame": "main.dll!$Program.$M_main_loop() Line 17",
+        "watches": {
+          "index": "error CS0103: The name 'index' does not exist in the current context",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:parameter-before",
+        "frame": "main.dll!$Program.$M_main_parameter(object value) Line 20",
+        "watches": {
+          "value": "11",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:parameter-inside",
+        "frame": "main.dll!$Program.$M_main_parameter(object value) Line 26",
+        "watches": {
+          "value": "99"
+        }
+      },
+      {
+        "marker": "break:parameter-after",
+        "frame": "main.dll!$Program.$M_main_parameter(object value) Line 28",
+        "watches": {
+          "value": "11",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      }
+    ]
+  },
+  "focusedRegressions": {
+    "status": "passed",
+    "tests": 12,
+    "configuration": "Release",
+    "filter": "FullyQualifiedName~CapturedAsyncShadow|FullyQualifiedName~CapturedInnerCell|FullyQualifiedName~ProjectedLexicalCellPayload|FullyQualifiedName~LexicalCellsKeepIdentity|FullyQualifiedName~AsyncChildThroughSyncRelay",
+    "artifacts": "artifacts/p3/alias-focused/alias-focused.trx",
+    "log": "artifacts/p3/alias-focused.log",
+    "checks": [
+      "PDB alias signature resolves to the authoritative retained cell type",
+      "Alias scope equals source lexical and hoisted-slot range",
+      "Reference reload precedes resume dispatch and follows cell allocation",
+      "Duplicate active field-slot checks retained",
+      "Verified debug/nondebug runtime parity, temporal dead zones and shared mutable cell identity",
+      "Independent iteration captures retain 0 and 1 while inner cells hold 99",
+      "Parameter restores 11 after inner captured shadow holds 99"
+    ]
+  },
+  "interimPrimary": {
+    "sourceCommit": "d14514cfa70b902cc25b59496db89f0061227ab2",
+    "compilerSha256": "a8bc155971a0edf69eec74c518670f3915652174652532f0e5cec06db64f821e",
+    "artifacts": "artifacts/p3/hoisted-debugger-fixed/run-ayx0HV",
+    "scope": "Superseded initial holder-order repair; did not certify combined loop-head/inner-cell shadows"
+  },
+  "secondary": "Not rerun for the final alias candidate; historical primary/secondary comparisons remain in hoisted-last-verified.json and numeric-timer-last-verified.json",
+  "verificationScope": "Final alias candidate validated by 55 existing primary stops, 10 combined loop/parameter primary stops, and 12 focused metadata/runtime regressions. Exact combined fixture bytes were copied from the validated artifact fixture into the tracked fixture after the run."
 }

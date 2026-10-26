@@ -84,6 +84,7 @@ public abstract partial class StatementEmitterBase
                 if (field is not null)
                 {
                     IL.Emit(OpCodes.Stfld, field);
+                    RefreshProjectedLexicalCell(token, field);
                     Ctx.LoopBodyCellFields[name] = field;
                 }
                 else
@@ -107,6 +108,7 @@ public abstract partial class StatementEmitterBase
                 {
                     IL.Emit(OpCodes.Newobj, LexicalCellStorage.ForDeclaration(Ctx, token).Constructor);
                     IL.Emit(OpCodes.Stfld, field);
+                    RefreshProjectedLexicalCell(token, field);
                     Ctx.LoopBodyCellShadowFields[name] = field;
                 }
                 else
@@ -257,7 +259,11 @@ public abstract partial class StatementEmitterBase
             if (hoisted) IL.Emit(OpCodes.Ldarg_0);
             IL.Emit(OpCodes.Ldloc, value);
             IL.Emit(OpCodes.Newobj, LexicalCellStorage.ForDeclaration(Ctx, token).Constructor);
-            if (hoisted) IL.Emit(OpCodes.Stfld, field!);
+            if (hoisted)
+            {
+                IL.Emit(OpCodes.Stfld, field!);
+                RefreshProjectedLexicalCell(token, field!);
+            }
             else IL.Emit(OpCodes.Stloc, Ctx.CellBindingLocals[name]);
         }
         else
@@ -272,6 +278,14 @@ public abstract partial class StatementEmitterBase
             IL.Emit(OpCodes.Stfld, LexicalCellStorage.ForDeclaration(Ctx, token).ValueField);
         }
         return true;
+    }
+
+    private void RefreshProjectedLexicalCell(Token declaration, FieldBuilder field)
+    {
+        if (!Ctx.ProjectedLexicalCellLocals.TryGetValue(declaration, out var alias)) return;
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldfld, field);
+        IL.Emit(OpCodes.Stloc, alias);
     }
 
     protected bool TryCopyLexicalCell(Token token)

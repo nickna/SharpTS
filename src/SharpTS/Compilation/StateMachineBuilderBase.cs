@@ -34,13 +34,13 @@ public abstract class StateMachineBuilderBase
     protected void DefineProjectedLexicalCellFields()
     {
         if (DebugSymbols is null || DebugLexicalCellStorages is null) return;
-        // Inner holders precede the function display class: the expression evaluator walks
-        // reachable display classes breadth-first and keeps the first live source name.
+        // Keep the retained cell out of the evaluator's receiver traversal. Its scoped local
+        // alias is the sole discovery path, so it can shadow an outer state-machine field.
         foreach (var binding in DebugSymbols.Bindings)
             if (DebugLexicalCellStorages.TryGetValue(binding.SourceToken, out var storage)
                 && storage.DebugHolderName is { } holderName)
                 _projectedLexicalCellFields.Add(binding.SourceToken,
-                    StateMachineType.DefineField(holderName, storage.ReferenceType, FieldAttributes.Public));
+                    StateMachineType.DefineField(DebugScaffoldingName(holderName), storage.ReferenceType, FieldAttributes.Public));
     }
 
     internal void AttachDebugSymbols(CompilationContext context)
@@ -49,8 +49,22 @@ public abstract class StateMachineBuilderBase
         context.HoistedDebugSymbols = DebugSymbols;
         foreach (var (declaration, field) in _projectedLexicalCellFields)
             context.ProjectedLexicalCellFields.Add(declaration, field);
-        context.Locals.SymbolSink = context.DebugScope.Collector.BeginMethodLocals(context.CurrentMethod, context.IL);
+        var locals = context.DebugScope.Collector.BeginMethodLocals(context.CurrentMethod, context.IL);
+        context.Locals.SymbolSink = locals;
         context.DebugScope.Collector.RecordHoistedLocals(context.CurrentMethod, DebugSymbols);
+        foreach (var binding in DebugSymbols.Bindings)
+        {
+            if (!_projectedLexicalCellFields.TryGetValue(binding.SourceToken, out var field)) continue;
+            var storage = DebugLexicalCellStorages![binding.SourceToken];
+            var alias = context.IL.DeclareLocal(storage.ReferenceType);
+            context.ProjectedLexicalCellLocals.Add(binding.SourceToken, alias);
+            locals.AddProjectedDisplayClassLocal(storage.DebugHolderName!, alias, binding.LexicalScope);
+            // MoveNext locals reset on every entry. Reload the actual retained reference before
+            // dispatching to any resume label; block activation refreshes it after replacement.
+            context.IL.Emit(OpCodes.Ldarg_0);
+            context.IL.Emit(OpCodes.Ldfld, field);
+            context.IL.Emit(OpCodes.Stloc, alias);
+        }
     }
 
     internal string DebugScaffoldingName(string name) => DebugSymbols is null || name.StartsWith("<>7__")
