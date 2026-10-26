@@ -20,5 +20,5 @@ public sealed class CommaConditionGuardExecutionTests
         => Assert.Equal("2 3 2\n", TestHarness.Run(Source, mode));
 
     [Fact]
-    public void GuardedReadsHaveVerifiedCompilerIl() => TestHarness.CompileAndVerifyOnly(Source);
+    public void GuardedReadsHaveVerifiedCompilerIl() => Assert.Empty(TestHarness.CompileAndVerifyOnly(Source));
 }
