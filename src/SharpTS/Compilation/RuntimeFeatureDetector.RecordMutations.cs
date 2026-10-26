@@ -133,6 +133,11 @@ public sealed partial class RuntimeFeatureDetector
         if (depth >= 32 || !visited.Add(type)) return;
         switch (type)
         {
+            case TypeInfo.Instance { ResolvedClassType: TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass generic } }:
+                // Required property names belong to the original class core and
+                // do not depend on its substituted value types.
+                CollectRequired(new TypeInfo.Instance(new TypeInfo.Class(generic.Core)), names, visited, depth + 1);
+                break;
             case TypeInfo.Instance { ResolvedClassType: TypeInfo.Class cls }:
                 foreach (var name in cls.FieldTypes.Keys.Concat(cls.Getters.Keys).Concat(cls.Setters.Keys))
                     if (cls.Core.OrdinaryOptionalMembers?.Contains((false, name)) != true && !IsPrototypeMember(name))

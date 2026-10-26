@@ -16,6 +16,11 @@ public class TypeMap
     private IReadOnlyDictionary<Token, BindingSymbol> _valueBindings = new Dictionary<Token, BindingSymbol>();
     internal void SetValueBindings(IReadOnlyDictionary<Token, BindingSymbol> bindings) => _valueBindings = bindings;
     internal BindingSymbol? GetValueBinding(Token token) => _valueBindings.GetValueOrDefault(token);
+    private readonly Dictionary<BindingSymbol, TypeInfo> _declaredValueTypes = new(ReferenceEqualityComparer.Instance);
+    internal void SetDeclaredValueType(BindingSymbol binding, TypeInfo type) => _declaredValueTypes[binding] = type;
+    internal TypeInfo? GetDeclaredValueType(Token name) => GetValueBinding(name) is { } binding
+        ? _declaredValueTypes.GetValueOrDefault(binding) : null;
+    internal void ClearDeclaredValueTypes() => _declaredValueTypes.Clear();
     internal IEnumerable<KeyValuePair<Stmt.Class, TypeInfo.Class>> ClassDeclarations => _classDeclarations;
     internal IEnumerable<KeyValuePair<Expr.ClassExpr, TypeInfo.Class>> ClassExpressions => _classExprTypes;
 

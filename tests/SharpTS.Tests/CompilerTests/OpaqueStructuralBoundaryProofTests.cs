@@ -10,6 +10,9 @@ public sealed class OpaqueStructuralBoundaryProofTests
     [Theory]
     [InlineData("function write(root:{payload:any}){const view=root.payload as {value:number;missing:number};view.value=4;}", "write({payload:mutable});")]
     [InlineData("interface Envelope<T>{payload:T;}function write(root:Envelope<any>){const view=root.payload as {value:number;missing:number};view.value=4;}", "write({payload:mutable});")]
+    [InlineData("class Envelope{payload:any;}function write(root:Envelope){const view=root.payload as {value:number;missing:number};view.value=4;}", "write({payload:mutable});")]
+    [InlineData("class Base{payload:any;}class Envelope extends Base{}function write(root:Envelope){const view=root.payload as {value:number;missing:number};view.value=4;}", "write({payload:mutable});")]
+    [InlineData("class Envelope<T>{payload:T;constructor(payload:T){this.payload=payload;}}function write(root:Envelope<any>){const view=root.payload as {value:number;missing:number};view.value=4;}", "write({payload:mutable});")]
     [InlineData("function write(items:[any]){const view=items[0] as {value:number;missing:number};view.value=4;}", "write([mutable]);")]
     public void ActualNestedArgumentShapesLoseTheirProofWithoutDisablingUnrelatedCarriers(string declaration, string call)
     {

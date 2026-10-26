@@ -729,7 +729,7 @@ public sealed partial class RuntimeFeatureDetector
                     TrackMathAlias(var.Name.Lexeme, var.Initializer);
                     TrackDateAlias(var.Name.Lexeme, var.Initializer);
                     TrackRegExpAlias(var.Name.Lexeme, var.Initializer);
-                    if (_opaqueValueBindings.Contains(var.Name.Lexeme))
+                    if (_opaqueValueBindings.Contains(var.Name.Lexeme) || IsOpaqueCheckedBinding(var.Name))
                         MarkPotentiallyMaterialized(var.Initializer);
                     VisitExpr(var.Initializer);
                 }
@@ -742,7 +742,7 @@ public sealed partial class RuntimeFeatureDetector
                 TrackMathAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackDateAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackRegExpAlias(cst.Name.Lexeme, cst.Initializer);
-                if (_opaqueValueBindings.Contains(cst.Name.Lexeme))
+                if (_opaqueValueBindings.Contains(cst.Name.Lexeme) || IsOpaqueCheckedBinding(cst.Name))
                     MarkPotentiallyMaterialized(cst.Initializer);
                 VisitExpr(cst.Initializer);
                 break;
@@ -1363,7 +1363,7 @@ public sealed partial class RuntimeFeatureDetector
                     _set.UsesMathMutation = true;
                 if (asg.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
-                if (_opaqueValueBindings.Contains(asg.Name.Lexeme))
+                if (_opaqueValueBindings.Contains(asg.Name.Lexeme) || IsOpaqueCheckedBinding(asg.Name))
                     MarkPotentiallyMaterialized(asg.Value);
                 VisitExpr(asg.Value);
                 break;
@@ -1459,6 +1459,8 @@ public sealed partial class RuntimeFeatureDetector
                 VisitExpr(csi.Value);
                 break;
             case Expr.LogicalAssign la:
+                if (_opaqueValueBindings.Contains(la.Name.Lexeme) || IsOpaqueCheckedBinding(la.Name))
+                    MarkPotentiallyMaterialized(la.Value);
                 if (la.Name.Lexeme == "Number")
                 {
                     _set.UsesNumberPrototypeMutation = true;
@@ -2526,6 +2528,10 @@ public sealed partial class RuntimeFeatureDetector
         TypeInfo? type = _typeMap?.Get(target);
         if (type is TypeInfo.Any or TypeInfo.Unknown)
             _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
+        else if (type is TypeInfo.Instance)
+            // A class-view property write materializes its outer carrier. Its
+            // unsubstituted field parameters do not identify mutated child values.
+            RecordStructuralMaterializationView(type);
         else
             MarkPotentiallyMaterialized(type);
     }

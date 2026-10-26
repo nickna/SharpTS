@@ -14,6 +14,9 @@ public sealed class OpaqueStructuralMutationTests
             "function write(root:{payload:unknown})",
             "interface Envelope{payload:any;}function write(root:Envelope)",
             "interface Envelope<T>{payload:T;}function write(root:Envelope<any>)",
+            "class Envelope{payload:any;}function write(root:Envelope)",
+            "class Base{payload:any;}class Envelope extends Base{}function write(root:Envelope)",
+            "class Envelope<T>{payload:T;constructor(payload:T){this.payload=payload;}}function write(root:Envelope<any>)",
             "function write(root:Readonly<{payload:any}>)"
         })
             yield return [declaration + "{" + view + "}const box={value:1,label:'kept'};write({payload:box});console.log(box.value,box.label);"];
