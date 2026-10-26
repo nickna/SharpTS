@@ -742,15 +742,17 @@ public partial class ILCompiler
                 break;
             case Stmt.Switch s:
                 CollectArrowsFromExpr(s.Subject);
-                foreach (var c in s.Cases)
+                _topLevelBlockDepth++;
+                try
                 {
-                    CollectArrowsFromExpr(c.Value);
-                    foreach (var cs in c.Body)
-                        CollectArrowsFromStmt(cs);
+                    foreach (var c in s.Clauses)
+                    {
+                        if (c.Value is { } value) CollectArrowsFromExpr(value);
+                        foreach (var cs in c.Body)
+                            CollectArrowsFromStmt(cs);
+                    }
                 }
-                if (s.DefaultBody != null)
-                    foreach (var ds in s.DefaultBody)
-                        CollectArrowsFromStmt(ds);
+                finally { _topLevelBlockDepth--; }
                 break;
             case Stmt.TryCatch t:
                 foreach (var ts in t.TryBlock)

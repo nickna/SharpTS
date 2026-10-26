@@ -303,19 +303,23 @@ public static class VarHoister
             case Stmt.Switch switchStmt:
             {
                 bool swChanged = false;
-                var newCases = new List<Stmt.SwitchCase>(switchStmt.Cases.Count);
-                foreach (var c in switchStmt.Cases)
+                List<Stmt.SwitchClause>? newClauses = null;
+                for (int i = 0; i < switchStmt.Clauses.Count; i++)
                 {
-                    var newCaseStmts = RewriteList(c.Body, collected, seen, spans, ref swChanged);
-                    newCases.Add(new Stmt.SwitchCase(c.Value, newCaseStmts));
+                    var c = switchStmt.Clauses[i];
+                    bool clauseChanged = false;
+                    var newCaseStmts = RewriteList(c.Body, collected, seen, spans, ref clauseChanged);
+                    if (clauseChanged)
+                    {
+                        swChanged = true;
+                        newClauses ??= new List<Stmt.SwitchClause>(switchStmt.Clauses);
+                        newClauses[i] = c with { Body = newCaseStmts };
+                    }
                 }
-                List<Stmt>? newDefault = switchStmt.DefaultBody != null
-                    ? RewriteList(switchStmt.DefaultBody, collected, seen, spans, ref swChanged)
-                    : null;
                 if (swChanged)
                 {
                     changed = true;
-                    return switchStmt with { Cases = newCases, DefaultBody = newDefault };
+                    return switchStmt with { Clauses = newClauses ?? switchStmt.Clauses };
                 }
                 return switchStmt;
             }

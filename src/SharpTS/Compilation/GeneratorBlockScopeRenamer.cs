@@ -478,14 +478,34 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
     {
         Visit(stmt.Subject);
         PushScope();   // all cases share one block scope (ECMA-262 14.12)
-        foreach (var c in stmt.Cases)
+        foreach (var declaration in stmt.Clauses.SelectMany(clause => clause.Body)) Predeclare(declaration);
+        foreach (var clause in stmt.Clauses)
         {
-            Visit(c.Value);
-            foreach (var s in c.Body) Visit(s);
+            if (clause.Value is { } value) Visit(value);
+            foreach (var s in clause.Body) Visit(s);
         }
-        if (stmt.DefaultBody != null)
-            foreach (var s in stmt.DefaultBody) Visit(s);
         PopScope();
+
+        void Predeclare(Stmt declaration)
+        {
+            if (declaration is Stmt.Sequence sequence)
+            {
+                foreach (var child in sequence.Statements) Predeclare(child);
+                return;
+            }
+            string? name = declaration switch
+            {
+                Stmt.Var { IsVar: false } variable => variable.Name.Lexeme,
+                Stmt.Const constant => constant.Name.Lexeme,
+                Stmt.Class @class => @class.Name.Lexeme,
+                Stmt.Function function => function.Name.Lexeme,
+                _ => null
+            };
+            if (name is null) return;
+            if (_arrowDepth > 0 || declaration is Stmt.Function)
+                CurrentScope.TryAdd(name, name);
+            else DeclareBlockScoped(declaration, name);
+        }
     }
 
     protected override void VisitTryCatch(Stmt.TryCatch stmt)

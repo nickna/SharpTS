@@ -69,9 +69,7 @@ internal static class ReturnSlotAnalysis
                 return StatementHasFlaggedReturn(ls.Statement, typeMap);
 
             case Stmt.Switch sw:
-                if (sw.DefaultBody != null && BlockReturnsMayBeUndefined(sw.DefaultBody, typeMap))
-                    return true;
-                foreach (var c in sw.Cases)
+                foreach (var c in sw.Clauses)
                     if (BlockReturnsMayBeUndefined(c.Body, typeMap)) return true;
                 return false;
 

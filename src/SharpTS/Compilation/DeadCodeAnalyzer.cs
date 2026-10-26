@@ -1,5 +1,6 @@
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
+using SharpTS.TypeSystem.ControlFlow;
 
 namespace SharpTS.Compilation;
 
@@ -202,45 +203,52 @@ public class DeadCodeAnalyzer
         // Check for exhaustive switch on union types
         if (subjectType is TypeInfo.Union union)
         {
-            // Bigint case values get an "n" suffix so `case 1n:` and `case 1:` stay distinct keys.
-            var coveredTypes = sw.Cases
-                .Where(c => c.Value is Expr.Literal)
-                .Select(c => ((Expr.Literal)c.Value).Value switch
-                {
-                    System.Numerics.BigInteger bi => bi + "n",
-                    var v => v?.ToString() ?? "null"
-                })
+            var coveredTypes = sw.Clauses
+                .Where(clause => clause.Value is Expr.Literal)
+                .Select(clause => SwitchLiteralKey(((Expr.Literal)clause.Value!).Value))
+                .OfType<(string Kind, string Value)>()
                 .ToHashSet();
 
             bool allCovered = union.FlattenedTypes.All(t => t switch
             {
-                TypeInfo.StringLiteral sl => coveredTypes.Contains(sl.Value),
-                TypeInfo.NumberLiteral nl => coveredTypes.Contains(nl.Value.ToString()),
-                TypeInfo.BooleanLiteral bl => coveredTypes.Contains(bl.Value.ToString()),
-                TypeInfo.BigIntLiteral bil => coveredTypes.Contains(bil.Value + "n"),
-                TypeInfo.Null => coveredTypes.Contains("null"),
+                TypeInfo.StringLiteral sl => coveredTypes.Contains(("string", sl.Value)),
+                TypeInfo.NumberLiteral nl => SwitchLiteralKey(nl.Value) is { } key && coveredTypes.Contains(key),
+                TypeInfo.BooleanLiteral bl => coveredTypes.Contains(("boolean", bl.Value.ToString())),
+                TypeInfo.BigIntLiteral bil => coveredTypes.Contains(("bigint", bil.Value.ToString())),
+                TypeInfo.Null => coveredTypes.Contains(("null", "")),
                 _ => false
             });
 
             if (allCovered)
             {
-                _result.SetSwitchResult(sw, new SwitchAnalysis([], DefaultIsUnreachable: true, IsExhaustive: true));
-                // Mark default body statements as dead
-                if (sw.DefaultBody != null)
+                int defaultIndex = sw.Clauses.FindIndex(clause => clause.IsDefault);
+                bool defaultIsUnreachable = defaultIndex <= 0 ||
+                    !StatementCompletionAnalysis.CanCompleteNormally(sw.Clauses[defaultIndex - 1].Body);
+                _result.SetSwitchResult(sw, new SwitchAnalysis([], defaultIsUnreachable, IsExhaustive: true));
+                // Exhaustiveness excludes direct selection, not earlier-case fallthrough.
+                if (defaultIsUnreachable && defaultIndex >= 0)
                 {
-                    foreach (var stmt in sw.DefaultBody)
+                    foreach (var stmt in sw.Clauses[defaultIndex].Body)
                         _result.MarkDead(stmt);
                 }
             }
         }
 
         // Analyze case bodies for dead code
-        foreach (var caseItem in sw.Cases)
-            AnalyzeBlock(caseItem.Body);
-
-        if (sw.DefaultBody != null)
-            AnalyzeBlock(sw.DefaultBody);
+        foreach (var clause in sw.Clauses)
+            AnalyzeBlock(clause.Body);
     }
+
+    private static (string Kind, string Value)? SwitchLiteralKey(object? value) => value switch
+    {
+        string text => ("string", text),
+        bool boolean => ("boolean", boolean.ToString()),
+        System.Numerics.BigInteger bigint => ("bigint", bigint.ToString()),
+        double number when !double.IsNaN(number) => ("number", (number == 0 ? 0 : number).ToString("R", System.Globalization.CultureInfo.InvariantCulture)),
+        int number => ("number", number.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        null => ("null", ""),
+        _ => null
+    };
 
     private void AnalyzeTryCatch(Stmt.TryCatch tc)
     {
@@ -542,26 +550,8 @@ public class DeadCodeAnalyzer
     /// so this uses <see cref="ContainsUnconditionalReturnOrThrow"/>, which ignores break/continue.
     /// </summary>
     private bool AnalyzeSwitchTermination(Stmt.Switch sw)
-    {
-        var analysis = _result.GetSwitchResult(sw);
-
-        // If exhaustive (all union members covered), default is unreachable
-        bool hasUnreachableDefault = analysis?.IsExhaustive == true;
-
-        // All reachable cases must terminate with return/throw (not break, which exits the switch
-        // but leaves the enclosing block reachable).
-        bool allCasesTerminate = sw.Cases.All(c => c.Body.Any(ContainsUnconditionalReturnOrThrow));
-
-        // Default must terminate (unless unreachable)
-        bool defaultTerminates = hasUnreachableDefault ||
-            (sw.DefaultBody != null && sw.DefaultBody.Any(ContainsUnconditionalReturnOrThrow));
-
-        // If no default and not exhaustive, switch doesn't terminate
-        if (sw.DefaultBody == null && !hasUnreachableDefault)
-            return false;
-
-        return allCasesTerminate && defaultTerminates;
-    }
+        => StatementCompletionAnalysis.SwitchDefinitelyReturns(sw, allowEmptyReturn: true,
+            isExhaustive: _result.GetSwitchResult(sw)?.IsExhaustive == true);
 
     #endregion
 }

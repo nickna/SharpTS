@@ -560,6 +560,9 @@ public partial class CompilationContext
     /// </summary>
     public Action<ILGenerator, CompilationContext, Stmt.Function>? EmitBlockScopedInnerFunction { get; set; }
 
+    /// <summary>Instantiates a lexical statement list's direct functions in two passes.</summary>
+    public Action<ILGenerator, CompilationContext, List<Stmt>>? EmitLexicalFunctionHoisting { get; set; }
+
     /// <summary>Predeclares lexical locals captured by a function declared in the same scope.</summary>
     public Action<ILGenerator, CompilationContext, List<Stmt>>? PredeclareCapturedLexicalLocals { get; set; }
 

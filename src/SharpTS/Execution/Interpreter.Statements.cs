@@ -324,36 +324,30 @@ public partial class Interpreter
     {
         var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         object? subject = (await ctx.EvaluateExprAsync(switchStmt.Subject)).ToObject();
-        bool fallen = false;
-        bool matched = false;
+        using var scope = EnterSwitchScope(switchStmt);
+        int selected = -1;
+        int defaultIndex = -1;
 
-        foreach (var caseItem in switchStmt.Cases)
+        for (int i = 0; i < switchStmt.Clauses.Count; i++)
         {
-            if (!fallen && !matched)
+            var clause = switchStmt.Clauses[i];
+            if (clause.Value is null)
             {
-                object? caseValue = (await ctx.EvaluateExprAsync(caseItem.Value)).ToObject();
-                if (IsStrictEqual(subject, caseValue))
-                {
-                    matched = true;
-                }
+                defaultIndex = i;
+                continue;
             }
-
-            if (fallen || matched)
+            object? caseValue = (await ctx.EvaluateExprAsync(clause.Value)).ToObject();
+            if (IsStrictEqual(subject, caseValue))
             {
-                fallen = true;
-                foreach (var stmt in caseItem.Body)
-                {
-                    var result = (await ctx.ExecuteStmtAsync(stmt)).UpdateEmpty(completion);
-                    completion = ExecutionResult.Success(result.Value);
-                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return completion;
-                    if (result.IsAbrupt) return result;
-                }
+                selected = i;
+                break;
             }
         }
 
-        if (switchStmt.DefaultBody != null && (fallen || !matched))
+        if (selected < 0) selected = defaultIndex;
+        for (int i = selected; i >= 0 && i < switchStmt.Clauses.Count; i++)
         {
-            foreach (var stmt in switchStmt.DefaultBody)
+            foreach (var stmt in switchStmt.Clauses[i].Body)
             {
                 var result = (await ctx.ExecuteStmtAsync(stmt)).UpdateEmpty(completion);
                 completion = ExecutionResult.Success(result.Value);
@@ -379,36 +373,30 @@ public partial class Interpreter
     {
         var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         object? subject = Evaluate(switchStmt.Subject);
-        bool fallen = false;
-        bool matched = false;
+        using var scope = EnterSwitchScope(switchStmt);
+        int selected = -1;
+        int defaultIndex = -1;
 
-        foreach (var caseItem in switchStmt.Cases)
+        for (int i = 0; i < switchStmt.Clauses.Count; i++)
         {
-            if (!fallen && !matched)
+            var clause = switchStmt.Clauses[i];
+            if (clause.Value is null)
             {
-                object? caseValue = Evaluate(caseItem.Value);
-                if (IsStrictEqual(subject, caseValue))
-                {
-                    matched = true;
-                }
+                defaultIndex = i;
+                continue;
             }
-
-            if (fallen || matched)
+            object? caseValue = Evaluate(clause.Value);
+            if (IsStrictEqual(subject, caseValue))
             {
-                fallen = true;
-                foreach (var stmt in caseItem.Body)
-                {
-                    var result = Execute(stmt).UpdateEmpty(completion);
-                    completion = ExecutionResult.Success(result.Value);
-                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return completion;
-                    if (result.IsAbrupt) return result;
-                }
+                selected = i;
+                break;
             }
         }
 
-        if (switchStmt.DefaultBody != null && (fallen || !matched))
+        if (selected < 0) selected = defaultIndex;
+        for (int i = selected; i >= 0 && i < switchStmt.Clauses.Count; i++)
         {
-            foreach (var stmt in switchStmt.DefaultBody)
+            foreach (var stmt in switchStmt.Clauses[i].Body)
             {
                 var result = Execute(stmt).UpdateEmpty(completion);
                 completion = ExecutionResult.Success(result.Value);
@@ -418,6 +406,28 @@ public partial class Interpreter
         }
 
         return completion;
+    }
+
+    private ScopedEnvironment EnterSwitchScope(Stmt.Switch statement)
+    {
+        var scope = PushScope(new RuntimeEnvironment(_environment)
+        {
+            VarDeclarationTarget = _environment.VarDeclarationTarget ?? _environment
+        });
+        try
+        {
+            var statements = statement.Clauses.SelectMany(clause => clause.Body);
+            ReserveLexicalDeclarations(statements);
+            foreach (var declaration in statements.OfType<Stmt.Class>())
+                _environment.ReserveLexical(declaration.Name.Lexeme);
+            HoistFunctionDeclarations(statements);
+            return scope;
+        }
+        catch
+        {
+            scope.Dispose();
+            throw;
+        }
     }
 
     /// <summary>

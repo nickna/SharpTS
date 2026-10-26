@@ -847,6 +847,7 @@ public partial class ILCompiler
         // function declarations this pre-pass deliberately skips. Also record which declarations we
         // hoist here, so the in-place path recognizes them as already-materialized and does nothing.
         ctx.EmitBlockScopedInnerFunction ??= EmitBlockScopedInnerFunctionDeclaration;
+        ctx.EmitLexicalFunctionHoisting ??= EmitInnerFunctionHoisting;
         ctx.PredeclareCapturedLexicalLocals ??= PredeclareCapturedLexicalLocals;
         var hoisted = ctx.HoistedInnerFunctions ??= new HashSet<Stmt.Function>(ReferenceEqualityComparer.Instance);
 
@@ -902,6 +903,7 @@ public partial class ILCompiler
     private void WireInPlaceInnerFunctions(CompilationContext ctx)
     {
         ctx.EmitBlockScopedInnerFunction ??= EmitBlockScopedInnerFunctionDeclaration;
+        ctx.EmitLexicalFunctionHoisting ??= EmitInnerFunctionHoisting;
         ctx.PredeclareCapturedLexicalLocals ??= PredeclareCapturedLexicalLocals;
         ctx.HoistedInnerFunctions ??= new HashSet<Stmt.Function>(ReferenceEqualityComparer.Instance);
     }

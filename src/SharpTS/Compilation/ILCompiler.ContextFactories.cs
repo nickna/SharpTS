@@ -454,6 +454,7 @@ public partial class ILCompiler
     private void ApplyInnerFunctionSupport(CompilationContext ctx)
     {
         ctx.EmitBlockScopedInnerFunction ??= EmitBlockScopedInnerFunctionDeclaration;
+        ctx.EmitLexicalFunctionHoisting ??= EmitInnerFunctionHoisting;
         ctx.PredeclareCapturedLexicalLocals ??= PredeclareCapturedLexicalLocals;
         ctx.InnerFunctionMethods = _innerFunctionMethods;
         ctx.InnerFunctionDisplayClasses = _innerFunctionDisplayClasses;

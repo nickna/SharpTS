@@ -423,6 +423,14 @@ public partial class ILEmitter
                 // dereferences Value (see LocalVariableResolver / CellCapturedFieldNames).
                 IL.Emit(OpCodes.Ldloc, cellLocal);
             }
+            else if (_ctx.Locals.GetNestedScopeLocal(capturedVar) is { } classShadow
+                && _ctx.Locals.TryGetTag(capturedVar, out var classTag) && classTag is Stmt.Class)
+            {
+                // A lexical class shadow owns this capture even when an outer
+                // class with the same spelling has a known emitted Type.
+                IL.Emit(OpCodes.Ldloc, classShadow);
+                EmitCaptureFieldConversion(classShadow.LocalType, field.FieldType);
+            }
             else if (_ctx.TryGetParameter(capturedVar, out var argIndex))
             {
                 IL.Emit(OpCodes.Ldarg, argIndex);

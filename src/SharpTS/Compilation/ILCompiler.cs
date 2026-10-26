@@ -2396,10 +2396,8 @@ public partial class ILCompiler
                     foreach (var s in tc.FinallyBlock) CollectLiftableBlockScopedDecls(s, nested: true, result);
                 break;
             case Stmt.Switch sw:
-                foreach (var c in sw.Cases)
+                foreach (var c in sw.Clauses)
                     foreach (var s in c.Body) CollectLiftableBlockScopedDecls(s, nested: true, result);
-                if (sw.DefaultBody != null)
-                    foreach (var s in sw.DefaultBody) CollectLiftableBlockScopedDecls(s, nested: true, result);
                 break;
             case Stmt.LabeledStatement labeled:
                 CollectLiftableBlockScopedDecls(labeled.Statement, nested, result);
