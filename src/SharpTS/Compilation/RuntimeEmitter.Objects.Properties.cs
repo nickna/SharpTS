@@ -2713,6 +2713,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "Number");
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notNumberNameLabel);
+            var notMapNameLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldtoken, _types.DictionaryObjectObject);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, notMapNameLabel);
+            il.Emit(OpCodes.Ldstr, "Map");
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notMapNameLabel);
             var genericTypeNameLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, typeLocal);
             il.Emit(OpCodes.Ldtoken, _types.BigInteger);

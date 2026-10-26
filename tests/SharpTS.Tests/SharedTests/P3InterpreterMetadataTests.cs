@@ -41,8 +41,8 @@ public sealed class P3InterpreterMetadataTests
     [Theory]
     [InlineData(ExecutionMode.Interpreted, "AbortController")]
     [InlineData(ExecutionMode.Compiled, "AbortController")]
-    // Compiled Map constructor names have a separate CLR-name defect.
     [InlineData(ExecutionMode.Interpreted, "Map")]
+    [InlineData(ExecutionMode.Compiled, "Map")]
     public void BuiltInConstructorNamesAreOwnConfigurableMetadata(ExecutionMode mode, string constructorName)
     {
         AssertOutput("""
@@ -153,8 +153,7 @@ public sealed class P3InterpreterMetadataTests
     public void NativePromiseSubclassesRejectNonCallableExecutorsWithTypeError(ExecutionMode mode)
     {
         AssertOutput("""
-            const NativePromise: any = Promise;
-            class C extends NativePromise {
+            class C extends Promise<any> {
                 constructor(executor: any) { super(executor); }
             }
             for (const executor of [7, null, undefined, {}]) {
