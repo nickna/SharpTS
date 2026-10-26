@@ -700,6 +700,14 @@ public partial class TypeChecker
             System.Globalization.CultureInfo.InvariantCulture, out double numericKey) &&
         Runtime.PropertyKeyConverter.ToPropertyKeyString(numericKey) == literal.Value;
 
+    private bool TryEvaluateConcreteKeyOfDomain(TypeInfo.KeyOf keyOf, out TypeInfo domain)
+    {
+        domain = EvaluateKeyOf(keyOf.SourceType);
+        // An open domain can contain both keyof T and known keys. Neither form
+        // proves a finite selection while the original parameter stays symbolic.
+        return !ContainsKeyOfDomain(domain);
+    }
+
     private void EnsureWritableInterfaceIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
     {
         if (receiver is TypeInfo.InstantiatedGeneric generic && FlattenInstantiatedInterface(generic) is { } flattened)
@@ -728,7 +736,8 @@ public partial class TypeChecker
         }
         if (index is TypeInfo.KeyOf keyOf)
         {
-            EnsureWritableInterfaceIndex(itf, EvaluateKeyOf(keyOf.SourceType), syntax);
+            if (TryEvaluateConcreteKeyOfDomain(keyOf, out var evaluated))
+                EnsureWritableInterfaceIndex(itf, evaluated, syntax);
             return;
         }
         // A concrete named declaration takes precedence over an index signature and
@@ -1428,7 +1437,7 @@ public partial class TypeChecker
         bool Collect(TypeInfo key)
         {
             if (key is TypeInfo.KeyOf keyOf)
-                return Collect(EvaluateKeyOf(keyOf.SourceType));
+                return Collect(TryEvaluateConcreteKeyOfDomain(keyOf, out var domain) ? domain : KeyLikeUnion);
             if (key is TypeInfo.TypeParameter keyParameter && keyParameter.Constraint is { } keyConstraint)
                 return Collect(keyConstraint);
             if (key is TypeInfo.Union union)
@@ -1462,8 +1471,10 @@ public partial class TypeChecker
     private bool CanIndexType(TypeInfo objectType, TypeInfo indexType)
     {
         if (indexType is TypeInfo.KeyOf keyOf)
+        {
             return TypeInfoEqualityComparer.Instance.Equals(keyOf.SourceType, objectType) ||
-                CanIndexType(objectType, EvaluateKeyOf(keyOf.SourceType));
+                CanIndexType(objectType, TryEvaluateConcreteKeyOfDomain(keyOf, out var domain) ? domain : KeyLikeUnion);
+        }
         if (indexType is TypeInfo.TypeParameter keyParameter && keyParameter.Constraint is { } constraint)
             return CanIndexType(objectType, constraint);
         if (indexType is TypeInfo.Union union)
