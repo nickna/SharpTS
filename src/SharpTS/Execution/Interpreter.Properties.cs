@@ -1277,6 +1277,7 @@ public partial class Interpreter
             {
                 return RuntimeValue.FromBoxed(ownMember);
             }
+            return RuntimeValue.FromBoxed(GetPropertyValue(objectNamespace, get.Name.Lexeme));
         }
 
         if (obj is ISharpTSPrimitiveConstructor primitiveConstructor)
@@ -2438,6 +2439,8 @@ public partial class Interpreter
     /// </summary>
     private object? EvaluateGetOnFallback(object? obj, string memberName)
     {
+        if (obj is SharpTSObjectNamespace)
+            return GetPropertyValue(obj, memberName);
         if (obj is ArrayBufferConstructorImpl)
             return GetPropertyValue(obj, memberName);
 
