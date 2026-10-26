@@ -44,6 +44,7 @@ public sealed class SharpTSBuiltInConstructor : ISharpTSCallable
     /// </summary>
     public object? GetMember(string name)
     {
+        if (name == "name") return Name;
         // ECMA-262 §22.2.6: RegExp.prototype is a regular object carrying the
         // five well-known-symbol-keyed protocol methods (@@match, @@matchAll,
         // @@replace, @@search, @@split). Surfacing it lets bracket access like

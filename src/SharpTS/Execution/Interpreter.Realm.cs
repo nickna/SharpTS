@@ -255,8 +255,17 @@ public partial class Interpreter
     private void SetBuiltInConstructorProperty(
         SharpTSBuiltInConstructor constructor,
         string name,
-        object? value)
+        object? value,
+        bool strictMode = false)
     {
+        if (name == "name"
+            && GetBuiltInConstructorOverlayDescriptor(constructor, name) is { Writable: false, HasGet: false, HasSet: false })
+        {
+            if (strictMode)
+                throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
+                    "Cannot assign to read only property 'name' of function"));
+            return;
+        }
         if (_builtInConstructorProperties != null
             && _builtInConstructorProperties.TryGetValue(constructor, out var existingProperties)
             && existingProperties.TryGetValue(name, out var existing))
@@ -302,6 +311,14 @@ public partial class Interpreter
         string name,
         SharpTSPropertyDescriptor descriptor)
     {
+        if (name == "name")
+        {
+            var storage = new SharpTSObject([]);
+            if (GetBuiltInConstructorOverlayDescriptor(constructor, name) is { } current)
+                storage.DefineProperty(name, current);
+            if (!storage.DefineProperty(name, descriptor)) return false;
+            descriptor = storage.GetOwnPropertyDescriptor(name)!;
+        }
         if (_deletedBuiltInConstructorProperties != null
             && _deletedBuiltInConstructorProperties.TryGetValue(constructor, out var deleted))
         {
@@ -325,7 +342,7 @@ public partial class Interpreter
         {
             return true;
         }
-        if (TryGetBuiltInConstructorProperty(constructor, name, out _))
+        if (GetBuiltInConstructorOverlayDescriptor(constructor, name) is not null)
             return true;
         return !IsBuiltInConstructorPropertyDeleted(constructor, name)
             && constructor.GetMember(name) is not null;
@@ -337,7 +354,10 @@ public partial class Interpreter
         if (_builtInConstructorProperties == null
             || !_builtInConstructorProperties.TryGetValue(constructor, out var properties)
             || !properties.TryGetValue(name, out var descriptor))
-            return null;
+            return name == "name" && !IsBuiltInConstructorPropertyDeleted(constructor, name)
+                ? new SharpTSPropertyDescriptor(constructor.Name,
+                    writable: false, enumerable: false, configurable: true)
+                : null;
         return descriptor;
     }
 

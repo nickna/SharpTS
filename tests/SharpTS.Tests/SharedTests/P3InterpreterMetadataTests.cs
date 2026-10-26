@@ -38,6 +38,24 @@ public sealed class P3InterpreterMetadataTests
             """, "true false \"\" true\ntrue false 0 true\nRestored 3 true true\n", mode);
     }
 
+    [Theory, ModeData]
+    public void BuiltInConstructorNamesAreOwnConfigurableMetadata(ExecutionMode mode)
+    {
+        AssertOutput("""
+            for (const ctor of [AbortController, Map]) {
+                const value: any = ctor;
+                const descriptor: any = Object.getOwnPropertyDescriptor(value, "name");
+                console.log(value.name, Reflect.get(value, "name"), Object.hasOwn(value, "name"),
+                    descriptor.writable, descriptor.enumerable, descriptor.configurable);
+                console.log(delete value.name, Object.hasOwn(value, "name"), JSON.stringify(value.name),
+                    JSON.stringify(Reflect.get(value, "name")),
+                    Object.getOwnPropertyDescriptor(value, "name") === undefined);
+                Object.defineProperty(value, "name", { value: "replacement", configurable: true });
+                console.log(value.name, Reflect.get(value, "name"), Object.hasOwn(value, "name"));
+            }
+            """, "AbortController AbortController true false false true\ntrue false \"\" \"\" true\nreplacement replacement true\nMap Map true false false true\ntrue false \"\" \"\" true\nreplacement replacement true\n", mode);
+    }
+
     private static void AssertOutput(string source, string expected, ExecutionMode mode)
     {
         if (mode == ExecutionMode.Compiled)

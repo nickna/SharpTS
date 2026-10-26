@@ -1846,7 +1846,7 @@ public partial class Interpreter
         if (obj is SharpTSBuiltInConstructor builtInConstructor)
         {
             SetBuiltInConstructorProperty(
-                builtInConstructor, PropertyKeyConverter.ToPropertyKeyString(index), value);
+                builtInConstructor, PropertyKeyConverter.ToPropertyKeyString(index), value, strictMode);
             return RuntimeValue.FromBoxed(value);
         }
 

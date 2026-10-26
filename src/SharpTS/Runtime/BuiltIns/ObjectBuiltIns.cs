@@ -1164,6 +1164,8 @@ public static partial class ObjectBuiltIns
                     writable: false,
                     enumerable: false,
                     configurable: false),
+            SharpTSBuiltInConstructor constructor when propertyKey == "name"
+                => interpreter.GetBuiltInConstructorOverlayDescriptor(constructor, propertyKey),
             SharpTSSymbol => null,
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
             BoundFunction bound => bound.GetOwnPropertyDescriptor(propertyKey),
