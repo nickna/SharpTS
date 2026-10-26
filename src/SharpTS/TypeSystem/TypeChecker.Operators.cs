@@ -374,6 +374,8 @@ public partial class TypeChecker
         var narrowings = logical.Operator.Type == TokenType.OR_OR
             ? CollectDisjunctGuards(logical.Left)
             : AnalyzeCompoundTypeGuards(logical.Left);
+        _checkedAndGuards.Remove(logical);
+        using var conditionWrites = BeginConditionWriteCapture();
 
         if (narrowings.Count > 0)
         {
@@ -408,6 +410,7 @@ public partial class TypeChecker
                 }
                 try
                 {
+                    ApplyCheckedConditionLoopOrigins(logical.Left, isAnd);
                     rightType = CheckValueFlowExpression(logical.Right, null, out rightFlow, rightLoopGuards);
                 }
                 finally
@@ -421,9 +424,12 @@ public partial class TypeChecker
         }
         else
         {
+            ApplyCheckedConditionLoopOrigins(logical.Left, logical.Operator.Type == TokenType.AND_AND);
             rightType = CheckValueFlowExpression(logical.Right, null, out rightFlow, rightLoopGuards);
         }
 
+        if (logical.Operator.Type == TokenType.AND_AND)
+            CompleteCheckedAndGuards(logical, conditionWrites, narrowings, rightFlow);
         bool? leftTruth = IsAlwaysFalsy(leftType) ? false : IsAlwaysTruthy(leftType) ? true : null;
         bool? runsRight = logical.Operator.Type == TokenType.AND_AND ? leftTruth : leftTruth is null ? null : !leftTruth;
         if (runsRight == false)
@@ -556,6 +562,7 @@ public partial class TypeChecker
         TypeInfo CheckBranch(bool then)
         {
             RestoreValueFlow(incomingFlow);
+            ApplyCheckedConditionLoopOrigins(ternary.Condition, then);
             var tryWrites = CaptureTryValueWrites();
             var jumps = CaptureValueFlowJumps();
             TypeInfo result = CheckValueFlowExpression(then ? ternary.ThenBranch : ternary.ElseBranch,

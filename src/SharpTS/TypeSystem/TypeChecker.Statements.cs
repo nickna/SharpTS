@@ -1145,6 +1145,7 @@ public partial class TypeChecker
             var jumps = CaptureValueFlowJumps();
             RestoreValueFlow(incomingFlow);
             using var branchScope = new EnvironmentScope(this, new TypeEnvironment(_environment));
+            ApplyCheckedConditionLoopOrigins(stmt.Condition, true);
             ApplyLoopExitGuards(loopGuards?.Then);
             RestoreDefiniteAssignmentState(incomingAssignments);
             bool addedAssumption = thenAssignmentAssumption != null &&
@@ -1184,6 +1185,7 @@ public partial class TypeChecker
             var jumps = CaptureValueFlowJumps();
             RestoreValueFlow(incomingFlow);
             using var branchScope = new EnvironmentScope(this, new TypeEnvironment(_environment));
+            ApplyCheckedConditionLoopOrigins(stmt.Condition, false);
             ApplyLoopExitGuards(loopGuards?.Else);
             RestoreDefiniteAssignmentState(incomingAssignments);
             bool addedAssumption = elseAssignmentAssumption != null &&

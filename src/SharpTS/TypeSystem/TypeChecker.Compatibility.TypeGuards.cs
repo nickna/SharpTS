@@ -909,11 +909,21 @@ public partial class TypeChecker
     /// </returns>
     private List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> AnalyzeCompoundTypeGuards(Expr condition)
     {
+        condition = FinalConditionOperand(condition);
+        if (condition is Expr.Logical logicalCondition && _checkedAndGuards.TryGetValue(logicalCondition, out var checkedGuards) &&
+            checkedGuards.Writes.Length > 0)
+            return AnalyzeCheckedAndGuards(logicalCondition, checkedGuards);
         var narrowings = new List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)>();
 
         void CollectNarrowings(Expr expr)
         {
             expr = FinalConditionOperand(expr);
+            if (expr is Expr.Logical checkedLogical && _checkedAndGuards.TryGetValue(checkedLogical, out var checkedFacts) &&
+                checkedFacts.Writes.Length > 0)
+            {
+                narrowings.AddRange(AnalyzeCheckedAndGuards(checkedLogical, checkedFacts));
+                return;
+            }
             // For &&, collect narrowings from both sides. Apply LHS narrowings while
             // analyzing the RHS so CheckExpr calls inside the RHS (e.g. inside
             // AnalyzePathNullCheck) see the narrowed receiver. Without this,
