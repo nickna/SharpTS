@@ -40,7 +40,7 @@ public partial class TypeChecker
             // have for COMPOSITE types. Never routes back through ToTypeInfo(string).
             case NamedTypeNode { TypeArguments: null } named:
                 BindTypeUse(named);
-                return ResolveTypeName(named.Name);
+                return ResolveBareTypeAnnotation(named.Name);
 
             // Generic references resolve their argument nodes and hand off to the shared
             // instantiation machinery (built-in generics, utility types, generic alias node
