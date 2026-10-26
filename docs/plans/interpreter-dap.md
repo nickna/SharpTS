@@ -197,3 +197,27 @@ and no local publication key was available. Publishing the intended first releas
 owner action. Keep #1405 and #1400 open until that package is public and the complete visual checklist
 passes in both development and packaged profiles. Do not bypass the existing NuGet preflight or
 mark the epic complete on the strength of protocol/API tests alone.
+
+## P3 release audit (2026-10-25)
+
+The open epic's old local-commit integration item is complete: `d944f489` is in
+`main`, as recorded above. A fresh audit also passed the actual extension's
+development and installed-VSIX acceptance on VS Code 1.141.0, ten sessions in
+each profile, plus the client-independent exact-version installed-tool smoke.
+[The current record](../../scripts/editor-smoke/vscode-debugger/p3-last-verified.json)
+distinguishes those completed checks from the remaining release gates.
+
+| Gate | Current evidence |
+| --- | --- |
+| Interpreter/DAP implementation and raw client path | Existing shipping code; 64 focused adapter tests passed in this audit. |
+| VS Code development and installed VSIX behavior | Both profiles passed the repeatable ten-session acceptance. |
+| Locally installable adapter package | Exact built version packed, installed from an isolated feed, and passed real protocol execution. |
+| Public adapter package | Public flat-container index returned HTTP 404; no first upload was performed. |
+| Visual editor presentation | The complete development/VSIX visual checklist still needs its own evidence. |
+
+The release workflow uses the protected `nuget-release` environment and NuGet
+trusted publishing for tagged releases. Its existing first-package preflight
+must remain intact. A local package or a historical publishing secret does not
+establish ownership/onboarding of the new package ID or prove public availability.
+Keep #1400 open until #1405's public-package and visual gates pass; compiled
+hoisted-local projection remains independently tracked by #1399.
