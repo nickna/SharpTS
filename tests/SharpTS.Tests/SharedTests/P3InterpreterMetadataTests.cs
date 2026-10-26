@@ -263,4 +263,19 @@ public sealed class P3InterpreterMetadataTests
             """, "true\n", mode);
     }
 
+    [Theory, ModeData]
+    public void ObjectOwnNamesOmitDeletedMetadata(ExecutionMode mode)
+    {
+        AssertOutput("""
+            const O: any = Object;
+            console.log(Object.getOwnPropertyNames(O).includes("name"), Object.getOwnPropertyNames(O).includes("length"));
+            delete O.name;
+            console.log(Object.getOwnPropertyNames(O).includes("name"), Object.getOwnPropertyNames(O).includes("length"));
+            delete O.length;
+            console.log(Object.getOwnPropertyNames(O).includes("name"), Object.getOwnPropertyNames(O).includes("length"));
+            console.log(Object.getOwnPropertyNames(O).includes("prototype"), Object.getOwnPropertyNames(O).includes("getOwnPropertyNames"));
+            Object.defineProperty(O, "name", { value: "restored", configurable: true });
+            console.log(Object.getOwnPropertyNames(O).includes("name"), O.name);
+            """, "true true\nfalse true\nfalse false\ntrue true\ntrue restored\n", mode);
+    }
 }
