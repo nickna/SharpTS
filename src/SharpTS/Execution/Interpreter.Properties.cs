@@ -2571,7 +2571,8 @@ public partial class Interpreter
         // Resolve static methods via the constructor's own GetMember.
         if (obj is SharpTSBuiltInConstructor ctor)
         {
-            if (TryGetBuiltInConstructorProperty(ctor, memberName, out var ownValue))
+            if (TryReadDescriptor(GetBuiltInConstructorOverlayDescriptor(ctor, memberName),
+                    ctor, out var ownValue))
                 return ownValue;
             if (IsBuiltInConstructorPropertyDeleted(ctor, memberName))
                 return GetPropertyValue(GetFunctionPrototype(), memberName, ctor);

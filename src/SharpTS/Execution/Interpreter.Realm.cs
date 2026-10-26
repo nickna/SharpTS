@@ -233,25 +233,6 @@ public partial class Interpreter
     private Dictionary<SharpTSBuiltInConstructor, HashSet<string>>?
         _deletedBuiltInConstructorProperties;
 
-    private bool TryGetBuiltInConstructorProperty(
-        SharpTSBuiltInConstructor constructor,
-        string name,
-        out object? value)
-    {
-        value = null;
-        if (_builtInConstructorProperties == null
-            || !_builtInConstructorProperties.TryGetValue(constructor, out var properties)
-            || !properties.TryGetValue(name, out var descriptor))
-        {
-            return false;
-        }
-
-        value = descriptor.Get is { } getter
-            ? FunctionBuiltIns.CallWithThis(this, getter, constructor, [])
-            : descriptor.Value;
-        return true;
-    }
-
     private void SetBuiltInConstructorProperty(
         SharpTSBuiltInConstructor constructor,
         string name,
