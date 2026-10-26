@@ -248,12 +248,21 @@ public partial class Interpreter
                     "Cannot assign to read only property 'name' of function"));
             return;
         }
-        if (name == "name" && !hadOwnProperty
-            && TryAssignThroughDescriptor(
-                GetFunctionPrototype().GetOwnPropertyDescriptor(name)
-                    ?? GetObjectPrototype().GetOwnPropertyDescriptor(name),
-                constructor, name, value, strictMode))
-            return;
+        if (name == "name" && !hadOwnProperty)
+        {
+            object? prototype = GetFunctionPrototype();
+            for (int depth = 0; depth < 64 && prototype is not (null or SharpTSUndefined); depth++)
+            {
+                if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, prototype, name) is { } inherited)
+                {
+                    if (TryAssignThroughDescriptor(inherited, constructor, name, value, strictMode)) return;
+                    // A nearer writable data property permits an own shadow even when
+                    // a farther prototype carries a readonly property or accessor.
+                    break;
+                }
+                prototype = ObjectBuiltIns.PrototypeOf(this, prototype);
+            }
+        }
         if (_builtInConstructorProperties != null
             && _builtInConstructorProperties.TryGetValue(constructor, out var existingProperties)
             && existingProperties.TryGetValue(name, out var existing))
