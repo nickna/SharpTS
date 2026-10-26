@@ -6,6 +6,23 @@ namespace SharpTS.Tests.SharedTests;
 public class P3CallableMetadataTests
 {
     [Theory, ModeData]
+    public void VariableAssignedAsyncArrowsHaveInferredOwnNames(ExecutionMode mode)
+    {
+        const string source = """
+            const arrow: any = async (value: any) => value;
+            const grouped: any = (async () => 1);
+            const unnamed: any[] = [async () => 2];
+            console.log(JSON.stringify(arrow.name), JSON.stringify(arrow.bind(null).name));
+            console.log(grouped.name, Object.hasOwn(arrow, "name"));
+            console.log(JSON.stringify(unnamed[0].name), JSON.stringify(unnamed[0].bind(null).name));
+            function make() { const nested: any = async () => 3; return nested; }
+            console.log(make().name);
+            """;
+        Assert.Equal("\"arrow\" \"bound arrow\"\ngrouped true\n\"\" \"bound \"\nnested\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void FrozenFunctionMetadataDescriptorsAreNotConfigurable(ExecutionMode mode)
     {
         const string source = """
