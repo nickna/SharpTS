@@ -22,4 +22,13 @@ public sealed class LogicalConditionWriteGuardExecutionTests
 
     [Fact]
     public void OrderedConditionWritesHaveVerifiedCompilerIl() => Assert.Empty(TestHarness.CompileAndVerifyOnly(Source));
+
+    private const string OrSource = "function read(value:string|number){let writes=0;if(typeof value==='string'||(writes++,value='s',false))return;const checked:string=value;console.log(checked,writes);}read(1);";
+
+    [Theory, ModeData]
+    public void TheFalseEdgeUsesTheExecutedRightHandWrite(ExecutionMode mode)
+        => Assert.Equal("s 1\n", TestHarness.Run(OrSource, mode));
+
+    [Fact]
+    public void OrConditionWritesHaveVerifiedCompilerIl() => Assert.Empty(TestHarness.CompileAndVerifyOnly(OrSource));
 }

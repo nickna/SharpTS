@@ -374,7 +374,10 @@ public partial class TypeChecker
         var narrowings = logical.Operator.Type == TokenType.OR_OR
             ? CollectDisjunctGuards(logical.Left)
             : AnalyzeCompoundTypeGuards(logical.Left);
+        var trueLeftGuards = logical.Operator.Type == TokenType.OR_OR
+            ? AnalyzeCompoundTypeGuards(logical.Left) : [];
         _checkedAndGuards.Remove(logical);
+        _checkedOrGuards.Remove(logical);
         using var conditionWrites = BeginConditionWriteCapture();
 
         if (narrowings.Count > 0)
@@ -430,6 +433,8 @@ public partial class TypeChecker
 
         if (logical.Operator.Type == TokenType.AND_AND)
             CompleteCheckedAndGuards(logical, conditionWrites, narrowings, rightFlow);
+        else
+            CompleteCheckedOrGuards(logical, conditionWrites, narrowings, trueLeftGuards, incomingFlow, rightFlow);
         bool? leftTruth = IsAlwaysFalsy(leftType) ? false : IsAlwaysTruthy(leftType) ? true : null;
         bool? runsRight = logical.Operator.Type == TokenType.AND_AND ? leftTruth : leftTruth is null ? null : !leftTruth;
         if (runsRight == false)

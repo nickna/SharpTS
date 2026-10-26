@@ -915,6 +915,9 @@ public partial class TypeChecker
         if (condition is Expr.Logical logicalCondition && _checkedAndGuards.TryGetValue(logicalCondition, out var checkedGuards) &&
             checkedGuards.Writes.Length > 0)
             return AnalyzeCheckedAndGuards(logicalCondition, checkedGuards);
+        if (condition is Expr.Logical orCondition && _checkedOrGuards.TryGetValue(orCondition, out var checkedOr) &&
+            checkedOr.Writes.Length > 0)
+            return AnalyzeCheckedOrGuards(orCondition, checkedOr);
         var narrowings = new List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)>();
 
         void CollectNarrowings(Expr expr)
@@ -924,6 +927,12 @@ public partial class TypeChecker
                 checkedFacts.Writes.Length > 0)
             {
                 narrowings.AddRange(AnalyzeCheckedAndGuards(checkedLogical, checkedFacts));
+                return;
+            }
+            if (expr is Expr.Logical checkedOrLogical && _checkedOrGuards.TryGetValue(checkedOrLogical, out var checkedOrFacts) &&
+                checkedOrFacts.Writes.Length > 0)
+            {
+                narrowings.AddRange(AnalyzeCheckedOrGuards(checkedOrLogical, checkedOrFacts));
                 return;
             }
             // For &&, collect narrowings from both sides. Apply LHS narrowings while
@@ -1138,6 +1147,12 @@ public partial class TypeChecker
         void Walk(Expr expr)
         {
             expr = FinalConditionOperand(expr);
+            if (expr is Expr.Logical checkedOr && _checkedOrGuards.TryGetValue(checkedOr, out var checkedGuards) &&
+                checkedGuards.Writes.Length > 0)
+            {
+                narrowings.AddRange(AnalyzeCheckedOrGuards(checkedOr, checkedGuards, exclusionsOnly: true));
+                return;
+            }
             if (expr is Expr.Logical orExpr && orExpr.Operator.Type == TokenType.OR_OR)
             {
                 Walk(orExpr.Left);

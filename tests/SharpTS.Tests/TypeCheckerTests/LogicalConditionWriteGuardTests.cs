@@ -29,6 +29,19 @@ public sealed class LogicalConditionWriteGuardTests
             ("let value:string|number='s';if(typeof value==='string'&&(value=1,typeof value==='string')){const unreachable:never=value;}", []),
             ("let value:string|number='s';do{if(typeof value==='string'&&(value=1,true))break;value=1;}while(true);const correct:number=value;", []),
             ("let value:string|number='s';do{if(typeof value==='string'&&(value=1,true))break;value=1;}while(true);const wrong:string=value;", ["TS2322"]),
+            ("function read(value:string|number){if(typeof value==='string'||(value='s',false))return;const wrong:number=value;}", ["TS2322"]),
+            ("function read(value:string|number){if(typeof value==='string'||(value='s',false))return;const correct:string=value;}", []),
+            ("function read(value:string|number){if(typeof value==='string'||(value='s',false)){}else{const correct:string=value;}}", []),
+            ("function read(value:string|number){if(typeof value==='string'||(value='s',typeof value==='number'))return;const correct:string=value;}", []),
+            ("function read(value:string|number){if(typeof value==='string'||(value='s',false)||value.length===0)return;const correct:string=value;}", []),
+            ("function read(value:string|number){if(typeof value==='string'||(value=1,typeof value==='number')){const correct:string|number=value;}}", []),
+            ("function read(value:string|number){if(typeof value==='string'||(value=1,false)){const wrong:string=value;}}", ["TS2322"]),
+            ("function read(value:string|number){if(typeof value==='string'||(value=1,false)){const wrong:number=value;}}", ["TS2322"]),
+            ("let value:string|number=1;if(true||(value='s',true)){const correct:number=value;}", []),
+            ("declare function accept(callback:()=>void):boolean;function read(value:string|number){if(typeof value==='string'||accept(()=>{value='s';}))return;const correct:number=value;}", []),
+            ("function read(value:string|number){if(typeof value==='string'||((value:string)=>{value='s';return false;})('x'))return;const correct:number=value;}", []),
+            ("let value:string|number=1;do{if(typeof value==='string'||(value='s',false)){}else break;value=1;}while(true);const wrong:number=value;", ["TS2322"]),
+            ("let value:string|number=1;do{if(typeof value==='string'||(value='s',false)){}else break;value=1;}while(true);const correct:string=value;", []),
         })
             foreach (bool modules in new[] { false, true }) yield return [source, codes, modules];
     }
@@ -42,6 +55,22 @@ public sealed class LogicalConditionWriteGuardTests
     {
         const string source = "declare function choose():boolean;let value:string|number='s';if(typeof value==='string'&&(value=1,choose())){const correct:number=value;}";
         var document = new SourceDocument("logical-condition-write.ts", source);
+        var statements = new Parser(new Lexer(source).ScanTokens()).WithSourceDocument(document).WithEditorSyntax().ParseOrThrow();
+        var checker = new TypeChecker(TypeCheckerOptions.Strict).WithEditorMetadata();
+        Assert.Empty(checker.CheckWithRecovery(statements, document).Diagnostics);
+        var facts = checker.EditorFacts.Freeze();
+        Assert.Single(facts.Invocations);
+        var invocation = Assert.Single(document.EditorSyntax!.Invocations);
+        var call = Assert.IsType<EditorInvocationFact>(facts.GetInvocation(document, invocation.Owner));
+        Assert.Equal(EditorInvocationStatus.Selected, call.Status);
+        Assert.Same(statements[0], Assert.Single(call.Candidates).Origin!.Owner);
+    }
+
+    [Fact]
+    public void OrFalseEdgeQueriesRetainTheOriginalCheckedCall()
+    {
+        const string source = "declare function choose():boolean;function read(value:string|number){if(typeof value==='string'||(value='s',choose()))return;const correct:string=value;}";
+        var document = new SourceDocument("or-condition-write.ts", source);
         var statements = new Parser(new Lexer(source).ScanTokens()).WithSourceDocument(document).WithEditorSyntax().ParseOrThrow();
         var checker = new TypeChecker(TypeCheckerOptions.Strict).WithEditorMetadata();
         Assert.Empty(checker.CheckWithRecovery(statements, document).Diagnostics);

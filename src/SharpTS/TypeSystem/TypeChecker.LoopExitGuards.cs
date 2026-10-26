@@ -51,6 +51,11 @@ public partial class TypeChecker
                     bool Survives(LoopGuardFact fact) => !checkedGuards.Writes.Any(write => ReferenceEquals(write.Symbol, fact.Symbol));
                     left = new(left.Then.Where(Survives).ToArray(), left.Else.Where(Survives).ToArray());
                 }
+                if (logical.Operator.Type == TokenType.OR_OR && _checkedOrGuards.TryGetValue(logical, out var checkedOrGuards))
+                {
+                    bool Survives(LoopGuardFact fact) => !checkedOrGuards.Writes.Any(write => ReferenceEquals(write.Symbol, fact.Symbol));
+                    left = new(left.Then.Where(Survives).ToArray(), left.Else.Where(Survives).ToArray());
+                }
                 return logical.Operator.Type == TokenType.AND_AND
                     ? new(Combine(left.Then, right.Then, all: true), Combine(left.Else, right.Else, all: false))
                     : logical.Operator.Type == TokenType.OR_OR

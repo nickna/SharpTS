@@ -11,6 +11,11 @@ public partial class TypeChecker
         (NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)[] Left,
         CheckedConditionWrite[] Writes, ValueFlowState Right);
     private readonly ConditionalWeakTable<Expr.Logical, CheckedAndGuards> _checkedAndGuards = new();
+    private sealed record CheckedOrGuards(
+        (NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)[] Left,
+        (NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)[] TrueLeft,
+        CheckedConditionWrite[] Writes, ValueFlowState Incoming, ValueFlowState Right);
+    private readonly ConditionalWeakTable<Expr.Logical, CheckedOrGuards> _checkedOrGuards = new();
     private readonly Stack<ConditionWriteCapture> _conditionWriteCaptures = new();
 
     private sealed class ConditionWriteCapture(TypeChecker checker,
@@ -65,15 +70,35 @@ public partial class TypeChecker
         _checkedAndGuards.AddOrUpdate(logical, new(left.ToArray(), writes, right));
     }
 
+    private void CompleteCheckedOrGuards(Expr.Logical logical, ConditionWriteCapture capture,
+        List<(NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> left,
+        List<(NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> trueLeft,
+        ValueFlowState incoming, ValueFlowState right)
+    {
+        var writes = (_typeMap.Get(logical.Left) is { } leftType && IsAlwaysTruthy(leftType)
+            ? Enumerable.Empty<KeyValuePair<BindingSymbol, string>>() : capture.Writes)
+            .Select(pair => right.Bindings.TryGetValue(pair.Key, out var binding)
+            ? new CheckedConditionWrite(pair.Value, pair.Key, binding.Type) : null).OfType<CheckedConditionWrite>().ToArray();
+        _checkedOrGuards.AddOrUpdate(logical, new(left.ToArray(), trueLeft.ToArray(), writes, incoming, right));
+    }
+
     private void ApplyCheckedConditionLoopOrigins(Expr condition, bool truthy)
     {
         condition = FinalConditionOperand(condition);
-        if (!truthy || condition is not Expr.Logical { Operator.Type: TokenType.AND_AND } logical) return;
-        ApplyCheckedConditionLoopOrigins(logical.Left, true);
-        ApplyCheckedConditionLoopOrigins(logical.Right, true);
-        if (!_checkedAndGuards.TryGetValue(logical, out var guards)) return;
-        foreach (var snapshot in guards.Right.LoopOrigins)
-            foreach (var write in guards.Writes)
+        if (condition is not Expr.Logical logical) return;
+        CheckedConditionWrite[] writes;
+        ValueFlowState right;
+        if (truthy && logical.Operator.Type == TokenType.AND_AND &&
+            _checkedAndGuards.TryGetValue(logical, out var andGuards))
+            (writes, right) = (andGuards.Writes, andGuards.Right);
+        else if (!truthy && logical.Operator.Type == TokenType.OR_OR &&
+            _checkedOrGuards.TryGetValue(logical, out var orGuards))
+            (writes, right) = (orGuards.Writes, orGuards.Right);
+        else return;
+        ApplyCheckedConditionLoopOrigins(logical.Left, truthy);
+        ApplyCheckedConditionLoopOrigins(logical.Right, truthy);
+        foreach (var snapshot in right.LoopOrigins)
+            foreach (var write in writes)
                 if (ReferenceEquals(_environment.GetValueBinding(write.Name), write.Symbol) &&
                     snapshot.Origins.TryGetValue(write.Symbol, out var origin))
                     snapshot.Owner.Origins[write.Symbol] = origin;
@@ -107,6 +132,58 @@ public partial class TypeChecker
             var left = checkedGuards.Left.FirstOrDefault(guard => guard.Path.Equals(path));
             var skipped = left.Path is not null ? left.ExcludedType : _environment.Get(write.Name) ?? write.Type;
             result.Add((path, write.Type, UnionLoopDomainTypes([skipped, write.Type])));
+        }
+        return result;
+    }
+
+    private List<(NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)>
+        AnalyzeCheckedOrGuards(Expr.Logical logical, CheckedOrGuards checkedGuards, bool exclusionsOnly = false)
+    {
+        var writes = checkedGuards.Writes.Where(write =>
+            ReferenceEquals(_environment.GetValueBinding(write.Name), write.Symbol)).ToArray();
+        bool leftIsFalse = _typeMap.Get(logical.Left) is { } leftType && IsAlwaysFalsy(leftType);
+        bool Invalidated(NarrowingPath path) => writes.Any(write => path.RootVariable == write.Name);
+        var left = checkedGuards.Left.Where(guard => !Invalidated(guard.Path)).ToList();
+        var rightEnvironment = new TypeEnvironment(_environment);
+        var context = NarrowingContext.Empty;
+        foreach (var (path, _, excluded) in left)
+            if (path is NarrowingPath.Variable variable) rightEnvironment.Define(variable.Name, excluded);
+            else context = context.WithNarrowing(path, excluded);
+        foreach (var write in writes) rightEnvironment.Define(write.Name, write.Type);
+        List<(NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> rightFalse;
+        List<(NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> rightTrue = [];
+        using (new EnvironmentScope(this, rightEnvironment))
+        {
+            if (!context.IsEmpty) PushNarrowingContext(context);
+            try
+            {
+                rightFalse = CollectDisjunctGuards(logical.Right);
+                if (!exclusionsOnly) rightTrue = AnalyzeCompoundTypeGuards(logical.Right);
+            }
+            finally { if (!context.IsEmpty) PopNarrowingContext(); }
+        }
+
+        var result = exclusionsOnly ? left : new List<(NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)>();
+        if (exclusionsOnly) result.AddRange(rightFalse);
+        else
+            foreach (var guard in checkedGuards.TrueLeft.Where(guard => !Invalidated(guard.Path)))
+            {
+                var right = rightTrue.FirstOrDefault(candidate => candidate.Path.Equals(guard.Path));
+                if (right.Path is not null)
+                    result.Add((guard.Path, UnionOfNarrowedTypes(guard.NarrowedType, right.NarrowedType), right.ExcludedType));
+            }
+        foreach (var write in writes)
+        {
+            var path = new NarrowingPath.Variable(write.Name);
+            if (exclusionsOnly && rightFalse.Any(guard => guard.Path.Equals(path))) continue;
+            var falseGuard = rightFalse.FirstOrDefault(guard => guard.Path.Equals(path));
+            var falseType = falseGuard.Path is not null ? falseGuard.ExcludedType : write.Type;
+            var skippedGuard = checkedGuards.TrueLeft.FirstOrDefault(guard => guard.Path.Equals(path));
+            var skipped = skippedGuard.Path is not null ? skippedGuard.NarrowedType :
+                checkedGuards.Incoming.Bindings.TryGetValue(write.Symbol, out var binding) ? binding.Type : write.Type;
+            var trueGuard = rightTrue.FirstOrDefault(guard => guard.Path.Equals(path));
+            var written = trueGuard.Path is not null ? trueGuard.NarrowedType : write.Type;
+            result.Add((path, UnionOfNarrowedTypes(leftIsFalse ? TypeInfo.Never.Shared : skipped, written), falseType));
         }
         return result;
     }
