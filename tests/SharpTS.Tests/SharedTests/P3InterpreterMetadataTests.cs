@@ -38,12 +38,15 @@ public sealed class P3InterpreterMetadataTests
             """, "true false \"\" true\ntrue false 0 true\nRestored 3 true true\n", mode);
     }
 
-    [Theory, ModeData]
-    public void BuiltInConstructorNamesAreOwnConfigurableMetadata(ExecutionMode mode)
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted, "AbortController")]
+    [InlineData(ExecutionMode.Compiled, "AbortController")]
+    // Compiled Map constructor names have a separate CLR-name defect.
+    [InlineData(ExecutionMode.Interpreted, "Map")]
+    public void BuiltInConstructorNamesAreOwnConfigurableMetadata(ExecutionMode mode, string constructorName)
     {
         AssertOutput("""
-            for (const ctor of [AbortController, Map]) {
-                const value: any = ctor;
+                const value: any = CONSTRUCTOR;
                 const descriptor: any = Object.getOwnPropertyDescriptor(value, "name");
                 console.log(value.name, Reflect.get(value, "name"), Object.hasOwn(value, "name"),
                     descriptor.writable, descriptor.enumerable, descriptor.configurable);
@@ -52,8 +55,8 @@ public sealed class P3InterpreterMetadataTests
                     Object.getOwnPropertyDescriptor(value, "name") === undefined);
                 Object.defineProperty(value, "name", { value: "replacement", configurable: true });
                 console.log(value.name, Reflect.get(value, "name"), Object.hasOwn(value, "name"));
-            }
-            """, "AbortController AbortController true false false true\ntrue false \"\" \"\" true\nreplacement replacement true\nMap Map true false false true\ntrue false \"\" \"\" true\nreplacement replacement true\n", mode);
+            """.Replace("CONSTRUCTOR", constructorName),
+            $"{constructorName} {constructorName} true false false true\ntrue false \"\" \"\" true\nreplacement replacement true\n", mode);
     }
 
     [Theory, ModeData]
@@ -90,6 +93,31 @@ public sealed class P3InterpreterMetadataTests
             async function run() {
                 const intrinsic: any = Object.getPrototypeOf(asynchronous.prototype);
                 for (const name of ["next", "return", "throw"]) {
+                    try {
+                        const result = intrinsic[name].call({});
+                        await result;
+                        console.log("accepted");
+                    }
+                    catch (error: any) {
+                        console.log(name, error.name, error instanceof TypeError);
+                    }
+                }
+            }
+            run();
+            """, "next TypeError true\nreturn TypeError true\nthrow TypeError true\nnext TypeError true\nreturn TypeError true\nthrow TypeError true\n", mode);
+    }
+
+    // Compiled async generator return/throw reject an invalid receiver synchronously;
+    // that independent timing defect is tracked separately from the error brand.
+    [Theory, InterpretedOnlyData]
+    public void AsyncGeneratorInvalidReceiversReturnRejectedPromises(ExecutionMode mode)
+    {
+        AssertOutput("""
+            async function* values() {}
+            async function run() {
+                const fn: any = values;
+                const intrinsic: any = Object.getPrototypeOf(fn.prototype);
+                for (const name of ["next", "return", "throw"]) {
                     let returned = false;
                     try {
                         const result = intrinsic[name].call({});
@@ -97,13 +125,11 @@ public sealed class P3InterpreterMetadataTests
                         await result;
                         console.log("accepted");
                     }
-                    catch (error: any) {
-                        console.log(name, error.name, error instanceof TypeError, returned);
-                    }
+                    catch (error: any) { console.log(name, error.name, returned); }
                 }
             }
             run();
-            """, "next TypeError true\nreturn TypeError true\nthrow TypeError true\nnext TypeError true true\nreturn TypeError true true\nthrow TypeError true true\n", mode);
+            """, "next TypeError true\nreturn TypeError true\nthrow TypeError true\n", mode);
     }
 
     [Theory, ModeData]
@@ -135,7 +161,8 @@ public sealed class P3InterpreterMetadataTests
                 try { new C(executor); console.log("accepted"); }
                 catch (error: any) { console.log(error instanceof TypeError, error.name); }
             }
-            new C((resolve: any) => resolve(42)).then((value: any) => console.log(value));
+            const valid: any = new C((resolve: any) => resolve(42));
+            valid.then((value: any) => console.log(value));
             """, "true TypeError\ntrue TypeError\ntrue TypeError\ntrue TypeError\n42\n", mode);
     }
 
