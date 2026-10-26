@@ -964,6 +964,8 @@ public partial class RuntimeEmitter
             )
         );  // For bind/call/apply on functions
         EmitBoundFunctionName(runtime.FunctionBindings.CaptureName, runtime.ObjectRead.Property);
+        EmitBoundFunctionLength(runtime.FunctionBindings.CaptureLength, runtime.ObjectRead.Property,
+            runtime.ObjectOwnProperties.HasOwnProperty);
         EmitBoundFunctionPrototype(runtime.FunctionBindings.CapturePrototype,
             runtime.ObjectPrototypes, runtime.DescriptorStorage);
         // Pre-define IsBoxedPrimitiveOfType shell so InstanceOf can reference

@@ -6,6 +6,31 @@ namespace SharpTS.Tests.SharedTests;
 public class P3CallableMetadataTests
 {
     [Theory, ModeData]
+    public void BindSnapshotsCurrentOwnLengthWithIntegerConversion(ExecutionMode mode)
+    {
+        const string source = """
+            const target: any = (value: any) => value;
+            for (const length of [3.66, -3.66, Infinity, -Infinity, NaN, "8", undefined]) {
+                Object.defineProperty(target, "length", { value: length, configurable: true });
+                const bound: any = target.bind(null, 17);
+                console.log(bound.length, bound(99));
+            }
+            Object.defineProperty(target, "length", { value: 5, configurable: true });
+            const snapshot: any = target.bind(null, 1, 2);
+            Object.defineProperty(target, "length", { value: 1 });
+            console.log(snapshot.length, snapshot.bind(null, 3).length);
+            let reads = 0;
+            Object.defineProperty(target, "length", { get() { reads++; return 4.9; }, configurable: true });
+            const accessor: any = target.bind(null, 1);
+            console.log(accessor.length, accessor.length, reads);
+            delete target.length;
+            console.log(target.bind(null).length);
+            """;
+        Assert.Equal("2 17\n0 17\nInfinity 17\n0 17\n0 17\n0 17\n0 17\n3 2\n3 3 1\n0\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void VariableAssignedAsyncArrowsHaveInferredOwnNames(ExecutionMode mode)
     {
         const string source = """

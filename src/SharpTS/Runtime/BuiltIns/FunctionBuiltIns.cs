@@ -93,7 +93,8 @@ public static class FunctionBuiltIns
             // their Arity() — typically the parameter count of a user-defined
             // function, which already matches the spec.
             case "length":
-                return receiver is BuiltInMethod bim
+                return receiver is BoundFunction bound ? bound.Length
+                    : receiver is BuiltInMethod bim
                     ? (double)bim.SpecLength
                     : (double)receiver.Arity();
             case "name":
@@ -148,6 +149,13 @@ public static class FunctionBuiltIns
         // BoundFunctionCreate snapshots the target's actual internal prototype,
         // including a derived class's base constructor and explicit null.
         object? prototype = ObjectBuiltIns.PrototypeOf(interp, callable);
+        double targetLength = 0;
+        if (SharpTSObjectUnboundMethod.HasOwn(interp, callable, "length")
+            && interp.GetPropertyValue(callable, "length") is double length
+            && length > 0)
+        {
+            targetLength = Math.Truncate(length);
+        }
         // Bind snapshots the target's current guest-visible name, including
         // constructor aliases and descriptor overrides, independently of it.
         string targetName = interp.GetPropertyValue(callable, "name") as string ?? "";
@@ -157,12 +165,13 @@ public static class FunctionBuiltIns
         {
             // Still create a bound function for partial application, but 'this' won't change
             var boundArrow = new BoundFunction(callable, null, boundArgs,
-                ignoreThisArg: true, targetName: targetName);
+                ignoreThisArg: true, targetName: targetName, targetLength: targetLength);
             boundArrow.SetPrototypeSnapshot(prototype);
             return RuntimeValue.FromObject(boundArrow);
         }
 
-        var bound = new BoundFunction(callable, thisArg, boundArgs, targetName: targetName);
+        var bound = new BoundFunction(callable, thisArg, boundArgs, targetName: targetName,
+            targetLength: targetLength);
         bound.SetPrototypeSnapshot(prototype);
         return RuntimeValue.FromObject(bound);
     }
@@ -444,8 +453,9 @@ public class BoundFunction : ISharpTSCallable
     private readonly object? _thisArg;
     private readonly List<object?> _boundArgs;
     private readonly bool _ignoreThisArg;
+    internal double Length { get; }
     private SharpTSObject? _ownProperties;
-    internal SharpTSObject OwnPropertyStorage => _ownProperties ??= FunctionObjectProperties.Create(Name, Arity());
+    internal SharpTSObject OwnPropertyStorage => _ownProperties ??= FunctionObjectProperties.Create(Name, Length);
 
     internal void SetPrototypeSnapshot(object? prototype)
         => FunctionObjectProperties.SetExplicitPrototype(OwnPropertyStorage, prototype);
@@ -516,12 +526,13 @@ public class BoundFunction : ISharpTSCallable
     public string Name { get; }
 
     public BoundFunction(ISharpTSCallable target, object? thisArg, List<object?> boundArgs,
-        bool ignoreThisArg = false, string? targetName = null)
+        bool ignoreThisArg = false, string? targetName = null, double? targetLength = null)
     {
         _target = target;
         _thisArg = thisArg;
         _boundArgs = boundArgs;
         _ignoreThisArg = ignoreThisArg;
+        Length = Math.Max(0, (targetLength ?? target.Arity()) - boundArgs.Count);
 
         // Get base function name and prefix with "bound "
         var baseName = targetName ?? GetBaseName(target);
@@ -533,11 +544,7 @@ public class BoundFunction : ISharpTSCallable
         return FunctionBuiltIns.GetFunctionName(target);
     }
 
-    public int Arity()
-    {
-        int baseArity = _target.Arity();
-        return Math.Max(0, baseArity - _boundArgs.Count);
-    }
+    public int Arity() => (int)Math.Min(int.MaxValue, Length);
 
     public RuntimeValue CallV2(Interpreter interpreter, ReadOnlySpan<RuntimeValue> arguments)
     {

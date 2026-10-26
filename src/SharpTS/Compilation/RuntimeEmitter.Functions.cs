@@ -85,6 +85,9 @@ public partial class RuntimeEmitter
         bindings.CaptureName = runtimeType.DefineMethod(
             "CaptureBoundFunctionName", MethodAttributes.Assembly | MethodAttributes.Static,
             _types.String, [_types.Object]);
+        bindings.CaptureLength = runtimeType.DefineMethod(
+            "CaptureBoundFunctionLength", MethodAttributes.Assembly | MethodAttributes.Static,
+            _types.Double, [_types.Object, _types.ObjectArray]);
         bindings.CapturePrototype = runtimeType.DefineMethod(
             "CaptureBoundFunctionPrototype", MethodAttributes.Assembly | MethodAttributes.Static,
             _types.Void, [_types.Object, _types.Object]);
@@ -113,6 +116,48 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitBoundFunctionLength(MethodBuilder captureLength, MethodBuilder getProperty,
+        MethodBuilder hasOwnProperty)
+    {
+        var il = captureLength.GetILGenerator();
+        var zero = il.DefineLabel();
+        var value = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, hasOwnProperty);
+        il.Emit(OpCodes.Brfalse, zero);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, getProperty);
+        il.Emit(OpCodes.Stloc, value);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, zero);
+        var length = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Stloc, length);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Ble_Un, zero);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+        var noArguments = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, noArguments);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Sub);
+        il.MarkLabel(noArguments);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Double, _types.Double));
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(zero);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Ret);
+    }
+
     /// <summary>
     /// Emits the $BoundTSFunction class for handling bound functions.
     /// </summary>
@@ -138,6 +183,8 @@ public partial class RuntimeEmitter
         functionBindings.BoundArgumentsField = boundArgsField;
         var nameField = typeBuilder.DefineField("_name", _types.String, FieldAttributes.Assembly | FieldAttributes.InitOnly);
         functionBindings.BoundNameField = nameField;
+        var lengthField = typeBuilder.DefineField("_length", _types.Double, FieldAttributes.Assembly | FieldAttributes.InitOnly);
+        functionBindings.BoundLengthField = lengthField;
 
         // Constructor: public $BoundTSFunction($TSFunction target, object thisArg, object[] boundArgs)
         var ctorBuilder = typeBuilder.DefineConstructor(
@@ -166,6 +213,11 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
         ctorIL.Emit(OpCodes.Call, functionBindings.CapturePrototype);
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldarg_1);
+        ctorIL.Emit(OpCodes.Ldarg_3);
+        ctorIL.Emit(OpCodes.Call, functionBindings.CaptureLength);
+        ctorIL.Emit(OpCodes.Stfld, lengthField);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
         ctorIL.Emit(OpCodes.Call, functionBindings.CaptureName);
@@ -328,6 +380,8 @@ public partial class RuntimeEmitter
         functionBindings.AnyArgumentsField = boundArgsField;
         var nameField = typeBuilder.DefineField("_name", _types.String, FieldAttributes.Assembly | FieldAttributes.InitOnly);
         functionBindings.AnyNameField = nameField;
+        var lengthField = typeBuilder.DefineField("_length", _types.Double, FieldAttributes.Assembly | FieldAttributes.InitOnly);
+        functionBindings.AnyLengthField = lengthField;
         var boundThisField = typeBuilder.DefineField("_thisArg", _types.Object, FieldAttributes.Private);
 
         // ctor(object target, object thisArg, object[] boundArgs)
@@ -353,6 +407,11 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
         ctorIL.Emit(OpCodes.Call, functionBindings.CapturePrototype);
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldarg_1);
+        ctorIL.Emit(OpCodes.Ldarg_3);
+        ctorIL.Emit(OpCodes.Call, functionBindings.CaptureLength);
+        ctorIL.Emit(OpCodes.Stfld, lengthField);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
         ctorIL.Emit(OpCodes.Call, functionBindings.CaptureName);
@@ -1389,22 +1448,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, lengthNotBoundTSFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
-        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.BoundTargetField);
-        il.Emit(OpCodes.Call, inputs.FunctionValues.LengthGetter);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.BoundType);
-        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.BoundArgumentsField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Sub);
-        var boundTSLengthNonNegative = il.DefineLabel();
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Bge, boundTSLengthNonNegative);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.MarkLabel(boundTSLengthNonNegative);
-        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.BoundLengthField);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
 
@@ -1415,23 +1459,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, lengthNotBoundAnyFunctionLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
-        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.AnyTargetField);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, method);
-        il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
-        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.AnyArgumentsField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Sub);
-        var boundAnyLengthNonNegative = il.DefineLabel();
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Bge, boundAnyLengthNonNegative);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.MarkLabel(boundAnyLengthNonNegative);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionBindings.AnyLengthField);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
 
