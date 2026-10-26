@@ -196,8 +196,9 @@ public sealed class P3InterpreterMetadataTests
             const ctor: any = Map;
             const prototype: any = Function.prototype;
             Object.defineProperty(prototype, "name", { value: "inherited", configurable: true });
+            const descriptor: any = Object.getOwnPropertyDescriptor(ctor, "name");
             console.log(ctor.name, Reflect.get(ctor, "name"),
-                Object.getOwnPropertyDescriptor(ctor, "name").value, prototype.name);
+                descriptor.value, prototype.name);
             console.log(delete ctor.name, ctor.name, Reflect.get(ctor, "name"), Object.hasOwn(ctor, "name"));
             Object.defineProperty(ctor, "name", { value: "renamed", configurable: true });
             console.log(ctor.name, Reflect.get(ctor, "name"), Object.hasOwn(ctor, "name"), prototype.name);
