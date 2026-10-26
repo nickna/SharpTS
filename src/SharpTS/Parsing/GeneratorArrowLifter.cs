@@ -140,8 +140,7 @@ internal sealed class GeneratorArrowLifter
             if (from.Count == 0) return;
             (names ??= new HashSet<string>(StringComparer.Ordinal)).UnionWith(from);
         }
-        foreach (var c in sw.Cases) Merge(CollectBlockBindings(c.Body));
-        if (sw.DefaultBody is not null) Merge(CollectBlockBindings(sw.DefaultBody));
+        foreach (var clause in sw.Clauses) Merge(CollectBlockBindings(clause.Body));
         return names ?? EmptyScope;
     }
 
@@ -370,29 +369,26 @@ internal sealed class GeneratorArrowLifter
     {
         // The subject is evaluated outside the switch block; every case shares one lexical scope (#678).
         var newSubject = RewriteExpr(sw.Subject);
-        List<Stmt.SwitchCase>? newCases = null;
-        List<Stmt>? newDefault;
+        List<Stmt.SwitchClause>? newClauses = null;
         PushBlockScope(CollectSwitchBindings(sw));
         try
         {
-            for (int i = 0; i < sw.Cases.Count; i++)
+            for (int i = 0; i < sw.Clauses.Count; i++)
             {
-                var c = sw.Cases[i];
-                var newValue = RewriteExpr(c.Value);
+                var c = sw.Clauses[i];
+                var newValue = c.Value is { } value ? RewriteExpr(value) : null;
                 var newBody = RewriteListIfChanged(c.Body, RewriteStmt);
                 if (!ReferenceEquals(newValue, c.Value) || !ReferenceEquals(newBody, c.Body))
                 {
-                    newCases ??= new List<Stmt.SwitchCase>(sw.Cases);
-                    newCases[i] = new Stmt.SwitchCase(newValue, newBody);
+                    newClauses ??= new List<Stmt.SwitchClause>(sw.Clauses);
+                    newClauses[i] = c with { Value = newValue, Body = newBody };
                 }
             }
-            newDefault = sw.DefaultBody is null ? null : RewriteListIfChanged(sw.DefaultBody, RewriteStmt);
         }
         finally { PopBlockScope(); }
-        if (ReferenceEquals(newSubject, sw.Subject) && newCases is null
-            && (sw.DefaultBody is null || ReferenceEquals(newDefault, sw.DefaultBody)))
+        if (ReferenceEquals(newSubject, sw.Subject) && newClauses is null)
             return sw;
-        return new Stmt.Switch(newSubject, newCases ?? sw.Cases, newDefault);
+        return sw with { Subject = newSubject, Clauses = newClauses ?? sw.Clauses };
     }
 
     private Stmt RewriteTryCatch(Stmt.TryCatch tc)

@@ -186,22 +186,25 @@ public partial class TypeChecker
                     return Each(nested.Variable, nested.IsDeclaration, nested.IsVar, nested.Object, nested.Body, true);
                 case Stmt.Switch selection:
                 {
-                    // The current AST separates default without retaining its position.
-                    // Do not assert a fallthrough graph when that order is unavailable.
-                    if (selection.DefaultBody is not null) throw new UnprovedLoopBodyFlow();
                     object subject = new();
                     var switchExits = exits with { Break = next };
-                    int defaultBody = selection.DefaultBody is null ? next : Statements(selection.DefaultBody, next, scope, switchExits);
-                    int fallthrough = defaultBody, test = defaultBody;
-                    foreach (var @case in selection.Cases.AsEnumerable().Reverse())
+                    var local = BlockScope(selection.Clauses.SelectMany(clause => clause.Body), scope);
+                    var bodies = new int[selection.Clauses.Count];
+                    int fallthrough = next;
+                    for (int index = selection.Clauses.Count - 1; index >= 0; index--)
                     {
-                        int body = Statements(@case.Body, fallthrough, scope, switchExits);
-                        test = Add(new(LoopBodyNodeKind.Case, scope, @case.Value)
-                        { Slot = subject, Subject = selection.Subject, Next = body, Otherwise = test, Exception = exits.Throw });
-                        fallthrough = body;
+                        bodies[index] = Statements(selection.Clauses[index].Body, fallthrough, local, switchExits);
+                        fallthrough = bodies[index];
                     }
+                    int defaultIndex = selection.Clauses.FindIndex(clause => clause.IsDefault);
+                    int test = defaultIndex < 0 ? next : bodies[defaultIndex];
+                    for (int index = selection.Clauses.Count - 1; index >= 0; index--)
+                        if (selection.Clauses[index].Value is { } value)
+                            test = Add(new(LoopBodyNodeKind.Case, local, value)
+                            { Slot = subject, Subject = selection.Subject, Next = bodies[index], Otherwise = test, Exception = exits.Throw });
+                    int enterScope = Add(new(LoopBodyNodeKind.Scope, local) { Next = test });
                     return Add(new(LoopBodyNodeKind.Subject, scope, selection.Subject)
-                    { Slot = subject, Next = test, Exception = exits.Throw });
+                    { Slot = subject, Next = enterScope, Exception = exits.Throw });
                 }
                 case Stmt.TryCatch guarded:
                 {

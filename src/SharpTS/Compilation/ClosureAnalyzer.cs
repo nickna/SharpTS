@@ -854,6 +854,24 @@ public class ClosureAnalyzer : AstVisitorBase
         ExitScope();
     }
 
+    protected override void VisitSwitch(Stmt.Switch stmt)
+    {
+        Visit(stmt.Subject);
+        EnterScope();
+        try
+        {
+            // Every clause shares one lexical scope, including case tests that
+            // precede the declaration whose binding their closures capture.
+            HoistFunctionDeclarations(stmt.Clauses.SelectMany(clause => clause.Body));
+            foreach (var clause in stmt.Clauses)
+            {
+                if (clause.Value is { } test) Visit(test);
+                foreach (var statement in clause.Body) Visit(statement);
+            }
+        }
+        finally { ExitScope(); }
+    }
+
     // Sequence intentionally uses base implementation (no new scope)
 
     protected override void VisitForOf(Stmt.ForOf stmt)

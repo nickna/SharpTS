@@ -351,8 +351,9 @@ public partial class TypeChecker
     }
 
     private (TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzeTypeofGuard(
-        TypeInfo currentType, string typeStr, bool negated)
+        TypeInfo currentType, string typeStr, bool negated, HashSet<TypeInfo>? activeParameters = null)
     {
+        currentType = RefreshCompletedInterfaceBinding(currentType);
         // Handle unknown type narrowing - typeof checks narrow unknown to specific types
         if (currentType is TypeInfo.Unknown)
         {
@@ -374,18 +375,40 @@ public partial class TypeChecker
 
         if (currentType is TypeInfo.Union union)
         {
-            var flattenedTypes = union.FlattenedTypes;
-            var matching = flattenedTypes.Where(t => TypeMatchesTypeof(t, typeStr)).ToList();
-            var nonMatching = flattenedTypes.Where(t => !TypeMatchesTypeof(t, typeStr)).ToList();
-
-            TypeInfo? narrowedType = matching.Count == 0 ? null :
-                matching.Count == 1 ? matching[0] : new TypeInfo.Union(matching);
-            TypeInfo? excludedType = nonMatching.Count == 0 ? null :
-                nonMatching.Count == 1 ? nonMatching[0] : new TypeInfo.Union(nonMatching);
+            var projections = union.FlattenedTypes.Select(type =>
+                AnalyzeTypeofGuard(type, typeStr, false, activeParameters)).ToList();
+            TypeInfo narrowedType = UnionTypeofProjections(projections.Select(projection => projection.NarrowedType));
+            TypeInfo excludedType = UnionTypeofProjections(projections.Select(projection => projection.ExcludedType));
 
             if (negated)
                 return (excludedType, narrowedType);
             return (narrowedType, excludedType);
+        }
+
+        if (currentType is TypeInfo.TypeParameter parameter)
+        {
+            activeParameters ??= new(ReferenceEqualityComparer.Instance);
+            if (!activeParameters.Add(parameter)) return (parameter, parameter);
+            try
+            {
+                var implied = TypeofStringToType(typeStr);
+                var constraint = parameter.Constraint;
+                bool openConstraint = constraint is null or TypeInfo.Any or TypeInfo.Unknown;
+                var projected = constraint is null or TypeInfo.Any or TypeInfo.Unknown
+                    ? (NarrowedType: implied, ExcludedType: (TypeInfo?)parameter)
+                    : AnalyzeTypeofGuard(constraint, typeStr, false, activeParameters);
+                TypeInfo narrowed = projected.NarrowedType is null or TypeInfo.Never
+                    ? TypeInfo.Never.Shared
+                    : projected.ExcludedType is TypeInfo.Never ? parameter
+                    : new TypeInfo.Intersection([parameter, projected.NarrowedType]);
+                if (openConstraint && typeStr == "object")
+                    narrowed = new TypeInfo.Intersection([parameter, new TypeInfo.Union([TypeInfo.Object.Shared, TypeInfo.Null.Shared])]);
+                // Keep the source parameter itself, rather than manufacturing a new
+                // parameter/owner or replacing its declaration with its constraint.
+                TypeInfo excluded = projected.ExcludedType is TypeInfo.Never ? TypeInfo.Never.Shared : parameter;
+                return negated ? (excluded, narrowed) : (narrowed, excluded);
+            }
+            finally { activeParameters.Remove(parameter); }
         }
 
         // Non-union type: check if current type matches typeof
@@ -398,6 +421,12 @@ public partial class TypeChecker
         }
         else
         {
+            // A structural supertype can also admit a primitive or callable value
+            // (for example { length: number } admits string). Keep its false edge
+            // and project the matching implied type without dropping members to any.
+            if (IsStructuralTypeofDomain(currentType) && TypeofStringToType(typeStr) is { } implied &&
+                IsCompatible(currentType, implied))
+                return negated ? (currentType, implied) : (implied, currentType);
             // Current type doesn't match - narrowed is never, excluded stays same
             if (negated)
                 return (currentType, TypeInfo.Never.Shared);
@@ -1587,8 +1616,8 @@ public partial class TypeChecker
         "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral or TypeInfo.Enum { Kind: EnumKind.Numeric },
         "boolean" => type is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral,
         "bigint" => type is TypeInfo.BigInt or TypeInfo.BigIntLiteral,
-        "object" => type is TypeInfo.Null or TypeInfo.Record or TypeInfo.Array or TypeInfo.Instance or TypeInfo.Object,
-        "function" => type is TypeInfo.Function,
+        "object" => IsTypeofObjectDomain(type),
+        "function" => HasTypeofCallableFacet(type),
         _ => false
     };
 }

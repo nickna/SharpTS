@@ -269,8 +269,8 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitStatementCore(Stmt stmt)
     {
-        // Spill temps never cross a statement boundary, so drop the live set here to keep
-        // the per-suspension persist/rehydrate cost proportional to one statement (#400).
+        // Expression temps end at statement boundaries. Switch selection keeps
+        // its discriminant explicitly retained across lowered nested statements.
         _helpers.ClearLiveSpills();
 
         switch (stmt)
@@ -1755,12 +1755,9 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
             case Stmt.ForIn fi:
                 return ContainsEscapingExit(fi.Body, insideLoop: true, insideSwitch);
             case Stmt.Switch s:
-                foreach (var c in s.Cases)
+                foreach (var c in s.Clauses)
                     foreach (var cs in c.Body)
                         if (ContainsEscapingExit(cs, insideLoop, insideSwitch: true)) return true;
-                if (s.DefaultBody != null)
-                    foreach (var ds in s.DefaultBody)
-                        if (ContainsEscapingExit(ds, insideLoop, insideSwitch: true)) return true;
                 return false;
             case Stmt.LabeledStatement ls:
                 return ContainsEscapingExit(ls.Statement, insideLoop, insideSwitch);
@@ -1789,33 +1786,75 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
     {
         EmitExpression(s.Subject);
         EnsureBoxed();
-        var subject = IL.DeclareLocal(Types.Object);
-        IL.Emit(OpCodes.Stloc, subject);
-        WithGeneratorLexicalScope(s.Cases.SelectMany(item => item.Body).Concat(s.DefaultBody ?? []),
-            () => EmitSwitchCases(s, subject));
+        // Case tests may suspend. Keep the discriminant in the existing spill
+        // storage so it survives a resumed MoveNext invocation.
+        var subject = _helpers.SpillStoreObject(retainAcrossStatements: true);
+        var statements = s.Clauses.SelectMany(clause => clause.Body).ToList();
+        WithSwitchLexicalScope(statements, () =>
+        {
+            var previousHoists = Ctx.HoistedInnerFunctions;
+            Ctx.HoistedInnerFunctions = previousHoists is null
+                ? new(ReferenceEqualityComparer.Instance)
+                : new(previousHoists, ReferenceEqualityComparer.Instance);
+            try
+            {
+                Ctx.EmitLexicalFunctionHoisting?.Invoke(IL, Ctx, statements);
+                EmitSwitchCases(s, subject);
+            }
+            finally { Ctx.HoistedInnerFunctions = previousHoists; }
+        });
     }
+
+    protected virtual void WithSwitchLexicalScope(List<Stmt> statements, Action emit)
+    {
+        Ctx.Locals.EnterScope();
+        List<LoopBodyCellScopeEntry> cells = [];
+        try
+        {
+            EnterLoopBodyCellScope(statements, cells);
+            emit();
+        }
+        finally
+        {
+            ExitLoopBodyCellScope(cells);
+            Ctx.Locals.ExitScope();
+        }
+    }
+
+    protected virtual bool IsSwitchDefaultUnreachable(Stmt.Switch statement) => false;
 
     private void EmitSwitchCases(Stmt.Switch s, LocalBuilder subjectLocal)
     {
         var endLabel = IL.DefineLabel();
-        var defaultLabel = IL.DefineLabel();
-        var caseLabels = s.Cases.Select(_ => IL.DefineLabel()).ToList();
+        var clauseLabels = s.Clauses.Select(_ => IL.DefineLabel()).ToList();
+        int defaultIndex = s.Clauses.FindIndex(clause => clause.IsDefault);
+        bool skipDefault = IsSwitchDefaultUnreachable(s);
 
-        // Generate case comparisons
-        for (int i = 0; i < s.Cases.Count; i++)
+        // A destructuring case expression emits nested statements. Its cleanup
+        // must retain the discriminant until every selection test is complete.
+        try
         {
-            IL.Emit(OpCodes.Ldloc, subjectLocal);
-            EmitExpression(s.Cases[i].Value);
-            EnsureBoxed();
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.StrictEquals);
-            IL.Emit(OpCodes.Brtrue, caseLabels[i]);
+            for (int i = 0; i < s.Clauses.Count; i++)
+            {
+                if (s.Clauses[i].Value is not { } test) continue;
+                EmitExpression(test);
+                EnsureBoxed();
+                var testLocal = IL.DeclareLocal(Types.Object);
+                IL.Emit(OpCodes.Stloc, testLocal);
+                // Load comparison operands only after a suspending test finishes.
+                IL.Emit(OpCodes.Ldloc, subjectLocal);
+                IL.Emit(OpCodes.Ldloc, testLocal);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.StrictEquals);
+                IL.Emit(OpCodes.Brtrue, clauseLabels[i]);
+            }
         }
+        finally { _helpers.ReleaseSpill(subjectLocal); }
 
         // Jump to default or end
-        if (s.DefaultBody == null)
+        if (defaultIndex < 0 || skipDefault)
             IL.Emit(OpCodes.Br, endLabel);
         else
-            IL.Emit(OpCodes.Br, defaultLabel);
+            IL.Emit(OpCodes.Br, clauseLabels[defaultIndex]);
 
         // Register the switch end as the current break target so nested breaks
         // (inside blocks, if/else, try/catch, etc.) exit the switch. Preserve the
@@ -1824,11 +1863,13 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         EnterLoop(endLabel, outerContinue);
         try
         {
-            // Emit case bodies
-            for (int i = 0; i < s.Cases.Count; i++)
+            // Selection and execution are separate: falling through a default
+            // clause must not evaluate any subsequent case expressions.
+            for (int i = 0; i < s.Clauses.Count; i++)
             {
-                IL.MarkLabel(caseLabels[i]);
-                foreach (var stmt in s.Cases[i].Body)
+                IL.MarkLabel(clauseLabels[i]);
+                if (skipDefault && s.Clauses[i].IsDefault) continue;
+                foreach (var stmt in s.Clauses[i].Body)
                 {
                     if (stmt is Stmt.Break breakStmt && breakStmt.Label == null)
                         IL.Emit(OpCodes.Br, endLabel);
@@ -1837,18 +1878,6 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 }
             }
 
-            // Default case
-            if (s.DefaultBody != null)
-            {
-                IL.MarkLabel(defaultLabel);
-                foreach (var stmt in s.DefaultBody)
-                {
-                    if (stmt is Stmt.Break breakStmt && breakStmt.Label == null)
-                        IL.Emit(OpCodes.Br, endLabel);
-                    else
-                        EmitStatement(stmt);
-                }
-            }
         }
         finally
         {

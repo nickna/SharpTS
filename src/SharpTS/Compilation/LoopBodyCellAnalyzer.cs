@@ -413,8 +413,15 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             bool classCaptureRelay = owner.ClassCaptureOwner is { } expression &&
                 (!ReferenceEquals(owner.Node, expression) || index + 1 < _owners.Count &&
                     ReferenceEquals(_owners[index + 1].ClassCaptureOwner, expression));
-            if (!owner.CanForward && !classCaptureRelay || binding.OrdinaryHandlerCandidate &&
+            // A directly nested ordinary function can use the same exact-token
+            // shadow cell as an arrow. Keep other callable chains conservative.
+            bool directBlockFunctionCapture = _ordinaryBlockShadows.Contains(binding.Name)
+                && owner.Node is Stmt.Function { IsAsync: false, IsGenerator: false }
+                && owner.CanOwnCells && index == _owners.Count - 1 && index > 0
+                && ReferenceEquals(_owners[index - 1], binding.Owner);
+            if ((!owner.CanForward && !classCaptureRelay || binding.OrdinaryHandlerCandidate &&
                 owner.Node is not Expr.ArrowFunction { IsAsync: false, IsGenerator: false })
+                && !directBlockFunctionCapture)
             { binding.Eligible = false; continue; }
             RecordCapture(owner.Node, name, binding);
         }
@@ -556,16 +563,15 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
     protected override void VisitSwitch(Stmt.Switch stmt)
     {
         Visit(stmt.Subject);
-        var statements = stmt.Cases.SelectMany(c => c.Body).Concat(stmt.DefaultBody ?? []).ToList();
-        EnterScope(statements, allowCandidates: false, unsupportedShadows: true, generatorLexicals: true);
+        var statements = stmt.Clauses.SelectMany(clause => clause.Body).ToList();
+        EnterScope(statements, allowCandidates: true, generatorLexicals: true, ordinaryBlock: true);
         try
         {
-            foreach (var @case in stmt.Cases)
+            foreach (var @case in stmt.Clauses)
             {
-                Visit(@case.Value);
+                if (@case.Value is { } test) Visit(test);
                 foreach (var statement in @case.Body) Visit(statement);
             }
-            if (stmt.DefaultBody is { } defaults) foreach (var statement in defaults) Visit(statement);
         }
         finally { _scopes.Pop(); }
     }

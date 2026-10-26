@@ -118,16 +118,11 @@ public static class LoopAssignmentAnalyzer
 
             case Stmt.Switch switchStmt:
                 CollectAssignedPathsFromExpr(switchStmt.Subject, paths, privateOwner);
-                foreach (var caseStmt in switchStmt.Cases)
+                foreach (var caseStmt in switchStmt.Clauses)
                 {
                     if (caseStmt.Value != null)
                         CollectAssignedPathsFromExpr(caseStmt.Value, paths, privateOwner);
                     foreach (var bodyStmt in caseStmt.Body)
-                        CollectAssignedPaths(bodyStmt, paths, privateOwner);
-                }
-                if (switchStmt.DefaultBody != null)
-                {
-                    foreach (var bodyStmt in switchStmt.DefaultBody)
                         CollectAssignedPaths(bodyStmt, paths, privateOwner);
                 }
                 break;

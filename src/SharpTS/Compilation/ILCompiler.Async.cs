@@ -873,15 +873,13 @@ public partial class ILCompiler
                 break;
             case Stmt.Switch s:
                 AnalyzeArrowExprForAwaits(s.Subject, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
-                foreach (var c in s.Cases)
+                foreach (var c in s.Clauses)
                 {
-                    AnalyzeArrowExprForAwaits(c.Value, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                    if (c.Value is { } value)
+                        AnalyzeArrowExprForAwaits(value, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                     foreach (var cs in c.Body)
                         AnalyzeArrowStmtForAwaits(cs, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 }
-                if (s.DefaultBody != null)
-                    foreach (var ds in s.DefaultBody)
-                        AnalyzeArrowStmtForAwaits(ds, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
             case Stmt.Throw th:
                 AnalyzeArrowExprForAwaits(th.Value, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);

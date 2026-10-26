@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.TypeSystem.ControlFlow;
 
 namespace SharpTS.TypeSystem;
 
@@ -59,30 +60,7 @@ public partial class TypeChecker
     /// Checks if a switch statement definitely returns on all code paths.
     /// </summary>
     private bool DoesSwitchDefinitelyReturn(Stmt.Switch switchStmt)
-    {
-        // Must have a default case to be exhaustive
-        if (switchStmt.DefaultBody == null)
-            return false;
-
-        // Check if default body definitely returns
-        if (!DoesBlockDefinitelyReturn(switchStmt.DefaultBody))
-            return false;
-
-        // Check if all case bodies definitely return
-        // Note: this is a simplified check that doesn't handle fall-through correctly
-        foreach (var caseItem in switchStmt.Cases)
-        {
-            if (!DoesBlockDefinitelyReturn(caseItem.Body))
-            {
-                // Check if the case falls through to another returning case
-                // For simplicity, we require each case to return or fall through to default
-                // A more sophisticated analysis would track fall-through
-                return false;
-            }
-        }
-
-        return true;
-    }
+        => StatementCompletionAnalysis.SwitchDefinitelyReturns(switchStmt, allowEmptyReturn: false);
 
     /// <summary>
     /// Checks if a try-catch-finally statement definitely returns on all code paths.

@@ -3285,26 +3285,31 @@ public partial class ILEmitter
     }
 
     protected override void EmitBlock(Stmt.Block b)
-    {
-        _ctx.Locals.EnterScope();
-        List<LoopBodyCellScopeEntry> cells = [];
-        try
+        => WithOrdinaryLexicalScope(b.Statements, () =>
         {
-            EnterOrdinaryBlockCellScope(b.Statements, cells);
-            RegisterRuntimeClassBindingScopes(b.Statements);
-            _ctx.PredeclareCapturedLexicalLocals?.Invoke(IL, _ctx, b.Statements);
-            InitializeCapturedLexicalTdzBindings(b.Statements);
-
-            // Class declarations have lexical block bindings but their CLR Types
-            // are defined ahead of method emission. Predeclare an undefined local
-            // for TDZ behavior; the declaration statement installs its Type token.
-            PredeclareBlockScopedClassLocals(b.Statements);
-
             var usingResources = new List<UsingResourceLocals>();
             bool hasUsing = b.Statements.Any(s => s is Stmt.Using);
             if (hasUsing) EmitBlockWithUsing(b.Statements, usingResources);
             else
                 foreach (var stmt in b.Statements) EmitStatement(stmt);
+        });
+
+    private void WithOrdinaryLexicalScope(List<Stmt> statements, Action emit)
+    {
+        _ctx.Locals.EnterScope();
+        List<LoopBodyCellScopeEntry> cells = [];
+        try
+        {
+            EnterOrdinaryBlockCellScope(statements, cells);
+            RegisterRuntimeClassBindingScopes(statements);
+            _ctx.PredeclareCapturedLexicalLocals?.Invoke(IL, _ctx, statements);
+            InitializeCapturedLexicalTdzBindings(statements);
+
+            // Class declarations have lexical block bindings but their CLR Types
+            // are defined ahead of method emission. Predeclare a TDZ local
+            // for TDZ behavior; the declaration statement installs its Type token.
+            PredeclareBlockScopedClassLocals(statements);
+            emit();
         }
         finally
         {
@@ -3326,7 +3331,7 @@ public partial class ILEmitter
 
             var local = _ctx.Locals.GetCurrentScopeLocal(classStmt.Name.Lexeme)
                 ?? _ctx.Locals.DeclareLocal(classStmt.Name.Lexeme, _ctx.Types.Object, classStmt);
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.LexicalUninitializedInstance);
             IL.Emit(OpCodes.Stloc, local);
         }
     }
@@ -4529,114 +4534,11 @@ public partial class ILEmitter
         builder.MarkLabel(breakLabel);
     }
 
-    protected override void EmitSwitch(Stmt.Switch s)
-    {
-        EmitExpression(s.Subject);
-        EmitBoxIfNeeded(s.Subject);
-        var subject = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Stloc, subject);
-        WithGeneratorLexicalScope(s.Cases.SelectMany(item => item.Body).Concat(s.DefaultBody ?? []),
-            () => EmitSwitchCases(s, subject));
-    }
+    protected override void WithSwitchLexicalScope(List<Stmt> statements, Action emit)
+        => WithOrdinaryLexicalScope(statements, emit);
 
-    private void EmitSwitchCases(Stmt.Switch s, LocalBuilder subjectLocal)
-    {
-        // Check for exhaustive switch optimization
-        var switchAnalysis = _ctx.DeadCode?.GetSwitchResult(s);
-        bool skipDefault = switchAnalysis?.DefaultIsUnreachable == true;
-
-        var builder = _ctx.ILBuilder;
-        var endLabel = builder.DefineLabel("switch_end");
-        var defaultLabel = builder.DefineLabel("switch_default");
-        var caseLabels = s.Cases.Select((_, i) => builder.DefineLabel($"switch_case_{i}")).ToList();
-
-        // Generate case comparisons
-        for (int i = 0; i < s.Cases.Count; i++)
-        {
-            IL.Emit(OpCodes.Ldloc, subjectLocal);
-            EmitExpression(s.Cases[i].Value);
-            EmitBoxIfNeeded(s.Cases[i].Value);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.Operators.StrictEquals);
-            builder.Emit_Brtrue(caseLabels[i]);
-        }
-
-        // Jump to default or end (skip default if unreachable)
-        if (skipDefault || s.DefaultBody == null)
-        {
-            builder.Emit_Br(endLabel);
-        }
-        else
-        {
-            builder.Emit_Br(defaultLabel);
-        }
-
-        // Register the switch end as the current break target so nested breaks
-        // (inside blocks, if/else, try/catch, etc.) exit the switch. Preserve the
-        // outer loop's continue target so `continue;` still propagates outward.
-        var outerContinue = CurrentLoop?.ContinueLabel ?? endLabel;
-        EnterLoop(endLabel, outerContinue);
-        try
-        {
-            // Emit case bodies
-            for (int i = 0; i < s.Cases.Count; i++)
-            {
-                builder.MarkLabel(caseLabels[i]);
-                foreach (var stmt in s.Cases[i].Body)
-                {
-                    if (stmt is Stmt.Break breakStmt)
-                    {
-                        if (breakStmt.Label != null)
-                        {
-                            // Labeled break - find and jump to the labeled target
-                            EmitBreak(breakStmt);
-                        }
-                        else
-                        {
-                            // Unlabeled break - exits switch only
-                            builder.Emit_Br(endLabel);
-                        }
-                    }
-                    else
-                    {
-                        EmitStatement(stmt);
-                    }
-                }
-                // Fall through if no break
-            }
-
-            // Default case (skip if unreachable)
-            if (s.DefaultBody != null && !skipDefault)
-            {
-                builder.MarkLabel(defaultLabel);
-                foreach (var stmt in s.DefaultBody)
-                {
-                    if (stmt is Stmt.Break breakStmt)
-                    {
-                        if (breakStmt.Label != null)
-                        {
-                            // Labeled break - find and jump to the labeled target
-                            EmitBreak(breakStmt);
-                        }
-                        else
-                        {
-                            // Unlabeled break - exits switch only
-                            builder.Emit_Br(endLabel);
-                        }
-                    }
-                    else
-                    {
-                        EmitStatement(stmt);
-                    }
-                }
-            }
-        }
-        finally
-        {
-            ExitLoop();
-        }
-
-        builder.MarkLabel(endLabel);
-    }
+    protected override bool IsSwitchDefaultUnreachable(Stmt.Switch statement)
+        => _ctx.DeadCode?.GetSwitchResult(statement)?.DefaultIsUnreachable == true;
 
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {

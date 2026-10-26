@@ -374,6 +374,35 @@ public class VariableResolver : AstVisitorBase
         }
     }
 
+    protected override void VisitSwitch(Stmt.Switch stmt)
+    {
+        // The discriminant is outside the one lexical scope shared by all clauses.
+        Visit(stmt.Subject);
+        Dictionary<string, bool>? target = null;
+        if (_scopes.TryPeek(out var previous))
+            target = _handlerVarTargets.TryGetValue(previous, out var markedTarget) ? markedTarget : previous;
+        BeginScope();
+        _handlerVarTargets.Add(_scopes.Peek(), target);
+        try
+        {
+            var statements = stmt.Clauses.SelectMany(clause => clause.Body);
+            PredeclareLexicalBindings(statements);
+            foreach (var declaration in statements.OfType<Stmt.Class>())
+                Declare(declaration.Name.Lexeme);
+            foreach (var declaration in statements.OfType<Stmt.Function>().Where(function => function.Body is not null))
+            {
+                Declare(declaration.Name.Lexeme);
+                Define(declaration.Name.Lexeme);
+            }
+            foreach (var clause in stmt.Clauses)
+            {
+                if (clause.Value is { } value) Visit(value);
+                foreach (var statement in clause.Body) Visit(statement);
+            }
+        }
+        finally { EndScope(); }
+    }
+
     protected override void VisitImport(Stmt.Import stmt)
     {
         // Declare imported bindings in current scope

@@ -523,8 +523,12 @@ public abstract record Stmt
     /// Labeled statement: label: statement (allows break/continue to target by name)
     /// </summary>
     public record LabeledStatement(Token Label, Stmt Statement) : Stmt;
-    public record SwitchCase(Expr Value, List<Stmt> Body);
-    public record Switch(Expr Subject, List<SwitchCase> Cases, List<Stmt>? DefaultBody) : Stmt;
+    // A null Value denotes default; case null retains its Expr.Literal node.
+    public record SwitchClause(Expr? Value, List<Stmt> Body)
+    {
+        public bool IsDefault => Value is null;
+    }
+    public record Switch(Expr Subject, List<SwitchClause> Clauses) : Stmt;
     // CatchParamType: optional catch-binding annotation text (`catch (e: unknown)`).
     // TS allows only 'any'/'unknown'; anything else is checker error TS1196.
     // CatchParamTypeNode: node twin of CatchParamType (type-AST migration), when the parser produced one.

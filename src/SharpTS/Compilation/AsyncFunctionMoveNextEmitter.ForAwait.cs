@@ -437,9 +437,9 @@ public abstract partial class AsyncFunctionMoveNextEmitter
             case Stmt.ForIn fi:
                 return ContainsEscapingBreakOrContinue(fi.Body, insideLoop: true, insideSwitch);
             case Stmt.Switch s:
-                foreach (var c in s.Cases)
+                foreach (var c in s.Clauses)
                     if (ContainsEscapingBreakOrContinue2(c.Body, insideLoop, insideSwitch: true)) return true;
-                return s.DefaultBody != null && ContainsEscapingBreakOrContinue2(s.DefaultBody, insideLoop, insideSwitch: true);
+                return false;
             case Stmt.LabeledStatement ls:
                 return ContainsEscapingBreakOrContinue(ls.Statement, insideLoop, insideSwitch);
             case Stmt.TryCatch t:

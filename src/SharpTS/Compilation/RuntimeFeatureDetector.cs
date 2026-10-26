@@ -874,13 +874,11 @@ public sealed partial class RuntimeFeatureDetector
                 break;
             case Stmt.Switch sw:
                 VisitExpr(sw.Subject);
-                foreach (var c in sw.Cases)
+                foreach (var c in sw.Clauses)
                 {
-                    VisitExpr(c.Value);
+                    if (c.Value is { } value) VisitExpr(value);
                     foreach (var s in c.Body) VisitStmt(s);
                 }
-                if (sw.DefaultBody is not null)
-                    foreach (var s in sw.DefaultBody) VisitStmt(s);
                 break;
             case Stmt.LabeledStatement lab:
                 VisitStmt(lab.Statement);
