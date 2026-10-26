@@ -2067,13 +2067,13 @@ public partial class TypeChecker
                         // with no location (#468).
                         _currentStatementLine = TryGetStmtLine(stmt);
                         bool previousRecoveryMode = _recoveryMode;
-                        // Namespace checking has its own two-pass/member loops. Let those nested
-                        // loops recover independently; otherwise the first bad namespace member (or
-                        // function statement inside it) aborts the rest of the namespace. Ordinary
-                        // top-level functions remain statement-atomic so an error cannot leave
-                        // partial flow narrowing behind and create cascade diagnostics.
+                        // Aggregate declarations have their own member loops. Recover inside
+                        // namespaces and global augmentations so one bad member does not abort
+                        // the rest. Ordinary top-level functions remain statement-atomic so an
+                        // error cannot leave partial flow narrowing and create cascade diagnostics.
                         _recoveryMode = previousRecoveryMode ||
-                            stmt is Stmt.Namespace or Stmt.Export { Declaration: Stmt.Namespace };
+                            stmt is Stmt.Namespace or Stmt.DeclareGlobal or
+                                Stmt.Export { Declaration: Stmt.Namespace or Stmt.DeclareGlobal };
                         try
                         {
                             CheckStmt(stmt);
@@ -2143,7 +2143,8 @@ public partial class TypeChecker
                             _currentStatementLine = TryGetStmtLine(stmt);
                             bool previousRecoveryMode = _recoveryMode;
                             _recoveryMode = previousRecoveryMode ||
-                                stmt is Stmt.Namespace or Stmt.Export { Declaration: Stmt.Namespace };
+                                stmt is Stmt.Namespace or Stmt.DeclareGlobal or
+                                    Stmt.Export { Declaration: Stmt.Namespace or Stmt.DeclareGlobal };
                             try
                             {
                                 CheckStmt(stmt);

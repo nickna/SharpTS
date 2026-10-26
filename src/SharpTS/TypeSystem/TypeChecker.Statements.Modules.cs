@@ -279,7 +279,23 @@ public partial class TypeChecker
             using (new EnvironmentScope(this, globalEnvironment))
             {
                 foreach (var member in declareGlobal.Members)
-                    CheckAndMergeGlobalMember(member);
+                {
+                    ThrowIfCancellationRequested();
+                    if (_recoveryMode)
+                    {
+                        if (_diagnostics.HitErrorLimit) break;
+                        int? savedLine = _currentStatementLine;
+                        _currentStatementLine = TryGetStmtLine(member) ?? savedLine;
+                        try { CheckAndMergeGlobalMember(member); }
+                        catch (TypeMismatchException ex) { RecordTypeError(ex); }
+                        catch (TypeCheckException ex) { RecordTypeError(ex); }
+                        finally { _currentStatementLine = savedLine; }
+                    }
+                    else
+                    {
+                        CheckAndMergeGlobalMember(member);
+                    }
+                }
             }
         }
         finally
