@@ -219,3 +219,20 @@ Attach screenshots or a concise transcript for breakpoint verification, scope gr
 presentation, worker threads, and clean termination to issue #1405. Record each checklist item as
 pass/fail with a defect link; all items must pass for both development and packaged runs before the
 issue is closed.
+
+### P3 acceptance audit (2026-10-25)
+
+The repeatable editor acceptance passed again on Windows x64 with VS Code 1.141.0,
+extension 0.2.0, and .NET SDK 10.0.402. Both development and installed-VSIX profiles
+completed ten sessions covering the actual command, saved project/reference context,
+source breakpoints, inspection/evaluation, stepping, async/generator/worker execution,
+all exception filters, changed-source rejection, restart, and shutdown. All four
+extension unit tests and the isolated exact-version NuGet tool protocol smoke also
+passed. [The audit record](../scripts/editor-smoke/vscode-debugger/p3-last-verified.json)
+retains the tested payload fingerprints and evidence paths.
+
+These runs certify editor APIs and real adapter traffic. They do not complete the
+visual checklist above. The public `sharpts.debugadapter` flat-container index still
+returned HTTP 404 during this audit. The locally prepared package was installed from
+an isolated local feed; it was not published. Keep #1405 open until both the visual
+checklist and first public-package gate pass for the intended release.
