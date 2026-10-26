@@ -28,6 +28,12 @@ public sealed class GuardCheckedFactQueryTests
             "interface Props<T>{value?:T;}function read(props:Props<number>){const value=props.value===undefined?1:props.value;const correct:number=value;}",
             "interface Base{value?:number;}interface Props extends Base{}function read(props:Props){const value=props.value===undefined?1:props.value;const correct:number=value;}",
             "function read(options:{initial?:{focus:()=>void}}){if(options.initial&&true)options.initial.focus();}",
+            "function isFunction<T>(value:T):value is Extract<T,Function>{return typeof value==='function';}function read(value:string|(()=>string)|undefined){if(isFunction(value)){const text:string=value();}}",
+            "function isFunction<T>(value:T):value is Extract<T,Function>{return typeof value==='function';}function getFunction<T>(value:T){if(isFunction(value))return value;throw new Error();}function read(value:string|(()=>string)|undefined){const callback=getFunction(value);const text:string=callback();}",
+            "function isFunction<T>(value:unknown):value is Extract<T,Function>{return typeof value==='function';}function read(value:unknown){if(isFunction<string|(()=>number)>(value)){const number:number=value();}}",
+            "function isFunction<A,T=A>(value:unknown):value is Extract<T,Function>{return typeof value==='function';}function read(value:unknown){if(isFunction<string|(()=>number)>(value)){const number:number=value();}}",
+            "function isFunction<T=string|(()=>number)>(value:unknown):value is Extract<T,Function>{return typeof value==='function';}function read(value:unknown){if(isFunction(value)){const number:number=value();}}",
+            "declare function isCallback<T>(value:unknown):value is {(argument:T):T;tag:string};function read(value:unknown){if(isCallback<number>(value)){const number:number=value(1);const tag:string=value.tag;}}",
         })
             foreach (bool modules in new[] { false, true }) yield return [source, modules];
     }
@@ -43,6 +49,43 @@ public sealed class GuardCheckedFactQueryTests
     {
         foreach (bool modules in new[] { false, true })
             Assert.Equal("TS2322", Assert.Single(Check(source, modules)).TsCode);
+    }
+
+    [Theory]
+    [InlineData("function isFunction<T>(value:T):value is Extract<T,Function>{return typeof value==='function';}function read(value:string|(()=>string)|undefined){if(isFunction(value)){const wrong:number=value();}}")]
+    [InlineData("function isFunction<T>(value:unknown):value is Extract<T,Function>{return typeof value==='function';}function read(value:unknown){if(isFunction<string|(()=>number)>(value)){const wrong:string=value();}}")]
+    public void GenericPredicateQueriesKeepTheInstantiatedReturnType(string source)
+    {
+        foreach (bool modules in new[] { false, true })
+            Assert.Equal("TS2322", Assert.Single(Check(source, modules)).TsCode);
+    }
+
+    [Fact]
+    public void GenericPredicateQueriesPreserveTheCheckedSignatureOwner()
+    {
+        const string source = "function isFunction<T>(value:T):value is Extract<T,Function>{return typeof value==='function';}function read(value:string|(()=>string)|undefined){isFunction(value);if(isFunction(value)){const text:string=value();}}";
+        var document = new SourceDocument("generic-predicate-checked-facts.ts", source);
+        var statements = new Parser(new Lexer(source).ScanTokens()).WithSourceDocument(document).WithEditorSyntax().ParseOrThrow();
+        var checker = new TypeChecker(TypeCheckerOptions.Strict).WithEditorMetadata();
+        var result = checker.CheckWithRecovery(statements, document);
+        Assert.Empty(result.Diagnostics);
+        var facts = checker.EditorFacts.Freeze();
+        Assert.Equal(3, facts.Invocations.Count);
+        var predicates = facts.Invocations.Where(call => call.Candidates.Any(candidate =>
+            ReferenceEquals(candidate.Origin?.Owner, statements[0]))).ToArray();
+        Assert.Equal(2, predicates.Length);
+        Assert.All(predicates, call => Assert.Equal(EditorInvocationStatus.Selected, call.Status));
+        var first = Assert.Single(predicates[0].Candidates);
+        var guarded = Assert.Single(predicates[1].Candidates);
+        Assert.Equal(first.OriginalSignatureId, guarded.OriginalSignatureId);
+        Assert.Same(statements[0], first.Origin!.Owner);
+        Assert.Same(first.Origin.Owner, guarded.Origin!.Owner);
+        var read = Assert.IsType<Stmt.Function>(statements[1]);
+        var conditional = Assert.IsType<Stmt.If>(read.Body![1]);
+        var predicate = Assert.IsType<TypeInfo.TypePredicate>(result.TypeMap.Get(conditional.Condition));
+        Assert.Equal("value", predicate.ParameterName);
+        Assert.False(predicate.IsAssertion);
+        Assert.IsType<TypeInfo.Function>(predicate.PredicateType);
     }
 
     [Fact]
