@@ -38,6 +38,7 @@ public partial class RuntimeEmitter
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
         MethodBuilder GetProperty,
+        MethodBuilder HasOwnProperty,
         MethodInfo IHasFieldsFieldsGetter,
         Type IHasFieldsInterface,
         EmittedObjectStorageRuntime ObjectStorage,
@@ -1317,6 +1318,20 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, addToList);
         }
 
+        void AddOwnName(string name)
+        {
+            // Constructor inventories describe the initial intrinsic shape.
+            // Use the live own-property path so deletion and explicit
+            // recreation agree with hasOwn and own-descriptor lookup.
+            var absent = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, inputs.HasOwnProperty);
+            il.Emit(OpCodes.Brfalse, absent);
+            AddName(name);
+            il.MarkLabel(absent);
+        }
+
         // Anonymous host delegates back Proxy revocation functions.  They are
         // ECMAScript built-ins whose own keys are created in this order.
         var notAnonymousDelegateForNamesLabel = il.DefineLabel();
@@ -1361,32 +1376,32 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, _types.Object);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notObjectTypeLabel);
-        AddName("length");
-        AddName("name");
-        AddName("prototype");
-        AddName("assign");
-        AddName("create");
-        AddName("defineProperties");
-        AddName("defineProperty");
-        AddName("entries");
-        AddName("freeze");
-        AddName("fromEntries");
-        AddName("getOwnPropertyDescriptor");
-        AddName("getOwnPropertyDescriptors");
-        AddName("getOwnPropertyNames");
-        AddName("getOwnPropertySymbols");
-        AddName("getPrototypeOf");
-        AddName("groupBy");
-        AddName("hasOwn");
-        AddName("is");
-        AddName("isExtensible");
-        AddName("isFrozen");
-        AddName("isSealed");
-        AddName("keys");
-        AddName("preventExtensions");
-        AddName("seal");
-        AddName("setPrototypeOf");
-        AddName("values");
+        AddOwnName("length");
+        AddOwnName("name");
+        AddOwnName("prototype");
+        AddOwnName("assign");
+        AddOwnName("create");
+        AddOwnName("defineProperties");
+        AddOwnName("defineProperty");
+        AddOwnName("entries");
+        AddOwnName("freeze");
+        AddOwnName("fromEntries");
+        AddOwnName("getOwnPropertyDescriptor");
+        AddOwnName("getOwnPropertyDescriptors");
+        AddOwnName("getOwnPropertyNames");
+        AddOwnName("getOwnPropertySymbols");
+        AddOwnName("getPrototypeOf");
+        AddOwnName("groupBy");
+        AddOwnName("hasOwn");
+        AddOwnName("is");
+        AddOwnName("isExtensible");
+        AddOwnName("isFrozen");
+        AddOwnName("isSealed");
+        AddOwnName("keys");
+        AddOwnName("preventExtensions");
+        AddOwnName("seal");
+        AddOwnName("setPrototypeOf");
+        AddOwnName("values");
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notObjectTypeLabel);
@@ -1397,13 +1412,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notArrayTypeForNamesLabel);
-        AddName("length");
-        AddName("name");
-        AddName("prototype");
-        AddName("from");
-        AddName("fromAsync");
-        AddName("isArray");
-        AddName("of");
+        AddOwnName("length");
+        AddOwnName("name");
+        AddOwnName("prototype");
+        AddOwnName("from");
+        AddOwnName("fromAsync");
+        AddOwnName("isArray");
+        AddOwnName("of");
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArrayTypeForNamesLabel);
@@ -1414,23 +1429,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, _types.Double);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notNumberTypeForNamesLabel);
-        AddName("length");
-        AddName("name");
-        AddName("prototype");
-        AddName("MAX_VALUE");
-        AddName("MIN_VALUE");
-        AddName("NaN");
-        AddName("NEGATIVE_INFINITY");
-        AddName("POSITIVE_INFINITY");
-        AddName("MAX_SAFE_INTEGER");
-        AddName("MIN_SAFE_INTEGER");
-        AddName("EPSILON");
-        AddName("isFinite");
-        AddName("isInteger");
-        AddName("isNaN");
-        AddName("isSafeInteger");
-        AddName("parseFloat");
-        AddName("parseInt");
+        AddOwnName("length");
+        AddOwnName("name");
+        AddOwnName("prototype");
+        AddOwnName("MAX_VALUE");
+        AddOwnName("MIN_VALUE");
+        AddOwnName("NaN");
+        AddOwnName("NEGATIVE_INFINITY");
+        AddOwnName("POSITIVE_INFINITY");
+        AddOwnName("MAX_SAFE_INTEGER");
+        AddOwnName("MIN_SAFE_INTEGER");
+        AddOwnName("EPSILON");
+        AddOwnName("isFinite");
+        AddOwnName("isInteger");
+        AddOwnName("isNaN");
+        AddOwnName("isSafeInteger");
+        AddOwnName("parseFloat");
+        AddOwnName("parseInt");
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notNumberTypeForNamesLabel);

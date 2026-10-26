@@ -1791,6 +1791,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.ObjectRead.Property,
+                runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.ObjectFields.FieldsGetter,
                 runtime.ObjectFields.Interface,
                 runtime.ObjectStorage,
