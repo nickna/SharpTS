@@ -141,6 +141,10 @@ public partial class ILEmitter
                 case Stmt.For loop:
                     Include(loop.Body);
                     break;
+                case Stmt.If conditional:
+                    Include(conditional.ThenBranch);
+                    if (conditional.ElseBranch is { } otherwise) Include(otherwise);
+                    break;
             }
         }
     }

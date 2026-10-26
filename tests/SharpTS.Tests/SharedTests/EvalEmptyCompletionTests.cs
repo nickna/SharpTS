@@ -33,6 +33,13 @@ public sealed class EvalEmptyCompletionTests
             ("{(()=>{11;return 2;})();}", "2"),
             ("1;for(var index=0;index<2;index++){}", "undefined"),
             ("{eval('2;{}');}", "2"),
+            ("{if(true)42;}", "42"),
+            ("1;{if(false)42;}", "undefined"),
+            ("1;{if(true){}}", "undefined"),
+            ("{if(false)1;else 2;}", "2"),
+            ("for(var index=0;index<3;index++){if(index===1){8;break;}else{index+2;}}", "8"),
+            ("for(var index=0;index<3;index++){if(index===2){8;continue;}else{index+2;}}", "8"),
+            ("{if(true){eval('2;{}');}}", "2"),
         })
             foreach (bool dynamic in new[] { false, true })
                 foreach (var mode in new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled })
@@ -63,6 +70,16 @@ public sealed class EvalEmptyCompletionTests
     [Fact]
     public void StaticBlockAndForCompletionCaptureProducesValidIl()
         => Assert.Empty(TestHarness.CompileAndVerifyOnly(BlockAndForCallerSource));
+
+    internal const string ConditionalCallerSource = "function outer(){let checks=0;let writes=0;const result=eval('{if(++checks===1){++writes;42;}else{writes=9;7;}}');console.log(result,checks,writes);}outer();";
+
+    [Theory, ModeData]
+    public void StaticConditionalCompletionChecksAndWritesExecuteOnce(ExecutionMode mode)
+        => Assert.Equal("42 1 1\n", TestHarness.Run(ConditionalCallerSource, mode));
+
+    [Fact]
+    public void StaticConditionalCompletionCaptureProducesValidIl()
+        => Assert.Empty(TestHarness.CompileAndVerifyOnly(ConditionalCallerSource));
 
     [Fact]
     public void StaticCompletionLocalProducesValidIl()
