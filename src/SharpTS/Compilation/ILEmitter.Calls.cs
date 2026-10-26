@@ -88,61 +88,108 @@ public partial class ILEmitter
         var completion = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
         IL.Emit(OpCodes.Stloc, completion);
-        foreach (var statement in statements)
+        var savedCapture = _staticEvalCompletionCapture;
+        _staticEvalCompletionCapture = new(completion, statements);
+        try
         {
+            foreach (var statement in statements)
+                EmitStatement(statement);
+            IL.Emit(OpCodes.Ldloc, completion);
+        }
+        finally
+        {
+            _staticEvalCompletionCapture = savedCapture;
+            _ctx.IsStrictMode = savedStrictMode;
+            _ctx.ThisBindingIsStrictOverride = savedThisBindingStrictOverride;
+        }
+        SetStackUnknown();
+        return true;
+    }
+
+    private StaticEvalCompletionCapture? _staticEvalCompletionCapture;
+
+    /// <summary>
+    /// Captures only the existing eval program's own statement identities. Blocks
+    /// pass through empty completions; a for loop starts a fresh undefined value.
+    /// Initializers and increments, nested callable bodies, and other control-flow
+    /// shapes retain their ordinary emission and cannot update this capture.
+    /// </summary>
+    private sealed class StaticEvalCompletionCapture
+    {
+        internal LocalBuilder Completion { get; }
+        internal HashSet<Stmt> Statements { get; } = new(ReferenceEqualityComparer.Instance);
+        internal HashSet<Stmt.Function> HoistedFunctions { get; } = new(ReferenceEqualityComparer.Instance);
+
+        internal StaticEvalCompletionCapture(LocalBuilder completion, List<Stmt> statements)
+        {
+            Completion = completion;
+            foreach (var function in statements.OfType<Stmt.Function>()) HoistedFunctions.Add(function);
+            foreach (var statement in statements) Include(statement);
+        }
+
+        private void Include(Stmt statement)
+        {
+            Statements.Add(statement);
             switch (statement)
             {
-                case Stmt.Expression expression:
-                    EmitExpression(expression.Expr);
-                    if (expression.HasEmptyCompletion)
-                        IL.Emit(OpCodes.Pop);
-                    else
-                    {
-                        EnsureBoxed();
-                        IL.Emit(OpCodes.Stloc, completion);
-                    }
+                case Stmt.Block block:
+                    foreach (var child in block.Statements) Include(child);
                     break;
-                case Stmt.Var declaration:
-                    // EvalDeclarationInstantiation reuses an existing var-env
-                    // binding instead of creating a shadow slot. This is the
-                    // common `var x = 0; eval("var x = 1")` case.
-                    if (_resolver.HasVariable(declaration.Name.Lexeme))
-                    {
-                        if (declaration.Initializer != null)
-                        {
-                            EmitExpression(declaration.Initializer);
-                            EnsureBoxed();
-                            _resolver.TryStoreVariable(declaration.Name.Lexeme);
-                        }
-                    }
-                    else
-                    {
-                        EmitVarDeclaration(declaration);
-                    }
+                case Stmt.Sequence sequence:
+                    foreach (var child in sequence.Statements) Include(child);
                     break;
-                case Stmt.Function:
-                    break;
-                case Stmt.Directive directive:
-                    IL.Emit(OpCodes.Ldstr, directive.Value);
-                    IL.Emit(OpCodes.Stloc, completion);
-                    break;
-                case Stmt.Class:
-                    EmitStatement(statement);
-                    break;
-                default:
-                    EmitStatement(statement);
-                    // Keep the existing control-statement lowering ceiling. Dynamic
-                    // eval and do-while completion use the runtime execution protocol.
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
-                    IL.Emit(OpCodes.Stloc, completion);
+                case Stmt.For loop:
+                    Include(loop.Body);
                     break;
             }
         }
-        IL.Emit(OpCodes.Ldloc, completion);
-        _ctx.IsStrictMode = savedStrictMode;
-        _ctx.ThisBindingIsStrictOverride = savedThisBindingStrictOverride;
-        SetStackUnknown();
-        return true;
+    }
+
+    private bool TryEmitStaticEvalCompletionStatement(Stmt statement)
+    {
+        if (_staticEvalCompletionCapture is not { } capture || !capture.Statements.Contains(statement))
+            return false;
+        switch (statement)
+        {
+            case Stmt.Expression expression:
+                EmitExpression(expression.Expr);
+                if (expression.HasEmptyCompletion) IL.Emit(OpCodes.Pop);
+                else
+                {
+                    EnsureBoxed();
+                    IL.Emit(OpCodes.Stloc, capture.Completion);
+                }
+                return true;
+            case Stmt.Var { IsVar: true } declaration:
+                // EvalDeclarationInstantiation reuses an existing var-env slot.
+                if (_resolver.HasVariable(declaration.Name.Lexeme))
+                {
+                    if (declaration.Initializer is { } initializer)
+                    {
+                        EmitExpression(initializer);
+                        EnsureBoxed();
+                        _resolver.TryStoreVariable(declaration.Name.Lexeme);
+                    }
+                }
+                else EmitVarDeclaration(declaration);
+                return true;
+            case Stmt.Function function when capture.HoistedFunctions.Contains(function):
+                return true;
+            case Stmt.Directive directive:
+                IL.Emit(OpCodes.Ldstr, directive.Value);
+                IL.Emit(OpCodes.Stloc, capture.Completion);
+                return true;
+            case Stmt.Block or Stmt.Sequence or Stmt.Class or Stmt.Var or Stmt.Const or Stmt.Function
+                or Stmt.Break or Stmt.Continue:
+                return false;
+            default:
+                // For evaluates to undefined before its first body execution,
+                // including when no iteration runs. Other control statements keep
+                // the existing static-lowering completion ceiling.
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+                IL.Emit(OpCodes.Stloc, capture.Completion);
+                return false;
+        }
     }
 
     private sealed class EvalCallableScanner : Parsing.Visitors.AstVisitorBase

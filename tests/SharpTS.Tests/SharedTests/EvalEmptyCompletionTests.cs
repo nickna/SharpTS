@@ -21,6 +21,18 @@ public sealed class EvalEmptyCompletionTests
             (";;;", "undefined"),
             ("", "undefined"),
             ("var value=0;++value;var value;value;", "1"),
+            ("1;{}", "1"),
+            ("{2;}", "2"),
+            ("1;{{};var value;}", "1"),
+            ("1;for(1;false;){2;}", "undefined"),
+            ("1;for(var index=0;index<2;index++){index+3;}", "4"),
+            ("for(var index=0;index<2;index++){index+3;var local;}", "4"),
+            ("for(var index=0;index<2;index++){index+3;continue;}", "4"),
+            ("for(var index=0;index<2;index++){5;break;}", "5"),
+            ("for(var index=0;index<2;index++){7;for(var inner=0;inner<0;inner++){8;}}", "undefined"),
+            ("{(()=>{11;return 2;})();}", "2"),
+            ("1;for(var index=0;index<2;index++){}", "undefined"),
+            ("{eval('2;{}');}", "2"),
         })
             foreach (bool dynamic in new[] { false, true })
                 foreach (var mode in new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled })
@@ -41,6 +53,16 @@ public sealed class EvalEmptyCompletionTests
         const string source = "function outer(){let value=0;const completion=eval('++value;;;var marker;');console.log(completion,value);}outer();";
         Assert.Equal("1 1\n", TestHarness.Run(source, mode));
     }
+
+    internal const string BlockAndForCallerSource = "function outer(){let value=0;console.log(eval('{++value;}'),value);console.log(eval('for(var index=0;index<2;index++){++value;}'),value);}outer();";
+
+    [Theory, ModeData]
+    public void StaticBlockAndForCompletionsKeepCallerLocalEffects(ExecutionMode mode)
+        => Assert.Equal("1 1\n3 3\n", TestHarness.Run(BlockAndForCallerSource, mode));
+
+    [Fact]
+    public void StaticBlockAndForCompletionCaptureProducesValidIl()
+        => Assert.Empty(TestHarness.CompileAndVerifyOnly(BlockAndForCallerSource));
 
     [Fact]
     public void StaticCompletionLocalProducesValidIl()

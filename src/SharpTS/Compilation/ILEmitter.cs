@@ -203,6 +203,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
             _nativePrimitiveFieldFacts.Clear();
         try
         {
+        if (TryEmitStaticEvalCompletionStatement(stmt)) return;
         switch (stmt)
         {
             case Stmt.Expression e:
