@@ -1163,8 +1163,16 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Br, ready);
 
         IL.MarkLabel(fallback);
+        var nativeEnumerable = IL.DeclareLocal(Types.IEnumerable);
+        var nativeIterable = IL.DefineLabel();
         IL.Emit(OpCodes.Ldloc, source);
-        IL.Emit(OpCodes.Castclass, Types.IEnumerable);
+        IL.Emit(OpCodes.Isinst, Types.IEnumerable);
+        IL.Emit(OpCodes.Stloc, nativeEnumerable);
+        IL.Emit(OpCodes.Ldloc, nativeEnumerable);
+        IL.Emit(OpCodes.Brtrue, nativeIterable);
+        GuestErrorEmitter.ThrowTypeError(IL, runtime, "Value is not iterable");
+        IL.MarkLabel(nativeIterable);
+        IL.Emit(OpCodes.Ldloc, nativeEnumerable);
         IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.IEnumerable, "GetEnumerator"));
         IL.Emit(OpCodes.Stloc, enumerator);
         IL.MarkLabel(ready);
