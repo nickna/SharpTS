@@ -18,7 +18,8 @@ public class P3CallableMetadataTests
             Object.defineProperty(target, "length", { value: 5, configurable: true });
             const snapshot: any = target.bind(null, 1, 2);
             Object.defineProperty(target, "length", { value: 1 });
-            console.log(snapshot.length, snapshot.bind(null, 3).length);
+            console.log(snapshot.length, snapshot.bind(null, 3).length,
+                Object.hasOwn(snapshot, "length"));
             let reads = 0;
             Object.defineProperty(target, "length", { get() { reads++; return 4.9; }, configurable: true });
             const accessor: any = target.bind(null, 1);
@@ -26,7 +27,7 @@ public class P3CallableMetadataTests
             delete target.length;
             console.log(target.bind(null).length);
             """;
-        Assert.Equal("2 17\n0 17\nInfinity 17\n0 17\n0 17\n0 17\n0 17\n3 2\n3 3 1\n0\n",
+        Assert.Equal("2 17\n0 17\nInfinity 17\n0 17\n0 17\n0 17\n0 17\n3 2 true\n3 3 1\n0\n",
             TestHarness.Run(source, mode));
     }
 

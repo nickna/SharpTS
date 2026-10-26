@@ -23,6 +23,7 @@ public partial class RuntimeEmitter
         EmittedSymbolAccessorRuntime SymbolAccessors,
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
+        EmittedFunctionBindingRuntime FunctionBindings,
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype
     );
@@ -189,6 +190,12 @@ public partial class RuntimeEmitter
         var functionOwnPropertyCheck = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.AnyType);
         il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
         if (inputs.Promise is not null)
         {
