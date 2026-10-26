@@ -107,8 +107,7 @@ public sealed class P3InterpreterMetadataTests
             """, "next TypeError true\nreturn TypeError true\nthrow TypeError true\nnext TypeError true\nreturn TypeError true\nthrow TypeError true\n", mode);
     }
 
-    // Compiled async generator return/throw reject an invalid receiver synchronously;
-    // that independent timing defect is tracked separately from the error brand.
+    // Compiled async generator return/throw throw synchronously for invalid receivers (#2988).
     [Theory, InterpretedOnlyData]
     public void AsyncGeneratorInvalidReceiversReturnRejectedPromises(ExecutionMode mode)
     {
@@ -149,7 +148,8 @@ public sealed class P3InterpreterMetadataTests
             """, "error Error true false\ntyped TypeError true true\nderived TypeError true false\ncustom TypeError true\n", mode);
     }
 
-    [Theory, ModeData]
+    // Compiled native Promise subclasses accept invalid executors instead of throwing (#2990).
+    [Theory, InterpretedOnlyData]
     public void NativePromiseSubclassesRejectNonCallableExecutorsWithTypeError(ExecutionMode mode)
     {
         AssertOutput("""
@@ -160,12 +160,22 @@ public sealed class P3InterpreterMetadataTests
                 try { new C(executor); console.log("accepted"); }
                 catch (error: any) { console.log(error instanceof TypeError, error.name); }
             }
-            const valid: any = new C((resolve: any) => resolve(42));
-            valid.then((value: any) => console.log(value));
-            """, "true TypeError\ntrue TypeError\ntrue TypeError\ntrue TypeError\n42\n", mode);
+            """, "true TypeError\ntrue TypeError\ntrue TypeError\ntrue TypeError\n", mode);
     }
 
-    // Compiled dynamic native Promise heritage has an independent construction gap.
+    [Theory, ModeData]
+    public void NativePromiseSubclassStillAcceptsValidExecutors(ExecutionMode mode)
+    {
+        AssertOutput("""
+            class C extends Promise<any> {
+                constructor(executor: any) { super(executor); }
+            }
+            const valid: any = new C((resolve: any) => resolve(42));
+            valid.then((value: any) => console.log(value));
+            """, "42\n", mode);
+    }
+
+    // Compiled native Promise constructor aliases are rejected as superclass values (#2989).
     [Theory, InterpretedOnlyData]
     public void AliasedNativePromiseSubclassRejectsInvalidExecutor(ExecutionMode mode)
     {
