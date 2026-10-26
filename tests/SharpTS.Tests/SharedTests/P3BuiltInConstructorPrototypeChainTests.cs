@@ -5,6 +5,8 @@ namespace SharpTS.Tests.SharedTests;
 
 public class P3BuiltInConstructorPrototypeChainTests
 {
+    // The compiler's deleted native name write path is tracked separately in #3003.
+    // These cases cover the interpreter's realm-specific prototype chain writes.
     [Fact]
     public void DeletedNativeNameWritesFollowCustomPrototypeReadonlyDescriptors()
     {
