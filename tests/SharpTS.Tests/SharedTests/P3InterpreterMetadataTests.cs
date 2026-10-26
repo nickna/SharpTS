@@ -123,6 +123,22 @@ public sealed class P3InterpreterMetadataTests
             """, "error Error true false\ntyped TypeError true true\nderived TypeError true false\ncustom TypeError true\n", mode);
     }
 
+    [Theory, ModeData]
+    public void NativePromiseSubclassesRejectNonCallableExecutorsWithTypeError(ExecutionMode mode)
+    {
+        AssertOutput("""
+            const NativePromise: any = Promise;
+            class C extends NativePromise {
+                constructor(executor: any) { super(executor); }
+            }
+            for (const executor of [7, null, undefined, {}]) {
+                try { new C(executor); console.log("accepted"); }
+                catch (error: any) { console.log(error instanceof TypeError, error.name); }
+            }
+            new C((resolve: any) => resolve(42)).then((value: any) => console.log(value));
+            """, "true TypeError\ntrue TypeError\ntrue TypeError\ntrue TypeError\n42\n", mode);
+    }
+
     private static void AssertOutput(string source, string expected, ExecutionMode mode)
     {
         if (mode == ExecutionMode.Compiled)
