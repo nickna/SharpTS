@@ -62,7 +62,10 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     private object? _explicitPrototype;
     internal bool HasExplicitPrototype { get; private set; }
     internal bool UsesDynamicPrototypeChain
-        => HasExplicitPrototype || _klass.HasModifiedInstancePrototypeChain;
+        => HasExplicitPrototype || _klass.HasModifiedInstancePrototypeChain
+            // Native Error defaults are ordinary mutable prototype properties,
+            // including when reached through several user-defined subclasses.
+            || _klass is SharpTSErrorClass;
 
     internal void SetExplicitPrototype(object? prototype)
     {

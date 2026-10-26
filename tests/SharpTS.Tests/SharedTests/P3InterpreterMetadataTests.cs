@@ -106,6 +106,23 @@ public sealed class P3InterpreterMetadataTests
             """, "next TypeError true\nreturn TypeError true\nthrow TypeError true\nnext TypeError true true\nreturn TypeError true true\nthrow TypeError true true\n", mode);
     }
 
+    [Theory, ModeData]
+    public void NativeErrorSubclassesInheritTheirNativePrototypeName(ExecutionMode mode)
+    {
+        AssertOutput("""
+            class E extends Error {}
+            class T extends TypeError {}
+            class Derived extends T {}
+            const error: any = new E("error"), subtype: any = new T("typed");
+            const derived: any = new Derived("derived");
+            console.log(error.message, error.name, error instanceof Error, Object.hasOwn(error, "name"));
+            console.log(subtype.message, subtype.name, subtype instanceof TypeError, subtype instanceof Error);
+            console.log(derived.message, derived.name, derived instanceof TypeError, Object.hasOwn(derived, "name"));
+            derived.name = "custom";
+            console.log(derived.name, subtype.name, Object.hasOwn(derived, "name"));
+            """, "error Error true false\ntyped TypeError true true\nderived TypeError true false\ncustom TypeError true\n", mode);
+    }
+
     private static void AssertOutput(string source, string expected, ExecutionMode mode)
     {
         if (mode == ExecutionMode.Compiled)
