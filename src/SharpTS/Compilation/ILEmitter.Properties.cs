@@ -461,7 +461,7 @@ public partial class ILEmitter
     /// property lookup and ToNumber semantics.
     /// </summary>
     private bool TryEmitTypedRecordNumberGet(Expr.Get g, JsonSerializationShape.Record? recordShape,
-        bool requireMaterializationGuard = false)
+        bool requireMaterializationGuard = false, bool numericConsumer = false)
     {
         if (g.Defaulted || _ctx.ProgramType is null || _ctx.Runtime is not { } runtime ||
             recordShape is null)
@@ -480,6 +480,10 @@ public partial class ILEmitter
         }
 
         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(recordShape);
+        // General reads retain a materialized slot's actual guest value. Only
+        // an unchanged-carrier proof permits an unconditionally numeric result.
+        if (!numericConsumer && _ctx.RuntimeFeatures?.CanAssumeCompactObjectRecordIsUnmaterialized(fingerprint) != true)
+            return false;
         TypeBuilder? jsonCarrierType = null;
         FieldBuilder? jsonValueField = null;
         TypeBuilder? compactCarrierType = null;
@@ -629,7 +633,8 @@ public partial class ILEmitter
                     fingerprint, out var jsonExactType) &&
                 _ctx.Runtime.Records.TypedScalarValueFields.TryGetValue(
                     (fingerprint, scalarIndex), out var jsonExactValueField) &&
-                jsonExactValueField.FieldType == _ctx.Types.Double)
+                jsonExactValueField.FieldType == _ctx.Types.Double &&
+                _ctx.RuntimeFeatures?.CanAssumeCompactObjectRecordIsUnmaterialized(fingerprint) == true)
             {
                 // A statically-numbered slot can stay as a native double through
                 // the consumer.  The non-carrier fallback applies ToNumber just

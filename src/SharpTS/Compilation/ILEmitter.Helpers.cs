@@ -583,6 +583,14 @@ public partial class ILEmitter
         if (expr is Expr.Get interfaceGet && TryEmitInterfaceRecordGet(interfaceGet, numericConsumer: true))
             return;
 
+        // Numeric consumers may coerce a materialized property value. General
+        // reads must preserve that value for comparisons, typeof and observation.
+        if (expr is Expr.Get { Optional: false } recordGet && _ctx.TypeMap?.Get(recordGet.Object) is TypeInfo.Record record &&
+            JsonSerializationShapeAnalyzer.TryAnalyze(record, out var analyzed) &&
+            analyzed is JsonSerializationShape.Record recordShape &&
+            TryEmitTypedRecordNumberGet(recordGet, recordShape, numericConsumer: true))
+            return;
+
         if (expr is Expr.GetIndex getIndex && TryEmitGuardedArrayIndex(getIndex))
             return;
 
