@@ -6,6 +6,37 @@ namespace SharpTS.Tests.SharedTests;
 public class P3CallableMetadataTests
 {
     [Theory, ModeData]
+    public void RepeatedClassExpressionAccessorMetadataIsIndependent(ExecutionMode mode)
+    {
+        const string source = """
+            function make(value: number) {
+                return class {
+                    get result() { return value; }
+                    set result(next: number) { value = next; }
+                    static get result() { return value; }
+                };
+            }
+            const A = make(41), B = make(42);
+            const first: any = Object.getOwnPropertyDescriptor(A.prototype, "result")!.get;
+            const second: any = Object.getOwnPropertyDescriptor(B.prototype, "result")!.get;
+            Object.defineProperty(first, "name", { value: "changed" });
+            console.log(first === second, first.name, second.name);
+            console.log(Object.getOwnPropertyDescriptor(A.prototype, "result")!.get === first);
+            console.log(new A().result, new B().result);
+            const staticFirst: any = Object.getOwnPropertyDescriptor(A, "result")!.get;
+            const staticSecond: any = Object.getOwnPropertyDescriptor(B, "result")!.get;
+            Object.defineProperty(staticFirst, "length", { value: 7 });
+            console.log(staticFirst === staticSecond, staticFirst.length, staticSecond.length);
+            const setterFirst: any = Object.getOwnPropertyDescriptor(A.prototype, "result")!.set;
+            const setterSecond: any = Object.getOwnPropertyDescriptor(B.prototype, "result")!.set;
+            Object.defineProperty(setterFirst, "name", { value: "setter" });
+            console.log(setterFirst.name, setterSecond.name);
+            """;
+        Assert.Equal("false changed get result\ntrue\n41 42\nfalse 7 0\nsetter set result\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void NumberConstructorAliasHasItsOwnInitialLength(ExecutionMode mode)
     {
         const string source = """

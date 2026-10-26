@@ -239,6 +239,11 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.CachedConstructor);
                 il.Emit(OpCodes.Stloc, function);
             }
+            // Each evaluated definition owns these callable values even when its
+            // CLR method is shared with another evaluation of the expression.
+            il.Emit(OpCodes.Ldloc, function);
+            il.Emit(OpCodes.Ldloc, function);
+            il.Emit(OpCodes.Stfld, _runtime.FunctionValues.PropertyIdentityField);
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Ldloc, function);
             il.Emit(OpCodes.Callvirt, (getter == true ? storage.DescriptorGetter : getter == false ? storage.DescriptorSetter : storage.DescriptorValue).GetSetMethod()!);
