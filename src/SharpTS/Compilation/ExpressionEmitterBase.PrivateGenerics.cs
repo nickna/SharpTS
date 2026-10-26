@@ -21,6 +21,7 @@ public abstract partial class ExpressionEmitterBase
             return false;
         var receiver = SpillGenericPrivateOperand(get.Object);
         var slots = EmitGenericPrivateBrandCheck(bridge, receiver, name);
+        EmitPrivateFieldInstalledCheck(slots, name);
         IL.Emit(OpCodes.Ldloc, slots);
         IL.Emit(OpCodes.Ldstr, name);
         IL.Emit(OpCodes.Callvirt, Types.GetMethod(typeof(Dictionary<string, object?>), "get_Item", typeof(string)));

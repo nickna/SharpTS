@@ -16,6 +16,7 @@ public abstract partial class ExpressionEmitterBase
         var value = assignedValue == null ? null : SpillGenericPrivateOperand(assignedValue);
         var slots = declaration.InstanceBridge is { } bridge ? EmitGenericPrivateBrandCheck(bridge, receiver, name)
             : EmitOrdinaryPrivateBrandCheck(owner, receiver, name);
+        if (value == null) EmitPrivateFieldInstalledCheck(slots, name);
         IL.Emit(OpCodes.Ldloc, slots); IL.Emit(OpCodes.Ldstr, name);
         if (value == null) IL.Emit(OpCodes.Callvirt, Types.GetMethod(Types.DictionaryStringObject, "get_Item", Types.String));
         else
@@ -24,6 +25,19 @@ public abstract partial class ExpressionEmitterBase
         }
         SetStackUnknown();
         return true;
+    }
+
+    protected void EmitPrivateFieldInstalledCheck(LocalBuilder slots, string key)
+    {
+        // The receiver brand is installed before its individual fields. A later
+        // field can therefore still be absent during an earlier initializer.
+        var installed = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, slots);
+        IL.Emit(OpCodes.Ldstr, key);
+        IL.Emit(OpCodes.Callvirt, Types.GetMethod(Types.DictionaryStringObject, "ContainsKey", Types.String));
+        IL.Emit(OpCodes.Brtrue, installed);
+        GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime!, $"Cannot access private member #{key} before initialization");
+        IL.MarkLabel(installed);
     }
 
     private LocalBuilder EmitOrdinaryPrivateBrandCheck(string owner, LocalBuilder receiver, string name)
@@ -152,7 +166,9 @@ public abstract partial class ExpressionEmitterBase
         }
         else
         {
-            IL.Emit(OpCodes.Ldloc, EmitDefinitionPrivateSlots(definition, receiver, name));
+            var slots = EmitDefinitionPrivateSlots(definition, receiver, name);
+            if (value == null) EmitPrivateFieldInstalledCheck(slots, name);
+            IL.Emit(OpCodes.Ldloc, slots);
         }
         IL.Emit(OpCodes.Ldstr, isStatic ? $"field:{name}" : name);
         if (value == null) IL.Emit(OpCodes.Callvirt, Types.GetMethod(Types.DictionaryStringObject, "get_Item", Types.String));
