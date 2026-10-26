@@ -326,6 +326,7 @@ public partial class Parser
             // `readonly` modifier so the index-signature parser sees the leading '['.
             if (Check(TokenType.READONLY) && PeekNext().Type == TokenType.LEFT_BRACKET)
             {
+                int readonlyStart = _current;
                 Advance(); // consume readonly
                 var roIndexSig = TryParseIndexSignature();
                 if (roIndexSig != null)
@@ -333,6 +334,7 @@ public partial class Parser
                     indexSignatures.Add(roIndexSig with { IsReadonly = true });
                     continue;
                 }
+                _current = readonlyStart;
             }
 
             // Check for index signature: [key: string]: valueType
@@ -416,6 +418,8 @@ public partial class Parser
             {
                 int computedLine = Peek().Line;
                 Advance(); // consume '['
+                Token? symbolReference = Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.RIGHT_BRACKET
+                    ? Peek() : null;
                 string raw = "";
                 while (!Check(TokenType.RIGHT_BRACKET) && !IsAtEnd())
                     raw += Advance().Lexeme;
@@ -446,7 +450,7 @@ public partial class Parser
                 members.Add(new Stmt.InterfaceMember(
                     computedTok, computedType, computedOptional, computedReadonly,
                     computedIsMethod, computedTypeNode,
-                    HasExplicitType: computedHasExplicitType));
+                    HasExplicitType: computedHasExplicitType) { ComputedSymbolReference = symbolReference });
                 continue;
             }
 

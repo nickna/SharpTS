@@ -166,7 +166,7 @@ public partial class TypeChecker
         // deferred and surfaced as the index result, not force-expanded here.
         if (objType is TypeInfo.InstantiatedGeneric igObj && !ContainsOpenTypeVariable(igObj)
             && FlattenInstantiatedInterface(igObj) is { } flatObj
-            && flatObj.NumberIndexType is not null)
+            && (flatObj.NumberIndexType is not null || flatObj.StringIndexType is not null || flatObj.SymbolIndexType is not null))
             objType = flatObj;
 
         // A deferred conditional is indexed through its constraint — `x[0]` where
@@ -700,33 +700,57 @@ public partial class TypeChecker
             System.Globalization.CultureInfo.InvariantCulture, out double numericKey) &&
         Runtime.PropertyKeyConverter.ToPropertyKeyString(numericKey) == literal.Value;
 
-    private void EnsureWritableInterfaceNumberIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
+    private void EnsureWritableInterfaceIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
     {
         if (receiver is TypeInfo.InstantiatedGeneric generic && FlattenInstantiatedInterface(generic) is { } flattened)
             receiver = flattened;
         if (receiver is TypeInfo.Union union)
         {
-            foreach (var member in union.FlattenedTypes) EnsureWritableInterfaceNumberIndex(member, index, syntax);
+            foreach (var member in union.FlattenedTypes) EnsureWritableInterfaceIndex(member, index, syntax);
             return;
         }
-        if (receiver is not TypeInfo.Interface { ReadonlyNumberIndex: true } itf) return;
-        // TypeScript keeps writes through an unresolved generic key admissible here,
-        // even when its constraint is number; do not classify the constraint as the key.
-        if (index is TypeInfo.TypeParameter) return;
+        if (receiver is not TypeInfo.Interface itf ||
+            !(itf.ReadonlyNumberIndex || itf.ReadonlyStringIndex || itf.ReadonlySymbolIndex)) return;
+        // Generic numeric/symbol and composite domains retain TypeScript's admission
+        // behavior. A string-only signature also governs a string/number generic key.
+        if (index is TypeInfo.TypeParameter parameter)
+        {
+            if (itf.ReadonlyStringIndex && parameter.Constraint is { } constraint &&
+                (IsString(constraint) || constraint is TypeInfo.StringLiteral ||
+                 itf.NumberIndexType is null && (IsNumber(constraint) || constraint is TypeInfo.NumberLiteral)))
+                EnsureWritableInterfaceIndex(itf, constraint, syntax);
+            return;
+        }
         if (index is TypeInfo.Union keys)
         {
-            foreach (var key in keys.FlattenedTypes) EnsureWritableInterfaceNumberIndex(itf, key, syntax);
+            foreach (var key in keys.FlattenedTypes) EnsureWritableInterfaceIndex(itf, key, syntax);
             return;
         }
         if (index is TypeInfo.KeyOf keyOf)
         {
-            EnsureWritableInterfaceNumberIndex(itf, EvaluateKeyOf(keyOf.SourceType), syntax);
+            EnsureWritableInterfaceIndex(itf, EvaluateKeyOf(keyOf.SourceType), syntax);
             return;
         }
-        if (!IsNumericConstructorIndex(index)) return;
         // A concrete named declaration takes precedence over an index signature and
         // carries its own readonly modifier, independently of the remaining numeric slots.
         if (TryGetLiteralPropertyKeys(index, out var names) && GetMemberType(itf, names[0]) is not null) return;
+        string? symbolName = index is TypeInfo.UniqueSymbol { DeclarationBinding: { } declaration }
+            ? InterfaceSymbolMembers(itf).GetValueOrDefault(declaration) : null;
+        symbolName ??= TryGetWellKnownSymbolMemberName(syntax);
+        if (symbolName is not null && GetMemberType(itf, symbolName) is not null)
+        {
+            if (itf.IsMemberReadonly(symbolName))
+                throw new TypeCheckException($"Cannot assign to '{symbolName}' because it is a read-only property.",
+                    TryGetExprLine(syntax), tsCode: "TS2540");
+            return;
+        }
+        bool readOnly = index is TypeInfo.Any ? itf.ReadonlyStringIndex || itf.ReadonlySymbolIndex
+            : index is TypeInfo.Symbol or TypeInfo.UniqueSymbol ? itf.ReadonlySymbolIndex
+            : IsNumericConstructorIndex(index) ? itf.NumberIndexType is not null
+                ? itf.ReadonlyNumberIndex : itf.ReadonlyStringIndex
+            : IsString(index) || index is TypeInfo.StringLiteral ? itf.ReadonlyStringIndex
+            : false;
+        if (!readOnly) return;
         throw new TypeCheckException($" Index signature in type '{itf}' only permits reading.",
             TryGetExprLine(syntax), tsCode: "TS2542");
     }
@@ -903,14 +927,14 @@ public partial class TypeChecker
         if (objType is TypeInfo.InstantiatedGeneric igSet &&
             FlattenInstantiatedInterface(igSet) is { } flatSet)
         {
-            if (flatSet.NumberIndexType is not null)
+            if (flatSet.NumberIndexType is not null || flatSet.StringIndexType is not null || flatSet.SymbolIndexType is not null)
                 objType = flatSet;
         }
 
-        // Reject a readonly numeric slot before the generic index-signature write helper can
+        // Reject a readonly slot before the generic index-signature write helper can
         // accept its value type. Read and write signatures share the same value type; mutability
         // is independent metadata and therefore must be checked first.
-        EnsureWritableInterfaceNumberIndex(objType, indexType, setIndex.Index);
+        EnsureWritableInterfaceIndex(objType, indexType, setIndex.Index);
 
         // Writes through a type parameter are deliberately stricter than reads. Even when the
         // constraint makes a key readable, an instantiation can narrow the selected property's
@@ -937,7 +961,7 @@ public partial class TypeChecker
                 TypeInfo.Record { IsReadonly: true } => true,
                 TypeInfo.Array { IsReadonly: true } => true,
                 TypeInfo.Tuple { IsReadonly: true } => true,
-                TypeInfo.Interface i when i.ReadonlyNumberIndex ||
+                TypeInfo.Interface i when i.ReadonlyNumberIndex || i.ReadonlyStringIndex || i.ReadonlySymbolIndex ||
                     i.GetAllMembers().Any(member => i.IsMemberReadonly(member.Key)) => true,
                 _ => writeTp.Constraint is TypeInfo.MappedType m &&
                     m.Modifiers.HasFlag(MappedTypeModifiers.AddReadonly),
@@ -1394,6 +1418,12 @@ public partial class TypeChecker
             TypeInfo.Interface i => i.NumberIndexType ?? i.StringIndexType,
             _ => null,
         };
+        TypeInfo? symbolIndex = objectType switch
+        {
+            TypeInfo.Record r => r.SymbolIndexType,
+            TypeInfo.Interface i => i.SymbolIndexType,
+            _ => null,
+        };
 
         bool Collect(TypeInfo key)
         {
@@ -1413,6 +1443,12 @@ public partial class TypeChecker
             {
                 if (numberIndex is null) return false;
                 collected.Add(numberIndex);
+                return true;
+            }
+            if (key is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
+            {
+                if (symbolIndex is null) return false;
+                collected.Add(symbolIndex);
                 return true;
             }
             return false;
@@ -1445,6 +1481,9 @@ public partial class TypeChecker
                 TypeInfo.Record { StringIndexType: not null } or
                 TypeInfo.Interface { NumberIndexType: not null } or
                 TypeInfo.Interface { StringIndexType: not null };
+        if (indexType is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
+            return objectType is TypeInfo.Record { SymbolIndexType: not null } or
+                TypeInfo.Interface { SymbolIndexType: not null };
         return false;
     }
 
@@ -1767,7 +1806,7 @@ public partial class TypeChecker
     private TypeInfo? CheckSetIndexOnType(TypeInfo objType, TypeInfo indexType, TypeInfo valueType, Expr.SetIndex setIndex)
     {
         EnsureWritableClassIndex(objType, indexType, setIndex.Index);
-        EnsureWritableInterfaceNumberIndex(objType, indexType, setIndex.Index);
+        EnsureWritableInterfaceIndex(objType, indexType, setIndex.Index);
         // Recursive case for nested type parameters
         if (objType is TypeInfo.TypeParameter tp && tp.Constraint != null)
         {

@@ -243,7 +243,7 @@ public partial class TypeChecker
         // IsDeclare (not just a missing initializer) — a non-ambient `let x: unique symbol;` has no
         // initializer either and must still be rejected.
         TypeInfo? declaredType = stmt.TypeAnnotation == "unique symbol" && stmt.IsDeclare
-            ? new TypeInfo.UniqueSymbol(stmt.Name.Lexeme, $"typeof {stmt.Name.Lexeme}")
+            ? new TypeInfo.UniqueSymbol(stmt.Name.Lexeme, $"typeof {stmt.Name.Lexeme}") { DeclarationBinding = variableSymbol }
             : ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt);
         if (stmt.TypeAnnotationNode is NamedTypeNode { Name: var annotatedAlias } &&
             _recursiveGenericIndexedAliases.Contains(annotatedAlias))
@@ -751,7 +751,7 @@ public partial class TypeChecker
             }
             constDeclaredType = new TypeInfo.UniqueSymbol(
                 stmt.Name.Lexeme,
-                $"typeof {stmt.Name.Lexeme}");
+                $"typeof {stmt.Name.Lexeme}") { DeclarationBinding = constBinding };
         }
         else if (stmt.TypeAnnotation != null)
         {

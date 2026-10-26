@@ -162,7 +162,12 @@ public partial class TypeChecker
                 MethodMembers: itf.MethodMembers,
                 MemberBrands: itf.MemberBrands,
                 ReadonlyNumberIndex: itf.NumberIndexType is not null || itf.ReadonlyNumberIndex)
-                { ClassOrigin = itf.ClassOrigin };
+                {
+                    ClassOrigin = itf.ClassOrigin,
+                    ReadonlyStringIndex = itf.StringIndexType is not null || itf.ReadonlyStringIndex,
+                    ReadonlySymbolIndex = itf.SymbolIndexType is not null || itf.ReadonlySymbolIndex,
+                    SymbolMemberNames = itf.SymbolMemberNames
+                };
         }
 
         // Handle unions

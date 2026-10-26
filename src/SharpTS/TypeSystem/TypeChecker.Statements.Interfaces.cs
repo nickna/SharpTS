@@ -73,7 +73,11 @@ public partial class TypeChecker
                     .Concat(record.GetterOnlyFields ?? FrozenSet<string>.Empty)
                     .ToFrozenSet(StringComparer.Ordinal),
             MethodMembers: record.MethodMembers,
-            ReadonlyNumberIndex: record.IsReadonly && record.NumberIndexType is not null);
+            ReadonlyNumberIndex: record.IsReadonly && record.NumberIndexType is not null)
+        {
+            ReadonlyStringIndex = record.IsReadonly && record.StringIndexType is not null,
+            ReadonlySymbolIndex = record.IsReadonly && record.SymbolIndexType is not null
+        };
 
     private static HashSet<Stmt.Interface> InterfaceDeclarationsFor(
         Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> declarations,
@@ -164,7 +168,9 @@ public partial class TypeChecker
             TypeInfo.Interface direct => new(direct.Name, [], direct.Members, direct.OptionalMembers,
                 direct.StringIndexType, direct.NumberIndexType, direct.SymbolIndexType, direct.Extends,
                 direct.CallSignatures, direct.ConstructorSignatures, direct.ReadonlyMembers, direct.MethodMembers,
-                direct.ReadonlyNumberIndex),
+                direct.ReadonlyNumberIndex)
+                { ReadonlyStringIndex = direct.ReadonlyStringIndex, ReadonlySymbolIndex = direct.ReadonlySymbolIndex,
+                    SymbolMemberNames = direct.SymbolMemberNames },
             _ => throw new InvalidOperationException("Only interface facets can augment an ambient class."),
         };
         var previous = GenericView(prior);
@@ -381,6 +387,9 @@ public partial class TypeChecker
             MethodMembers = MergeSet(left.MethodMembers, right.MethodMembers),
             MemberBrands = left.MemberBrands ?? right.MemberBrands,
             ReadonlyNumberIndex = left.ReadonlyNumberIndex || right.ReadonlyNumberIndex,
+            ReadonlyStringIndex = left.ReadonlyStringIndex || right.ReadonlyStringIndex,
+            ReadonlySymbolIndex = left.ReadonlySymbolIndex || right.ReadonlySymbolIndex,
+            SymbolMemberNames = MergeInterfaceSymbolMembers(left.SymbolMemberNames, right.SymbolMemberNames),
             ClassOrigin = right.ClassOrigin ?? left.ClassOrigin,
         };
 
@@ -401,7 +410,36 @@ public partial class TypeChecker
             ReadonlyMembers = MergeSet(left.ReadonlyMembers, right.ReadonlyMembers),
             MethodMembers = MergeSet(left.MethodMembers, right.MethodMembers),
             ReadonlyNumberIndex = left.ReadonlyNumberIndex || right.ReadonlyNumberIndex,
+            ReadonlyStringIndex = left.ReadonlyStringIndex || right.ReadonlyStringIndex,
+            ReadonlySymbolIndex = left.ReadonlySymbolIndex || right.ReadonlySymbolIndex,
+            SymbolMemberNames = MergeInterfaceSymbolMembers(left.SymbolMemberNames, right.SymbolMemberNames),
         };
+
+    private static FrozenDictionary<BindingSymbol, string>? MergeInterfaceSymbolMembers(
+        FrozenDictionary<BindingSymbol, string>? left, FrozenDictionary<BindingSymbol, string>? right)
+    {
+        if (left is null) return right;
+        if (right is null) return left;
+        Dictionary<BindingSymbol, string> merged = new(left, ReferenceEqualityComparer.Instance);
+        foreach (var (symbol, name) in right) merged[symbol] = name;
+        return merged.ToFrozenDictionary(ReferenceEqualityComparer.Instance);
+    }
+
+    private static Dictionary<BindingSymbol, string> InterfaceSymbolMembers(TypeInfo.Interface iface)
+    {
+        Dictionary<BindingSymbol, string> members = new(ReferenceEqualityComparer.Instance);
+        HashSet<TypeInfo.Interface> visited = new(ReferenceEqualityComparer.Instance);
+        Visit(iface);
+        return members;
+
+        void Visit(TypeInfo.Interface current)
+        {
+            if (!visited.Add(current)) return;
+            if (current.SymbolMemberNames is { } own)
+                foreach (var (symbol, name) in own) members.TryAdd(symbol, name);
+            foreach (var parent in current.Extends ?? []) Visit(parent);
+        }
+    }
 
     /// <summary>
     /// Pre-registers an interface declaration before function hoisting.
@@ -681,11 +719,17 @@ public partial class TypeChecker
         TypeInfo? numberIndexType = null;
         TypeInfo? symbolIndexType = null;
         bool readonlyNumberIndex = false;
+        bool readonlyStringIndex = false;
+        bool readonlySymbolIndex = false;
+        Dictionary<BindingSymbol, string> symbolMemberNames = new(ReferenceEqualityComparer.Instance);
 
         using (new EnvironmentScope(this, interfaceTypeEnv))
         {
         foreach (var member in interfaceStmt.Members)
         {
+            if (member.ComputedSymbolReference is { } reference &&
+                _environment.Get(reference.Lexeme) is TypeInfo.UniqueSymbol { DeclarationBinding: { } symbol })
+                symbolMemberNames[symbol] = member.Name.Lexeme;
             if (member.TypeAnnotationNode is { } memberNode &&
                 ContainsSelfIndexedAccess(memberNode, interfaceStmt.Name.Lexeme, requireLiteralIndex: true))
             {
@@ -783,6 +827,7 @@ public partial class TypeChecker
                         if (stringIndexType != null)
                             throw new TypeCheckException($" Duplicate string index signature in interface '{interfaceStmt.Name.Lexeme}'.", tsCode: "TS2374");
                         stringIndexType = valueType;
+                        readonlyStringIndex = indexSig.IsReadonly;
                         break;
                     case TokenType.TYPE_NUMBER:
                         if (numberIndexType != null)
@@ -794,6 +839,7 @@ public partial class TypeChecker
                         if (symbolIndexType != null)
                             throw new TypeCheckException($" Duplicate symbol index signature in interface '{interfaceStmt.Name.Lexeme}'.", tsCode: "TS2374");
                         symbolIndexType = valueType;
+                        readonlySymbolIndex = indexSig.IsReadonly;
                         break;
                 }
             }
@@ -869,6 +915,16 @@ public partial class TypeChecker
                 {
                     numberIndexType = inheritedIndex;
                     readonlyNumberIndex = baseInterface.ReadonlyNumberIndex;
+                }
+                if (stringIndexType is null && baseInterface.StringIndexType is { } inheritedStringIndex)
+                {
+                    stringIndexType = inheritedStringIndex;
+                    readonlyStringIndex = baseInterface.ReadonlyStringIndex;
+                }
+                if (symbolIndexType is null && baseInterface.SymbolIndexType is { } inheritedSymbolIndex)
+                {
+                    symbolIndexType = inheritedSymbolIndex;
+                    readonlySymbolIndex = baseInterface.ReadonlySymbolIndex;
                 }
             }
             // Resolving `extends A<Base>` instantiates the generic base; a type-argument constraint
@@ -1047,7 +1103,8 @@ public partial class TypeChecker
                 readonlyMembers.Count > 0 ? readonlyMembers.ToFrozenSet() : null,
                 methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null,
                 readonlyNumberIndex
-            );
+            ) { ReadonlyStringIndex = readonlyStringIndex, ReadonlySymbolIndex = readonlySymbolIndex,
+                SymbolMemberNames = symbolMemberNames.ToFrozenDictionary(ReferenceEqualityComparer.Instance) };
             DefineCompletedInterface(interfaceStmt, genericItfType);
         }
         else
@@ -1065,7 +1122,8 @@ public partial class TypeChecker
                 readonlyMembers.Count > 0 ? readonlyMembers.ToFrozenSet() : null,
                 methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null,
                 ReadonlyNumberIndex: readonlyNumberIndex
-            );
+            ) { ReadonlyStringIndex = readonlyStringIndex, ReadonlySymbolIndex = readonlySymbolIndex,
+                SymbolMemberNames = symbolMemberNames.ToFrozenDictionary(ReferenceEqualityComparer.Instance) };
             DefineCompletedInterface(interfaceStmt, itfType);
         }
 
@@ -1230,8 +1288,11 @@ public partial class TypeChecker
         var members = gi.Members.ToDictionary(kv => kv.Key, kv => SubstitutePreservingSignatures(kv.Value, subs));
         var optionalMembers = gi.OptionalMembers.ToHashSet(StringComparer.Ordinal);
         var readonlyMembers = gi.ReadonlyMembers?.ToHashSet(StringComparer.Ordinal) ?? [];
+        Dictionary<BindingSymbol, string> symbolMembers = gi.SymbolMemberNames is { } declaredSymbols
+            ? new(declaredSymbols, ReferenceEqualityComparer.Instance) : new(ReferenceEqualityComparer.Instance);
         foreach (TypeInfo.Interface baseInterface in gi.Extends ?? [])
         {
+            foreach (var (symbol, name) in InterfaceSymbolMembers(baseInterface)) symbolMembers.TryAdd(symbol, name);
             var inheritedReadonly = baseInterface.GetAllReadonlyMembers().ToHashSet(StringComparer.Ordinal);
             foreach ((string name, TypeInfo member) in baseInterface.GetAllMembers())
             {
@@ -1286,7 +1347,9 @@ public partial class TypeChecker
             constructorSignatures,
             readonlyMembers.Count > 0 ? readonlyMembers.ToFrozenSet(StringComparer.Ordinal) : null,
             gi.MethodMembers,
-            ReadonlyNumberIndex: gi.ReadonlyNumberIndex);
+            ReadonlyNumberIndex: gi.ReadonlyNumberIndex)
+            { ReadonlyStringIndex = gi.ReadonlyStringIndex, ReadonlySymbolIndex = gi.ReadonlySymbolIndex,
+                SymbolMemberNames = symbolMembers.ToFrozenDictionary(ReferenceEqualityComparer.Instance) };
     }
 
     /// <summary>

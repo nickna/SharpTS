@@ -788,6 +788,8 @@ public partial class TypeChecker
         TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(set.Object));
         EnsureWritableClassIndex(objType, new TypeInfo.StringLiteral(set.Name.Lexeme),
             new Expr.Literal(set.Name.Lexeme));
+        EnsureWritableInterfaceIndex(objType, new TypeInfo.StringLiteral(set.Name.Lexeme),
+            new Expr.Literal(set.Name.Lexeme));
 
         // A generic interface is the same mutable object shape for writes as for reads.
         if (objType is TypeInfo.InstantiatedGeneric instantiated &&
