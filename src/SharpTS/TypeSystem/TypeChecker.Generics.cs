@@ -496,7 +496,7 @@ public partial class TypeChecker
         return CopyEditorSignatureMetadata(generic,
             new TypeInfo.Function(substitutedParams, substitutedReturn, generic.RequiredParams, generic.HasRestParam,
                 preserveCallableMetadata && generic.ThisType is not null ? SubstitutePreservingSignatures(generic.ThisType, substitutions) : null,
-                preserveCallableMetadata ? generic.ParamNames : null));
+                preserveCallableMetadata ? generic.ParamNames : null) { WrittenCallSignature = generic.WrittenCallSignature });
     }
 
     /// <summary>

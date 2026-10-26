@@ -729,7 +729,7 @@ public sealed partial class RuntimeFeatureDetector
                     TrackMathAlias(var.Name.Lexeme, var.Initializer);
                     TrackDateAlias(var.Name.Lexeme, var.Initializer);
                     TrackRegExpAlias(var.Name.Lexeme, var.Initializer);
-                    if (_opaqueValueBindings.Contains(var.Name.Lexeme))
+                    if (_opaqueValueBindings.Contains(var.Name.Lexeme) || IsOpaqueCheckedBinding(var.Name))
                         MarkPotentiallyMaterialized(var.Initializer);
                     VisitExpr(var.Initializer);
                 }
@@ -742,7 +742,7 @@ public sealed partial class RuntimeFeatureDetector
                 TrackMathAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackDateAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackRegExpAlias(cst.Name.Lexeme, cst.Initializer);
-                if (_opaqueValueBindings.Contains(cst.Name.Lexeme))
+                if (_opaqueValueBindings.Contains(cst.Name.Lexeme) || IsOpaqueCheckedBinding(cst.Name))
                     MarkPotentiallyMaterialized(cst.Initializer);
                 VisitExpr(cst.Initializer);
                 break;
@@ -1363,7 +1363,7 @@ public sealed partial class RuntimeFeatureDetector
                     _set.UsesMathMutation = true;
                 if (asg.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
-                if (_opaqueValueBindings.Contains(asg.Name.Lexeme))
+                if (_opaqueValueBindings.Contains(asg.Name.Lexeme) || IsOpaqueCheckedBinding(asg.Name))
                     MarkPotentiallyMaterialized(asg.Value);
                 VisitExpr(asg.Value);
                 break;
@@ -1459,6 +1459,8 @@ public sealed partial class RuntimeFeatureDetector
                 VisitExpr(csi.Value);
                 break;
             case Expr.LogicalAssign la:
+                if (_opaqueValueBindings.Contains(la.Name.Lexeme) || IsOpaqueCheckedBinding(la.Name))
+                    MarkPotentiallyMaterialized(la.Value);
                 if (la.Name.Lexeme == "Number")
                 {
                     _set.UsesNumberPrototypeMutation = true;
@@ -2397,13 +2399,6 @@ public sealed partial class RuntimeFeatureDetector
         }
     }
 
-    private static bool ContainsOpaqueType(TypeInfo type) => type switch
-    {
-        TypeInfo.Any or TypeInfo.Unknown => true,
-        TypeInfo.Union union => union.Types.Any(ContainsOpaqueType),
-        _ => false
-    };
-
     private sealed class DeclaredNameCounter : AstVisitorBase
     {
         public Dictionary<string, int> Counts { get; } = [];
@@ -2533,6 +2528,10 @@ public sealed partial class RuntimeFeatureDetector
         TypeInfo? type = _typeMap?.Get(target);
         if (type is TypeInfo.Any or TypeInfo.Unknown)
             _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
+        else if (type is TypeInfo.Instance)
+            // A class-view property write materializes its outer carrier. Its
+            // unsubstituted field parameters do not identify mutated child values.
+            RecordStructuralMaterializationView(type);
         else
             MarkPotentiallyMaterialized(type);
     }
@@ -2541,6 +2540,22 @@ public sealed partial class RuntimeFeatureDetector
     {
         MarkObjectLiteralShape(expression);
         MarkPotentiallyMaterialized(_typeMap?.Get(expression));
+        // Contextual annotations can erase a nested argument's actual shape. Its
+        // checked child expressions still identify carriers crossing this boundary.
+        switch (expression)
+        {
+            case Expr.ObjectLiteral literal:
+                foreach (var property in literal.Properties) MarkPotentiallyMaterialized(property.Value);
+                break;
+            case Expr.ArrayLiteral array:
+                foreach (var element in array.Elements) MarkPotentiallyMaterialized(element);
+                break;
+            case Expr.Grouping grouping: MarkPotentiallyMaterialized(grouping.Expression); break;
+            case Expr.TypeAssertion assertion: MarkPotentiallyMaterialized(assertion.Expression); break;
+            case Expr.Satisfies satisfies: MarkPotentiallyMaterialized(satisfies.Expression); break;
+            case Expr.NonNullAssertion assertion: MarkPotentiallyMaterialized(assertion.Expression); break;
+            case Expr.Spread spread: MarkPotentiallyMaterialized(spread.Expression); break;
+        }
     }
 
     private void MarkObjectLiteralShape(Expr expression)
@@ -2582,6 +2597,24 @@ public sealed partial class RuntimeFeatureDetector
 
         switch (type)
         {
+            case TypeInfo.Instance instance:
+                RecordStructuralMaterializationView(instance);
+                switch (instance.ResolvedClassType)
+                {
+                    case TypeInfo.Class cls:
+                        foreach (var member in cls.FieldTypes.Values.Concat(cls.Getters.Values).Concat(cls.Setters.Values))
+                            MarkPotentiallyMaterialized(member, visited);
+                        if (cls.Superclass is not null)
+                            MarkPotentiallyMaterialized(new TypeInfo.Instance(cls.Superclass), visited);
+                        break;
+                    case TypeInfo.MutableClass cls:
+                        foreach (var member in cls.FieldTypes.Values.Concat(cls.Getters.Values).Concat(cls.Setters.Values))
+                            MarkPotentiallyMaterialized(member, visited);
+                        if (cls.Superclass is not null)
+                            MarkPotentiallyMaterialized(new TypeInfo.Instance(cls.Superclass), visited);
+                        break;
+                }
+                break;
             case TypeInfo.Record record:
                 RecordStructuralMaterializationView(record);
                 if (JsonSerializationShapeAnalyzer.TryAnalyze(record, out var analyzed) &&

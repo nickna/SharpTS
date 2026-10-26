@@ -30,10 +30,21 @@ public partial class TypeChecker
     private TypeInfo ToTypeInfo(string typeName)
     {
         if (IsBareTypeName(typeName))
-            return ResolveTypeName(typeName);
+            return ResolveBareTypeAnnotation(typeName);
         return Parser.TryParseTypeFragment(typeName, _cancellationToken) is { } node
             ? TryToTypeInfo(node) ?? UnprovenEditorTypeFallback()
             : UnprovenEditorTypeFallback();
+    }
+
+    private TypeInfo ResolveBareTypeAnnotation(string name)
+    {
+        TypeInfo type = ResolveTypeName(name);
+        // Definition lookups still return the original generic. Only an annotation
+        // that omits every argument selects the declaration's resolved defaults.
+        return type is TypeInfo.GenericInterface { TypeParams.Count: > 0 } generic &&
+            generic.TypeParams.All(parameter => parameter.Default is not null)
+            ? InstantiateGenericInterface(generic, [])
+            : type;
     }
 
     /// <summary>

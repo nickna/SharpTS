@@ -74,6 +74,10 @@ public partial class TypeChecker
         {
             TypeInfo.TypeParameter tp =>
                 substitutions.TryGetValue(tp.Name, out var sub) ? sub : type,
+            // A checked generic predicate must carry its call-site type inside the
+            // wrapper, so guard queries can consume the authoritative return fact.
+            TypeInfo.TypePredicate predicate =>
+                predicate with { PredicateType = Sub(predicate.PredicateType) },
             TypeInfo.Array arr =>
                 new TypeInfo.Array(Sub(arr.ElementType), arr.IsReadonly),
             TypeInfo.Promise promise =>
@@ -97,7 +101,7 @@ public partial class TypeChecker
                     // assignability path (evalConditionals) needs it. The conditional path leaves them unmarked.
                     InstantiatedTypeParamPositions: evalConditionals
                         ? MarkInstantiatedParamPositions(func, substitutions)
-                        : null),
+                        : null) { WrittenCallSignature = func.WrittenCallSignature },
             TypeInfo.Tuple tuple =>
                 SubstituteTupleWithFlattening(tuple, substitutions, evalConditionals),
             TypeInfo.SpreadType spread =>
@@ -374,9 +378,15 @@ public partial class TypeChecker
     /// which this intercepts).
     /// </summary>
     private TypeInfo SubstitutePreservingSignatures(TypeInfo type, Dictionary<string, TypeInfo> substitutions) =>
-        type is TypeInfo.Record rec
-            ? SubstituteRecordMembers(rec, t => SubstitutePreservingSignatures(t, substitutions))
-            : Substitute(type, substitutions);
+        type switch
+        {
+            TypeInfo.Record rec => SubstituteRecordMembers(rec, t => SubstitutePreservingSignatures(t, substitutions)),
+            TypeInfo.TypePredicate predicate => predicate with
+            {
+                PredicateType = SubstitutePreservingSignatures(predicate.PredicateType, substitutions)
+            },
+            _ => Substitute(type, substitutions)
+        };
 
     /// <summary>
     /// Substitutes type parameters in a tuple with flattening of spread elements.

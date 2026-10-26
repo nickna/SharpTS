@@ -95,17 +95,20 @@ public partial class Interpreter
             // (#924, the async analog of #534).
             HoistFunctionDeclarations(statements);
 
+            var completion = ExecutionResult.Success();
             foreach (Stmt statement in statements)
             {
-                var result = await ExecuteStatementAsync(statement);
+                var result = (await ExecuteStatementAsync(statement)).UpdateEmpty(completion);
                 if (result.IsAbrupt) return result;
+                completion = result;
             }
-            return ExecutionResult.Success();
+            return completion;
         }
     }
 
     private async Task<ExecutionResult> ExecuteForOfAsync(Stmt.ForOf forOf)
     {
+        var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         // Drain any labels parked by ExecuteLabeledStatementAsyncVT before evaluating the iterable, so a
         // `break`/`continue <label>` targeting this loop (including via the async-iterator path below) is
         // matched here rather than escaping — and so a labeled loop produced by the iterable expression
@@ -164,15 +167,16 @@ public partial class Interpreter
                 }
 
                 var result = await ExecuteLoopBodyAsync(forOf.Variable, forOf.IsDeclaration && !forOf.IsVar, value, forOf.Body);
+                result = UpdateLoopCompletion(ref completion, result);
                 preserveThrow = result.Type == ExecutionResult.ResultType.Throw;
                 var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
-                if (shouldBreak) return ExecutionResult.Success();
+                if (shouldBreak) return completion;
                 if (shouldContinue) continue;
                 if (abruptResult.HasValue) return abruptResult.Value;
 
                 ProcessPendingCallbacks(processMicrotasks: false);
             }
-            return ExecutionResult.Success();
+            return completion;
         }
         catch
         {
@@ -328,6 +332,7 @@ public partial class Interpreter
     /// </summary>
     private async Task<ExecutionResult> IterateAsyncIterator(object asyncIterator, Stmt.ForOf forOf, IReadOnlyList<string>? labels = null)
     {
+        var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         // The loop body must run in the for-await statement's own lexical scope, regardless of how the
         // iterator's next() mutates the interpreter's ambient environment. The eager-drain async generator
         // transiently repoints that environment at its own closure while draining, and a body shape whose
@@ -388,6 +393,7 @@ public partial class Interpreter
                 await CloseAsyncIteratorOnEarlyExit(asyncIterator, preserveThrow: true);
                 throw;
             }
+            result = UpdateLoopCompletion(ref completion, result);
             var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
             // An early exit (break, or a return/throw out of the loop body) closes the iterator before
             // leaving: ECMA-262 AsyncIteratorClose calls return() and awaits it, so a suspended async
@@ -397,7 +403,7 @@ public partial class Interpreter
             if (shouldBreak)
             {
                 await CloseAsyncIteratorOnEarlyExit(asyncIterator, preserveThrow: false);
-                return ExecutionResult.Success();
+                return completion;
             }
             if (shouldContinue) continue;
             if (abruptResult.HasValue)
@@ -411,7 +417,7 @@ public partial class Interpreter
             ProcessPendingCallbacks(processMicrotasks: false);
         }
 
-        return ExecutionResult.Success();
+        return completion;
     }
 
     /// <summary>
@@ -525,6 +531,7 @@ public partial class Interpreter
 
     private async Task<ExecutionResult> ExecuteForInAsync(Stmt.ForIn forIn)
     {
+        var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         var labels = TakePendingLoopLabels();
         object? obj = (await EvaluateAsync(forIn.Object)).ToObject();
 
@@ -549,8 +556,9 @@ public partial class Interpreter
         {
             ThrowIfExecutionCancelled();
             var result = await ExecuteLoopBodyAsync(forIn.Variable, forIn.IsDeclaration && !forIn.IsVar, key, forIn.Body);
+            result = UpdateLoopCompletion(ref completion, result);
             var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
-            if (shouldBreak) return ExecutionResult.Success();
+            if (shouldBreak) return completion;
             if (shouldContinue) continue;
             if (abruptResult.HasValue) return abruptResult.Value;
 
@@ -558,7 +566,7 @@ public partial class Interpreter
             ProcessPendingCallbacks(processMicrotasks: false);
         }
 
-        return ExecutionResult.Success();
+        return completion;
     }
 
     // ===================== Async Statement Handlers for Registry =====================
@@ -572,31 +580,33 @@ public partial class Interpreter
 
     internal async ValueTask<ExecutionResult> ExecuteSequenceAsyncVT(Stmt.Sequence seq)
     {
+        var completion = ExecutionResult.Success();
         foreach (var s in seq.Statements)
         {
-            var result = await ExecuteStatementAsync(s);
+            var result = (await ExecuteStatementAsync(s)).UpdateEmpty(completion);
             if (result.IsAbrupt) return result;
+            completion = result;
         }
-        return ExecutionResult.Success();
+        return completion;
     }
 
     internal async ValueTask<ExecutionResult> ExecuteExpressionAsyncVT(Stmt.Expression exprStmt)
     {
-        await EvaluateAsync(exprStmt.Expr);
-        return ExecutionResult.Success();
+        var value = await EvaluateAsync(exprStmt.Expr);
+        return exprStmt.HasEmptyCompletion ? ExecutionResult.Success() : ExecutionResult.Success(value);
     }
 
     internal async ValueTask<ExecutionResult> ExecuteIfAsyncVT(Stmt.If ifStmt)
     {
         if (IsTruthy(await EvaluateAsync(ifStmt.Condition)))
         {
-            return await ExecuteStatementAsync(ifStmt.ThenBranch);
+            return (await ExecuteStatementAsync(ifStmt.ThenBranch)).UpdateEmpty(ExecutionResult.Success(RuntimeValue.Undefined));
         }
         else if (ifStmt.ElseBranch != null)
         {
-            return await ExecuteStatementAsync(ifStmt.ElseBranch);
+            return (await ExecuteStatementAsync(ifStmt.ElseBranch)).UpdateEmpty(ExecutionResult.Success(RuntimeValue.Undefined));
         }
-        return ExecutionResult.Success();
+        return ExecutionResult.Success(RuntimeValue.Undefined);
     }
 
     internal ValueTask<ExecutionResult> ExecuteWhileAsyncVT(Stmt.While whileStmt)
@@ -668,7 +678,7 @@ public partial class Interpreter
             // The loop absorbs continue/break for its labels; guard a matching break defensively.
             if (result.Type == ExecutionResult.ResultType.Break &&
                 result.TargetLabel != null && labels.Contains(result.TargetLabel))
-                return ExecutionResult.Success();
+                return ExecutionResult.Success().UpdateEmpty(result);
             return result;
         }
 
@@ -676,7 +686,7 @@ public partial class Interpreter
         var r = await ExecuteStatementAsync(inner);
         if (r.Type == ExecutionResult.ResultType.Break &&
             r.TargetLabel != null && labels.Contains(r.TargetLabel))
-            return ExecutionResult.Success();
+            return ExecutionResult.Success().UpdateEmpty(r);
         return r;
     }
 

@@ -23,6 +23,7 @@ public readonly struct ExecutionResult
     public readonly ResultType Type;
     public readonly RuntimeValue Value;
     public readonly string? TargetLabel;
+    public readonly bool HasValue;
 
     /// <summary>
     /// For a <see cref="ResultType.Throw"/> result, whether the thrown value originated from a
@@ -34,15 +35,18 @@ public readonly struct ExecutionResult
     /// </summary>
     public readonly bool FromGuestThrow;
 
-    private ExecutionResult(ResultType type, RuntimeValue value = default, string? targetLabel = null, bool fromGuestThrow = false)
+    private ExecutionResult(ResultType type, RuntimeValue value = default, string? targetLabel = null, bool fromGuestThrow = false,
+        bool hasValue = false)
     {
         Type = type;
         Value = value;
         TargetLabel = targetLabel;
         FromGuestThrow = fromGuestThrow;
+        HasValue = hasValue || type is ResultType.Return or ResultType.Throw;
     }
 
     public static ExecutionResult Success() => new(ResultType.None);
+    public static ExecutionResult Success(RuntimeValue value) => new(ResultType.None, value, hasValue: true);
     public static ExecutionResult Return(RuntimeValue value) => new(ResultType.Return, value);
     public static ExecutionResult Return(object? value) => new(ResultType.Return, RuntimeValue.FromBoxed(value));
     public static ExecutionResult Break(string? label = null) => new(ResultType.Break, default, label);
@@ -58,4 +62,9 @@ public readonly struct ExecutionResult
 
     public bool IsNormal => Type == ResultType.None;
     public bool IsAbrupt => Type != ResultType.None;
+
+    // Empty is distinct from an expression whose value is undefined. Statement lists fill
+    // only empty completions, including a break/continue following an expression.
+    public ExecutionResult UpdateEmpty(ExecutionResult previous) => HasValue || !previous.HasValue
+        ? this : new(Type, previous.Value, TargetLabel, FromGuestThrow, hasValue: true);
 }

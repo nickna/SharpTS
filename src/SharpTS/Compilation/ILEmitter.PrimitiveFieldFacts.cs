@@ -31,6 +31,20 @@ public partial class ILEmitter
         return null;
     }
 
+    private bool HasNominalClassCarrier(Expr receiver)
+    {
+        if (receiver is Expr.This)
+            return _ctx.IsInstanceMethod && !_ctx.HasGuestReceiver;
+        if (receiver is Expr.Variable variable)
+        {
+            if (_ctx.Locals.TryGetLocal(variable.Name.Lexeme, out var local))
+                return _ctx.TypeMapper.IsUserClassReferenceType(local.LocalType);
+            if (_ctx.TryGetParameterType(variable.Name.Lexeme, out var parameter) && parameter is not null)
+                return _ctx.TypeMapper.IsUserClassReferenceType(parameter);
+        }
+        return false;
+    }
+
     private bool ConsumeNativePrimitiveFieldFact(Expr receiver, MethodBuilder getter)
     {
         object? key = PrimitiveFieldReceiverIdentity(receiver);
@@ -66,7 +80,7 @@ public partial class ILEmitter
         // Do not attach a saved receiver's store to a binding changed during RHS
         // evaluation. This deliberately small proof admits only literal/slot loads.
         if (value is not (Expr.Literal or Expr.Variable) ||
-            _ctx.RuntimeFeatures?.UsesObjectIntegrityMutation != false)
+            _ctx.RuntimeFeatures?.UsesObjectIntegrityMutation != false || !HasNominalClassCarrier(receiver))
             return;
         if (PrimitiveFieldReceiverIdentity(receiver) is { } key)
             _nativePrimitiveFieldFacts.Add((key, getter));

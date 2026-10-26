@@ -458,6 +458,11 @@ public partial class TypeChecker
             ReferenceEquals(type, call.ArgumentTypes[index])).All(unchanged => unchanged)) return call.CheckedReturn;
         if (call.ExplicitTypes) return call.CheckedReturn;
         if (call.Construct) return EvaluateLoopConstructor(callee, call, arguments, fallback);
+        return EvaluateLoopCallReturn(callee, arguments, fallback);
+    }
+
+    private TypeInfo EvaluateLoopCallReturn(TypeInfo callee, List<TypeInfo> arguments, TypeInfo fallback)
+    {
         var functions = callee is TypeInfo.Union union ? union.FlattenedTypes : [callee];
         List<TypeInfo> results = [];
         foreach (var sourceFunction in functions)

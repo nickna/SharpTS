@@ -133,6 +133,25 @@ public sealed partial class RuntimeFeatureDetector
         if (depth >= 32 || !visited.Add(type)) return;
         switch (type)
         {
+            case TypeInfo.Instance { ResolvedClassType: TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass generic } }:
+                // Required property names belong to the original class core and
+                // do not depend on its substituted value types.
+                CollectRequired(new TypeInfo.Instance(new TypeInfo.Class(generic.Core)), names, visited, depth + 1);
+                break;
+            case TypeInfo.Instance { ResolvedClassType: TypeInfo.Class cls }:
+                foreach (var name in cls.FieldTypes.Keys.Concat(cls.Getters.Keys).Concat(cls.Setters.Keys))
+                    if (cls.Core.OrdinaryOptionalMembers?.Contains((false, name)) != true && !IsPrototypeMember(name))
+                        names.Add(name);
+                if (cls.Superclass is not null)
+                    CollectRequired(new TypeInfo.Instance(cls.Superclass), names, visited, depth + 1);
+                break;
+            case TypeInfo.Instance { ResolvedClassType: TypeInfo.MutableClass cls }:
+                foreach (var name in cls.FieldTypes.Keys.Concat(cls.Getters.Keys).Concat(cls.Setters.Keys))
+                    if (!cls.OrdinaryOptionalMembers.Contains((false, name)) && !IsPrototypeMember(name))
+                        names.Add(name);
+                if (cls.Superclass is not null)
+                    CollectRequired(new TypeInfo.Instance(cls.Superclass), names, visited, depth + 1);
+                break;
             case TypeInfo.Record record:
                 foreach (var name in record.Fields.Keys)
                     if (!record.IsFieldOptional(name) && !IsPrototypeMember(name)) names.Add(name);

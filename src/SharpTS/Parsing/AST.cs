@@ -352,7 +352,12 @@ public enum DestructuringSourceKind
 
 public abstract record Stmt
 {
-    public record Expression(Expr Expr) : Stmt;
+    public record Expression(Expr Expr) : Stmt
+    {
+        // Empty statements and lowered var effects do not contribute an expression
+        // completion, even when their executable representation is an expression.
+        public bool HasEmptyCompletion { get; init; }
+    }
     /// <param name="TypeAnnotationNode">Structured form of <c>TypeAnnotation</c> when the
     /// construct has node support (type-AST migration); null otherwise — consumers fall back to
     /// the string.</param>
@@ -474,7 +479,10 @@ public abstract record Stmt
     /// <param name="IsMethod">Declared with method syntax (<c>m(x): T</c>) rather than as a
     /// function-typed property — method members keep bivariant parameter relating under
     /// strictFunctionTypes.</param>
-    public record InterfaceMember(Token Name, string Type, bool IsOptional = false, bool IsReadonly = false, bool IsMethod = false, TypeNode? TypeAnnotationNode = null, bool HasExplicitType = true);
+    public record InterfaceMember(Token Name, string Type, bool IsOptional = false, bool IsReadonly = false, bool IsMethod = false, TypeNode? TypeAnnotationNode = null, bool HasExplicitType = true)
+    {
+        public Token? ComputedSymbolReference { get; init; }
+    }
     /// <summary>
     /// Index signature in interfaces: [key: string]: valueType, [key: number]: valueType, [key: symbol]: valueType
     /// </summary>

@@ -7,8 +7,20 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    private static Expr FinalConditionOperand(Expr expression)
+    {
+        while (true)
+            switch (expression)
+            {
+                case Expr.Grouping grouping: expression = grouping.Expression; break;
+                case Expr.Comma comma: expression = comma.Right; break;
+                default: return expression;
+            }
+    }
+
     private (string? VarName, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzeTypeGuard(Expr condition)
     {
+        condition = FinalConditionOperand(condition);
         // Pattern 1: typeof x === "string" or typeof x == "string"
         if (condition is Expr.Binary bin &&
             bin.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
@@ -234,29 +246,29 @@ public partial class TypeChecker
     private (string? VarName, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzeTypePredicateCall(Expr.Call call)
     {
         // Get the callee's type
-        TypeInfo? calleeType = null;
+        TypeInfo? calleeType = _typeMap.Get(call.Callee);
 
         // Handle direct function calls: isString(x)
-        if (call.Callee is Expr.Variable funcVar)
+        if (calleeType is null && call.Callee is Expr.Variable funcVar)
         {
             calleeType = _environment.Get(funcVar.Name.Lexeme);
         }
         // Handle method calls: obj.isString(x)
-        else if (call.Callee is Expr.Get getExpr)
+        else if (calleeType is null && call.Callee is Expr.Get getExpr)
         {
-            var objType = CheckExpr(getExpr.Object);
-            calleeType = GetMemberType(objType, getExpr.Name.Lexeme);
+            if (_typeMap.Get(getExpr.Object) is { } objType)
+                calleeType = GetMemberType(objType, getExpr.Name.Lexeme);
         }
 
         if (calleeType == null) return (null, null, null);
 
         // Handle GenericFunction by checking if it has a predicate return type
-        TypeInfo? returnType = calleeType switch
+        TypeInfo? returnType = _typeMap.Get(call) as TypeInfo.TypePredicate ?? (calleeType switch
         {
             TypeInfo.Function func => func.ReturnType,
             TypeInfo.GenericFunction gf => gf.ReturnType,
             _ => null
-        };
+        });
 
         // Check for type predicate return type (not assertion - those are handled differently)
         if (returnType is TypeInfo.TypePredicate pred && !pred.IsAssertion)
@@ -277,14 +289,14 @@ public partial class TypeChecker
                 // `isFunction(x)` with `x: string | (() => string)` must narrow to `() => string`
                 // (the conditional distributes over the inferred union), not to a dangling
                 // `T extends Function ? T : never`.
-                if (calleeType is TypeInfo.GenericFunction predGf && predGf.TypeParams.Count > 0)
+                if (_typeMap.Get(call) is not TypeInfo.TypePredicate &&
+                    calleeType is TypeInfo.GenericFunction predGf && predGf.TypeParams.Count > 0)
                 {
                     var argTypes = call.Arguments
-                        .Select(a => a is Expr.Variable v
-                            ? _environment.Get(v.Name.Lexeme) ?? TypeInfo.Any.Shared
-                            : CheckExpr(a))
+                        .Select(a => _typeMap.Get(a) ?? (a is Expr.Variable v ? _environment.Get(v.Name.Lexeme) : null))
                         .ToList();
-                    var typeArgs = InferTypeArguments(predGf, argTypes);
+                    if (argTypes.Any(type => type is null)) return (null, null, null);
+                    var typeArgs = InferTypeArguments(predGf, argTypes.OfType<TypeInfo>().ToList());
                     var subs = new Dictionary<string, TypeInfo>();
                     for (int i = 0; i < predGf.TypeParams.Count && i < typeArgs.Count; i++)
                         subs[predGf.TypeParams[i].Name] = typeArgs[i];
@@ -714,6 +726,7 @@ public partial class TypeChecker
     /// </remarks>
     private (Narrowing.NarrowingPath? Path, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzePathTypeGuard(Expr condition)
     {
+        condition = FinalConditionOperand(condition);
         if (condition is Expr.Binary comparison && comparison.Operator.Type is
             TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL or TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL)
         {
@@ -730,7 +743,8 @@ public partial class TypeChecker
                 path is not Narrowing.NarrowingPath.Variable && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
                 bool negated = comparison.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL;
-                var (narrowedType, excludedType) = AnalyzeTypeofGuard(CheckExpr(operand), typeName, negated);
+                if (CheckedGuardExpressionType(operand) is not { } operandType) return (null, null, null);
+                var (narrowedType, excludedType) = AnalyzeTypeofGuard(operandType, typeName, negated);
                 return (path, narrowedType, excludedType);
             }
         }
@@ -877,7 +891,8 @@ public partial class TypeChecker
             return (null, null, null);
         }
 
-        var (truthy, falsy) = ComputeTruthinessNarrowing(CheckExpr(expr));
+        if (CheckedGuardExpressionType(expr) is not { } checkedType) return (null, null, null);
+        var (truthy, falsy) = ComputeTruthinessNarrowing(checkedType);
         if (truthy == null || falsy == null)
         {
             return (null, null, null);
@@ -896,12 +911,32 @@ public partial class TypeChecker
     /// </returns>
     private List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> AnalyzeCompoundTypeGuards(Expr condition)
     {
+        condition = FinalConditionOperand(condition);
+        if (condition is Expr.Logical logicalCondition && _checkedAndGuards.TryGetValue(logicalCondition, out var checkedGuards) &&
+            checkedGuards.Writes.Length > 0)
+            return AnalyzeCheckedAndGuards(logicalCondition, checkedGuards);
+        if (condition is Expr.Logical orCondition && _checkedOrGuards.TryGetValue(orCondition, out var checkedOr) &&
+            checkedOr.Writes.Length > 0)
+            return AnalyzeCheckedOrGuards(orCondition, checkedOr);
         var narrowings = new List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)>();
 
         void CollectNarrowings(Expr expr)
         {
+            expr = FinalConditionOperand(expr);
+            if (expr is Expr.Logical checkedLogical && _checkedAndGuards.TryGetValue(checkedLogical, out var checkedFacts) &&
+                checkedFacts.Writes.Length > 0)
+            {
+                narrowings.AddRange(AnalyzeCheckedAndGuards(checkedLogical, checkedFacts));
+                return;
+            }
+            if (expr is Expr.Logical checkedOrLogical && _checkedOrGuards.TryGetValue(checkedOrLogical, out var checkedOrFacts) &&
+                checkedOrFacts.Writes.Length > 0)
+            {
+                narrowings.AddRange(AnalyzeCheckedOrGuards(checkedOrLogical, checkedOrFacts));
+                return;
+            }
             // For &&, collect narrowings from both sides. Apply LHS narrowings while
-            // analyzing the RHS so CheckExpr calls inside the RHS (e.g. inside
+            // analyzing the RHS so checked path queries (e.g. inside
             // AnalyzePathNullCheck) see the narrowed receiver. Without this,
             // `a != null && a.b != null` errors when reading `a.b`, because `a` is
             // still typed `T | null` at the point we compute `a.b`'s current type.
@@ -1102,7 +1137,7 @@ public partial class TypeChecker
     /// not simple guards (including nested <c>&amp;&amp;</c>, whose negation
     /// is itself a disjunction) contribute nothing. Later disjuncts are
     /// analyzed under the accumulated exclusions of earlier ones so that
-    /// CheckExpr calls inside the analysis (e.g. <c>a.length === 0</c> after
+    /// checked path queries (e.g. <c>a.length === 0</c> after
     /// <c>a == null</c>) see the narrowed receiver.
     /// </summary>
     private List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> CollectDisjunctGuards(Expr condition)
@@ -1111,6 +1146,13 @@ public partial class TypeChecker
 
         void Walk(Expr expr)
         {
+            expr = FinalConditionOperand(expr);
+            if (expr is Expr.Logical checkedOr && _checkedOrGuards.TryGetValue(checkedOr, out var checkedGuards) &&
+                checkedGuards.Writes.Length > 0)
+            {
+                narrowings.AddRange(AnalyzeCheckedOrGuards(checkedOr, checkedGuards, exclusionsOnly: true));
+                return;
+            }
             if (expr is Expr.Logical orExpr && orExpr.Operator.Type == TokenType.OR_OR)
             {
                 Walk(orExpr.Left);
@@ -1175,8 +1217,7 @@ public partial class TypeChecker
     private (Narrowing.NarrowingPath? Path, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzePathNullCheck(
         Narrowing.NarrowingPath path, Expr expr, bool negated, bool checkingForNull = true, bool checkBoth = false)
     {
-        // Get the current type of the expression
-        TypeInfo currentType = CheckExpr(expr);
+        if (CheckedGuardExpressionType(expr) is not { } currentType) return (null, null, null);
 
         // checkBoth: a LOOSE comparison (`== null`/`!= null`/`== undefined`/`!= undefined`) against
         // EITHER literal narrows away BOTH null and undefined (JS: `null == undefined`) — unlike a
@@ -1225,6 +1266,20 @@ public partial class TypeChecker
 
         // Not nullable in the checked sense - no narrowing effect
         return (null, null, null);
+    }
+
+    private TypeInfo? CheckedGuardExpressionType(Expr expression)
+    {
+        if (ExtractNarrowingPath(expression) is { } path)
+        {
+            // Variable writes are reflected in the current branch environment. A checked
+            // member read additionally carries optional/instantiated/inherited metadata
+            // that the declared-slot lookup alone cannot reconstruct.
+            return GetNarrowing(path) ?? (path is Narrowing.NarrowingPath.Variable
+                ? GetTypeForNarrowingPath(path) ?? _typeMap.Get(expression)
+                : _typeMap.Get(expression) ?? GetTypeForNarrowingPath(path));
+        }
+        return _typeMap.Get(expression);
     }
 
     /// <summary>

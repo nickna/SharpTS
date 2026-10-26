@@ -5,6 +5,9 @@ namespace SharpTS.TypeSystem;
 
 public partial class TypeChecker
 {
+    private TypeInfo OptionalPropertyWriteType(TypeInfo type, bool optional) =>
+        optional && !_exactOptionalPropertyTypes ? CreateUnion(type, TypeInfo.Undefined.Shared) : type;
+
     private TypeCheckException DottedPropertyWriteError(TypeInfo receiver, Token name, TypeInfo target, TypeInfo source,
         string message, int? line = null)
     {

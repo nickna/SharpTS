@@ -40,7 +40,7 @@ public partial class TypeChecker
             // have for COMPOSITE types. Never routes back through ToTypeInfo(string).
             case NamedTypeNode { TypeArguments: null } named:
                 BindTypeUse(named);
-                return ResolveTypeName(named.Name);
+                return ResolveBareTypeAnnotation(named.Name);
 
             // Generic references resolve their argument nodes and hand off to the shared
             // instantiation machinery (built-in generics, utility types, generic alias node
@@ -366,12 +366,26 @@ public partial class TypeChecker
             }
         }
 
-        // A pure single call-signature object type is structurally a plain function type —
-        // same rule (and same this-type retention) as the string path.
+        // Keep the existing function representation (including this/delegate metadata), while
+        // retaining the written object protocol that requires declaration-owned call arity.
         if (callSignatures.Count == 1 && constructSignatures.Count == 0 && fields.Count == 0
             && stringIndexType == null && numberIndexType == null && symbolIndexType == null)
         {
-            return TryToTypeInfo(callSignatures[0]);
+            var resolved = TryToTypeInfo(callSignatures[0]);
+            return resolved switch
+            {
+                TypeInfo.Function function => CopyEditorSignatureMetadata(function, function with
+                {
+                    WrittenCallSignature = CopyEditorSignatureMetadata(function, new TypeInfo.CallSignature(null,
+                        function.ParamTypes, function.ReturnType, function.RequiredParams, function.HasRestParam, function.ParamNames))
+                }),
+                TypeInfo.GenericFunction generic => CopyEditorSignatureMetadata(generic, generic with
+                {
+                    WrittenCallSignature = CopyEditorSignatureMetadata(generic, new TypeInfo.CallSignature(generic.TypeParams,
+                        generic.ParamTypes, generic.ReturnType, generic.RequiredParams, generic.HasRestParam, generic.ParamNames))
+                }),
+                _ => resolved
+            };
         }
 
         List<TypeInfo.CallSignature>? recCallSigs = null;

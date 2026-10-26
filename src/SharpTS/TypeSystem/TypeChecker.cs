@@ -785,6 +785,7 @@ public partial class TypeChecker
     private void RecordDeclaredType(TypeEnvironment environment, string name, TypeInfo type)
     {
         if (environment.GetValueBinding(name) is not { } binding) return;
+        _typeMap.SetDeclaredValueType(binding, type);
         RecordClassFieldBindingType(binding, type);
         if (_declaredVariableTypesStack.Count > 0)
         {
@@ -1408,6 +1409,7 @@ public partial class TypeChecker
         IndexNewTargetContexts(statements);
         _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
+        _typeMap.ClearDeclaredValueTypes();
         _members?.Clear();
         _sourceClassNesting = null;
         ResetEditorMetadata();
@@ -1501,6 +1503,7 @@ public partial class TypeChecker
         IndexNewTargetContexts(statements);
         _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
+        _typeMap.ClearDeclaredValueTypes();
         _members?.Clear();
         _sourceClassNesting = null;
         ResetEditorMetadata();
@@ -1810,6 +1813,7 @@ public partial class TypeChecker
         _diagnostics.Clear();
         IndexNewTargetContexts(modules.SelectMany(module => module.Statements));
         Bindings.Clear();
+        _typeMap.ClearDeclaredValueTypes();
         _members?.Clear();
         _sourceClassNesting = null;
         ResetEditorMetadata();

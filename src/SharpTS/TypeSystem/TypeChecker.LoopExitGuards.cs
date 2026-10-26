@@ -35,6 +35,7 @@ public partial class TypeChecker
 
         LoopConditionalGuards Collect(Expr expression)
         {
+            expression = FinalConditionOperand(expression);
             if (expression is Expr.Grouping grouping) return Collect(grouping.Expression);
             if (expression is Expr.Unary { Operator.Type: TokenType.BANG } negation)
             {
@@ -45,6 +46,16 @@ public partial class TypeChecker
             {
                 var left = Collect(logical.Left);
                 var right = Collect(logical.Right);
+                if (logical.Operator.Type == TokenType.AND_AND && _checkedAndGuards.TryGetValue(logical, out var checkedGuards))
+                {
+                    bool Survives(LoopGuardFact fact) => !checkedGuards.Writes.Any(write => ReferenceEquals(write.Symbol, fact.Symbol));
+                    left = new(left.Then.Where(Survives).ToArray(), left.Else.Where(Survives).ToArray());
+                }
+                if (logical.Operator.Type == TokenType.OR_OR && _checkedOrGuards.TryGetValue(logical, out var checkedOrGuards))
+                {
+                    bool Survives(LoopGuardFact fact) => !checkedOrGuards.Writes.Any(write => ReferenceEquals(write.Symbol, fact.Symbol));
+                    left = new(left.Then.Where(Survives).ToArray(), left.Else.Where(Survives).ToArray());
+                }
                 return logical.Operator.Type == TokenType.AND_AND
                     ? new(Combine(left.Then, right.Then, all: true), Combine(left.Else, right.Else, all: false))
                     : logical.Operator.Type == TokenType.OR_OR

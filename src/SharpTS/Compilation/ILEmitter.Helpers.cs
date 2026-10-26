@@ -583,6 +583,17 @@ public partial class ILEmitter
         if (expr is Expr.Get interfaceGet && TryEmitInterfaceRecordGet(interfaceGet, numericConsumer: true))
             return;
 
+        // Preserve property dispatch precedence: a record-typed receiver may live
+        // in a promoted struct slot rather than an ordinary object carrier.
+        if (expr is Expr.Get { Optional: false } recordGet &&
+            _ctx.TypeMap?.Get(recordGet.Object) is TypeInfo.Record)
+        {
+            SetStackUnknown();
+            EmitGet(recordGet, numericConsumer: true);
+            EnsureDouble();
+            return;
+        }
+
         if (expr is Expr.GetIndex getIndex && TryEmitGuardedArrayIndex(getIndex))
             return;
 

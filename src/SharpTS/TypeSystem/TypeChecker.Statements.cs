@@ -243,7 +243,7 @@ public partial class TypeChecker
         // IsDeclare (not just a missing initializer) — a non-ambient `let x: unique symbol;` has no
         // initializer either and must still be rejected.
         TypeInfo? declaredType = stmt.TypeAnnotation == "unique symbol" && stmt.IsDeclare
-            ? new TypeInfo.UniqueSymbol(stmt.Name.Lexeme, $"typeof {stmt.Name.Lexeme}")
+            ? new TypeInfo.UniqueSymbol(stmt.Name.Lexeme, $"typeof {stmt.Name.Lexeme}") { DeclarationBinding = variableSymbol }
             : ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt);
         if (stmt.TypeAnnotationNode is NamedTypeNode { Name: var annotatedAlias } &&
             _recursiveGenericIndexedAliases.Contains(annotatedAlias))
@@ -751,7 +751,7 @@ public partial class TypeChecker
             }
             constDeclaredType = new TypeInfo.UniqueSymbol(
                 stmt.Name.Lexeme,
-                $"typeof {stmt.Name.Lexeme}");
+                $"typeof {stmt.Name.Lexeme}") { DeclarationBinding = constBinding };
         }
         else if (stmt.TypeAnnotation != null)
         {
@@ -1145,6 +1145,7 @@ public partial class TypeChecker
             var jumps = CaptureValueFlowJumps();
             RestoreValueFlow(incomingFlow);
             using var branchScope = new EnvironmentScope(this, new TypeEnvironment(_environment));
+            ApplyCheckedConditionLoopOrigins(stmt.Condition, true);
             ApplyLoopExitGuards(loopGuards?.Then);
             RestoreDefiniteAssignmentState(incomingAssignments);
             bool addedAssumption = thenAssignmentAssumption != null &&
@@ -1184,6 +1185,7 @@ public partial class TypeChecker
             var jumps = CaptureValueFlowJumps();
             RestoreValueFlow(incomingFlow);
             using var branchScope = new EnvironmentScope(this, new TypeEnvironment(_environment));
+            ApplyCheckedConditionLoopOrigins(stmt.Condition, false);
             ApplyLoopExitGuards(loopGuards?.Else);
             RestoreDefiniteAssignmentState(incomingAssignments);
             bool addedAssumption = elseAssignmentAssumption != null &&
@@ -1339,6 +1341,7 @@ public partial class TypeChecker
     private (BindingSymbol? Then, BindingSymbol? Else) GetTypeofDefiniteAssignmentAssumptions(
         Expr condition)
     {
+        condition = FinalConditionOperand(condition);
         Expr.Variable? variable = null;
         string? comparedType = null;
         TokenType comparison = TokenType.EOF;
@@ -1559,12 +1562,20 @@ public partial class TypeChecker
         var conditionWrites = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
             new Stmt.Expression(stmt.Condition), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
         var incomingFlow = CaptureValueFlow();
+        TypeEnvironment? bodyEnvironment = null;
+        if (ReachableLoopBodyInputs(stmt) is { } bodyInputs)
+        {
+            bodyEnvironment = new TypeEnvironment(_environment);
+            foreach (var (symbol, type) in bodyInputs)
+                if (ReferenceEquals(_environment.GetValueBinding(symbol.Name), symbol))
+                    bodyEnvironment.Define(symbol.Name, type);
+        }
         // tsc's do-loop flow recognizes the written true keyword here; grouping
         // and numeric truthy expressions retain its conservative continuing edge.
         LoopValueDomain? domain = stmt.Condition is Expr.Literal { Value: true }
             ? BeginLoopValueDomain(incomingFlow) : null;
         ValueFlowLoopExit bodyFlow;
-        try { bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings: null, conditionAssignedPaths: conditionWrites); }
+        try { bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: bodyEnvironment, conditionAssignedPaths: conditionWrites); }
         finally { if (domain is not null) _loopValueDomains.Pop(); }
         bool conditionRuns = ApplyLoopContinuingValueFlow(incomingFlow, bodyFlow);
         var tryWrites = CaptureTryValueWrites();

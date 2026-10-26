@@ -253,6 +253,7 @@ public partial class TypeChecker
 
     private void RecordTryValueMutation(SharpTS.Parsing.Expr expression)
     {
+        RecordConditionValueMutation(expression);
         if (!_valueFlowTryWrites.TryPeek(out var writes) || writes.Depth != _definiteAssignmentStack.Count ||
             _classFieldBindingFlowBoundary is not null || _deferredInitializerFlowBoundary is not null)
             return;

@@ -2137,16 +2137,17 @@ public abstract partial class ExpressionEmitterBase
     protected bool GuardClassMethodPrototype => Ctx.RuntimeFeatures?.UsesReflect != false
         || Ctx.RuntimeFeatures is { UsesClassPrototypeMutation: true };
 
-    // The two direct-call emitters retain their nominal fast path, but a
-    // Reflect.construct receiver can carry another constructor's prototype.
+    // The direct-call emitters retain their nominal fast path. Structural class
+    // values and Reflect.construct receivers can require guest property dispatch.
     // Return the evaluated receiver for the fast arm and join both arms as a
     // boxed guest value. Suspending arguments use the existing dynamic path
     // instead, so no await/yield state is emitted twice.
     protected LocalBuilder? EmitAlternateClassMethodCallGuard(
-        Expr receiver, string methodName, List<Expr> arguments, out Label completed)
+        Expr receiver, string methodName, List<Expr> arguments, out Label completed,
+        Type? requiredInstanceType = null)
     {
         completed = default;
-        if (!GuardClassMethodPrototype) return null;
+        if (!GuardClassMethodPrototype && requiredInstanceType is null) return null;
 
         var receiverLocal = SpillBoxed(receiver);
         var nominal = IL.DefineLabel();
@@ -2154,6 +2155,14 @@ public abstract partial class ExpressionEmitterBase
         var dynamicCall = IL.DefineLabel();
         completed = IL.DefineLabel();
         EmitThrowIfReceiverUndefined(receiverLocal, methodName);
+        if (requiredInstanceType is not null)
+        {
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Isinst, requiredInstanceType);
+            IL.Emit(OpCodes.Brfalse, dynamicCall);
+        }
+        if (!GuardClassMethodPrototype)
+            IL.Emit(OpCodes.Br, nominal);
         IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.DescriptorStorage.HasPrototypeEntry);
         IL.Emit(OpCodes.Brfalse, checkNominalChain);
@@ -2232,14 +2241,14 @@ public abstract partial class ExpressionEmitterBase
                 classType2, methodBuilder, Ctx.EmittingTypeBuilder, out var castType, out var callTarget))
             return false;
 
-        if (GuardClassMethodPrototype && AnyContainsSuspension(arguments))
+        if (AnyContainsSuspension(arguments))
         {
             EmitDynamicMethodCallPreservingThis(receiver, methodName, arguments);
             return true;
         }
 
         var guardedReceiver = EmitAlternateClassMethodCallGuard(
-            receiver, methodName, arguments, out var prototypeCallCompleted);
+            receiver, methodName, arguments, out var prototypeCallCompleted, castType);
 
         var methodParams = methodBuilder.GetParameters();
         int expectedParamCount = methodParams.Length;

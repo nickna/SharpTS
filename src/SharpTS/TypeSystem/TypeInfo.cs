@@ -174,6 +174,9 @@ public abstract record TypeInfo
     /// </summary>
     public record Function(List<TypeInfo> ParamTypes, TypeInfo ReturnType, int RequiredParams = -1, bool HasRestParam = false, TypeInfo? ThisType = null, List<string>? ParamNames = null, FrozenSet<int>? InstantiatedTypeParamPositions = null) : TypeInfo
     {
+        // A pure object call signature shares the function representation, but its written
+        // protocol retains strict call arity even when every parameter is any.
+        public CallSignature? WrittenCallSignature { get; init; }
         // RequiredParams defaults to -1 meaning all params are required (for backwards compat)
         public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;
         public override string ToString() =>
@@ -567,6 +570,9 @@ public abstract record TypeInfo
         // Class-derived interface bases retain the exact source class for write access and
         // protected receiver checks. Public mapped projections deliberately omit this origin.
         internal TypeInfo? ClassOrigin { get; init; }
+        public bool ReadonlyStringIndex { get; init; }
+        public bool ReadonlySymbolIndex { get; init; }
+        internal FrozenDictionary<BindingSymbol, string>? SymbolMemberNames { get; init; }
 
         /// <summary>True when the member (own or inherited) was declared with method syntax —
         /// method members keep bivariant parameter relating under strictFunctionTypes.</summary>
@@ -1074,6 +1080,7 @@ public abstract record TypeInfo
     /// <param name="DisplayName">For error messages (e.g., "typeof KEY")</param>
     public record UniqueSymbol(string DeclarationId, string? DisplayName = null) : TypeInfo
     {
+        internal BindingSymbol? DeclarationBinding { get; init; }
         public override string ToString() => DisplayName ?? "unique symbol";
     }
 
@@ -1531,6 +1538,7 @@ public abstract record TypeInfo
         List<string>? ParamNames = null
     ) : TypeInfo
     {
+        public CallSignature? WrittenCallSignature { get; init; }
         public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;
         public override string ToString() =>
             ThisType != null
@@ -1602,6 +1610,10 @@ public abstract record TypeInfo
         bool ReadonlyNumberIndex = false
     ) : TypeInfo
     {
+        public bool ReadonlyStringIndex { get; init; }
+        public bool ReadonlySymbolIndex { get; init; }
+        internal FrozenDictionary<BindingSymbol, string>? SymbolMemberNames { get; init; }
+
         public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
         public bool HasCallSignature => CallSignatures is { Count: > 0 };
         public bool HasConstructorSignature => ConstructorSignatures is { Count: > 0 };

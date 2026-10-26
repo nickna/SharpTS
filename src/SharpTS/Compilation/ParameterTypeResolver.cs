@@ -192,10 +192,13 @@ public static class ParameterTypeResolver
     /// <item>Class constructors (<c>typeof C</c>) — runtime values are Type or $ClassDefinition,
     /// rather than CLR instances of C.</item>
     /// </list>
-    /// Primitives, plain strings, and class instances keep their sound strict slot.
+    /// Source class values use object slots because public class contracts can
+    /// also be satisfied by plain objects. External CLR classes retain their slots.
     /// </remarks>
     private static Type CoerceParamSlotType(Type mapped, TSTypeInfo source, TypeMapper typeMapper)
     {
+        if (typeMapper.IsUserClassReferenceType(mapped))
+            return typeof(object);
         // typeof a class denotes its constructor value (Type or $ClassDefinition),
         // rather than an instance of the emitted class.
         if (source is TSTypeInfo.Class or TSTypeInfo.GenericClass)
@@ -303,6 +306,8 @@ public static class ParameterTypeResolver
         else
         {
             baseType = typeMapper.MapTypeInfoStrict(returnTypeInfo);
+            if (typeMapper.IsUserClassReferenceType(baseType))
+                baseType = typeof(object);
 
             // A flagged return can carry the undefined sentinel. Widen numeric/boolean and
             // class-reference slots while retaining typed slots for sound return values.

@@ -17,14 +17,22 @@ public sealed class StableClassFieldLoweringTests
             class Counter {
                 value: number;
                 constructor(value: number) { this.value = value; }
+                bump(next: number): number {
+                    this.value = next;
+                    return this.value + 1;
+                }
             }
-            function bump(counter: Counter, next: number): number {
-                counter.value = next;
-                return counter.value + 1;
+            function exact(next: number): number {
+                const counter = new Counter(0);
+                return counter.bump(next);
             }
             """);
 
-        var instructions = ReadInstructions(FindFunction(assembly, "bump")).ToArray();
+        // An exact constructed receiver proves the CLR field carrier. A class
+        // annotation on a parameter also admits structurally compatible objects.
+        var core = Assert.Single(assembly.GetType("Counter")!.GetMethods(
+            BindingFlags.Instance | BindingFlags.NonPublic), method => method.Name.StartsWith("$typed$bump$", StringComparison.Ordinal));
+        var instructions = ReadInstructions(core).ToArray();
         Assert.Contains(instructions, instruction =>
             instruction.Operand is MethodBase { Name: "set_Value" });
         Assert.Contains(instructions, instruction =>
@@ -33,6 +41,28 @@ public sealed class StableClassFieldLoweringTests
             instruction.OpCode == OpCodes.Box && instruction.Operand == typeof(double));
         Assert.DoesNotContain(instructions, instruction =>
             instruction.Operand is MethodBase { Name: "TryGetValue" });
+    }
+
+    [Fact]
+    public void StructuralClassContract_GuardsTheNativeSetterAndRetainsRawReads()
+    {
+        Assembly assembly = Compile("""
+            class Counter {
+                value: number;
+                constructor(value: number) { this.value = value; }
+            }
+            function bump(counter: Counter, next: number) {
+                counter.value = next;
+                return counter.value + 1;
+            }
+            """);
+        var instructions = ReadInstructions(FindFunction(assembly, "bump")).ToArray();
+        Assert.Contains(instructions, instruction => instruction.OpCode == OpCodes.Isinst
+            && instruction.Operand == assembly.GetType("Counter"));
+        Assert.Contains(instructions, instruction => instruction.Operand is MethodBase { Name: "set_Value" });
+        Assert.Contains(instructions, instruction => instruction.Operand is MethodBase { Name: "SetProperty" });
+        Assert.Contains(instructions, instruction => instruction.Operand is MethodBase { Name: "GetProperty" });
+        Assert.DoesNotContain(instructions, instruction => instruction.Operand is MethodBase { Name: "TryGetValue" });
     }
 
     [Fact]

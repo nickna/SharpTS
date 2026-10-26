@@ -194,7 +194,8 @@ public partial class Interpreter
                     // Check vm timeout token before each statement in a block
                     ThrowIfExecutionCancelled();
 
-                    var result = Execute(statement);
+                    var result = Execute(statement).UpdateEmpty(blockResult);
+                    blockResult = result;
                     if (result.IsAbrupt)
                     {
                         // Capture the result but continue to finally for disposal
@@ -301,7 +302,7 @@ public partial class Interpreter
             // The loop absorbs continue/break for its labels; guard a matching break defensively.
             if (result.Type == ExecutionResult.ResultType.Break &&
                 result.TargetLabel != null && labels.Contains(result.TargetLabel))
-                return ExecutionResult.Success();
+                return ExecutionResult.Success().UpdateEmpty(result);
             return result;
         }
 
@@ -309,7 +310,7 @@ public partial class Interpreter
         var r = Execute(inner);
         if (r.Type == ExecutionResult.ResultType.Break &&
             r.TargetLabel != null && labels.Contains(r.TargetLabel))
-            return ExecutionResult.Success();
+            return ExecutionResult.Success().UpdateEmpty(r);
         return r;
     }
 
@@ -321,6 +322,7 @@ public partial class Interpreter
     /// <returns>A ValueTask containing the execution result.</returns>
     private async ValueTask<ExecutionResult> ExecuteSwitchCore(IEvaluationContext ctx, Stmt.Switch switchStmt)
     {
+        var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         object? subject = (await ctx.EvaluateExprAsync(switchStmt.Subject)).ToObject();
         bool fallen = false;
         bool matched = false;
@@ -341,8 +343,9 @@ public partial class Interpreter
                 fallen = true;
                 foreach (var stmt in caseItem.Body)
                 {
-                    var result = await ctx.ExecuteStmtAsync(stmt);
-                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                    var result = (await ctx.ExecuteStmtAsync(stmt)).UpdateEmpty(completion);
+                    completion = ExecutionResult.Success(result.Value);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return completion;
                     if (result.IsAbrupt) return result;
                 }
             }
@@ -352,13 +355,14 @@ public partial class Interpreter
         {
             foreach (var stmt in switchStmt.DefaultBody)
             {
-                var result = await ctx.ExecuteStmtAsync(stmt);
-                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                var result = (await ctx.ExecuteStmtAsync(stmt)).UpdateEmpty(completion);
+                completion = ExecutionResult.Success(result.Value);
+                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return completion;
                 if (result.IsAbrupt) return result;
             }
         }
 
-        return ExecutionResult.Success();
+        return completion;
     }
 
     /// <summary>
@@ -373,6 +377,7 @@ public partial class Interpreter
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/switch">MDN switch Statement</seealso>
     private ExecutionResult ExecuteSwitch(Stmt.Switch switchStmt)
     {
+        var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         object? subject = Evaluate(switchStmt.Subject);
         bool fallen = false;
         bool matched = false;
@@ -393,8 +398,9 @@ public partial class Interpreter
                 fallen = true;
                 foreach (var stmt in caseItem.Body)
                 {
-                    var result = Execute(stmt);
-                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                    var result = Execute(stmt).UpdateEmpty(completion);
+                    completion = ExecutionResult.Success(result.Value);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return completion;
                     if (result.IsAbrupt) return result;
                 }
             }
@@ -404,13 +410,14 @@ public partial class Interpreter
         {
             foreach (var stmt in switchStmt.DefaultBody)
             {
-                var result = Execute(stmt);
-                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                var result = Execute(stmt).UpdateEmpty(completion);
+                completion = ExecutionResult.Success(result.Value);
+                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return completion;
                 if (result.IsAbrupt) return result;
             }
         }
 
-        return ExecutionResult.Success();
+        return completion;
     }
 
     /// <summary>
@@ -464,7 +471,7 @@ public partial class Interpreter
             if (finallyResult.IsAbrupt)
             {
                 // Finally block overrides previous jump/throw
-                return finallyResult;
+                return finallyResult.UpdateEmpty(ExecutionResult.Success(RuntimeValue.Undefined));
             }
         }
 
@@ -473,7 +480,7 @@ public partial class Interpreter
             return pendingResult;
         }
 
-        return pendingResult;
+        return pendingResult.UpdateEmpty(ExecutionResult.Success(RuntimeValue.Undefined));
     }
 
     /// <summary>
@@ -497,15 +504,17 @@ public partial class Interpreter
                 ReserveLexicalDeclarations(tryCatch.CatchBlock);
                 try
                 {
+                    var completion = ExecutionResult.Success();
                     foreach (var catchStmt in tryCatch.CatchBlock)
                     {
-                        var catchResult = await ctx.ExecuteStmtAsync(catchStmt);
+                        var catchResult = (await ctx.ExecuteStmtAsync(catchStmt)).UpdateEmpty(completion);
                         if (catchResult.IsAbrupt)
                         {
                             return (true, catchResult);
                         }
+                        completion = catchResult;
                     }
-                    return (true, ExecutionResult.Success());
+                    return (true, completion);
                 }
                 catch (GeneratorReturnException grex)
                 {
@@ -535,12 +544,14 @@ public partial class Interpreter
     {
         using var scope = PushScope(CreateHandlerEnvironment());
         ReserveLexicalDeclarations(statements);
+        var completion = ExecutionResult.Success();
         foreach (var stmt in statements)
         {
-            var result = await ctx.ExecuteStmtAsync(stmt);
+            var result = (await ctx.ExecuteStmtAsync(stmt)).UpdateEmpty(completion);
             if (result.IsAbrupt) return result;
+            completion = result;
         }
-        return ExecutionResult.Success();
+        return completion;
     }
 
     /// <summary>
@@ -601,7 +612,7 @@ public partial class Interpreter
             if (finallyResult.IsAbrupt)
             {
                 // Finally block overrides previous jump/throw
-                return finallyResult;
+                return finallyResult.UpdateEmpty(ExecutionResult.Success(RuntimeValue.Undefined));
             }
         }
 
@@ -610,7 +621,7 @@ public partial class Interpreter
             return pendingResult;
         }
 
-        return pendingResult;
+        return pendingResult.UpdateEmpty(ExecutionResult.Success(RuntimeValue.Undefined));
     }
 
     /// <summary>
@@ -633,15 +644,17 @@ public partial class Interpreter
                 ReserveLexicalDeclarations(tryCatch.CatchBlock);
                 try
                 {
+                    var completion = ExecutionResult.Success();
                     foreach (var catchStmt in tryCatch.CatchBlock)
                     {
-                        var catchResult = Execute(catchStmt);
+                        var catchResult = Execute(catchStmt).UpdateEmpty(completion);
                         if (catchResult.IsAbrupt)
                         {
                             return (true, catchResult);
                         }
+                        completion = catchResult;
                     }
-                    return (true, ExecutionResult.Success());
+                    return (true, completion);
                 }
                 catch (GeneratorReturnException grex)
                 {
@@ -700,12 +713,14 @@ public partial class Interpreter
     {
         using var scope = PushScope(CreateHandlerEnvironment());
         ReserveLexicalDeclarations(statements);
+        var completion = ExecutionResult.Success();
         foreach (var stmt in statements)
         {
-            var result = Execute(stmt);
+            var result = Execute(stmt).UpdateEmpty(completion);
             if (result.IsAbrupt) return result;
+            completion = result;
         }
-        return ExecutionResult.Success();
+        return completion;
     }
 
     /// <summary>
@@ -1342,6 +1357,7 @@ public partial class Interpreter
     /// </summary>
     private ExecutionResult IterateWithBreakContinue(IEnumerable<object?> elements, Token variable, bool isDeclaration, Stmt body, IReadOnlyList<string>? labels = null)
     {
+        var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         var iterator = elements.GetEnumerator();
         bool preserveThrow = false;
         try
@@ -1353,10 +1369,10 @@ public partial class Interpreter
 
                 using (PushScope(loopEnv))
                 {
-                    var result = Execute(body);
+                    var result = UpdateLoopCompletion(ref completion, Execute(body));
                     preserveThrow = result.Type == ExecutionResult.ResultType.Throw;
                     var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
-                    if (shouldBreak) return ExecutionResult.Success();
+                    if (shouldBreak) return completion;
                     if (shouldContinue) continue;
                     if (abruptResult.HasValue) return abruptResult.Value;
 
@@ -1364,7 +1380,7 @@ public partial class Interpreter
                     ProcessPendingCallbacks(processMicrotasks: false);
                 }
             }
-            return ExecutionResult.Success();
+            return completion;
         }
         catch
         {
@@ -1393,14 +1409,16 @@ public partial class Interpreter
         Stmt.While whileStmt,
         IReadOnlyList<string>? labels = null)
     {
+        var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         while ((await ctx.EvaluateExprAsync(whileStmt.Condition)).IsTruthy())
         {
             // Check vm timeout token on each loop iteration
             ThrowIfExecutionCancelled();
 
             var result = await ctx.ExecuteStmtAsync(whileStmt.Body);
+            result = UpdateLoopCompletion(ref completion, result);
             var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
-            if (shouldBreak) return ExecutionResult.Success();
+            if (shouldBreak) return completion;
             if (shouldContinue) continue;
             if (abruptResult.HasValue) return abruptResult.Value;
 
@@ -1408,7 +1426,7 @@ public partial class Interpreter
             // and we execute them here, avoiding thread scheduling issues on macOS.
             ProcessPendingCallbacks(processMicrotasks: false);
         }
-        return ExecutionResult.Success();
+        return completion;
     }
 
     /// <summary>
@@ -1420,18 +1438,27 @@ public partial class Interpreter
         Stmt.DoWhile doWhileStmt,
         IReadOnlyList<string>? labels = null)
     {
+        var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         do
         {
             ThrowIfExecutionCancelled();
             var result = await ctx.ExecuteStmtAsync(doWhileStmt.Body);
+            result = UpdateLoopCompletion(ref completion, result);
             var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
-            if (shouldBreak) return ExecutionResult.Success();
+            if (shouldBreak) return completion;
             if (shouldContinue) continue;
             if (abruptResult.HasValue) return abruptResult.Value;
             // Process any pending timer callbacks
             ProcessPendingCallbacks(processMicrotasks: false);
         } while ((await ctx.EvaluateExprAsync(doWhileStmt.Condition)).IsTruthy());
-        return ExecutionResult.Success();
+        return completion;
+    }
+
+    private static ExecutionResult UpdateLoopCompletion(ref ExecutionResult completion, ExecutionResult result)
+    {
+        result = result.UpdateEmpty(completion);
+        completion = ExecutionResult.Success(result.Value);
+        return result;
     }
 
     /// <summary>
@@ -1805,31 +1832,33 @@ public partial class Interpreter
     internal ExecutionResult VisitSequence(Stmt.Sequence seq)
     {
         // Execute in current scope (no new environment)
+        var completion = ExecutionResult.Success();
         foreach (var s in seq.Statements)
         {
-            var result = Execute(s);
+            var result = Execute(s).UpdateEmpty(completion);
             if (result.IsAbrupt) return result;
+            completion = result;
         }
-        return ExecutionResult.Success();
+        return completion;
     }
 
     internal ExecutionResult VisitExpression(Stmt.Expression exprStmt)
     {
-        Evaluate(exprStmt.Expr);
-        return ExecutionResult.Success();
+        var value = EvaluateRV(exprStmt.Expr);
+        return exprStmt.HasEmptyCompletion ? ExecutionResult.Success() : ExecutionResult.Success(value);
     }
 
     internal ExecutionResult VisitIf(Stmt.If ifStmt)
     {
         if (IsTruthy(Evaluate(ifStmt.Condition)))
         {
-            return Execute(ifStmt.ThenBranch);
+            return Execute(ifStmt.ThenBranch).UpdateEmpty(ExecutionResult.Success(RuntimeValue.Undefined));
         }
         else if (ifStmt.ElseBranch != null)
         {
-            return Execute(ifStmt.ElseBranch);
+            return Execute(ifStmt.ElseBranch).UpdateEmpty(ExecutionResult.Success(RuntimeValue.Undefined));
         }
-        return ExecutionResult.Success();
+        return ExecutionResult.Success(RuntimeValue.Undefined);
     }
 
     internal ExecutionResult VisitWhile(Stmt.While whileStmt)
@@ -1857,6 +1886,7 @@ public partial class Interpreter
         Stmt.For forStmt,
         IReadOnlyList<string>? labels)
     {
+        var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         RuntimeEnvironment loopEnv = new(_environment);
         using (PushScope(loopEnv))
         {
@@ -1876,7 +1906,7 @@ public partial class Interpreter
                 || EvaluateRV(forStmt.Condition).IsTruthy())
             {
                 ThrowIfExecutionCancelled();
-                ExecutionResult result = Execute(forStmt.Body);
+                ExecutionResult result = UpdateLoopCompletion(ref completion, Execute(forStmt.Body));
                 var (shouldBreak, shouldContinue, abruptResult) =
                     HandleLoopResult(result, labels);
                 if (shouldBreak)
@@ -1905,7 +1935,7 @@ public partial class Interpreter
                     ProcessPendingCallbacks(processMicrotasks: false);
             }
 
-            return ExecutionResult.Success();
+            return completion;
         }
     }
 
@@ -1915,6 +1945,7 @@ public partial class Interpreter
     /// </summary>
     private async ValueTask<ExecutionResult> ExecuteForCore(IEvaluationContext ctx, Stmt.For forStmt, IReadOnlyList<string>? labels)
     {
+        var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         // Create scope for loop variables (ES6 let/const block scoping)
         // Variables declared with let/const in the initializer are scoped to the loop
         RuntimeEnvironment loopEnv = new(_environment);
@@ -1939,6 +1970,7 @@ public partial class Interpreter
             {
                 ThrowIfExecutionCancelled();
                 var result = await ctx.ExecuteStmtAsync(forStmt.Body);
+                result = UpdateLoopCompletion(ref completion, result);
                 var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
                 if (shouldBreak) break;
                 // On continue (unlabeled or to this loop), execute increment then re-test
@@ -1962,7 +1994,7 @@ public partial class Interpreter
                 if (HasPendingLoopCallbacks)
                     ProcessPendingCallbacks(processMicrotasks: false);
             }
-            return ExecutionResult.Success();
+            return completion;
         }
     }
 
@@ -2635,8 +2667,8 @@ public partial class Interpreter
 
     internal ExecutionResult VisitDirective(Stmt.Directive directive) =>
         // Directives are processed at the start of interpretation for their side effects (strict mode)
-        // When encountered during execution, they are a no-op
-        ExecutionResult.Success();
+        // Their string expression still contributes a normal completion value.
+        ExecutionResult.Success(RuntimeValue.FromString(directive.Value));
 
     internal ExecutionResult VisitDeclareModule(Stmt.DeclareModule declareModule) =>
         // Module/global augmentations and ambient declarations are type-only
