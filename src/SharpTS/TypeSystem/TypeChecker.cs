@@ -1970,18 +1970,16 @@ public partial class TypeChecker
                         bool previousRecoveryMode = _recoveryMode;
                         _recoveryMode = previousRecoveryMode ||
                             augmentation is Stmt.Namespace or Stmt.Export { Declaration: Stmt.Namespace };
-                        if (module.IsDeclarationFile)
-                            _suppressDiagnostics++;
+                        // This merge prepares the global surface. The authoritative source
+                        // visit publishes failures at each declaration exactly once.
+                        _suppressDiagnostics++;
                         try { CheckAndMergeGlobalMember(augmentation); }
-                        catch (TypeCheckException ex)
+                        catch (TypeCheckException)
                         {
-                            if (!module.IsDeclarationFile)
-                                RecordTypeError(ex);
                         }
                         finally
                         {
-                            if (module.IsDeclarationFile)
-                                _suppressDiagnostics--;
+                            _suppressDiagnostics--;
                             _recoveryMode = previousRecoveryMode;
                         }
                     }
