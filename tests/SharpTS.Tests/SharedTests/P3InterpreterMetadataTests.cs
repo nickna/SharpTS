@@ -23,6 +23,21 @@ public sealed class P3InterpreterMetadataTests
             """, "true\ntrue false false true\ntrue 7\ntrue\ntrue false false true\ntrue 7\n", mode);
     }
 
+    [Theory, ModeData]
+    public void ObjectConstructorMetadataCanBeDeletedAndRestored(ExecutionMode mode)
+    {
+        AssertOutput("""
+            const O: any = Object;
+            console.log(delete O.name, Object.hasOwn(O, "name"), JSON.stringify(O.name),
+                Object.getOwnPropertyDescriptor(O, "name") === undefined);
+            console.log(delete O.length, Object.hasOwn(O, "length"), O.length,
+                Object.getOwnPropertyDescriptor(O, "length") === undefined);
+            Object.defineProperty(O, "name", { value: "Restored", configurable: true });
+            Object.defineProperty(O, "length", { value: 3, configurable: true });
+            console.log(O.name, O.length, Object.hasOwn(O, "name"), Object.hasOwn(O, "length"));
+            """, "true false \"\" true\ntrue false 0 true\nRestored 3 true true\n", mode);
+    }
+
     private static void AssertOutput(string source, string expected, ExecutionMode mode)
     {
         if (mode == ExecutionMode.Compiled)

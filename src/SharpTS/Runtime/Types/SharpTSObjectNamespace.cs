@@ -13,7 +13,7 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSObjectNamespace : ISharpTSCallable
 {
     public static readonly SharpTSObjectNamespace Instance = new();
-    private readonly SharpTSObject _extras = new([]);
+    private readonly SharpTSObject _extras = FunctionObjectProperties.Create("Object", 1);
     private readonly HashSet<string> _deletedBuiltIns = [];
     private readonly Dictionary<string, object?> _realmBuiltIns = [];
     // Each Interpreter owns a realm instance so guest mutations of Object's
@@ -26,14 +26,12 @@ public class SharpTSObjectNamespace : ISharpTSCallable
     private static bool IsBuiltIn(string name) => ObjectBuiltIns.GetStaticMethod(name) != null;
 
     public bool HasOwnProperty(string name)
-        => name is "length" or "name" or "prototype"
+        => name is "prototype"
             || _extras.HasProperty(name)
             || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
 
     public object? GetMember(string name)
     {
-        if (name == "length") return 1.0;
-        if (name == "name") return "Object";
         if (_extras.HasProperty(name)) return _extras.GetProperty(name);
         if (_deletedBuiltIns.Contains(name)) return null;
         if (_realmBuiltIns.TryGetValue(name, out var cached)) return cached;
