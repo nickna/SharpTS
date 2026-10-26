@@ -56,6 +56,25 @@ public sealed class P3InterpreterMetadataTests
             """, "AbortController AbortController true false false true\ntrue false \"\" \"\" true\nreplacement replacement true\nMap Map true false false true\ntrue false \"\" \"\" true\nreplacement replacement true\n", mode);
     }
 
+    [Theory, ModeData]
+    public void GeneratorIntrinsicConstructorsOwnTheirPrototype(ExecutionMode mode)
+    {
+        AssertOutput("""
+            function* sync() {}
+            async function* asynchronous() {}
+            for (const fn of [sync, asynchronous]) {
+                const ctor: any = Object.getPrototypeOf(fn).constructor;
+                const descriptor: any = Object.getOwnPropertyDescriptor(ctor, "prototype");
+                console.log(ctor.name, descriptor !== undefined, descriptor.writable,
+                    descriptor.enumerable, descriptor.configurable);
+                console.log(Object.hasOwn(ctor, "prototype"),
+                    Object.prototype.hasOwnProperty.call(ctor, "prototype"),
+                    Reflect.deleteProperty(ctor, "prototype"));
+                console.log(Object.hasOwn(ctor, "prototype"));
+            }
+            """, "GeneratorFunction true false false false\ntrue true false\ntrue\nAsyncGeneratorFunction true false false false\ntrue true false\ntrue\n", mode);
+    }
+
     private static void AssertOutput(string source, string expected, ExecutionMode mode)
     {
         if (mode == ExecutionMode.Compiled)
