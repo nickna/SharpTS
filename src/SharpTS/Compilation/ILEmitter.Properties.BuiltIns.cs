@@ -205,16 +205,8 @@ public partial class ILEmitter
         switch (propName)
         {
             case "length":
-                // Try to get function arity at compile time for known function references
-                if (TryGetFunctionArity(g.Object, out int arity))
-                {
-                    // Emit the arity directly as a constant - more efficient than runtime lookup
-                    IL.Emit(OpCodes.Ldc_R8, (double)arity);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return true;
-                }
-                // Fall back to runtime dispatch for unknown function references
+                // Even declared functions have configurable own metadata. Runtime
+                // lookup observes descriptor replacements, accessors and deletion.
                 return false;
 
             case "name":
@@ -233,29 +225,6 @@ public partial class ILEmitter
             default:
                 return false;
         }
-    }
-
-    /// <summary>
-    /// Tries to get the arity (number of required parameters) of a known function at compile time.
-    /// </summary>
-    private bool TryGetFunctionArity(Expr funcExpr, out int arity)
-    {
-        arity = 0;
-
-        // Handle direct function variable references
-        if (funcExpr is Expr.Variable v)
-        {
-            string resolvedName = _ctx.ResolveFunctionName(v.Name.Lexeme);
-            if (_ctx.Functions.TryGetValue(resolvedName, out var methodBuilder))
-            {
-                // Source metadata retains default/rest rules and includes legal source names
-                // such as __this; parameter names alone cannot identify internal slots.
-                arity = _ctx.GetFunctionLength(methodBuilder);
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>
