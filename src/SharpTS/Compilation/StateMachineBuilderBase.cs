@@ -29,11 +29,26 @@ public abstract class StateMachineBuilderBase
 
     internal StateMachineDebugSymbols? DebugSymbols { get; set; }
     internal IReadOnlyDictionary<SharpTS.Parsing.Token, LexicalCellStorage>? DebugLexicalCellStorages { get; set; }
+    private readonly Dictionary<SharpTS.Parsing.Token, FieldBuilder> _projectedLexicalCellFields = new(ReferenceEqualityComparer.Instance);
+
+    protected void DefineProjectedLexicalCellFields()
+    {
+        if (DebugSymbols is null || DebugLexicalCellStorages is null) return;
+        // Inner holders precede the function display class: the expression evaluator walks
+        // reachable display classes breadth-first and keeps the first live source name.
+        foreach (var binding in DebugSymbols.Bindings)
+            if (DebugLexicalCellStorages.TryGetValue(binding.SourceToken, out var storage)
+                && storage.DebugHolderName is { } holderName)
+                _projectedLexicalCellFields.Add(binding.SourceToken,
+                    StateMachineType.DefineField(holderName, storage.ReferenceType, FieldAttributes.Public));
+    }
 
     internal void AttachDebugSymbols(CompilationContext context)
     {
         if (DebugSymbols is null || context.DebugScope is null || context.CurrentMethod is null) return;
         context.HoistedDebugSymbols = DebugSymbols;
+        foreach (var (declaration, field) in _projectedLexicalCellFields)
+            context.ProjectedLexicalCellFields.Add(declaration, field);
         context.Locals.SymbolSink = context.DebugScope.Collector.BeginMethodLocals(context.CurrentMethod, context.IL);
         context.DebugScope.Collector.RecordHoistedLocals(context.CurrentMethod, DebugSymbols);
     }

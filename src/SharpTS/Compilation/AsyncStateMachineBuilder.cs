@@ -112,6 +112,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
         // Define core fields
         DefineStateField();
         DefineBuilderField();
+        DefineProjectedLexicalCellFields();
 
         // Define hoisted variables using HoistingManager
         _hoisting = new HoistingManager(_stateMachineType, _types.Object);

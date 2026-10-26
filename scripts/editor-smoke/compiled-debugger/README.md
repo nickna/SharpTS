@@ -110,6 +110,12 @@ The global async-arrow case keeps a module binding in its authoritative static f
 state-machine copy is hidden, and bare `moduleShared` Watch lookup is unavailable; inspect the
 static field as described in the debugger guide.
 
+The 2026-10-25 lexical-cell follow-up passes the same 55 primary stops with VS Code 1.141.0
+and C# 2.140.9. It restores the captured async shadow's `local = 99` instead of exposing
+the outer `local = 11`, then restores the outer binding on scope exit. The
+[follow-up record](lexical-cell-last-verified.json) preserves its exact inputs and observations.
+The earlier netcoredbg comparison above was not repeated for this follow-up.
+
 The primary C# debugger's Watch evaluator requires C# keyword escaping: a source binding `int = 3`
 appears as `@int` in Locals and evaluates as `@int`; bare `int` fails with CS1525. The legal source
 name `$dollar` evaluates directly (verified value `4`). Visual Studio and Rider have not been

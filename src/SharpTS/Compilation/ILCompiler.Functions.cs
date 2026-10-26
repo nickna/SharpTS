@@ -381,9 +381,23 @@ public partial class ILCompiler
     private void DefineFunctionDisplayClass(Stmt.Function funcStmt, string qualifiedFunctionName,
         BlockScopeRenameResult? blockScopeRenames = null)
     {
+        var debugSymbols = GetDebugHoistedBindings(funcStmt);
+        var perIterationBindings = _closures.Analyzer.GetPerIterationLoopBindings(funcStmt);
+        var cellNames = debugSymbols?.Bindings
+            .Where(binding => _debugLexicalCellStorages.ContainsKey(binding.SourceToken))
+            .Select(binding => binding.SourceName).ToHashSet();
+        var projectedShadows = debugSymbols?.Bindings
+            .Where(binding => cellNames!.Contains(binding.SourceName)
+                && !_debugLexicalCellStorages.ContainsKey(binding.SourceToken)
+                && !perIterationBindings.Contains(binding.SourceName)
+                && blockScopeRenames?.PerIterationStorageNames.Contains(binding.StorageName) != true
+                && (!_closures.AsyncCapturedVarsExclusion.TryGetValue(qualifiedFunctionName, out var excluded)
+                    || !excluded.Contains(binding.SourceName)))
+            .Select(binding => binding.StorageName).ToArray() ?? [];
+
         // Check if this function has local variables that are captured by inner closures
         var capturedLocals = _closures.Analyzer.GetCapturedLocals(funcStmt);
-        if (capturedLocals.Count == 0)
+        if (capturedLocals.Count == 0 && projectedShadows.Length == 0)
             return;
 
         // Declaration-owned lexical cells already provide the authoritative storage.
@@ -393,7 +407,7 @@ public partial class ILCompiler
         {
             capturedLocals = new HashSet<string>(capturedLocals);
             capturedLocals.ExceptWith(cellOnlyNames);
-            if (capturedLocals.Count == 0)
+            if (capturedLocals.Count == 0 && projectedShadows.Length == 0)
                 return;
         }
 
@@ -403,12 +417,11 @@ public partial class ILCompiler
         // capture distinct values. Keeping them out of the function DC leaves them as
         // locals / state-machine fields that closures snapshot per iteration — matching
         // the already-correct top-level case (#649).
-        var perIterationBindings = _closures.Analyzer.GetPerIterationLoopBindings(funcStmt);
         if (perIterationBindings.Count > 0)
         {
             capturedLocals = new HashSet<string>(capturedLocals);
             capturedLocals.ExceptWith(perIterationBindings);
-            if (capturedLocals.Count == 0)
+            if (capturedLocals.Count == 0 && projectedShadows.Length == 0)
                 return;
         }
 
@@ -418,7 +431,7 @@ public partial class ILCompiler
         {
             capturedLocals = new HashSet<string>(capturedLocals);
             capturedLocals.ExceptWith(exclusions);
-            if (capturedLocals.Count == 0)
+            if (capturedLocals.Count == 0 && projectedShadows.Length == 0)
                 return;
         }
 
@@ -436,6 +449,25 @@ public partial class ILCompiler
             var renameAware = new HashSet<string>(capturedLocals);
             ApplyReadCaptureRenames(renameAware, readRenames);
             capturedLocals = renameAware;
+        }
+
+        if (projectedShadows.Length > 0)
+        {
+            // Roslyn discovers direct state-machine fields before fields reached through a
+            // display-class holder. Keep same-named bindings at the same discovery depth so
+            // an inner lexical cell can shadow this authoritative outer storage.
+            capturedLocals = new HashSet<string>(capturedLocals);
+            capturedLocals.UnionWith(projectedShadows);
+        }
+
+        if (debugSymbols is not null)
+        {
+            // Rename expansion can add a cell-owned storage key even when the source name also
+            // denotes a captured outer binding. Only the cell may publish that binding's slot.
+            capturedLocals = new HashSet<string>(capturedLocals);
+            capturedLocals.ExceptWith(debugSymbols.Bindings
+                .Where(binding => _debugLexicalCellStorages.ContainsKey(binding.SourceToken))
+                .Select(binding => binding.StorageName));
         }
 
         RegisterFunctionDisplayClass(qualifiedFunctionName, capturedLocals, funcStmt);

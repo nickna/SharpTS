@@ -229,7 +229,41 @@ remains in `artifacts/hoisted-investigation/numeric-real`; #1985's accepted nume
 the valid `Promise.resolve` path. The original full-suite and conformance results above describe
 #1985 and remain in its unchanged verification record.
 
+## Follow-up: lexical-cell shadow precedence
+
+The 2026-10-25 P3 audit reran the strict primary acceptance on VS Code 1.141.0 and
+C# 2.140.9. It found that the captured async shadow at `async-captured-shadow`
+resolved the outer `local = 11` instead of the inner `local = 99`. The inner
+lexical cell had correct source naming and PDB ranges, but Roslyn discovers
+fields breadth-first: a direct state-machine field wins before a same-named
+field reached through a display-class holder.
+
+Debug builds now keep conflicting outer bindings in the existing authoritative
+function display class, placing both source bindings at the same discovery
+depth. Inner lexical-cell holders are defined before the function display-class
+holder. The evaluator can therefore choose the inner field while its slot is
+live and restore the outer field after scope exit. No value mirrors are used;
+debugger reads and guest execution share the same storage. Builds without
+symbols retain their existing storage selection and layout.
+
+The new metadata regression checks both uncaptured and captured outer bindings,
+the actual holder ordering, lexical expiry, and verified debug/nondebug output.
+Exact cell-owned storage keys are excluded after rename expansion, avoiding two
+fields publishing the same PDB slot. Per-iteration storage remains excluded from
+the function display class; a runtime regression requires loop closures to retain
+independent values `0` and `1` in both symbol modes.
+The fresh primary run passes all 55 stops and matches debug/nondebug output;
+[its compact record](../../scripts/editor-smoke/compiled-debugger/lexical-cell-last-verified.json)
+identifies the exact binary, PE/PDB, fixture, and observations. The earlier
+secondary comparison remains historical and was not rerun for this follow-up.
+
 ## Remaining limits
+
+Combining a same-named per-iteration loop binding with an inner captured lexical
+cell still needs a projection design. The outer loop binding must retain its
+independent capture storage; leaving it as a direct field lets Roslyn discover it
+before the inner cell. The root-local shadow repair above does not certify this
+combined shape, so #1399 remains open for that acceptance gap.
 
 The C# and netcoredbg expression evaluators have different presentation rules;
 the accepted target does not require their Locals views to be identical. Types
