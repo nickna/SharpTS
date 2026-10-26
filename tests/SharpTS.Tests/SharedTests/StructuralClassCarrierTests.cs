@@ -28,6 +28,7 @@ public sealed class StructuralClassCarrierTests
         yield return ["holder-boundary", "class View{value=0;}class Holder{view:View;constructor(view:View){this.view=view;}}const original={value:1};const holder=new Holder(original);console.log(holder.view===original,holder.view.value);", "true 1\n"];
         yield return ["raw-structural-return", "class View{value=0;}function read(view:View){return view.value;}const value:any=undefined;const result=read({value});console.log(result===undefined,typeof result);", "true undefined\n"];
         yield return ["generic-holder-boundary", "class View{value=0;}class Holder<T>{view:T;constructor(view:T){this.view=view;}}const original={value:1};const holder=new Holder<View>(original);console.log(holder.view===original,holder.view.value);", "true 1\n"];
+        yield return ["generic-self-getter", "class Box<T>{value:T;constructor(value:T){this.value=value;}read(other:Box<T>):T{return other.value;}own():T{return this.value;}}const numberBox=new Box<number>(1);console.log(numberBox.read(new Box<number>(2)),numberBox.own());const stringBox=new Box<string>('one');console.log(stringBox.read(new Box<string>('two')),stringBox.own());", "2 1\ntwo one\n"];
     }
 
     public static IEnumerable<object[]> ParityCases() => Cases().SelectMany(row =>

@@ -2570,7 +2570,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, savedReceiver);
         IL.Emit(OpCodes.Castclass, castType);
         IL.Emit(OpCodes.Callvirt, getterTarget);
-        if (getterReturnType.IsValueType)
+        if (getterReturnType.IsValueType || getterReturnType.IsGenericParameter)
             IL.Emit(OpCodes.Box, getterReturnType);
         IL.Emit(OpCodes.Stloc, result);
         IL.MarkLabel(completed);
@@ -2589,7 +2589,7 @@ public partial class ILEmitter
         else if (_ctx.Types.IsString(returnType)) SetStackType(StackType.String);
         else
         {
-            if (returnType.IsValueType) IL.Emit(OpCodes.Box, returnType);
+            if (returnType.IsValueType || returnType.IsGenericParameter) IL.Emit(OpCodes.Box, returnType);
             SetStackUnknown();
         }
     }
