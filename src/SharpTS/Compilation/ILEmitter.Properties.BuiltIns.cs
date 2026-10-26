@@ -26,7 +26,8 @@ public partial class ILEmitter
             TypeCategory.Timeout => TryEmitTimeoutPropertyGet(g, propName),
             TypeCategory.Buffer => TryEmitBufferPropertyGet(g, propName),
             TypeCategory.Symbol => TryEmitSymbolPropertyGet(g, propName),
-            TypeCategory.Function => TryEmitFunctionPropertyGet(g, propName),
+            // Function name/length are configurable own properties.
+            TypeCategory.Function => false,
             _ => false
         };
     }
@@ -198,55 +199,6 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Runtime!.Symbols.DescriptionGetter);
         SetStackUnknown();
         return true;
-    }
-
-    private bool TryEmitFunctionPropertyGet(Expr.Get g, string propName)
-    {
-        switch (propName)
-        {
-            case "length":
-                // Even declared functions have configurable own metadata. Runtime
-                // lookup observes descriptor replacements, accessors and deletion.
-                return false;
-
-            case "name":
-                // Try to get function name at compile time for known function references
-                if (TryGetFunctionName(g.Object, out string? funcName) && funcName != null)
-                {
-                    // Check if this is a bound function (we'd need to track that separately)
-                    // For now, just emit the name directly
-                    IL.Emit(OpCodes.Ldstr, funcName);
-                    SetStackType(StackType.String);
-                    return true;
-                }
-                // Fall back to runtime dispatch for unknown function references
-                return false;
-
-            default:
-                return false;
-        }
-    }
-
-    /// <summary>
-    /// Tries to get the name of a known function at compile time.
-    /// </summary>
-    private bool TryGetFunctionName(Expr funcExpr, out string? funcName)
-    {
-        funcName = null;
-
-        // Handle direct function variable references
-        if (funcExpr is Expr.Variable v)
-        {
-            string resolvedName = _ctx.ResolveFunctionName(v.Name.Lexeme);
-            if (_ctx.Functions.ContainsKey(resolvedName))
-            {
-                // Use the original variable name (not the resolved/mangled name)
-                funcName = v.Name.Lexeme;
-                return true;
-            }
-        }
-
-        return false;
     }
 
     #endregion

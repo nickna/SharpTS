@@ -134,4 +134,19 @@ public class P3CallableMetadataTests
             """;
         Assert.Equal("4 17\n6\ntrue 0\n", TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void DeclaredFunctionNameReadsObserveDescriptorChanges(ExecutionMode mode)
+    {
+        const string source = """
+            function fn() { return 17; }
+            console.log(fn.name);
+            Object.defineProperty(fn, "name", { value: "changed", configurable: true });
+            console.log(fn.name, Reflect.get(fn, "name"));
+            Object.defineProperty(fn, "name", { get() { return "getter"; }, configurable: true });
+            console.log(fn.name, Reflect.get(fn, "name"));
+            console.log(delete fn.name, fn.name === "", fn());
+            """;
+        Assert.Equal("fn\nchanged changed\ngetter getter\ntrue true 17\n", TestHarness.Run(source, mode));
+    }
 }
