@@ -1562,12 +1562,20 @@ public partial class TypeChecker
         var conditionWrites = ControlFlow.LoopAssignmentAnalyzer.GetAssignedWrites(
             new Stmt.Expression(stmt.Condition), name => FindLexicalPrivateOwner(name.Lexeme)?.Core.DeclarationId);
         var incomingFlow = CaptureValueFlow();
+        TypeEnvironment? bodyEnvironment = null;
+        if (ReachableLoopBodyInputs(stmt) is { } bodyInputs)
+        {
+            bodyEnvironment = new TypeEnvironment(_environment);
+            foreach (var (symbol, type) in bodyInputs)
+                if (ReferenceEquals(_environment.GetValueBinding(symbol.Name), symbol))
+                    bodyEnvironment.Define(symbol.Name, type);
+        }
         // tsc's do-loop flow recognizes the written true keyword here; grouping
         // and numeric truthy expressions retain its conservative continuing edge.
         LoopValueDomain? domain = stmt.Condition is Expr.Literal { Value: true }
             ? BeginLoopValueDomain(incomingFlow) : null;
         ValueFlowLoopExit bodyFlow;
-        try { bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings: null, conditionAssignedPaths: conditionWrites); }
+        try { bodyFlow = CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: bodyEnvironment, conditionAssignedPaths: conditionWrites); }
         finally { if (domain is not null) _loopValueDomains.Pop(); }
         bool conditionRuns = ApplyLoopContinuingValueFlow(incomingFlow, bodyFlow);
         var tryWrites = CaptureTryValueWrites();

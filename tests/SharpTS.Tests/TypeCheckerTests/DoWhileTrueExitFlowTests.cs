@@ -93,10 +93,8 @@ public sealed class DoWhileTrueExitFlowTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void IndependentBreakWritesDoNotEraseAnExistingBackedgeReadRejection(bool modules)
-        // The existing checker reports the post-loop TS2322 rather than tsc's earlier
-        // TS2339 at source.length. Exit precision must preserve that rejection boundary.
-        => Assert.Equal("TS2322", Assert.Single(Check("""
+    public void IndependentBreakWritesRetainTheCanonicalBackedgeBodyDiagnostic(bool modules)
+        => Assert.Equal("TS2339", Assert.Single(Check("""
             declare const choose:boolean;
             let source:string|number='s';let result:string|number='s';
             do {
