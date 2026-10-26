@@ -234,6 +234,14 @@ public partial class TypeChecker
         if (ReferenceEquals(type, UnprovedLoopBodyType)) throw new UnprovedLoopBodyFlow();
         if (reference is Expr.Unary { Operator.Type: TokenType.TYPEOF } && compared is TypeInfo.StringLiteral expected)
         {
+            // The ordinary guard query has an intentionally partial classifier.
+            // An unclassified structural/callable domain is not proof that this
+            // branch cannot run: retain it on both graph edges.
+            if (type is not (TypeInfo.Any or TypeInfo.Unknown) && LoopBodyAtoms(type).Any(atom =>
+                atom is not (TypeInfo.Null or TypeInfo.Never) && (!IsPrimitiveType(atom) ||
+                    !TypeMatchesTypeof(atom, "string") && !TypeMatchesTypeof(atom, "number") &&
+                    !TypeMatchesTypeof(atom, "boolean") && !TypeMatchesTypeof(atom, "bigint"))))
+                return evaluation.Values;
             var (narrowed, excluded) = AnalyzeTypeofGuard(type, expected.Value, negated: false);
             var projected = equal ? narrowed : excluded;
             if (projected is null or TypeInfo.Never) return null;
