@@ -105,10 +105,26 @@ public partial class TypeChecker
             case Expr.CompoundAssign compound:
             {
                 var current = LoopBodyValue(evaluation, compound.Name.Lexeme);
-                Evaluate(compound.Value);
-                if (LoopBodySlot(evaluation, compound.Name.Lexeme) is { } slot)
-                    StoreLoopBodyValue(evaluation, slot, current);
-                return current;
+                var operand = Evaluate(compound.Value);
+                if (HasUnprovedLoopBodyType(current) || HasUnprovedLoopBodyType(operand) ||
+                    LoopBodySlot(evaluation, compound.Name.Lexeme) is not { } slot)
+                    throw new UnprovedLoopBodyFlow();
+                var result = current;
+                if (compound.Operator.Type == TokenType.PLUS_EQUAL)
+                {
+                    result = DotNetTypeSynthesizer.TryResolveCompoundOperator(current, operand, compound.Operator.Type, out var clrResult)
+                        ? clrResult
+                        : UnionLoopBodyValues(LoopBodyAtoms(current).SelectMany(left =>
+                            LoopBodyAtoms(operand).Select(right => CheckPlusOperator(left, right))));
+                    // Preserve the ordinary compound-assignment admission rule:
+                    // widening an invalid first iteration must not make it valid.
+                    if (HasUnprovedLoopBodyType(result) || !IsCompatible(WidenLiteralType(current), result))
+                        throw new UnprovedLoopBodyFlow();
+                    // Ordinary += does not narrow an existing union operand.
+                    result = UnionLoopBodyValues([current, result]);
+                }
+                StoreLoopBodyValue(evaluation, slot, result);
+                return result;
             }
             case Expr.LogicalAssign assignment:
                 return EvaluateLoopBodyLogicalAssignment(assignment, evaluation);

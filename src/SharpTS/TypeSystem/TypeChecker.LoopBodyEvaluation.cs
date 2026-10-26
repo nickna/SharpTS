@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
 
@@ -35,6 +36,9 @@ public partial class TypeChecker
             return result;
         }
         catch (UnprovedLoopBodyFlow) { return null; }
+        // Pure type queries can fail while expanding an alias or comparing a
+        // contract. Only the authoritative body check owns source diagnostics.
+        catch (TypeCheckException) { return null; }
     }
 
     private sealed record LoopBodyGraphExit(Dictionary<object, TypeInfo> Entry, Dictionary<object, TypeInfo>? Exit,
