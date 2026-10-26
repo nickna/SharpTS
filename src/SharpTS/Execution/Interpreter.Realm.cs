@@ -248,6 +248,12 @@ public partial class Interpreter
                     "Cannot assign to read only property 'name' of function"));
             return;
         }
+        if (name == "name" && !hadOwnProperty
+            && TryAssignThroughDescriptor(
+                GetFunctionPrototype().GetOwnPropertyDescriptor(name)
+                    ?? GetObjectPrototype().GetOwnPropertyDescriptor(name),
+                constructor, name, value, strictMode))
+            return;
         if (_builtInConstructorProperties != null
             && _builtInConstructorProperties.TryGetValue(constructor, out var existingProperties)
             && existingProperties.TryGetValue(name, out var existing))

@@ -239,4 +239,28 @@ public sealed class P3InterpreterMetadataTests
             """, string.Concat(Enumerable.Repeat("true false\nchanged false\nrecreated true true true\n", 2)), mode);
     }
 
+    [Theory, ModeData]
+    public void DeletedConstructorNameRespectsInheritedReadonlyMetadata(ExecutionMode mode)
+    {
+        AssertOutput("""
+            const ctor: any = Map;
+            delete ctor.name;
+            ctor.name = "ignored";
+            console.log(Object.hasOwn(ctor, "name"), JSON.stringify(ctor.name));
+            """, "false \"\"\n", mode);
+    }
+
+    // The compiled native name-write boundary is tracked in #3003.
+    [Theory, InterpretedOnlyData]
+    public void StrictDeletedConstructorNameRespectsInheritedReadonlyMetadata(ExecutionMode mode)
+    {
+        AssertOutput("""
+            const ctor: any = Map;
+            delete ctor.name;
+            function strictWrite(target: any) { "use strict"; target.name = "ignored"; }
+            try { strictWrite(ctor); }
+            catch (error: any) { console.log(error instanceof TypeError); }
+            """, "true\n", mode);
+    }
+
 }
