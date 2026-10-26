@@ -165,6 +165,35 @@ public sealed class P3InterpreterMetadataTests
             """, "true TypeError\ntrue TypeError\ntrue TypeError\ntrue TypeError\n42\n", mode);
     }
 
+    // Compiled dynamic native Promise heritage has an independent construction gap.
+    [Theory, InterpretedOnlyData]
+    public void AliasedNativePromiseSubclassRejectsInvalidExecutor(ExecutionMode mode)
+    {
+        AssertOutput("""
+            const NativePromise: any = Promise;
+            class C extends NativePromise {
+                constructor(executor: any) { super(executor); }
+            }
+            try { new C(7); }
+            catch (error: any) { console.log(error instanceof TypeError, error.name); }
+            """, "true TypeError\n", mode);
+    }
+
+    [Theory, ModeData]
+    public void MapConstructorNameRetainsOwnDescriptorAndInheritedFallback(ExecutionMode mode)
+    {
+        AssertOutput("""
+            const ctor: any = Map;
+            const prototype: any = Function.prototype;
+            Object.defineProperty(prototype, "name", { value: "inherited", configurable: true });
+            console.log(ctor.name, Reflect.get(ctor, "name"),
+                Object.getOwnPropertyDescriptor(ctor, "name").value, prototype.name);
+            console.log(delete ctor.name, ctor.name, Reflect.get(ctor, "name"), Object.hasOwn(ctor, "name"));
+            Object.defineProperty(ctor, "name", { value: "renamed", configurable: true });
+            console.log(ctor.name, Reflect.get(ctor, "name"), Object.hasOwn(ctor, "name"), prototype.name);
+            """, "Map Map Map inherited\ntrue inherited inherited false\nrenamed renamed true inherited\n", mode);
+    }
+
     private static void AssertOutput(string source, string expected, ExecutionMode mode)
     {
         if (mode == ExecutionMode.Compiled)
