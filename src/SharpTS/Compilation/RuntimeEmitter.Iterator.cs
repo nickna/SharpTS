@@ -1931,9 +1931,8 @@ public partial class RuntimeEmitter
 
         // Throw error for non-iterable
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "Runtime Error: Value is not iterable. Expected an array, string, or object with [Symbol.iterator].");
-        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
+            "Value is not iterable. Expected an array, string, or object with [Symbol.iterator].");
     }
 
 }
