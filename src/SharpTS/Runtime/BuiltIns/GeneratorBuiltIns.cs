@@ -1,4 +1,5 @@
 using SharpTS.Runtime.Types;
+using SharpTS.Runtime.Exceptions;
 
 namespace SharpTS.Runtime.BuiltIns;
 
@@ -31,7 +32,7 @@ public static class GeneratorBuiltIns
                     object? sent = args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance;
                     return RuntimeValue.FromObject(gen.Next(sent));
                 }
-                throw new Exception("Runtime Error: next() called on non-generator.");
+                throw new ThrowException(new SharpTSTypeError("next() called on non-generator."));
             }),
             "return" => BuiltInMethod.CreateV2("return", 0, 1, static (_, receiver, args) =>
             {
@@ -41,7 +42,7 @@ public static class GeneratorBuiltIns
                     object? value = args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance;
                     return RuntimeValue.FromObject(gen.Return(value));
                 }
-                throw new Exception("Runtime Error: return() called on non-generator.");
+                throw new ThrowException(new SharpTSTypeError("return() called on non-generator."));
             }),
             "throw" => BuiltInMethod.CreateV2("throw", 0, 1, static (_, receiver, args) =>
             {
@@ -51,7 +52,7 @@ public static class GeneratorBuiltIns
                     object? error = args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance;
                     return RuntimeValue.FromObject(gen.Throw(error));
                 }
-                throw new Exception("Runtime Error: throw() called on non-generator.");
+                throw new ThrowException(new SharpTSTypeError("throw() called on non-generator."));
             }),
             // ES2025 Iterator Helpers - create wrapper methods that convert generator to iterator internally.
             // We can't just delegate to IteratorBuiltIns.GetMember because EvaluateGetOnFallback

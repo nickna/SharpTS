@@ -1,4 +1,5 @@
 using SharpTS.Runtime.Types;
+using SharpTS.Runtime.Exceptions;
 
 namespace SharpTS.Runtime.BuiltIns;
 
@@ -26,7 +27,7 @@ public static class AsyncGeneratorBuiltIns
                     object? sent = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
                     return await gen.Next(sent);
                 }
-                throw new Exception("Runtime Error: next() called on non-async-generator.");
+                throw new ThrowException(new SharpTSTypeError("next() called on non-async-generator."));
             }),
             "return" => new BuiltInAsyncMethod("return", 0, 1, async (_, receiver, args) =>
             {
@@ -37,7 +38,7 @@ public static class AsyncGeneratorBuiltIns
                     object? value = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
                     return await gen.Return(value);
                 }
-                throw new Exception("Runtime Error: return() called on non-async-generator.");
+                throw new ThrowException(new SharpTSTypeError("return() called on non-async-generator."));
             }),
             "throw" => new BuiltInAsyncMethod("throw", 0, 1, async (_, receiver, args) =>
             {
@@ -47,7 +48,7 @@ public static class AsyncGeneratorBuiltIns
                     object? error = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
                     return await gen.Throw(error);
                 }
-                throw new Exception("Runtime Error: throw() called on non-async-generator.");
+                throw new ThrowException(new SharpTSTypeError("throw() called on non-async-generator."));
             }),
             _ => null
         };

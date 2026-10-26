@@ -75,6 +75,37 @@ public sealed class P3InterpreterMetadataTests
             """, "GeneratorFunction true false false false\ntrue true false\ntrue\nAsyncGeneratorFunction true false false false\ntrue true false\ntrue\n", mode);
     }
 
+    [Theory, ModeData]
+    public void GeneratorIntrinsicsBrandInvalidReceiversAsTypeError(ExecutionMode mode)
+    {
+        AssertOutput("""
+            function* values() {}
+            async function* asyncValues() {}
+            const sync: any = values, asynchronous: any = asyncValues;
+            const syncIntrinsic: any = Object.getPrototypeOf(sync.prototype);
+            for (const name of ["next", "return", "throw"]) {
+                try { syncIntrinsic[name].call({}); console.log("accepted"); }
+                catch (error: any) { console.log(name, error.name, error instanceof TypeError); }
+            }
+            async function run() {
+                const intrinsic: any = Object.getPrototypeOf(asynchronous.prototype);
+                for (const name of ["next", "return", "throw"]) {
+                    let returned = false;
+                    try {
+                        const result = intrinsic[name].call({});
+                        returned = true;
+                        await result;
+                        console.log("accepted");
+                    }
+                    catch (error: any) {
+                        console.log(name, error.name, error instanceof TypeError, returned);
+                    }
+                }
+            }
+            run();
+            """, "next TypeError true\nreturn TypeError true\nthrow TypeError true\nnext TypeError true true\nreturn TypeError true true\nthrow TypeError true true\n", mode);
+    }
+
     private static void AssertOutput(string source, string expected, ExecutionMode mode)
     {
         if (mode == ExecutionMode.Compiled)
