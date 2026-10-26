@@ -721,6 +721,12 @@ public partial class TypeChecker
 
     private void ThrowIfStaticMemberOnInstance(TypeInfo classType, Token member)
     {
+        // A string index signature admits the instance read independently of
+        // whether the constructor happens to have a property with this name.
+        for (TypeInfo? current = classType; current != null; current = GetSuperclass(current))
+            if (ClassInfoAccessor.Get(current, c => c.StringIndexType, gc => gc.StringIndexType) is not null)
+                return;
+
         for (TypeInfo? current = classType; current != null; current = GetSuperclass(current))
         {
             if (GetStaticProperties(current)?.ContainsKey(member.Lexeme) == true ||

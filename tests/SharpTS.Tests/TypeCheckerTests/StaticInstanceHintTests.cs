@@ -31,6 +31,14 @@ public sealed class StaticInstanceHintTests
         Assert.Equal("TS2339", error.Diagnostic.TsCode);
     }
 
+    [Theory]
+    [InlineData("class C<T> { [key: string]: number; static value = 2; } const c = new C<number>(); c.value;")]
+    [InlineData("class Base<T> { [key: string]: number; } class C<T> extends Base<T> { static value = 2; } const c = new C<number>(); c.value;")]
+    public void GenericInstanceIndexSignaturesStillAdmitSameNamedStaticMembers(string source)
+    {
+        new TypeChecker().Check(TestHarness.ParseOrThrow(source));
+    }
+
     [Theory, ModeData]
     public void InstanceMemberWinsOverStaticMemberWithSameName(ExecutionMode mode)
     {
