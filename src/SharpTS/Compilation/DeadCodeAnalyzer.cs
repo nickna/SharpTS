@@ -395,34 +395,37 @@ public class DeadCodeAnalyzer
         // For union types, check if ALL or NONE match
         if (type is TypeInfo.Union union)
         {
-            // If any member is indeterminate, the whole result is indeterminate.
-            if (union.FlattenedTypes.Any(t => t is TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Inferred))
-                return null;
-            var matches = union.FlattenedTypes.Select(t => TypeMatchesTypeof(t, typeofResult)).ToList();
-            if (matches.All(m => m)) return true;   // All match
-            if (matches.All(m => !m)) return false; // None match
+            var matches = union.FlattenedTypes.Where(type => type is not TypeInfo.Never)
+                .Select(type => EvaluateTypeAgainstTypeof(type, typeofResult)).ToList();
+            if (matches.Count == 0 || matches.Any(match => match is null)) return null;
+            if (matches.All(match => match == true)) return true;
+            if (matches.All(match => match == false)) return false;
             return null; // Mixed - indeterminate
         }
 
-        // Single type - definitive answer
+        // A structural contract does not prove an exact runtime tag. Keep its
+        // branches, including when an interface or generic callable is in a union.
         return TypeMatchesTypeof(type, typeofResult);
     }
 
     /// <summary>
     /// Check if a single type matches a typeof result string.
     /// </summary>
-    private static bool TypeMatchesTypeof(TypeInfo type, string typeofResult) => typeofResult switch
+    private static bool? TypeMatchesTypeof(TypeInfo type, string typeofResult)
     {
-        "string" => type is TypeInfo.String or TypeInfo.StringLiteral,
-        "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral,
-        "boolean" => type is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral,
-        "bigint" => type is TypeInfo.BigInt or TypeInfo.BigIntLiteral,
-        "object" => type is TypeInfo.Null or TypeInfo.Record or TypeInfo.Array or TypeInfo.Instance,
-        "function" => type is TypeInfo.Function,
-        "undefined" => false, // SharpTS doesn't have undefined as a type
-        "symbol" => type is TypeInfo.Symbol,
-        _ => false
-    };
+        string? exactTag = type switch
+        {
+            TypeInfo.String or TypeInfo.StringLiteral => "string",
+            TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral => "number",
+            TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral => "boolean",
+            TypeInfo.BigInt or TypeInfo.BigIntLiteral => "bigint",
+            TypeInfo.Null => "object",
+            TypeInfo.Undefined or TypeInfo.Void => "undefined",
+            TypeInfo.Symbol or TypeInfo.UniqueSymbol => "symbol",
+            _ => null
+        };
+        return exactTag is null ? null : exactTag == typeofResult;
+    }
 
     #endregion
 
