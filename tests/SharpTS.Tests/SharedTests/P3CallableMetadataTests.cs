@@ -6,6 +6,33 @@ namespace SharpTS.Tests.SharedTests;
 public class P3CallableMetadataTests
 {
     [Theory, ModeData]
+    public void FrozenFunctionMetadataDescriptorsAreNotConfigurable(ExecutionMode mode)
+    {
+        const string source = """
+            function declaration(first: any) {}
+            const functions: any[] = [declaration, function named(first: any) {}, (first: any) => first];
+            for (const target of functions) {
+                Object.freeze(target);
+                console.log(Object.isFrozen(target));
+                for (const key of ["name", "length"]) {
+                    const descriptor: any = Object.getOwnPropertyDescriptor(target, key);
+                    console.log(Object.hasOwn(target, key), descriptor.writable,
+                        descriptor.enumerable, descriptor.configurable,
+                        Reflect.deleteProperty(target, key));
+                }
+            }
+            const sealed: any = (value: any) => value;
+            Object.seal(sealed);
+            console.log(Object.getOwnPropertyDescriptor(sealed, "name")!.configurable);
+            const prevented: any = (value: any) => value;
+            Object.preventExtensions(prevented);
+            console.log(Object.getOwnPropertyDescriptor(prevented, "name")!.configurable);
+            """;
+        Assert.Equal(string.Concat(Enumerable.Repeat("true\ntrue false false false false\ntrue false false false false\n", 3))
+            + "false\ntrue\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void RepeatedClassExpressionAccessorMetadataIsIndependent(ExecutionMode mode)
     {
         const string source = """

@@ -1709,6 +1709,7 @@ public partial class RuntimeEmitter
             il,
             new GetOwnDescriptorFunctionReceiverInputs(
                 inputs.GetProperty,
+                inputs.DescriptorStorage,
                 inputs.ObjectState,
                 inputs.Promise,
                 inputs.TSFunctionType,
