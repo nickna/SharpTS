@@ -77,13 +77,14 @@ public class StateMachineEmitHelpers
     {
         public required LocalBuilder Local;
         public FieldBuilder? Field;
+        public bool RetainAcrossStatements;
     }
 
     private Func<string, FieldBuilder>? _defineSpillField;
     private int _spillFieldCount;
-    // Spill temps created since the last statement boundary. A temp that is still
-    // registered when a suspension is emitted is live across it (operands are spilled
-    // up front, then loaded), so it must survive the MoveNext re-entry in a field.
+    // Expression temps live until the next statement boundary. Longer-lived temps
+    // remain registered until explicitly released. Any registered temp must survive
+    // a suspension's MoveNext re-entry in a field.
     private readonly List<SpillEntry> _liveSpills = new();
 
     /// <summary>
@@ -100,22 +101,28 @@ public class StateMachineEmitHelpers
     /// Pops the boxed value on top of the stack into a fresh object local and returns it.
     /// When persistent spills are enabled, the local is also registered so that a later
     /// suspension persists it to a field (#400). Stack: [value] -> [].
+    /// A retained spill survives nested statement emission until <see cref="ReleaseSpill"/>.
     /// </summary>
-    public LocalBuilder SpillStoreObject()
+    public LocalBuilder SpillStoreObject(bool retainAcrossStatements = false)
     {
         var local = _il.DeclareLocal(_types.Object);
         _il.Emit(OpCodes.Stloc, local);
         if (_defineSpillField != null)
-            _liveSpills.Add(new SpillEntry { Local = local });
+            _liveSpills.Add(new SpillEntry { Local = local, RetainAcrossStatements = retainAcrossStatements });
         return local;
     }
 
     /// <summary>
-    /// Drops all registered spill temps. Called at statement boundaries: spill temps are
-    /// consumed within the expression that created them and never cross a statement, so
-    /// clearing keeps the live set (and the per-suspension persist/rehydrate cost) small.
+    /// Drops ordinary expression spill temps at statement boundaries, keeping the live
+    /// set small while preserving explicitly retained temps across nested statements.
     /// </summary>
-    public void ClearLiveSpills() => _liveSpills.Clear();
+    public void ClearLiveSpills() => _liveSpills.RemoveAll(entry => !entry.RetainAcrossStatements);
+
+    /// <summary>
+    /// Ends the liveness of the exact spill local after its final use, including a
+    /// retained spill that outlives nested statement emission.
+    /// </summary>
+    public void ReleaseSpill(LocalBuilder local) => _liveSpills.RemoveAll(entry => ReferenceEquals(entry.Local, local));
 
     /// <summary>
     /// Mirrors every live spill local to a backing field. Emitted at a suspension point

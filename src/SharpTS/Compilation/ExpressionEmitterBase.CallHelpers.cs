@@ -1341,8 +1341,8 @@ public abstract partial class ExpressionEmitterBase
         Stmt.Block b => AnyStmtContainsSuspension(b.Statements),
         Stmt.Sequence seq => AnyStmtContainsSuspension(seq.Statements),
         Stmt.LabeledStatement ls => StmtContainsSuspension(ls.Statement),
-        Stmt.Switch s => s.Cases.Any(c => ExprContainsSuspension(c.Value) || AnyStmtContainsSuspension(c.Body))
-            || (s.DefaultBody != null && AnyStmtContainsSuspension(s.DefaultBody)),
+        Stmt.Switch s => s.Clauses.Any(c =>
+            c.Value is { } value && ExprContainsSuspension(value) || AnyStmtContainsSuspension(c.Body)),
         Stmt.TryCatch t => AnyStmtContainsSuspension(t.TryBlock)
             || (t.CatchBlock != null && AnyStmtContainsSuspension(t.CatchBlock))
             || (t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock)),

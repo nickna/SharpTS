@@ -623,15 +623,12 @@ public abstract class AstVisitorBase
     protected virtual void VisitSwitch(Stmt.Switch stmt)
     {
         Visit(stmt.Subject);
-        foreach (var c in stmt.Cases)
+        foreach (var clause in stmt.Clauses)
         {
-            Visit(c.Value);
-            foreach (var s in c.Body)
+            if (clause.Value is { } value) Visit(value);
+            foreach (var s in clause.Body)
                 Visit(s);
         }
-        if (stmt.DefaultBody != null)
-            foreach (var s in stmt.DefaultBody)
-                Visit(s);
     }
 
     protected virtual void VisitTryCatch(Stmt.TryCatch stmt)

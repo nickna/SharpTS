@@ -163,15 +163,14 @@ public partial class TypeChecker
         protected override void VisitSwitch(Stmt.Switch statement)
         {
             Visit(statement.Subject);
-            var body = statement.Cases.SelectMany(@case => @case.Body).Concat(statement.DefaultBody ?? []).ToArray();
+            var body = statement.Clauses.SelectMany(clause => clause.Body).ToArray();
             InScope(LexicalNames(body), () =>
             {
-                foreach (var @case in statement.Cases)
+                foreach (var @case in statement.Clauses)
                 {
-                    Visit(@case.Value);
+                    if (@case.Value is { } test) Visit(test);
                     foreach (var child in @case.Body) Visit(child);
                 }
-                foreach (var child in statement.DefaultBody ?? []) Visit(child);
             });
         }
         protected override void VisitStaticBlock(Stmt.StaticBlock statement)

@@ -70,8 +70,7 @@ internal sealed class DebugEmitScope(
             Stmt.For loop => loop.Body,
             Stmt.ForOf loop => loop.Body,
             Stmt.ForIn loop => loop.Body,
-            Stmt.Switch choice => choice.Cases.SelectMany(@case => @case.Body).FirstOrDefault()
-                ?? choice.DefaultBody?.FirstOrDefault(),
+            Stmt.Switch choice => choice.Clauses.SelectMany(clause => clause.Body).FirstOrDefault(),
             _ => null,
         };
         if (body is null || !Spans.TryGetSpan(body, out SourceSpan bodySpan) || bodySpan.IsHidden)

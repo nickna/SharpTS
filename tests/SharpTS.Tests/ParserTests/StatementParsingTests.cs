@@ -157,7 +157,7 @@ public class StatementParsingTests
             """;
         var statements = TestHarness.ParseOrThrow(source);
         var switchStmt = Assert.IsType<Stmt.Switch>(statements[0]);
-        Assert.Single(switchStmt.Cases);
+        Assert.Single(switchStmt.Clauses);
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public class StatementParsingTests
             """;
         var statements = TestHarness.ParseOrThrow(source);
         var switchStmt = Assert.IsType<Stmt.Switch>(statements[0]);
-        Assert.Equal(2, switchStmt.Cases.Count);
+        Assert.Equal(2, switchStmt.Clauses.Count);
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public class StatementParsingTests
             """;
         var statements = TestHarness.ParseOrThrow(source);
         var switchStmt = Assert.IsType<Stmt.Switch>(statements[0]);
-        Assert.NotNull(switchStmt.DefaultBody);
+        Assert.True(Assert.Single(switchStmt.Clauses).IsDefault);
     }
 
     #endregion

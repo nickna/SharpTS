@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.TypeSystem.ControlFlow;
 using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
@@ -29,87 +30,83 @@ public partial class TypeChecker
     private void CheckSwitch(Stmt.Switch switchStmt)
     {
         CheckExpr(switchStmt.Subject);
-        var incomingFlow = CaptureValueFlow();
-        List<ValueFlowState> exits = [];
-        ValueFlowState? fallthroughFlow = null;
         using var editorScope = EnterEditorLexicalScope(switchStmt);
-
+        var enclosingEnvironment = _environment;
+        var switchEnvironment = new TypeEnvironment(enclosingEnvironment);
         Expr.Variable? discriminatedVariable = null;
         Token? discriminantProperty = null;
-        if (switchStmt.Subject is Expr.Get
-            {
-                Object: Expr.Variable variable,
-                Name: var property
-            })
+        BindingSymbol? discriminatedBinding = null;
+        if (switchStmt.Subject is Expr.Get { Object: Expr.Variable variable, Name: var property })
         {
             discriminatedVariable = variable;
             discriminantProperty = property;
+            discriminatedBinding = _environment.GetValueBinding(variable.Name.Lexeme);
         }
 
-        TypeInfo? fallthroughType = null;
+        using var switchScope = new EnvironmentScope(this, switchEnvironment);
+        var statements = switchStmt.Clauses.SelectMany(clause => clause.Body).ToList();
+        HoistClassDeclarations(statements);
+        HoistFunctionDeclarations(statements);
+        HoistLexicalDeclarations(statements);
+        var incomingFlow = CaptureValueFlow();
+        var entries = new ValueFlowState[switchStmt.Clauses.Count];
+        var canNarrow = new bool[switchStmt.Clauses.Count];
 
+        // Check each test once in selection order. Default's direct entry sees
+        // every failed test, even tests written after the default clause.
+        using (var writes = BeginConditionWriteCapture())
+        {
+            for (int index = 0; index < switchStmt.Clauses.Count; index++)
+            {
+                if (switchStmt.Clauses[index].Value is not { } test) continue;
+                CheckExpr(test);
+                entries[index] = CaptureValueFlow();
+                canNarrow[index] = discriminatedBinding is not null &&
+                    ReferenceEquals(_environment.GetValueBinding(discriminatedVariable!.Name.Lexeme), discriminatedBinding) &&
+                    !writes.Writes.ContainsKey(discriminatedBinding);
+            }
+        }
+        var unmatchedFlow = CaptureValueFlow();
+        int defaultIndex = switchStmt.Clauses.FindIndex(clause => clause.IsDefault);
+        if (defaultIndex >= 0) entries[defaultIndex] = unmatchedFlow;
+        List<ValueFlowState> exits = [];
+        ValueFlowState? fallthroughFlow = null;
+        TypeInfo? fallthroughType = null;
         _switchDepth++;
         var flowTarget = new ValueFlowTarget(null, false, true, null);
         _valueFlowTargets.Push(flowTarget);
         try
         {
-            foreach (var caseItem in switchStmt.Cases)
+            for (int index = 0; index < switchStmt.Clauses.Count; index++)
             {
-                JoinValueFlow(incomingFlow, incomingFlow, fallthroughFlow ?? incomingFlow);
-                CheckExpr(caseItem.Value);
-
-                TypeInfo? caseType = null;
-                if (discriminatedVariable is not null &&
-                    discriminantProperty is not null &&
-                    caseItem.Value is Expr.Literal { Value: string literalValue })
+                var clause = switchStmt.Clauses[index];
+                RestoreValueFlow(entries[index]);
+                TypeInfo? entryType = null;
+                if (discriminatedVariable is not null && discriminantProperty is not null &&
+                    ReferenceEquals(_environment.GetValueBinding(discriminatedVariable.Name.Lexeme), discriminatedBinding))
                 {
-                    (_, caseType, _) = AnalyzeDiscriminatedUnionGuard(
-                        discriminatedVariable.Name.Lexeme,
-                        discriminantProperty.Lexeme,
-                        literalValue);
+                    entryType = _environment.Get(discriminatedVariable.Name.Lexeme);
+                    if (canNarrow[index] && clause.Value is Expr.Literal { Value: string literalValue })
+                    {
+                        (_, var narrowed, _) = AnalyzeDiscriminatedUnionGuard(
+                            discriminatedVariable.Name.Lexeme, discriminantProperty.Lexeme, literalValue);
+                        entryType = narrowed ?? entryType;
+                    }
                 }
+                if (fallthroughFlow is not null)
+                    JoinValueFlow(incomingFlow, entries[index], fallthroughFlow);
+                if (discriminatedVariable is not null && entryType is not null)
+                    _environment.Define(discriminatedVariable.Name.Lexeme, fallthroughType is null
+                        ? entryType : CreateUnion(entryType, fallthroughType));
 
-                TypeInfo? effectiveCaseType = (fallthroughType, caseType) switch
-                {
-                    (null, { } current) => current,
-                    ({ } previous, null) => previous,
-                    ({ } previous, { } current) => new TypeInfo.Union([previous, current]),
-                    _ => null,
-                };
-                var caseEnvironment = new TypeEnvironment(_environment);
-                if (discriminatedVariable is not null && effectiveCaseType is not null)
-                    caseEnvironment.Define(discriminatedVariable.Name.Lexeme, effectiveCaseType);
-
-                using (new EnvironmentScope(this, caseEnvironment))
-                {
-                    CheckStmtList(caseItem.Body);
-                    fallthroughFlow = CaptureValueFlow();
-                }
-
-                bool exitsCase = caseItem.Body.LastOrDefault() is Stmt.Break or Stmt.Continue ||
-                    caseItem.Body.Count > 0 && AlwaysTerminates(caseItem.Body[^1]);
-                fallthroughType = exitsCase ? null : effectiveCaseType;
-                if (exitsCase)
-                {
-                    if (caseItem.Body.LastOrDefault() is Stmt.Break or Stmt.Continue)
-                        exits.Add(fallthroughFlow);
-                    fallthroughFlow = null;
-                }
+                CheckStmtList(clause.Body);
+                bool exitsClause = !StatementCompletionAnalysis.CanCompleteNormally(clause.Body);
+                fallthroughFlow = exitsClause ? null : CaptureValueFlow();
+                fallthroughType = !exitsClause && entryType is not null
+                    ? _environment.Get(discriminatedVariable!.Name.Lexeme) : null;
             }
-
-            if (switchStmt.DefaultBody != null)
-            {
-                JoinValueFlow(incomingFlow, incomingFlow, fallthroughFlow ?? incomingFlow);
-                CheckBlock(switchStmt.DefaultBody, new TypeEnvironment(_environment));
-                if (switchStmt.DefaultBody.LastOrDefault() is Stmt.Break ||
-                    switchStmt.DefaultBody.Count == 0 || !AlwaysTerminates(switchStmt.DefaultBody[^1]))
-                    exits.Add(CaptureValueFlow());
-            }
-            else
-            {
-                exits.Add(incomingFlow);
-                if (fallthroughFlow is not null) exits.Add(fallthroughFlow);
-            }
+            if (fallthroughFlow is not null) exits.Add(fallthroughFlow);
+            if (defaultIndex < 0) exits.Add(unmatchedFlow);
         }
         finally
         {
@@ -118,6 +115,7 @@ public partial class TypeChecker
         }
         exits.AddRange(flowTarget.Breaks);
         JoinValueFlow(incomingFlow, exits.ToArray());
+        PublishInheritedValueFlow(switchEnvironment, enclosingEnvironment);
     }
 
     private void CheckTryCatch(Stmt.TryCatch tryCatch)

@@ -321,10 +321,8 @@ public partial class TypeChecker
                 HoistLoopHeadVars(labeled.Statement);
                 break;
             case Stmt.Switch selection:
-                foreach (var arm in selection.Cases)
+                foreach (var arm in selection.Clauses)
                     foreach (var child in arm.Body) HoistLoopHeadVars(child);
-                if (selection.DefaultBody is { } defaultBody)
-                    foreach (var child in defaultBody) HoistLoopHeadVars(child);
                 break;
             case Stmt.TryCatch guarded:
                 foreach (var child in guarded.TryBlock) HoistLoopHeadVars(child);

@@ -437,8 +437,8 @@ public partial class Parser
         Consume(TokenType.LEFT_BRACE, "Expect '{' before switch body.");
         int bodyStart = Previous().Start;
 
-        List<Stmt.SwitchCase> cases = [];
-        List<Stmt>? defaultBody = null;
+        List<Stmt.SwitchClause> clauses = [];
+        bool hasDefault = false;
 
         while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
@@ -453,17 +453,20 @@ public partial class Parser
                 {
                     caseBody.Add(Declaration());
                 }
-                cases.Add(new Stmt.SwitchCase(caseValue, caseBody));
+                clauses.Add(new Stmt.SwitchClause(caseValue, caseBody));
             }
             else if (Match(TokenType.DEFAULT))
             {
+                if (hasDefault) throw new ParseError("A 'default' clause cannot appear more than once in a 'switch' statement.", "TS1113");
+                hasDefault = true;
                 Consume(TokenType.COLON, "Expect ':' after 'default'.");
 
-                defaultBody = [];
-                while (!Check(TokenType.CASE) && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
+                List<Stmt> defaultBody = [];
+                while (!Check(TokenType.CASE) && !Check(TokenType.DEFAULT) && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
                 {
                     defaultBody.Add(Declaration());
                 }
+                clauses.Add(new Stmt.SwitchClause(null, defaultBody));
             }
             else
             {
@@ -472,7 +475,7 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after switch body.");
-        var result = new Stmt.Switch(subject, cases, defaultBody);
+        var result = new Stmt.Switch(subject, clauses);
         RecordEditorRange(result, new SourceSpan(bodyStart, ConsumedSourceEnd), EditorSyntaxKind.Block, EditorSyntaxRole.Body);
         return result;
     }

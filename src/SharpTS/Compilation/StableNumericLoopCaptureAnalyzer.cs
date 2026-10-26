@@ -369,22 +369,17 @@ internal static class StableNumericLoopCaptureAnalyzer
 
             // A switch owns one lexical scope shared by every case. A declaration in
             // any arm therefore shadows the loop binding throughout the case block.
-            if (statement.Cases.Any(@case => DeclaresBinding(@case.Body))
-                || statement.DefaultBody is not null
-                && DeclaresBinding(statement.DefaultBody))
+            if (statement.Clauses.Any(clause => DeclaresBinding(clause.Body)))
             {
                 return;
             }
 
-            foreach (var @case in statement.Cases)
+            foreach (var @case in statement.Clauses)
             {
-                Visit(@case.Value);
+                if (@case.Value is { } test) Visit(test);
                 foreach (var child in @case.Body)
                     Visit(child);
             }
-            if (statement.DefaultBody is not null)
-                foreach (var child in statement.DefaultBody)
-                    Visit(child);
         }
 
         protected override void VisitForOf(Stmt.ForOf statement)

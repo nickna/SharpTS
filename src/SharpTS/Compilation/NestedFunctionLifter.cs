@@ -565,9 +565,11 @@ internal sealed class NestedFunctionLifter
                 break;
             case Stmt.Switch sw:
                 CollectShapeCandidatesExpr(sw.Subject, enclosingBlockBindings, scan);
-                foreach (var c in sw.Cases) CollectShapeCandidatesExpr(c.Value, enclosingBlockBindings, scan);
-                foreach (var c in sw.Cases) CollectShapeCandidates(c.Body, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, enclosingBlockBindings, scan);
-                if (sw.DefaultBody != null) CollectShapeCandidates(sw.DefaultBody, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, enclosingBlockBindings, scan);
+                foreach (var clause in sw.Clauses)
+                {
+                    if (clause.Value is { } value) CollectShapeCandidatesExpr(value, enclosingBlockBindings, scan);
+                    CollectShapeCandidates(clause.Body, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, enclosingBlockBindings, scan);
+                }
                 break;
             case Stmt.Class cls:
                 // Method bodies are function-likes regardless of where the class sits.
@@ -1473,22 +1475,20 @@ internal sealed class NestedFunctionLifter
             case Stmt.Switch sw:
             {
                 var subject = ProcessExpr(sw.Subject);
-                List<Stmt.SwitchCase>? newCases = null;
-                for (int i = 0; i < sw.Cases.Count; i++)
+                List<Stmt.SwitchClause>? newClauses = null;
+                for (int i = 0; i < sw.Clauses.Count; i++)
                 {
-                    var c = sw.Cases[i];
-                    var value = ProcessExpr(c.Value);
+                    var c = sw.Clauses[i];
+                    var value = c.Value is { } expression ? ProcessExpr(expression) : null;
                     var nb = ProcessBody(c.Body, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
                     if (!ReferenceEquals(value, c.Value) || !ReferenceEquals(nb, c.Body))
                     {
-                        newCases ??= new List<Stmt.SwitchCase>(sw.Cases);
-                        newCases[i] = new Stmt.SwitchCase(value, nb);
+                        newClauses ??= new List<Stmt.SwitchClause>(sw.Clauses);
+                        newClauses[i] = c with { Value = value, Body = nb };
                     }
                 }
-                var newDefault = sw.DefaultBody != null ? ProcessBody(sw.DefaultBody, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod) : null;
-                bool defaultChanged = sw.DefaultBody != null && !ReferenceEquals(newDefault, sw.DefaultBody);
-                if (ReferenceEquals(subject, sw.Subject) && newCases == null && !defaultChanged) return sw;
-                return new Stmt.Switch(subject, newCases ?? sw.Cases, defaultChanged ? newDefault : sw.DefaultBody);
+                if (ReferenceEquals(subject, sw.Subject) && newClauses == null) return sw;
+                return sw with { Subject = subject, Clauses = newClauses ?? sw.Clauses };
             }
             case Stmt.Class cls:
                 return ProcessClass(cls);
