@@ -35,7 +35,25 @@ public static class EvalBridge
             return argument;
 
         var interpreter = new Interpreter();
-        var result = interpreter.Eval(source);
+        object? result;
+        try
+        {
+            result = interpreter.Eval(source);
+        }
+        catch (Runtime.Exceptions.ThrowException error) when (
+            error.Value is null or string or bool or double or System.Numerics.BigInteger
+                or Runtime.Types.SharpTSBigInt or Runtime.Types.SharpTSUndefined)
+        {
+            // The emitted catch boundary already understands this bridge payload. Preserve
+            // genuine primitive throws while typed runtime errors retain error translation.
+            error.Data["__tsValue"] = error.Value switch
+            {
+                Runtime.Types.SharpTSUndefined => callerUndefined,
+                Runtime.Types.SharpTSBigInt bigInt => bigInt.Value,
+                _ => error.Value
+            };
+            throw;
+        }
         if (result is Runtime.Types.SharpTSUndefined)
             return callerUndefined;
         return result is Runtime.Types.SharpTSGlobalThis
