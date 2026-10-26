@@ -20,7 +20,7 @@ public partial class Parser
     private Stmt StatementCore()
     {
         // Handle empty statements (just semicolons)
-        if (Match(TokenType.SEMICOLON)) return new Stmt.Expression(new Expr.Literal(null));
+        if (Match(TokenType.SEMICOLON)) return new Stmt.Expression(new Expr.Literal(null)) { HasEmptyCompletion = true };
 
         if (Match(TokenType.BREAK)) return BreakStatement();
         if (Match(TokenType.CONTINUE)) return ContinueStatement();

@@ -85,17 +85,22 @@ public partial class ILEmitter
             }
         }
 
-        for (int i = 0; i < statements.Count; i++)
+        var completion = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+        IL.Emit(OpCodes.Stloc, completion);
+        foreach (var statement in statements)
         {
-            bool isLast = i == statements.Count - 1;
-            switch (statements[i])
+            switch (statement)
             {
                 case Stmt.Expression expression:
                     EmitExpression(expression.Expr);
-                    if (!isLast)
+                    if (expression.HasEmptyCompletion)
                         IL.Emit(OpCodes.Pop);
                     else
+                    {
                         EnsureBoxed();
+                        IL.Emit(OpCodes.Stloc, completion);
+                    }
                     break;
                 case Stmt.Var declaration:
                     // EvalDeclarationInstantiation reuses an existing var-env
@@ -114,24 +119,26 @@ public partial class ILEmitter
                     {
                         EmitVarDeclaration(declaration);
                     }
-                    if (isLast)
-                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                     break;
                 case Stmt.Function:
-                    if (isLast)
-                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
                     break;
-                case Stmt.Directive:
-                    if (isLast)
-                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+                case Stmt.Directive directive:
+                    IL.Emit(OpCodes.Ldstr, directive.Value);
+                    IL.Emit(OpCodes.Stloc, completion);
+                    break;
+                case Stmt.Class:
+                    EmitStatement(statement);
                     break;
                 default:
-                    EmitStatement(statements[i]);
-                    if (isLast)
-                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+                    EmitStatement(statement);
+                    // Keep the existing control-statement lowering ceiling. Dynamic
+                    // eval and do-while completion use the runtime execution protocol.
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+                    IL.Emit(OpCodes.Stloc, completion);
                     break;
             }
         }
+        IL.Emit(OpCodes.Ldloc, completion);
         _ctx.IsStrictMode = savedStrictMode;
         _ctx.ThisBindingIsStrictOverride = savedThisBindingStrictOverride;
         SetStackUnknown();

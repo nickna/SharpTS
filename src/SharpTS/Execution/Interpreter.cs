@@ -1506,7 +1506,7 @@ public partial class Interpreter : IDisposable
     /// <summary>
     /// Implements the global <c>eval(source)</c> function. Lexes, parses, and interprets
     /// <paramref name="source"/> in the interpreter's current environment, returning the
-    /// completion value (the value of the last expression statement, or <c>undefined</c>).
+    /// execution completion value, or <c>undefined</c> for an empty completion.
     /// </summary>
     /// <remarks>
     /// This is "direct eval" semantics: the evaluated code runs against the current scope
@@ -1535,13 +1535,18 @@ public partial class Interpreter : IDisposable
             throw new ThrowException(new SharpTSError($"SyntaxError: {detail}"));
         }
 
-        // Preserve the outer type map: InterpretRepl assigns _typeMap, and passing null
-        // would clobber type-aware dispatch for the remainder of the outer program.
-        var completion = InterpretRepl(parseResult.Statements, _typeMap);
-        return parseResult.Statements.Count > 0
-            && parseResult.Statements[^1] is Stmt.Expression
-                ? completion
-                : SharpTSUndefined.Instance;
+        HoistFunctionDeclarations(parseResult.Statements);
+        HoistLocalLoopVarDeclarations(parseResult.Statements);
+        var completion = ExecutionResult.Success();
+        foreach (var statement in parseResult.Statements)
+        {
+            ThrowIfExecutionCancelled();
+            completion = Execute(statement).UpdateEmpty(completion);
+            if (completion.Type == ExecutionResult.ResultType.Throw)
+                throw ThrowException.FromResult(completion.Value.ToObject(), completion.FromGuestThrow);
+            if (completion.IsAbrupt) return SharpTSUndefined.Instance;
+        }
+        return completion.HasValue ? completion.Value.ToObject() : SharpTSUndefined.Instance;
     }
 
     /// <summary>

@@ -131,7 +131,7 @@ public static class VarHoister
                         v.Initializer,
                         IsVarRedeclaration: true,
                         RedeclarationTypeAnnotation: v.TypeAnnotation,
-                        RedeclarationTypeAnnotationNode: v.TypeAnnotationNode));
+                        RedeclarationTypeAnnotationNode: v.TypeAnnotationNode)) { HasEmptyCompletion = true };
                 }
 
                 if (seen.Add(v.Name.Lexeme))
@@ -155,7 +155,7 @@ public static class VarHoister
                     v.Initializer,
                     IsVarRedeclaration: true,
                     RedeclarationTypeAnnotation: v.TypeAnnotation,
-                    RedeclarationTypeAnnotationNode: v.TypeAnnotationNode));
+                    RedeclarationTypeAnnotationNode: v.TypeAnnotationNode)) { HasEmptyCompletion = true };
             }
 
             case Stmt.Sequence seq:
@@ -341,14 +341,14 @@ public static class VarHoister
     {
         if (v.TypeAnnotation == null && v.TypeAnnotationNode == null)
         {
-            return new Stmt.Expression(new Expr.Literal(null));
+            return new Stmt.Expression(new Expr.Literal(null)) { HasEmptyCompletion = true };
         }
         return new Stmt.Expression(new Expr.Assign(
             v.Name,
             new Expr.Variable(v.Name),
             IsVarRedeclaration: true,
             RedeclarationTypeAnnotation: v.TypeAnnotation,
-            RedeclarationTypeAnnotationNode: v.TypeAnnotationNode));
+            RedeclarationTypeAnnotationNode: v.TypeAnnotationNode)) { HasEmptyCompletion = true };
     }
 
     /// <summary>

@@ -352,7 +352,12 @@ public enum DestructuringSourceKind
 
 public abstract record Stmt
 {
-    public record Expression(Expr Expr) : Stmt;
+    public record Expression(Expr Expr) : Stmt
+    {
+        // Empty statements and lowered var effects do not contribute an expression
+        // completion, even when their executable representation is an expression.
+        public bool HasEmptyCompletion { get; init; }
+    }
     /// <param name="TypeAnnotationNode">Structured form of <c>TypeAnnotation</c> when the
     /// construct has node support (type-AST migration); null otherwise — consumers fall back to
     /// the string.</param>
