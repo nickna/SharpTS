@@ -1,0 +1,672 @@
+{
+  "issue": "https://github.com/nickna/SharpTS/issues/1399",
+  "scope": "Scoped IL-local aliases expose authoritative lexical cells before receiver-derived outer bindings, including independent loop captures and parameter shadows",
+  "verifiedUtc": "2026-10-26T06:03:22.299Z",
+  "sourceCommit": "664b3df8bd714229da542cf39b18b7a31c394399",
+  "workingTreeChangesIncluded": true,
+  "platform": "win32-x64",
+  "dotnetSdk": "10.0.402",
+  "sources": {
+    "src/SharpTS/Compilation/CompilationContext.Closures.cs": "94898757afdda27df7b4ba0a7e962589ba7aa40a82f287ea7b7e0baf5c25e4ae",
+    "src/SharpTS/Compilation/ILCompiler.Functions.cs": "5baf57ba4f7e23bf115e0c74655959c867520f070d7715c93935a3944cbc6c3b",
+    "src/SharpTS/Compilation/StateMachineBuilderBase.cs": "0cf2c45b2283da0ebf35ff7bb295ba1493775e4a1a75f71eb9033dec80200c9c",
+    "src/SharpTS/Compilation/StatementEmitterBase.LexicalCells.cs": "d80b6f3996392ae689ca14dbf1153ae98775d503fc7b14201dccad75d93735f4",
+    "src/SharpTS/Compilation/Symbols/DebugInfoCollector.cs": "6fdb8483b149ad4115d23d6e6cc39128f5ca272ec40295b136d99d3931277887",
+    "src/SharpTS/Compilation/Symbols/MethodLocalSymbols.cs": "4c7d17aa3100dccb0728831a5fe8b6d2ce6663eaf5bf034e91ad9ffaf4d9d96d",
+    "tests/SharpTS.Tests/Compilation/DebugSymbolsHoistedLocalsTests.cs": "68c80089030fc4027f415b82504b0cae36292063e97a899680dd244c62938d92",
+    "tests/SharpTS.Tests/Compilation/DebugSymbolsLexicalShadowPrecedenceTests.cs": "1d34debb30ba0ed6a0ccb3188c0af4efba4dfec24d7806c23495225161b14b0d",
+    "tests/fixtures/HoistedDebuggerAcceptance/main.ts": "ea16b4002d9d45dae849fad77bdae005d010f2d7dd8898726721830e6029a524",
+    "tests/fixtures/HoistedDebuggerAcceptance/helper.ts": "28bfdc34df0b19a4b26cc7fcbb4757297f70578c81c3128bb3c5fce2766b1545",
+    "tests/fixtures/HoistedDebuggerAcceptance/expectations.json": "d968aaa56543ce2310ee441379e97a306966b5ed1b886d68bee649ba1f1f7914",
+    "tests/fixtures/HoistedDebuggerLexicalCells/main.ts": "2f3d42f492f8237f00e73fff104cd9dc11e58329caebbb203bc0033e8d00c235",
+    "tests/fixtures/HoistedDebuggerLexicalCells/helper.ts": "84c1832d67a4bc27432151a64337cb3992500b8afc28c64720e104093bb1a555",
+    "tests/fixtures/HoistedDebuggerLexicalCells/expectations.json": "43b26d5a63fa3775dc2c3e59ba4f1a357799b1ee84f34a17c58d5b2b261f7c27",
+    "scripts/editor-smoke/compiled-debugger/run.mjs": "9734f54ea97c42b838afb164f6d04515345df6ce4a075b3fd72356a75ea93d92",
+    "scripts/editor-smoke/compiled-debugger/hoisted.test.cjs": "c5548199ff6ad37838939b1db06b14e475bc726df0dcbca51d791bcebe88859f"
+  },
+  "editorDistribution": {
+    "kind": "Official portable Windows x64 archive, isolated profile",
+    "version": "1.141.0",
+    "commit": "2a59476c9bfcb90b3ddc372c36762471b7dfad1c",
+    "archiveSha256": "30ef5f55c377452af33009d0a8ac29a15cf8f770782bff42fe987c30da272223"
+  },
+  "primary": {
+    "status": "passed",
+    "artifacts": "artifacts/p3/hoisted-debugger-alias-portable/run-Oieu29",
+    "fixture": "tests/fixtures/HoistedDebuggerAcceptance",
+    "verifiedUtc": "2026-10-26T06:03:01.856Z",
+    "editor": "VS Code 1.141.0",
+    "csharpVersion": "2.140.9",
+    "extensionVersions": {
+      "ms-dotnettools.csharp": "2.140.9",
+      "ms-dotnettools.vscode-dotnet-runtime": "3.2.0"
+    },
+    "stops": 55,
+    "compilerSha256": "a3c3cdc4af3ff07693306189decfaffe42d80c633f50a64072c54c9b27704dc2",
+    "assemblySha256": "9ac3a255cf4a8d2a0f50828cf71014c3ed3857dccc851fa97fc046c238a805a1",
+    "pdbSha256": "92d6050e98ac9751454c37a3052798c1a3f8f453b3d3faf856e609958ec8c28f",
+    "debugAndNonDebugOutputMatch": true,
+    "nonDebugPdbAbsent": true,
+    "referenceAssemblyRewrite": true,
+    "sourceEncodings": {
+      "main.ts": "UTF-8 with BOM",
+      "helper.ts": "UTF-16 LE with BOM"
+    },
+    "strictUniqueExpectedLocals": true,
+    "outOfScopeLocalsAbsent": true,
+    "observations": [
+      {
+        "marker": "break:async-before",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 9",
+        "watches": {
+          "parameter": "10",
+          "local": "11",
+          "captured": "12",
+          "blockLocal": "error CS0103: The name 'blockLocal' does not exist in the current context",
+          "repeated": "error CS0103: The name 'repeated' does not exist in the current context",
+          "error": "error CS0103: The name 'error' does not exist in the current context",
+          "index": "error CS0103: The name 'index' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-after",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 11",
+        "watches": {
+          "parameter": "10",
+          "local": "11",
+          "captured": "12",
+          "blockLocal": "error CS0103: The name 'blockLocal' does not exist in the current context",
+          "repeated": "error CS0103: The name 'repeated' does not exist in the current context",
+          "error": "error CS0103: The name 'error' does not exist in the current context",
+          "index": "error CS0103: The name 'index' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-block",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 15",
+        "watches": {
+          "parameter": "10",
+          "local": "11",
+          "captured": "12",
+          "blockLocal": "14"
+        }
+      },
+      {
+        "marker": "break:async-outside",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 18",
+        "watches": {
+          "parameter": "10",
+          "local": "11",
+          "captured": "13",
+          "blockLocal": "error CS0103: The name 'blockLocal' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-shadow",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 22",
+        "watches": {
+          "parameter": "10",
+          "local": "30",
+          "captured": "13"
+        }
+      },
+      {
+        "marker": "break:async-restored",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 24",
+        "watches": {
+          "parameter": "10",
+          "local": "11",
+          "blockLocal": "error CS0103: The name 'blockLocal' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-parameter-shadow",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 28",
+        "watches": {
+          "parameter": "99",
+          "local": "11"
+        }
+      },
+      {
+        "marker": "break:async-parameter-restored",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 30",
+        "watches": {
+          "parameter": "10",
+          "local": "11"
+        }
+      },
+      {
+        "marker": "break:async-captured-block",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 37",
+        "watches": {
+          "capturedBlock": "61",
+          "parameter": "10"
+        }
+      },
+      {
+        "marker": "break:async-captured-outside",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 39",
+        "watches": {
+          "parameter": "10",
+          "capturedBlock": "error CS0103: The name 'capturedBlock' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-captured-shadow",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 45",
+        "watches": {
+          "local": "99",
+          "parameter": "10"
+        }
+      },
+      {
+        "marker": "break:async-captured-shadow-restored",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 47",
+        "watches": {
+          "local": "11",
+          "shadowReader": "error CS0103: The name 'shadowReader' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-sibling-one",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 51",
+        "watches": {
+          "repeated": "40"
+        }
+      },
+      {
+        "marker": "break:async-between-siblings",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 53",
+        "watches": {
+          "local": "11",
+          "repeated": "error CS0103: The name 'repeated' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-sibling-two",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 57",
+        "watches": {
+          "repeated": "50"
+        }
+      },
+      {
+        "marker": "break:async-catch",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 63",
+        "watches": {
+          "error": "7"
+        }
+      },
+      {
+        "marker": "break:async-catch-ended",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 65",
+        "watches": {
+          "local": "11",
+          "error": "error CS0103: The name 'error' does not exist in the current context",
+          "repeated": "error CS0103: The name 'repeated' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-loop",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 68",
+        "watches": {
+          "index": "0"
+        }
+      },
+      {
+        "marker": "break:async-for-of-let",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 72",
+        "watches": {
+          "item": "4",
+          "index": "error CS0103: The name 'index' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-for-of-assignment",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 77",
+        "watches": {
+          "assigned": "5",
+          "item": "error CS0103: The name 'item' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-for-of-var",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 82",
+        "watches": {
+          "retained": "6",
+          "assigned": "5",
+          "item": "error CS0103: The name 'item' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-loop-bindings-ended",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 84",
+        "watches": {
+          "retained": "6",
+          "assigned": "5",
+          "item": "error CS0103: The name 'item' does not exist in the current context",
+          "index": "error CS0103: The name 'index' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-destructuring",
+        "frame": "main.dll!$Program.$M_main_asynchronous(object value) Line 90",
+        "watches": {
+          "left": "3",
+          "right": "4",
+          "carried": "6",
+          "__user": "3",
+          "_destUser": "4",
+          "index": "error CS0103: The name 'index' does not exist in the current context",
+          "error": "error CS0103: The name 'error' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:iterator-before",
+        "frame": "main.dll!$Program.$M_main_sequence(object value) Line 96",
+        "watches": {
+          "parameter": "20",
+          "local": "21",
+          "blockLocal": "error CS0103: The name 'blockLocal' does not exist in the current context",
+          "index": "error CS0103: The name 'index' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:iterator-after",
+        "frame": "main.dll!$Program.$M_main_sequence(object value) Line 99",
+        "watches": {
+          "parameter": "20",
+          "local": "23"
+        }
+      },
+      {
+        "marker": "break:iterator-block",
+        "frame": "main.dll!$Program.$M_main_sequence(object value) Line 103",
+        "watches": {
+          "local": "23",
+          "blockLocal": "26"
+        }
+      },
+      {
+        "marker": "break:iterator-outside",
+        "frame": "main.dll!$Program.$M_main_sequence(object value) Line 105",
+        "watches": {
+          "local": "23",
+          "blockLocal": "error CS0103: The name 'blockLocal' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:iterator-shadow",
+        "frame": "main.dll!$Program.$M_main_sequence(object value) Line 109",
+        "watches": {
+          "parameter": "20",
+          "local": "40"
+        }
+      },
+      {
+        "marker": "break:iterator-restored",
+        "frame": "main.dll!$Program.$M_main_sequence(object value) Line 111",
+        "watches": {
+          "local": "23",
+          "blockLocal": "error CS0103: The name 'blockLocal' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:iterator-loop",
+        "frame": "main.dll!$Program.$M_main_sequence(object value) Line 114",
+        "watches": {
+          "index": "0"
+        }
+      },
+      {
+        "marker": "break:iterator-loop-ended",
+        "frame": "main.dll!$Program.$M_main_sequence(object value) Line 116",
+        "watches": {
+          "local": "23",
+          "index": "error CS0103: The name 'index' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-iterator-before",
+        "frame": "main.dll!$Program.$M_main_asynchronousSequence(object value) Line 121",
+        "watches": {
+          "parameter": "30",
+          "local": "31",
+          "blockLocal": "error CS0103: The name 'blockLocal' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:async-iterator-after",
+        "frame": "main.dll!$Program.$M_main_asynchronousSequence(object value) Line 126",
+        "watches": {
+          "parameter": "30",
+          "local": "33"
+        }
+      },
+      {
+        "marker": "break:async-iterator-block",
+        "frame": "main.dll!$Program.$M_main_asynchronousSequence(object value) Line 130",
+        "watches": {
+          "local": "33",
+          "blockLocal": "36"
+        }
+      },
+      {
+        "marker": "break:async-iterator-outside",
+        "frame": "main.dll!$Program.$M_main_asynchronousSequence(object value) Line 132",
+        "watches": {
+          "local": "33",
+          "blockLocal": "error CS0103: The name 'blockLocal' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:arrow-before",
+        "frame": "main.dll!$Program.<>AsyncArrow_3_Stub(object value) Line 137",
+        "watches": {
+          "parameter": "40",
+          "local": "41"
+        }
+      },
+      {
+        "marker": "break:arrow-after",
+        "frame": "main.dll!$Program.<>AsyncArrow_3_Stub(object value) Line 139",
+        "watches": {
+          "parameter": "40",
+          "local": "41"
+        }
+      },
+      {
+        "marker": "break:global-arrow",
+        "frame": "main.dll!$Program.<>AsyncArrow_4_Stub(object value) Line 147",
+        "watches": {
+          "moduleShared": "error CS0103: The name 'moduleShared' does not exist in the current context",
+          "parameter": "42",
+          "local": "43"
+        }
+      },
+      {
+        "marker": "break:captured-arrow-before",
+        "frame": "main.dll!$Program.<>AsyncArrow_0_Stub(object value, object value) Line 156",
+        "watches": {
+          "parameter": "45",
+          "seed": "45",
+          "snapshot": "46",
+          "shared": "47",
+          "local": "91"
+        }
+      },
+      {
+        "marker": "break:captured-arrow-after",
+        "frame": "main.dll!$Program.<>AsyncArrow_0_Stub(object value, object value) Line 159",
+        "watches": {
+          "parameter": "45",
+          "seed": "45",
+          "snapshot": "46",
+          "shared": "48",
+          "local": "91"
+        }
+      },
+      {
+        "marker": "break:sync-owner-arrow-before",
+        "frame": "main.dll!$Program.<>AsyncArrow_5_Stub(object value, object value) Line 170",
+        "watches": {
+          "parameter": "46",
+          "seed": "46",
+          "snapshot": "47",
+          "shared": "48",
+          "local": "93"
+        }
+      },
+      {
+        "marker": "break:sync-owner-arrow-after",
+        "frame": "main.dll!$Program.<>AsyncArrow_5_Stub(object value, object value) Line 173",
+        "watches": {
+          "parameter": "46",
+          "seed": "46",
+          "snapshot": "47",
+          "shared": "49",
+          "local": "93"
+        }
+      },
+      {
+        "marker": "break:transitive-before",
+        "frame": "main.dll!$Program.<>AsyncArrow_2_Stub(object value, object value) Line 185",
+        "watches": {
+          "seed": "10",
+          "shared": "12",
+          "parentLocal": "13",
+          "childParameter": "13",
+          "childLocal": "26"
+        }
+      },
+      {
+        "marker": "break:transitive-after",
+        "frame": "main.dll!$Program.<>AsyncArrow_2_Stub(object value, object value) Line 187",
+        "watches": {
+          "seed": "10",
+          "shared": "12",
+          "parentLocal": "13",
+          "childParameter": "13",
+          "childLocal": "26"
+        }
+      },
+      {
+        "marker": "break:numeric-capture-loop",
+        "frame": "main.dll!$Program.$M_main_numericCaptureLoop(object value) Line 205",
+        "watches": {
+          "n": "3",
+          "i": "0"
+        }
+      },
+      {
+        "marker": "break:numeric-capture-loop",
+        "frame": "main.dll!$Program.$M_main_numericCaptureLoop(object value) Line 205",
+        "watches": {
+          "n": "3",
+          "i": "1"
+        }
+      },
+      {
+        "marker": "break:numeric-capture-loop",
+        "frame": "main.dll!$Program.$M_main_numericCaptureLoop(object value) Line 205",
+        "watches": {
+          "n": "3",
+          "i": "2"
+        }
+      },
+      {
+        "marker": "break:numeric-capture-restored",
+        "frame": "main.dll!$Program.$M_main_numericCaptureLoop(object value) Line 209",
+        "watches": {
+          "n": "3",
+          "i": "7",
+          "result": "3"
+        }
+      },
+      {
+        "marker": "break:instance-async",
+        "frame": "main.dll!$M_main_Cases.work(double value) Line 217",
+        "watches": {
+          "parameter": "50",
+          "local": "51"
+        }
+      },
+      {
+        "marker": "break:static-async",
+        "frame": "main.dll!$M_main_Cases.work(double value) Line 224",
+        "watches": {
+          "parameter": "60",
+          "local": "61"
+        }
+      },
+      {
+        "marker": "break:instance-iterator",
+        "frame": "main.dll!$M_main_Cases.sequence(double value) Line 231",
+        "watches": {
+          "parameter": "70",
+          "local": "71"
+        }
+      },
+      {
+        "marker": "break:instance-async-iterator",
+        "frame": "main.dll!$M_main_Cases.stream(double value) Line 238",
+        "watches": {
+          "parameter": "80",
+          "local": "81"
+        }
+      },
+      {
+        "marker": "break:namespace-async",
+        "frame": "main.dll!$Program.$nsfn_Named_$M_main_work(object value) Line 246",
+        "watches": {
+          "parameter": "90",
+          "local": "91"
+        }
+      },
+      {
+        "marker": "break:namespace-iterator",
+        "frame": "main.dll!$Program.$nsfn_Named_$M_main_sequence(object value) Line 253",
+        "watches": {
+          "parameter": "100",
+          "local": "101"
+        }
+      },
+      {
+        "marker": "break:namespace-async-iterator",
+        "frame": "main.dll!$Program.$nsfn_Named_$M_main_stream(object value) Line 260",
+        "watches": {
+          "parameter": "110",
+          "local": "111"
+        }
+      }
+    ]
+  },
+  "combinedLexicalCells": {
+    "status": "passed",
+    "artifacts": "artifacts/p3/combined-debugger-alias-portable/run-9WUnD4",
+    "fixture": "tests/fixtures/HoistedDebuggerLexicalCells",
+    "verifiedUtc": "2026-10-26T06:03:22.299Z",
+    "editor": "VS Code 1.141.0",
+    "csharpVersion": "2.140.9",
+    "extensionVersions": {
+      "ms-dotnettools.csharp": "2.140.9",
+      "ms-dotnettools.vscode-dotnet-runtime": "3.2.0"
+    },
+    "stops": 10,
+    "compilerSha256": "a3c3cdc4af3ff07693306189decfaffe42d80c633f50a64072c54c9b27704dc2",
+    "assemblySha256": "e5840333201d719f99bc75e8dc6949f9f590a952dba60e3537f70804ca61d333",
+    "pdbSha256": "3b58f73d118bc7fad0f5367cd63afd7697aa4f29c23794a6f05d3fa275b18967",
+    "debugAndNonDebugOutputMatch": true,
+    "nonDebugPdbAbsent": true,
+    "referenceAssemblyRewrite": true,
+    "sourceEncodings": {
+      "main.ts": "UTF-8 with BOM",
+      "helper.ts": "UTF-16 LE with BOM"
+    },
+    "strictUniqueExpectedLocals": true,
+    "outOfScopeLocalsAbsent": true,
+    "observations": [
+      {
+        "marker": "break:loop-before",
+        "frame": "main.dll!$Program.$M_main_loop() Line 7",
+        "watches": {
+          "index": "0",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:loop-inside",
+        "frame": "main.dll!$Program.$M_main_loop() Line 13",
+        "watches": {
+          "index": "99"
+        }
+      },
+      {
+        "marker": "break:loop-after",
+        "frame": "main.dll!$Program.$M_main_loop() Line 15",
+        "watches": {
+          "index": "0",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:loop-before",
+        "frame": "main.dll!$Program.$M_main_loop() Line 7",
+        "watches": {
+          "index": "1",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:loop-inside",
+        "frame": "main.dll!$Program.$M_main_loop() Line 13",
+        "watches": {
+          "index": "99"
+        }
+      },
+      {
+        "marker": "break:loop-after",
+        "frame": "main.dll!$Program.$M_main_loop() Line 15",
+        "watches": {
+          "index": "1",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:loop-done",
+        "frame": "main.dll!$Program.$M_main_loop() Line 17",
+        "watches": {
+          "index": "error CS0103: The name 'index' does not exist in the current context",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:parameter-before",
+        "frame": "main.dll!$Program.$M_main_parameter(object value) Line 20",
+        "watches": {
+          "value": "11",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      },
+      {
+        "marker": "break:parameter-inside",
+        "frame": "main.dll!$Program.$M_main_parameter(object value) Line 26",
+        "watches": {
+          "value": "99"
+        }
+      },
+      {
+        "marker": "break:parameter-after",
+        "frame": "main.dll!$Program.$M_main_parameter(object value) Line 28",
+        "watches": {
+          "value": "11",
+          "inner": "error CS0103: The name 'inner' does not exist in the current context"
+        }
+      }
+    ]
+  },
+  "focusedRegressions": {
+    "status": "passed",
+    "tests": 12,
+    "configuration": "Release",
+    "filter": "FullyQualifiedName~CapturedAsyncShadow|FullyQualifiedName~CapturedInnerCell|FullyQualifiedName~ProjectedLexicalCellPayload|FullyQualifiedName~LexicalCellsKeepIdentity|FullyQualifiedName~AsyncChildThroughSyncRelay",
+    "artifacts": "artifacts/p3/alias-focused/alias-focused.trx",
+    "log": "artifacts/p3/alias-focused.log",
+    "checks": [
+      "PDB alias signature resolves to the authoritative retained cell type",
+      "Alias scope equals source lexical and hoisted-slot range",
+      "Reference reload precedes resume dispatch and follows cell allocation",
+      "Duplicate active field-slot checks retained",
+      "Verified debug/nondebug runtime parity, temporal dead zones and shared mutable cell identity",
+      "Independent iteration captures retain 0 and 1 while inner cells hold 99",
+      "Parameter restores 11 after inner captured shadow holds 99"
+    ]
+  },
+  "interimPrimary": {
+    "sourceCommit": "d14514cfa70b902cc25b59496db89f0061227ab2",
+    "compilerSha256": "a8bc155971a0edf69eec74c518670f3915652174652532f0e5cec06db64f821e",
+    "artifacts": "artifacts/p3/hoisted-debugger-fixed/run-ayx0HV",
+    "scope": "Superseded initial holder-order repair; did not certify combined loop-head/inner-cell shadows"
+  },
+  "secondary": "Not rerun for the final alias candidate; historical primary/secondary comparisons remain in hoisted-last-verified.json and numeric-timer-last-verified.json",
+  "verificationScope": "Final alias candidate validated by 55 existing primary stops, 10 combined loop/parameter primary stops, and 12 focused metadata/runtime regressions. Exact combined fixture bytes were copied from the validated artifact fixture into the tracked fixture after the run."
+}

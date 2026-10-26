@@ -62,7 +62,10 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     private object? _explicitPrototype;
     internal bool HasExplicitPrototype { get; private set; }
     internal bool UsesDynamicPrototypeChain
-        => HasExplicitPrototype || _klass.HasModifiedInstancePrototypeChain;
+        => HasExplicitPrototype || _klass.HasModifiedInstancePrototypeChain
+            // Native Error defaults are ordinary mutable prototype properties,
+            // including when reached through several user-defined subclasses.
+            || _klass is SharpTSErrorClass;
 
     internal void SetExplicitPrototype(object? prototype)
     {
@@ -213,7 +216,10 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
             if (_setters?.ContainsKey(propName) == true)
                 return SharpTSUndefined.Instance;
             if (_fields.TryGetValue(propName, out var value)) return value;
-            return _interpreter!.GetInstancePrototypeProperty(this, propName);
+            if (_interpreter is not null)
+                return _interpreter.GetInstancePrototypeProperty(this, propName);
+            return TryGetUnattachedPrototypeProperty(propName, out var inherited)
+                ? inherited : SharpTSUndefined.Instance;
         }
         if (!_fields.ContainsKey(propName) && _getters?.ContainsKey(propName) != true
             && _setters?.ContainsKey(propName) != true && _klass.HasInstanceAccessorDeclaration(propName))
@@ -263,9 +269,9 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     public void Set(Token name, object? value)
     {
         string propName = name.Lexeme;
-        if (UsesDynamicPrototypeChain)
+        if (UsesDynamicPrototypeChain && _interpreter is not null)
         {
-            _interpreter!.SetInstancePropertyWithExplicitPrototype(this, propName, value, false);
+            _interpreter.SetInstancePropertyWithExplicitPrototype(this, propName, value, false);
             return;
         }
         if (TrySetClassAccessor(propName, value, false)) return;
@@ -331,9 +337,9 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     public void SetStrict(Token name, object? value, bool strictMode)
     {
         string propName = name.Lexeme;
-        if (UsesDynamicPrototypeChain)
+        if (UsesDynamicPrototypeChain && _interpreter is not null)
         {
-            _interpreter!.SetInstancePropertyWithExplicitPrototype(this, propName, value, strictMode);
+            _interpreter.SetInstancePropertyWithExplicitPrototype(this, propName, value, strictMode);
             return;
         }
         if (TrySetClassAccessor(propName, value, strictMode)) return;
@@ -428,7 +434,9 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
                 ?? (Prototype is SharpTSClassPrototype prototype && prototype.HasOwnProperty(name));
         }
         if (UsesDynamicPrototypeChain)
-            return GetOwnPropertyDescriptor(name) is not null || _interpreter!.HasProperty(Prototype, name);
+            return GetOwnPropertyDescriptor(name) is not null || (_interpreter is not null
+                ? _interpreter.HasProperty(Prototype, name)
+                : TryGetUnattachedPrototypeProperty(name, out _));
         // Get resolves live inherited accessor descriptors before its nominal
         // cache. Presence must agree so callers retain that getter's result.
         if (_klass.HasInstanceAccessorDeclaration(name)) return true;
@@ -438,6 +446,22 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
             _lookupCache[name] = resolution;
         }
         return resolution.Type != ResolutionType.NotFound;
+    }
+
+    private bool TryGetUnattachedPrototypeProperty(string name, out object? value)
+    {
+        // Hosts can allocate native Error instances before attaching their interpreter.
+        // Their canonical class prototypes already expose the data and method defaults.
+        object? current = Prototype;
+        var visited = new HashSet<SharpTSClassPrototype>(ReferenceEqualityComparer.Instance);
+        while (current is SharpTSClassPrototype prototype && visited.Add(prototype))
+        {
+            if (prototype.TryGetOwnMember(name, out value)) return true;
+            current = prototype.HasExplicitPrototype
+                ? prototype.ExplicitPrototype : prototype.Class.Superclass?.Prototype;
+        }
+        value = null;
+        return false;
     }
 
     public SharpTSClass GetClass() => _klass;

@@ -111,7 +111,7 @@ public sealed class EmittedObjectDescriptorRuntimeTests
         var ownPrototype = Activator.CreateInstance(ownPrototypeType,
             runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind)!;
         var inputs = Activator.CreateInstance(inputType,
-            getProperty, runtime.ObjectState, promise, runtime.FunctionValues.Type, runtime.FunctionBindings, runtime.Sentinels.UndefinedType,
+            getProperty, runtime.DescriptorStorage, runtime.ObjectState, promise, runtime.FunctionValues.Type, runtime.FunctionBindings, runtime.Sentinels.UndefinedType,
             ownPrototype)!;
         EmitReceiverProbe(emitter, probe, helper, inputs); probe.CreateType();
         var loaded = SaveVerifyLoad(builder); var savedProbe = loaded.GetType(probe.FullName!)!;
@@ -126,6 +126,19 @@ public sealed class EmittedObjectDescriptorRuntimeTests
                     var descriptor = Assert.IsType<Dictionary<string, object?>>(value);
                     Assert.Equal("supplied value", descriptor["value"]); Assert.Equal(false, descriptor["writable"]);
                     Assert.Equal(false, descriptor["enumerable"]); Assert.Equal(true, descriptor["configurable"]);
+                }
+                else Assert.Equal("unhandled", value);
+            }
+            var storageType = loaded.GetType(runtime.DescriptorStorage.Seal.DeclaringType!.FullName!)!;
+            Call(storageType, runtime.DescriptorStorage.Seal.Name, receiver);
+            foreach (string key in new[] { "name", "length" })
+            {
+                var value = Call(savedProbe, "Lookup", receiver, key);
+                if (supplied)
+                {
+                    var descriptor = Assert.IsType<Dictionary<string, object?>>(value);
+                    Assert.Equal("supplied value", descriptor["value"]);
+                    Assert.Equal(false, descriptor["configurable"]);
                 }
                 else Assert.Equal("unhandled", value);
             }

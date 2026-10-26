@@ -117,6 +117,7 @@ public partial class AsyncMoveNextEmitter
                 $"Cannot read private member #{fieldName} from an object whose class did not declare it");
             _il.MarkLabel(successLabel);
 
+            EmitPrivateFieldInstalledCheck(dictLocal, fieldName);
             _il.Emit(OpCodes.Ldloc, dictLocal);
             _il.Emit(OpCodes.Ldstr, fieldName);
             _il.Emit(OpCodes.Callvirt, dictType.GetMethod("get_Item", [typeof(string)])!);

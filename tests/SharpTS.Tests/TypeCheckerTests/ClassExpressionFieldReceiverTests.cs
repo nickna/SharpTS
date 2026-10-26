@@ -34,10 +34,9 @@ public sealed class ClassExpressionFieldReceiverTests
             function make(this: { outer: number }) { const C = class { value = 3; copy = this.value; static first = 7; static second = this.first; }; const restored: number = this.outer; console.log(restored); return C; } const C = make.call({ outer: 11 }); console.log(new C().copy, C.second);
             """, "", 0];
 
-        // #2451: TypeScript reports TS2576; SharpTS currently reports missing-member TS2339.
         yield return ["wrong-instance-facet", """
             const C = class { static first = 7; copy = this.first; };
-            """, "TS2339", 1];
+            """, "TS2576", 1];
 
         yield return ["wrong-static-result", """
             const C = class { static first = 7; static second: string = this.first; };

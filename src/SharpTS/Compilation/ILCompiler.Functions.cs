@@ -381,6 +381,9 @@ public partial class ILCompiler
     private void DefineFunctionDisplayClass(Stmt.Function funcStmt, string qualifiedFunctionName,
         BlockScopeRenameResult? blockScopeRenames = null)
     {
+        var debugSymbols = GetDebugHoistedBindings(funcStmt);
+        var perIterationBindings = _closures.Analyzer.GetPerIterationLoopBindings(funcStmt);
+
         // Check if this function has local variables that are captured by inner closures
         var capturedLocals = _closures.Analyzer.GetCapturedLocals(funcStmt);
         if (capturedLocals.Count == 0)
@@ -403,7 +406,6 @@ public partial class ILCompiler
         // capture distinct values. Keeping them out of the function DC leaves them as
         // locals / state-machine fields that closures snapshot per iteration — matching
         // the already-correct top-level case (#649).
-        var perIterationBindings = _closures.Analyzer.GetPerIterationLoopBindings(funcStmt);
         if (perIterationBindings.Count > 0)
         {
             capturedLocals = new HashSet<string>(capturedLocals);
@@ -436,6 +438,16 @@ public partial class ILCompiler
             var renameAware = new HashSet<string>(capturedLocals);
             ApplyReadCaptureRenames(renameAware, readRenames);
             capturedLocals = renameAware;
+        }
+
+        if (debugSymbols is not null)
+        {
+            // Rename expansion can add a cell-owned storage key even when the source name also
+            // denotes a captured outer binding. Only the cell may publish that binding's slot.
+            capturedLocals = new HashSet<string>(capturedLocals);
+            capturedLocals.ExceptWith(debugSymbols.Bindings
+                .Where(binding => _debugLexicalCellStorages.ContainsKey(binding.SourceToken))
+                .Select(binding => binding.StorageName));
         }
 
         RegisterFunctionDisplayClass(qualifiedFunctionName, capturedLocals, funcStmt);

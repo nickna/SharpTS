@@ -88,6 +88,7 @@ public partial class ILEmitter
 
             IL.MarkLabel(successLabel);
 
+            EmitPrivateFieldInstalledCheck(dictLocal, fieldName);
             // Access dictionary: dictLocal[fieldName]
             IL.Emit(OpCodes.Ldloc, dictLocal);
             IL.Emit(OpCodes.Ldstr, fieldName);

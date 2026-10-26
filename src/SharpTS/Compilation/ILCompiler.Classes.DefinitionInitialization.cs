@@ -239,6 +239,14 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.CachedConstructor);
                 il.Emit(OpCodes.Stloc, function);
             }
+            if (getter.HasValue)
+            {
+                // Accessor metadata belongs to this value. Ordinary methods retain
+                // the canonical key also used to associate their generator iterators.
+                il.Emit(OpCodes.Ldloc, function);
+                il.Emit(OpCodes.Ldloc, function);
+                il.Emit(OpCodes.Stfld, _runtime.FunctionValues.PropertyIdentityField);
+            }
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Ldloc, function);
             il.Emit(OpCodes.Callvirt, (getter == true ? storage.DescriptorGetter : getter == false ? storage.DescriptorSetter : storage.DescriptorValue).GetSetMethod()!);

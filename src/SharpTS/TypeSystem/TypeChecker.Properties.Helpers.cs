@@ -559,6 +559,7 @@ public partial class TypeChecker
             }
         }
 
+        ThrowIfStaticMemberOnInstance(gc, memberToken);
         return TypeInfo.Any.Shared;
     }
 
@@ -711,10 +712,33 @@ public partial class TypeChecker
         }
         if (memberNameStr == "constructor")
             return startClass;
+        ThrowIfStaticMemberOnInstance(startClass, memberName);
         throw new TypeCheckException(
             $"Property '{memberNameStr}' does not exist on type '{startClass.Name}'.",
             memberName.Line,
             tsCode: "TS2339");
+    }
+
+    private void ThrowIfStaticMemberOnInstance(TypeInfo classType, Token member)
+    {
+        // A string index signature admits the instance read independently of
+        // whether the constructor happens to have a property with this name.
+        for (TypeInfo? current = classType; current != null; current = GetSuperclass(current))
+            if (ClassInfoAccessor.Get(current, c => c.StringIndexType, gc => gc.StringIndexType) is not null)
+                return;
+
+        for (TypeInfo? current = classType; current != null; current = GetSuperclass(current))
+        {
+            if (GetStaticProperties(current)?.ContainsKey(member.Lexeme) == true ||
+                GetStaticMethods(current)?.ContainsKey(member.Lexeme) == true)
+            {
+                string className = GetClassName(classType) ?? classType.ToString();
+                throw new TypeCheckException(
+                    $"Property '{member.Lexeme}' does not exist on type '{className}'. Did you mean to access the static member '{className}.{member.Lexeme}' instead?",
+                    member.Line,
+                    tsCode: "TS2576");
+            }
+        }
     }
 
     private static TypeInfo? ResolveBuiltInSuperclassMember(string className, string memberName)

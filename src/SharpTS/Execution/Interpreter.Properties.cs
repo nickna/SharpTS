@@ -665,11 +665,17 @@ public partial class Interpreter
                 continue;
             }
 
-            if (current is SharpTSBuiltInConstructor nativeConstructor
-                && nativeConstructor.GetMember(name) is { } nativeStatic)
-                return nativeStatic is BuiltInMethod { IsConstant: true } constant
-                    ? constant.ConstantValue
-                    : nativeStatic;
+            if (current is SharpTSBuiltInConstructor nativeConstructor)
+            {
+                if (TryReadDescriptor(GetBuiltInConstructorOverlayDescriptor(nativeConstructor, name),
+                        receiver, out var constructorValue))
+                    return constructorValue;
+                if (!IsBuiltInConstructorPropertyDeleted(nativeConstructor, name)
+                    && nativeConstructor.GetMember(name) is { } nativeStatic)
+                    return nativeStatic is BuiltInMethod { IsConstant: true } constant
+                        ? constant.ConstantValue
+                        : nativeStatic;
+            }
 
             if (current is ISharpTSCallable callable)
             {
@@ -1271,6 +1277,7 @@ public partial class Interpreter
             {
                 return RuntimeValue.FromBoxed(ownMember);
             }
+            return RuntimeValue.FromBoxed(GetPropertyValue(objectNamespace, get.Name.Lexeme));
         }
 
         if (obj is ISharpTSPrimitiveConstructor primitiveConstructor)
@@ -2432,6 +2439,8 @@ public partial class Interpreter
     /// </summary>
     private object? EvaluateGetOnFallback(object? obj, string memberName)
     {
+        if (obj is SharpTSObjectNamespace)
+            return GetPropertyValue(obj, memberName);
         if (obj is ArrayBufferConstructorImpl)
             return GetPropertyValue(obj, memberName);
 
@@ -2565,10 +2574,11 @@ public partial class Interpreter
         // Resolve static methods via the constructor's own GetMember.
         if (obj is SharpTSBuiltInConstructor ctor)
         {
-            if (TryGetBuiltInConstructorProperty(ctor, memberName, out var ownValue))
+            if (TryReadDescriptor(GetBuiltInConstructorOverlayDescriptor(ctor, memberName),
+                    ctor, out var ownValue))
                 return ownValue;
             if (IsBuiltInConstructorPropertyDeleted(ctor, memberName))
-                return SharpTSUndefined.Instance;
+                return GetPropertyValue(GetFunctionPrototype(), memberName, ctor);
             // RegExp.prototype is realm-local: route through the Interpreter's
             // own prototype object so `delete RegExp.prototype[Symbol.split]`
             // and `Object.defineProperty(RegExp.prototype, …)` don't leak
@@ -2937,7 +2947,7 @@ public partial class Interpreter
         }
         if (obj is SharpTSBuiltInConstructor builtInConstructor)
         {
-            SetBuiltInConstructorProperty(builtInConstructor, set.Name.Lexeme, value);
+            SetBuiltInConstructorProperty(builtInConstructor, set.Name.Lexeme, value, strictMode);
             return value;
         }
 

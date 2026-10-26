@@ -32,6 +32,7 @@ internal sealed class MethodLocalSymbols(MethodBase method, ILGenerator il) : IL
 
     private readonly List<Scope> _scopes = [];
     private readonly Stack<Scope> _open = new();
+    private readonly List<(string Name, int Slot, StateMachineDebugSymbols.Scope Scope)> _projectedDisplayClasses = [];
 
     internal MethodBase Method { get; } = method;
     internal StateMachineDebugSymbols? HoistedSymbols { get; set; }
@@ -40,7 +41,35 @@ internal sealed class MethodLocalSymbols(MethodBase method, ILGenerator il) : IL
     internal IReadOnlyList<Scope> Scopes => _scopes;
 
     /// <summary>Whether anything worth writing was recorded.</summary>
-    internal bool HasLocals => _scopes.Any(scope => scope.Locals.Count > 0);
+    internal bool HasLocals => _projectedDisplayClasses.Count > 0 || _scopes.Any(scope => scope.Locals.Count > 0);
+
+    internal void AddProjectedDisplayClassLocal(string name, LocalBuilder local, StateMachineDebugSymbols.Scope scope)
+        => _projectedDisplayClasses.Add((name, local.LocalIndex, scope));
+
+    internal IReadOnlyList<Scope> GetScopesWithProjections()
+    {
+        var scopes = _scopes.Select(original =>
+        {
+            var copy = new Scope(original.StartOffset) { EndOffset = original.EndOffset };
+            copy.Locals.AddRange(original.Locals);
+            return copy;
+        }).ToList();
+        foreach (var (name, slot, lexicalScope) in _projectedDisplayClasses)
+        {
+            if (!lexicalScope.IsRoot && (lexicalScope.StartOffset == int.MaxValue
+                || lexicalScope.EndOffset <= lexicalScope.StartOffset)) continue;
+            int start = lexicalScope.IsRoot ? 0 : lexicalScope.StartOffset;
+            int end = lexicalScope.IsRoot ? -1 : lexicalScope.EndOffset;
+            var scope = scopes.FirstOrDefault(scope => scope.StartOffset == start && scope.EndOffset == end);
+            if (scope is null)
+            {
+                scope = new Scope(start) { EndOffset = end };
+                scopes.Add(scope);
+            }
+            scope.Locals.Add((name, slot, false));
+        }
+        return scopes;
+    }
 
     /// <summary>Opens the method-body scope. Called once, before emission.</summary>
     internal void Begin()

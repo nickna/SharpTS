@@ -229,6 +229,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             };
         }
         var key = args[0]?.ToString() ?? "";
+        if (FunctionObjectProperties.TryGetStorage(target, interpreter, out var ownProperties))
+            return ownProperties.GetOwnPropertyDescriptor(key) is not null;
         return target switch
         {
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(key) is not null,

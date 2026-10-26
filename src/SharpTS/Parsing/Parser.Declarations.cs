@@ -910,7 +910,7 @@ public partial class Parser
         Expr? initializer = null;
         if (Match(TokenType.EQUAL))
         {
-            initializer = Expression();
+            initializer = InferAsyncArrowInitializerName(Expression(), name.Lexeme);
         }
 
         if (hasDefiniteAssignment && initializer != null)
@@ -927,6 +927,24 @@ public partial class Parser
         if (isConst)
             return new Stmt.Const(name, typeAnnotation, initializer!, typeAnnotationNode);
         return new Stmt.Var(name, typeAnnotation, initializer, hasDefiniteAssignment, isVar, typeAnnotationNode);
+    }
+
+    private Expr InferAsyncArrowInitializerName(Expr initializer, string name)
+    {
+        Expr replacement = initializer switch
+        {
+            Expr.ArrowFunction { IsAsync: true, IsGenerator: false, Name: null, RuntimeName: null } arrow =>
+                arrow with { RuntimeName = name },
+            Expr.Grouping grouping => grouping with
+            {
+                Expression = InferAsyncArrowInitializerName(grouping.Expression, name)
+            },
+            _ => initializer
+        };
+        // The display name does not add a lexical self-binding. Preserve the
+        // expression's source/editor identity when installing its runtime name.
+        _spans.CopySpan(initializer, replacement);
+        return replacement;
     }
 
     /// <summary>

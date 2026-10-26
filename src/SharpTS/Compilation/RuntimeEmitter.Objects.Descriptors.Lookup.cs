@@ -57,6 +57,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct GetOwnDescriptorFunctionReceiverInputs(
         MethodBuilder GetProperty,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedObjectStateRuntime ObjectState,
         EmittedPromiseRuntime? Promise,
         TypeBuilder TSFunctionType,
@@ -446,7 +447,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         EmitDescriptorBoolField(il, resultDictLocal, "writable", false);
         EmitDescriptorBoolField(il, resultDictLocal, "enumerable", false);
-        EmitDescriptorBoolField(il, resultDictLocal, "configurable", true);
+        EmitFunctionMetadataConfigurable();
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notFnNameLabel);
@@ -471,10 +472,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         EmitDescriptorBoolField(il, resultDictLocal, "writable", false);
         EmitDescriptorBoolField(il, resultDictLocal, "enumerable", false);
-        EmitDescriptorBoolField(il, resultDictLocal, "configurable", true);
+        EmitFunctionMetadataConfigurable();
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notFnLengthLabel);
+
+        void EmitFunctionMetadataConfigurable()
+        {
+            il.Emit(OpCodes.Ldloc, resultDictLocal);
+            il.Emit(OpCodes.Ldstr, "configurable");
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsSealed);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ceq);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        }
 
         // Constructor functions have an own non-configurable `prototype`
         // property. GetProperty supplies the stable cached prototype object

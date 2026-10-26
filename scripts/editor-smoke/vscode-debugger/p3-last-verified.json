@@ -1,0 +1,113 @@
+{
+  "issue": "https://github.com/nickna/SharpTS/issues/1405",
+  "verifiedLocalDate": "2026-10-25",
+  "status": "automated-acceptance-passed-release-gates-open",
+  "platform": "win32-x64",
+  "dotnetSdk": "10.0.402",
+  "editor": "VS Code 1.141.0",
+  "shippingExtension": "SharpTS0.2.0",
+  "editorEvidence": "artifacts/p3/interpreter-debugger/run-Qwb9oO/result.json",
+  "modes": [
+    {
+      "mode": "development",
+      "sessions": 10,
+      "status": "passed",
+      "sourceCommit": "39697520f20d865beee341122aab1439dd45e8b3",
+      "binaryHashes": {
+        "SharpTS.LanguageServer.dll": "a4ab26eea406515ecd90b26d5b47827c864667529d89dfd0174fc1dee6af5bfe",
+        "SharpTS.dll": "e935bb09810514f0d9699bc0789637e055e45417ee0de8f5654b9be1dee48f40",
+        "SharpTS.DebugAdapter.dll": "90d408ac3098a7a934c8e8a2470167b49674429bc967092af1733a7d496a8cf9"
+      },
+      "coverage": [
+        "dirty-command-save",
+        "project-and-reference-forwarding",
+        "managed-project-reference-execution",
+        "launch-json",
+        "bound-source-breakpoints",
+        "comment-line-snapping",
+        "class-expansion",
+        "method-and-function-scopes",
+        "closure-values",
+        "loop-stops",
+        "watch-hover-repl",
+        "read-only-evaluation",
+        "step-in-next-out",
+        "async-generator-resumption",
+        "worker-thread-step",
+        "debug-console-output",
+        "caught-uncaught-unhandled-exceptions",
+        "pause-terminate-relaunch",
+        "vscode-restart-and-stop",
+        "changed-source-rejection-and-relaunch"
+      ]
+    },
+    {
+      "mode": "vsix",
+      "sessions": 10,
+      "status": "passed",
+      "sourceCommit": "39697520f20d865beee341122aab1439dd45e8b3",
+      "binaryHashes": {
+        "SharpTS.LanguageServer.dll": "a4ab26eea406515ecd90b26d5b47827c864667529d89dfd0174fc1dee6af5bfe",
+        "SharpTS.dll": "e935bb09810514f0d9699bc0789637e055e45417ee0de8f5654b9be1dee48f40",
+        "SharpTS.DebugAdapter.dll": "90d408ac3098a7a934c8e8a2470167b49674429bc967092af1733a7d496a8cf9"
+      },
+      "coverage": [
+        "dirty-command-save",
+        "project-and-reference-forwarding",
+        "managed-project-reference-execution",
+        "launch-json",
+        "bound-source-breakpoints",
+        "comment-line-snapping",
+        "class-expansion",
+        "method-and-function-scopes",
+        "closure-values",
+        "loop-stops",
+        "watch-hover-repl",
+        "read-only-evaluation",
+        "step-in-next-out",
+        "async-generator-resumption",
+        "worker-thread-step",
+        "debug-console-output",
+        "caught-uncaught-unhandled-exceptions",
+        "pause-terminate-relaunch",
+        "vscode-restart-and-stop",
+        "changed-source-rejection-and-relaunch"
+      ]
+    }
+  ],
+  "extensionTests": {
+    "passed": 4,
+    "failed": 0
+  },
+  "debuggerFocusedTests": {
+    "passed": 177,
+    "failed": 0,
+    "evidence": "artifacts/p3/debugger-tests/debugger-p3.trx",
+    "scope": "113 DebugSymbolsTests plus64 DebugAdapter tests; before subsequent lexical-shadow metadata regressions"
+  },
+  "package": {
+    "version": "1.0.13-alpha.0.374",
+    "sha256": "6b3c623c4eaec9da1686109f2130acd95512beaa4aea4fc09b86b6e619fc4861",
+    "adapterSha256": "90d408ac3098a7a934c8e8a2470167b49674429bc967092af1733a7d496a8cf9",
+    "installedShimProtocol": "passed",
+    "evidence": "artifacts/p3/debugger-package-verified/run-c1514f8c2e6c42669a7ba3c49351b445/result.json",
+    "publication": "local-feed-only",
+    "note": "Version pinned to the built binary using MinVerVersionOverride; package must be rebuilt from the intended final release source."
+  },
+  "vsix": {
+    "sha256": "19c081e855e6d032a7c1be6571011b807b3430efdd1712f6480c7f8e2ec22dfa",
+    "version": "0.2.0",
+    "source": "artifacts/p3/debugger-vsix/package.json"
+  },
+  "remainingReleaseGates": [
+    "Visual UI checklist in development and installed-VSIX profiles",
+    "First public SharpTS.DebugAdapter package publication"
+  ],
+  "publicPackage": {
+    "url": "https://api.nuget.org/v3-flatcontainer/sharpts.debugadapter/index.json",
+    "httpStatus": 404,
+    "evidence": "artifacts/p3/debugger-public-package-status.json"
+  },
+  "presentationEvidence": "VS Code debug APIs and actual extension-host DAP traffic; no new visual assertions",
+  "relatedFinding": "Packaging toolchain npm audit report retained at artifacts/p3/extension-npm-audit.json"
+}

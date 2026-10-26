@@ -128,8 +128,8 @@ public sealed class StaticAccessorFacetTests
     [InlineData("const C = class { static get value() { return 1; } static set value(value: number) {} }; C.value = true;", "TS2322")]
     [InlineData("class C { static get value(): number { return 1; } } const value: boolean = C.value;", "TS2322")]
     [InlineData("const C = class { static get value() { return 1; } }; const value: boolean = C.value;", "TS2322")]
-    [InlineData("class C { static get value(): number { return 1; } } new C().value;", "TS2339")]
-    [InlineData("const C = class { static get value(): number { return 1; } }; new C().value;", "TS2339")]
+    [InlineData("class C { static get value(): number { return 1; } } new C().value;", "TS2576")]
+    [InlineData("const C = class { static get value(): number { return 1; } }; new C().value;", "TS2576")]
     public void StaticAccessorsEnforceReadWriteTypesReadonlyAndVisibility(string source, string tsCode)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();

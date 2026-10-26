@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -648,6 +649,11 @@ public partial class DebugSymbolsTests
         var visited = new HashSet<TypeDefinitionHandle>();
         var referencedSlots = new HashSet<int>();
         pending.Enqueue(machine.StateMachineType);
+        foreach (var alias in ReadProjectedCellAliases(artifacts, machine))
+        {
+            referencedSlots.Add(alias.Scope.Slot);
+            pending.Enqueue(alias.CellType);
+        }
         while (pending.TryDequeue(out TypeDefinitionHandle type))
         {
             if (!visited.Add(type)) continue;
@@ -688,6 +694,66 @@ public partial class DebugSymbolsTests
         Assert.All(machine.Scopes.Where(scope => scope.Length > 0), scope =>
             Assert.Contains(scope.Slot, referencedSlots));
         return fields;
+    }
+
+    private sealed record ProjectedCellAlias(int LocalSlot, string Name, TypeDefinitionHandle CellType, HoistedLocalScope Scope);
+
+    private static IReadOnlyList<ProjectedCellAlias> ReadProjectedCellAliases(
+        CompilationArtifacts artifacts, HoistedStateMachineScopes machine)
+    {
+        using var pe = new PEReader(new MemoryStream(artifacts.Assembly, writable: false));
+        MetadataReader metadata = pe.GetMetadataReader();
+        MethodDefinition moveNext = metadata.GetMethodDefinition(machine.MoveNext);
+        MethodBodyBlock body = pe.GetMethodBody(moveNext.RelativeVirtualAddress);
+        if (body.LocalSignature.IsNil) return [];
+        ImmutableArray<EntityHandle> localTypes = metadata.GetStandaloneSignature(body.LocalSignature)
+            .DecodeLocalSignature(new LocalTypeHandleProvider(), (object?)null);
+        MetadataReader pdb = ReadPdb(artifacts.Pdb!);
+        var aliases = new List<ProjectedCellAlias>();
+        foreach (LocalScopeHandle handle in pdb.GetLocalScopes(machine.MoveNext))
+        {
+            LocalScope scope = pdb.GetLocalScope(handle);
+            foreach (LocalVariableHandle variableHandle in scope.GetLocalVariables())
+            {
+                LocalVariable variable = pdb.GetLocalVariable(variableHandle);
+                string name = pdb.GetString(variable.Name);
+                if (!name.StartsWith("<>8__", StringComparison.Ordinal)) continue;
+                Assert.Equal(LocalVariableAttributes.None, variable.Attributes);
+                Assert.InRange(variable.Index, 0, localTypes.Length - 1);
+                EntityHandle type = localTypes[variable.Index];
+                Assert.Equal(HandleKind.TypeDefinition, type.Kind);
+                var cell = (TypeDefinitionHandle)type;
+                Assert.Contains("DisplayClass_LexicalCell", metadata.GetString(metadata.GetTypeDefinition(cell).Name));
+                Assert.True(int.TryParse(name.AsSpan(5), out int suffix));
+                Assert.InRange(suffix - 1, 0, machine.Scopes.Count - 1);
+                HoistedLocalScope hoistedScope = machine.Scopes[suffix - 1];
+                Assert.Equal(hoistedScope.StartOffset, scope.StartOffset);
+                Assert.Equal(hoistedScope.Length, scope.Length);
+                Assert.True(scope.Length > 0);
+                aliases.Add(new(variable.Index, name, cell, hoistedScope));
+            }
+        }
+        Assert.Equal(aliases.Count, aliases.Select(alias => alias.LocalSlot).Distinct().Count());
+        return aliases;
+    }
+
+    private sealed class LocalTypeHandleProvider : ISignatureTypeProvider<EntityHandle, object?>
+    {
+        public EntityHandle GetArrayType(EntityHandle elementType, ArrayShape shape) => default;
+        public EntityHandle GetByReferenceType(EntityHandle elementType) => default;
+        public EntityHandle GetFunctionPointerType(MethodSignature<EntityHandle> signature) => default;
+        public EntityHandle GetGenericInstantiation(EntityHandle genericType, ImmutableArray<EntityHandle> typeArguments) => genericType;
+        public EntityHandle GetGenericMethodParameter(object? genericContext, int index) => default;
+        public EntityHandle GetGenericTypeParameter(object? genericContext, int index) => default;
+        public EntityHandle GetModifiedType(EntityHandle modifier, EntityHandle unmodifiedType, bool isRequired) => unmodifiedType;
+        public EntityHandle GetPinnedType(EntityHandle elementType) => elementType;
+        public EntityHandle GetPointerType(EntityHandle elementType) => default;
+        public EntityHandle GetPrimitiveType(PrimitiveTypeCode typeCode) => default;
+        public EntityHandle GetSZArrayType(EntityHandle elementType) => default;
+        public EntityHandle GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind) => handle;
+        public EntityHandle GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind) => handle;
+        public EntityHandle GetTypeFromSpecification(MetadataReader reader, object? genericContext, TypeSpecificationHandle handle, byte rawTypeKind)
+            => reader.GetTypeSpecification(handle).DecodeSignature(this, genericContext);
     }
 
     internal readonly record struct HoistedLocalScope(int Slot, int StartOffset, int Length)

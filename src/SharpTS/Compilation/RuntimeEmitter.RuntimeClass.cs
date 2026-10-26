@@ -903,6 +903,7 @@ public partial class RuntimeEmitter
                 runtime.SymbolAccessors,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
+                runtime.FunctionBindings,
                 runtime.Sentinels.UndefinedType,
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind)
             )
@@ -964,6 +965,8 @@ public partial class RuntimeEmitter
             )
         );  // For bind/call/apply on functions
         EmitBoundFunctionName(runtime.FunctionBindings.CaptureName, runtime.ObjectRead.Property);
+        EmitBoundFunctionLength(runtime.FunctionBindings.CaptureLength, runtime.ObjectRead.Property,
+            runtime.ObjectOwnProperties.HasOwnProperty);
         EmitBoundFunctionPrototype(runtime.FunctionBindings.CapturePrototype,
             runtime.ObjectPrototypes, runtime.DescriptorStorage);
         // Pre-define IsBoxedPrimitiveOfType shell so InstanceOf can reference
@@ -1788,6 +1791,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.ObjectRead.Property,
+                runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.ObjectFields.FieldsGetter,
                 runtime.ObjectFields.Interface,
                 runtime.ObjectStorage,

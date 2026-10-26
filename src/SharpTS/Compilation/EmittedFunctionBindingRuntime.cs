@@ -16,6 +16,13 @@ public sealed class EmittedFunctionBindingRuntime
         internal set => SetHandle(ref _captureName, value);
     }
 
+    private MethodBuilder? _captureLength;
+    public MethodBuilder CaptureLength
+    {
+        get => Require(_captureLength);
+        internal set => SetHandle(ref _captureLength, value);
+    }
+
     private MethodBuilder? _capturePrototype;
     public MethodBuilder CapturePrototype
     {
@@ -72,6 +79,13 @@ public sealed class EmittedFunctionBindingRuntime
         internal set => SetHandle(ref _boundNameField, value);
     }
 
+    private FieldBuilder? _boundLengthField;
+    public FieldBuilder BoundLengthField
+    {
+        get => Require(_boundLengthField);
+        internal set => SetHandle(ref _boundLengthField, value);
+    }
+
     private TypeBuilder? _anyType;
     public TypeBuilder AnyType
     {
@@ -112,6 +126,13 @@ public sealed class EmittedFunctionBindingRuntime
     {
         get => Require(_anyNameField);
         internal set => SetHandle(ref _anyNameField, value);
+    }
+
+    private FieldBuilder? _anyLengthField;
+    public FieldBuilder AnyLengthField
+    {
+        get => Require(_anyLengthField);
+        internal set => SetHandle(ref _anyLengthField, value);
     }
 
     private TypeBuilder? _bindType;
@@ -199,6 +220,7 @@ public sealed class EmittedFunctionBindingRuntime
     {
         EnsureMutable();
         _ = CaptureName;
+        _ = CaptureLength;
         _ = CapturePrototype;
         _ = BoundType;
         _ = BoundCtor;
@@ -207,12 +229,14 @@ public sealed class EmittedFunctionBindingRuntime
         _ = BoundTargetField;
         _ = BoundArgumentsField;
         _ = BoundNameField;
+        _ = BoundLengthField;
         _ = AnyType;
         _ = AnyCtor;
         _ = AnyInvoke;
         _ = AnyTargetField;
         _ = AnyArgumentsField;
         _ = AnyNameField;
+        _ = AnyLengthField;
         _ = BindType;
         _ = BindCtor;
         _ = BindInvoke;

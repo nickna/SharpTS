@@ -207,12 +207,6 @@ public class SharpTSErrorClass : SharpTSClass
     public override object? Call(Interpreter interpreter, List<object?> arguments)
         => Construct(interpreter, arguments, this);
 
-    internal override object? Construct(Interpreter interpreter, List<object?> arguments, object? newTarget)
-    {
-        SharpTSInstance instance = new(this);
-        return ExecuteConstructorLevel(interpreter, instance, arguments, newTarget);
-    }
-
     protected override bool TryExecuteNativeConstructor(
         Interpreter interpreter, object allocation, List<object?> arguments)
     {

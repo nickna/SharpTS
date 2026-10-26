@@ -1,6 +1,7 @@
 using SharpTS.Execution;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
 
 namespace SharpTS.Runtime.Types;
 
@@ -228,7 +229,7 @@ public class SharpTSPromiseClass : SharpTSClass
     private static ISharpTSCallable RequireExecutor(List<object?> arguments)
     {
         if (arguments.Count < 1 || arguments[0] is not ISharpTSCallable executor)
-            throw new InterpreterException("Promise executor must be callable.");
+            throw new ThrowException(new SharpTSTypeError("Promise executor must be callable."));
         return executor;
     }
 

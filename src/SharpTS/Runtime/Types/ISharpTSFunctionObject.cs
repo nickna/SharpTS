@@ -55,7 +55,7 @@ internal static class FunctionObjectProperties
             ? generator.FunctionProperties.GetProperties(interpreter)
             : function.OwnProperties;
 
-    internal static SharpTSObject Create(string name, int length)
+    internal static SharpTSObject Create(string name, double length)
     {
         var properties = new SharpTSObject([]);
         properties.DefineProperty("length", new SharpTSPropertyDescriptor(

@@ -1078,6 +1078,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 $"Cannot read private member #{fieldName} from an object whose class did not declare it");
             IL.MarkLabel(successLabel);
 
+            EmitPrivateFieldInstalledCheck(dictLocal, fieldName);
             IL.Emit(OpCodes.Ldloc, dictLocal);
             IL.Emit(OpCodes.Ldstr, fieldName);
             IL.Emit(OpCodes.Callvirt, dictType.GetMethod("get_Item", [typeof(string)])!);

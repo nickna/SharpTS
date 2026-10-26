@@ -110,6 +110,19 @@ The global async-arrow case keeps a module binding in its authoritative static f
 state-machine copy is hidden, and bare `moduleShared` Watch lookup is unavailable; inspect the
 static field as described in the debugger guide.
 
+The 2026-10-25 lexical-cell follow-up passes the same 55 primary stops with VS Code 1.141.0
+and C# 2.140.9. Scoped IL locals expose references to authoritative lexical cells, allowing
+the inner `local = 99` to precede the outer `local = 11` and restoring the outer binding on
+scope exit. The [combined lexical-cell fixture](../../../tests/fixtures/HoistedDebuggerLexicalCells/main.ts)
+adds ten passing stops covering inner captured shadows of independent loop iterations and
+a parameter. Run it with the same command, changing `--fixture` to
+`tests/fixtures/HoistedDebuggerLexicalCells`. Both fixtures require exactly one Locals entry
+per expected binding, Watch values, scope absence, and matching debug/nondebug output.
+Twelve focused metadata/runtime regressions verify cell identity, alias scopes and reference
+reloads, independent iteration captures, and unchanged nondebug behavior. The
+[follow-up record](lexical-cell-last-verified.json) preserves exact source and binary hashes
+and both live runs. The earlier netcoredbg comparison was not repeated for this follow-up.
+
 The primary C# debugger's Watch evaluator requires C# keyword escaping: a source binding `int = 3`
 appears as `@int` in Locals and evaluates as `@int`; bare `int` fails with CS1525. The legal source
 name `$dollar` evaluates directly (verified value `4`). Visual Studio and Rider have not been
