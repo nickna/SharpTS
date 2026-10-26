@@ -29,6 +29,6 @@ public class StaticAutoAccessorTypeTests
             const incompatible = new Config().version;
             """;
         var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(TestHarness.ParseOrThrow(source)));
-        Assert.Equal("TS2339", error.Diagnostic.TsCode);
+        Assert.Equal("TS2576", error.Diagnostic.TsCode);
     }
 }
