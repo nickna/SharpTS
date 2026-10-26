@@ -239,6 +239,7 @@ public partial class Interpreter
         object? value,
         bool strictMode = false)
     {
+        bool hadOwnProperty = HasBuiltInConstructorOwnProperty(constructor, name);
         if (name == "name"
             && GetBuiltInConstructorOverlayDescriptor(constructor, name) is { Writable: false, HasGet: false, HasSet: false })
         {
@@ -280,7 +281,7 @@ public partial class Interpreter
             HasValue = true,
             Writable = true,
             HasWritable = true,
-            Enumerable = constructor.GetMember(name) is null,
+            Enumerable = !hadOwnProperty,
             HasEnumerable = true,
             Configurable = true,
             HasConfigurable = true,

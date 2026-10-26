@@ -215,4 +215,28 @@ public sealed class P3InterpreterMetadataTests
         }
         else Assert.Equal(expected, TestHarness.RunInterpreted(source));
     }
+
+    // Compiled recreation of deleted native constructor names is tracked in #3003.
+    [Theory, InterpretedOnlyData]
+    public void BuiltInConstructorNameAssignmentPreservesDescriptorEnumerability(ExecutionMode mode)
+    {
+        AssertOutput("""
+            const prototype: any = Function.prototype;
+            Object.defineProperty(prototype, "name", { writable: true });
+            for (const ctor of [Map, AbortController]) {
+                const target: any = ctor;
+                const original = target.name;
+                target.name = "ignored";
+                console.log(target.name === original, Object.getOwnPropertyDescriptor(target, "name")!.enumerable);
+                Object.defineProperty(target, "name", { writable: true });
+                target.name = "changed";
+                console.log(target.name, Object.getOwnPropertyDescriptor(target, "name")!.enumerable);
+                delete target.name;
+                target.name = "recreated";
+                const descriptor: any = Object.getOwnPropertyDescriptor(target, "name");
+                console.log(descriptor.value, descriptor.enumerable, descriptor.writable, descriptor.configurable);
+            }
+            """, string.Concat(Enumerable.Repeat("true false\nchanged false\nrecreated true true true\n", 2)), mode);
+    }
+
 }
