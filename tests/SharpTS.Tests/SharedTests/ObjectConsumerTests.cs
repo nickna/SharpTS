@@ -47,6 +47,8 @@ public class ObjectConsumerTests
             }
             console.log(work(2, 3, 5));
             """;
+        if (mode == ExecutionMode.Compiled)
+            Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
         Assert.Equal("1\n6\n6\n7\n", TestHarness.Run(source, mode));
     }
 

@@ -16,7 +16,9 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    protected override void EmitGet(Expr.Get g)
+    protected override void EmitGet(Expr.Get g) => EmitGet(g, numericConsumer: false);
+
+    private void EmitGet(Expr.Get g, bool numericConsumer)
     {
         object? factReceiver = PrimitiveFieldReceiverIdentity(g.Object);
         if (factReceiver is null || !_nativePrimitiveFieldFacts.Any(fact =>
@@ -382,7 +384,7 @@ public partial class ILEmitter
         // record, class instances assigned to record-typed variables, etc.).
         // Skipped when optional chaining is in play — null-check semantics
         // there are non-trivial and hot-path optionals are rare.
-        if (TryEmitInterfaceRecordGet(g, numericConsumer: false))
+        if (TryEmitInterfaceRecordGet(g, numericConsumer))
             return;
 
         if (!g.Optional
@@ -391,7 +393,7 @@ public partial class ILEmitter
         {
             JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzed);
             var shape = analyzed as JsonSerializationShape.Record;
-            if (TryEmitTypedRecordNumberGet(g, shape))
+            if (TryEmitTypedRecordNumberGet(g, shape, numericConsumer: numericConsumer))
                 return;
             EmitTypedRecordPropertyGet(g, shape);
             return;

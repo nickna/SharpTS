@@ -38,6 +38,8 @@ public class ObjectLocalPromotionTests
             console.log(objectWork(100));
             """;
 
+        if (mode == ExecutionMode.Compiled)
+            Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
         Assert.Equal("10000\n", TestHarness.Run(source, mode));
     }
 
