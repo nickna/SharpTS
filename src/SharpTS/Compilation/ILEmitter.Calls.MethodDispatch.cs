@@ -825,14 +825,15 @@ public partial class ILEmitter
         if (!hasRestParam && arguments.Any(a => a is Expr.Spread))
             return false;
 
-        if (GuardClassMethodPrototype && AnyContainsSuspension(arguments))
+        if (AnyContainsSuspension(arguments))
         {
             EmitDynamicMethodCallPreservingThis(receiver, methodName, arguments);
             return true;
         }
 
         var guardedReceiver = EmitAlternateClassMethodCallGuard(
-            receiver, methodName, arguments, out var prototypeCallCompleted);
+            receiver, methodName, arguments, out var prototypeCallCompleted,
+            _ctx.TypeMap?.IsStableExactPrimitiveMethodCall(methodGet) == true ? null : castType);
 
         // Emit: ((ClassName)receiver).method(args)
         if (guardedReceiver != null)

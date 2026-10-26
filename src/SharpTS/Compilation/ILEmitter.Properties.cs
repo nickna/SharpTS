@@ -2534,45 +2534,62 @@ public partial class ILEmitter
                 classType, getterBuilder, _ctx.EmittingTypeBuilder, out var castType, out var getterTarget))
             return false;
 
-        // Emit: ((ClassName)receiver).get_PropertyName()
+        if (HasNominalClassCarrier(receiver))
+        {
+            EmitExpression(receiver);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Castclass, castType);
+            IL.Emit(OpCodes.Callvirt, getterTarget);
+            SetClassGetterStackType(getterBuilder.ReturnType);
+            return true;
+        }
+
+        // A public class annotation admits structurally compatible objects. Keep
+        // direct dispatch for actual CLR instances, and read the original carrier
+        // through guest property dispatch for other compatible values.
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
+        var savedReceiver = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, savedReceiver);
+        var nominal = IL.DefineLabel();
+        var completed = IL.DefineLabel();
+        var getterReturnType = getterBuilder.ReturnType;
+        var result = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Ldloc, savedReceiver);
+        IL.Emit(OpCodes.Isinst, castType);
+        IL.Emit(OpCodes.Brtrue, nominal);
+        EmitThrowIfReceiverUndefined(savedReceiver, propertyName);
+        IL.Emit(OpCodes.Ldloc, savedReceiver);
+        IL.Emit(OpCodes.Ldstr, propertyName);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
+        IL.Emit(OpCodes.Stloc, result);
+        IL.Emit(OpCodes.Br, completed);
+        IL.MarkLabel(nominal);
+        IL.Emit(OpCodes.Ldloc, savedReceiver);
         IL.Emit(OpCodes.Castclass, castType);
         IL.Emit(OpCodes.Callvirt, getterTarget);
-
-        // Check the actual return type of the getter method
-        // Field properties have typed getters, but explicit accessors return object
-        var getterReturnType = getterBuilder.ReturnType;
-
-        if (_ctx.Types.IsDouble(getterReturnType))
-        {
-            // A declared `number` field is already a native double. Keep that representation
-            // through arithmetic and loop consumers; they will box only if an object boundary
-            // actually requires it.
-            SetStackType(StackType.Double);
-        }
-        else if (_ctx.Types.IsBoolean(getterReturnType))
-        {
-            SetStackType(StackType.Boolean);
-        }
-        else if (getterReturnType.IsValueType)
-        {
-            // Other CLR value types are not represented by StackType and must retain the
-            // established boxed-object contract.
+        if (getterReturnType.IsValueType)
             IL.Emit(OpCodes.Box, getterReturnType);
-            SetStackUnknown();
-        }
-        else if (_ctx.Types.IsString(getterReturnType))
-        {
-            SetStackType(StackType.String);
-        }
+        IL.Emit(OpCodes.Stloc, result);
+        IL.MarkLabel(completed);
+        IL.Emit(OpCodes.Ldloc, result);
+
+        // A structural field retains its raw guest value, including values
+        // supplied through any, rather than coercing it to the class annotation.
+        SetStackUnknown();
+        return true;
+    }
+
+    private void SetClassGetterStackType(Type returnType)
+    {
+        if (_ctx.Types.IsDouble(returnType)) SetStackType(StackType.Double);
+        else if (_ctx.Types.IsBoolean(returnType)) SetStackType(StackType.Boolean);
+        else if (_ctx.Types.IsString(returnType)) SetStackType(StackType.String);
         else
         {
-            // Reference types (including object) don't need boxing
+            if (returnType.IsValueType) IL.Emit(OpCodes.Box, returnType);
             SetStackUnknown();
         }
-
-        return true;
     }
 
     /// <summary>
@@ -2637,6 +2654,16 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stloc, savedValue);
 
             var done = IL.DefineLabel();
+            if (!HasNominalClassCarrier(receiver))
+            {
+                var nominal = IL.DefineLabel();
+                IL.Emit(OpCodes.Ldloc, savedReceiver);
+                IL.Emit(OpCodes.Isinst, nativeStore ? nativeCast : guestCast);
+                IL.Emit(OpCodes.Brtrue, nominal);
+                EmitStructuralClassPropertyWrite(savedReceiver, propertyName, savedValue);
+                IL.Emit(OpCodes.Br, done);
+                IL.MarkLabel(nominal);
+            }
             if (_ctx.RuntimeFeatures?.UsesObjectIntegrityMutation != false)
             {
                 var frozen = IL.DeclareLocal(_ctx.Types.Object);
@@ -2687,46 +2714,43 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, receiverTemp);
 
         if (TryEmitTypedDirectSetter(
-                receiverTemp, castType, setterBuilder, setterTarget, setterParamType, value))
+                receiverTemp, castType, setterBuilder, setterTarget, setterParamType, propertyName, value,
+                HasNominalClassCarrier(receiver)))
             return true;
 
-        // Check if frozen: _frozenObjects.TryGetValue(obj, out _)
-        var notFrozenLabel = IL.DefineLabel();
+        EmitExpression(value);
+        EnsureBoxed();
+        var assignedValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, assignedValue);
+
+        var nominalSetter = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, receiverTemp);
+        IL.Emit(OpCodes.Isinst, castType);
+        IL.Emit(OpCodes.Brtrue, nominalSetter);
+        EmitStructuralClassPropertyWrite(receiverTemp, propertyName, assignedValue);
+        IL.Emit(OpCodes.Br, endLabel);
+        IL.MarkLabel(nominalSetter);
+
+        // Preserve the nominal setter's object-integrity check after RHS effects.
         var frozenCheckLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.ObjectState.FrozenObjects);
         IL.Emit(OpCodes.Ldloc, receiverTemp);
         IL.Emit(OpCodes.Ldloca, frozenCheckLocal);
         IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.ConditionalWeakTable, "TryGetValue", _ctx.Types.Object, _ctx.Types.Object.MakeByRefType()));
-        IL.Emit(OpCodes.Brfalse, notFrozenLabel);
-
-        // Object is frozen - emit value but skip setter call
-        // Just return the value as the expression result
-        EmitExpression(value);
-        EmitBoxIfNeeded(value);
-        IL.Emit(OpCodes.Br, endLabel);
-
-        // Not frozen - proceed with normal setter call
-        IL.MarkLabel(notFrozenLabel);
+        IL.Emit(OpCodes.Brtrue, endLabel);
 
         // Load receiver and cast to class type
         IL.Emit(OpCodes.Ldloc, receiverTemp);
         IL.Emit(OpCodes.Castclass, castType);
 
-        // Emit value and convert to setter parameter type
-        EmitExpression(value);
+        IL.Emit(OpCodes.Ldloc, assignedValue);
 
         // Check if setter returns void (field properties) or object (explicit accessors)
         var setterReturnsVoid = _ctx.Types.IsVoid(setterBuilder.ReturnType);
 
-        // Save a copy for expression result (need to box if value type for consistent handling)
         if (setterParamType.IsValueType || setterParamType.IsGenericParameter)
         {
-            // For value types: box first, then dup, then unbox for setter
-            EmitBoxIfNeeded(value);
-            IL.Emit(OpCodes.Dup);
-            var resultTemp = IL.DeclareLocal(_ctx.Types.Object);
-            IL.Emit(OpCodes.Stloc, resultTemp);
             IL.Emit(OpCodes.Unbox_Any, setterParamType);
             IL.Emit(OpCodes.Callvirt, setterTarget);
             // Pop setter return value if not void (explicit accessors return object)
@@ -2734,15 +2758,9 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Pop);
             }
-            IL.Emit(OpCodes.Ldloc, resultTemp);
         }
         else
         {
-            // For reference types (including object): dup, optionally cast, call setter
-            EmitBoxIfNeeded(value);
-            IL.Emit(OpCodes.Dup);
-            var resultTemp = IL.DeclareLocal(_ctx.Types.Object);
-            IL.Emit(OpCodes.Stloc, resultTemp);
             if (!_ctx.Types.IsObject(setterParamType))
             {
                 IL.Emit(OpCodes.Castclass, setterParamType);
@@ -2753,12 +2771,29 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Pop);
             }
-            IL.Emit(OpCodes.Ldloc, resultTemp);
         }
 
         IL.MarkLabel(endLabel);
+        IL.Emit(OpCodes.Ldloc, assignedValue);
         SetStackUnknown();  // Result is boxed object
         return true;
+    }
+
+    private void EmitStructuralClassPropertyWrite(LocalBuilder receiver, string name, LocalBuilder value)
+    {
+        EmitThrowIfReceiverUndefined(receiver, name, isWrite: true);
+        IL.Emit(OpCodes.Ldloc, receiver);
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(OpCodes.Ldloc, value);
+        if (value.LocalType.IsValueType || value.LocalType.IsGenericParameter)
+            IL.Emit(OpCodes.Box, value.LocalType);
+        if (_ctx.IsStrictMode)
+        {
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.PropertyStrict);
+        }
+        else
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Property);
     }
 
     /// <summary>
@@ -2772,7 +2807,9 @@ public partial class ILEmitter
         MethodBuilder setterBuilder,
         System.Reflection.MethodInfo setterTarget,
         Type setterParamType,
-        Expr value)
+        string propertyName,
+        Expr value,
+        bool nominalCarrier)
     {
         StackType resultStackType;
         if (_ctx.Types.IsDouble(setterParamType) && IsNumericType(_ctx.TypeMap?.Get(value)))
@@ -2793,10 +2830,23 @@ public partial class ILEmitter
         var valueTemp = IL.DeclareLocal(setterParamType);
         IL.Emit(OpCodes.Stloc, valueTemp);
 
+        var completed = IL.DefineLabel();
+        if (!nominalCarrier)
+        {
+            var nominal = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, receiverTemp);
+            IL.Emit(OpCodes.Isinst, castType);
+            IL.Emit(OpCodes.Brtrue, nominal);
+            EmitStructuralClassPropertyWrite(receiverTemp, propertyName, valueTemp);
+            IL.Emit(OpCodes.Br, completed);
+            IL.MarkLabel(nominal);
+        }
+
         if (_ctx.RuntimeFeatures?.UsesObjectIntegrityMutation == false)
         {
             EmitTypedDirectSetterCall(
                 receiverTemp, castType, setterBuilder, setterTarget, valueTemp);
+            IL.MarkLabel(completed);
             IL.Emit(OpCodes.Ldloc, valueTemp);
             SetStackType(resultStackType);
             return true;
@@ -2816,6 +2866,7 @@ public partial class ILEmitter
             receiverTemp, castType, setterBuilder, setterTarget, valueTemp);
 
         IL.MarkLabel(endLabel);
+        IL.MarkLabel(completed);
         IL.Emit(OpCodes.Ldloc, valueTemp);
         SetStackType(resultStackType);
         return true;

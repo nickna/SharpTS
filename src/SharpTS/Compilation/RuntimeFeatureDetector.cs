@@ -2591,6 +2591,24 @@ public sealed partial class RuntimeFeatureDetector
 
         switch (type)
         {
+            case TypeInfo.Instance instance:
+                RecordStructuralMaterializationView(instance);
+                switch (instance.ResolvedClassType)
+                {
+                    case TypeInfo.Class cls:
+                        foreach (var member in cls.FieldTypes.Values.Concat(cls.Getters.Values).Concat(cls.Setters.Values))
+                            MarkPotentiallyMaterialized(member, visited);
+                        if (cls.Superclass is not null)
+                            MarkPotentiallyMaterialized(new TypeInfo.Instance(cls.Superclass), visited);
+                        break;
+                    case TypeInfo.MutableClass cls:
+                        foreach (var member in cls.FieldTypes.Values.Concat(cls.Getters.Values).Concat(cls.Setters.Values))
+                            MarkPotentiallyMaterialized(member, visited);
+                        if (cls.Superclass is not null)
+                            MarkPotentiallyMaterialized(new TypeInfo.Instance(cls.Superclass), visited);
+                        break;
+                }
+                break;
             case TypeInfo.Record record:
                 RecordStructuralMaterializationView(record);
                 if (JsonSerializationShapeAnalyzer.TryAnalyze(record, out var analyzed) &&
