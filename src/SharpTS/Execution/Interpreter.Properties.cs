@@ -470,6 +470,14 @@ public partial class Interpreter
                 if (TryReadDescriptor(ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name),
                         receiver, out var ownValue))
                     return ownValue;
+                var collectionMember = current switch
+                {
+                    SharpTSMap map => MapBuiltIns.GetMember(map, name),
+                    SharpTSSet set => SetBuiltIns.GetMember(set, name),
+                    _ => null
+                };
+                if (collectionMember is not null)
+                    return collectionMember;
                 current = ObjectBuiltIns.PrototypeOf(this, current);
                 continue;
             }
@@ -742,6 +750,11 @@ public partial class Interpreter
                 if (TryReadDescriptor(ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(symbol),
                         receiver, out var ownValue))
                     return ownValue;
+                if (symbol == SharpTSSymbol.Iterator)
+                {
+                    if (current is SharpTSMap map) return MapBuiltIns.GetMember(map, "entries");
+                    if (current is SharpTSSet set) return SetBuiltIns.GetMember(set, "values");
+                }
                 current = ObjectBuiltIns.PrototypeOf(this, current);
                 continue;
             }
@@ -1293,7 +1306,8 @@ public partial class Interpreter
         if (obj is ISharpTSPrimitiveConstructor primitiveConstructor)
             return RuntimeValue.FromBoxed(GetPropertyValue(primitiveConstructor, get.Name.Lexeme));
 
-        if (obj is ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator)
+        if (obj is ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator
+            or SharpTSMap or SharpTSSet)
             return RuntimeValue.FromBoxed(GetPropertyValue(obj, get.Name.Lexeme));
 
         if (NeedsLiveFunctionPrototypeRead(obj, get.Name.Lexeme))
