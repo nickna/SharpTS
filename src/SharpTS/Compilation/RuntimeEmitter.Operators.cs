@@ -83,7 +83,8 @@ public partial class RuntimeEmitter
         EmittedNumericCoercionRuntime NumericCoercion,
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedStringCoercionRuntime StringCoercion,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? BigIntLooseEquals
     );
 
     /// <summary>
@@ -1293,6 +1294,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, ordinaryPrototypeHas);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Brtrue, ordinaryPrototypeHas);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Brtrue, ordinaryPrototypeHas);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, defaultFunctionHas);
         il.MarkLabel(ordinaryPrototypeHas);
         var functionHasKey = il.DeclareLocal(_types.String);
@@ -1831,6 +1838,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.BoxedPrimitives.UnwrapIfBoxed);
         il.Emit(OpCodes.Stloc, rightLocal);
         il.MarkLabel(operandsReadyLabel);
+
+        if (inputs.BigIntLooseEquals is { } bigIntEquals)
+        {
+            var compareBigInt = il.DefineLabel();
+            var noBigInt = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, leftLocal);
+            il.Emit(OpCodes.Isinst, _types.BigInteger);
+            il.Emit(OpCodes.Brtrue, compareBigInt);
+            il.Emit(OpCodes.Ldloc, rightLocal);
+            il.Emit(OpCodes.Isinst, _types.BigInteger);
+            il.Emit(OpCodes.Brfalse, noBigInt);
+            il.MarkLabel(compareBigInt);
+            il.Emit(OpCodes.Ldloc, leftLocal);
+            il.Emit(OpCodes.Ldloc, rightLocal);
+            il.Emit(OpCodes.Call, bigIntEquals);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noBigInt);
+        }
 
         // ECMA-262 7.2.14 IsLooselyEqual: when one side is a Dictionary/$Object
         // and the other is a String, Number, or Boolean, the spec calls

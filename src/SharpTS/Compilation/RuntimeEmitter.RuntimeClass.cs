@@ -1356,18 +1356,6 @@ public partial class RuntimeEmitter
         // both bound by this point (ToJsString's Symbol arm uses them too).
         EmitStringifyCoerce(runtime.StringCoercion,
             runtime.Symbols.Type, runtime.ObjectStorage.Type, runtime.ObjectFields.Interface, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
-        // Equals body — must come after ToJsString since the Object-vs-String
-        // branch calls runtime.StringCoercion.ToJsString.
-        EmitEquals(
-            runtime.Operators,
-            new EqualsInputs(
-                runtime.BoxedPrimitives,
-                runtime.NumericCoercion,
-                runtime.ObjectStorage,
-                runtime.StringCoercion,
-                runtime.Sentinels.UndefinedType
-            )
-        );
         // ToNumber/ConvertToNumber bodies: emit AFTER GetProperty/InvokeMethodValue
         // so their ToPrimitive(value, "number") on Dictionary/$Object args can
         // call those helpers.
@@ -2948,6 +2936,19 @@ public partial class RuntimeEmitter
                     runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter, runtime.NumericCoercion.ToNumber, runtime.Sentinels.UndefinedType,
                     runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         }
+        // Equals body — must come after ToJsString since the Object-vs-String
+        // branch calls runtime.StringCoercion.ToJsString.
+        EmitEquals(
+            runtime.Operators,
+            new EqualsInputs(
+                runtime.BoxedPrimitives,
+                runtime.NumericCoercion,
+                runtime.ObjectStorage,
+                runtime.StringCoercion,
+                runtime.Sentinels.UndefinedType,
+                runtime.BigInt.Implementation?.LooseEquals
+            )
+        );
         // Promise methods moved earlier (before GetProperty, which needs PromiseThen for typeof p.then)
         // Number methods
         EmitNumberMethods(typeBuilder, runtime.Numbers, runtime.StringCoercion,
