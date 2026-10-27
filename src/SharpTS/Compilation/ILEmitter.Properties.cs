@@ -2702,8 +2702,9 @@ public partial class ILEmitter
 
         // Get the actual parameter type of the setter method
         // Field properties have typed setters, but explicit accessors take object
-        var setterParams = setterBuilder.GetParameters();
-        var setterParamType = setterParams.Length > 0 ? setterParams[0].ParameterType : _ctx.Types.Object;
+        var setterParams = setterTarget.GetParameters();
+        var setterParamType = setterParams.Length > 0
+            ? EmitterTypeHelpers.ResolveMethodParameterType(setterTarget, 0) : _ctx.Types.Object;
 
         // Emit: ((ClassName)receiver).set_PropertyName(value), while retaining the value as the
         // assignment expression result. Primitive field values stay in typed locals across the

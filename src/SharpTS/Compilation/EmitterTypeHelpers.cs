@@ -182,6 +182,18 @@ internal static class EmitterTypeHelpers
         return false; // no instantiation of the declaring type found
     }
 
+    internal static Type ResolveMethodParameterType(MethodInfo method, int index)
+    {
+        var parameter = method.GetParameters()[index].ParameterType;
+        if (method.DeclaringType is not { IsConstructedGenericType: true } owner)
+            return parameter;
+        var parameters = owner.GetGenericTypeDefinition().GetGenericArguments();
+        var arguments = owner.GetGenericArguments();
+        var replacements = new Dictionary<Type, Type>();
+        for (int i = 0; i < parameters.Length; i++) replacements.Add(parameters[i], arguments[i]);
+        return SubstituteBaseTypeArguments(parameter, replacements);
+    }
+
     private static Type? GetInstantiatedBaseType(Type type)
     {
         if (!type.IsConstructedGenericType) return type.BaseType;
