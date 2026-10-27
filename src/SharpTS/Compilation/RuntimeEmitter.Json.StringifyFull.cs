@@ -32,7 +32,8 @@ public partial class RuntimeEmitter
         ConstructorBuilder TSTypeErrorCtor,
         MethodBuilder TypeOf,
         FieldInfo UndefinedInstance,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ConvertListToHashSetInputs(
@@ -65,7 +66,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSSymbolType,
         ConstructorBuilder TSTypeErrorCtor,
         MethodBuilder TypeOf,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct StringifyArrayFullInputs(
@@ -149,7 +151,8 @@ public partial class RuntimeEmitter
                 inputs.TSSymbolType,
                 inputs.TSTypeErrorCtor,
                 inputs.TypeOf,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                NativeProxyRejection: inputs.NativeProxyRejection
             )
         );
 
@@ -674,7 +677,7 @@ public partial class RuntimeEmitter
             il,
             valueLocal,
             notProxyLabelFull,
-            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped)
+            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection)
         );
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, allowPooledDictionaryKeysLocal);

@@ -9,6 +9,18 @@ public sealed class EmittedReflectedMethodRuntime
     internal EmittedReflectedMethodRuntime() { }
     public bool IsComplete { get; private set; }
     private bool _callableFinalized;
+    public MethodBuilder? NativeProxyRejection { get; private set; }
+
+    internal void DeclareNativeProxyRejection(TypeBuilder owner, MethodBuilder method)
+    {
+        EnsureMutable();
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(method);
+        if (NativeProxyRejection is not null || method.DeclaringType != owner || !method.IsStatic || method.IsGenericMethod ||
+            method.ReturnType != typeof(object) || method.GetParameters().Length != 0)
+            throw new InvalidOperationException("Native Proxy rejection requires one exact static object-returning helper.");
+        NativeProxyRejection = method;
+    }
 
     private MethodBuilder? _toPascalCase;
     public MethodBuilder ToPascalCase
@@ -123,6 +135,8 @@ public sealed class EmittedReflectedMethodRuntime
         _ = InvokeUnwrapped;
         if (!_callableFinalized)
             throw new InvalidOperationException("Reflected callable has not been finalized.");
+        if (NativeProxyRejection is { } rejection && rejection.GetILGenerator().ILOffset == 0)
+            throw new InvalidOperationException("Native Proxy rejection body is incomplete.");
         IsComplete = true;
     }
 }

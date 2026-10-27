@@ -34,7 +34,8 @@ public partial class RuntimeEmitter
         EmittedMapRuntime? Map,
         EmittedSetRuntime? Set,
         EmittedInvocationRuntime Invocation,
-        EmittedNativeCallableRuntime? NativeCallables = null
+        EmittedNativeCallableRuntime? NativeCallables = null,
+        MethodInfo? NativeProxyRejection = null
     );
 
     private readonly record struct FunctionBindWrapperClassInputs(
@@ -46,7 +47,8 @@ public partial class RuntimeEmitter
         FieldInfo UndefinedInstance,
         EmittedErrorRuntime Errors,
         Type FunctionPrototypeType,
-        EmittedNativeCallableRuntime? NativeCallables = null
+        EmittedNativeCallableRuntime? NativeCallables = null,
+        MethodInfo? NativeProxyRejection = null
     );
 
     private readonly record struct FunctionCallWrapperClassInputs(
@@ -59,7 +61,8 @@ public partial class RuntimeEmitter
         EmittedTextEncodingRuntime? TextEncoding,
         FieldInfo UndefinedInstance,
         EmittedErrorRuntime Errors,
-        EmittedNativeCallableRuntime? NativeCallables = null
+        EmittedNativeCallableRuntime? NativeCallables = null,
+        MethodInfo? NativeProxyRejection = null
     );
 
     private readonly record struct FunctionApplyWrapperClassInputs(
@@ -73,7 +76,8 @@ public partial class RuntimeEmitter
         EmittedTextEncodingRuntime? TextEncoding,
         FieldInfo UndefinedInstance,
         EmittedErrorRuntime Errors,
-        EmittedNativeCallableRuntime? NativeCallables = null
+        EmittedNativeCallableRuntime? NativeCallables = null,
+        MethodInfo? NativeProxyRejection = null
     );
 
     private readonly record struct DispatchToTargetInputs(
@@ -81,7 +85,8 @@ public partial class RuntimeEmitter
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedMapRuntime? Map,
         EmittedSetRuntime? Set,
-        EmittedInvocationRuntime Invocation
+        EmittedInvocationRuntime Invocation,
+        MethodInfo? NativeProxyRejection
     );
 
     private void DefineBoundFunctionMetadata(TypeBuilder runtimeType, EmittedFunctionBindingRuntime bindings)
@@ -512,7 +517,7 @@ public partial class RuntimeEmitter
         EmitDispatchToTarget(
             il,
             functionBindings,
-            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation),
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation, NativeProxyRejection: inputs.NativeProxyRejection),
             targetField,
             combinedLocal,
             boundThisLocal
@@ -651,7 +656,7 @@ public partial class RuntimeEmitter
 
         if (thisArgLocal != null)
             EmitProxyInvokeWithThisFallback(
-                il, targetField, thisArgLocal, argsLocal);
+                il, targetField, thisArgLocal, argsLocal, inputs.NativeProxyRejection);
 
         // Nested call/apply/bind wrappers and built-in values are dispatched by
         // the canonical helper, whose signature is declared before these types.
@@ -781,7 +786,8 @@ public partial class RuntimeEmitter
         ILGenerator il,
         FieldBuilder targetField,
         LocalBuilder thisArgLocal,
-        LocalBuilder argsLocal)
+        LocalBuilder argsLocal,
+        MethodInfo? nativeProxyRejection)
     {
         var proxyLabel = il.DefineLabel();
         var notProxyLabel = il.DefineLabel();
@@ -796,6 +802,13 @@ public partial class RuntimeEmitter
             notProxyLabel);
 
         il.MarkLabel(proxyLabel);
+        if (nativeProxyRejection is not null)
+        {
+            il.Emit(OpCodes.Call, nativeProxyRejection);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notProxyLabel);
+            return;
+        }
         var methodLocal = il.DeclareLocal(_types.MethodInfo);
         var resultLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
@@ -1796,7 +1809,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-        });
+        }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Brtrue, callableTargetLabel);
         il.MarkLabel(nonProxyTargetLabel);
@@ -2050,7 +2063,7 @@ public partial class RuntimeEmitter
         EmitDispatchToTarget(
             il,
             functionBindings,
-            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation),
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation, NativeProxyRejection: inputs.NativeProxyRejection),
             targetField,
             callArgsLocal,
             thisArgLocal
@@ -2263,7 +2276,7 @@ public partial class RuntimeEmitter
         EmitDispatchToTarget(
             il,
             functionBindings,
-            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation),
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation, NativeProxyRejection: inputs.NativeProxyRejection),
             targetField,
             callArgsLocal,
             thisArgLocal

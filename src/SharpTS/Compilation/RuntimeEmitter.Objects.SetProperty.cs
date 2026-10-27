@@ -84,7 +84,8 @@ public partial class RuntimeEmitter
         EmittedSymbolAccessorRuntime SymbolAccessors,
         MethodBuilder TSFunctionInvokeWithThis,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct SetPropertyStrictInputs(
@@ -113,7 +114,8 @@ public partial class RuntimeEmitter
         MethodBuilder SafeGetMethod,
         EmittedSymbolAccessorRuntime SymbolAccessors,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct SetIndexStrictInputs(
@@ -132,7 +134,8 @@ public partial class RuntimeEmitter
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
         MethodInfo ToPropertyKey,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private void EmitSetFieldsProperty(
@@ -851,7 +854,8 @@ public partial class RuntimeEmitter
                     inputs.InvokeMethodUnwrapped,
                     inputs.ObjectDescriptors,
                     inputs.ObjectRead,
-                    inputs.ReflectAssignment
+                    inputs.ReflectAssignment,
+                    NativeProxyRejection: inputs.NativeProxyRejection
                 ),
                 () => il.Emit(OpCodes.Ldarg_0),
                 () => il.Emit(OpCodes.Ldarg_1),
@@ -894,7 +898,7 @@ public partial class RuntimeEmitter
                 inheritedProxyLabel, inheritedNotProxyLabel);
             il.MarkLabel(inheritedProxyLabel);
             EmitProxySetCompiledCall(
-                il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped),
+                il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection),
                 () => il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal),
                 () => il.Emit(OpCodes.Ldarg_1),
                 () => il.Emit(OpCodes.Ldarg_2),
@@ -2360,14 +2364,14 @@ public partial class RuntimeEmitter
         EmittedErrorRuntime Errors,
         Type UndefinedType,
         EmittedObjectPrototypeRuntime ObjectPrototypes,
-        bool HasStrictArgument);
+        bool HasStrictArgument, MethodInfo? NativeProxyRejection);
 
     private void EmitConstructorPrototypeSetGuard(
         ILGenerator il, SetPropertyStrictInputs inputs, Action emitPrototype, Label create, Label reject)
         => EmitConstructorPrototypeSetGuard(il,
             new ConstructorPrototypeSetGuardInputs(inputs.ProxySelected, inputs.ReflectAssignment,
                 inputs.ObjectDescriptors, inputs.ObjectRead, inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue,
-                inputs.Errors, inputs.UndefinedType, inputs.ObjectPrototypes, true), emitPrototype, create, reject);
+                inputs.Errors, inputs.UndefinedType, inputs.ObjectPrototypes, true, NativeProxyRejection: inputs.NativeProxyRejection), emitPrototype, create, reject);
 
     private void EmitSloppyClassInstanceSetGuard(ILGenerator il, SetPropertyInputs inputs)
     {
@@ -2384,7 +2388,7 @@ public partial class RuntimeEmitter
         EmitConstructorPrototypeSetGuard(il,
             new ConstructorPrototypeSetGuardInputs(inputs.ProxySelected, inputs.ReflectAssignment,
                 inputs.ObjectDescriptors, inputs.ObjectRead, inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue,
-                inputs.Errors, inputs.UndefinedType, inputs.ObjectPrototypes, false), () =>
+                inputs.Errors, inputs.UndefinedType, inputs.ObjectPrototypes, false, NativeProxyRejection: inputs.NativeProxyRejection), () =>
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
@@ -2421,7 +2425,7 @@ public partial class RuntimeEmitter
             // object as Receiver, instead of running descriptor traps.
             EmitProxySetCompiledCall(
                 il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor,
-                    inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped),
+                    inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection),
                 () => il.Emit(OpCodes.Ldloc, prototype),
                 () => il.Emit(OpCodes.Ldarg_1),
                 () => il.Emit(OpCodes.Ldarg_2),
@@ -2742,7 +2746,8 @@ public partial class RuntimeEmitter
         EmittedObjectReadRuntime ObjectRead,
         bool ProxySelected,
         EmittedReflectAssignment? ReflectAssignment,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     // Empty stack on entry and every branch. A successful inherited setter or
@@ -2780,7 +2785,7 @@ public partial class RuntimeEmitter
             EmitProxySetCompiledCall(
                 il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set,
                     inputs.ObjectDescriptors.GetOwnPropertyDescriptor,
-                    inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped),
+                    inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection),
                 () => il.Emit(OpCodes.Ldloc, prototype), loadKey,
                 () => il.Emit(OpCodes.Ldarg_2), () => il.Emit(OpCodes.Ldarg_0));
             il.Emit(OpCodes.Brfalse, reject);
@@ -2882,7 +2887,7 @@ public partial class RuntimeEmitter
                 strictSetProxyLabel, strictSetNotProxyLabel);
             il.MarkLabel(strictSetProxyLabel);
             EmitProxySetCompiledCall(
-                il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped),
+                il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection),
                 () => il.Emit(OpCodes.Ldarg_0),
                 () => il.Emit(OpCodes.Ldarg_1),
                 () => il.Emit(OpCodes.Ldarg_2),
@@ -3614,7 +3619,7 @@ public partial class RuntimeEmitter
             il, new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage,
                 inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue, inputs.ObjectDescriptors,
                 inputs.ObjectPrototypes, inputs.ObjectRead, inputs.ProxySelected,
-                inputs.ReflectAssignment, inputs.UndefinedType),
+                inputs.ReflectAssignment, inputs.UndefinedType, NativeProxyRejection: inputs.NativeProxyRejection),
             () => il.Emit(OpCodes.Ldloc, strictArrayKeyLocal),
             strictArrayNoInheritedSetterLabel, strictArrayRejectLabel);
 

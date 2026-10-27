@@ -28,7 +28,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSSymbolType,
         ConstructorBuilder TSTypeErrorCtor,
         MethodBuilder TypeOf,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct AppendJsonArrayInputs(EmittedArrayStorageRuntime ArrayStorage);
@@ -271,7 +272,7 @@ public partial class RuntimeEmitter
             il,
             valueLocal,
             notProxy,
-            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped)
+            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection)
         );
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, allowPooledKeysLocal);

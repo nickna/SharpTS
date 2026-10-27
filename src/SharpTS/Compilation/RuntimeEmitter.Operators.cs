@@ -24,7 +24,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
-        FieldInfo FunctionPrototype
+        FieldInfo FunctionPrototype,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct InstanceOfInputs(
@@ -67,7 +68,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         MethodBuilder ToPascalCase,
         Type UndefinedType,
-        TypeBuilder TSFunctionType
+        TypeBuilder TSFunctionType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct AddInputs(
@@ -609,7 +611,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-        });
+        }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Brtrue, functionLabel);
         il.Emit(OpCodes.Ldstr, "object");
@@ -1252,7 +1254,8 @@ public partial class RuntimeEmitter
                 inputs.InvokeMethodUnwrapped,
                 inputs.ObjectDescriptors,
                 inputs.ObjectRead,
-                inputs.ObjectState
+                inputs.ObjectState,
+                NativeProxyRejection: inputs.NativeProxyRejection
             )
         );
 
@@ -1322,7 +1325,7 @@ public partial class RuntimeEmitter
             () => il.Emit(OpCodes.Ldloc, functionHasKey),
             functionHasNotProxy, operators,
             new ProxyHasCheckInputs(inputs.Booleans, inputs.InvokeMethodUnwrapped,
-                inputs.ObjectDescriptors, inputs.ObjectRead, inputs.ObjectState));
+                inputs.ObjectDescriptors, inputs.ObjectRead, inputs.ObjectState, NativeProxyRejection: inputs.NativeProxyRejection));
         il.MarkLabel(functionHasNotProxy);
         il.Emit(OpCodes.Ldloc, functionHasPrototype);
         il.Emit(OpCodes.Ldloc, functionHasKey);

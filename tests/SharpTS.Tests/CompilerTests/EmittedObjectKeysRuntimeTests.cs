@@ -154,6 +154,7 @@ public sealed class EmittedObjectKeysRuntimeTests
         {
             string name = parameter.Name!;
             if (overrides.TryGetValue(name, out var value)) return value;
+            if (name == "NativeProxyRejection") return runtime.ReflectedMethods.NativeProxyRejection;
             if (name is "ProxyDescriptor" or "ProxyOwnKeys" or "OwnPrototype") return MakeInputs(parameter.ParameterType, runtime, overrides);
             return name switch
             {

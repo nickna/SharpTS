@@ -116,7 +116,7 @@ public partial class RuntimeEmitter
                     typeof(Func<object, string, object?>),
                     _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.ReflectedMethods.NativeProxyRejection);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyLabel);
 

@@ -331,6 +331,15 @@ four corresponding IL2075 diagnostics from that helper. The measured sequence
 is 101, then 89, then 81, then 80 after the unavailable eval bridge is omitted,
 then 78 after the optional numeric-rest no-producer proof; the remaining
 diagnostics still fail strict publish.
+
+Native output also omits the interpreter-backed Proxy trap bridges. It retains
+their type checks and throws a guest TypeError before reading or invoking a trap
+if a host supplies a Proxy at runtime. This covers callable wrappers, JSON
+materialization/revivers and array classification; ordinary managed output and
+general CLR reflection keep their existing behavior. On the same basic guest and
+toolchain, this removes 39 diagnostics from the 80-diagnostic checkpoint with
+none added, leaving 41: IL2059 (6),
+IL2060 (1), IL2070 (19), IL2075 (14), IL3050 (1). Strict publish still fails.
 Separate diagnostic publishes retaining all warnings executed the ConsoleClear,
 generic-symbol and core-language probes correctly; a statically resolved BCL
 `RuntimeFeature.IsDynamicCodeSupported` probe returned `false` from the produced

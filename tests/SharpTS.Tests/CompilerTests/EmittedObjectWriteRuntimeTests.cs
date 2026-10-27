@@ -195,6 +195,7 @@ public sealed class EmittedObjectWriteRuntimeTests
         return constructor.Invoke(constructor.GetParameters().Select(parameter =>
         {
             if (overrides.TryGetValue(parameter.Name!, out var value)) return value;
+            if (parameter.Name == "NativeProxyRejection") return runtime.ReflectedMethods.NativeProxyRejection;
             if (parameter.Name == "CommonJs") return runtime.Modules.CommonJs;
             if (parameter.Name == "ReflectAssignment") return runtime.Reflect.Assignment;
             if (parameter.Name == "GlobalThisSingletonField") return runtime.GlobalObject.SingletonField;

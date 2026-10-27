@@ -58,6 +58,7 @@ public partial class RuntimeEmitter
         EmittedStringRuntime Strings,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
+        MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
@@ -73,11 +74,12 @@ public partial class RuntimeEmitter
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedRecordStorageRuntime Records,
         EmittedSymbolRuntime Symbols,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
-    private readonly record struct ObjectPreventExtensionsInputs(EmittedArrayStorageRuntime ArrayStorage, MethodBuilder CreateException, EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, EmittedObjectStorageRuntime ObjectStorage, ConstructorBuilder TSTypeErrorCtor);
-    private readonly record struct ObjectIsExtensibleInputs(EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped);
+    private readonly record struct ObjectPreventExtensionsInputs(EmittedArrayStorageRuntime ArrayStorage, MethodBuilder CreateException, EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, EmittedObjectStorageRuntime ObjectStorage, ConstructorBuilder TSTypeErrorCtor, MethodInfo? NativeProxyRejection);
+    private readonly record struct ObjectIsExtensibleInputs(EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, MethodInfo? NativeProxyRejection);
 
     /// <summary>
     /// Emits Object.create(proto, propertiesObject?) - creates a new object with prototype.
@@ -280,7 +282,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         var proxyPreventExtensionsSucceededLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, proxyPreventExtensionsSucceededLabel);
@@ -421,7 +423,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyLabel);
@@ -665,7 +667,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyForGpoLabel);
 
@@ -1332,7 +1334,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         var proxySetSucceeded = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, proxySetSucceeded);

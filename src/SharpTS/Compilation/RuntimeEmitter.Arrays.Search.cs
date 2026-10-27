@@ -2485,7 +2485,8 @@ public partial class RuntimeEmitter
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.ObjectDescriptors,
                 runtime.ObjectRead,
-                runtime.ObjectState
+                runtime.ObjectState,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         il.MarkLabel(notProxyLabel);

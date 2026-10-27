@@ -11,14 +11,15 @@ public partial class RuntimeEmitter
         EmittedFunctionValueRuntime FunctionValues,
         EmittedFunctionAttributesRuntime FunctionAttributes,
         Type UndefinedType,
-        MethodBuilder InvokeMethodUnwrapped
+        MethodBuilder InvokeMethodUnwrapped,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ReflectGetInputs(MethodInfo InvokeMethodUnwrapped,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod,
         MethodInfo GetFunctionMethod, MethodInfo InvokeMethodValue, FieldInfo UndefinedInstance, Type UndefinedType,
         MethodInfo GetProperty, MethodInfo GetPrototypeOf, MethodInfo GetIndex, MethodInfo IsSymbol,
-        MethodInfo FindOwnSymbolMethod);
+        MethodInfo FindOwnSymbolMethod, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectToPropertyKeyInputs(Type SymbolType, FieldInfo SymbolToPrimitive,
         Type UndefinedType, MethodInfo ToJsString, MethodInfo GetProperty, MethodInfo InvokeMethodValue,
@@ -29,10 +30,10 @@ public partial class RuntimeEmitter
         MethodInfo DeleteProperty, MethodInfo DeleteIndex, MethodInfo IsSymbol,
         Type UndefinedType, MethodInfo GetProperty, MethodInfo TypeOf,
         MethodInfo CreateException, ConstructorInfo TypeErrorConstructor,
-        EmittedFunctionBindingRuntime FunctionBindings);
+        EmittedFunctionBindingRuntime FunctionBindings, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectPreventExtensionsInputs(MethodInfo InvokeMethodUnwrapped,
-        MethodInfo ObjectPreventExtensions, MethodInfo ObjectIsExtensible, MethodInfo GetProperty);
+        MethodInfo ObjectPreventExtensions, MethodInfo ObjectIsExtensible, MethodInfo GetProperty, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectSetInputs(ProxySetCallInputs ProxySet,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo IsFrozen, MethodInfo HasOwnPropertyHelperMethod,
@@ -42,12 +43,12 @@ public partial class RuntimeEmitter
     private readonly record struct ReflectSetPrototypeOfInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, MethodInfo InvokeMethodUnwrapped, MethodInfo ObjectGetPrototypeOf,
         MethodInfo ObjectSetPrototypeOf, MethodInfo ObjectIsExtensible, Type UndefinedType, Type TSSymbolType,
-        MethodInfo GetProperty);
+        MethodInfo GetProperty, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectDefinePropertyInputs(MethodInfo InvokeMethodUnwrapped,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod, MethodInfo ToPropertyKey,
         MethodInfo ObjectDefineProperty, MethodInfo ObjectIsExtensible, MethodInfo GetProperty,
-        PropertyDescriptorConversionInputs DescriptorConversion);
+        PropertyDescriptorConversionInputs DescriptorConversion, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectOwnKeysInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, ProxyOwnKeysCallInputs ProxyOwnKeys,
@@ -59,7 +60,7 @@ public partial class RuntimeEmitter
     private readonly record struct ReflectConstructInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, MethodInfo InvokeMethodUnwrapped, MethodInfo CreateErrorFromTypeOrNull,
         MethodInfo ToNumber, MethodInfo IsConstructorMethod, MethodInfo ConstructDynamicValue, Type UndefinedType,
-        MethodInfo GetProperty, EmittedDataViewRuntime? DataView, EmittedPromiseRuntime? Promise);
+        MethodInfo GetProperty, EmittedDataViewRuntime? DataView, EmittedPromiseRuntime? Promise, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectValueFormMethodsInputs(MethodInfo Get, MethodInfo Set,
         MethodInfo DefineProperty, MethodInfo ObjectGetOwnPropertyDescriptor,
@@ -218,7 +219,7 @@ public partial class RuntimeEmitter
                         delegateType, _types.Object, _types.IntPtr)!);
                     il.Emit(OpCodes.Stelem_Ref);
                 }
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notProxyLabel);
@@ -404,7 +405,7 @@ public partial class RuntimeEmitter
                         delegateType, _types.Object, _types.IntPtr)!);
                     il.Emit(OpCodes.Stelem_Ref);
                 }
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
@@ -511,7 +512,7 @@ public partial class RuntimeEmitter
                         delegateType, _types.Object, _types.IntPtr)!);
                     il.Emit(OpCodes.Stelem_Ref);
                 }
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
@@ -875,7 +876,7 @@ public partial class RuntimeEmitter
                         delegateType, _types.Object, _types.IntPtr)!);
                     il.Emit(OpCodes.Stelem_Ref);
                 }
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyLabel);
@@ -985,7 +986,7 @@ public partial class RuntimeEmitter
                         delegateType, _types.Object, _types.IntPtr)!);
                     il.Emit(OpCodes.Stelem_Ref);
                 }
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryDefineLabel);
@@ -1342,7 +1343,7 @@ public partial class RuntimeEmitter
                     typeof(Func<object, bool>),
                     _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyLabel);
@@ -1629,7 +1630,7 @@ public partial class RuntimeEmitter
                     typeof(Func<object, string, object?>),
                     _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyTargetLabel);
 

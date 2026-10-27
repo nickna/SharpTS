@@ -34,6 +34,7 @@ public partial class RuntimeEmitter
         EmittedTypedArrayRuntime TypedArrays,
         MethodInfo ToPropertyKey,
         Type UndefinedType,
+        MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
         MethodInfo? GuestOwnSetProperty = null
     );
@@ -73,6 +74,7 @@ public partial class RuntimeEmitter
         EmittedNumberRuntime Numbers,
         EmittedBigIntRuntime BigInt,
         MethodInfo ToPropertyKey,
+        MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
@@ -164,7 +166,7 @@ public partial class RuntimeEmitter
         EmitProxyGetIndexCheck(
             il,
             objectRead,
-            new ProxyGetIndexCheckInputs(inputs.InvokeMethodUnwrapped, inputs.ObjectDescriptors),
+            new ProxyGetIndexCheckInputs(inputs.InvokeMethodUnwrapped, inputs.ObjectDescriptors, NativeProxyRejection: inputs.NativeProxyRejection),
             () => il.Emit(OpCodes.Ldarg_0),
             () => il.Emit(OpCodes.Ldarg_1),
             notProxyLabel
@@ -1386,7 +1388,8 @@ public partial class RuntimeEmitter
                     inputs.InvokeMethodUnwrapped,
                     inputs.ObjectDescriptors,
                     inputs.ObjectRead,
-                    inputs.ReflectAssignment
+                    inputs.ReflectAssignment,
+                    NativeProxyRejection: inputs.NativeProxyRejection
                 ),
                 () => il.Emit(OpCodes.Ldarg_0),
                 () => il.Emit(OpCodes.Ldarg_1),
@@ -1426,7 +1429,7 @@ public partial class RuntimeEmitter
                 inheritedProxyLabel, inheritedNotProxyLabel);
             il.MarkLabel(inheritedProxyLabel);
             EmitProxySetCompiledCall(
-                il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped),
+                il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection),
                 () => il.Emit(OpCodes.Ldloc, indexPrototypeLocal),
                 () =>
                 {
@@ -1740,7 +1743,7 @@ public partial class RuntimeEmitter
             il, new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage,
                 inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue, inputs.ObjectDescriptors,
                 inputs.ObjectPrototypes, inputs.ObjectRead, inputs.ProxySelected,
-                inputs.ReflectAssignment, inputs.UndefinedType),
+                inputs.ReflectAssignment, inputs.UndefinedType, NativeProxyRejection: inputs.NativeProxyRejection),
             () => il.Emit(OpCodes.Ldloc, tsArraySetKeyLocal),
             tsArraySetRawStorage, nullLabel);
 
@@ -1972,7 +1975,7 @@ public partial class RuntimeEmitter
             var notProxy = il.DefineLabel();
             EmitProxySetIndexCheck(il,
                 new ProxySetIndexCheckInputs(inputs.InvokeMethodUnwrapped, inputs.ObjectDescriptors,
-                    inputs.ObjectRead, inputs.ReflectAssignment),
+                    inputs.ObjectRead, inputs.ReflectAssignment, NativeProxyRejection: inputs.NativeProxyRejection),
                 () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1),
                 () => il.Emit(OpCodes.Ldarg_2), notProxy, inputs.Errors);
             il.MarkLabel(notProxy);
@@ -1982,7 +1985,7 @@ public partial class RuntimeEmitter
             inputs.ProxySelected
                 ? new ProxySetCallInputs(inputs.ReflectAssignment!.Set,
                     inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property,
-                    inputs.InvokeMethodUnwrapped)
+                    inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection)
                 : null);
         // #266: symbol-keyed class accessor setter (`set [Symbol.x](v) {...}`).
         // A registered setter takes the write (accessor semantics) instead of

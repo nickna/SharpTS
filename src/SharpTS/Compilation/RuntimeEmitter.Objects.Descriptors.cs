@@ -38,7 +38,8 @@ public partial class RuntimeEmitter
         MethodBuilder GetProperty,
         MethodBuilder HasOwnPropertyHelperMethod,
         MethodBuilder InvokeMethodUnwrapped,
-        EmittedObjectStateRuntime ObjectState
+        EmittedObjectStateRuntime ObjectState,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ObjectDefinePropertyInputs(
@@ -69,6 +70,7 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         Type FunctionPrototypeType,
         FunctionOwnPrototypeInputs OwnPrototype,
+        MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
@@ -181,7 +183,8 @@ public partial class RuntimeEmitter
         ProxyOwnKeysCallInputs ProxyOwnKeys,
         EmittedReflectRuntime Reflect,
         EmittedSymbolRuntime Symbols,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ObjectGetOwnPropertyDescriptorsInputs(
@@ -565,7 +568,7 @@ public partial class RuntimeEmitter
                     delegateType, _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
             }
-        });
+        }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         var proxyDefineSucceededLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, proxyDefineSucceededLabel);
@@ -652,7 +655,8 @@ public partial class RuntimeEmitter
                 inputs.GetProperty,
                 inputs.HasOwnPropertyHelperMethod,
                 inputs.InvokeMethodUnwrapped,
-                inputs.ObjectState
+                inputs.ObjectState,
+                NativeProxyRejection: inputs.NativeProxyRejection
             ),
             method,
             propertyKeyLocal
@@ -2175,7 +2179,7 @@ public partial class RuntimeEmitter
             EmitDelegate(4, inputs.ProxyOwnKeys.IsExtensible, typeof(Func<object, bool>));
             EmitDelegate(5, inputs.GetProperty, typeof(Func<object, string, object?>));
             EmitDelegate(6, inputs.ObjectOwnProperties.HasOwnProperty, typeof(Func<object, string, bool>));
-        });
+        }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         var succeeded = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, succeeded);

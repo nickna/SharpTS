@@ -320,7 +320,8 @@ public partial class RuntimeEmitter
         EmittedWeakMapRuntime? WeakMap,
         EmittedWeakRefRuntime? WeakRef,
         EmittedWeakSetRuntime? WeakSet,
-        bool UserClasses
+        bool UserClasses,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct GetFieldsPropertyInputs(
@@ -1661,7 +1662,8 @@ public partial class RuntimeEmitter
                 inputs.GetFunctionMethod,
                 inputs.InvokeMethodUnwrapped,
                 inputs.ObjectDescriptors,
-                inputs.Reflect
+                inputs.Reflect,
+                NativeProxyRejection: inputs.NativeProxyRejection
             ),
             () => il.Emit(OpCodes.Ldarg_0),
             () => il.Emit(OpCodes.Ldarg_1),

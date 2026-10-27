@@ -1655,27 +1655,35 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(
             il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
         il.MarkLabel(proxyLabel);
+        if (runtime.ReflectedMethods.NativeProxyRejection is { } rejection)
+        {
+            il.Emit(OpCodes.Call, rejection);
+            il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+            il.Emit(OpCodes.Ret);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldstr, "IsRevoked");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String));
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.PropertyInfo, "GetValue", _types.Object));
+            il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+            var proxyActiveLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brfalse, proxyActiveLabel);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot perform operation on a revoked proxy");
+            il.MarkLabel(proxyActiveLabel);
 
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldstr, "IsRevoked");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String));
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.PropertyInfo, "GetValue", _types.Object));
-        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
-        var proxyActiveLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, proxyActiveLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot perform operation on a revoked proxy");
-        il.MarkLabel(proxyActiveLabel);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldstr, "Target");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String));
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.PropertyInfo, "GetValue", _types.Object));
-        il.Emit(OpCodes.Call, method);
-        il.Emit(OpCodes.Ret);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldstr, "Target");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String));
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.PropertyInfo, "GetValue", _types.Object));
+            il.Emit(OpCodes.Call, method);
+            il.Emit(OpCodes.Ret);
+        }
 
         il.MarkLabel(notProxyLabel);
 

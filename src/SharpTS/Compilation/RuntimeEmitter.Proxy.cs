@@ -12,37 +12,42 @@ public partial class RuntimeEmitter
         MethodBuilder InvokeMethodUnwrapped,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectReadRuntime ObjectRead,
-        EmittedObjectStateRuntime ObjectState
+        EmittedObjectStateRuntime ObjectState,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ProxySetPropertyCheckInputs(
         MethodBuilder InvokeMethodUnwrapped,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectReadRuntime ObjectRead,
-        EmittedReflectAssignment? ReflectAssignment
+        EmittedReflectAssignment? ReflectAssignment,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ProxySetIndexCheckInputs(
         MethodBuilder InvokeMethodUnwrapped,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectReadRuntime ObjectRead,
-        EmittedReflectAssignment? ReflectAssignment
+        EmittedReflectAssignment? ReflectAssignment,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ProxyGetPropertyCheckInputs(
         MethodBuilder GetFunctionMethod,
         MethodBuilder InvokeMethodUnwrapped,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
-        EmittedReflectRuntime Reflect
+        EmittedReflectRuntime Reflect,
+        MethodInfo? NativeProxyRejection
     );
 
-    private readonly record struct ProxyGetIndexCheckInputs(MethodBuilder InvokeMethodUnwrapped, EmittedObjectDescriptorRuntime ObjectDescriptors);
+    private readonly record struct ProxyGetIndexCheckInputs(MethodBuilder InvokeMethodUnwrapped, EmittedObjectDescriptorRuntime ObjectDescriptors, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ProxyDeleteCheckInputs(
         MethodBuilder GetProperty,
         MethodBuilder InvokeMethodUnwrapped,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
-        EmittedObjectStateRuntime ObjectState
+        EmittedObjectStateRuntime ObjectState,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ProxyEnumerableOwnPropertiesCheckInputs(
@@ -66,11 +71,11 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct ProxySetCallInputs(MethodInfo Set, MethodInfo GetOwnPropertyDescriptor,
-        MethodInfo GetProperty, MethodInfo InvokeMethodUnwrapped);
+        MethodInfo GetProperty, MethodInfo InvokeMethodUnwrapped, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ProxyOwnKeysCallInputs(MethodInfo OwnKeys, MethodInfo CreateList,
         MethodInfo GetOwnPropertyDescriptor, MethodInfo IsExtensible, MethodInfo IsSymbol, MethodInfo GetProperty,
-        MethodInfo InvokeMethodUnwrapped);
+        MethodInfo InvokeMethodUnwrapped, MethodInfo? NativeProxyRejection);
 
     private const string ProxyTypeName = "SharpTS.Runtime.Types.SharpTSProxy";
 
@@ -112,8 +117,20 @@ public partial class RuntimeEmitter
     /// obj.GetType().GetMethod(methodName).Invoke(obj, args)
     /// This avoids any dependency on SharpTS.dll being loaded.
     /// </summary>
-    private void EmitProxyMethodCall(ILGenerator il, Action emitLoadObj, string methodName, Action emitArgs)
+    private static void EmitNativeProxyRejection(MethodBuilder method, EmittedErrorRuntime errors)
     {
+        GuestErrorEmitter.ThrowError(method.GetILGenerator(), errors.CreateException, errors.TypeErrorConstructor,
+            "Proxy is not supported in native guest output. Use --target dll or --target exe.");
+    }
+
+    private void EmitProxyMethodCall(ILGenerator il, Action emitLoadObj, string methodName, Action emitArgs,
+        MethodInfo? nativeProxyRejection)
+    {
+        if (nativeProxyRejection is not null)
+        {
+            il.Emit(OpCodes.Call, nativeProxyRejection);
+            return;
+        }
         // obj.GetType().GetMethod(methodName)
         emitLoadObj();
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
@@ -133,11 +150,17 @@ public partial class RuntimeEmitter
     private void EmitProxyMethodCallUnwrapped(
         ILGenerator il, EmittedRuntime runtime, Action emitLoadObj,
         string methodName, Action emitArgs) =>
-        EmitProxyMethodCallUnwrapped(il, runtime.ReflectedMethods.InvokeUnwrapped, emitLoadObj, methodName, emitArgs);
+        EmitProxyMethodCallUnwrapped(il, runtime.ReflectedMethods.InvokeUnwrapped, emitLoadObj, methodName, emitArgs,
+            runtime.ReflectedMethods.NativeProxyRejection);
 
     private void EmitProxyMethodCallUnwrapped(ILGenerator il, MethodInfo invokeMethodUnwrapped, Action emitLoadObj,
-        string methodName, Action emitArgs)
+        string methodName, Action emitArgs, MethodInfo? nativeProxyRejection)
     {
+        if (nativeProxyRejection is not null)
+        {
+            il.Emit(OpCodes.Call, nativeProxyRejection);
+            return;
+        }
         emitLoadObj();
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, methodName);
@@ -210,7 +233,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, _types.GetConstructor(
                 typeof(Func<object, object, object?>), _types.Object, _types.IntPtr));
             il.Emit(OpCodes.Stelem_Ref);
-        });
+        }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Ret);
     }
 
@@ -232,7 +255,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(proxyLabel);
         EmitProxySetCompiledCall(
-            il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped), emitLoadObj, emitLoadName, emitLoadValue, emitLoadObj);
+            il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection), emitLoadObj, emitLoadName, emitLoadValue, emitLoadObj);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }
@@ -284,7 +307,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, _types.GetConstructor(
                 typeof(Func<object, object, object?>), _types.Object, _types.IntPtr));
             il.Emit(OpCodes.Stelem_Ref);
-        });
+        }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Ret);
     }
 
@@ -306,7 +329,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(proxyLabel);
         EmitProxySetCompiledCall(
-            il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped), emitLoadObj,
+            il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection), emitLoadObj,
             emitLoadIndex,
             emitLoadValue, emitLoadObj);
         if (strictErrors is not null)
@@ -336,7 +359,7 @@ public partial class RuntimeEmitter
         ProxyHasCheckInputs inputs
     )
     {
-        EmitProxyHasResult(il, emitLoadObj, emitLoadKey, notProxyLabel, new ProxyHasInputs(inputs.InvokeMethodUnwrapped, operators.ProxyOrdinaryHas, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectState.IsExtensible, inputs.ObjectRead.Property, inputs.Booleans.IsTruthy));
+        EmitProxyHasResult(il, emitLoadObj, emitLoadKey, notProxyLabel, new ProxyHasInputs(inputs.InvokeMethodUnwrapped, operators.ProxyOrdinaryHas, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectState.IsExtensible, inputs.ObjectRead.Property, inputs.Booleans.IsTruthy, NativeProxyRejection: inputs.NativeProxyRejection));
         il.Emit(OpCodes.Ret);
     }
 
@@ -391,13 +414,13 @@ public partial class RuntimeEmitter
                     typeof(Func<object, string, object?>),
                     _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
     }
 
     private readonly record struct ProxyHasInputs(
         MethodInfo InvokeMethodUnwrapped, MethodInfo OrdinaryHas, MethodInfo GetOwnPropertyDescriptor,
-        MethodInfo IsExtensible, MethodInfo GetProperty, MethodInfo IsTruthy);
+        MethodInfo IsExtensible, MethodInfo GetProperty, MethodInfo IsTruthy, MethodInfo? NativeProxyRejection);
 
     /// <summary>
     /// Emits the Proxy [[HasProperty]] trap and leaves its boolean result on
@@ -443,7 +466,7 @@ public partial class RuntimeEmitter
                     delegateType, _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
             }
-        });
+        }, inputs.NativeProxyRejection);
         // TrapHas returns object — apply truthy coercion (JS `in` coerces to boolean)
         il.Emit(OpCodes.Call, inputs.IsTruthy);
     }
@@ -495,7 +518,7 @@ public partial class RuntimeEmitter
                     delegateType, _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
             }
-        });
+        }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
     }
 
@@ -618,7 +641,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectState.IsExtensible,
                 runtime.Symbols.IsSymbol,
                 runtime.ObjectRead.Property,
-                runtime.ReflectedMethods.InvokeUnwrapped
+                runtime.ReflectedMethods.InvokeUnwrapped,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             ),
             emitLoadObj
         );
@@ -642,7 +666,7 @@ public partial class RuntimeEmitter
                 typeof(Func<object, bool>));
             EmitDelegateArgument(5, inputs.GetProperty,
                 typeof(Func<object, string, object?>));
-        });
+        }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
 
         void EmitDelegateArgument(int slot, MethodInfo target, Type delegateType)
@@ -659,7 +683,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct ProxyDescriptorCallInputs(
         MethodInfo InvokeMethodUnwrapped, MethodInfo GetOwnPropertyDescriptor,
-        MethodInfo IsExtensible, MethodInfo GetProperty);
+        MethodInfo IsExtensible, MethodInfo GetProperty, MethodInfo? NativeProxyRejection);
 
     /// <summary>Leaves a compiled Proxy [[GetOwnProperty]] result on stack.</summary>
     private void EmitProxyGetOwnPropertyDescriptorCompiledCall(
@@ -669,7 +693,7 @@ public partial class RuntimeEmitter
         EmitProxyGetOwnPropertyDescriptorCompiledCall(il,
             new ProxyDescriptorCallInputs(runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.ObjectDescriptors.GetOwnPropertyDescriptor, runtime.ObjectState.IsExtensible,
-                runtime.ObjectRead.Property), emitLoadObj, emitLoadKey);
+                runtime.ObjectRead.Property, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection), emitLoadObj, emitLoadKey);
     }
 
     private void EmitProxyGetOwnPropertyDescriptorCompiledCall(
@@ -710,7 +734,7 @@ public partial class RuntimeEmitter
                     typeof(Func<object, string, object?>),
                     _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
     }
 
     /// <summary>
@@ -975,7 +999,7 @@ public partial class RuntimeEmitter
                 typeof(Func<object, string, object?>),
                 _types.Object, _types.IntPtr)!);
             il.Emit(OpCodes.Stelem_Ref);
-        });
+        }, inputs.ReflectedMethods.NativeProxyRejection);
         il.Emit(OpCodes.Ret);
     }
 

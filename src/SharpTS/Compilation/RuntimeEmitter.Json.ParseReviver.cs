@@ -14,7 +14,8 @@ public partial class RuntimeEmitter
         MethodBuilder ObjectDefineProperty,
         MethodBuilder TSFunctionInvokeWithThis,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ApplyReviverHelperInputs(
@@ -26,14 +27,16 @@ public partial class RuntimeEmitter
         MethodBuilder ObjectDefineProperty,
         MethodBuilder TSFunctionInvokeWithThis,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ReviverProxyBranchInputs(
         MethodBuilder InvokeMethodUnwrapped,
         EmittedNumericCoercionRuntime NumericCoercion,
         MethodBuilder ObjectDefineProperty,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ReviverListBranchInputs(
@@ -49,7 +52,7 @@ public partial class RuntimeEmitter
         Type UndefinedType
     );
 
-    private readonly record struct HolderGetInputs(MethodBuilder InvokeMethodUnwrapped);
+    private readonly record struct HolderGetInputs(MethodBuilder InvokeMethodUnwrapped, MethodInfo? NativeProxyRejection);
 
     /// <summary>
     /// Emits JsonParseWithReviver(text, reviver). Implements ECMA-262 25.5.1.1
@@ -78,7 +81,8 @@ public partial class RuntimeEmitter
                 inputs.ObjectDefineProperty,
                 inputs.TSFunctionInvokeWithThis,
                 inputs.TSFunctionType,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                NativeProxyRejection: inputs.NativeProxyRejection
             )
         );
 
@@ -176,7 +180,7 @@ public partial class RuntimeEmitter
         var valLocal = il.DeclareLocal(_types.Object);
         EmitHolderGet(
             il,
-            new HolderGetInputs(inputs.InvokeMethodUnwrapped),
+            new HolderGetInputs(inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection),
             ldHolder: () => il.Emit(OpCodes.Ldarg_0),
             ldKey: () => il.Emit(OpCodes.Ldarg_1)
         );
@@ -195,7 +199,8 @@ public partial class RuntimeEmitter
                 inputs.InvokeMethodUnwrapped,
                 inputs.NumericCoercion,
                 inputs.ObjectDefineProperty,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                NativeProxyRejection: inputs.NativeProxyRejection
             ),
             method,
             valLocal,
@@ -268,6 +273,15 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(proxyLabel);
 
+        if (inputs.NativeProxyRejection is { } rejection)
+        {
+            il.Emit(OpCodes.Call, rejection);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Br, afterIterLabel);
+            il.MarkLabel(notProxyLabel);
+            return;
+        }
+
         // proxyType = Type.GetType("SharpTS.Runtime.Types.SharpTSProxy, SharpTS")
         var proxyTypeLocal = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.Types.SharpTSProxy, SharpTS");
@@ -295,7 +309,7 @@ public partial class RuntimeEmitter
         var proxyArrayLength = il.DeclareLocal(_types.Int32);
         EmitHolderGet(
             il,
-            new HolderGetInputs(inputs.InvokeMethodUnwrapped),
+            new HolderGetInputs(inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection),
             ldHolder: () => il.Emit(OpCodes.Ldloc, valLocal),
             ldKey: () => il.Emit(OpCodes.Ldstr, "length")
         );
@@ -781,33 +795,42 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(il, () => il.Emit(OpCodes.Ldloc, holderTmp), proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
-        // proxyType.GetMethod("TrapGet").Invoke(holder, [key.ToString(), null])
-        il.Emit(OpCodes.Ldloc, holderTmp);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldstr, "TrapGet");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        il.Emit(OpCodes.Ldloc, holderTmp);
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        // Convert key to string (it's always a string in our walk, but be defensive)
-        il.Emit(OpCodes.Ldloc, keyTmp);
-        var keyNullLabel = il.DefineLabel();
-        var keyStrEndLabel = il.DefineLabel();
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brfalse, keyNullLabel);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
-        il.Emit(OpCodes.Br, keyStrEndLabel);
-        il.MarkLabel(keyNullLabel);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldstr, "");
-        il.MarkLabel(keyStrEndLabel);
-        il.Emit(OpCodes.Stelem_Ref);
-        // [1] = null (Interpreter) — already null from Newarr
-        il.Emit(OpCodes.Call, inputs.InvokeMethodUnwrapped);
-        il.Emit(OpCodes.Stloc, resultLocal);
-        il.Emit(OpCodes.Br, doneLabel);
+        if (inputs.NativeProxyRejection is { } rejection)
+        {
+            il.Emit(OpCodes.Call, rejection);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Br, doneLabel);
+        }
+        else
+        {
+            // proxyType.GetMethod("TrapGet").Invoke(holder, [key.ToString(), null])
+            il.Emit(OpCodes.Ldloc, holderTmp);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldstr, "TrapGet");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+            il.Emit(OpCodes.Ldloc, holderTmp);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            // Convert key to string (it's always a string in our walk, but be defensive)
+            il.Emit(OpCodes.Ldloc, keyTmp);
+            var keyNullLabel = il.DefineLabel();
+            var keyStrEndLabel = il.DefineLabel();
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brfalse, keyNullLabel);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
+            il.Emit(OpCodes.Br, keyStrEndLabel);
+            il.MarkLabel(keyNullLabel);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldstr, "");
+            il.MarkLabel(keyStrEndLabel);
+            il.Emit(OpCodes.Stelem_Ref);
+            // [1] = null (Interpreter) — already null from Newarr
+            il.Emit(OpCodes.Call, inputs.InvokeMethodUnwrapped);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Br, doneLabel);
+        }
 
         il.MarkLabel(notProxyLabel);
 

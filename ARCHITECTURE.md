@@ -813,6 +813,16 @@ behavior. Tests preserve overload selection, stable cached wrappers, cache
 isolation, exception identity, inherited lookup, generator and async super values, Invoke/Call
 fallback behavior and standalone crypto/event dispatch.
 
+For native guest output, orchestration declares an optional, checked
+`ReflectedMethods.NativeProxyRejection` helper before its consumers and fills its
+guest TypeError body after error metadata is available. Scoped Proxy bridge inputs
+carry that exact nullable handle; they do not read the output profile themselves.
+After the existing Proxy type check, a supplied helper rejects the operation before
+reading a trap or invoking the interpreter. This includes callable wrappers, JSON
+materialization/revivers and array classification. A null handle emits the existing
+managed bridge unchanged. General opaque CLR reflection remains available; this
+boundary implements the native profile's explicit Proxy refusal only.
+
 Instance `super` property values use `ClassDefinitions.ReadSuper` with the lexical
 class home and actual receiver, including captured arrows and state machines.
 The prototype reader respects live own descriptors and dynamic data before

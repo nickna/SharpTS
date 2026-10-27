@@ -197,7 +197,7 @@ public sealed class EmittedFunctionInvocationRuntimeTests
         var fallback = fallbackType.DefineMethod("InvokeMethodValue", MethodAttributes.Public | MethodAttributes.Static, typeof(object), [typeof(object), typeof(object), typeof(object[])]);
         fallback.GetILGenerator().Emit(OpCodes.Ldnull); fallback.GetILGenerator().Emit(OpCodes.Ret); fallbackType.CreateType();
         var invocation = new EmittedInvocationRuntime { Method = fallback };
-        var peers = Activator.CreateInstance(inputs, Members, null, [values, arrays, maps, sets, invocation], null)!;
+        var peers = Activator.CreateInstance(inputs, Members, null, [values, arrays, maps, sets, invocation, null], null)!;
         var dispatcher = module.DefineType("Dispatch", TypeAttributes.Public);
         var targetField = dispatcher.DefineField("Target", typeof(object), FieldAttributes.Public);
         var method = dispatcher.DefineMethod("Invoke", MethodAttributes.Public, typeof(object), [typeof(object[])]);

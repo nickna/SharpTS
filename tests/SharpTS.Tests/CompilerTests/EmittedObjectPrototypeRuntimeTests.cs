@@ -180,6 +180,7 @@ public sealed class EmittedObjectPrototypeRuntimeTests
     {
         var ctor = Assert.Single(type.GetConstructors());
         return ctor.Invoke(ctor.GetParameters().Select(p => overrides.TryGetValue(p.Name!, out var value) ? value
+            : p.Name == "NativeProxyRejection" ? runtime.ReflectedMethods.NativeProxyRejection
             : p.Name is "NativeObjectTypes" or "NativeFunctionTypes" ? Array.Empty<Type>()
             : p.Name == "GetProperty" ? runtime.ObjectRead.Property
             : p.Name == "FunctionGetMethodInfo" ? runtime.FunctionValues.GetMethodInfo

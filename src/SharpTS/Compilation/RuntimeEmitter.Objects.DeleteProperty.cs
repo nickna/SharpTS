@@ -27,6 +27,7 @@ public partial class RuntimeEmitter
         EmittedRecordStorageRuntime Records,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
+        MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
@@ -49,6 +50,7 @@ public partial class RuntimeEmitter
         EmittedRecordStorageRuntime Records,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
+        MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
@@ -71,6 +73,7 @@ public partial class RuntimeEmitter
         EmittedRecordStorageRuntime Records,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
+        MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
@@ -109,7 +112,8 @@ public partial class RuntimeEmitter
                 inputs.Records,
                 inputs.TSFunctionType,
                 inputs.UndefinedType,
-                inputs.GuestOwnProperties
+                NativeProxyRejection: inputs.NativeProxyRejection,
+                GuestOwnProperties: inputs.GuestOwnProperties
             ),
             strict: false
         );
@@ -301,7 +305,8 @@ public partial class RuntimeEmitter
                 inputs.GetProperty,
                 inputs.InvokeMethodUnwrapped,
                 inputs.ObjectDescriptors,
-                inputs.ObjectState
+                inputs.ObjectState,
+                NativeProxyRejection: inputs.NativeProxyRejection
             ),
             () => il.Emit(OpCodes.Ldarg_0),
             () => il.Emit(OpCodes.Ldarg_1),
@@ -1279,7 +1284,8 @@ public partial class RuntimeEmitter
                 inputs.Records,
                 inputs.TSFunctionType,
                 inputs.UndefinedType,
-                inputs.GuestOwnProperties
+                NativeProxyRejection: inputs.NativeProxyRejection,
+                GuestOwnProperties: inputs.GuestOwnProperties
             ),
             strict: true
         );

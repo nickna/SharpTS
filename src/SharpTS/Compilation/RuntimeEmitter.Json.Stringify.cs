@@ -57,7 +57,8 @@ public partial class RuntimeEmitter
         bool UsesArrayPrototypeMutation,
         bool UsesClassPrototypeMutation,
         bool UsesDynamicPropertyDescriptors,
-        bool UsesObjectIntegrityMutation
+        bool UsesObjectIntegrityMutation,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct JsonStringifyHelperInputs(
@@ -80,7 +81,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSSymbolType,
         ConstructorBuilder TSTypeErrorCtor,
         MethodBuilder TypeOf,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct BigIntCheckInputs(
@@ -980,7 +982,8 @@ public partial class RuntimeEmitter
                 inputs.TSSymbolType,
                 inputs.TSTypeErrorCtor,
                 inputs.TypeOf,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                NativeProxyRejection: inputs.NativeProxyRejection
             )
         );
         var appendValue = EmitAppendJsonValueHelper(
@@ -1006,7 +1009,8 @@ public partial class RuntimeEmitter
                 inputs.TSSymbolType,
                 inputs.TSTypeErrorCtor,
                 inputs.TypeOf,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                NativeProxyRejection: inputs.NativeProxyRejection
             )
         );
 
@@ -1229,7 +1233,7 @@ public partial class RuntimeEmitter
             il,
             valueLocal,
             notProxyLabelSimple,
-            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped)
+            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection)
         );
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, allowPooledDictionaryKeysLocal);

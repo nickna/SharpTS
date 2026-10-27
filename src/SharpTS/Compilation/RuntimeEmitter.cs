@@ -192,6 +192,9 @@ public partial class RuntimeEmitter
         // during EmitRuntimeClass / EmitStringify / EmitCreateException, which
         // re-use the pre-allocated TypeBuilder + MethodBuilders.
         DefineRuntimeClassPhase1(moduleBuilder, runtime);
+        if (_emitNativeCallables)
+            runtime.ReflectedMethods.DeclareNativeProxyRejection(runtime.RuntimeClass.Type, runtime.RuntimeClass.Type.DefineMethod(
+                "RejectNativeProxy", MethodAttributes.Assembly | MethodAttributes.Static, _types.Object, Type.EmptyTypes));
 
         // Guest throws use a dedicated exception carrying the original value.
         // Define it immediately after the phase-1 runtime signatures because its
@@ -299,6 +302,8 @@ public partial class RuntimeEmitter
         // Emit $Error class hierarchy for standalone error support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
         EmitTSErrorClasses(moduleBuilder, runtime.Errors);
+        if (runtime.ReflectedMethods.NativeProxyRejection is { } nativeProxyRejection)
+            EmitNativeProxyRejection(nativeProxyRejection, runtime.Errors);
 
         // Emit $DataCloneError exception type — thrown by StructuredCloneCore (#1255).
         // Unconditional: StructuredCloneCore itself is always emitted (EmitWorkerHelpers
@@ -609,7 +614,7 @@ public partial class RuntimeEmitter
         EmitBoundAnyFunctionClass(
             moduleBuilder,
             runtime.FunctionBindings,
-            new BoundAnyFunctionClassInputs(runtime.FunctionValues, runtime.ArrayOperations, runtime.Map, runtime.Set, runtime.Invocation, runtime.NativeCallables)
+            new BoundAnyFunctionClassInputs(runtime.FunctionValues, runtime.ArrayOperations, runtime.Map, runtime.Set, runtime.Invocation, runtime.NativeCallables, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection)
         );
         EmitFunctionCallWrapperClass(
             moduleBuilder,
@@ -623,7 +628,8 @@ public partial class RuntimeEmitter
                 runtime.TypedArrays,
                 runtime.TextEncoding,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Errors, runtime.NativeCallables
+                runtime.Errors, runtime.NativeCallables,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         EmitFunctionApplyWrapperClass(
@@ -639,7 +645,8 @@ public partial class RuntimeEmitter
                 runtime.TypedArrays,
                 runtime.TextEncoding,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Errors, runtime.NativeCallables
+                runtime.Errors, runtime.NativeCallables,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         EmitFunctionBindWrapperClass(
@@ -653,7 +660,8 @@ public partial class RuntimeEmitter
                 runtime.Set,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Errors,
-                runtime.FunctionPrototypes.Type, runtime.NativeCallables
+                runtime.FunctionPrototypes.Type, runtime.NativeCallables,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         runtime.FunctionBindings.CompleteEmission();

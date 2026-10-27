@@ -831,7 +831,8 @@ public partial class RuntimeEmitter
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
-                runtime.FunctionPrototypes.Prototype
+                runtime.FunctionPrototypes.Prototype,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         EmitAdd(
@@ -905,7 +906,8 @@ public partial class RuntimeEmitter
                     runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
-                    runtime.ObjectRead.Property
+                    runtime.ObjectRead.Property,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.RegExps,
                 runtime.SymbolAccessors,
@@ -1199,7 +1201,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues,
                 runtime.FunctionAttributes,
                 runtime.Sentinels.UndefinedType,
-                runtime.ReflectedMethods.InvokeUnwrapped
+                runtime.ReflectedMethods.InvokeUnwrapped,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         runtime.FunctionIntrospection.CompleteEmission();
@@ -1331,7 +1334,8 @@ public partial class RuntimeEmitter
                 runtime.WeakMap,
                 runtime.WeakRef,
                 runtime.WeakSet,
-                _features.UsesUserClasses
+                _features.UsesUserClasses,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         EmitClassDefinitionBodies(runtime);
@@ -1420,7 +1424,8 @@ public partial class RuntimeEmitter
                 runtime.SymbolAccessors,
                 runtime.FunctionValues.InvokeWithThis,
                 runtime.FunctionValues.Type,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         EmitSetPropertyStrict(
@@ -1452,7 +1457,8 @@ public partial class RuntimeEmitter
                 runtime.ReflectedMethods.FindMethod,
                 runtime.SymbolAccessors,
                 runtime.FunctionValues.Type,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         EmitDeleteProperty(
@@ -1477,7 +1483,8 @@ public partial class RuntimeEmitter
                 runtime.Records,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
-                runtime.GuestOwnProperties
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                GuestOwnProperties: runtime.GuestOwnProperties
             )
         );
         EmitDeletePropertyStrict(
@@ -1502,7 +1509,8 @@ public partial class RuntimeEmitter
                 runtime.Records,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
-                runtime.GuestOwnProperties
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                GuestOwnProperties: runtime.GuestOwnProperties
             )
         );
         EmitMergeIntoTSObject(
@@ -1538,7 +1546,8 @@ public partial class RuntimeEmitter
                 runtime.Symbols,
                 runtime.ReflectedMethods.ToPascalCase,
                 runtime.Sentinels.UndefinedType,
-                runtime.FunctionValues.Type
+                runtime.FunctionValues.Type,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         // Array SetElement helpers - must come BEFORE GetIndex/SetIndex which reference them.
@@ -1586,7 +1595,8 @@ public partial class RuntimeEmitter
                 runtime.Numbers,
                 runtime.BigInt,
                 runtime.Reflect.ToPropertyKey,
-                runtime.GuestOwnProperties
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                GuestOwnProperties: runtime.GuestOwnProperties
             )
         );
         // Apply wrappers were finalized earlier against the forward declaration;
@@ -1664,7 +1674,8 @@ public partial class RuntimeEmitter
                 runtime.TypedArrays,
                 runtime.Reflect.ToPropertyKey,
                 runtime.Sentinels.UndefinedType,
-                runtime.GuestOwnProperties, runtime.ObjectWrite.Property
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                GuestOwnProperties: runtime.GuestOwnProperties, GuestOwnSetProperty: runtime.ObjectWrite.Property
             )
         );
         EmitSetIndexStrict(
@@ -1686,7 +1697,8 @@ public partial class RuntimeEmitter
                 runtime.StringCoercion,
                 runtime.Symbols,
                 runtime.Reflect.ToPropertyKey,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         EmitDeleteIndex(
@@ -1705,8 +1717,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.Reflect.ToPropertyKey,
                 new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
-                    runtime.ObjectDescriptors, runtime.ObjectState),
-                runtime.GuestOwnProperties
+                    runtime.ObjectDescriptors, runtime.ObjectState, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
+                GuestOwnProperties: runtime.GuestOwnProperties
             )
         );
         EmitDeleteIndexStrict(
@@ -1725,8 +1737,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.Reflect.ToPropertyKey,
                 new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
-                    runtime.ObjectDescriptors, runtime.ObjectState),
-                runtime.GuestOwnProperties
+                    runtime.ObjectDescriptors, runtime.ObjectState, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
+                GuestOwnProperties: runtime.GuestOwnProperties
             )
         );
         EmitStrictModeHelpers(typeBuilder, runtime.Operators, runtime.Errors);
@@ -1794,7 +1806,7 @@ public partial class RuntimeEmitter
         // extensibility callbacks even though their public Object methods are
         // emitted later in this section. Declare the descriptor shell and emit
         // isExtensible up front so key consumers can capture stable delegates.
-        EmitObjectIsExtensible(runtime.ObjectState, new ObjectIsExtensibleInputs(runtime.DescriptorStorage, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped));
+        EmitObjectIsExtensible(runtime.ObjectState, new ObjectIsExtensibleInputs(runtime.DescriptorStorage, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection));
         DeclareProxyOwnKeysHelpers(typeBuilder, runtime.ObjectKeys);
         EmitNormalizeOwnPropertyKeys(typeBuilder, runtime.ObjectKeys);
         if (runtime.GuestOwnProperties is { } guestOwnProperties)
@@ -1819,7 +1831,8 @@ public partial class RuntimeEmitter
                     runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
-                    runtime.ObjectRead.Property
+                    runtime.ObjectRead.Property,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 new ProxyOwnKeysCallInputs(
                     runtime.ObjectKeys.Ordinary,
@@ -1828,7 +1841,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.ReflectedMethods.InvokeUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.RegExps,
                 runtime.Symbols,
@@ -1851,7 +1865,8 @@ public partial class RuntimeEmitter
                     runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
-                    runtime.ObjectRead.Property
+                    runtime.ObjectRead.Property,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 new ProxyOwnKeysCallInputs(
                     runtime.ObjectKeys.Ordinary,
@@ -1860,7 +1875,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.ReflectedMethods.InvokeUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.Symbols,
                 runtime.Sentinels.UndefinedType,
@@ -1887,7 +1903,8 @@ public partial class RuntimeEmitter
                     runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
-                    runtime.ObjectRead.Property
+                    runtime.ObjectRead.Property,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 new ProxyOwnKeysCallInputs(
                     runtime.ObjectKeys.Ordinary,
@@ -1896,7 +1913,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.ReflectedMethods.InvokeUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
@@ -1929,7 +1947,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.ReflectedMethods.InvokeUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 _features.UsesProxy,
                 runtime.ObjectWrite.Index,
@@ -1955,7 +1974,8 @@ public partial class RuntimeEmitter
                     runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
-                    runtime.ObjectRead.Property
+                    runtime.ObjectRead.Property,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 new ProxyOwnKeysCallInputs(
                     runtime.ObjectKeys.Ordinary,
@@ -1964,7 +1984,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.ReflectedMethods.InvokeUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.Reflect,
                 runtime.FunctionValues.Type,
@@ -1989,7 +2010,8 @@ public partial class RuntimeEmitter
                     runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
-                    runtime.ObjectRead.Property
+                    runtime.ObjectRead.Property,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 new ProxyOwnKeysCallInputs(
                     runtime.ObjectKeys.Ordinary,
@@ -1998,7 +2020,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.ReflectedMethods.InvokeUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.Reflect,
                 runtime.FunctionValues.Type,
@@ -2037,7 +2060,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.ReflectedMethods.InvokeUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.ObjectWrite.IndexStrict,
                 runtime.ObjectWrite.PropertyStrict,
@@ -2086,7 +2110,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 runtime.FunctionPrototypes.Type,
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
-                runtime.GuestOwnProperties
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                GuestOwnProperties: runtime.GuestOwnProperties
             )
         );
         // Declare the Math adapters before the later singleton population installs
@@ -2125,7 +2150,8 @@ public partial class RuntimeEmitter
                     runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
-                    runtime.ObjectRead.Property
+                    runtime.ObjectRead.Property,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.RegExps,
                 runtime.StringCoercion,
@@ -2159,11 +2185,13 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.ReflectedMethods.InvokeUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.Reflect,
                 runtime.Symbols,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         EmitObjectGetOwnPropertyDescriptors(
@@ -2179,7 +2207,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol,
                     runtime.ObjectRead.Property,
-                    runtime.ReflectedMethods.InvokeUnwrapped
+                    runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.Symbols,
                 runtime.Sentinels.UndefinedInstance,
@@ -2202,7 +2231,7 @@ public partial class RuntimeEmitter
         // but their implementation needs all of the object-model helpers above.
         if (_features.UsesPromise)
             EmitPromiseKeyedMethodBodies(runtime);
-        EmitObjectPreventExtensions(typeBuilder, runtime.ObjectState, new ObjectPreventExtensionsInputs(runtime.ArrayStorage, runtime.Errors.CreateException, runtime.DescriptorStorage, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped, runtime.ObjectStorage, runtime.Errors.TypeErrorConstructor));
+        EmitObjectPreventExtensions(typeBuilder, runtime.ObjectState, new ObjectPreventExtensionsInputs(runtime.ArrayStorage, runtime.Errors.CreateException, runtime.DescriptorStorage, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped, runtime.ObjectStorage, runtime.Errors.TypeErrorConstructor, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection));
         EmitObjectGetPrototypeOf(
             runtime.ClassPrototypes,
             runtime.ObjectPrototypes,
@@ -2255,7 +2284,8 @@ public partial class RuntimeEmitter
                 runtime.Strings,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
-                runtime.GuestOwnProperties
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                GuestOwnProperties: runtime.GuestOwnProperties
             ),
             prototypeStoreField
         );
@@ -2274,7 +2304,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.Records,
                 runtime.Symbols,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             ),
             prototypeStoreField
         );
@@ -2340,7 +2371,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectPrototypes.GetPrototypeOf,
                 runtime.ObjectRead.Index,
                 runtime.Symbols.IsSymbol,
-                runtime.SymbolAccessors.FindOwnMethod
+                runtime.SymbolAccessors.FindOwnMethod,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         if (runtime.Reflect.Assignment is not null)
@@ -2353,7 +2385,8 @@ public partial class RuntimeEmitter
                         runtime.Reflect.RequireAssignment().Set,
                         runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                         runtime.ObjectRead.Property,
-                        runtime.ReflectedMethods.InvokeUnwrapped
+                        runtime.ReflectedMethods.InvokeUnwrapped,
+                        NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                     ),
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.DescriptorStorage.IsFrozen,
@@ -2386,7 +2419,8 @@ public partial class RuntimeEmitter
                             runtime.ObjectPrototypes.GetPrototypeOf,
                             runtime.Operators.HasIn, runtime.Sentinels.UndefinedType),
                         runtime.Reflect.Get, runtime.Operators.TypeOf,
-                        runtime.Sentinels.UndefinedType)
+                        runtime.Sentinels.UndefinedType),
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );
         }
@@ -2408,7 +2442,8 @@ public partial class RuntimeEmitter
                     runtime.Operators.TypeOf,
                     runtime.Errors.CreateException,
                     runtime.Errors.TypeErrorConstructor,
-                    runtime.FunctionBindings
+                    runtime.FunctionBindings,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );
             EmitReflectPreventExtensions(
@@ -2418,7 +2453,8 @@ public partial class RuntimeEmitter
                     runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectState.PreventExtensions,
                     runtime.ObjectState.IsExtensible,
-                    runtime.ObjectRead.Property
+                    runtime.ObjectRead.Property,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );
             EmitReflectSetPrototypeOf(
@@ -2435,7 +2471,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectState.IsExtensible,
                     runtime.Sentinels.UndefinedType,
                     runtime.Symbols.Type,
-                    runtime.ObjectRead.Property
+                    runtime.ObjectRead.Property,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );
             EmitReflectOwnKeys(
@@ -2451,7 +2488,8 @@ public partial class RuntimeEmitter
                         runtime.ObjectState.IsExtensible,
                         runtime.Symbols.IsSymbol,
                         runtime.ObjectRead.Property,
-                        runtime.ReflectedMethods.InvokeUnwrapped
+                        runtime.ReflectedMethods.InvokeUnwrapped,
+                        NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                     ),
                     runtime.ObjectKeys.Ordinary,
                     runtime.ObjectKeys.Symbols,
@@ -2479,7 +2517,8 @@ public partial class RuntimeEmitter
                     runtime.Sentinels.UndefinedType,
                     runtime.ObjectRead.Property,
                     runtime.DataView,
-                    runtime.Promise
+                    runtime.Promise,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );
             EmitReflectValueFormMethods(
@@ -2856,7 +2895,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectDescriptors.DefineProperty,
                     runtime.FunctionValues.InvokeWithThis,
                     runtime.FunctionValues.Type,
-                    runtime.Sentinels.UndefinedType
+                    runtime.Sentinels.UndefinedType,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );
             EmitJsonStringify(
@@ -2899,7 +2939,8 @@ public partial class RuntimeEmitter
                     _features.UsesArrayPrototypeMutation,
                     _features.UsesClassPrototypeMutation,
                     _features.UsesDynamicPropertyDescriptors,
-                    _features.UsesObjectIntegrityMutation
+                    _features.UsesObjectIntegrityMutation,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );
             EmitJsonStringifyFull(
@@ -2931,7 +2972,8 @@ public partial class RuntimeEmitter
                     runtime.Errors.TypeErrorConstructor,
                     runtime.Operators.TypeOf,
                     runtime.Sentinels.UndefinedInstance,
-                    runtime.Sentinels.UndefinedType
+                    runtime.Sentinels.UndefinedType,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );
             EmitJsonRawJsonMethods(
@@ -3083,7 +3125,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectState.IsExtensible,
                     runtime.ObjectRead.Property,
-                    runtime.Booleans.IsTruthy
+                    runtime.Booleans.IsTruthy,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.StringCoercion,
                 runtime.Sentinels.UndefinedInstance,
