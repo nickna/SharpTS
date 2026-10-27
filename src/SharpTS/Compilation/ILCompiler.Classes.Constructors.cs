@@ -113,9 +113,7 @@ public partial class ILCompiler
                 EmitEffectiveClassElements(ctx, classStmt.Fields,
                     _typedInterop.PropertyBackingFields.GetValueOrDefault(className),
                     _typedInterop.PropertyTypes.GetValueOrDefault(className),
-                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)));
-                foreach (var accessor in classStmt.AutoAccessors?.Where(accessor => !accessor.IsStatic) ?? [])
-                    EmitReceiverAutoAccessorInitializer(ctx, accessor, className);
+                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)), classStmt.AutoAccessors);
                 var parameterEmitter = new ILEmitter(ctx);
                 foreach (var assignment in parameterProperties) parameterEmitter.EmitConstructorParameterProperty(assignment);
             });
@@ -125,7 +123,6 @@ public partial class ILCompiler
                 // Keep nominal fields and their typed accessors synchronized.
                 // The callback runs at the successful super expression itself.
                 EmitOrderedFieldInitializers();
-                EmitInstanceAutoAccessorInitializers();
                 var parameterEmitter = new ILEmitter(ctx);
                 foreach (var assignment in parameterProperties) parameterEmitter.EmitConstructorParameterProperty(assignment);
             });
@@ -307,9 +304,6 @@ public partial class ILCompiler
             && constructor.Body.Any(ContainsSuperCall);
         bool privateInitializationEmitted = !deferPrivateInitialization;
         if (!deferPrivateInitialization && ctx.ClassConstructorThisCell == null) EmitOrderedFieldInitializers();
-        // TypeScript 4.9+: Initialize instance auto-accessor backing fields
-        if (ctx.ClassConstructorThisCell == null && !initializeNominalElementsAtSuper)
-            EmitInstanceAutoAccessorInitializers();
 
         // Emit constructor body
         if (constructor != null)
@@ -372,20 +366,6 @@ public partial class ILCompiler
 
         il.Emit(OpCodes.Ret);
 
-        void EmitInstanceAutoAccessorInitializers()
-        {
-            var instanceAutoAccessors = classStmt.AutoAccessors?.Where(a => !a.IsStatic && a.Initializer != null).ToList() ?? [];
-            if (instanceAutoAccessors.Count == 0) return;
-            ctx.FieldsField = fieldsField;
-            ctx.IsInstanceMethod = true;
-            var autoAccessorEmitter = new ILEmitter(ctx);
-            bool previous = ctx.SuppressNewTarget;
-            ctx.SuppressNewTarget = true;
-            foreach (var autoAccessor in instanceAutoAccessors)
-                EmitAutoAccessorInitializer(autoAccessorEmitter, autoAccessor, className, isStatic: false);
-            ctx.SuppressNewTarget = previous;
-        }
-
         void EmitOrderedFieldInitializers()
         {
             bool previous = ctx.SuppressNewTarget;
@@ -400,15 +380,24 @@ public partial class ILCompiler
             var instanceFieldsWithInit = classStmt.Fields.Where(f =>
                 !f.IsStatic && !f.IsDeclare &&
                 (f.IsPrivate || f.Initializer != null || f.ComputedKey != null || f.TypeAnnotation == null)).ToList();
-            if (instanceFieldsWithInit.Count > 0 || _classes.PrivateElements.Require(className).Storage != null)
+            var instanceAutoAccessors = classStmt.AutoAccessors?.Where(accessor => !accessor.IsStatic && accessor.Initializer != null) ?? [];
+            var elements = instanceFieldsWithInit.Cast<Stmt>().Concat(instanceAutoAccessors)
+                .OrderBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset).ToList();
+            if (elements.Count > 0 || _classes.PrivateElements.Require(className).Storage != null)
             {
                 ctx.FieldsField = fieldsField;
                 ctx.IsInstanceMethod = true;
                 var initEmitter = new ILEmitter(ctx);
 
                 var privateStorage = EmitPrivateFieldStorage(il, className);
-                foreach (var field in instanceFieldsWithInit)
+                foreach (var element in elements)
                 {
+                    if (element is Stmt.AutoAccessor accessor)
+                    {
+                        EmitAutoAccessorInitializer(initEmitter, accessor, className, isStatic: false);
+                        continue;
+                    }
+                    var field = (Stmt.Field)element;
                     if (field.IsPrivate)
                     {
                         EmitPrivateFieldInitializer(il, field, privateStorage!, initEmitter);

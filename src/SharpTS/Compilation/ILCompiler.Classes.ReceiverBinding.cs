@@ -14,15 +14,24 @@ public partial class ILCompiler
 
     private void EmitEffectiveClassElements(CompilationContext context, IEnumerable<Stmt.Field> fields,
         IReadOnlyDictionary<string, FieldBuilder>? backingFields, IReadOnlyDictionary<string, Type>? propertyTypes,
-        Action<Stmt.Field> loadComputedKey)
+        Action<Stmt.Field> loadComputedKey, IEnumerable<Stmt.AutoAccessor>? autoAccessors = null)
     {
         var il = context.IL;
         var emitter = new ILEmitter(context);
         bool previous = context.SuppressNewTarget;
         context.SuppressNewTarget = true;
         var slots = EmitPrivateFieldStorage(il, context.CurrentClassName!, context, emitter);
-        foreach (var field in fields.Where(field => !field.IsStatic && !field.IsDeclare))
+        var elements = fields.Where(field => !field.IsStatic && !field.IsDeclare).Cast<Stmt>()
+            .Concat((autoAccessors ?? []).Where(accessor => !accessor.IsStatic))
+            .OrderBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset);
+        foreach (var element in elements)
         {
+            if (element is Stmt.AutoAccessor accessor)
+            {
+                EmitReceiverAutoAccessorInitializer(context, accessor, context.CurrentClassName!);
+                continue;
+            }
+            var field = (Stmt.Field)element;
             if (field.IsPrivate)
             {
                 EmitPrivateFieldInitializer(il, field, slots!, emitter);

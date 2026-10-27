@@ -360,8 +360,17 @@ public partial class SharpTSClass(
                 throw new ThrowException(new SharpTSTypeError("Cannot initialize private methods twice on the same object"));
         }
 
-        foreach (var field in OrderedInstanceFields ?? _instanceFields.Concat(_instancePrivateFields).ToList())
+        var elements = (OrderedInstanceFields ?? _instanceFields.Concat(_instancePrivateFields).ToList()).Cast<Stmt>()
+            .Concat(_instanceAutoAccessors)
+            .OrderBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset);
+        foreach (var element in elements)
         {
+            if (element is Stmt.AutoAccessor accessor)
+            {
+                InitializeOwnAutoAccessor(interpreter, receiver, accessor);
+                continue;
+            }
+            var field = (Stmt.Field)element;
             object? value = field.Initializer != null
                 ? interpreter.EvaluateClassInitializer(this, receiver, field.Initializer)
                 : SharpTSUndefined.Instance;
@@ -377,7 +386,6 @@ public partial class SharpTSClass(
                 ObjectBuiltIns.CreateDataPropertyOrThrow(interpreter, receiver, key, value);
             }
         }
-        InitializeOwnAutoAccessors(interpreter, receiver);
     }
 
     internal ISharpTSCallable? FindOwnMethod(string name)
@@ -942,15 +950,17 @@ public partial class SharpTSClass(
         if (_instanceAutoAccessors.Count == 0)
             return;
 
-        var storage = _autoAccessorStorage.GetValue(instance, static _ => []);
         foreach (var autoAccessor in _instanceAutoAccessors)
-        {
-            object? value = autoAccessor.Initializer != null
-                ? interpreter.EvaluateClassInitializer(this, instance, autoAccessor.Initializer)
-                : null;
-            if (!storage.TryAdd(autoAccessor.Name.Lexeme, value))
-                throw new ThrowException(new SharpTSTypeError($"Cannot initialize auto-accessor {autoAccessor.Name.Lexeme} twice on the same object"));
-        }
+            InitializeOwnAutoAccessor(interpreter, instance, autoAccessor);
+    }
+
+    private void InitializeOwnAutoAccessor(Interpreter interpreter, object instance, Stmt.AutoAccessor accessor)
+    {
+        var storage = _autoAccessorStorage.GetValue(instance, static _ => []);
+        object? value = accessor.Initializer is { } initializer
+            ? interpreter.EvaluateClassInitializer(this, instance, initializer) : SharpTSUndefined.Instance;
+        if (!storage.TryAdd(accessor.Name.Lexeme, value))
+            throw new ThrowException(new SharpTSTypeError($"Cannot initialize auto-accessor {accessor.Name.Lexeme} twice on the same object"));
     }
 
     /// <summary>
