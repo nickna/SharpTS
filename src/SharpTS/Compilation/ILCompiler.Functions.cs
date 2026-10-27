@@ -1712,8 +1712,9 @@ public partial class ILCompiler
         {
             if (returnsExitCode)
             {
-                // Unbox double, convert to int, call Environment.Exit
-                il.Emit(OpCodes.Unbox_Any, _types.Double);
+                // Numeric user methods may use a native double return slot.
+                if (userMainMethod.ReturnType != _types.Double)
+                    il.Emit(OpCodes.Unbox_Any, _types.Double);
                 il.Emit(OpCodes.Conv_I4);
                 EmitTerminateOwnedChildProcesses(il);
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.Environment, "Exit", _types.Int32));
