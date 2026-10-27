@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using System.Reflection;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -619,6 +620,62 @@ public class LockDecoratorTests
     }
 
     // ==================== Static Async @lock Tests ====================
+
+    [Fact]
+    public void LockDecorator_GenericBaseAliasKeepsItsOwnGateOnADerivedReceiver()
+    {
+        const string source = """
+            const events: string[] = [];
+            let release: any;
+            const gate = new Promise<void>(resolve => { release = resolve; });
+            class Base<T> {
+                @lock
+                async held(): Promise<void> {
+                    events.push('base');
+                    await gate;
+                    events.push('released');
+                }
+            }
+            class Derived extends Base<number> {
+                @lock
+                async own(): Promise<number> { events.push('derived'); return 47; }
+            }
+            const owner = new Derived();
+            const held: any = owner.held, own: any = owner.own;
+            async function run() {
+                const pending = held.call(owner);
+                console.log(await own.call(owner), events.join(','));
+                release();
+                await pending;
+                console.log(events.join(','));
+            }
+            run().catch((error: any) => console.log('unexpected', error.name, error.message));
+            """;
+        Assert.Equal("47 base,derived\nbase,derived,released\n", TestHarness.RunCompiled(source, DecoratorMode.Stage3));
+    }
+
+    [Fact]
+    public void LockDecorator_CanonicalStaticGateReadersRemainInternal()
+    {
+        const string source = """
+            class Counter {
+                @lock
+                static async value(): Promise<number> { return 47; }
+            }
+            console.log(Object.getOwnPropertyNames(Counter).join(','));
+            const value: any = Counter.value;
+            value.call(Counter).then((result: any) => console.log(result));
+            """;
+        var (assembly, output) = TestHarness.CompileAndRun(source, DecoratorMode.Stage3);
+        Assert.Equal("length,name,prototype,value\n47\n", output);
+        var owner = assembly.GetType("Counter")!;
+        const BindingFlags hiddenStatic = BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        var readers = owner.GetMethods(hiddenStatic).Where(method => method.Name.StartsWith("<>__ReadAsyncLock_", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(2, readers.Length);
+        Assert.All(readers, reader => Assert.True(reader.IsAssembly));
+        Assert.True(owner.GetField("_staticAsyncLock", hiddenStatic)!.IsPrivate);
+        Assert.True(owner.GetField("_staticLockReentrancy", hiddenStatic)!.IsPrivate);
+    }
 
     [Fact]
     public void LockDecorator_StaticAsyncMethod_BasicUsage_Works()
