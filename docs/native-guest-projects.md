@@ -219,6 +219,14 @@ call/apply/bind wrappers refuse independently of typed CLR argument admission.
 This covers Promise executors/rejection handlers and EventEmitter capture-rejection
 listeners, whose exceptional payloads do not enter through source catch syntax.
 Guest-only and unrelated pure async callbacks/rejections remain guest values.
+Module capture also preserves original roots and identities for deferred CommonJS
+and dynamic-import-only modules. Selected or transitively known CLR effects at
+those module roots refuse before output, rather than escaping when require/import
+runs inside a later guest callback. The eager entry keeps its typed CLR domain;
+pure deferred modules and cached CommonJS cycles remain supported. This is a
+bounded initialization rule, not a blanket module/`any` restriction. Native
+projects use non-hosted initialization; explicit top-level await retains its
+existing compiler-context refusal, so this slice adds no redundant await gate.
 Uncatalogued member-provider operations on a proven CLR origin remain unsupported. Ordinary guest objects,
 callbacks, catches, `any`, computed names and Symbol keys retain guest semantics.
 

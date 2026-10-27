@@ -417,13 +417,111 @@ public class NativeClrAdmissionTests
         Assert.Equal("true\n", Execute(Compile("try { Function('return arbitrarySource'); } catch (e) { console.log(e.message.includes('source text is not supported')); }", true).SaveToBytes()));
     }
 
-    private static ILCompiler CompileModule(string source, bool native)
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DeferredCommonJsRootCannotEraseDirectOrTransitiveClrExceptionalEffects(bool transitive)
     {
-        const string entry = "/native-clr/exceptional.ts";
-        var resolver = new ModuleResolver(entry, new Dictionary<string, string> { [entry] = source });
-        var modules = resolver.GetModulesInOrder(resolver.LoadModule(entry, DecoratorMode.Legacy));
+        const string entry = "/native-clr/deferred-entry.cjs";
+        string module;
+        if (transitive) module = ExceptionSource + "fail(); module.exports = {};";
+        else
+        {
+            int start = ExceptionSource.IndexOf("function fail() {", StringComparison.Ordinal);
+            string body = ExceptionSource[(start + "function fail() {".Length)..];
+            module = ExceptionSource[..start] + body[..body.LastIndexOf('}')] + "module.exports = {};";
+        }
+        var files = new Dictionary<string, string>
+        {
+            [entry] = "Promise.resolve(1).then(() => require('./deferred.cjs')).catch(reason => console.log('lazy', reason.toString()));",
+            ["/native-clr/deferred.cjs"] = module
+        };
+        Assert.Equal("lazy opaque\n", Execute(CompileFiles(files, entry, false).SaveToBytes()));
+        var error = Assert.Throws<CompileException>(() => CompileFiles(files, entry, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.Contains("deferred module", error.Message);
+    }
+
+    [Fact]
+    public void EagerEntryTypedClrAndUnrelatedPureDeferredModuleRemainSupported()
+    {
+        const string entry = "/native-clr/mixed-entry.cjs";
+        var files = new Dictionary<string, string>
+        {
+            [entry] = Builder + "const value: Builder = new Builder(); value.append('typed'); Promise.resolve(1).then(() => require('./pure.cjs')).then(value => console.log('pure', value.x));",
+            ["/native-clr/pure.cjs"] = "module.exports = { x: 4 };"
+        };
+        Assert.Equal("pure 4\n", Execute(CompileFiles(files, entry, true).SaveToBytes()));
+    }
+
+    [Fact]
+    public void PureCommonJsCycleDoesNotReclassifyTheEagerEntryAsDeferred()
+    {
+        const string entry = "/native-clr/cycle-entry.cjs";
+        var files = new Dictionary<string, string>
+        {
+            [entry] = Builder + "exports.x = 3; const value: Builder = new Builder(); value.append('typed'); const child = require('./cycle-child.cjs'); console.log('cycle', child.x);",
+            ["/native-clr/cycle-child.cjs"] = "const parent = require('./cycle-entry.cjs'); module.exports = { x: parent.x };"
+        };
+        Assert.Equal("cycle 3\n", Execute(CompileFiles(files, entry, true).SaveToBytes()));
+    }
+
+    [Fact]
+    public void DynamicOnlyModuleRootsKeepTheirDeferredClrEffectIdentity()
+    {
+        const string entry = "/native-clr/dynamic-entry.ts";
+        var files = new Dictionary<string, string>
+        {
+            [entry] = "import('./dynamic').catch(reason => console.log(reason));",
+            ["/native-clr/dynamic.ts"] = ExceptionSource + "fail(); export const value = 1;"
+        };
+        var error = Assert.Throws<CompileException>(() => CompileFiles(files, entry, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.Contains("deferred module", error.Message);
+    }
+
+    [Fact]
+    public void PureDynamicModuleDoesNotTaintEagerEntryClrFacts()
+    {
+        const string entry = "/native-clr/dynamic-pure-entry.ts";
+        var files = new Dictionary<string, string>
+        {
+            [entry] = Builder + "const value: Builder = new Builder(); value.append('typed'); import('./dynamic-pure').then(module => console.log('import', module.value));",
+            ["/native-clr/dynamic-pure.ts"] = "export const value = 4;"
+        };
+        Assert.Equal("import 4\n", Execute(CompileFiles(files, entry, true).SaveToBytes()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NonHostedTopLevelAwaitRetainsItsExistingCompilerContextRefusal(bool native)
+    {
+        var error = Assert.Throws<CompileException>(() => CompileModule(Builder + "const value: Builder = new Builder(); await Promise.resolve(1); export {};", native));
+        Assert.Equal(DiagnosticCode.CompileError, error.Diagnostic.Code); Assert.Contains("Await not supported in this context", error.Message);
+    }
+
+    private static ILCompiler CompileModule(string source, bool native) =>
+        CompileFiles(new Dictionary<string, string> { ["/native-clr/exceptional.ts"] = source }, "/native-clr/exceptional.ts", native);
+
+    private static ILCompiler CompileFiles(Dictionary<string, string> files, string entry, bool native)
+    {
+        var resolver = new ModuleResolver(entry, files);
+        var entryModule = resolver.LoadModule(entry, DecoratorMode.Legacy);
+        var modules = resolver.GetModulesInOrder(entryModule);
         var checker = new TypeChecker(); checker.SetDecoratorMode(DecoratorMode.Legacy);
         var types = checker.CheckModules(modules, resolver);
+        var dynamicModules = new List<ParsedModule>();
+        var processed = new HashSet<(string Specifier, string ImportingModulePath)>();
+        while (true)
+        {
+            var pending = checker.DynamicImportReferences.Where(reference => processed.Add(reference)).ToArray();
+            if (pending.Length == 0) break;
+            var loaded = pending.SelectMany(reference => resolver.LoadDynamicImportModules(
+                [reference.Specifier], reference.ImportingModulePath, DecoratorMode.Legacy)).ToArray();
+            if (loaded.Length == 0) continue;
+            dynamicModules.AddRange(loaded);
+            modules = resolver.GetRuntimeModulesInOrder(dynamicModules.Append(entryModule));
+            types = checker.CheckModules(resolver.GetModulesInOrder(dynamicModules.Append(entryModule)), resolver);
+        }
         var compiler = new ILCompiler("native_clr_exceptional_" + Guid.NewGuid().ToString("N"), false, true, null, null, null, OutputTarget.Dll);
         if (native) compiler.EnableNativeAotProjectOutput(); compiler.CompileModules(modules, resolver, types); return compiler;
     }

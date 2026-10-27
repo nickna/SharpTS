@@ -24,6 +24,7 @@ internal sealed partial class NativeClrAdmission
             }
         } while (changed);
 
+        CheckDeferredModuleIngress(known);
         foreach (var owner in known)
         {
             if (owner is Stmt.Function function)

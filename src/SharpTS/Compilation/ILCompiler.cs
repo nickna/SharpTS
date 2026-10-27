@@ -1354,7 +1354,7 @@ public partial class ILCompiler
         _typeMapper.HeldClassConstructions = HeldClassConstructionInfo.Analyze(
             modules.SelectMany(module => module.Statements), typeMap, _typeMapper);
         _nativeClrAdmission = _nativeAotProjectOutput
-            ? NativeClrAdmission.Capture(modules.SelectMany(module => module.Statements), typeMap, _types) : null;
+            ? NativeClrAdmission.CaptureModules(modules, typeMap, _types) : null;
         _rawCallStorage = RawCallStorageAnalysis.Capture(
             modules.SelectMany(module => module.Statements), typeMap,
             modules.Where(module => !module.IsCommonJs).Select(module => (IEnumerable<Stmt>)module.Statements));
