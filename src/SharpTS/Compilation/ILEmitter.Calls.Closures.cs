@@ -128,7 +128,8 @@ public partial class ILEmitter
                 else if (LexicalEnvironmentCellAccess.TryEmitCaptureReference(IL, _ctx, af, captureName)) { }
                 else if (arrowBuilder.StandaloneLiveCaptureFields.TryGetValue(captureName, out var liveField))
                 {
-                    StandaloneAsyncCaptureEmitter.EmitReference(IL, _ctx, liveField, captureName);
+                    if (!TryEmitClassDefinitionEnvironment(liveField.DeclaringType!))
+                        StandaloneAsyncCaptureEmitter.EmitReference(IL, _ctx, liveField, captureName);
                 }
                 else if (captureName == "this")
                 {
