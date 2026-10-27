@@ -17,6 +17,12 @@ public partial class ILCompiler
         var sourceTypes = method.GetParameters().Skip(receiverSkip)
             .Select(parameter => parameter.ParameterType).ToArray();
         var context = CreateModuleMemberContext(il, method);
+        // Defaults can create closures before the iterator exists. Their owner
+        // references must be populated from this invocation's newly created scope.
+        context.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields;
+        context.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields;
+        context.ArrowScopeDCFields = _closures.ArrowScopeDCFields;
+        context.ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields;
         context.IsInstanceMethod = true;
         context.IsStrictMode = _strictArrows.Contains(source) || _isStrictMode
             || BodyDeclaresUseStrict(source.BlockBody);
