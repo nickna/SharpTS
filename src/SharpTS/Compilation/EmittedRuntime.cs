@@ -17,6 +17,16 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Opt-in source own-property infrastructure; does not admit or reroute existing carriers.</summary>
+    public EmittedGuestOwnPropertyRuntime? GuestOwnProperties { get; private set; }
+
+    internal void BeginGuestOwnPropertiesEmission(EmittedGuestOwnPropertyRuntime declarations)
+    {
+        ArgumentNullException.ThrowIfNull(declarations);
+        if (GuestOwnProperties != null) throw new InvalidOperationException("Guest own-property emission has already started.");
+        GuestOwnProperties = declarations;
+    }
+
     /// <summary>Opt-in direct invocation contracts for generated native guest carriers.</summary>
     public EmittedNativeCallableRuntime? NativeCallables { get; private set; }
 

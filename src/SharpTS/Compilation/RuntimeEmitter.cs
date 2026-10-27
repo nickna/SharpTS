@@ -12,6 +12,7 @@ public partial class RuntimeEmitter
     private readonly TypeProvider _types;
     private readonly bool _emitHosted;
     private readonly bool _emitNativeCallables;
+    private readonly bool _emitNativeOwnProperties;
 
     /// <summary>
     /// Feature gating set — populated by <see cref="EmitAll(ModuleBuilder, RuntimeFeatureSet)"/>
@@ -27,10 +28,16 @@ public partial class RuntimeEmitter
     }
 
     internal RuntimeEmitter(TypeProvider types, bool emitHosted, bool emitNativeCallables)
+        : this(types, emitHosted, emitNativeCallables, emitNativeOwnProperties: false)
+    {
+    }
+
+    internal RuntimeEmitter(TypeProvider types, bool emitHosted, bool emitNativeCallables, bool emitNativeOwnProperties)
     {
         _types = types;
         _emitHosted = emitHosted;
         _emitNativeCallables = emitNativeCallables;
+        _emitNativeOwnProperties = emitNativeOwnProperties;
     }
 
     /// <summary>
@@ -329,6 +336,9 @@ public partial class RuntimeEmitter
         // Must come before $Object which implements it
         EmitHasFieldsInterface(moduleBuilder, runtime.ObjectFields);
         runtime.ObjectFields.CompleteEmission();
+        if (_emitNativeOwnProperties)
+            runtime.BeginGuestOwnPropertiesEmission(DeclareGuestOwnProperties(moduleBuilder,
+                runtime.DescriptorStorage.DescriptorType, runtime.Symbols.Type));
         EmitCompactObjectRecordInterface(moduleBuilder, runtime.Records);
         DefineClassDefinitionTypes(moduleBuilder, runtime.ClassDefinitions, runtime.NativeCallables);
 
@@ -1106,6 +1116,7 @@ public partial class RuntimeEmitter
         runtime.Promise?.CompleteEmission();
         runtime.BuiltInModules.CompleteEmission();
         runtime.NativeCallables?.CompleteEmission();
+        runtime.GuestOwnProperties?.CompleteEmission();
         return runtime;
     }
 }

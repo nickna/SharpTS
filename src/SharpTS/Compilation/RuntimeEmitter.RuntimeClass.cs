@@ -1783,6 +1783,8 @@ public partial class RuntimeEmitter
         EmitObjectIsExtensible(runtime.ObjectState, new ObjectIsExtensibleInputs(runtime.DescriptorStorage, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped));
         DeclareProxyOwnKeysHelpers(typeBuilder, runtime.ObjectKeys);
         EmitNormalizeOwnPropertyKeys(typeBuilder, runtime.ObjectKeys);
+        if (runtime.GuestOwnProperties is { } guestOwnProperties)
+            EmitGuestOwnPropertySnapshot(guestOwnProperties, runtime.ObjectKeys.Normalize);
         EmitClassConstructorKeys(typeBuilder, runtime.ObjectKeys, runtime.DescriptorStorage,
             runtime.ObjectState, runtime.FunctionAttributes, runtime.ObjectFields.Interface);
         EmitGetOwnPropertyNames(
