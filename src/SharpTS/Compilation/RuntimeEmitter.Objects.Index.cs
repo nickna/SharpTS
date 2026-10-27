@@ -68,7 +68,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         EmittedBooleanRuntime Booleans,
         EmittedNumberRuntime Numbers,
-        EmittedBigIntRuntime BigInt
+        EmittedBigIntRuntime BigInt,
+        MethodInfo ToPropertyKey
     );
 
     private readonly record struct RegExpSymbolDispatchInputs(
@@ -141,6 +142,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, nullLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ToPropertyKey);
+        il.Emit(OpCodes.Starg_S, (byte)1);
 
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         var notProxyLabel = il.DefineLabel();

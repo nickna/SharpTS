@@ -1572,7 +1572,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 runtime.Booleans,
                 runtime.Numbers,
-                runtime.BigInt
+                runtime.BigInt,
+                runtime.Reflect.ToPropertyKey
             )
         );
         // Apply wrappers were finalized earlier against the forward declaration;
