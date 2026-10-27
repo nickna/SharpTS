@@ -30,6 +30,7 @@ public partial class RuntimeEmitter
     private readonly record struct ObjectGetPrototypeOfInputs(
         EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedArrayOperationsRuntime ArrayOperations,
+        Type NativeArrayType,
         EmittedBooleanRuntime Booleans,
         TypeBuilder BoundTSFunctionType,
         TypeBuilder BoundAnyFunctionType,
@@ -959,6 +960,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, _types.Object);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Beq, notUserClassCtorForProtoLabel);
+        var ordinaryUserParent = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
+        il.Emit(OpCodes.Ldtoken, inputs.NativeArrayType);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Bne_Un, ordinaryUserParent);
+        il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinaryUserParent);
+        var canonicalUserParent = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsConstructedGenericType").GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, canonicalUserParent);
+        il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(canonicalUserParent);
         il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notUserClassCtorForProtoLabel);

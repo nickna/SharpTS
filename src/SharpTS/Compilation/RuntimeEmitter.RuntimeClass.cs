@@ -2170,6 +2170,7 @@ public partial class RuntimeEmitter
             new ObjectGetPrototypeOfInputs(
                 runtime.ClassDefinitions,
                 runtime.ArrayOperations,
+                runtime.ArrayStorage.Type,
                 runtime.Booleans,
                 runtime.FunctionBindings.BoundType,
                 runtime.FunctionBindings.AnyType,
