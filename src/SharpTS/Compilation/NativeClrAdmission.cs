@@ -68,6 +68,11 @@ internal sealed partial class NativeClrAdmission
             Fail($"selected CLR member {member.DeclaringType?.FullName}.{member.Name} has no original source expression");
             return;
         }
+        if (_sharedSourceUses.Contains(source))
+        {
+            Fail("selected CLR operation has ambiguous original parent or execution owner", source);
+            return;
+        }
         _selections.Add(new(source, member, resultType, marshalling));
         _effects.Add(source);
         if (receiver is not null) AllowReceiver(source, receiver);
@@ -241,7 +246,8 @@ internal sealed partial class NativeClrAdmission
         {
             if (!analysis._parents.TryAdd(expression, _parent) &&
                 !ReferenceEquals(analysis._parents[expression], _parent)) analysis._sharedSourceUses.Add(expression);
-            analysis._owners.TryAdd(expression, _owner);
+            if (!analysis._owners.TryAdd(expression, _owner) &&
+                !ReferenceEquals(analysis._owners[expression], _owner)) analysis._sharedSourceUses.Add(expression);
             var previous = _parent; _parent = expression;
             try { base.Visit(expression); } finally { _parent = previous; }
         }

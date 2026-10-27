@@ -499,6 +499,26 @@ public class NativeClrAdmissionTests
         Assert.Equal(DiagnosticCode.CompileError, error.Diagnostic.Code); Assert.Contains("Await not supported in this context", error.Message);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SharedStatementCannotBorrowTheFirstExecutionOwnerEvenForScalarClrResults(bool scalar)
+    {
+        string declaration = scalar
+            ? "@DotNetType(\"System.Math\") declare class ClrMath { static abs(value: number): number; }"
+            : Builder;
+        string operation = scalar ? "ClrMath.abs(1);" : "new Builder();";
+        string source = declaration + "function first() { " + operation + " } async function second() { " + operation + " } second().catch(reason => console.log(reason));";
+        var statements = new Parser(new Lexer(source).ScanTokens(), DecoratorMode.Legacy).ParseOrThrow();
+        var functions = statements.OfType<Stmt.Function>().ToArray();
+        functions[1].Body![0] = functions[0].Body![0];
+        var checker = new TypeChecker(); checker.SetDecoratorMode(DecoratorMode.Legacy); var types = checker.Check(statements);
+        var compiler = new ILCompiler("native_clr_shared_owner", false, true, null, null, null, OutputTarget.Dll);
+        compiler.EnableNativeAotProjectOutput();
+        var error = Assert.Throws<CompileException>(() => compiler.Compile(statements, types));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.Contains("ambiguous original", error.Message);
+    }
+
     private static ILCompiler CompileModule(string source, bool native) =>
         CompileFiles(new Dictionary<string, string> { ["/native-clr/exceptional.ts"] = source }, "/native-clr/exceptional.ts", native);
 
