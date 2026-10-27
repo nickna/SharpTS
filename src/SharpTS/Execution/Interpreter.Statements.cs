@@ -948,6 +948,15 @@ public partial class Interpreter
     /// <returns>An enumerable of values if the object has a Symbol.iterator, null otherwise.</returns>
     private IEnumerable<object?>? TryGetSymbolIterator(object? iterable)
     {
+        if (iterable is SharpTSGenerator generator
+            && ((ISharpTSOwnPropertyObject)generator).OwnProperties.HasSymbolProperty(SharpTSSymbol.Iterator))
+        {
+            var iteratorFn = PerformIndexGet(null!, generator, SharpTSSymbol.Iterator).ToObject();
+            if (iteratorFn is not ISharpTSCallable)
+                throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function"));
+            return EnumerateWithIteratorProtocol(BindMemberCallReceiver(iteratorFn, generator)!);
+        }
+
         // Class constructors can implement the protocol through static methods or getters.
         // Property reads preserve the canonical function; acquisition supplies the receiver.
         if (iterable is SharpTSClass klass)

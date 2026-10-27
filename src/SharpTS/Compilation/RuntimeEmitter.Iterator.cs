@@ -1187,21 +1187,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
 
-        // Emitted generators are iterator objects, but their intrinsic
-        // @@iterator method lives on $IGenerator rather than in an own symbol
-        // dictionary. Return the interface MethodInfo; InvokeMethodValue binds
-        // the generator receiver and the method returns that receiver unchanged.
-        var notGeneratorIterator = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
-        il.Emit(OpCodes.Bne_Un, notGeneratorIterator);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.Generators.Type);
-        il.Emit(OpCodes.Brfalse, notGeneratorIterator);
-        EmitInstanceMethodInfoLiteral(il, inputs.Generators.Iterator, inputs.Generators.Type);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notGeneratorIterator);
-
         // #1024: node:stream $Readable exposes [Symbol.asyncIterator] via GetAsyncIterator().
         // It carries no per-object symbol dict and isn't a user class, so hook it here:
         //   if (symbol == SymbolAsyncIterator && obj is $Readable) return new $TSFunction(obj, GetAsyncIterator);
@@ -1259,6 +1244,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(tryRegistryLabel);
+        // Emitted generators are iterator objects, but their intrinsic
+        // @@iterator method lives on $IGenerator rather than in an own symbol
+        // dictionary. Return the interface MethodInfo; InvokeMethodValue binds
+        // the generator receiver and the method returns that receiver unchanged.
+        var notGeneratorIterator = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
+        il.Emit(OpCodes.Bne_Un, notGeneratorIterator);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.Generators.Type);
+        il.Emit(OpCodes.Brfalse, notGeneratorIterator);
+        EmitInstanceMethodInfoLiteral(il, inputs.Generators.Iterator, inputs.Generators.Type);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notGeneratorIterator);
+
+
         var ordinaryRegistry = il.DefineLabel();
         var ordinaryUserClass = il.DefineLabel();
         // Constructors use ordinary symbol lookup so inherited accessor
