@@ -2315,6 +2315,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "prototype");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notProtoNameLabel);
+            var notArrayPrototype = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, notArrayPrototype);
+            il.Emit(OpCodes.Call, inputs.ArrayOperations.PrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, inputs.ArrayOperations.PrototypeField);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notArrayPrototype);
             // typeof(object) is the value-form representation of the Object
             // constructor.  Its prototype is the real Object.prototype
             // singleton, not a reflected CLR member.
@@ -2593,6 +2602,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "length");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notTypeLengthLabel);
+            var notArrayLength = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, notArrayLength);
+            il.Emit(OpCodes.Ldc_R8, 1.0);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notArrayLength);
             var notNumberLengthLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldtoken, _types.Double);
