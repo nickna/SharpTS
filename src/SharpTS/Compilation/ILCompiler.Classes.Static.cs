@@ -101,6 +101,18 @@ public partial class ILCompiler
         EmitClassPrototypeRegistration(
             il, typeBuilder, GetClassConstructorLength(classStmt.Methods));
 
+        var pendingFields = classStmt.Fields.Where(field => field.IsStatic && !field.IsPrivate && !field.IsDeclare
+            && field.ComputedKey is null && field.Name.Lexeme is not ("name" or "length" or "prototype")
+            && !classStmt.Methods.Any(method => method.IsStatic && method.Name.Lexeme == field.Name.Lexeme))
+            .Select(field => field.Name.Lexeme).ToHashSet(StringComparer.Ordinal);
+        if (hasStaticInitializers)
+            foreach (var name in pendingFields)
+            {
+                EmitCanonicalClassConstructorValue(il, typeBuilder);
+                il.Emit(OpCodes.Ldstr, name);
+                il.Emit(OpCodes.Call, _runtime.ObjectState.MarkBuiltinDeleted);
+            }
+
         // Initialize static @lock decorator fields
         if (_locks.StaticSyncLockFields.TryGetValue(qualifiedClassName, out var staticSyncLockField))
         {
@@ -179,6 +191,14 @@ public partial class ILCompiler
                             emitter.EmitExpression(field.Initializer);
                             emitter.EmitBoxIfNeeded(field.Initializer);
 
+                            if (!field.IsPrivate && pendingFields.Contains(field.Name.Lexeme))
+                            {
+                                var value = il.DeclareLocal(_types.Object);
+                                il.Emit(OpCodes.Stloc, value);
+                                EmitStaticFieldDefinitionGuard(il, typeBuilder, field.Name.Lexeme);
+                                il.Emit(OpCodes.Ldloc, value);
+                            }
+
                             if (field.IsPrivate)
                             {
                                 string fieldName = field.Name.Lexeme;
@@ -194,6 +214,11 @@ public partial class ILCompiler
                         }
                         if (field.IsPrivate)
                             EmitStaticPrivatePresence(il, privateElements, field.Name.Lexeme.TrimStart('#'));
+                        else if (pendingFields.Contains(field.Name.Lexeme))
+                        {
+                            if (field.Initializer is null) EmitStaticFieldDefinitionGuard(il, typeBuilder, field.Name.Lexeme);
+                            EmitRestoreStaticFieldPresence(il, typeBuilder, field.Name.Lexeme);
+                        }
                         break;
 
                     case Stmt.StaticBlock block:
@@ -257,6 +282,37 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldstr, name);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(HashSet<string>), "Add", typeof(string)));
         il.Emit(OpCodes.Pop);
+    }
+
+    private void EmitStaticFieldDefinitionGuard(ILGenerator il, Type owner, string name)
+    {
+        var allowed = il.DefineLabel();
+        EmitCanonicalClassConstructorValue(il, owner);
+        il.Emit(OpCodes.Call, _runtime.ObjectState.IsExtensible);
+        il.Emit(OpCodes.Brtrue, allowed);
+        EmitCanonicalClassConstructorValue(il, owner);
+        il.Emit(OpCodes.Ldstr, name);
+        il.Emit(OpCodes.Call, _runtime.ObjectOwnProperties.HasOwnProperty);
+        il.Emit(OpCodes.Brtrue, allowed);
+        GuestErrorEmitter.ThrowTypeError(il, _runtime, $"Cannot define property '{name}' on a non-extensible class constructor");
+        il.MarkLabel(allowed);
+    }
+
+    private void EmitRestoreStaticFieldPresence(ILGenerator il, Type owner, string name)
+    {
+        var deleted = il.DeclareLocal(_types.Object);
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, _runtime.ObjectState.DeletedBuiltins);
+        EmitCanonicalClassConstructorValue(il, owner);
+        il.Emit(OpCodes.Ldloca, deleted);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTableObjectObject, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldloc, deleted);
+        il.Emit(OpCodes.Castclass, _types.HashSetOfString);
+        il.Emit(OpCodes.Ldstr, name);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.HashSetOfString, "Remove", _types.String));
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(done);
     }
 
     /// <summary>
