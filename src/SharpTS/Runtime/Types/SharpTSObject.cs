@@ -372,6 +372,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public bool DeleteProperty(string name)
     {
+        if (GetOwnPropertyDescriptor(name) is null) return true;
         if (IsFrozen || IsSealed)
         {
             // Frozen and sealed objects silently ignore property deletions
@@ -390,6 +391,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// <returns>True if the property was deleted, false otherwise.</returns>
     public bool DeletePropertyStrict(string name, bool strictMode)
     {
+        if (GetOwnPropertyDescriptor(name) is null) return true;
         if (IsFrozen || IsSealed)
         {
             if (strictMode)
