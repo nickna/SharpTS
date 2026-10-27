@@ -1683,6 +1683,28 @@ public partial class RuntimeEmitter
         );
         il.MarkLabel(notTSObjectLabel);
 
+        // Native collection slots are inherited. An own descriptor shadows
+        // them and must be read before the native member dispatch returns.
+        var collectionDescriptorRead = il.DefineLabel();
+        var noCollectionDescriptor = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryObjectObject);
+        il.Emit(OpCodes.Brtrue, collectionDescriptorRead);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.HashSetOfObject);
+        il.Emit(OpCodes.Brfalse, noCollectionDescriptor);
+        il.MarkLabel(collectionDescriptorRead);
+        var collectionDescriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, collectionDescriptor);
+        il.Emit(OpCodes.Ldloc, collectionDescriptor);
+        il.Emit(OpCodes.Brfalse, noCollectionDescriptor);
+        EmitDescriptorReadAndReturn(il, inputs.DescriptorStorage, collectionDescriptor,
+            () => il.Emit(OpCodes.Ldarg_0), inputs.InvokeMethodValue, inputs.UndefinedInstance, inputs.UndefinedType);
+        il.MarkLabel(noCollectionDescriptor);
+
         // Map (Dictionary<object, object>) - "size" + $BoundMapMethod wrappers.
         if (inputs.Map is not null)
         {
