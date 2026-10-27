@@ -128,12 +128,12 @@ public static class ReflectBuiltIns
                     : interpreter.HasProperty(target, propertyKey?.ToString() ?? ""));
             }),
 
-            "deleteProperty" => BuiltInMethod.CreateV2("deleteProperty", 2, static (interpreter, _, args) =>
+            "deleteProperty" => BuiltInMethod.CreateV2("deleteProperty", 0, int.MaxValue, static (interpreter, _, args) =>
             {
-                if (!args[0].IsObject)
+                if (args.Length == 0 || !args[0].IsObject)
                     throw new ThrowException(new SharpTSTypeError("Reflect.deleteProperty requires a target object"));
                 var target = args[0].ToObject()!;
-                var key = interpreter.ToPropertyKey(args[1].ToObject());
+                var key = interpreter.ToPropertyKey(args.Length > 1 ? args[1].ToObject() : SharpTSUndefined.Instance);
                 if (target is ISharpTSOwnPropertyObject carrier)
                 {
                     return RuntimeValue.FromBoolean(key is SharpTSSymbol ownSymbol
@@ -193,7 +193,7 @@ public static class ReflectBuiltIns
                     default:
                         return RuntimeValue.True;
                 }
-            }),
+            }).WithSpecLength(2),
 
             "get" => BuiltInMethod.CreateV2("get", 2, 3, static (interpreter, _, args) =>
             {
