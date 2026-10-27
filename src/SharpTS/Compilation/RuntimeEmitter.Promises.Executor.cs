@@ -1936,6 +1936,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTaskLabel);
 
+        // Executor validation precedes the rejection-catching invocation block:
+        // construction must throw synchronously for a noncallable executor.
+        var callableExecutor = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brtrue, callableExecutor);
+        GuestErrorEmitter.ThrowError(il, runtime.Errors.CreateException,
+            runtime.Errors.TypeErrorConstructor, "Promise executor is not callable");
+        il.MarkLabel(callableExecutor);
+
         // TaskCompletionSource<object?> tcs = new TaskCompletionSource<object?>();
         var tcsCtor = typeof(TaskCompletionSource<object?>).GetConstructor([])!;
         il.Emit(OpCodes.Newobj, tcsCtor);
