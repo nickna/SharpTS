@@ -33,6 +33,7 @@ public class ClosureAnalyzer : AstVisitorBase
 
     // Stack of scopes - each scope tracks variables declared at that level
     private readonly Stack<HashSet<string>> _scopeStack = new();
+    private readonly Dictionary<HashSet<string>, object?> _scopeOwners = [];
 
     // Current function being analyzed (for tracking captures)
     private object? _currentFunction;
@@ -330,14 +331,14 @@ public class ClosureAnalyzer : AstVisitorBase
         _bodyCells.Analyze(statements, moduleOwners, _runtimeClassDeclarations);
         if (checkedTypes != null) _bodyCells.MarkUndefinedBodyVarReferences(checkedTypes);
         _checkedTypes = checkedTypes;
-        _scopeStack.Push([]);
+        EnterScope();
         HoistFunctionDeclarations(statements, hoistOwnedVars: true);
         foreach (var stmt in statements)
         {
             _moduleClrImports = moduleClrImports?.GetValueOrDefault(stmt);
             Visit(stmt);
         }
-        _scopeStack.Pop();
+        ExitScope();
         _moduleClrImports = null;
         _checkedTypes = null;
 
@@ -409,8 +410,14 @@ public class ClosureAnalyzer : AstVisitorBase
 
     #region Scope management
 
-    private void EnterScope() => _scopeStack.Push([]);
-    private void ExitScope() => _scopeStack.Pop();
+    private void EnterScope()
+    {
+        HashSet<string> scope = [];
+        _scopeStack.Push(scope);
+        _scopeOwners.Add(scope, _currentFunction);
+    }
+
+    private void ExitScope() => _scopeOwners.Remove(_scopeStack.Pop());
 
     /// <param name="name">The declared identifier.</param>
     /// <param name="isPerIterationBinding">True when the declaration creates a fresh
@@ -483,7 +490,7 @@ public class ClosureAnalyzer : AstVisitorBase
         }
 
         // Check if this is a local variable in the current function
-        if (_localVars.TryGetValue(_currentFunction, out var locals) && locals.Contains(name))
+        if (FindDefiningFunction(name) == _currentFunction)
             return;
 
         // Check if it's an outer variable - this means it's captured
@@ -721,28 +728,17 @@ public class ClosureAnalyzer : AstVisitorBase
     }
 
     /// <summary>
-    /// Finds the function that defines a given variable by checking _localVars
-    /// for functions in the stack. Returns null if the variable is top-level.
+    /// Finds the callable owning the nearest active lexical declaration.
+    /// Returns null if the variable is top-level or undeclared.
     /// Note: O(depth) where depth is nesting level, typically small (5-10).
     /// </summary>
-    /// <remarks>
-    /// <c>Stack&lt;T&gt;</c> enumerates LIFO (most-recently-pushed first), so a plain
-    /// <c>foreach</c> already visits the innermost function first — the nearest
-    /// declaring scope wins. That's what we want. The minimal reproducer that
-    /// surfaced this code path had two sibling module-level functions with the
-    /// same parameter name and inner closures capturing it; each function is
-    /// analyzed with its own fresh stack, so sibling collisions don't occur
-    /// through this path.
-    /// </remarks>
     private object? FindDefiningFunction(string name)
     {
-        foreach (var func in _functionStack)
-        {
-            if (func != null && _localVars.TryGetValue(func, out var locals) && locals.Contains(name))
-            {
-                return func;
-            }
-        }
+        // Cumulative function locals also contain declarations from exited
+        // blocks. Only an active lexical scope can own this reference.
+        foreach (var scope in _scopeStack)
+            if (scope.Contains(name))
+                return _scopeOwners[scope];
         return null;
     }
 
