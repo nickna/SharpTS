@@ -196,35 +196,80 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldloc, tempLocal);
         _il.Emit(OpCodes.Stfld, enumeratorField);
 
-        EnterLoop(endLabel, continueLabel);
-
-        // Declare loop variable (may be hoisted or local)
-        var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme));
-
-        _il.MarkLabel(startLabel);
-
-        // Check MoveNext - load enumerator from hoisted field
-        _il.Emit(OpCodes.Ldarg_0);  // this
-        _il.Emit(OpCodes.Ldfld, enumeratorField);
-        _il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IEnumerator, "MoveNext"));
-        _il.Emit(OpCodes.Brfalse, endLabel);
-
-        // Set loop variable from Current
-        EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme), () =>
+        var closePending = _builder.StateMachineType.DefineField(
+            enumeratorField.Name + "_closePending", _types.Boolean, System.Reflection.FieldAttributes.Private);
+        void SetClosePending(bool pending)
         {
-            _il.Emit(OpCodes.Ldarg_0);  // this
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(pending ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Stfld, closePending);
+        }
+        SetClosePending(false);
+
+        // This synthetic finally shares the suspension-aware exit routing used
+        // by source try/finally. Its scope encloses the loop, so local continue
+        // stays inside it while return and outer labeled exits cross cleanup.
+        var body = f.Body is Stmt.Block block ? block.Statements : [f.Body];
+        var cleanup = new Stmt.TryCatch(body, null, null, []);
+        EmitTryCatchWithYields(cleanup, cleanup, (caught, exceptionPresent, afterTry) =>
+        {
+            EnterLoop(endLabel, continueLabel);
+            var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme));
+            var moved = _il.DeclareLocal(_types.Boolean);
+            var value = _il.DeclareLocal(_types.Object);
+            _il.MarkLabel(startLabel);
+            EmitCancellationCheck();
+            SetClosePending(false);
+
+            // Failures of next/done/value do not close an iterator. Capture them
+            // before marking a successfully produced value as close-pending.
+            EmitSyncSegmentInTry(() =>
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, enumeratorField);
+                _il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IEnumerator, "MoveNext"));
+                _il.Emit(OpCodes.Stloc, moved);
+                var noValue = _il.DefineLabel();
+                _il.Emit(OpCodes.Ldloc, moved);
+                _il.Emit(OpCodes.Brfalse, noValue);
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, enumeratorField);
+                _il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.IEnumerator, "Current"));
+                _il.Emit(OpCodes.Stloc, value);
+                _il.MarkLabel(noValue);
+            }, caught, exceptionPresent);
+            _il.Emit(OpCodes.Ldloc, exceptionPresent);
+            _il.Emit(OpCodes.Brtrue, afterTry);
+            _il.Emit(OpCodes.Ldloc, moved);
+            _il.Emit(OpCodes.Brfalse, endLabel);
+            SetClosePending(true);
+            EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme),
+                () => _il.Emit(OpCodes.Ldloc, value));
+            EmitScopedTryBodyWithYields(body, caught, exceptionPresent, afterTry);
+            _il.Emit(OpCodes.Ldloc, exceptionPresent);
+            _il.Emit(OpCodes.Brtrue, afterTry);
+            _il.MarkLabel(continueLabel);
+            _il.Emit(OpCodes.Br, startLabel);
+            _il.MarkLabel(endLabel);
+            ExitLoop();
+        }, exceptionPresent =>
+        {
+            var complete = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, closePending);
+            _il.Emit(OpCodes.Brfalse, complete);
+            SetClosePending(false);
+            _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, enumeratorField);
-            _il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.IEnumerator, "Current"));
+            _il.Emit(OpCodes.Ldloc, exceptionPresent);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, GetPendingExitField());
+            _il.Emit(OpCodes.Ldc_I4, ExitCodeThrow);
+            _il.Emit(OpCodes.Ceq);
+            _il.Emit(OpCodes.Or);
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Close);
+            _il.MarkLabel(complete);
         });
-
-        // Emit body
-        EmitStatement(f.Body);
-
-        _il.MarkLabel(continueLabel);
-        _il.Emit(OpCodes.Br, startLabel);
-
-        _il.MarkLabel(endLabel);
-        ExitLoop();
     }
 
     #endregion
