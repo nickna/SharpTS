@@ -3165,7 +3165,7 @@ public partial class RuntimeEmitter
         // and descriptor bodies retain the same forward MethodBuilder.
         EmitLookupBuiltInStaticMemberBody(runtime.BuiltInStatics,
             new BuiltInStaticDispatchInputs(
-                runtime.FunctionConstruction.GetOrCreate, runtime.ArrayOperations.IsArray, runtime.Numbers,
+                runtime.FunctionConstruction.GetOrCreate, runtime.ArrayOperations, runtime.Numbers,
                 runtime.Strings.FromCharCode, runtime.Strings.FromCodePoint, runtime.Templates.Raw,
                 runtime.ObjectKeys, runtime.ObjectOperations, runtime.ObjectState, runtime.ObjectPrototypes,
                 runtime.ObjectDescriptors, runtime.ObjectOwnProperties.HasOwn,

@@ -24,7 +24,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly record struct BuiltInStaticDispatchInputs(
-        MethodInfo GetOrCreate, MethodInfo IsArray, EmittedNumberRuntime Numbers,
+        MethodInfo GetOrCreate, EmittedArrayOperationsRuntime Arrays, EmittedNumberRuntime Numbers,
         MethodInfo StringFromCharCode, MethodInfo StringFromCodePoint, MethodInfo StringRaw,
         EmittedObjectKeysRuntime ObjectKeys, EmittedObjectOperationsRuntime ObjectOperations,
         EmittedObjectStateRuntime ObjectState, EmittedObjectPrototypeRuntime ObjectPrototypes,
@@ -106,7 +106,9 @@ public partial class RuntimeEmitter
         }
 
         // Array.* — stored-as-value Array reference accessing static members.
-        EmitLookup(_types.IListOfObject, "isArray", inputs.IsArray, 1);
+        EmitLookup(_types.IListOfObject, "isArray", inputs.Arrays.IsArray, 1);
+        EmitLookup(_types.IListOfObject, "from", inputs.Arrays.FromAdapter, 1);
+        EmitLookup(_types.IListOfObject, "of", inputs.Arrays.Of, 0);
 
         if (inputs.ArrayBuffer is { } arrayBuffer)
             EmitLookup(arrayBuffer.Type, "isView", arrayBuffer.IsView, 1);

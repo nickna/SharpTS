@@ -962,7 +962,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, resultDictLocal);
             il.Emit(OpCodes.Ldloc, resultDictLocal);
             il.Emit(OpCodes.Ldstr, "value");
-            if (n == "isArray")
+            if (n is "isArray" or "from" or "of")
             {
                 // Resolve through the existing static-member cache, just as
                 // direct, computed and aliased Array.isArray reads do.
