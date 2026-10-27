@@ -310,11 +310,10 @@ public class LocalVariableResolver : IVariableResolver
         {
             _il.Emit(OpCodes.Ldloc, displayClass);
             _il.Emit(OpCodes.Ldfld, field);
-            if (field.FieldType.IsValueType)
-                _il.Emit(OpCodes.Box, field.FieldType);
-            // Retain the parameter's physical representation for typed loads
-            // and callers that consult TryGetParameterType for boxing decisions.
-            _ctx.EmitConvertForParamSlot(_il, name);
+            // A child can write a checker-accepted `any` value that no longer
+            // fits the original argument slot. The shared field is the value's
+            // authoritative representation after parameter initialization.
+            return MapTypeToStackType(field.FieldType);
         }
         else
             _il.Emit(OpCodes.Ldarg, argIndex);
