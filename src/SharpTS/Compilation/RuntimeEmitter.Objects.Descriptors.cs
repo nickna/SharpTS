@@ -461,6 +461,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, existingSymbolValue);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.MarkLabel(symbolHolderReady);
+        // The temporary holder runs ordinary descriptor validation. Carry the
+        // target's integrity state across as well as its current symbol slot.
+        var symbolNotFrozen = il.DefineLabel();
+        var symbolIntegrityReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
+        il.Emit(OpCodes.Brfalse, symbolNotFrozen);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorHolderLocal);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.Freeze);
+        il.Emit(OpCodes.Br, symbolIntegrityReady);
+        il.MarkLabel(symbolNotFrozen);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsSealed);
+        il.Emit(OpCodes.Brfalse, symbolIntegrityReady);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorHolderLocal);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.Seal);
+        il.MarkLabel(symbolIntegrityReady);
         il.Emit(OpCodes.Ldloc, symbolDescriptorHolderLocal);
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Ldarg_2);
