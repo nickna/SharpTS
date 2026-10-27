@@ -86,7 +86,9 @@ public partial class Interpreter
         string? simpleClassName = GetSimpleClassName(newExpr.Callee);
 
         // Handle built-in constructors via factory
-        if (isSimpleName && simpleClassName != null)
+        if (isSimpleName && simpleClassName != null
+            && newExpr.Callee is Expr.Variable intrinsicReference
+            && !_locals.ContainsKey(intrinsicReference) && !_environment.IsDefined(simpleClassName))
         {
             // Special case: Promise needs executor function evaluation, not standard arg evaluation
             if (simpleClassName == BuiltInNames.Promise)
@@ -228,7 +230,9 @@ public partial class Interpreter
         string? simpleClassName = GetSimpleClassName(newExpr.Callee);
 
         // Handle built-in constructors via factory
-        if (isSimpleName && simpleClassName != null)
+        if (isSimpleName && simpleClassName != null
+            && newExpr.Callee is Expr.Variable intrinsicReference
+            && !_locals.ContainsKey(intrinsicReference) && !_environment.IsDefined(simpleClassName))
         {
             // Special case: Promise needs executor function evaluation, not standard arg evaluation
             if (simpleClassName == BuiltInNames.Promise)

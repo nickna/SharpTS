@@ -83,7 +83,9 @@ public partial class ILEmitter
         }
 
         // 1. Built-in constructors (Date, Map, Set, Promise, Headers, etc.) - handled by base
-        if (namespaceParts.Count == 0 && n.Callee is Expr.Variable && TryEmitBuiltInConstructor(className, n.Arguments))
+        if (namespaceParts.Count == 0 && n.Callee is Expr.Variable
+            && !_resolver.HasVariable(className) && !_ctx.HasVisibleValueBinding(className)
+            && TryEmitBuiltInConstructor(className, n.Arguments))
             return;
 
         // 2. Intl namespace constructors (Intl.NumberFormat, etc.) - handled by base

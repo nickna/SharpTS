@@ -1732,7 +1732,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
         var (namespaceParts, className) = ExtractQualifiedNameFromCallee(n.Callee);
 
-        if (namespaceParts.Count == 0 && n.Callee is Expr.Variable && TryEmitBuiltInConstructor(className, n.Arguments))
+        if (namespaceParts.Count == 0 && n.Callee is Expr.Variable
+            && !Resolver.HasVariable(className) && !Ctx.HasVisibleValueBinding(className)
+            && TryEmitBuiltInConstructor(className, n.Arguments))
             return;
 
         if (TryEmitIntlConstructor(namespaceParts, className, n.Arguments))
