@@ -250,6 +250,7 @@ public partial class ILCompiler
         foreach (var (name, backing) in backingFields ?? [])
         {
             if (ownFields.Any(field => ReferenceEquals(field.BackingField, backing))) continue;
+            if (_autoAccessorBackingFields.Values.Contains(backing)) continue;
             il.Emit(OpCodes.Ldloc, result);
             il.Emit(OpCodes.Ldstr, NamingConventions.ToCamelCase(name));
             il.Emit(OpCodes.Ldarg_0);
@@ -444,8 +445,9 @@ public partial class ILCompiler
         // Check typed backing field names
         if (backingFields != null)
         {
-            foreach (var (propName, _) in backingFields)
+            foreach (var (propName, backing) in backingFields)
             {
+                if (_autoAccessorBackingFields.Values.Contains(backing)) continue;
                 var camelName = NamingConventions.ToCamelCase(propName);
 
                 // if (name == "camelName") return true;
