@@ -2959,8 +2959,6 @@ public partial class RuntimeEmitter
                     runtime.ObjectStorage.Type, runtime.ObjectStorage.FieldsGetter, runtime.NumericCoercion.ToNumber, runtime.Sentinels.UndefinedType,
                     runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         }
-        // Equals body — must come after ToJsString since the Object-vs-String
-        // branch calls runtime.StringCoercion.ToJsString.
         EmitEquals(
             runtime.Operators,
             new EqualsInputs(
