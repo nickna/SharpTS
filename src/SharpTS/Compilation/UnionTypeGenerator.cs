@@ -111,6 +111,20 @@ public class UnionTypeGenerator
         IsComplete = true;
     }
 
+    /// <summary>Returns this completed owner's exact declarations, never a name-based ownership guess.</summary>
+    internal IReadOnlyList<Type> RequireCompletedTypes(TypeMapper mapper, ModuleBuilder module, Type unionTypeInterface)
+    {
+        if (!ReferenceEquals(_typeMapper, mapper) || !ReferenceEquals(mapper.ModuleBuilder, module) ||
+            !ReferenceEquals(UnionTypeInterface, unionTypeInterface))
+            throw new InvalidOperationException("Completed union metadata must match its exact mapper, module and interface owner.");
+        if (!IsComplete)
+            throw new InvalidOperationException("Union type emission has not completed.");
+        var types = _unionTypes.Values.ToArray();
+        if (types.Any(type => type.Module.ModuleVersionId != module.ModuleVersionId || !type.IsValueType))
+            throw new InvalidOperationException("Completed union declarations must be value types in this output's module.");
+        return Array.AsReadOnly(types);
+    }
+
     /// <summary>
     /// Generates a unique key for a union type based on its member types.
     /// </summary>

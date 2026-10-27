@@ -752,9 +752,11 @@ public partial class ILCompiler
         {
             _nativeSourceOwners = new(_moduleBuilder, _types);
             _nativeGenericMethodNormalization = new(_moduleBuilder, _types);
+            _nativeUnionArgumentConversion = new(_moduleBuilder, _types);
             _functionEmissionPolicy = _functionEmissionPolicy with
             {
-                NativeGenericNormalizer = _nativeGenericMethodNormalization.Normalize
+                NativeGenericNormalizer = _nativeGenericMethodNormalization.Normalize,
+                NativeUnionConverter = _nativeUnionArgumentConversion.Convert
             };
         }
         if (_nativeAotProjectOutput && _functionEmissionPolicy.BindNumericRest4)
@@ -1252,6 +1254,7 @@ public partial class ILCompiler
         _nativeClassInitialization?.CompleteEmission();
         _nativeNumericRest4Binding?.CompleteEmission();
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
+        _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
@@ -1911,6 +1914,7 @@ public partial class ILCompiler
         _nativeClassInitialization?.CompleteEmission();
         _nativeNumericRest4Binding?.CompleteEmission();
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
+        _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();

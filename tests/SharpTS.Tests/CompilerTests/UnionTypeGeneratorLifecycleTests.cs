@@ -124,7 +124,8 @@ public sealed class UnionTypeGeneratorLifecycleTests
     public void FailedFinalizationCannotPublishNullMetadataOnRetry()
     {
         var module = NewModule();
-        var owner = new UnionTypeGenerator(new TypeMapper(module));
+        var mapper = new TypeMapper(module);
+        var owner = new UnionTypeGenerator(mapper);
         owner.GetOrCreateUnionType(Union(), module);
         var invalidUnion = new TI.Union([TI.Primitive.Boolean, TI.String.Shared]);
         var invalid = Assert.IsAssignableFrom<TypeBuilder>(owner.GetOrCreateUnionType(invalidUnion, module));
@@ -132,6 +133,7 @@ public sealed class UnionTypeGeneratorLifecycleTests
 
         Assert.Throws<TypeLoadException>(owner.FinalizeAllUnionTypes);
         Assert.False(owner.IsComplete);
+        Assert.Throws<InvalidOperationException>(() => owner.RequireCompletedTypes(mapper, module, typeof(IUnionType)));
         var completed = owner.GetOrCreateUnionType(Union(), module);
         Assert.False(completed is TypeBuilder);
         Assert.Throws<InvalidOperationException>(owner.FinalizeAllUnionTypes);

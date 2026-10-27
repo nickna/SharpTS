@@ -790,6 +790,20 @@ identity, emitter reuse, wrapped primitive/null/undefined values, typed union pr
 and standalone/hosted output. Generator dictionaries and shared reflection caches
 remain part of the complete construction and shared-infrastructure audit.
 
+Native guest orchestration may supply `$TSFunction` an exact optional union-conversion
+handle through its function-emission policy. The compiler-owned late body requires
+the completed generator's exact mapper, module and emitted union interface before
+selecting behavior; its immutable snapshot comes from the sole declaration owner,
+not type names. Both compiler finalization paths finish union declarations before
+completing this body and serializing the guest. Any declaration retains the full
+legacy conversion body, including declarations whose eventual slots widen to object.
+An empty completed snapshot retains the existing value-type, prefix, non-null and
+already-exact guards, then throws a guest TypeError at the old `op_Implicit` lookup
+boundary for unsupported foreign `Union_` conversion. Ordinary managed output and
+runtime-emitter calls without this optional certificate retain the original body.
+The prefix predicate defines the existing conversion boundary; it proves no ownership.
+Cached signature/conversion flags and the wrapped source MethodInfo remain unchanged.
+
 Required `Sentinels` owns the distinct `$Undefined` and `$LexicalUninitialized`
 singleton types and fields. Both helpers receive only the module and this owner.
 They publish the baked declarations once; temporary builders remain local.

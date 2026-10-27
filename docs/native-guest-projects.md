@@ -429,6 +429,37 @@ The same basic strict console measurement falls from 39 to 37 diagnostics,
 removing exactly the normalizer's IL2060 and IL3050 findings with none added.
 This does not establish general CLR provenance or strict native acceptance.
 
+### Completed union-conversion inventory
+
+Native output can also certify its completed union declaration inventory. The exact
+`UnionTypeGenerator`, mapper, module and emitted `$IUnionType` interface must agree;
+a type name is not ownership evidence. Both single-file and module finalization
+complete the generator before selecting the late converter body or serializing output.
+An incomplete, failed or foreign owner cannot certify the output. Saved-PE tests
+compare actual interface implementers with the completed snapshot, including imported
+producers and feature overrides.
+
+Any compiler-owned union declaration retains the full legacy argument converter,
+even if a mapped collection or return slot subsequently widens to object. Ordinary
+managed output and uncertified runtime-emitter APIs retain it too. With a completed
+empty inventory, null arguments, already-exact boxed values, non-value types and
+value types outside the old `Union_` prefix predicate keep their old behavior.
+A non-null mismatched argument for a `Union_` value-type parameter instead receives
+a guest TypeError immediately before the former reflective `op_Implicit` lookup.
+This is an explicit experimental native boundary: verified foreign structs can match
+that name and have working implicit operators without belonging to this guest.
+The compiler does not silently discard their conversion or use their names as proof.
+Cached conversion flags, parameter metadata and original MethodInfo identity remain.
+
+The strict basic-console inventory falls from 37 to 36, removing exactly the
+converter's IL2075 diagnostic with no additions. Diagnostic publishes retain all
+warnings; the zero-producer console executes `42` and a real union-producing array
+program executes `2`. Strict native acceptance remains incomplete. Ordinary output
+for both programs retains its PE size and every method-body hash against the
+preserved managed compiler baseline. The producer-present strict control remains
+at 37 diagnostics; its retained IL2075 warning moves from the original converter
+to the late helper, with no other multiset change.
+
 ### Finite canonical source owners
 
 Native runtime helpers can use a compiler-owned late catalog to obtain literal
@@ -478,10 +509,10 @@ assembly roots or warning suppressions. Current emitted-runtime warnings therefo
 fail strict native publish instead of being hidden by successful project export.
 
 With the current changes combined, fresh strict `console.log(42)` publication
-reports 37 diagnostics: IL2059 (6), IL2070 (19), IL2075 (12).
+reports 36 diagnostics: IL2059 (6), IL2070 (19), IL2075 (11).
 The two optional numeric-rest lookups, 39 Proxy bridge diagnostics and two
-certified generic-normalizer diagnostics are absent
-from the earlier 80-diagnostic checkpoint, with no additions. Strict publication
+certified generic-normalizer diagnostics and the certified union-converter lookup
+are absent from the earlier 80-diagnostic checkpoint, with no additions. Strict publication
 still fails. Separate diagnostic publishes retain all warnings and pass focused
 native execution for own-property presence/order, generic storage/prototypes,
 suspended callbacks and rest-function binding; a managed-compiler export of the

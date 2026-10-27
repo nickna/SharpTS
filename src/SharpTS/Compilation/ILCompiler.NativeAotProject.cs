@@ -15,6 +15,8 @@ public partial class ILCompiler
     private NativeNumericRest4Binding? _nativeNumericRest4Binding;
     private NativeGenericMethodNormalization? _nativeGenericMethodNormalization;
     internal NativeGenericMethodNormalization? NativeGenericMethods => _nativeGenericMethodNormalization;
+    private NativeUnionArgumentConversion? _nativeUnionArgumentConversion;
+    internal NativeUnionArgumentConversion? NativeUnionArguments => _nativeUnionArgumentConversion;
 
     private NativeClassInitializationEmission? GetNativeClassInitialization() =>
         !_nativeAotProjectOutput || _programType is null ? null :
