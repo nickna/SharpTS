@@ -138,6 +138,8 @@ public partial class TypeChecker
             {
                 if (EditorFacts.IsEnabled && _editorAliasResolutionProof?.GetValueOrDefault(aliasCacheKey) != true)
                     MarkEditorUnprovenTypeName();
+                EditorFacts.RecordResolvedAliasDefinition(aliasEntry.DefinitionNode, cached,
+                    _editorAliasResolutionProof?.GetValueOrDefault(aliasCacheKey) == true);
                 return cached;
             }
 
@@ -176,6 +178,8 @@ public partial class TypeChecker
                 _expandedTypeAliasCache[aliasCacheKey] = expanded;
                 if (EditorFacts.IsEnabled)
                     (_editorAliasResolutionProof ??= new(StringComparer.Ordinal))[aliasCacheKey] = editorProofVersion == _editorUnprovenTypeVersion;
+                EditorFacts.RecordResolvedAliasDefinition(aliasEntry.DefinitionNode, expanded,
+                    editorProofVersion == _editorUnprovenTypeVersion);
 
                 return expanded;
             }

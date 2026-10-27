@@ -6,7 +6,7 @@ using SharpTS.Parsing;
 namespace SharpTS.TypeSystem;
 
 /// <summary>Opt-in build facts. Publication projects types into bounded immutable values.</summary>
-public sealed class EditorSemanticIndex
+public sealed partial class EditorSemanticIndex
 {
     private static long _nextGeneration;
     internal static EditorSemanticIndex Empty { get; } = new(false);
@@ -36,6 +36,7 @@ public sealed class EditorSemanticIndex
         _callableSurfaces.Clear();
         _signatureProofs.Clear();
         _annotationProofs.Clear();
+        _resolvedAliasDefinitions.Clear();
         _scopes.Clear(); _scopesById.Clear(); _enteredBodies.Clear(); _signatureIds.Clear(); _nextScope = 1;
         Generation = Interlocked.Increment(ref _nextGeneration);
     }
