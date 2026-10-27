@@ -68,11 +68,18 @@ public partial class Parser
 
     private Expr AssignmentCore()
     {
+        bool singleAsyncArrow = Check(TokenType.ASYNC)
+            && Peek().Line == PeekNext().Line
+            && (PeekNext().Type == TokenType.IDENTIFIER || IsContextualKeyword(PeekNext().Type))
+            && PeekAt(2).Type == TokenType.ARROW
+            && PeekNext().Line == PeekAt(2).Line;
+        int arrowStart = CurrentSourceStart();
+        if (singleAsyncArrow) Advance();
         // Check for single-parameter arrow function without parentheses: x => expr.
         // Also accept TS contextual keywords as the param name (e.g.
         // `namespace => …`, `type => …`), since they are valid JS identifiers.
         if ((Check(TokenType.IDENTIFIER) || IsContextualKeyword(Peek().Type))
-            && CheckNext(TokenType.ARROW))
+            && CheckNext(TokenType.ARROW) && Peek().Line == PeekNext().Line)
         {
             Token raw = Advance(); // consume identifier/contextual keyword
             Token paramName = raw.Type == TokenType.IDENTIFIER
@@ -100,13 +107,10 @@ public partial class Parser
             var param = new Stmt.Parameter(paramName, null, null);
             RecordEditorRange(param, raw.Span, EditorSyntaxKind.ParameterList, EditorSyntaxRole.Parameter);
             RecordEditorName(paramName, param, EditorSyntaxRole.DeclarationName);
-            var arrow = new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: [param], ExpressionBody: exprBody, BlockBody: body, ReturnType: null);
-            RecordFunctionExpressionSyntax(arrow, raw.Start, raw.Start, raw.End, headerEnd, bodyStart);
+            var arrow = new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: [param], ExpressionBody: exprBody, BlockBody: body, ReturnType: null, IsAsync: singleAsyncArrow);
+            RecordFunctionExpressionSyntax(arrow, arrowStart, raw.Start, raw.End, headerEnd, bodyStart);
             return arrow;
         }
-
-        // Check for single-parameter async arrow function: async x => expr
-        // This case is handled in Primary() for async (params) => but we need async x => too
 
         Expr expr = Ternary();
 
