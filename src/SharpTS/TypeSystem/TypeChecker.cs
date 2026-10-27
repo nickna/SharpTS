@@ -3130,11 +3130,13 @@ public partial class TypeChecker
                                     isValue: !isTypeOnly);
 
                             Token localToken = spec.LocalName ?? spec.Imported;
-                            if (!isTypeOnly &&
-                                importedModule.ExportedValueBindings.TryGetValue(
-                                    importedName,
-                                    out var valueBinding))
+                            if (!isTypeOnly)
                             {
+                                // Native/embedded modules can supply a checked export
+                                // without source declaration provenance. The local import
+                                // still needs a lexical value identity, distinct from a
+                                // same-named parameter or block binding.
+                                importedModule.ExportedValueBindings.TryGetValue(importedName, out var valueBinding);
                                 BindImportedDeclaration(
                                     env,
                                     localToken,

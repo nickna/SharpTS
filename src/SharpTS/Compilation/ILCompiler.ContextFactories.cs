@@ -93,6 +93,8 @@ public partial class ILCompiler
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
+            NativeModuleConstructorBindings = _nativeModuleConstructorBindings,
+            NativeModuleNamespaceBindings = _nativeModuleNamespaceBindings,
             ImportedNames = _importedNames,
             TopLevelNumericConstantValues = _topLevelNumericConstantValues,
             ClassExprBuilders = _classExprs.Builders,

@@ -107,6 +107,10 @@ public partial class TypeChecker
 
     private TypeInfo CheckNewCore(Expr.New newExpr)
     {
+        // Compatibility constructor fast paths may not call CheckExpr on a
+        // bare callee. Still retain its existing lexical identity so imported
+        // native constructors remain distinct from same-named local values.
+        if (newExpr.Callee is Expr.Variable variable) BindValueUse(variable.Name);
         // Built-in types only apply when callee is a simple identifier
         bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
         string? simpleClassName = GetSimpleClassName(newExpr.Callee);

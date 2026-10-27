@@ -58,6 +58,8 @@ public partial class ILCompiler
     // don't collide in a shared flat dictionary.
     // Null key = single-module / global bindings (legacy single-module Compile path).
     private readonly Dictionary<string, Dictionary<string, (string ModuleName, string MethodName)>> _builtInModuleMethodBindingsByModule = [];
+    private readonly Dictionary<BindingSymbol, (string ModuleName, string MemberName)> _nativeModuleConstructorBindings = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<BindingSymbol, string> _nativeModuleNamespaceBindings = new(ReferenceEqualityComparer.Instance);
     private static readonly Dictionary<string, (string ModuleName, string MethodName)> _emptyBindings = [];
     private readonly HashSet<string> _importedNames = [];  // Every named / default / namespace import, any module source. Used to shadow global call handlers.
 
@@ -849,12 +851,16 @@ public partial class ILCompiler
                     if (import.DefaultImport != null)
                     {
                         _builtInModuleNamespaces[import.DefaultImport.Lexeme] = builtInModuleName;
+                        if (_typeMap.GetValueBinding(import.DefaultImport) is { } binding)
+                            _nativeModuleNamespaceBindings[binding] = builtInModuleName;
                     }
 
                     // Namespace import: import * as os from 'os' -> os maps to "os"
                     if (import.NamespaceImport != null)
                     {
                         _builtInModuleNamespaces[import.NamespaceImport.Lexeme] = builtInModuleName;
+                        if (_typeMap.GetValueBinding(import.NamespaceImport) is { } binding)
+                            _nativeModuleNamespaceBindings[binding] = builtInModuleName;
                     }
 
                     // Named imports: create static fields so they're accessible from functions
@@ -868,6 +874,8 @@ public partial class ILCompiler
 
                             // Track method binding for direct dispatch (scoped to this module)
                             bindings[localName] = (builtInModuleName, importedName);
+                            if (_typeMap.GetValueBinding(spec.LocalName ?? spec.Imported) is { } binding)
+                                _nativeModuleConstructorBindings[binding] = (builtInModuleName, importedName);
 
                             if (!_topLevelStaticVars.ContainsKey(localName))
                             {
@@ -1363,6 +1371,15 @@ public partial class ILCompiler
 
     private void AnalyzeModuleBindings(List<ParsedModule> modules)
     {
+        // The embedded events facade is a source module, not a native module
+        // registry entry. Its canonical constructor name still has the native
+        // EventEmitter result type and corresponding emitted method strategy.
+        foreach (var (declaration, _) in _typeMap.ClassDeclarations)
+            if (declaration.Name.Lexeme == "EventEmitter" &&
+                _typeMap.GetValueBinding(declaration.Name) is { } binding &&
+                binding.Declarations.Any(source =>
+                    Modules.Stdlib.Providers.EmbeddedStdlibProvider.TryExtractSpecifier(source.Document.Path) == "events"))
+                _nativeModuleConstructorBindings[binding] = ("stdlib:events", "EventEmitter");
         // Scope each module's named-import bindings to that module so local
         // aliases like __platform don't collide between stdlib modules.
         foreach (var m in modules)

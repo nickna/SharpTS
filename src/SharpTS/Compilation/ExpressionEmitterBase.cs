@@ -1714,6 +1714,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitNew(Expr.New n)
     {
+        if (TryEmitNativeModuleConstructor(n)) return;
         if (Ctx.RuntimeFeatures?.UsesClassPrototypeMutation == true
             && Ctx.TypeMapper.IsDynamicClassInstance(Ctx.TypeMap?.Get(n)))
         {

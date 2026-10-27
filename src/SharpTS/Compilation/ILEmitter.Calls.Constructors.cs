@@ -14,6 +14,7 @@ public partial class ILEmitter
 {
     protected override void EmitNew(Expr.New n)
     {
+        if (TryEmitNativeModuleConstructor(n)) return;
         if (_ctx.TypeMapper.RequiresReceiverConstruction(_ctx.TypeMap?.Get(n)))
         {
             EmitDynamicConstruction(n);
