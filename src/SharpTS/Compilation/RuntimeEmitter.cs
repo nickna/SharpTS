@@ -49,6 +49,9 @@ public partial class RuntimeEmitter
         => EmitAll(moduleBuilder, RuntimeFeatureSet.EmitEverything());
 
     public EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, RuntimeFeatureSet features)
+        => EmitAll(moduleBuilder, features, FunctionEmissionPolicy.Full);
+
+    internal EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, RuntimeFeatureSet features, FunctionEmissionPolicy functionPolicy)
     {
         _features = features;
         if (_emitHosted)
@@ -255,7 +258,7 @@ public partial class RuntimeEmitter
                 new TSFunctionCoercionInputs(runtime.StringCoercion.ToJsString,
                     runtime.NumericCoercion.ToNumber, runtime.ArrayOperations.Materialize,
                     runtime.ReceiverGuard.RequireObjectCoercibleThis), runtime.NativeCallables
-            )
+            ) { Policy = functionPolicy }
         );
         runtime.FunctionValues.CompleteEmission();
         runtime.FunctionConstruction.CompleteEmission();

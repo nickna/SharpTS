@@ -655,6 +655,7 @@ public partial class ILCompiler
         _typeMapper.HeldClassConstructions = HeldClassConstructionInfo.Analyze(statements, typeMap, _typeMapper);
         _rawCallStorage = RawCallStorageAnalysis.Capture(statements, typeMap);
         statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans, typeMap, _rawCallStorage.RecordRewrite);
+        _functionEmissionPolicy = FunctionEmissionPolicy.ForPreparedSource(statements, _nativeAotProjectOutput);
         _lexicalBindingNames = LexicalBindingNameCollector.Collect(statements);
         _features ??= new RuntimeFeatureDetector().Detect(statements, _typeMap);
         // The stable iterator result shape must be known before Phase 1 emits its
@@ -748,7 +749,7 @@ public partial class ILCompiler
     {
         _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput,
             _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true)) { EntryModulePath = _entryModulePath }
-            .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything());
+            .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy);
         if (_runtime.GuestOwnProperties is { } own) GetClassRegistry().BeginNativeOwnProperties(own);
         _typeMapper.SetRuntime(_runtime);
     }
@@ -1348,6 +1349,7 @@ public partial class ILCompiler
         }
 
         var allStatements = modules.SelectMany(m => m.Statements).ToList();
+        _functionEmissionPolicy = FunctionEmissionPolicy.ForPreparedSource(allStatements, _nativeAotProjectOutput);
         _lexicalBindingNames = LexicalBindingNameCollector.Collect(allStatements);
 
         // Detect features across the union of all modules' statements (any module

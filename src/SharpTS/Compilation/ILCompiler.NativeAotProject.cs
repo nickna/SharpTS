@@ -8,6 +8,7 @@ public partial class ILCompiler
     private bool _nativeAotProjectOutput;
     private TypeBuilder? _nativeAotEntryFacade;
     private NativeClassInitializationEmission? _nativeClassInitialization;
+    private FunctionEmissionPolicy _functionEmissionPolicy = FunctionEmissionPolicy.Full;
 
     private NativeClassInitializationEmission? GetNativeClassInitialization() =>
         !_nativeAotProjectOutput || _programType is null ? null :

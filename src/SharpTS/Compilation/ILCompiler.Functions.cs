@@ -294,6 +294,7 @@ public partial class ILCompiler
                             entryIL.Emit(OpCodes.Ldarg, argument);
                         entryIL.Emit(OpCodes.Call, companion);
                         entryIL.Emit(OpCodes.Ret);
+                        _functionEmissionPolicy.RequireNumericRest4Producer();
                         methodBuilder.SetCustomAttribute(_runtime!.FunctionAttributes.NumericRest4Ctor,
                             CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.NumericRest4Ctor, entry.Name));
                     }

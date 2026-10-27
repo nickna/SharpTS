@@ -14,7 +14,10 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         TSFunctionCoercionInputs Coercion,
         EmittedNativeCallableRuntime? NativeCallables = null
-    );
+    )
+    {
+        public FunctionEmissionPolicy Policy { get; init; } = FunctionEmissionPolicy.Full;
+    }
 
     private readonly record struct TSFunctionCoercionInputs(
         MethodInfo ToJsString,
@@ -461,7 +464,7 @@ public partial class RuntimeEmitter
         EmitComputeNeedsArgConversion(ctorIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)  [pseudocode]
         EmitLookupOrCreateInvoker(ctorIL, invokerField, invokerCacheField, invokerCacheType, erasedInvokerTarget, methodArgIndex: 2);
-        EmitComputeNumericRest4(ctorIL, numericRest4Field, inputs.FunctionAttributes);
+        if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(ctorIL, numericRest4Field, inputs.FunctionAttributes);
         ctorIL.MarkLabel(noMethodLabel);
         ctorIL.Emit(OpCodes.Ret);
 
@@ -506,7 +509,7 @@ public partial class RuntimeEmitter
         EmitComputeNeedsArgConversion(ctorCacheIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)
         EmitLookupOrCreateInvoker(ctorCacheIL, invokerField, invokerCacheField, invokerCacheType, erasedInvokerTarget, methodArgIndex: 2);
-        EmitComputeNumericRest4(ctorCacheIL, numericRest4Field, inputs.FunctionAttributes);
+        if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(ctorCacheIL, numericRest4Field, inputs.FunctionAttributes);
         ctorCacheIL.MarkLabel(noCachedMethodLabel);
         ctorCacheIL.Emit(OpCodes.Ret);
 
@@ -548,7 +551,7 @@ public partial class RuntimeEmitter
             EmitComputeNeedsArgConversion(il, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
             EmitLookupOrCreateInvoker(il, invokerField, invokerCacheField, invokerCacheType, erasedInvokerTarget,
                 methodArgIndex: 2, invocationTargetArgIndex: cachedMetadata ? 5 : 3);
-            EmitComputeNumericRest4(il, numericRest4Field, inputs.FunctionAttributes);
+            if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(il, numericRest4Field, inputs.FunctionAttributes);
             il.Emit(OpCodes.Ret);
             return constructor;
         }
