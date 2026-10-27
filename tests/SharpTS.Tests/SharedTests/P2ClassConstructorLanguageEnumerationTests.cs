@@ -5,8 +5,7 @@ namespace SharpTS.Tests.SharedTests;
 
 public class P2ClassConstructorLanguageEnumerationTests
 {
-    // Compiled constructor rest and inherited for-in use separate runtime paths.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void ClassConstructorsParticipateInSpreadRestAndSyncAsyncForIn(ExecutionMode mode)
     {
         const string source = """

@@ -264,7 +264,7 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldloc, sourceTemp);
         _il.Emit(OpCodes.Stfld, sourceField);
         _il.Emit(OpCodes.Ldloc, sourceTemp);
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectKeys.Keys);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectKeys.ForIn);
         var keysTemp = _il.DeclareLocal(_types.ListOfObject);
         _il.Emit(OpCodes.Stloc, keysTemp);
         _il.Emit(OpCodes.Ldarg_0);

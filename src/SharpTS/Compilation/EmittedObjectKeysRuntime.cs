@@ -18,6 +18,20 @@ public sealed class EmittedObjectKeysRuntime
     }
 
     private MethodBuilder? _normalize;
+    private MethodBuilder? _forIn;
+    public MethodBuilder ForIn
+    {
+        get => Require(_forIn);
+        internal set => SetHandle(ref _forIn, value);
+    }
+
+    private MethodBuilder? _forInEnumerable;
+    public MethodBuilder ForInEnumerable
+    {
+        get => Require(_forInEnumerable);
+        internal set => SetHandle(ref _forInEnumerable, value);
+    }
+
     public MethodBuilder Normalize
     {
         get => Require(_normalize);
@@ -117,6 +131,8 @@ public sealed class EmittedObjectKeysRuntime
     {
         EnsureMutable();
         _ = Keys;
+        _ = ForIn;
+        _ = ForInEnumerable;
         _ = Normalize;
         _ = Names;
         _ = Ordinary;

@@ -1511,7 +1511,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
     {
         emitReceiver();
         emitKey();
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectOwnProperties.IsEnumerable);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectKeys.ForInEnumerable);
         IL.Emit(OpCodes.Brfalse, continueLabel);
     }
 
@@ -1524,7 +1524,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         var receiver = IL.DeclareLocal(Types.Object);
         IL.Emit(OpCodes.Stloc, receiver);
         IL.Emit(OpCodes.Ldloc, receiver);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectKeys.Keys);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectKeys.ForIn);
         var keys = IL.DeclareLocal(Types.ListOfObject);
         IL.Emit(OpCodes.Stloc, keys);
         var index = IL.DeclareLocal(Types.Int32);

@@ -3231,7 +3231,7 @@ public partial class ILEmitter
         var sourceLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, sourceLocal);
         IL.Emit(OpCodes.Ldloc, sourceLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectKeys.Keys);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectKeys.ForIn);
         var keysLocal = IL.DeclareLocal(_ctx.Types.ListOfObject);
         IL.Emit(OpCodes.Stloc, keysLocal);
 

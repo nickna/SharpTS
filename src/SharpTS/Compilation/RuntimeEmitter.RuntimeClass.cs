@@ -1872,6 +1872,9 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType
             )
         );
+        EmitForInKeys(typeBuilder, new ForInInputs(runtime.ObjectKeys, runtime.ObjectPrototypes,
+            runtime.ObjectDescriptors, runtime.ObjectOwnProperties, runtime.ObjectRead.Property,
+            runtime.Booleans.IsTruthy, runtime.Operators.TypeOf, runtime.Sentinels.UndefinedType));
         // MergeIntoObject implements CopyDataProperties through GetKeys and
         // GetProperty, so its body must be emitted after GetKeys is available.
         EmitMergeIntoObject(
