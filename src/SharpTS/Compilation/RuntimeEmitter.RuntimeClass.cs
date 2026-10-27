@@ -1099,6 +1099,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.Interface,
                 runtime.Invocation.Method,
                 runtime.ReflectedMethods.CallableConstructor,
+                runtime.ObjectDescriptors,
                 runtime.ObjectOwnProperties,
                 runtime.ObjectPrototypes,
                 runtime.ObjectStorage,

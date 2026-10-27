@@ -334,6 +334,7 @@ public partial class RuntimeEmitter
         Type IHasFieldsInterface,
         MethodBuilder InvokeMethodValue,
         ConstructorBuilder MethodCallableCtor,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectOwnPropertiesRuntime ObjectOwnProperties,
         EmittedObjectPrototypeRuntime ObjectPrototypes,
         EmittedObjectStorageRuntime ObjectStorage,
@@ -800,6 +801,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, notHasFieldsLabel);
+
+        var classInstanceOwnDescriptor = il.DeclareLocal(_types.Object);
+        var classInstanceOwn = il.DefineLabel();
+        var classInstancePrototype = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, classInstanceOwnDescriptor);
+        il.Emit(OpCodes.Ldloc, classInstanceOwnDescriptor);
+        var classInstanceNoOwn = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, classInstanceNoOwn);
+        il.Emit(OpCodes.Ldloc, classInstanceOwnDescriptor);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brfalse, classInstanceOwn);
+        il.MarkLabel(classInstanceNoOwn);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, classInstancePrototype);
+        il.Emit(OpCodes.Ldloc, classInstancePrototype);
+        var classInstanceHasPrototype = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, classInstanceHasPrototype);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(classInstanceHasPrototype);
+        il.Emit(OpCodes.Ldloc, classInstancePrototype);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.Reflect.Get);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(classInstanceOwn);
 
         // Call interface method: ((IHasFields)obj).GetProperty(name)
         il.Emit(OpCodes.Ldarg_0);

@@ -1283,9 +1283,14 @@ public partial class RuntimeEmitter
         // Ordinary-function chains use existence-only own descriptors
         // and actual prototype links, including null termination and Proxy [[Has]].
         var defaultFunctionHas = il.DefineLabel();
+        var ordinaryPrototypeHas = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, ordinaryPrototypeHas);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, defaultFunctionHas);
+        il.MarkLabel(ordinaryPrototypeHas);
         var functionHasKey = il.DeclareLocal(_types.String);
         var functionHasPrototype = il.DeclareLocal(_types.Object);
         var functionHasDescriptor = il.DeclareLocal(_types.Object);
