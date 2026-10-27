@@ -122,7 +122,8 @@ public partial class RuntimeEmitter
         EmittedStringCoercionRuntime stringCoercion,
         EmittedFunctionConstructionRuntime functionConstruction,
         EmittedFunctionValueRuntime functionValues,
-        MethodBuilder symbolMethodName
+        MethodBuilder symbolMethodName,
+        bool userClasses
     )
     {
         var outer = SymOuterDictType;
@@ -156,7 +157,7 @@ public partial class RuntimeEmitter
             innerTryGetValue,
             innerSetItem
         );
-        EmitSymbolGenericHelperBodies(symbolAccessors);
+        EmitSymbolGenericHelperBodies(symbolAccessors, userClasses);
         EmitFindSymbolAccessorBody(
             symbolAccessors,
             symbolAccessors.FindGetter,
@@ -392,7 +393,7 @@ public partial class RuntimeEmitter
     /// two so the base-chain walk both finds the slot and produces an invokable
     /// (closed) accessor MethodInfo.
     /// </summary>
-    private void EmitSymbolGenericHelperBodies(EmittedSymbolAccessorRuntime symbolAccessors)
+    private void EmitSymbolGenericHelperBodies(EmittedSymbolAccessorRuntime symbolAccessors, bool userClasses)
     {
         var isConstructedGeneric = _types.GetProperty(_types.Type, "IsConstructedGenericType")!.GetGetMethod()!;
         var isGenericType = _types.GetProperty(_types.Type, "IsGenericType")!.GetGetMethod()!;
@@ -433,7 +434,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, owner);
             // Only source classes contribute generic symbol owners. All built-in
             // carriers are non-generic, so do not emit dynamic closure for them.
-            if (_features.UsesUserClasses)
+            if (userClasses)
             {
                 il.Emit(OpCodes.Ldloc, owner);
                 il.Emit(OpCodes.Callvirt, isGenericType);

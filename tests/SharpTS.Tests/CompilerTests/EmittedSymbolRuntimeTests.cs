@@ -122,7 +122,7 @@ public sealed class EmittedSymbolRuntimeTests
         var cctor = builder.DefineTypeInitializer().GetILGenerator();
         void EmitInitializer() => InvokeEmitter(emitter, "InitSymbolAccessorRegistry", cctor, accessors);
         void EmitBodies() => InvokeEmitter(emitter, "EmitSymbolAccessorRegistryBodies", accessors, localSymbols,
-            runtime.StringCoercion, runtime.FunctionConstruction, runtime.FunctionValues, runtime.Symbols.MethodName);
+            runtime.StringCoercion, runtime.FunctionConstruction, runtime.FunctionValues, runtime.Symbols.MethodName, true);
         if (omitInitializer) EmitBodies(); else EmitInitializer();
         var error = Assert.Throws<InvalidOperationException>(accessors.CompleteEmission);
         Assert.Contains(omitInitializer ? "initialization" : "bodies", error.Message);
@@ -134,6 +134,9 @@ public sealed class EmittedSymbolRuntimeTests
         builder.CreateType();
         var loaded = SaveVerifyLoad(assembly);
         var registryType = loaded.GetType(builder.Name)!;
+        // This staged family explicitly enables generic owners even though the
+        // emitter's earlier whole-runtime selection contained no source class.
+        Assert.Equal(typeof(ProbeGeneric<object>), Call(registryType, "SymbolClosedOwner", typeof(ProbeGeneric<>)));
         var method = new object();
         // Guest registration occurs after compiler metadata is frozen.
         Call(registryType, "RegisterSymbolMethod", typeof(ProbeOwner), "key", method, false);
@@ -152,7 +155,10 @@ public sealed class EmittedSymbolRuntimeTests
         foreach (string source in new[] { "const value=1;", "const value=Symbol.for('key');", "const value=1;" })
         {
             var builder = NewAssembly();
-            var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect(source));
+            var features = Detect(source);
+            // CheckAccessorRegistry installs a generic CLR owner explicitly.
+            features.UsesUserClasses = true;
+            var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             foreach (object owner in new object[] { runtime.Symbols, runtime.SymbolAccessors })
             {
                 Assert.DoesNotContain(owner, owners);

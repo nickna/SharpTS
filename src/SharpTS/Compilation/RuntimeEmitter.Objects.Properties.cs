@@ -224,12 +224,12 @@ public partial class RuntimeEmitter
         GenericTypeClosingEmitter.Emit(il, _types, owner);
 
     private LocalBuilder EmitDeferredStaticFieldStorageOwner(ILGenerator il, LocalBuilder owner,
-        Type userClassInterface, ConstructorBuilder policyAttribute)
+        Type userClassInterface, ConstructorBuilder policyAttribute, bool userClasses)
     {
         // Only a deferred generic definition initializes all source statics in
         // canonical storage. Ordinary closed generic parents keep their own .cctor storage.
         // Built-in carriers cannot need this closure when no source class exists.
-        if (!_features.UsesUserClasses) return owner;
+        if (!userClasses) return owner;
         var storageOwner = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldloc, owner);
         il.Emit(OpCodes.Stloc, storageOwner);
@@ -319,7 +319,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         EmittedWeakMapRuntime? WeakMap,
         EmittedWeakRefRuntime? WeakRef,
-        EmittedWeakSetRuntime? WeakSet
+        EmittedWeakSetRuntime? WeakSet,
+        bool UserClasses
     );
 
     private readonly record struct GetFieldsPropertyInputs(
@@ -2759,7 +2760,7 @@ public partial class RuntimeEmitter
             // A live constructor-prototype read reenters here on its closed
             // generic parent. Select deferred storage without changing that parent identity.
             var fieldOwnerLocal = EmitDeferredStaticFieldStorageOwner(il, methodOwnerLocal,
-                inputs.IHasFieldsInterface, inputs.ClassInitialization.CanonicalStaticStorageAttributeConstructor);
+                inputs.IHasFieldsInterface, inputs.ClassInitialization.CanonicalStaticStorageAttributeConstructor, inputs.UserClasses);
             // Static field: type.GetField(name, Public|Static).
             var staticFieldLocal = il.DeclareLocal(typeof(FieldInfo));
             il.Emit(OpCodes.Ldloc, fieldOwnerLocal);
@@ -3023,7 +3024,7 @@ public partial class RuntimeEmitter
             // Keep the ancestor's guest identity for descriptors/deletion above;
             // only deferred generic field storage uses the canonical closed owner.
             var baseFieldOwner = EmitDeferredStaticFieldStorageOwner(il, baseMethodOwner,
-                inputs.IHasFieldsInterface, inputs.ClassInitialization.CanonicalStaticStorageAttributeConstructor);
+                inputs.IHasFieldsInterface, inputs.ClassInitialization.CanonicalStaticStorageAttributeConstructor, inputs.UserClasses);
             // declared static field → field.GetValue(null)
             il.Emit(OpCodes.Ldloc, baseFieldOwner);
             il.Emit(OpCodes.Ldarg_1);
