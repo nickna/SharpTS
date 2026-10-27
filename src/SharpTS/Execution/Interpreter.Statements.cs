@@ -797,6 +797,7 @@ public partial class Interpreter
         IEnumerable<string> keys = obj switch
         {
             SharpTSProxy proxy => proxy.TrapOwnEnumerableKeys(this),
+            SharpTSClass klass => EnumerateClassConstructorForInKeys(klass),
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.OwnEnumerableKeys(),
             // Own enumerable keys only, hiding boxed-primitive internal slots and
             // honoring enumerability — consistent with Object.keys (#475).
@@ -834,6 +835,23 @@ public partial class Interpreter
         };
 
         return IterateWithBreakContinue(keys.Cast<object?>(), forIn.Variable, forIn.IsDeclaration && !forIn.IsVar, forIn.Body, labels);
+    }
+
+    private IEnumerable<string> EnumerateClassConstructorForInKeys(SharpTSClass klass)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        object? current = klass;
+        for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
+        {
+            var keys = (SharpTSArray)ObjectBuiltIns.GetOwnPropertyNames(this, [current])!;
+            foreach (var key in keys.OfType<string>())
+            {
+                if (!visited.Add(key)) continue;
+                if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, current, key)?.Enumerable == true)
+                    yield return key;
+            }
+            current = ObjectBuiltIns.PrototypeOf(this, current);
+        }
     }
 
     /// <summary>

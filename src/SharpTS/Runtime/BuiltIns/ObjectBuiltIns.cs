@@ -1265,6 +1265,9 @@ public static partial class ObjectBuiltIns
     internal static List<object> GetClassPrototypeOwnKeys(SharpTSClassPrototype prototype)
         => prototype.OwnStringKeys().Cast<object>().Concat(prototype.GetSymbolPropertyNames()).ToList();
 
+    internal static List<object> GetClassConstructorOwnKeys(SharpTSClass klass)
+        => klass.OwnStaticStringKeys().Cast<object>().Concat(klass.OwnStaticSymbolKeys()).ToList();
+
     internal static SharpTSPropertyDescriptor? GetClassPrototypeOwnDescriptor(
         SharpTSClassPrototype prototype, object key)
         => key is SharpTSSymbol symbol ? prototype.GetOwnPropertyDescriptor(symbol)
@@ -1804,6 +1807,24 @@ public static partial class ObjectBuiltIns
     internal static SharpTSObject ObjectRest(
         Interpreter interpreter, object? source, IEnumerable<object?> excludeKeys)
     {
+        if (source is SharpTSClass klass)
+        {
+            var excludedClassKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();
+            var classRest = new SharpTSObject([]);
+            foreach (var key in GetClassConstructorOwnKeys(klass))
+            {
+                if (excludedClassKeys.Contains(key)) continue;
+                var descriptor = key is SharpTSSymbol symbolKey
+                    ? klass.GetOwnStaticSymbolPropertyDescriptor(symbolKey)
+                    : klass.GetOwnStaticPropertyDescriptor((string)key);
+                if (descriptor?.Enumerable != true) continue;
+                if (key is SharpTSSymbol symbol)
+                    classRest.SetBySymbol(symbol, interpreter.GetSymbolPropertyValue(klass, symbol));
+                else
+                    classRest.SetProperty((string)key, interpreter.GetPropertyValue(klass, (string)key));
+            }
+            return classRest;
+        }
         if (source is SharpTSClassPrototype prototype)
         {
             var excludedPrototypeKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();

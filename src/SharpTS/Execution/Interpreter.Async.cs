@@ -537,6 +537,7 @@ public partial class Interpreter
 
         IEnumerable<string> keys = obj switch
         {
+            SharpTSClass klass => EnumerateClassConstructorForInKeys(klass),
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.OwnEnumerableKeys(),
             // Own enumerable keys only, hiding boxed-primitive internal slots and
             // honoring enumerability — consistent with Object.keys (#475).
