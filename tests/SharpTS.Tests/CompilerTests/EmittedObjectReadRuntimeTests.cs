@@ -123,7 +123,12 @@ public sealed class EmittedObjectReadRuntimeTests
         var probe = runtime.RuntimeClass.Type.DefineNestedType("SuppliedRead", TypeAttributes.NestedPublic);
         var propertyOwner = ObjectReadTestSupport.EmitProperty(emitter, probe, runtime, inputs);
         AssertFrozen(propertyOwner);
-        var indexOwner = new EmittedObjectReadRuntime { Property = propertyOwner.Property };
+        var indexOwner = new EmittedObjectReadRuntime
+        {
+            Property = propertyOwner.Property,
+            Index = probe.DefineMethod("GetIndex", MethodAttributes.Public | MethodAttributes.Static,
+                typeof(object), [typeof(object), typeof(object)])
+        };
         var indexHelper = typeof(RuntimeEmitter).GetMethod("EmitGetIndex", Members)!;
         indexHelper.Invoke(emitter, [probe, indexOwner, ObjectReadTestSupport.MakeInputs(indexHelper.GetParameters()[2].ParameterType, runtime, inputs)]);
         probe.CreateType(); var loaded = SaveVerifyLoad(builder); var saved = loaded.GetType(probe.FullName!)!;

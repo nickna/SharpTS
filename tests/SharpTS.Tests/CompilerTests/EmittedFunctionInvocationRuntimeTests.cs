@@ -46,7 +46,13 @@ public sealed class EmittedFunctionInvocationRuntimeTests
         Assert.Equal("$ArgumentsContext", field.DeclaringType!.Name);
         Assert.True(((TypeBuilder)field.DeclaringType).IsCreated());
         Assert.False(owner.IsComplete); Assert.Throws<InvalidOperationException>(owner.CompleteEmission);
-        emitter.EmitArgumentsTypeDefinition(module, owner); owner.CompleteEmission();
+        emitter.EmitArgumentsTypeDefinition(module, owner);
+        var initializers = module.DefineType("ArgumentInitialization");
+        owner.Initialize = initializers.DefineMethod("Initialize", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void), [typeof(object)]);
+        owner.Initialize.GetILGenerator().Emit(OpCodes.Ret);
+        initializers.CreateType();
+        owner.CompleteEmission();
         Assert.Same(field, owner.CurrentField); Assert.True(owner.Type.IsCreated());
         var loaded = SaveVerifyLoad(builder);
         Assert.NotNull(loaded.GetType("$ArgumentsContext")!.GetField(field.Name)!.GetCustomAttribute<ThreadStaticAttribute>());

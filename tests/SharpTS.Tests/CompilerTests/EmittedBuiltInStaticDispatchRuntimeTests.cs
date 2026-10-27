@@ -187,6 +187,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             return owner;
         }
         var numbers = Owner(typeof(EmittedNumberRuntime), "IsNaN", "IsFinite", "IsInteger", "IsSafeInteger", "ParseInt", "ParseFloat");
+        var arrays = Owner(typeof(EmittedArrayOperationsRuntime), "IsArray", "FromAdapter", "Of");
         var keys = Owner(typeof(EmittedObjectKeysRuntime), "Keys", "Names", "Symbols");
         var operations = Owner(typeof(EmittedObjectOperationsRuntime), "Values", "Entries", "FromEntries", "Assign", "Is", "GroupBy");
         var state = Owner(typeof(EmittedObjectStateRuntime), "Freeze", "Seal", "PreventExtensions", "IsExtensible", "IsFrozen", "IsSealed");
@@ -196,7 +197,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
         if (optional)
         {
             bigInt = Owner(typeof(EmittedBigIntImplementation), "AsIntN", "AsUintN");
-            promise = Owner(typeof(EmittedPromiseRuntime), "ResolveStatic", "RejectStatic", "AllStatic", "AllKeyedStatic", "RaceStatic", "AllSettledStatic", "AllSettledKeyedStatic", "AnyStatic");
+            promise = Owner(typeof(EmittedPromiseRuntime), "ResolveStatic", "RejectStatic", "AllStatic", "AllKeyedStatic", "RaceStatic", "AllSettledStatic", "AllSettledKeyedStatic", "AnyStatic", "WithResolversStatic");
             typeof(EmittedPromiseRuntime).GetProperty("Type")!.SetValue(promise, typeof(decimal));
             date = Owner(typeof(EmittedDateImplementation), "Now", "StaticUTC", "StaticParse");
             typeof(EmittedDateImplementation).GetProperty("Type")!.SetValue(date, type);
@@ -204,7 +205,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
         }
         var inputsType = typeof(RuntimeEmitter).GetNestedType("BuiltInStaticDispatchInputs", BindingFlags.NonPublic)!;
         var input = Assert.Single(inputsType.GetConstructors()).Invoke([
-            typeof(EmittedBuiltInStaticDispatchRuntimeTests).GetMethod(nameof(DescribeSuppliedMethod))!, Stub("ArrayCheck"), numbers,
+            typeof(EmittedBuiltInStaticDispatchRuntimeTests).GetMethod(nameof(DescribeSuppliedMethod))!, arrays, numbers,
             Stub("CharCode"), Stub("CodePoint"), Stub("Raw"), keys, operations, state, prototypes, descriptors, Stub("Own"),
             typeof(Uri), Stub("SymbolFor"), Stub("SymbolKeyFor"), bigInt, promise, typeof(Version), Stub("ErrorCheck"), date, map, null]);
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
@@ -216,7 +217,9 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
         Complete(owner); type.CreateType();
         var loaded = SaveVerifyLoad(builder); var lookup = loaded.GetType("Scoped")!.GetMethod("LookupBuiltInStaticMember")!;
         object? Lookup(Type target, string name) => lookup.Invoke(null, [target, name]);
-        Assert.Equal("ArrayCheck:isArray:1", Lookup(typeof(IList<object>), "isArray"));
+        Assert.Equal("EmittedArrayOperationsRuntime_IsArray:isArray:1", Lookup(typeof(IList<object>), "isArray"));
+        Assert.Equal("EmittedArrayOperationsRuntime_FromAdapter:from:1", Lookup(typeof(IList<object>), "from"));
+        Assert.Equal("EmittedArrayOperationsRuntime_Of:of:0", Lookup(typeof(IList<object>), "of"));
         Assert.Equal("EmittedNumberRuntime_ParseInt:parseInt:2", Lookup(typeof(double), "parseInt"));
         Assert.Equal("EmittedNumberRuntime_ParseFloat:parseFloat:1", Lookup(typeof(double), "parseFloat"));
         Assert.Equal("CharCode:fromCharCode:1", Lookup(typeof(string), "fromCharCode"));
