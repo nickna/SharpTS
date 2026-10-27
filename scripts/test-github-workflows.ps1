@@ -296,7 +296,7 @@ if (-not $artifactValidationStep.Contains('-Action ValidateArtifacts', [StringCo
     $errors.Add('Every Publish build must validate local package artifacts without a conditional guard.')
 }
 $registrationStep = [regex]::Match($publishBuildJob, '(?ms)^      - name: Preflight NuGet package IDs and artifacts\r?\n.*?(?=^      - |\z)').Value
-if (-not $registrationStep.Contains("if: startsWith(github.ref, 'refs/tags/v')", [StringComparison]::Ordinal) -or
+if (-not $registrationStep.Contains("if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')", [StringComparison]::Ordinal) -or
     -not $registrationStep.Contains('-Action Preflight', [StringComparison]::Ordinal)) {
     $errors.Add('Tagged Publish builds must retain full NuGet registration preflight; dispatches must reach binary validation without it.')
 }
@@ -310,7 +310,7 @@ foreach ($requiredText in @("if: github.event_name == 'workflow_dispatch'", 'GIT
 
 foreach ($requiredText in @(
     'needs: [build, standalone, binaries, native-binaries]',
-    "if: startsWith(github.ref, 'refs/tags/v')",
+    "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
     'contents: read',
     'id-token: write',
     'timeout-minutes: 15',
@@ -349,6 +349,7 @@ foreach ($forbiddenText in @('id-token:', 'contents: write', 'environment:', 'se
 
 foreach ($requiredText in @(
     'needs: [build, standalone, binaries, native-binaries, verify-nuget]',
+    "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
     'contents: write',
     'timeout-minutes: 20',
     "pattern: 'managed-*'",
@@ -388,6 +389,7 @@ else {
 }
 
 $wingetRequiredText = @(
+    "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.build.outputs.is_stable == 'true'",
     'is_stable: ${{ steps.version.outputs.IS_STABLE }}',
     'IS_STABLE=false',
     'IS_STABLE=$IS_STABLE',
@@ -433,4 +435,5 @@ if ($errors.Count -gt 0) {
     throw "GitHub workflow policy failed:`n - $($errors -join "`n - ")"
 }
 
+& (Join-Path $PSScriptRoot 'test-release-dispatch.ps1')
 Write-Host "Validated $($workflowFiles.Count) workflows: immutable actions, least-privilege declarations, fixed runners, and pinned toolchains."

@@ -27,6 +27,11 @@ publication readiness. Use `./scripts/nuget-release.ps1 -Action ValidateArtifact
 for the same local artifact checks. `-Action Preflight` additionally queries public package
 registration; `-Action Publish` repeats both checks before attempting any push.
 
+Every manual dispatch uses `0.0.0-dryrun.<run-number>` and sets the stable flag to false, including
+dispatches that select an existing version tag. Real release versions, registration preflight,
+NuGet publication, GitHub Release creation and WinGet submission require a version-tag `push` event.
+Rerunning a tagged push retains that tag's version and the same publication checks.
+
 The tagged release is blocked if any manifest ID is not registered. This prevents an untested
 permission from publishing established packages before failing on a new ID.
 
