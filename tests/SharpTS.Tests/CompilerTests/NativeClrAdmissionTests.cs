@@ -240,6 +240,35 @@ public class NativeClrAdmissionTests
         Assert.Throws<InvalidOperationException>(() => compiler.SaveToBytes());
     }
 
+    [Theory]
+    [InlineData("const value: StringBuilder = new StringBuilder(); export = value;")]
+    [InlineData("const Value = StringBuilder; export = Value;")]
+    public void CommonJsExportAssignmentCannotDiscardAnOpaqueAliasRead(string body)
+    {
+        const string entry = "/native-clr/export-assignment.ts";
+        var files = new Dictionary<string, string> { [entry] = "import { StringBuilder } from 'dotnet:System.Text.StringBuilder'; " + body };
+        var resolver = new ModuleResolver(entry, files);
+        var modules = resolver.GetModulesInOrder(resolver.LoadModule(entry));
+        var types = new TypeChecker().CheckModules(modules, resolver);
+        var compiler = new ILCompiler("native_clr_export_assignment", false, true, null, null, null, OutputTarget.Dll);
+        compiler.EnableNativeAotProjectOutput();
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, Assert.Throws<CompileException>(() => compiler.CompileModules(modules, resolver, types)).Diagnostic.Code);
+    }
+
+    [Fact]
+    public void CommonJsGuestAnyExportRemainsAValueExport()
+    {
+        const string entry = "/native-clr/export-guest.ts";
+        var resolver = new ModuleResolver(entry, new Dictionary<string, string> { [entry] = "const value: any = { x: 4 }; export = value;" });
+        var modules = resolver.GetModulesInOrder(resolver.LoadModule(entry));
+        var types = new TypeChecker().CheckModules(modules, resolver);
+        var compiler = new ILCompiler("native_clr_guest_export", false, true, null, null, null, OutputTarget.Dll);
+        compiler.EnableNativeAotProjectOutput(); compiler.CompileModules(modules, resolver, types);
+        using var stream = new MemoryStream(compiler.SaveToBytes());
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        Assert.Empty(verifier.Verify(stream));
+    }
+
     private static ILCompiler Compile(string source, bool native)
     {
         var statements = new Parser(new Lexer(source).ScanTokens(), DecoratorMode.Legacy).ParseOrThrow();

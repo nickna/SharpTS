@@ -253,6 +253,9 @@ internal sealed partial class NativeClrAdmission
                 if (!item.IsTypeOnly && analysis._types.GetValueBinding(item.LocalName) is { } binding)
                     analysis._exports.Add(binding);
             base.VisitExport(statement);
+            // CommonJS export assignment is a runtime value, unlike named export tokens.
+            // The shared visitor does not currently traverse this slot.
+            if (statement.ExportAssignment is { } value) Visit(value);
         }
         protected override void VisitVariable(Expr.Variable expression)
         {
