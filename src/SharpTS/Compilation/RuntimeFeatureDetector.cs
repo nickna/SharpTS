@@ -788,6 +788,8 @@ public sealed partial class RuntimeFeatureDetector
 
             case Stmt.Class cls:
                 _set.UsesUserClasses = true;
+                if (cls.Methods.Any(method => !method.IsStatic && method.ComputedKey is { } key && IsSymbolIterator(key)))
+                    _set.UsesArrayPrototypeMutation = true;
                 foreach (var expression in ClassDefinitionExpressions.Enumerate(cls))
                     VisitExpr(expression);
                 foreach (var m in cls.Methods)
@@ -1790,6 +1792,8 @@ public sealed partial class RuntimeFeatureDetector
                 break;
             case Expr.ClassExpr ce:
                 _set.UsesUserClasses = true;
+                if (ce.Methods.Any(method => !method.IsStatic && method.ComputedKey is { } key && IsSymbolIterator(key)))
+                    _set.UsesArrayPrototypeMutation = true;
                 foreach (var expression in ClassDefinitionExpressions.Enumerate(ce))
                     VisitExpr(expression);
                 foreach (var m in ce.Methods)
