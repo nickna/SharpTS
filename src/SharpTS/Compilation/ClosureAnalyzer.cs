@@ -180,9 +180,6 @@ public class ClosureAnalyzer : AstVisitorBase
     {
         if (_bodyCells.CanTransportClassSelf(reference))
             return _bodyCells.TryGetClassSelfOwner(reference, out owner);
-        // Ordinary nested declarations do not yet carry an evaluated class
-        // owner. Preserve their previous capture/emission path; the raw lexical
-        // identity remains available in the independent analysis.
         owner = null!;
         return false;
     }

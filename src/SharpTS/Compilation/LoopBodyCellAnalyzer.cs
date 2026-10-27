@@ -586,7 +586,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
     {
         if (stmt.ComputedKey is { } key) Visit(key);
         VisitCallable(stmt, stmt.Parameters, stmt.Body ?? [], null,
-            !stmt.IsAsync && !stmt.IsGenerator, stmt.Name, canRelayClassSelf: false);
+            !stmt.IsAsync && !stmt.IsGenerator, stmt.Name);
     }
 
     private void VisitCallable(object node, List<Stmt.Parameter> parameters, List<Stmt> body,
