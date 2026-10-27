@@ -63,7 +63,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct ReflectValueFormMethodsInputs(MethodInfo Get, MethodInfo Set,
         MethodInfo DefineProperty, MethodInfo ObjectGetOwnPropertyDescriptor,
-        MethodInfo ObjectGetPrototypeOf, MethodInfo ObjectIsExtensible, MethodInfo HasIn);
+        MethodInfo ObjectGetPrototypeOf, MethodInfo ObjectIsExtensible, MethodInfo HasIn, FieldInfo UndefinedInstance);
 
     /// <summary>ToPropertyKey preserves Symbol results of string-hint ToPrimitive.</summary>
     private void EmitReflectToPropertyKey(EmittedReflectRuntime reflect, ReflectToPropertyKeyInputs inputs)
@@ -1801,7 +1801,7 @@ public partial class RuntimeEmitter
             return method;
         }
 
-        static void EmitArgument(ILGenerator il, int index)
+        void EmitArgument(ILGenerator il, int index, bool undefinedForMissing = false)
         {
             var present = il.DefineLabel();
             var done = il.DefineLabel();
@@ -1810,7 +1810,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Ldc_I4, index);
             il.Emit(OpCodes.Bgt, present);
-            il.Emit(OpCodes.Ldnull);
+            if (undefinedForMissing) il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+            else il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Br, done);
             il.MarkLabel(present);
             il.Emit(OpCodes.Ldarg_0);
@@ -1871,7 +1872,7 @@ public partial class RuntimeEmitter
         Define("deleteProperty", il =>
         {
             EmitArgument(il, 0);
-            EmitArgument(il, 1);
+            EmitArgument(il, 1, undefinedForMissing: true);
             il.Emit(OpCodes.Call, reflectNamespace.DeleteProperty);
             BoxBoolean(il);
             il.Emit(OpCodes.Ret);

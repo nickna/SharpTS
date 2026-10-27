@@ -5,8 +5,7 @@ namespace SharpTS.Tests.SharedTests;
 
 public class P2ReflectDeleteOmittedKeyTests
 {
-    // The compiled Reflect wrapper independently supplies missing arguments.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void DeletePropertyConvertsMissingKeyToUndefined(ExecutionMode mode)
     {
         const string source = """

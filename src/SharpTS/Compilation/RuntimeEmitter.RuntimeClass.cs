@@ -2455,7 +2455,8 @@ public partial class RuntimeEmitter
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                     runtime.ObjectPrototypes.GetPrototypeOf,
                     runtime.ObjectState.IsExtensible,
-                    runtime.Operators.HasIn
+                    runtime.Operators.HasIn,
+                    runtime.Sentinels.UndefinedInstance
                 )
             );
             EmitReflectSingletonPopulate(runtime.Reflect.RequireNamespace(), GetBuiltinSingletonInputs(runtime));
