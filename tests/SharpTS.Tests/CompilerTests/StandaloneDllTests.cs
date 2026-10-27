@@ -10358,8 +10358,8 @@ public partial class StandaloneDllTests
             "class_set",
             "main.ts",
             new string[] { "main.ts" },
-            new string[] { "class MyClass {\n    x: number = 1;\n}\nlet obj = new MyClass();\nlet threw = false;\ntry {\n    Object.setPrototypeOf(obj, { y: 2 });\n} catch (e) {\n    threw = true;\n}\nconsole.log(threw);" },
-            "true\n",
+            new string[] { "class MyClass {\n    x: number = 1;\n}\nconst obj: any = new MyClass();\nconst parent = { y: 2 };\nconsole.log(Object.setPrototypeOf(obj, parent) === obj);\nconsole.log(Object.getPrototypeOf(obj) === parent, obj.x, obj.y);" },
+            "true\ntrue 1 2\n",
             false,
             true
         },
