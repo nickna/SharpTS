@@ -613,8 +613,8 @@ public partial class RuntimeEmitter
             // Object/Array/String constructor static method names: per ECMA-262
             // §17, every other data property has configurable:true. Mark the
             // deletion in the per-Type tracker so subsequent gOPD/hasOwn report
-            // the property as absent, then return true. (prototype/name/length
-            // and Number constants caught above are non-configurable.)
+            // the property as absent, then return true. The non-configurable
+            // prototype and Number constants have already been handled above.
             var objTypeDelLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldtoken, _types.Object);
@@ -646,6 +646,23 @@ public partial class RuntimeEmitter
             EmitObjectMethodDelCheck("preventExtensions"); EmitObjectMethodDelCheck("seal");
             EmitObjectMethodDelCheck("setPrototypeOf"); EmitObjectMethodDelCheck("values");
             il.MarkLabel(objTypeDelLabel);
+
+            foreach (var (constructor, names) in new (Type, string[])[]
+            {
+                (_types.IListOfObject, ["from", "fromAsync", "isArray", "of"]),
+                (_types.Double, ["isFinite", "isInteger", "isNaN", "isSafeInteger", "parseFloat", "parseInt"]),
+                (_types.String, ["fromCharCode", "fromCodePoint", "raw"])
+            })
+            {
+                var nextConstructor = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldtoken, constructor);
+                il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+                il.Emit(OpCodes.Bne_Un, nextConstructor);
+                foreach (var name in names)
+                    EmitObjectMethodDelCheck(name);
+                il.MarkLabel(nextConstructor);
+            }
 
             // Runtime-backed Promise/Error statics are configurable built-in
             // own properties, but are not discoverable through reflection on

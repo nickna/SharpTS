@@ -553,6 +553,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Type);
         il.Emit(OpCodes.Brfalse, notTypeForDescLabel);
+        // Explicit PDS definitions were checked by the caller. A tombstone
+        // suppresses every remaining synthesized native static descriptor.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
+        il.Emit(OpCodes.Brtrue, returnNullLabel);
         EmitGetOwnDescriptorConstructorMetadata(il, inputs.GetProperty, inputs.ObjectState.IsBuiltinDeleted,
             propNameLocal, resultDictLocal, returnNullLabel, endLabel);
 
