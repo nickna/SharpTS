@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
 
@@ -18,8 +19,9 @@ public partial class ILEmitter
     /// </summary>
     /// <param name="type">The target type to prepare the receiver as.</param>
     /// <returns>True if the type is a value type (caller should use Call instead of Callvirt).</returns>
-    private bool PrepareReceiverForMemberAccess(Type type)
+    private bool PrepareReceiverForMemberAccess(Type type, Expr receiver)
     {
+        RecordExternalInput(receiver, type, NativeClrAdmission.InputConversion.Receiver);
         if (type.IsValueType)
         {
             IL.Emit(OpCodes.Unbox_Any, type);

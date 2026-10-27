@@ -364,7 +364,7 @@ public partial class ILEmitter
                 // Emit field access
                 EmitExpression(receiver);
                 EmitBoxIfNeeded(receiver);
-                PrepareReceiverForMemberAccess(externalType);
+                PrepareReceiverForMemberAccess(externalType, receiver);
                 RecordExternalSelection(field, field.FieldType, NativeClrAdmission.Marshalling.BoxedSlot, receiver);
                 IL.Emit(OpCodes.Ldfld, field);
                 BoxResultIfValueType(field.FieldType);
@@ -384,7 +384,7 @@ public partial class ILEmitter
         // Emit property access
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
-        bool isValueType = PrepareReceiverForMemberAccess(externalType);
+        bool isValueType = PrepareReceiverForMemberAccess(externalType, receiver);
         RecordExternalSelection(getter, getter.ReturnType, NativeClrAdmission.Marshalling.BoxedSlot, receiver);
         IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, getter);
         BoxResultIfValueType(property.PropertyType);
@@ -434,10 +434,10 @@ public partial class ILEmitter
             if (field != null)
             {
                 // Emit field set
-                EmitExpression(receiver);
+                EmitExpression(receiver); RecordExternalInput(receiver, externalType, NativeClrAdmission.InputConversion.Receiver);
                 EmitBoxIfNeeded(receiver);
                 IL.Emit(OpCodes.Castclass, externalType);
-                EmitExpression(value);
+                EmitExpression(value); RecordExternalInput(value, field.FieldType);
                 EmitExternalTypeConversion(field.FieldType);
 
                 // Save value for expression result
@@ -468,10 +468,10 @@ public partial class ILEmitter
         }
 
         // Emit property set
-        EmitExpression(receiver);
+        EmitExpression(receiver); RecordExternalInput(receiver, externalType, NativeClrAdmission.InputConversion.Receiver);
         EmitBoxIfNeeded(receiver);
         IL.Emit(OpCodes.Castclass, externalType);
-        EmitExpression(value);
+        EmitExpression(value); RecordExternalInput(value, property.PropertyType);
         EmitExternalTypeConversion(property.PropertyType);
 
         // Save value for expression result

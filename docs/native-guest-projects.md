@@ -198,6 +198,17 @@ refused pending the existing guest-storage boxing defect (#3051); boxed results
 from proven getters can still feed typed consumers. Missing selected-source
 context is negative evidence, rather than a guest-safety default.
 
+Typed annotations and observed class-shaped values are not positive CLR-origin
+proof. Every selected receiver/argument edge must have its actual emitted
+conversion recorded. Reference pass-through requires a selected CLR producer or
+an immutable checked alias of one; scalar-normalizing conversions and independent
+copies of scalar arrays are admitted. Guest arrays cast to `IList`, including
+`ArrayList.Adapter` wrappers, cannot acquire trusted origin merely by reaching a
+typed consumer. Callback reference and array returns are refused because their
+adapter casts or passes through the guest value rather than making an independent
+copy; scalar and void callbacks remain supported. Indexer assignments that return
+the original RHS keep that RHS provenance, even when the stored value was converted.
+
 Reference stores through CLR setter/indexer syntax are currently unimplemented.
 This does not prove that CLR state retains no references: admitted CLR method
 arguments can be retained internally. Every later result, callback or exception
@@ -243,7 +254,9 @@ The proof owner stays open during source emission, then freezes before native
 serialization. Failed admission also guards `Save`, `SaveToBytes` and
 `SaveArtifacts`; normal compilation has no admission owner. No runtime reflection
 fallback is removed, and this bounded slice is not a complete closure or a
-warning-free native compatibility claim.
+warning-free native compatibility claim. In particular, consumer conversion proof does
+not certify reflection or metadata capabilities: a selected API may address guest
+state by assembly/type/member identity without receiving a guest object argument.
 
 A broader closed profile still needs producer-to-use provenance at these boundaries:
 

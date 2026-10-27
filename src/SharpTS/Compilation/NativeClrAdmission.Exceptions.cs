@@ -23,7 +23,7 @@ internal sealed partial class NativeClrAdmission
         foreach (var attempt in _tries)
         {
             if (attempt.CatchParam is not { } token) continue;
-            var binding = _types.GetValueBinding(token);
+            var binding = SourceBinding(token);
             if (binding is not null && !_reads.ContainsKey(binding)) continue;
             foreach (var node in _parents.Keys)
             {
@@ -81,7 +81,7 @@ internal sealed partial class NativeClrAdmission
         if (expression is Expr.ArrowFunction arrow) return arrow;
         if (expression is Expr.Grouping grouping) return ResolveCallable(grouping.Expression, seen);
         if (expression is Expr.TypeAssertion assertion) return ResolveCallable(assertion.Expression, seen);
-        if (expression is not Expr.Variable variable || _types.GetValueBinding(variable.Name) is not { } binding || !seen.Add(binding)) return null;
+        if (expression is not Expr.Variable variable || SourceBinding(variable.Name) is not { } binding || !seen.Add(binding)) return null;
         if (_functions.TryGetValue(binding, out var function)) return function;
         return _constants.TryGetValue(binding, out var declaration) ? ResolveCallable(declaration.Initializer, seen) : null;
     }

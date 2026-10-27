@@ -15,12 +15,14 @@ namespace SharpTS.Compilation;
 /// </summary>
 internal sealed partial class NativeClrAdmission
 {
-    internal enum Marshalling { MethodResult, BoxedSlot, RawBox, CallbackParameter, Literal, Constructed, TypeValue }
+    internal enum Marshalling { MethodResult, BoxedSlot, RawBox, CallbackParameter, Literal, Constructed, TypeValue, OriginalAssignment }
     internal sealed record Selection(Expr Source, MemberInfo Member, Type ResultType, Marshalling Conversion);
     private readonly List<Selection> _selections = [];
     internal IReadOnlyList<Selection> Selections => _selections.AsReadOnly();
     private readonly HashSet<BindingSymbol> _exports = new(ReferenceEqualityComparer.Instance);
     private readonly TypeMap _types;
+    private readonly Dictionary<Token, BindingSymbol?> _bindingSnapshot = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Token, TypeInfo?> _declaredSnapshot = new(ReferenceEqualityComparer.Instance);
     private readonly TypeProvider _framework;
     private readonly Dictionary<object, object> _source = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<object, object?> _parents = new(ReferenceEqualityComparer.Instance);
@@ -53,6 +55,16 @@ internal sealed partial class NativeClrAdmission
         if (!ReferenceEquals(source, target)) _source[target] = Source(source);
     }
 
+    private BindingSymbol? CaptureBinding(Token token)
+    {
+        var binding = _types.GetValueBinding(token);
+        _bindingSnapshot.TryAdd(token, binding);
+        _declaredSnapshot.TryAdd(token, _types.GetDeclaredValueType(token));
+        return binding;
+    }
+
+    private BindingSymbol? SourceBinding(Token token) => _bindingSnapshot.GetValueOrDefault(token);
+
     private object Source(object node)
     {
         while (_source.TryGetValue(node, out var source)) node = source;
@@ -82,10 +94,19 @@ internal sealed partial class NativeClrAdmission
         foreach (var argument in arguments ?? [])
             if (source is not Expr.Set && source is not Expr.SetIndex) AllowEdge(source, argument);
 
+        bool tupleResult = false;
+        bool staticMember = member is MethodBase { IsStatic: true } or FieldInfo { IsStatic: true };
+        if (receiver is null && staticMember)
+        {
+            if (source is Expr.Call { Callee: Expr.Get staticGet }) AddEdge(_metadataEdges, staticGet, staticGet.Object);
+            else if (source is Expr.Get staticValue) AddEdge(_metadataEdges, staticValue, staticValue.Object);
+        }
+        if (member is ConstructorInfo && source is Expr.New constructor) AddEdge(_metadataEdges, source, constructor.Callee);
         if (member is MethodBase method)
         {
             var parameters = method.GetParameters();
-            if (parameters.Any(parameter => parameter.ParameterType.IsByRef && !parameter.IsIn) && !IsSafe(resultType, marshalling))
+            tupleResult = parameters.Any(parameter => parameter.ParameterType.IsByRef && !parameter.IsIn);
+            if (tupleResult && !IsSafe(resultType, marshalling))
                 Fail($"CLR ref/out tuple {member.Name} contains an unsupported CLR result");
             foreach (var parameter in parameters)
             {
@@ -101,7 +122,8 @@ internal sealed partial class NativeClrAdmission
             Fail($"CLR member {member.Name} declares System.Object without scalar result proof");
         else if (resultType.IsArray && !IsSafe(resultType, marshalling))
             Fail($"CLR member {member.Name} returns an array with unsupported CLR element/storage provenance");
-        else if (!IsSafe(resultType, marshalling)) _opaque.Add(source);
+        else if (!IsSafe(resultType, marshalling)) { _opaque.Add(source); _clrProducers.Add(source); }
+        else if (!tupleResult && !resultType.IsArray && marshalling != Marshalling.OriginalAssignment) _scalarResults.Add(source);
     }
 
     internal void RecordUnclassifiedSourceBoundary(Expr? expression, string reason)
@@ -120,10 +142,13 @@ internal sealed partial class NativeClrAdmission
         if (invoke is null || invoke.GetParameters().Any(parameter =>
                 parameter.ParameterType.IsByRef || !IsSafe(parameter.ParameterType, Marshalling.CallbackParameter)))
             Fail($"CLR callback {delegateType.FullName} has unsupported reference, boxed-struct or by-ref ingress");
+        if (invoke is not null && invoke.ReturnType != typeof(void) && !IsScalarEnforcingConversion(invoke.ReturnType))
+            Fail($"CLR callback {delegateType.FullName} has unsupported reference return marshalling");
     }
 
     private bool IsSafe(Type type, Marshalling mode)
     {
+        if (mode == Marshalling.OriginalAssignment) return true; // Result remains the original RHS; no producer/scalar proof.
         if (mode is Marshalling.Constructed or Marshalling.TypeValue) return false;
         if (_framework.IsVoid(type) || _framework.IsString(type) || _framework.IsBoolean(type) || _framework.IsDouble(type)) return true;
         if (mode == Marshalling.Literal) return !type.IsEnum;
@@ -160,6 +185,7 @@ internal sealed partial class NativeClrAdmission
     internal void Complete()
     {
         EnsureOpen();
+        CheckConsumerConversions();
         foreach (var expression in _opaque) CheckUse(expression, new(ReferenceEqualityComparer.Instance));
         CheckExceptionalCallableIngress();
         CheckExceptionIngress();
@@ -184,12 +210,16 @@ internal sealed partial class NativeClrAdmission
             Fail("CLR value has no classified source use");
             return;
         }
-        if (parent is Expr owner && _typedEdges.TryGetValue(owner, out var edges) && edges.Contains(expression)) return;
+        if (parent is Expr owner && _typedEdges.TryGetValue(owner, out var edges) && edges.Contains(expression))
+        {
+            if (!HasValidatedInput(owner, expression)) Fail("CLR typed edge has no actual consumer-conversion proof", expression);
+            return;
+        }
         if (parent is Stmt.Expression) return; // Explicit discard does not escape.
         if (parent is Expr.Grouping grouping) { CheckUse(grouping, seen); return; }
         if (parent is Stmt.Const declaration && ReferenceEquals(declaration.Initializer, expression) &&
-            _types.GetValueBinding(declaration.Name) is { } binding && _constants.ContainsKey(binding) && !_exports.Contains(binding) &&
-            _types.GetDeclaredValueType(declaration.Name) is { } declared && declared is not TypeInfo.Any)
+            SourceBinding(declaration.Name) is { } binding && _constants.ContainsKey(binding) && !_exports.Contains(binding) &&
+            _declaredSnapshot.GetValueOrDefault(declaration.Name) is { } declared && declared is not TypeInfo.Any)
         {
             foreach (var read in _reads.GetValueOrDefault(binding) ?? [])
             {
@@ -260,7 +290,7 @@ internal sealed partial class NativeClrAdmission
         }
         protected override void VisitConst(Stmt.Const statement)
         {
-            if (analysis._types.GetValueBinding(statement.Name) is { } binding &&
+            if (analysis.CaptureBinding(statement.Name) is { } binding &&
                 analysis._parents.GetValueOrDefault(statement) is not Stmt.Export)
                 analysis._constants[binding] = statement;
             base.VisitConst(statement);
@@ -268,7 +298,7 @@ internal sealed partial class NativeClrAdmission
         protected override void VisitExport(Stmt.Export statement)
         {
             foreach (var item in statement.NamedExports ?? [])
-                if (!item.IsTypeOnly && analysis._types.GetValueBinding(item.LocalName) is { } binding)
+                if (!item.IsTypeOnly && analysis.CaptureBinding(item.LocalName) is { } binding)
                     analysis._exports.Add(binding);
             base.VisitExport(statement);
             // CommonJS export assignment is a runtime value, unlike named export tokens.
@@ -277,7 +307,7 @@ internal sealed partial class NativeClrAdmission
         }
         protected override void VisitVariable(Expr.Variable expression)
         {
-            if (analysis._types.GetValueBinding(expression.Name) is { } binding)
+            if (analysis.CaptureBinding(expression.Name) is { } binding)
             {
                 if (!analysis._reads.TryGetValue(binding, out var reads)) analysis._reads[binding] = reads = [];
                 reads.Add(expression);
@@ -309,7 +339,7 @@ internal sealed partial class NativeClrAdmission
         {
             Decorators(statement.Decorators);
             if (statement.ComputedKey is { } key) Visit(key);
-            if (statement.Body is not null && analysis._types.GetValueBinding(statement.Name) is { } binding)
+            if (statement.Body is not null && analysis.CaptureBinding(statement.Name) is { } binding)
                 analysis._functions[binding] = statement;
             var previous = _owner; _owner = statement;
             try
@@ -321,7 +351,7 @@ internal sealed partial class NativeClrAdmission
         }
         protected override void VisitArrowFunction(Expr.ArrowFunction expression)
         {
-            if (expression.Name is { } name && analysis._types.GetValueBinding(name) is { } binding)
+            if (expression.Name is { } name && analysis.CaptureBinding(name) is { } binding)
                 analysis._functions[binding] = expression;
             var previous = _owner; _owner = expression;
             try
@@ -407,6 +437,7 @@ internal sealed partial class NativeClrAdmission
         }
         protected override void VisitTryCatch(Stmt.TryCatch statement)
         {
+            if (statement.CatchParam is { } token) analysis.CaptureBinding(token);
             analysis._tries.Add(statement); base.VisitTryCatch(statement);
         }
     }

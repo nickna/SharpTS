@@ -484,10 +484,24 @@ public class NativeClrAdmissionTests
         const string entry = "/native-clr/dynamic-pure-entry.ts";
         var files = new Dictionary<string, string>
         {
-            [entry] = Builder + "const value: Builder = new Builder(); value.append('typed'); import('./dynamic-pure').then(module => console.log('import', module.value));",
+            [entry] = Builder + "const value: Builder = new Builder(); value.append('typed'); import('./dynamic-pure').then(module => console.log('import', module.value)); export {};",
             ["/native-clr/dynamic-pure.ts"] = "export const value = 4;"
         };
         Assert.Equal("import 4\n", Execute(CompileFiles(files, entry, true).SaveToBytes()));
+    }
+
+    [Fact]
+    public void UnresolvedScriptGlobalDoesNotAcquireTheModuleLocalProducerProof()
+    {
+        const string entry = "/native-clr/dynamic-script-entry.ts";
+        var files = new Dictionary<string, string>
+        {
+            [entry] = Builder + "const value: Builder = new Builder(); value.append('typed'); import('./dynamic-pure').then(module => console.log(module.value));",
+            ["/native-clr/dynamic-pure.ts"] = "export const value = 4;"
+        };
+        var error = Assert.Throws<CompileException>(() => CompileFiles(files, entry, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code);
+        Assert.Contains("guest reference pass-through", error.Message);
     }
 
     [Theory]
@@ -517,6 +531,106 @@ public class NativeClrAdmissionTests
         compiler.EnableNativeAotProjectOutput();
         var error = Assert.Throws<CompileException>(() => compiler.Compile(statements, types));
         Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.Contains("ambiguous original", error.Message);
+    }
+
+    private const string ConsumerSource = Builder + """
+        @DotNetType("System.Collections.IList")
+        declare class ClrList { add(value: any): number; count: number; }
+        @DotNetType("System.Collections.ArrayList")
+        declare class ClrArrayList { constructor(); add(value: any): number; count: number; static adapter(value: any): ClrArrayList; }
+        """;
+
+    [Theory]
+    [InlineData("(guest as any as ClrList).add(value);", "array")]
+    [InlineData("const alias: ClrList = ClrArrayList.adapter(guest as any as ClrList); alias.add(value);", "adapter")]
+    public void SelectedClrConsumersCannotWriteOpaqueValuesThroughGuestStorageAliases(string operation, string label)
+    {
+        string source = ConsumerSource + "const value: Builder = new Builder(); value.append('opaque'); const guest: any[] = []; " + operation + " console.log('" + label + "', guest[0].toString());";
+        Assert.Equal(label + " opaque\n", Execute(Compile(source, false).SaveToBytes()));
+        var error = Assert.Throws<CompileException>(() => Compile(source, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.Contains("guest reference pass-through", error.Message);
+    }
+
+    [Fact]
+    public void ReferenceReturningCallbackCannotTurnGuestArrayIntoTrustedClrProducer()
+    {
+        const string source = ConsumerSource + """
+            @DotNetType("System.Lazy`1[System.Collections.IList]")
+            declare class LazyList { constructor(factory: () => ClrList); value: ClrList; }
+            const value: Builder = new Builder(); value.append('opaque'); const guest: any[] = [];
+            const lazy: LazyList = new LazyList(() => guest as any as ClrList);
+            const alias: ClrList = lazy.value;
+            alias.add(value); console.log('callback', guest[0].toString());
+            """;
+        Assert.Equal("callback opaque\n", Execute(Compile(source, false).SaveToBytes()));
+        var error = Assert.Throws<CompileException>(() => Compile(source, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.Contains("reference return", error.Message);
+    }
+
+    [Theory]
+    [InlineData("System.Lazy`1[System.Object]")]
+    [InlineData("System.Lazy`1[System.Int32[]]")]
+    public void CallbackObjectAndArrayReturnsAreNotIndependentCopies(string clrType)
+    {
+        string source = "@DotNetType(\"" + clrType + "\") declare class LazyValue { constructor(factory: () => any); } const guest: any[] = []; new LazyValue(() => guest);";
+        var error = Assert.Throws<CompileException>(() => Compile(source, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.Contains("reference return", error.Message);
+    }
+
+    [Fact]
+    public void TrustedClrLocalsAndTheirAdaptersStayWithinTheClrDomain()
+    {
+        const string source = ConsumerSource + """
+            const value: Builder = new Builder(); value.append('opaque');
+            const owned: ClrArrayList = new ClrArrayList(); owned.add(value);
+            const adapted: ClrArrayList = ClrArrayList.adapter(owned); adapted.add(value);
+            console.log(owned.count, adapted.count);
+            """;
+        Assert.Equal("2 2\n", Execute(Compile(source, true).SaveToBytes()));
+    }
+
+    [Fact]
+    public void ScalarArrayCopiesAndScalarCallbacksKeepTheirActualConversions()
+    {
+        const string source = """
+            @DotNetType("System.Convert") declare class Converter { static toBase64String(values: number[]): string; }
+            @DotNetType("System.Lazy`1[System.Double]") declare class LazyNumber { constructor(factory: () => number); value: number; }
+            @DotNetType("System.Array") declare class ClrArray { static forEach<T>(values: T[], fn: (value: T) => void): void; }
+            const values = [1, 2, 3]; console.log(Converter.toBase64String(values));
+            const lazy: LazyNumber = new LazyNumber(() => 7); console.log(lazy.value);
+            ClrArray.forEach<string>(['a', 'b'], value => console.log(value));
+            """;
+        Assert.Equal("AQID\n7\na\nb\n", Execute(Compile(source, true).SaveToBytes()));
+    }
+
+    [Fact]
+    public void ReferenceRetainingClrArrayConversionsRemainUnsupported()
+    {
+        const string source = """
+            @DotNetType("System.Array") declare class ClrArray { static sort<T>(values: T[]): void; }
+            const values: any[] = [{}]; ClrArray.sort<any>(values);
+            """;
+        var error = Assert.Throws<CompileException>(() => Compile(source, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.Contains("guest reference pass-through", error.Message);
+    }
+
+    [Fact]
+    public void IndexerAssignmentResultRetainsItsOriginalGuestRhsProvenance()
+    {
+        const string source = ConsumerSource + """
+            @DotNetType("System.Collections.Generic.List`1[System.Int32[]]")
+            declare class IntArrays { constructor(); add(value: number[]): void; [index: number]: number[]; }
+            const value: Builder = new Builder(); value.append('opaque');
+            const owned: IntArrays = new IntArrays(); owned.add([1]);
+            const guest: any[] = [];
+            const result = (owned[0] = guest);
+            const alias: ClrArrayList = ClrArrayList.adapter(result);
+            alias.add(value); console.log(result === guest, guest[0].toString());
+            """;
+        Assert.Equal("true opaque\n", Execute(Compile(source, false).SaveToBytes()));
+        var error = Assert.Throws<CompileException>(() => Compile(source, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code);
+        Assert.Contains("guest reference pass-through", error.Message);
     }
 
     private static ILCompiler CompileModule(string source, bool native) =>

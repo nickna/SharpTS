@@ -2482,7 +2482,7 @@ public partial class ILEmitter
 
         // Preserve the original boxed value for postfix semantics, then invoke the CLR
         // op_Increment/op_Decrement once and write the returned value back to the l-value.
-        EmitExpression(operand);
+        EmitExpression(operand); RecordExternalInput(operand, method.GetParameters()[0].ParameterType);
         EnsureBoxed();
         var oldValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, oldValue);
@@ -2831,6 +2831,7 @@ public partial class ILEmitter
         Expr rightExpression,
         MethodInfo method)
     {
+        _ctx.NativeClrAdmission?.RefuseUnclassifiedInput(CurrentSourceExpression);
         var parameters = method.GetParameters();
         IL.Emit(OpCodes.Ldloc, oldValue);
         EmitExternalTypeConversion(parameters[0].ParameterType);
@@ -2848,6 +2849,7 @@ public partial class ILEmitter
         LocalBuilder oldValue,
         MethodInfo method)
     {
+        _ctx.NativeClrAdmission?.RefuseUnclassifiedInput(CurrentSourceExpression);
         IL.Emit(OpCodes.Ldloc, oldValue);
         EmitExternalTypeConversion(method.GetParameters()[0].ParameterType);
         RecordExternalSelection(method, method.ReturnType);

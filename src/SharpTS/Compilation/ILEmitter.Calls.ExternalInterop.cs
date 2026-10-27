@@ -85,7 +85,7 @@ public partial class ILEmitter
 
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
-        bool isValueType = PrepareReceiverForMemberAccess(externalType);
+        bool isValueType = PrepareReceiverForMemberAccess(externalType, receiver);
         EmitExternalCallArguments(arguments, getter, candidate);
         IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, getter);
         BoxResultIfValueType(getter.ReturnType);
@@ -113,19 +113,19 @@ public partial class ILEmitter
         var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
         var candidate = resolver.ResolveMethod(setters, arguments);
         var setter = (MethodInfo)candidate.Method;
-        RecordExternalSelection(setter, typeof(void), receiver: receiver, arguments: arguments);
+        RecordExternalSelection(setter, typeof(void), NativeClrAdmission.Marshalling.OriginalAssignment, receiver: receiver, arguments: arguments);
         var parameters = setter.GetParameters();
 
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
-        bool isValueType = PrepareReceiverForMemberAccess(externalType);
+        bool isValueType = PrepareReceiverForMemberAccess(externalType, receiver);
 
-        EmitExpression(index);
+        EmitExpression(index); RecordExternalInput(index, parameters[0].ParameterType);
         EmitExternalTypeConversion(parameters[0].ParameterType);
 
         // Preserve the original TypeScript RHS as the assignment-expression result. The CLR
         // setter may narrow it (for example number -> int), but JS assignment returns the RHS.
-        EmitExpression(value);
+        EmitExpression(value); RecordExternalInput(value, parameters[1].ParameterType);
         EnsureBoxed();
         var result = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, result);
@@ -187,6 +187,8 @@ public partial class ILEmitter
 
         // Emit receiver and prepare for member access
         EmitExpression(receiver);
+        if (externalType.IsValueType && !method.DeclaringType!.IsValueType)
+            RecordExternalInput(receiver, method.DeclaringType, NativeClrAdmission.InputConversion.Receiver);
         EmitBoxIfNeeded(receiver);
         bool isValueType;
         if (externalType.IsValueType && !method.DeclaringType!.IsValueType)
@@ -200,7 +202,7 @@ public partial class ILEmitter
         }
         else
         {
-            isValueType = PrepareReceiverForMemberAccess(externalType);
+            isValueType = PrepareReceiverForMemberAccess(externalType, receiver);
         }
 
         // Emit arguments with type conversion (handles params arrays)
@@ -396,7 +398,8 @@ public partial class ILEmitter
                     }
                     else
                     {
-                        EmitExpression(arguments[argumentIndex++]);
+                        var argument = arguments[argumentIndex++];
+                        EmitExpression(argument); RecordExternalInput(argument, elementType);
                         EmitExternalTypeConversion(elementType);
                         IL.Emit(OpCodes.Stloc, local);
                     }
@@ -408,7 +411,8 @@ public partial class ILEmitter
 
                 if (argumentIndex < arguments.Count)
                 {
-                    EmitExpression(arguments[argumentIndex++]);
+                    var argument = arguments[argumentIndex++];
+                    EmitExpression(argument); RecordExternalInput(argument, parameter.ParameterType);
                     EmitExternalTypeConversion(parameter.ParameterType);
                 }
                 else
@@ -434,7 +438,8 @@ public partial class ILEmitter
                     }
                     else
                     {
-                        EmitExpression(arguments[argumentIndex++]);
+                        var argument = arguments[argumentIndex++];
+                        EmitExpression(argument); RecordExternalInput(argument, byRefElementType);
                         EmitExternalTypeConversion(byRefElementType);
                         IL.Emit(OpCodes.Stloc, local);
                     }
@@ -444,7 +449,8 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    EmitExpression(arguments[argumentIndex++]);
+                    var argument = arguments[argumentIndex++];
+                    EmitExpression(argument); RecordExternalInput(argument, parameter.ParameterType);
                     EmitExternalTypeConversion(parameter.ParameterType);
                 }
             }
@@ -465,6 +471,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Dup);                    // Duplicate array reference
                 IL.Emit(OpCodes.Ldc_I4, i);              // Push index
                 EmitExpression(arguments[argumentIndex + i]);
+                RecordExternalInput(arguments[argumentIndex + i], elementType);
 
                 // For object[], box value types but leave reference types as-is
                 if (isObjectArray)
@@ -1018,7 +1025,7 @@ public partial class ILEmitter
 
         // Evaluate handler (tsFunction) into a local.
         var tsFuncLocal = IL.DeclareLocal(_ctx.Types.Object);
-        EmitExpression(handlerExpr);
+        EmitExpression(handlerExpr); RecordExternalInput(handlerExpr, handlerDelegateType);
         EmitBoxIfNeeded(handlerExpr);
         IL.Emit(OpCodes.Stloc, tsFuncLocal);
 
@@ -1030,7 +1037,7 @@ public partial class ILEmitter
         }
         else
         {
-            EmitExpression(receiver);
+            EmitExpression(receiver); RecordExternalInput(receiver, accessor.DeclaringType!, NativeClrAdmission.InputConversion.Receiver);
             EmitBoxIfNeeded(receiver);
         }
         IL.Emit(OpCodes.Stloc, receiverLocal);
