@@ -135,6 +135,7 @@ public class EmitterSyncTests
             "get_Resolver",
             "GetHoistedVariableField", // Hoisted variable fields on state machine
             "RegisterLoopLocal",    // Loop locals stored in _locals dict instead of Ctx.Locals
+            "GetForLoopCellStorageName", // #2771: match iteration cells to analyzed binding renames that shadow a private async-function name
             "SharpTS.Compilation.Emitters.IEmitterContext.get_IL",           // IEmitterContext impl
             "SharpTS.Compilation.Emitters.IEmitterContext.SetStackUnknown", // IEmitterContext impl
             "SharpTS.Compilation.Emitters.IEmitterContext.SetStackType",   // IEmitterContext impl
