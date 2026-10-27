@@ -1,0 +1,18 @@
+cask "sharpts" do
+  version "@VERSION@"
+  sha256 "@SHA256@"
+
+  url "https://github.com/nickna/SharpTS/releases/download/v#{version}/sharpts-#{version}-osx-arm64.tar.gz"
+  name "SharpTS"
+  desc "TypeScript interpreter and compiler with the full managed feature set"
+  homepage "https://github.com/nickna/SharpTS"
+
+  livecheck do
+    skip "Updated from validated stable upstream releases"
+  end
+
+  conflicts_with cask: "sharpts-native"
+  depends_on arch: :arm64
+
+  binary "sharpts"
+end

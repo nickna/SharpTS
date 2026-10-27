@@ -86,6 +86,10 @@ jobs:
         shell: pwsh
         run: ./scripts/test-nuget-release.ps1
 
+      - name: Test Homebrew cask generation
+        shell: pwsh
+        run: ./scripts/test-homebrew-casks.ps1
+
       - name: Test initial WinGet manifest preparation
         shell: pwsh
         run: ./scripts/test-winget-manifests.ps1
@@ -174,17 +178,15 @@ jobs:
   # managed self-contained CLI handles child_process.fork it launches its own
   # Environment.ProcessPath, so the child does not require a separate SDK.
   #
-  # Runner selection: self-contained *managed* publishing is cross-RID capable,
-  # but four RIDs run on their own architecture so the published binary is
-  # executed before release (win/linux on x64 and arm64 runners). macOS
-  # binaries are cross-published (macOS runner minutes bill at 10x); the SDK
-  # ad-hoc-signs single-file Mach-O bundles during publish, but if Gatekeeper
-  # still rejects a downloaded binary, `codesign -s - sharpts` re-signs it.
+  # Every RID publishes and executes its final archive on a matching runner.
+  # Enable MACOS_CLI_SIGNING_ENABLED after configuring the protected macOS
+  # environment described in docs/homebrew-distribution.md.
   binaries:
     name: Managed SKU (${{ matrix.rid }})
     needs: build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 60
+    environment: ${{ matrix.rid == 'osx-arm64' && 'macos-cli-distribution' || 'binary-release' }}
     env:
       MinVerVersionOverride: ${{ needs.build.outputs.version }}
     strategy:
@@ -195,7 +197,7 @@ jobs:
           - { rid: win-arm64,   os: windows-11-vs2026-arm,    smoke: true }
           - { rid: linux-x64,   os: ubuntu-24.04,            smoke: true }
           - { rid: linux-arm64, os: ubuntu-24.04-arm,         smoke: true }
-          - { rid: osx-arm64,   os: ubuntu-24.04,            smoke: false }
+          - { rid: osx-arm64,   os: macos-15,                smoke: true }
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -229,6 +231,18 @@ jobs:
             -p:PlatformTarget=AnyCPU \
             -p:Version=${{ needs.build.outputs.version }} \
             -o ./sku/${{ matrix.rid }}
+
+      - name: Sign and notarize macOS CLI
+        if: matrix.rid == 'osx-arm64' && vars.MACOS_CLI_SIGNING_ENABLED == 'true'
+        shell: pwsh
+        env:
+          MACOS_DEVELOPER_ID_P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
+          MACOS_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_NOTARY_KEY_BASE64: ${{ secrets.MACOS_NOTARY_KEY_BASE64 }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: ./scripts/sign-cli-macos.ps1 -Executable ./sku/osx-arm64/SharpTS -Sku Managed -ResultsDirectory ./macos-signing-managed
 
       # Embedded-resource smoke: the interpreter and compiler both depend on
       # resources bundled into the single-file exe (stdlib/*.ts via
@@ -295,6 +309,22 @@ jobs:
               ;;
           esac
 
+      - name: Smoke test final archive
+        if: matrix.smoke
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+          RELEASE_RID: ${{ matrix.rid }}
+          REQUIRE_SIGNED: ${{ matrix.rid == 'osx-arm64' && vars.MACOS_CLI_SIGNING_ENABLED == 'true' }}
+        run: |
+          $windows = $env:RELEASE_RID.StartsWith('win-')
+          $suffix = if ($windows) { '.zip' } else { '.tar.gz' }
+          $exe = if ($windows) { 'SharpTS.exe' } else { 'SharpTS' }
+          $hash = (Get-FileHash "./sku/$($env:RELEASE_RID)/$exe" -Algorithm SHA256).Hash
+          ./scripts/test-cli-release-archive.ps1 -ArchivePath "./sharpts-$($env:RELEASE_VERSION)-$($env:RELEASE_RID)$suffix" `
+            -Sku Managed -Version $env:RELEASE_VERSION -ExpectedExecutableSha256 $hash `
+            -RequireSigned:($env:REQUIRE_SIGNED -eq 'true') -ResultsDirectory ./archive-smoke-managed
+
       - name: Upload archive artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -312,7 +342,8 @@ jobs:
     name: Native SKU (${{ matrix.rid }})
     needs: build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 60
+    environment: ${{ matrix.rid == 'osx-arm64' && 'macos-cli-distribution' || 'binary-release' }}
     env:
       MinVerVersionOverride: ${{ needs.build.outputs.version }}
     strategy:
@@ -367,6 +398,18 @@ jobs:
             -p:Version=${{ needs.build.outputs.version }} \
             -p:SharpTSManagedRuntimePayloadPath="$PWD/sku/managed-runtime/SharpTS.dll" \
             -o ./sku/${{ matrix.rid }} 2>&1 | tee native-publish-${{ matrix.rid }}.log
+
+      - name: Sign and notarize macOS CLI
+        if: matrix.rid == 'osx-arm64' && vars.MACOS_CLI_SIGNING_ENABLED == 'true'
+        shell: pwsh
+        env:
+          MACOS_DEVELOPER_ID_P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
+          MACOS_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_NOTARY_KEY_BASE64: ${{ secrets.MACOS_NOTARY_KEY_BASE64 }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: ./scripts/sign-cli-macos.ps1 -Executable ./sku/osx-arm64/SharpTS -Sku Native -ResultsDirectory ./macos-signing-native
 
       # ILC closures differ per RID; a SharpTS-owned warning that only appears on
       # one platform must fail that platform's release job, not ship silently.
@@ -520,6 +563,21 @@ jobs:
               tar -C staging -czf "sharpts-native-$VERSION-$RID.tar.gz" .
               ;;
           esac
+
+      - name: Smoke test final archive
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+          RELEASE_RID: ${{ matrix.rid }}
+          REQUIRE_SIGNED: ${{ matrix.rid == 'osx-arm64' && vars.MACOS_CLI_SIGNING_ENABLED == 'true' }}
+        run: |
+          $windows = $env:RELEASE_RID.StartsWith('win-')
+          $suffix = if ($windows) { '.zip' } else { '.tar.gz' }
+          $exe = if ($windows) { 'SharpTS.exe' } else { 'SharpTS' }
+          $hash = (Get-FileHash "./sku/$($env:RELEASE_RID)/$exe" -Algorithm SHA256).Hash
+          ./scripts/test-cli-release-archive.ps1 -ArchivePath "./sharpts-native-$($env:RELEASE_VERSION)-$($env:RELEASE_RID)$suffix" `
+            -Sku Native -Version $env:RELEASE_VERSION -ExpectedExecutableSha256 $hash `
+            -RequireSigned:($env:REQUIRE_SIGNED -eq 'true') -ResultsDirectory ./archive-smoke-native
 
       - name: Upload archive artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
