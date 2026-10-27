@@ -225,6 +225,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brtrue, copySource);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Brtrue, copySource);
         // Iterator state machines keep guest own slots in descriptor/Symbol
         // sidecars rather than the IHasFields storage used by ordinary records.
         foreach (var generatorInterface in new[] { inputs.GeneratorInterface, inputs.AsyncGeneratorInterface })
