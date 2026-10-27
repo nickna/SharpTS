@@ -6,6 +6,41 @@ namespace SharpTS.Tests.SharedTests;
 public class FunctionIntrinsicKeyChronologyTests
 {
     [Theory, ModeData]
+    public void ExplicitIntrinsicDescriptorsControlEnumerableAdmission(ExecutionMode mode)
+    {
+        const string source = """
+            for (const key of ['name', 'length']) {
+                const fn: any = () => {};
+                Object.defineProperty(fn, key, { value: 7, enumerable: true, configurable: true });
+                console.log(Object.prototype.propertyIsEnumerable.call(fn, key), JSON.stringify(Object.values(fn)),
+                    JSON.stringify(Object.entries(fn)), JSON.stringify(Object.assign({}, fn)));
+                Object.defineProperty(fn, key, { enumerable: false });
+                console.log(Object.prototype.propertyIsEnumerable.call(fn, key), JSON.stringify(Object.values(fn)),
+                    JSON.stringify(Object.entries(fn)), JSON.stringify(Object.assign({}, fn)));
+            }
+            """;
+        Assert.Equal("true [7] [[\"name\",7]] {\"name\":7}\nfalse [] [] {}\ntrue [7] [[\"length\",7]] {\"length\":7}\nfalse [] [] {}\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void CompiledIntrinsicAccessorAdmissionDoesNotInvokeItsGetter()
+    {
+        const string source = """
+            for (const key of ['name', 'length']) {
+                const fn: any = () => {};
+                let reads = 0;
+                const getter = () => { reads++; return 9; };
+                Object.defineProperty(fn, key, { get: getter, enumerable: true });
+                console.log(Object.prototype.propertyIsEnumerable.call(fn, key), reads);
+                console.log(JSON.stringify(Object.values(fn)), reads);
+                console.log(JSON.stringify(Object.entries(fn)), reads);
+                console.log(JSON.stringify(Object.assign({}, fn)), reads);
+            }
+            """;
+        Assert.Equal("true 0\n[9] 1\n[[\"name\",9]] 2\n{\"name\":9} 3\ntrue 0\n[9] 1\n[[\"length\",9]] 2\n{\"length\":9} 3\n", TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
+    [Theory, ModeData]
     public void RedefinitionKeepsIntrinsicOrderWhileRecreationMovesTheKey(ExecutionMode mode)
     {
         const string source = """

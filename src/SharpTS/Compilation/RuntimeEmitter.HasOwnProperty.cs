@@ -800,6 +800,20 @@ public partial class RuntimeEmitter
             il.MarkLabel(pieNotRegExpLastIndex);
         }
 
+        // PDS descriptor lookup. When defineProperty installed a descriptor
+        // for this name we already have the spec-correct Enumerable bit.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descLocal);
+        var noPdsLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Brfalse, noPdsLabel);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noPdsLabel);
+
         // ECMA-262 §17: built-in function .name / .length are
         // { writable:false, enumerable:false, configurable:true } — return
         // false explicitly when the receiver is a $TSFunction and the name
@@ -831,20 +845,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.MarkLabel(notFunctionBuiltinLabel);
-
-        // PDS descriptor lookup. When defineProperty installed a descriptor
-        // for this name we already have the spec-correct Enumerable bit.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, descLocal);
-        var noPdsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Brfalse, noPdsLabel);
-        il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(noPdsLabel);
 
         // Array length is a synthetic, non-enumerable own property even before
         // defineProperty attaches an explicit descriptor.
