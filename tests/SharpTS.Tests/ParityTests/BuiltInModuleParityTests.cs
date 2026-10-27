@@ -1175,19 +1175,15 @@ public class BuiltInModuleParityTests
 
     #region ChildProcess Module
 
-    [Fact]
-    public void ChildProcess_ExecSync_Echo_Parity()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ChildProcess_ExecSync_Echo_Parity(bool oversizedChildPath)
     {
-        AssertParity("""
+        string options = oversizedChildPath ? ", { env: { PATH: 'x'.repeat(9000) } }" : "";
+        AssertParity($$"""
             import { execSync } from 'child_process';
-            import * as os from 'os';
-            const platform = os.platform();
-            let result: string;
-            if (platform === 'win32') {
-                result = execSync('cmd /c echo hello');
-            } else {
-                result = execSync('echo hello');
-            }
+            const result = execSync('echo hello'{{options}});
             console.log(typeof result === 'string');
             console.log(result.length > 0);
             """);
