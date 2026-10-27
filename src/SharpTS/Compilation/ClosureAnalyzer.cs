@@ -746,6 +746,17 @@ public class ClosureAnalyzer : AstVisitorBase
 
     #region Statement visitors
 
+    protected override void VisitNamespace(Stmt.Namespace stmt)
+    {
+        EnterScope();
+        try
+        {
+            HoistFunctionDeclarations(stmt.Members, hoistOwnedVars: true);
+            base.VisitNamespace(stmt);
+        }
+        finally { ExitScope(); }
+    }
+
     protected override void VisitVar(Stmt.Var stmt)
     {
         DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: !stmt.IsVar);
