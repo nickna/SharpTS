@@ -1741,6 +1741,8 @@ public class SharpTSProxy : ISharpTSCallable
 
     public object? TrapApply(object? thisArg, List<object?> args, Interpreter? interp)
     {
+        if (!IsCallable)
+            throw new ThrowException(new SharpTSTypeError("Proxy target is not callable"));
         var trap = GetTrapCallable("apply", interp);
         if (trap == null)
         {
@@ -1772,6 +1774,8 @@ public class SharpTSProxy : ISharpTSCallable
         Func<object, object, object?[], object?> ordinaryCall,
         Func<object, string, object?> ordinaryGet)
     {
+        if (!IsCallable)
+            throw new ThrowException(new SharpTSTypeError("Proxy target is not callable"));
         var trap = GetTrapCallableCompiled("apply", ordinaryGet);
         if (trap == null)
         {
