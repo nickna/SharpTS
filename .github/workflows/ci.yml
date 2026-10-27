@@ -193,6 +193,10 @@ jobs:
         shell: pwsh
         run: ./scripts/test-nuget-release.ps1
 
+      - name: Test initial WinGet manifest preparation
+        shell: pwsh
+        run: ./scripts/test-winget-manifests.ps1
+
       - name: Test GUI version staging
         shell: pwsh
         run: ./scripts/test-gui-version.ps1

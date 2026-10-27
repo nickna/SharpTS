@@ -103,6 +103,35 @@ on native x64 and ARM64 Windows systems.
 Only enable automated updates after both initial identities are visible in the public WinGet
 catalog:
 
+Prepare initial submissions from a published stable release with:
+
+```powershell
+$releaseVersion = Read-Host 'Published stable release version, without v'
+./scripts/new-winget-manifests.ps1 -Version $releaseVersion -OutputDirectory ./artifacts/winget-initial
+```
+
+The preparer uses the GitHub CLI (`gh`) to download the four exact versioned Windows ZIPs, checks their root
+`sharpts.exe`, `LICENSE`, and `README.md`, verifies each PE architecture, and computes
+SHA-256 from the downloaded bytes. It also checks the release asset digest when
+GitHub supplies one. Use `-AssetDirectory` to validate previously downloaded copies
+against the same public release metadata. Drafts, prereleases, missing assets, URL
+mismatches, and mismatched hashes are rejected before manifests are written.
+
+Both identities receive version, `en-US` locale, and ZIP/portable installer files
+using the current [1.12.0 manifest schemas](https://learn.microsoft.com/windows/package-manager/package/manifest).
+The directories follow the `winget-pkgs` layout beneath the requested output root:
+
+- `manifests/s/SharpTS/SharpTS/<version>`
+- `manifests/s/SharpTS/SharpTS/NativeAOT/<version>`
+
+Run `winget validate --manifest <directory>` for each directory, then perform the
+installation, uninstall, switching, architecture, and sandbox checks above before
+opening the two initial upstream pull requests. Regenerating identical inputs
+preserves manifest bytes; the tool refuses to overwrite local manifest edits.
+It does not install either SKU, alter PATH, or submit anything to the catalog.
+
+After the initial submissions are accepted:
+
 1. Create a protected `winget-release` environment.
 2. Create a classic GitHub PAT with only `public_repo`; fine-grained PATs are not supported by
    WinGetCreate. Store it as the environment secret `WINGET_CREATE_GITHUB_TOKEN`. Do not grant the

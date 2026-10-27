@@ -86,6 +86,10 @@ jobs:
         shell: pwsh
         run: ./scripts/test-nuget-release.ps1
 
+      - name: Test initial WinGet manifest preparation
+        shell: pwsh
+        run: ./scripts/test-winget-manifests.ps1
+
       - name: Publish SharpTS for SDK bundling
         run: dotnet publish src/SharpTS/SharpTS.csproj --configuration Release --no-build
 
