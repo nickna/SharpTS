@@ -241,6 +241,12 @@ public partial class ILCompiler
             if (_arrowsInStaticClassContext.Contains(arrow) && captures.Contains("this")
                 && (returnType is TypeBuilder || returnType.IsConstructedGenericType))
                 returnType = _types.Object;
+            // Captured object storage can receive a checker-accepted `any`
+            // write after this function was created. Preserve the actual value
+            // unless whole-program analysis proves its numeric representation.
+            if ((returnType == _types.Double || returnType == _types.Boolean)
+                && captures.Any(name => _typeMap?.IsStableNumericCaptureField(arrow, name) != true))
+                returnType = _types.Object;
             if (arrow.IsGenerator)
                 returnType = arrow.IsAsync ? _types.IAsyncEnumerableOfObject : _types.IEnumerableOfObject;
             _closures.ArrowReturnTypes[arrow] = returnType;
