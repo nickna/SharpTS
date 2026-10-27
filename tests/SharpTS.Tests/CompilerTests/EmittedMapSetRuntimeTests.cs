@@ -77,7 +77,7 @@ public sealed class EmittedMapSetRuntimeTests
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         object owner = Activator.CreateInstance(OwnerType(family), nonPublic: true)!;
         typeof(RuntimeEmitter).GetMethod("EmitBound" + family + "MethodTypeDefinition", InstanceMembers)!
-            .Invoke(emitter, [module, owner]);
+            .Invoke(emitter, [module, owner, null]);
         foreach (string name in new[] { "BoundMethodType", "BoundMethodConstructor", "BoundMethodInvoke", "BoundReceiverField", "BoundNameField" })
             Assert.NotNull(owner.GetType().GetProperty(name)!.GetValue(owner));
         var operation = owner.GetType().GetProperty("Size")!;
