@@ -387,22 +387,18 @@ public class ObjectPrototypeTests
     }
 
     [Theory, ModeData]
-    public void SetPrototypeOf_ThrowsOnClassInstance(ExecutionMode mode)
+    public void SetPrototypeOf_ClassInstanceRetainsOwnFieldsAndUsesNewParent(ExecutionMode mode)
     {
         var source = """
             class MyClass {
                 x: number = 1;
             }
-            let obj = new MyClass();
-            let threw = false;
-            try {
-                Object.setPrototypeOf(obj, { y: 2 });
-            } catch (e) {
-                threw = true;
-            }
-            console.log(threw);
+            const obj: any = new MyClass();
+            const parent = { y: 2 };
+            console.log(Object.setPrototypeOf(obj, parent) === obj);
+            console.log(Object.getPrototypeOf(obj) === parent, obj.x, obj.y);
             """;
-        Assert.Equal("true\n", TestHarness.Run(source, mode));
+        Assert.Equal("true\ntrue 1 2\n", TestHarness.Run(source, mode));
     }
 
     // === Edge cases and interactions ===
