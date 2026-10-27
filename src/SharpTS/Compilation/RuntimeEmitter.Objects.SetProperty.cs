@@ -1041,6 +1041,22 @@ public partial class RuntimeEmitter
         // this, the assignment would fall through to SetFieldsProperty which is a
         // class-instance path that doesn't match $TSFunction.
         var tsFunctionSetLabel = il.DefineLabel();
+        var iteratorSet = il.DefineLabel();
+        var notIteratorSet = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.IEnumerator);
+        il.Emit(OpCodes.Brtrue, iteratorSet);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.MakeGenericType(typeof(IAsyncEnumerator<>), _types.Object));
+        il.Emit(OpCodes.Brfalse, notIteratorSet);
+        il.MarkLabel(iteratorSet);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, objectWrite.PropertyStrict);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notIteratorSet);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
         il.Emit(OpCodes.Brtrue, tsFunctionSetLabel);
@@ -2438,6 +2454,27 @@ public partial class RuntimeEmitter
         }
         il.Emit(OpCodes.Br, fallback);
         il.MarkLabel(metadata);
+        EmitDescriptorObjectSetStrict(il, inputs, requireDeletedBuiltin: true);
+        il.MarkLabel(fallback);
+    }
+
+    private void EmitIteratorObjectSetStrict(ILGenerator il, SetPropertyStrictInputs inputs)
+    {
+        var iterator = il.DefineLabel();
+        var fallback = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.IEnumerator);
+        il.Emit(OpCodes.Brtrue, iterator);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.MakeGenericType(typeof(IAsyncEnumerator<>), _types.Object));
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.MarkLabel(iterator);
+        EmitDescriptorObjectSetStrict(il, inputs, requireDeletedBuiltin: false);
+        il.MarkLabel(fallback);
+    }
+
+    private void EmitDescriptorObjectSetStrict(ILGenerator il, SetPropertyStrictInputs inputs, bool requireDeletedBuiltin)
+    {
         var descriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         var absent = il.DefineLabel();
         var writableOwn = il.DefineLabel();
@@ -2463,10 +2500,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(absent);
         // Initial native metadata is readonly; deletion transfers authority to
         // the live prototype, including inherited setters and readonly slots.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
-        il.Emit(OpCodes.Brfalse, reject);
+        if (requireDeletedBuiltin)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
+            il.Emit(OpCodes.Brfalse, reject);
+        }
         EmitConstructorPrototypeSetGuard(il, inputs, () =>
         {
             il.Emit(OpCodes.Ldarg_0);
@@ -2761,6 +2801,7 @@ public partial class RuntimeEmitter
         // Constructor metadata descriptors are synthesized rather than stored
         // in PDS. Strict writes must consult that same guest descriptor.
         EmitNativeMetadataSetStrict(il, inputs);
+        EmitIteratorObjectSetStrict(il, inputs);
         var notConstructorPrototype = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Type);
