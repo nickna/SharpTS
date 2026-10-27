@@ -5,8 +5,7 @@ namespace SharpTS.Tests.SharedTests;
 
 public class P2AbsentRecordDeletionTests
 {
-    // Compiled absent-property deletion has an independent strict-mode guard.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void SealedAndFrozenRecordsAllowDeletingAbsentOwnNames(ExecutionMode mode)
     {
         const string source = """

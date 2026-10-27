@@ -1163,6 +1163,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(dictLabel);
         var valueLocal = il.DeclareLocal(_types.Object);
 
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
         // Check if frozen
         il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
