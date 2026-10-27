@@ -405,7 +405,10 @@ public partial class TypeChecker
                     narrowed = new TypeInfo.Intersection([parameter, new TypeInfo.Union([TypeInfo.Object.Shared, TypeInfo.Null.Shared])]);
                 // Keep the source parameter itself, rather than manufacturing a new
                 // parameter/owner or replacing its declaration with its constraint.
-                TypeInfo excluded = projected.ExcludedType is TypeInfo.Never ? TypeInfo.Never.Shared : parameter;
+                TypeInfo excluded = projected.ExcludedType is null or TypeInfo.Never
+                    ? TypeInfo.Never.Shared
+                    : openConstraint ? parameter
+                    : new TypeInfo.Intersection([parameter, projected.ExcludedType]);
                 return negated ? (excluded, narrowed) : (narrowed, excluded);
             }
             finally { activeParameters.Remove(parameter); }
