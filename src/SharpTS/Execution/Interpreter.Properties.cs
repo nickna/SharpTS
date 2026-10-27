@@ -980,7 +980,7 @@ public partial class Interpreter
                 obj = GetRecordPrototype(so);
                 continue;
             }
-            if (obj is SharpTSInstance constructorInstance && name == "constructor")
+            if (obj is SharpTSInstance constructorInstance && !constructorInstance.UsesDynamicPrototypeChain)
             {
                 constructorInstance.SetInterpreter(this);
                 return constructorInstance.HasProperty(name);
