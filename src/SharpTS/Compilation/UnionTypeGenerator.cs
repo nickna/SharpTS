@@ -464,7 +464,6 @@ public class UnionTypeGenerator
 
         var il = method.GetILGenerator();
         var labels = new Label[valueFields.Count];
-        var endLabel = il.DefineLabel();
 
         for (int i = 0; i < valueFields.Count; i++)
             labels[i] = il.DefineLabel();
@@ -476,7 +475,7 @@ public class UnionTypeGenerator
 
         // default: return ""
         il.Emit(OpCodes.Ldstr, "");
-        il.Emit(OpCodes.Br_S, endLabel);
+        il.Emit(OpCodes.Ret);
 
         // case N: return value.ToString() (just the value, no type prefix for TypeScript semantics)
         for (int i = 0; i < valueFields.Count; i++)
@@ -493,11 +492,8 @@ public class UnionTypeGenerator
             var toStringMethod = typeof(object).GetMethod("ToString", Type.EmptyTypes)!;
             il.Emit(OpCodes.Callvirt, toStringMethod);
 
-            il.Emit(OpCodes.Br_S, endLabel);
+            il.Emit(OpCodes.Ret);
         }
-
-        il.MarkLabel(endLabel);
-        il.Emit(OpCodes.Ret);
 
         // Override object.ToString
         typeBuilder.DefineMethodOverride(method, typeof(object).GetMethod("ToString")!);
