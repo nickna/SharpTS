@@ -3226,23 +3226,8 @@ public partial class RuntimeEmitter
         var noPromisePdsDescLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, promisePdsDescLocal);
         il.Emit(OpCodes.Brfalse, noPromisePdsDescLabel);
-        var promiseDataDescLabel = il.DefineLabel();
-        var promiseGetterLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, promisePdsDescLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, promiseGetterLocal);
-        il.Emit(OpCodes.Ldloc, promiseGetterLocal);
-        il.Emit(OpCodes.Brfalse, promiseDataDescLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, promiseGetterLocal);
-        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(
-            _types.GetMethod(typeof(System.Array), "Empty"), _types.Object));
-        il.Emit(OpCodes.Call, inputs.InvokeMethodValue);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(promiseDataDescLabel);
-        il.Emit(OpCodes.Ldloc, promisePdsDescLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
-        il.Emit(OpCodes.Ret);
+        EmitDescriptorReadAndReturn(il, inputs.DescriptorStorage, promisePdsDescLocal,
+            () => il.Emit(OpCodes.Ldarg_0), inputs.InvokeMethodValue, inputs.UndefinedInstance, inputs.UndefinedType);
         il.MarkLabel(noPromisePdsDescLabel);
 
         // First, extract the underlying Task if this is a $Promise object
