@@ -42,7 +42,9 @@ public partial class RuntimeEmitter
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder GetOwnPropertyDescriptor,
         MethodBuilder HasOwnPropertyHelperMethod,
-        MethodBuilder TypeOf
+        MethodBuilder TypeOf,
+        Type ObjectStorageType,
+        Type IHasFieldsType
     );
 
     private readonly record struct DefinePropertyExistingFunctionPrototypeInputs(
@@ -216,6 +218,21 @@ public partial class RuntimeEmitter
             skipSynthExistingLabel
         );
 
+        EmitDefinePropertyExistingConstructor(
+            il,
+            new DefinePropertyExistingConstructorInputs(
+                inputs.DescriptorStorage,
+                inputs.GetOwnPropertyDescriptor,
+                inputs.HasOwnPropertyHelperMethod,
+                inputs.TypeOf,
+                inputs.ObjectStorage.Type,
+                inputs.IHasFieldsInterface
+            ),
+            propNameLocal,
+            existingDescLocal,
+            skipSynthExistingLabel
+        );
+
         var receiverIsSynthableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -253,18 +270,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
         il.Emit(OpCodes.Brtrue, receiverIsSynthableLabel);
         il.MarkLabel(notOwnStaticField);
-        EmitDefinePropertyExistingConstructor(
-            il,
-            new DefinePropertyExistingConstructorInputs(
-                inputs.DescriptorStorage,
-                inputs.GetOwnPropertyDescriptor,
-                inputs.HasOwnPropertyHelperMethod,
-                inputs.TypeOf
-            ),
-            propNameLocal,
-            existingDescLocal,
-            skipSynthExistingLabel
-        );
         var checkSynthListLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
@@ -337,28 +342,34 @@ public partial class RuntimeEmitter
         return existingDescLocal;
     }
 
-    // Constructor intrinsics are synthesized by own-descriptor lookup rather than
-    // stored in PDS until their first mutation. Preserve their reported attributes
-    // through the same validation/merge path as an explicitly stored descriptor.
+    // Callable metadata and literal accessors are reported by own-descriptor
+    // lookup before PDS stores their first mutation. Preserve those descriptors
+    // without reading a property's value through an observable getter.
     private void EmitDefinePropertyExistingConstructor(
         ILGenerator il,
-        var intrinsicCallable = il.DefineLabel();
         DefinePropertyExistingConstructorInputs inputs,
         LocalBuilder propNameLocal,
+        LocalBuilder existingDescLocal,
+        Label skipSynthExistingLabel
+    )
+    {
+        var notConstructor = il.DefineLabel();
+        var intrinsicCallable = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Brtrue, intrinsicCallable);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ObjectStorageType);
+        il.Emit(OpCodes.Brtrue, intrinsicCallable);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsType);
         il.Emit(OpCodes.Brtrue, intrinsicCallable);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.StringOpEquality);
-        LocalBuilder existingDescLocal,
-        il.MarkLabel(intrinsicCallable);
-        Label skipSynthExistingLabel
-    )
-    {
-        var notConstructor = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Type);
         il.Emit(OpCodes.Brfalse, notConstructor);
+        il.MarkLabel(intrinsicCallable);
         // A deleted or inherited member is a newly defined own property and
         // therefore retains defineProperty's default attributes.
         il.Emit(OpCodes.Ldarg_0);
@@ -380,16 +391,24 @@ public partial class RuntimeEmitter
             ("value", inputs.DescriptorStorage.DescriptorValue),
             ("writable", inputs.DescriptorStorage.DescriptorWritable),
             ("enumerable", inputs.DescriptorStorage.DescriptorEnumerable),
-            ("configurable", inputs.DescriptorStorage.DescriptorConfigurable)
+            ("configurable", inputs.DescriptorStorage.DescriptorConfigurable),
+            ("get", inputs.DescriptorStorage.DescriptorGetter),
+            ("set", inputs.DescriptorStorage.DescriptorSetter)
         })
         {
-            il.Emit(OpCodes.Ldloc, existingDescLocal);
+            var absentField = il.DefineLabel();
+            var fieldValue = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldloc, intrinsicDescriptor);
             il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "get_Item", _types.String));
-            if (name != "value")
+            il.Emit(OpCodes.Ldloca, fieldValue);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
+            il.Emit(OpCodes.Brfalse, absentField);
+            il.Emit(OpCodes.Ldloc, existingDescLocal);
+            il.Emit(OpCodes.Ldloc, fieldValue);
+            if (name is "writable" or "enumerable" or "configurable")
                 il.Emit(OpCodes.Unbox_Any, _types.Boolean);
             il.Emit(OpCodes.Callvirt, property.GetSetMethod()!);
+            il.MarkLabel(absentField);
         }
         il.Emit(OpCodes.Br, skipSynthExistingLabel);
         il.MarkLabel(notConstructor);

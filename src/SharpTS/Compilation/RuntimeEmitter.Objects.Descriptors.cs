@@ -763,6 +763,8 @@ public partial class RuntimeEmitter
         var (newIsAccessorOuter, newIsDataOuter) =
             EmitDefinePropertyDescriptorClassification(il, inputs.Errors, dictLocal, dictTryGetValue);
 
+        EmitExistingDescriptorIntegrity(il, inputs.DescriptorStorage, existingDescLocal);
+
         EmitDefinePropertyRedefinitionValidation(
             il,
             new DefinePropertyRedefinitionValidationInputs(
@@ -780,8 +782,6 @@ public partial class RuntimeEmitter
         );
 
         EmitDefinePropertyDescriptorMerge(
-        EmitExistingDescriptorIntegrity(il, inputs.DescriptorStorage, existingDescLocal);
-
             il,
             inputs.DescriptorStorage,
             dictLocal,
@@ -843,6 +843,7 @@ public partial class RuntimeEmitter
             propNameLocal,
             dictLocal,
             descriptorLocal,
+            existingDescLocal,
             dictTryGetValue
         );
         // Return the object
@@ -860,7 +861,6 @@ public partial class RuntimeEmitter
         DefinePropertyArrayLengthCoercionInputs inputs,
         LocalBuilder propNameLocal
     )
-            existingDescLocal,
     {
         // ECMA-262 10.4.2.4 ArraySetLength steps 3-4: newLen =
         // ToUint32(Desc.[[Value]]), numberLen = ToNumber(Desc.[[Value]]) —
