@@ -11,7 +11,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly record struct DescriptorKeyInputs(
-        Type FunctionType, MethodInfo GetMethodInfo, FieldInfo PropertyIdentityField);
+        Type FunctionType, MethodInfo GetMethodInfo, FieldInfo PropertyIdentityField, MethodInfo ForgetConstructorKey);
 
     /// <summary>
     /// Emits all property descriptor types: $FrozenSealedState, $PrototypeInfo,
@@ -1009,6 +1009,7 @@ public partial class RuntimeEmitter
         EmitNormalizePDSKey(il, keys, keyLocal);
 
         // if (!_descriptors.TryGetValue(key, out dict)) return true (nothing to delete)
+        il.Emit(OpCodes.Ldloc, keyLocal); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Call, keys.ForgetConstructorKey);
         il.Emit(OpCodes.Ldsfld, descriptorsField);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldloca, dictLocal);

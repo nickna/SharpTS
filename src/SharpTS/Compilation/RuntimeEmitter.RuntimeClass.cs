@@ -857,7 +857,7 @@ public partial class RuntimeEmitter
         // GetFunctionMethod / ObjectGetOwnPropertyDescriptor / DeleteIndex to
         // hide name/length on a $TSFunction after `delete fn.name`. Emitted
         // before its consumers.
-        EmitDeletedBuiltinsHelpers(typeBuilder, runtime.ObjectState);
+        EmitDeletedBuiltinsHelpers(typeBuilder, runtime.ObjectState, runtime.ObjectKeys);
         // Symbol helpers — moved before HasOwnPropertyHelper so its
         // Symbol-key arm can call IsSymbolMethod / GetSymbolDictMethod
         // (Object.prototype.hasOwnProperty must honor Symbol keys per

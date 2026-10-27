@@ -316,6 +316,9 @@ public partial class ILCompiler
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.HashSetOfString, "Remove", _types.String));
         il.Emit(OpCodes.Pop);
         il.MarkLabel(done);
+        EmitCanonicalClassConstructorValue(il, owner);
+        il.Emit(OpCodes.Ldstr, name);
+        il.Emit(OpCodes.Call, _runtime.ObjectKeys.RecordConstructorKey);
     }
 
     /// <summary>
@@ -337,9 +340,6 @@ public partial class ILCompiler
         foreach (var member in GetClassMemberRegistrations(typeBuilder))
         {
             if (capturedKeys != null && member.Builder?.IsStatic == true) continue;
-            // Constant static accessors were installed before user initialization.
-            if (member.Accessor is { IsStatic: true } && GetConstantComputedAccessorName(member.Key) != null
-                && GetNominalClassDeclaration(typeBuilder) != null) continue;
             EmitClassMemberRegistration(il, typeBuilder, member, () => EmitKey(member));
         }
         il.MarkLabel(noCapturedKeys);
@@ -378,14 +378,17 @@ public partial class ILCompiler
         if (GetNominalClassDeclaration(owner) is { } declaration)
         {
             var methods = _classes.InstanceMethods.GetValueOrDefault(owner.FullName!);
-            foreach (var method in declaration.Methods.Where(method => method.Body != null && !method.IsStatic
-                         && !method.IsPrivate && method.ComputedKey == null && method.Name.Lexeme != "constructor"))
-                if (methods?.TryGetValue(method.Name.Lexeme, out var builder) == true)
+            var staticMethods = _classes.StaticMethods.GetValueOrDefault(owner.FullName!);
+            foreach (var method in declaration.Methods.Where(method => method.Body != null
+                         && !method.IsPrivate && method.ComputedKey == null && (method.IsStatic || method.Name.Lexeme != "constructor")))
+                if ((method.IsStatic ? staticMethods : methods)?.TryGetValue(method.Name.Lexeme, out var builder) == true)
                     members.Add(new(method, null, null, new Expr.Literal(method.Name.Lexeme), builder, method.Name.SourceOrderOffset));
-            foreach (var accessor in (declaration.Accessors ?? []).Where(accessor => !accessor.IsStatic && accessor.ComputedKey == null))
+            foreach (var accessor in (declaration.Accessors ?? []).Where(accessor => accessor.ComputedKey == null))
                 if (_classes.AccessorBuilders.TryGetValue(accessor, out var builder))
                     members.Add(new(null, accessor, null, new Expr.Literal(accessor.Name.Lexeme), builder, accessor.Name.SourceOrderOffset));
             foreach (var source in _receiverAutoAccessors.Where(entry => ReferenceEquals(entry.Value.Owner, owner)).Select(entry => entry.Key))
+                members.Add(new(null, null, source, new Expr.Literal(source.Name.Lexeme), null, source.Name.SourceOrderOffset));
+            foreach (var source in (declaration.AutoAccessors ?? []).Where(accessor => accessor.IsStatic))
                 members.Add(new(null, null, source, new Expr.Literal(source.Name.Lexeme), null, source.Name.SourceOrderOffset));
         }
         return members.OrderBy(member => member.Position);
@@ -396,7 +399,10 @@ public partial class ILCompiler
     {
         if (member.AutoAccessor is { } autoAccessor)
         {
-            EmitReceiverAutoAccessorDescriptors(il, owner, autoAccessor, descriptorOwner);
+            if (autoAccessor.IsStatic)
+                EmitStaticAutoAccessorDescriptor(il, owner, autoAccessor, descriptorOwner == null ? null
+                    : () => EmitCanonicalClassConstructorValue(il, descriptorOwner));
+            else EmitReceiverAutoAccessorDescriptors(il, owner, autoAccessor, descriptorOwner);
             return;
         }
         var key = il.DeclareLocal(_types.Object);
@@ -412,7 +418,7 @@ public partial class ILCompiler
         if (CanOwnDeclaredSymbolMethodValue(owner))
         {
             EmitDeclaredComputedMethodDescriptor(il, owner, method, member.Builder!, key, descriptorOwner,
-                sourceOrdered: !method.IsStatic);
+                sourceOrdered: true);
             il.Emit(OpCodes.Ldloc, key); il.Emit(OpCodes.Isinst, _runtime.Symbols.Type);
             il.Emit(OpCodes.Brtrue, done);
         }

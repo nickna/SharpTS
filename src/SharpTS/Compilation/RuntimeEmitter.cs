@@ -306,7 +306,7 @@ public partial class RuntimeEmitter
         // only on helper types emitted above.
         EmitPropertyDescriptorTypes(moduleBuilder, runtime.DescriptorStorage,
             new DescriptorKeyInputs(runtime.FunctionValues.Type, runtime.FunctionValues.GetMethodInfo,
-                runtime.FunctionValues.PropertyIdentityField),
+                runtime.FunctionValues.PropertyIdentityField, runtime.ObjectKeys.ForgetConstructorKey),
             runtime.Sentinels.UndefinedType);
 
         // Emit $Array class for standalone array support

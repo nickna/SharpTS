@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 
 namespace SharpTS.Compilation;
 
@@ -24,7 +25,57 @@ public partial class RuntimeEmitter
         keys.ClassStaticPropertyConstructor = constructor;
         keys.ClassStaticPropertyName = name;
         keys.ClassStaticPropertyEnumerable = enumerable;
-        type.CreateType();
+        var tableType = typeof(ConditionalWeakTable<object, List<object>>);
+        var order = type.DefineField("CreationOrder", tableType, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        keys.ConstructorCreationOrder = order;
+        var initialize = type.DefineTypeInitializer().GetILGenerator();
+        initialize.Emit(OpCodes.Newobj, tableType.GetConstructor(Type.EmptyTypes)!);
+        initialize.Emit(OpCodes.Stsfld, order); initialize.Emit(OpCodes.Ret);
+        keys.RecordConstructorKey = type.DefineMethod("RecordKey", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void, [_types.Object, _types.String]);
+        keys.ForgetConstructorKey = type.DefineMethod("ForgetKey", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void, [_types.Object, _types.String]);
+        var forget = keys.ForgetConstructorKey.GetILGenerator();
+        var list = forget.DeclareLocal(_types.ListOfObject);
+        var done = forget.DefineLabel();
+        forget.Emit(OpCodes.Ldarg_0); forget.Emit(OpCodes.Brfalse, done);
+        forget.Emit(OpCodes.Ldsfld, order); forget.Emit(OpCodes.Ldarg_0); forget.Emit(OpCodes.Ldloca, list);
+        forget.Emit(OpCodes.Callvirt, _types.GetMethod(tableType, "TryGetValue", _types.Object, _types.ListOfObject.MakeByRefType()));
+        forget.Emit(OpCodes.Brfalse, done);
+        forget.Emit(OpCodes.Ldloc, list); forget.Emit(OpCodes.Ldarg_1);
+        forget.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Remove", _types.Object)); forget.Emit(OpCodes.Pop);
+        forget.MarkLabel(done); forget.Emit(OpCodes.Ret);
+    }
+
+    private void EmitClassConstructorKeyRecording(EmittedObjectKeysRuntime keys, EmittedDescriptorStorageRuntime descriptors)
+    {
+        var il = keys.RecordConstructorKey.GetILGenerator();
+        var list = il.DeclareLocal(_types.ListOfObject);
+        var extras = il.DeclareLocal(_types.ListOfObject);
+        var key = il.DeclareLocal(_types.Object);
+        var index = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldsfld, keys.ConstructorCreationOrder); il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(keys.ConstructorCreationOrder.FieldType, "GetOrCreateValue", _types.Object));
+        il.Emit(OpCodes.Stloc, list);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Call, descriptors.GetAllExtraKeys); il.Emit(OpCodes.Stloc, extras);
+        var loop = il.DefineLabel(); var next = il.DefineLabel(); var end = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(loop); il.Emit(OpCodes.Ldloc, index); il.Emit(OpCodes.Ldloc, extras);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Count")); il.Emit(OpCodes.Bge, end);
+        il.Emit(OpCodes.Ldloc, extras); il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32)); il.Emit(OpCodes.Stloc, key);
+        AddUnique(next);
+        il.MarkLabel(next); il.Emit(OpCodes.Ldloc, index); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, index); il.Emit(OpCodes.Br, loop);
+        il.MarkLabel(end); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Stloc, key);
+        var complete = il.DefineLabel(); AddUnique(complete); il.MarkLabel(complete); il.Emit(OpCodes.Ret);
+        ((TypeBuilder)keys.ClassStaticPropertyType).CreateType();
+        void AddUnique(Label skip)
+        {
+            il.Emit(OpCodes.Ldloc, list); il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Contains", _types.Object)); il.Emit(OpCodes.Brtrue, skip);
+            il.Emit(OpCodes.Ldloc, list); il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        }
     }
 
     // Null means this is not a nominal source constructor. Existing carrier
@@ -33,6 +84,7 @@ public partial class RuntimeEmitter
         EmittedDescriptorStorageRuntime descriptors, EmittedObjectStateRuntime state,
         EmittedFunctionAttributesRuntime functions, Type fieldsInterface)
     {
+        EmitClassConstructorKeyRecording(keys, descriptors);
         var method = runtime.DefineMethod("GetClassConstructorKeys", MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject, [_types.Object, _types.Boolean]);
         keys.ConstructorKeys = method;
@@ -64,6 +116,23 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Box, _types.Boolean); il.Emit(OpCodes.Callvirt, setCandidate);
         }
         var index = il.DeclareLocal(_types.Int32);
+        var recorded = il.DeclareLocal(_types.ListOfObject);
+        var noRecorded = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, keys.ConstructorCreationOrder); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloca, recorded);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(keys.ConstructorCreationOrder.FieldType, "TryGetValue", _types.Object, _types.ListOfObject.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, noRecorded);
+        var recordedLoop = il.DefineLabel(); var recordedNext = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(recordedLoop); il.Emit(OpCodes.Ldloc, index); il.Emit(OpCodes.Ldloc, recorded);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Count")); il.Emit(OpCodes.Bge, noRecorded);
+        il.Emit(OpCodes.Ldloc, candidates); il.Emit(OpCodes.Ldloc, recorded); il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32)); il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String)); il.Emit(OpCodes.Brtrue, recordedNext);
+        il.Emit(OpCodes.Ldloc, candidates); il.Emit(OpCodes.Ldloc, recorded); il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32)); il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Box, _types.Boolean); il.Emit(OpCodes.Callvirt, setCandidate);
+        il.MarkLabel(recordedNext); il.Emit(OpCodes.Ldloc, index); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, index); il.Emit(OpCodes.Br, recordedLoop);
+        il.MarkLabel(noRecorded);
         // Evaluated computed names and expandos are already stored under their
         // JavaScript keys. Synthetic CLR backing fields/methods are unmarked.
         var extras = il.DeclareLocal(_types.ListOfObject); var key = il.DeclareLocal(_types.String);

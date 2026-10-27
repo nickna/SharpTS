@@ -157,14 +157,6 @@ public sealed class ClassConstructorOwnKeyReflectionTests
 
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
         new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
-            .Where(mode => mode == ExecutionMode.Interpreted || (string)row[0] switch
-            {
-                // #2635 owns declared and recreated constructor key ordering.
-                "definition-order-and-static-initialization" or "expando-deletion-recreation-order" => false,
-                // #2637: compiled enumeration reads later keys after their descriptors change.
-                "snapshots-and-live-enumerable-descriptors" => false,
-                _ => true
-            })
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(ModeCases))]

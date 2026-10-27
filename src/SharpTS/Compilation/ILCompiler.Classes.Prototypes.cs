@@ -280,30 +280,7 @@ public partial class ILCompiler
         }
 
         var nominalDeclaration = GetNominalClassDeclaration(typeBuilder);
-        if (nominalDeclaration != null)
-        {
-            var staticMembers = nominalDeclaration.Methods
-                .Where(method => method.IsStatic && !method.IsPrivate && method.Body != null && method.ComputedKey == null)
-                .Cast<Stmt>().Concat((nominalDeclaration.Accessors ?? []).Where(accessor => accessor.IsStatic))
-                .Concat((nominalDeclaration.AutoAccessors ?? []).Where(accessor => accessor.IsStatic))
-                .OrderBy(member => member switch
-                {
-                    Stmt.Function method => method.Name.SourceOrderOffset,
-                    Stmt.Accessor accessor => accessor.Name.SourceOrderOffset,
-                    Stmt.AutoAccessor accessor => accessor.Name.SourceOrderOffset,
-                    _ => 0
-                });
-            foreach (var member in staticMembers)
-            {
-                if (member is Stmt.Function method && staticMethods?.TryGetValue(method.Name.Lexeme, out var builder) == true)
-                    EmitStaticDataDescriptor(method.Name.Lexeme, builder);
-                else if (member is Stmt.Accessor accessor)
-                    EmitKnownDeclaredAccessorDescriptors(il, typeBuilder, staticOnly: true, selected: accessor);
-                else if (member is Stmt.AutoAccessor autoAccessor)
-                    EmitStaticAutoAccessorDescriptor(il, typeBuilder, autoAccessor);
-            }
-        }
-        else if (staticMethods != null)
+        if (nominalDeclaration == null && staticMethods != null)
         {
             foreach (var (methodName, methodBuilder) in staticMethods)
             {
@@ -314,7 +291,8 @@ public partial class ILCompiler
             }
         }
 
-        // Instance methods/accessors share the later source-ordered installer.
+        // Nominal members share the later source-ordered installer, including
+        // computed static members whose names are captured by a registrar.
         // Expression definitions likewise install on their owned prototype.
         if (nominalDeclaration == null)
             EmitKnownDeclaredAccessorDescriptors(il, typeBuilder, staticOnly: true);

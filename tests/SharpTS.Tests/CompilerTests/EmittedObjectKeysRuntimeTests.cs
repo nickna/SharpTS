@@ -48,7 +48,7 @@ public sealed class EmittedObjectKeysRuntimeTests
         var first = new EmittedRuntime(); var second = new EmittedRuntime();
         Assert.NotSame(first.ObjectKeys, second.ObjectKeys);
         Assert.False(first.ObjectKeys.IsComplete); Assert.False(second.ObjectKeys.IsComplete);
-        Assert.Equal(11, Handles(typeof(EmittedObjectKeysRuntime)).Length);
+        Assert.Equal(16, Handles(typeof(EmittedObjectKeysRuntime)).Length);
         Assert.Null(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.ObjectKeys))!.SetMethod);
     }
 
