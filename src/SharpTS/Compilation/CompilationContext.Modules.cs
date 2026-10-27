@@ -148,6 +148,20 @@ public partial class CompilationContext
         return null;
     }
 
+    internal FieldBuilder? ResolveNamespaceVariableField(string name)
+    {
+        if (CurrentNamespacePath == null || NamespaceVarFields == null) return null;
+        string? path = CurrentNamespacePath;
+        while (path != null)
+        {
+            if (NamespaceVarFields.TryGetValue(path, out var fields)
+                && fields.TryGetValue(name, out var field)) return field;
+            int separator = path.LastIndexOf('.');
+            path = separator < 0 ? null : path[..separator];
+        }
+        return null;
+    }
+
     /// <summary>
     /// Gets the sanitized module name with caching to avoid repeated string operations.
     /// </summary>

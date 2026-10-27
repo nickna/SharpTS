@@ -34,6 +34,7 @@ public class ClosureAnalyzer : AstVisitorBase
     // Stack of scopes - each scope tracks variables declared at that level
     private readonly Stack<HashSet<string>> _scopeStack = new();
     private readonly Dictionary<HashSet<string>, object?> _scopeOwners = [];
+    private readonly HashSet<HashSet<string>> _namespaceScopes = [];
 
     // Current function being analyzed (for tracking captures)
     private object? _currentFunction;
@@ -480,6 +481,15 @@ public class ClosureAnalyzer : AstVisitorBase
         if (name is "console.log" or "console" or "undefined" or "NaN" or "Infinity" or "Symbol")
             return;
 
+        // Namespace members have namespace-owned static storage. Treating them
+        // as module captures can select an unrelated same-spelled module field.
+        foreach (var scope in _scopeStack)
+            if (scope.Contains(name))
+            {
+                if (_namespaceScopes.Contains(scope)) return;
+                break;
+            }
+
         // Check for self-reference in named function expressions
         // This needs to happen BEFORE the local variable check
         if (name == _currentFunctionName)
@@ -749,12 +759,18 @@ public class ClosureAnalyzer : AstVisitorBase
     protected override void VisitNamespace(Stmt.Namespace stmt)
     {
         EnterScope();
+        var namespaceScope = _scopeStack.Peek();
+        _namespaceScopes.Add(namespaceScope);
         try
         {
             HoistFunctionDeclarations(stmt.Members, hoistOwnedVars: true);
             base.VisitNamespace(stmt);
         }
-        finally { ExitScope(); }
+        finally
+        {
+            _namespaceScopes.Remove(namespaceScope);
+            ExitScope();
+        }
     }
 
     protected override void VisitVar(Stmt.Var stmt)

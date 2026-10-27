@@ -217,6 +217,12 @@ public class LocalVariableResolver : IVariableResolver
             return MapTypeToStackType(field.FieldType);
         }
 
+        if (_ctx.ResolveNamespaceVariableField(name) is { } namespaceField)
+        {
+            _il.Emit(OpCodes.Ldsfld, namespaceField);
+            return MapTypeToStackType(namespaceField.FieldType);
+        }
+
         // 5. Entry-point display class fields (captured top-level vars)
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
@@ -555,6 +561,12 @@ public class LocalVariableResolver : IVariableResolver
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldloc, temp);
             _il.Emit(OpCodes.Stfld, field);
+            return true;
+        }
+
+        if (_ctx.ResolveNamespaceVariableField(name) is { } namespaceField)
+        {
+            _il.Emit(OpCodes.Stsfld, namespaceField);
             return true;
         }
 
