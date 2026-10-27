@@ -697,242 +697,25 @@ public partial class RuntimeEmitter
     private void EmitParseIntHelper(TypeBuilder typeBuilder, EmittedNumberRuntime numbers,
         EmittedStringCoercionRuntime stringCoercion, MethodInfo jsToInt32)
     {
-        // Helper method that implements parseInt logic
-        var method = typeBuilder.DefineMethod(
-            "ParseIntHelper",
+        var method = typeBuilder.DefineMethod("ParseIntHelper",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.Double,
-            [_types.Object, _types.Object]
-        );
+            _types.Double, [_types.Object, _types.Object]);
         numbers.ParseIntHelper = method;
-
         var il = method.GetILGenerator();
-        var rawStrLocal = il.DeclareLocal(_types.String);
-        var strLocal = il.DeclareLocal(_types.String);
-        var radixLocal = il.DeclareLocal(_types.Int32);
-        var signLocal = il.DeclareLocal(_types.Int32);
-        var startIndexLocal = il.DeclareLocal(_types.Int32);
-        var resultLocal = il.DeclareLocal(_types.Int64);
-
-        var checkHexLabel = il.DefineLabel();
-        var noHexPrefixLabel = il.DefineLabel();
-        var validateRadixLabel = il.DefineLabel();
-        var parseLoopLabel = il.DefineLabel();
-        var loopBodyLabel = il.DefineLabel();
-        var endLoopLabel = il.DefineLabel();
-        var returnResultLabel = il.DefineLabel();
-        var nonDecimalRadixLabel = il.DefineLabel();
-
-        // Apply ECMAScript ToString before parsing. In particular, JavaScript
-        // stringifies negative zero as "0" (where Double.ToString() yields
-        // "-0"), and object arguments must observe their coercion hooks.
+        var text = il.DeclareLocal(_types.String);
+        // Input ToString precedes radix ToInt32, including observable hooks.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, stringCoercion.ToJsString);
-        il.Emit(OpCodes.Stloc, rawStrLocal);
-        EmitParseIntTrimStart(il, () => il.Emit(OpCodes.Ldloc, rawStrLocal));
-        il.Emit(OpCodes.Stloc, strLocal);
-
-        // ToInt32(radix) follows input ToString even when parsing will find no digits.
-        // Reuse ToNumber/ToPrimitive and the finite, truncating modulo-2^32 conversion.
+        il.Emit(OpCodes.Stloc, text);
+        var radix = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, jsToInt32);
-        il.Emit(OpCodes.Stloc, radixLocal);
-
-        // Check for empty string
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
-        var notEmptyLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, notEmptyLabel);
-        il.Emit(OpCodes.Ldc_R8, double.NaN);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notEmptyLabel);
-
-        // Initialize sign = 1, startIndex = 0
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stloc, signLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, startIndexLocal);
-
-        // Check for sign
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
-        il.Emit(OpCodes.Ldc_I4, (int)'-');
-        var notMinusLabel = il.DefineLabel();
-        il.Emit(OpCodes.Bne_Un, notMinusLabel);
-        il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Stloc, signLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stloc, startIndexLocal);
-        il.Emit(OpCodes.Br, checkHexLabel);
-
-        il.MarkLabel(notMinusLabel);
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
-        il.Emit(OpCodes.Ldc_I4, (int)'+');
-        var notPlusLabel = il.DefineLabel();
-        il.Emit(OpCodes.Bne_Un, notPlusLabel);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stloc, startIndexLocal);
-
-        il.MarkLabel(notPlusLabel);
-
-        // Check for 0x prefix (only if radix is 0 or 16)
-        il.MarkLabel(checkHexLabel);
-        il.Emit(OpCodes.Ldloc, radixLocal);
-        var stripHexPrefixLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, stripHexPrefixLabel);
-        il.Emit(OpCodes.Ldloc, radixLocal);
-        il.Emit(OpCodes.Ldc_I4, 16);
-        il.Emit(OpCodes.Bne_Un, validateRadixLabel);
-        il.MarkLabel(stripHexPrefixLabel);
-
-        // A hexadecimal prefix is stripped for both inferred and explicit radix 16.
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldloc, startIndexLocal);
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Add);
-        var noRoomForHexLabel = il.DefineLabel();
-        il.Emit(OpCodes.Blt, noRoomForHexLabel);
-
-        // Check if str[startIndex] == '0' && (str[startIndex+1] == 'x' || str[startIndex+1] == 'X')
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Ldloc, startIndexLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
-        il.Emit(OpCodes.Ldc_I4, (int)'0');
-        il.Emit(OpCodes.Bne_Un, noRoomForHexLabel);
-
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Ldloc, startIndexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
-        var charLocal = il.DeclareLocal(_types.Char);
-        il.Emit(OpCodes.Stloc, charLocal);
-        il.Emit(OpCodes.Ldloc, charLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)'x');
-        var isHexLabel = il.DefineLabel();
-        il.Emit(OpCodes.Beq, isHexLabel);
-        il.Emit(OpCodes.Ldloc, charLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)'X');
-        il.Emit(OpCodes.Bne_Un, noRoomForHexLabel);
-
-        il.MarkLabel(isHexLabel);
-        il.Emit(OpCodes.Ldc_I4, 16);
-        il.Emit(OpCodes.Stloc, radixLocal);
-        il.Emit(OpCodes.Ldloc, startIndexLocal);
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, startIndexLocal);
-        il.Emit(OpCodes.Br, validateRadixLabel);
-
-        il.MarkLabel(noRoomForHexLabel);
-        // Default to radix 10 if no hex prefix found
-        il.Emit(OpCodes.Ldloc, radixLocal);
-        il.Emit(OpCodes.Brtrue, validateRadixLabel);
-        il.Emit(OpCodes.Ldc_I4, 10);
-        il.Emit(OpCodes.Stloc, radixLocal);
-
-        // Validate radix 2-36
-        il.MarkLabel(validateRadixLabel);
-        il.Emit(OpCodes.Ldloc, radixLocal);
-        il.Emit(OpCodes.Ldc_I4_2);
-        var radixValidLabel = il.DefineLabel();
-        il.Emit(OpCodes.Bge, radixValidLabel);
-        il.Emit(OpCodes.Ldc_R8, double.NaN);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(radixValidLabel);
-        il.Emit(OpCodes.Ldloc, radixLocal);
-        il.Emit(OpCodes.Ldc_I4, 36);
-        var radixNotTooLargeLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ble, radixNotTooLargeLabel);
-        il.Emit(OpCodes.Ldc_R8, double.NaN);
-        il.Emit(OpCodes.Ret);
-
-        // Parse digits: result = 0, iterate through string
-        il.MarkLabel(radixNotTooLargeLabel);
-        il.Emit(OpCodes.Ldloc, radixLocal);
-        il.Emit(OpCodes.Ldc_I4_S, (sbyte)10);
-        il.Emit(OpCodes.Bne_Un, nonDecimalRadixLabel);
-        il.Emit(OpCodes.Ldloc, rawStrLocal);
-        il.Emit(OpCodes.Call, numbers.ParseIntDecimalString);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(nonDecimalRadixLabel);
-        il.Emit(OpCodes.Ldc_I8, 0L);
-        il.Emit(OpCodes.Stloc, resultLocal);
-
-        var indexLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldloc, startIndexLocal);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        var hasDigitsLocal = il.DeclareLocal(_types.Boolean);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, hasDigitsLocal);
-
-        il.MarkLabel(parseLoopLabel);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
-        il.Emit(OpCodes.Bge, endLoopLabel);
-
-        // Get digit value
-        var digitLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
-        il.Emit(OpCodes.Call, numbers.GetDigitValue); // Helper to get digit value
-        il.Emit(OpCodes.Stloc, digitLocal);
-
-        // Check if digit is valid for this radix
-        il.Emit(OpCodes.Ldloc, digitLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, endLoopLabel); // Invalid digit, stop
-
-        il.Emit(OpCodes.Ldloc, digitLocal);
-        il.Emit(OpCodes.Ldloc, radixLocal);
-        il.Emit(OpCodes.Bge, endLoopLabel); // Digit >= radix, stop
-
-        // result = result * radix + digit
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, radixLocal);
-        il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Mul);
-        il.Emit(OpCodes.Ldloc, digitLocal);
-        il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, resultLocal);
-
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stloc, hasDigitsLocal);
-
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, parseLoopLabel);
-
-        il.MarkLabel(endLoopLabel);
-
-        // If no digits parsed, return NaN
-        il.Emit(OpCodes.Ldloc, hasDigitsLocal);
-        il.Emit(OpCodes.Brtrue, returnResultLabel);
-        il.Emit(OpCodes.Ldc_R8, double.NaN);
-        il.Emit(OpCodes.Ret);
-
-        // Return sign * result
-        il.MarkLabel(returnResultLabel);
-        il.Emit(OpCodes.Ldloc, signLocal);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Stloc, radix);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Ldloc, radix);
+        il.Emit(OpCodes.Call, numbers.ParseIntString);
         il.Emit(OpCodes.Ret);
     }
-
     private void EmitGetDigitValue(TypeBuilder typeBuilder, EmittedNumberRuntime numbers)
     {
         // Returns digit value for character, or -1 if invalid
