@@ -831,6 +831,7 @@ public partial class RuntimeEmitter
                 runtime.RequireAsyncGenerators().RequireFromSync(),
                 new AsyncFromSyncIteratorSupportInputs(
                     runtime.Generators,
+                    runtime.Errors,
                     runtime.IteratorProtocol.Done,
                     runtime.IteratorProtocol.Function,
                     runtime.IteratorRecords.NextMethod,
