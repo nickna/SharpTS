@@ -209,8 +209,17 @@ exception effects when CLR code is present. An otherwise unrelated dynamic opera
 be refused when the compilation also contains CLR effects. Known pure source
 calls and their checked aliases retain ordinary guest catch behavior. Callback signatures are checked using
 their actual boxing/materialization convention; opaque reference, unsupported
-boxed-struct and by-ref callback slots are refused. Uncatalogued member-provider
-operations on a proven CLR origin remain unsupported. Ordinary guest objects,
+boxed-struct and by-ref callback slots are refused. Known selected CLR effects
+also flow through checked source callees in a separate fixed point. Effectful
+async/generator bodies and class/accessor/initializer owners are unimplemented
+in this first profile. An effectful synchronous source callable can be used only
+as a known direct source callee or through immutable checked aliases whose uses
+remain direct; callback arguments, returns/exports, containers and dynamic
+call/apply/bind wrappers refuse independently of typed CLR argument admission.
+This covers Promise executors/rejection handlers and EventEmitter capture-rejection
+listeners, whose exceptional payloads do not enter through source catch syntax.
+Guest-only and unrelated pure async callbacks/rejections remain guest values.
+Uncatalogued member-provider operations on a proven CLR origin remain unsupported. Ordinary guest objects,
 callbacks, catches, `any`, computed names and Symbol keys retain guest semantics.
 
 The proof owner stays open during source emission, then freezes before native

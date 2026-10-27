@@ -149,6 +149,7 @@ internal sealed partial class NativeClrAdmission
     {
         EnsureOpen();
         foreach (var expression in _opaque) CheckUse(expression, new(ReferenceEqualityComparer.Instance));
+        CheckExceptionalCallableIngress();
         CheckExceptionIngress();
         _complete = true;
         ThrowIfIncompatible();

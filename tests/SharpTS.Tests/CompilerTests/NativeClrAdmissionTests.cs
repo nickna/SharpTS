@@ -212,7 +212,7 @@ public class NativeClrAdmissionTests
     public void ExceptionalClrIngressSurvivesSourceCallsAliasesAndCallbacks(string body)
     {
         var error = Assert.Throws<CompileException>(() => Compile(Builder + body, true));
-        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.Contains("catch binding", error.Message);
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.True(error.Message.Contains("catch binding") || error.Message.Contains("source callable"));
     }
 
     [Fact]
@@ -267,6 +267,139 @@ public class NativeClrAdmissionTests
         using var stream = new MemoryStream(compiler.SaveToBytes());
         using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
         Assert.Empty(verifier.Verify(stream));
+    }
+
+    private const string ExceptionSource = Builder + """
+        @DotNetType("System.Collections.IDictionary")
+        declare class Dictionary { add(key: any, value: any): void; }
+        @DotNetType("System.Exception")
+        declare class HostException { constructor(message: string); data: Dictionary; }
+        @DotNetType("System.Runtime.ExceptionServices.ExceptionDispatchInfo")
+        declare class Dispatch { static capture(error: HostException): Dispatch; throw(): void; }
+        function fail() {
+            const value: Builder = new Builder(); value.append('opaque');
+            const error: HostException = new HostException('test');
+            const data: Dictionary = error.data; data.add('__tsValue', value);
+            Dispatch.capture(error).throw();
+        }
+        """;
+
+    [Theory]
+    [InlineData("async function run() { fail(); } run().catch(reason => console.log('reason', reason.toString()));", "reason opaque\n")]
+    [InlineData("new Promise((resolve, reject) => fail()).catch(reason => console.log('executor', reason.toString()));", "executor opaque\n")]
+    [InlineData("Promise.resolve(1).then(fail).catch(reason => console.log('then', reason.toString()));", "then opaque\n")]
+    public void PromiseRejectionIngressCannotEraseKnownClrExceptionalEffects(string body, string expected)
+    {
+        string source = ExceptionSource + body;
+        Assert.Equal(expected, Execute(Compile(source, false).SaveToBytes()));
+        var error = Assert.Throws<CompileException>(() => Compile(source, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code);
+        Assert.Contains("exceptional", error.Message);
+    }
+
+    [Theory]
+    [InlineData(true, "event opaque\n")]
+    [InlineData(false, "raw test\n")]
+    public void EventEmitterCaptureRejectionsCannotAdmitClrMetadataOrRawExceptions(bool metadata, string expected)
+    {
+        string source = ExceptionSource;
+        if (!metadata) source = source.Replace("data.add('__tsValue', value);", "");
+        source += """
+            import { EventEmitter } from 'node:events';
+            const emitter = new EventEmitter({ captureRejections: true });
+            """ + (metadata
+                ? "emitter.on('error', reason => console.log('event', reason.toString()));"
+                : "emitter.on('error', reason => console.log('raw', reason.message));") + """
+            emitter.on('run', async () => { fail(); }); emitter.emit('run');
+            """;
+        Assert.Equal(expected, Execute(CompileModule(source, false).SaveToBytes()));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape,
+            Assert.Throws<CompileException>(() => CompileModule(source, true)).Diagnostic.Code);
+    }
+
+    [Theory]
+    [InlineData("async function run() { fail(); } run();")]
+    [InlineData("function* run() { fail(); yield 1; } run();")]
+    [InlineData("const callback = () => fail(); Promise.resolve(1).then(callback);")]
+    [InlineData("const callback = fail; const callbacks = [callback];")]
+    [InlineData("const value = { run: fail };")]
+    [InlineData("function wrap() { return () => fail(); } wrap();")]
+    [InlineData("const callback = fail.bind(null);")]
+    [InlineData("fail.call(null);")]
+    [InlineData("fail.apply(null, []);")]
+    [InlineData("class Owner { run() { fail(); } } new Owner();")]
+    [InlineData("class Owner { get value() { fail(); return 1; } } new Owner();")]
+    [InlineData("class Owner { value = (() => { fail(); return 1; })(); } new Owner();")]
+    [InlineData("@DotNetType(\"System.Threading.Thread\") declare class ClrThread { constructor(fn: () => void); } new ClrThread(fail);")]
+    public void EffectfulCallableValuesDoNotReuseTypedArgumentAdmission(string body)
+    {
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape,
+            Assert.Throws<CompileException>(() => Compile(ExceptionSource + body, true)).Diagnostic.Code);
+    }
+
+    [Fact]
+    public void GuestAndUnrelatedPureAsyncCallbacksRemainGuestOnly()
+    {
+        const string source = """
+            const value: Builder = new Builder(); value.append('bcl');
+            async function pure() { return 4; }
+            const alias: any = pure;
+            Promise.resolve(1).then(async () => 5).then(v => console.log('callback', v));
+            alias().then(v => console.log('pure', v));
+            new Promise((resolve, reject) => reject({ x: 6 })).catch(e => console.log('guest', e.x));
+            """;
+        Assert.Equal("pure 4\nguest 6\ncallback 5\n", Execute(Compile(Builder + source, true).SaveToBytes()));
+    }
+
+    [Fact]
+    public void SharedOriginalCallableUseCannotBorrowItsFirstImmutableAliasProof()
+    {
+        var statements = new Parser(new Lexer(Builder + "function fail() { new Builder(); } const alias = fail; [fail];").ScanTokens(), DecoratorMode.Legacy).ParseOrThrow();
+        var alias = statements.OfType<Stmt.Const>().Single();
+        var array = Assert.IsType<Expr.ArrayLiteral>(Assert.IsType<Stmt.Expression>(statements[^1]).Expr);
+        array.Elements[0] = alias.Initializer;
+        var checker = new TypeChecker(); checker.SetDecoratorMode(DecoratorMode.Legacy); var types = checker.Check(statements);
+        var compiler = new ILCompiler("native_clr_shared_callable", false, true, null, null, null, OutputTarget.Dll);
+        compiler.EnableNativeAotProjectOutput();
+        var error = Assert.Throws<CompileException>(() => compiler.Compile(statements, types));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.Contains("shared original", error.Message);
+    }
+
+    [Fact]
+    public void MixedProgramGuestEventRejectionsAndGeneratorsRemainGuestValues()
+    {
+        const string source = """
+            import { EventEmitter } from 'node:events';
+            const value: Builder = new Builder(); value.append('bcl');
+            const emitter = new EventEmitter({ captureRejections: true });
+            emitter.on('error', reason => console.log('guest event', reason.x));
+            emitter.on('run', async () => { throw { x: 6 }; }); emitter.emit('run');
+            function* pure() { yield 4; }
+            console.log('generator', pure().next().value);
+            """;
+        Assert.Equal("generator 4\nguest event 6\n", Execute(CompileModule(Builder + source, true).SaveToBytes()));
+    }
+
+    [Fact]
+    public void EffectfulSynchronousCheckedAliasCanStillBeCalledDirectly()
+    {
+        const string source = """
+            function run() { const value: Builder = new Builder(); value.append('typed'); return value.toString(); }
+            const alias: any = run;
+            console.log(alias());
+            """;
+        Assert.Equal("typed\n", Execute(Compile(Builder + source, true).SaveToBytes()));
+    }
+
+    private static ILCompiler CompileModule(string source, bool native)
+    {
+        const string entry = "/native-clr/exceptional.ts";
+        var resolver = new ModuleResolver(entry, new Dictionary<string, string> { [entry] = source });
+        var modules = resolver.GetModulesInOrder(resolver.LoadModule(entry, DecoratorMode.Legacy));
+        var checker = new TypeChecker(); checker.SetDecoratorMode(DecoratorMode.Legacy);
+        var types = checker.CheckModules(modules, resolver);
+        var compiler = new ILCompiler("native_clr_exceptional_" + Guid.NewGuid().ToString("N"), false, true, null, null, null, OutputTarget.Dll);
+        if (native) compiler.EnableNativeAotProjectOutput(); compiler.CompileModules(modules, resolver, types); return compiler;
     }
 
     private static ILCompiler Compile(string source, bool native)
