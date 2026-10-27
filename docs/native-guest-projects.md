@@ -279,8 +279,9 @@ literal canonical owner and resolves that missing native code/metadata failure.
 
 This is an exact-method invocation plan, rather than a direct typed invocation
 thunk. Opaque CLR and source-reflection construction still use their legacy
-paths, including `$ErasedSourceInvokerTarget` and runtime `MakeGenericMethod`.
-They are retained until their producer/use provenance is proved. Omitting the
+paths, including `$ErasedSourceInvokerTarget` and runtime `MakeGenericMethod`,
+for producer-present or uncertified outputs. A completed zero-producer native
+certificate has the explicit foreign-marker boundary described below. Omitting the
 unavailable interpreter eval bridge reduced the basic strict console inventory
 to 80 diagnostics; the source invocation plan itself removed none. The optional
 numeric-rest proof below reduces it further.
@@ -356,9 +357,38 @@ A separate Windows rest-producer/capability probe reduces its strict inventory
 from 43 to 40 diagnostics, removing three constructor IL2075 lookup diagnostics
 and adding none. A diagnostic-only publish retains all warnings and its native
 executable prints `10 true false` (sum, source-function identity, and dynamic-code
-availability). The basic no-producer inventory remains 39. This finite optional
+availability). At that checkpoint the basic no-producer inventory was 39. This finite optional
 optimization does not remove other reflective invocation paths or establish strict
 native acceptance.
+
+### Completed method-generic certificate
+
+Native output records both owned method-generic definition sites: ordinary source
+functions and their `new.target` body clones. A compiler-owned late helper checks
+the exact method and parameter snapshots against the completed
+`FunctionGenericParameterRegistry` before the program type is finalized or any
+output is serialized. Saved-PE tests compare every generic method token with that
+inventory, including imported definitions and feature overrides.
+
+When the completed inventory is empty, the helper retains the original method
+identity for nongeneric methods, closed generic methods and foreign methods without
+all three source markers. A generic definition carrying this output's
+`FunctionName`, `FunctionLength` and `PadUndefined` markers instead receives a
+guest TypeError naming the unsupported foreign-marker boundary. These public
+attributes alone do not prove that a method belongs to the compiler: a verified
+foreign assembly can carry them. The refusal therefore makes that native profile
+boundary explicit rather than silently dropping its previous generic closure.
+
+Any owned generic producer keeps the full legacy normalizer. Ordinary managed
+output and runtime-emitter calls without the optional certificate retain it as
+well. Source MethodInfo and wrapper/cache identity remain unchanged. Tests retain
+the verified foreign-marker legacy closure alongside the native refusal, and
+diagnostic native executions pass both the zero-producer capability control
+(`42 false`) and a generic alias control (`7 text`).
+
+The same basic strict console measurement falls from 39 to 37 diagnostics,
+removing exactly the normalizer's IL2060 and IL3050 findings with none added.
+This does not establish general CLR provenance or strict native acceptance.
 
 ### Finite canonical source owners
 
@@ -409,8 +439,9 @@ assembly roots or warning suppressions. Current emitted-runtime warnings therefo
 fail strict native publish instead of being hidden by successful project export.
 
 With the current changes combined, fresh strict `console.log(42)` publication
-reports 39 diagnostics: IL2059 (6), IL2060 (1), IL2070 (19), IL2075 (12), IL3050 (1).
-The two optional numeric-rest lookups and 39 Proxy bridge diagnostics are absent
+reports 37 diagnostics: IL2059 (6), IL2070 (19), IL2075 (12).
+The two optional numeric-rest lookups, 39 Proxy bridge diagnostics and two
+certified generic-normalizer diagnostics are absent
 from the earlier 80-diagnostic checkpoint, with no additions. Strict publication
 still fails. Separate diagnostic publishes retain all warnings and pass focused
 native execution for own-property presence/order, generic storage/prototypes,

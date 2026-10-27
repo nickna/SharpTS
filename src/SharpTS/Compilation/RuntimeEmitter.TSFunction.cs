@@ -409,7 +409,7 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Stsfld, currentThisField);
         cctorIL.Emit(OpCodes.Ret);
 
-        var erasedInvokerTarget = EmitErasedSourceInvokerTarget(typeBuilder, inputs.FunctionAttributes);
+        var erasedInvokerTarget = EmitErasedSourceInvokerTarget(typeBuilder, inputs.FunctionAttributes, inputs.Policy.NativeGenericNormalizer);
         var nativeSources = inputs.NativeCallables?.BeginSourceFunctionsEmission();
 
         // Constructor: public $TSFunction(object target, MethodInfo method)
@@ -1413,142 +1413,26 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Closes only the invocation target of an erased source generic function. The original
-    /// MethodInfo remains the guest identity and cache key, independent of argument values.
+    /// Uses the supplied completed native policy, or the legacy erased source generic target.
+    /// The original MethodInfo remains the guest identity and cache key, independent of arguments.
     /// </summary>
-    private MethodBuilder EmitErasedSourceInvokerTarget(TypeBuilder owner, EmittedFunctionAttributesRuntime attributes)
+    private MethodBuilder EmitErasedSourceInvokerTarget(TypeBuilder owner, EmittedFunctionAttributesRuntime attributes,
+        MethodInfo? nativeNormalizer)
     {
         var method = owner.DefineMethod("$ErasedSourceInvokerTarget", MethodAttributes.Private | MethodAttributes.Static,
             _types.MethodInfo, [_types.MethodInfo]);
         var il = method.GetILGenerator();
-        var original = il.DefineLabel();
-        var parameters = il.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
-        var genericParameters = il.DeclareLocal(_types.MakeArrayType(_types.Type));
-        var arguments = il.DeclareLocal(_types.MakeArrayType(_types.Type));
-        var constraints = il.DeclareLocal(_types.MakeArrayType(_types.Type));
-        var argument = il.DeclareLocal(_types.Type);
-        var index = il.DeclareLocal(_types.Int32);
-        var containsGenericParameters = _types.GetProperty(_types.Type, "ContainsGenericParameters")!.GetGetMethod()!;
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodInfo, "IsGenericMethodDefinition")!.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, original);
-        // Positive source markers belong to this emitted output; host methods remain untouched.
-        foreach (Type marker in new Type[] { attributes.FunctionNameType, attributes.FunctionLengthType, attributes.PadUndefinedType })
+        if (nativeNormalizer is not null)
         {
+            if (!nativeNormalizer.IsStatic || nativeNormalizer.IsGenericMethod || nativeNormalizer.ReturnType != _types.MethodInfo ||
+                !nativeNormalizer.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual([_types.MethodInfo]))
+                throw new InvalidOperationException("Native generic normalization requires an exact static MethodInfo-to-MethodInfo helper.");
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, marker);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
-            il.Emit(OpCodes.Brfalse, original);
+            il.Emit(OpCodes.Call, nativeNormalizer);
+            il.Emit(OpCodes.Ret);
         }
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodInfo, "DeclaringType")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, containsGenericParameters);
-        il.Emit(OpCodes.Brtrue, original);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodInfo, "ReturnType")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, containsGenericParameters);
-        il.Emit(OpCodes.Brtrue, original);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "GetParameters")!);
-        il.Emit(OpCodes.Stloc, parameters);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, index);
-        var checkParameter = il.DefineLabel();
-        var nextParameter = il.DefineLabel();
-        il.Emit(OpCodes.Br, checkParameter);
-        il.MarkLabel(nextParameter);
-        il.Emit(OpCodes.Ldloc, parameters);
-        il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "ParameterType")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, containsGenericParameters);
-        il.Emit(OpCodes.Brtrue, original);
-        IncrementIndex();
-        il.MarkLabel(checkParameter);
-        il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Ldloc, parameters);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Blt, nextParameter);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "GetGenericArguments")!);
-        il.Emit(OpCodes.Stloc, genericParameters);
-        il.Emit(OpCodes.Ldloc, genericParameters);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Newarr, _types.Type);
-        il.Emit(OpCodes.Stloc, arguments);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, index);
-        var checkGenericParameter = il.DefineLabel();
-        var nextGenericParameter = il.DefineLabel();
-        var unconstrained = il.DefineLabel();
-        var storeArgument = il.DefineLabel();
-        il.Emit(OpCodes.Br, checkGenericParameter);
-        il.MarkLabel(nextGenericParameter);
-        il.Emit(OpCodes.Ldloc, genericParameters);
-        il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "GenericParameterAttributes")!.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, original);
-        il.Emit(OpCodes.Ldloc, genericParameters);
-        il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetGenericParameterConstraints")!);
-        il.Emit(OpCodes.Stloc, constraints);
-        il.Emit(OpCodes.Ldloc, constraints);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Brfalse, unconstrained);
-        il.Emit(OpCodes.Ldloc, constraints);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Bne_Un, original);
-        il.Emit(OpCodes.Ldloc, constraints);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Stloc, argument);
-        il.Emit(OpCodes.Ldloc, argument);
-        il.Emit(OpCodes.Callvirt, containsGenericParameters);
-        il.Emit(OpCodes.Brtrue, original);
-        il.Emit(OpCodes.Br, storeArgument);
-        il.MarkLabel(unconstrained);
-        il.Emit(OpCodes.Ldtoken, _types.Object);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Stloc, argument);
-        il.MarkLabel(storeArgument);
-        il.Emit(OpCodes.Ldloc, arguments);
-        il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Ldloc, argument);
-        il.Emit(OpCodes.Stelem_Ref);
-        IncrementIndex();
-        il.MarkLabel(checkGenericParameter);
-        il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Ldloc, arguments);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Blt, nextGenericParameter);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, arguments);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "MakeGenericMethod", _types.MakeArrayType(_types.Type))!);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(original);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ret);
+        else ErasedSourceInvocationEmission.EmitLegacy(il, _types, attributes);
         return method;
-
-        void IncrementIndex()
-        {
-            il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Stloc, index);
-        }
     }
 
     /// <summary>

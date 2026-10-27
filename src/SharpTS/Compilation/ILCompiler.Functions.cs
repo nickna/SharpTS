@@ -190,6 +190,7 @@ public partial class ILCompiler
         {
             string[] typeParamNames = funcStmt.TypeParams!.Select(tp => tp.Name.Lexeme).ToArray();
             genericParams = methodBuilder.DefineGenericParameters(typeParamNames);
+            _nativeGenericMethodNormalization?.RecordDefinition(methodBuilder, genericParams);
 
             // Apply constraints
             for (int i = 0; i < funcStmt.TypeParams!.Count; i++)

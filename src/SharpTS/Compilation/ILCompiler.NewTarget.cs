@@ -20,6 +20,7 @@ public partial class ILCompiler
         if (genericParameters.Length > 0)
         {
             var parameters = body.DefineGenericParameters(genericParameters.Select(parameter => parameter.Name).ToArray());
+            _nativeGenericMethodNormalization?.RecordDefinition(body, parameters);
             bodyGenericParameters = parameters;
             for (int i = 0; i < parameters.Length; i++)
             {

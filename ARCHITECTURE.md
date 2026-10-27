@@ -2210,6 +2210,16 @@ module initializer emission and completes immediately before type finalization i
 compiler pipelines. Completion revalidates declarations and rejects later writes.
 Nested erased functions and non-generic suspension stubs retain their existing signatures.
 
+Native generic-method normalization uses a compiler-owned late certificate. Both
+method-generic definition sites record their exact builders and parameters; the
+late body cross-checks the completed function registry before program finalization
+and serialization. An exact optional `FunctionEmissionPolicy` handle supplies its
+forward declaration to the already-created function wrappers. With no producers,
+the native helper preserves nongeneric, closed-generic and unmarked foreign method
+identity and explicitly rejects foreign generic definitions carrying this output's
+public source markers. With a producer or without the certificate it emits the
+full legacy normalization body. Ordinary managed emission remains unchanged.
+
 ### Generated union metadata
 
 `UnionTypeGenerator` fixes its type mapper and marker interface at construction. The

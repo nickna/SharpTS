@@ -62,6 +62,12 @@ public sealed class FunctionGenericParameterRegistry
         IsComplete = true;
     }
 
+    internal IReadOnlyList<KeyValuePair<MethodBuilder, IReadOnlyList<GenericTypeParameterBuilder>>> RequireCompletedGenericDefinitions()
+    {
+        if (!IsComplete) throw new InvalidOperationException("Function generic parameter metadata is not complete.");
+        return _parameters.Where(pair => pair.Value.Count != 0).ToArray();
+    }
+
     private static void Validate(MethodBuilder owner, IReadOnlyList<GenericTypeParameterBuilder> parameters)
     {
         var declared = owner.GetGenericArguments() ?? Type.EmptyTypes;

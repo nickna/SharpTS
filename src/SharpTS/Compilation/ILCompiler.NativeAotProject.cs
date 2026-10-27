@@ -13,6 +13,8 @@ public partial class ILCompiler
     private NativeSourceOwnerCatalog? _nativeSourceOwners;
     internal NativeSourceOwnerCatalog? NativeSourceOwners => _nativeSourceOwners;
     private NativeNumericRest4Binding? _nativeNumericRest4Binding;
+    private NativeGenericMethodNormalization? _nativeGenericMethodNormalization;
+    internal NativeGenericMethodNormalization? NativeGenericMethods => _nativeGenericMethodNormalization;
 
     private NativeClassInitializationEmission? GetNativeClassInitialization() =>
         !_nativeAotProjectOutput || _programType is null ? null :

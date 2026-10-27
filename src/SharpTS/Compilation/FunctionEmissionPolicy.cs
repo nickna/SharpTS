@@ -8,6 +8,7 @@ namespace SharpTS.Compilation;
 internal readonly record struct FunctionEmissionPolicy(bool BindNumericRest4)
 {
     internal MethodInfo? NativeNumericRest4Binder { get; init; }
+    internal MethodInfo? NativeGenericNormalizer { get; init; }
     internal static FunctionEmissionPolicy Full => new(true);
 
     internal static FunctionEmissionPolicy ForPreparedSource(IEnumerable<Stmt> statements, bool native)
