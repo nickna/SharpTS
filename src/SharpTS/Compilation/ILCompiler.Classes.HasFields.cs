@@ -466,9 +466,22 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldloc, fieldsLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", [_types.String])!);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Brtrue, returnTrueLabel);
 
         il.MarkLabel(noFieldsLabel);
+        var owner = (TypeBuilder)method.DeclaringType!;
+        var parent = owner.BaseType;
+        var parentDefinition = parent?.IsConstructedGenericType == true ? parent.GetGenericTypeDefinition() : parent;
+        if (parentDefinition is TypeBuilder parentBuilder
+            && _classes.PropertyDispatch.TryGet(parentBuilder, out var parentDispatch)
+            && EmitterTypeHelpers.TryResolveInstanceDispatch(owner, parentDispatch.HasProperty, owner,
+                out _, out var parentHasProperty))
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, parentHasProperty);
+            il.Emit(OpCodes.Ret);
+        }
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
 
