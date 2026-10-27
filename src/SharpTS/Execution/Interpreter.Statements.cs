@@ -1202,11 +1202,8 @@ public partial class Interpreter
     /// ECMA-262 7.4.6 IteratorClose: invoke an iterator's <c>return()</c> method
     /// when iteration is abandoned before the iterator reports done (a for-of
     /// break/throw, or a spread / <c>Array.from(items, mapFn)</c> element callback
-    /// throwing). Best-effort: a missing/undefined <c>return</c> is a no-op, and any
-    /// abrupt completion from <c>return()</c> itself is swallowed — this runs inside
-    /// a <c>finally</c> during exception unwind, so letting <c>return()</c> throw
-    /// would mask the original completion (which is what the spec discards when the
-    /// triggering completion is itself a throw).
+    /// throwing). The consumer preserves an existing throw completion while
+    /// disposing its enumerator. Other completions propagate close failures.
     /// </summary>
     private void TryCallIteratorReturn(object? iterator)
     {
@@ -1219,19 +1216,12 @@ public partial class Interpreter
         };
         if (returnMethod is null or SharpTSUndefined) return;
 
-        try
-        {
-            returnMethod = BindMemberCallReceiver(returnMethod, iterator);
-
-            // SharpTSFunction also implements ISharpTSCallable, so this covers both.
-            if (returnMethod is ISharpTSCallable callable)
-                callable.Call(this, []);
-        }
-        catch
-        {
-            // Swallow — see remarks. IteratorClose must not let return()'s failure
-            // replace the completion that triggered it.
-        }
+        returnMethod = BindMemberCallReceiver(returnMethod, iterator);
+        if (returnMethod is not ISharpTSCallable callable)
+            throw new ThrowException(new SharpTSTypeError("Iterator.return must be a function."));
+        var result = callable.Call(this, []);
+        if (result is null or SharpTSUndefined or double or string or bool or SharpTSBigInt or SharpTSSymbol)
+            throw new ThrowException(new SharpTSTypeError("Iterator.return must return an object."));
     }
 
     /// <summary>
