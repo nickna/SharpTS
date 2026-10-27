@@ -169,8 +169,14 @@ public partial class Interpreter
         {
             if (sharpClass.IsAbstract)
                 throw new InterpreterException($"Cannot create an instance of abstract class '{sharpClass.Name}'.");
+            if (sharpClass.NativeConstructionTarget is { } nativeTarget)
+                return nativeTarget.CallBoxed(this, [.. args]);
             return sharpClass.Construct(this, [.. args], newTarget);
         }
+        if (callable is SharpTSBlobConstructor)
+            return BuiltInConstructorFactory.TryCreate(BuiltInNames.Blob, [.. args], this);
+        if (callable is SharpTSFileConstructor)
+            return BuiltInConstructorFactory.TryCreate(BuiltInNames.File, [.. args], this);
         if (callable is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise })
             return CreatePromiseFromExecutor(args.Count > 0 ? args[0] : SharpTSUndefined.Instance);
         if (callable is SharpTSArrayGlobal or SharpTSBuiltInConstructor { Name: BuiltInNames.Array })

@@ -68,6 +68,9 @@ public partial class SharpTSClass(
 
     public bool IsAbstract { get; } = isAbstract;
     internal RuntimeEnvironment? InitializerEnvironment { get; set; }
+    // Embedded module facades can retain guest static helpers while using a
+    // native instance implementation. The binding carries this identity through aliases.
+    internal ISharpTSCallable? NativeConstructionTarget { get; set; }
     internal virtual bool RequiresNew => true;
     internal IReadOnlyList<Stmt.Field>? OrderedInstanceFields { get; set; }
     // Host-created classes have no source-order seed. Capture their own member

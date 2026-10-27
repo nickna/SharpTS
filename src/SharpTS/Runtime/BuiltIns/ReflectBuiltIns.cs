@@ -729,6 +729,8 @@ public static class ReflectBuiltIns
     /// </summary>
     internal static bool IsNotConstructor(object? value)
     {
+        if (value is SharpTSBlobConstructor or SharpTSFileConstructor)
+            return false;
         if (value is SharpTSProxy proxy)
             return !proxy.HasConstructableTarget(target => !IsNotConstructor(target));
         // Direct rejections — methods/wrappers that are clearly callable but

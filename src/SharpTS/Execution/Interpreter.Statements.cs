@@ -2512,6 +2512,9 @@ public partial class Interpreter
 
         klass.BindPrivateMemberOwners();
         klass.InitializerEnvironment = _environment;
+        if (classStmt.Name.Lexeme == BuiltInNames.EventEmitter
+            && Modules.Stdlib.Providers.EmbeddedStdlibProvider.TryExtractSpecifier(_currentModule?.Path ?? "") == "events")
+            klass.NativeConstructionTarget = SharpTSEventEmitterConstructor.Instance;
         klass.OrderedInstanceFields = classStmt.Fields.Where(field => !field.IsStatic && !field.IsDeclare)
             .SelectMany(field => (field.IsPrivate ? instancePrivateFields : instanceFields)
                 .Where(captured => captured.Name == field.Name)).ToList();
