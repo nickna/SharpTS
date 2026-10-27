@@ -1809,6 +1809,8 @@ public abstract partial class ExpressionEmitterBase
         Expr.Grouping gr => HasOptionalLink(gr.Expression),
         Expr.Instantiation instantiation => HasOptionalLink(instantiation.Expression),
         Expr.TypeAssertion ta => HasOptionalLink(ta.Expression),
+        Expr.NonNullAssertion assertion => HasOptionalLink(assertion.Expression),
+        Expr.Satisfies satisfies => HasOptionalLink(satisfies.Expression),
         _ => false
     };
 
@@ -1847,7 +1849,9 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected bool TryEmitOptionalChainMethodCall(Expr.Call c)
     {
-        if (c.Optional || c.Callee is not Expr.Get g || !HasOptionalLink(g))
+        Expr reference = c.Callee;
+        while (reference is Expr.NonNullAssertion assertion) reference = assertion.Expression;
+        if (c.Optional || reference is not Expr.Get g || !HasOptionalLink(g))
             return false;
 
         // When an argument can suspend, the receiver and resolved fn are live across that

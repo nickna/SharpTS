@@ -342,6 +342,15 @@ public partial class Interpreter
         {
             switch (expr)
             {
+                case Expr.NonNullAssertion assertion:
+                    expr = assertion.Expression;
+                    continue;
+                case Expr.TypeAssertion assertion:
+                    expr = assertion.Expression;
+                    continue;
+                case Expr.Satisfies satisfies:
+                    expr = satisfies.Expression;
+                    continue;
                 case Expr.Get g:
                     if (g.Optional) return true;
                     expr = g.Object;
