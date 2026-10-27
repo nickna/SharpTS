@@ -1170,6 +1170,23 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Brfalse, noOwnIteratorClaim);
         GuestErrorEmitter.ThrowTypeError(IL, runtime, "Symbol.iterator is not callable");
         IL.MarkLabel(noOwnIteratorClaim);
+        void EmitNativeCollectionFallback(Type representation, System.Reflection.MethodInfo factory)
+        {
+            var notNativeCollection = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, source);
+            IL.Emit(OpCodes.Isinst, representation);
+            IL.Emit(OpCodes.Brfalse, notNativeCollection);
+            // Intrinsic factories preserve guest entry arrays and native
+            // iteration behavior after an own iterator override has been ruled out.
+            IL.Emit(OpCodes.Ldloc, source);
+            IL.Emit(OpCodes.Call, factory);
+            IL.Emit(OpCodes.Call, runtime.IteratorHelpers.NormalizeToEnumerator);
+            IL.Emit(OpCodes.Stloc, enumerator);
+            IL.Emit(OpCodes.Br, ready);
+            IL.MarkLabel(notNativeCollection);
+        }
+        if (runtime.Map is { } map) EmitNativeCollectionFallback(Types.DictionaryObjectObject, map.Entries);
+        if (runtime.Set is { } set) EmitNativeCollectionFallback(Types.HashSetOfObject, set.Values);
         var nativeEnumerable = IL.DeclareLocal(Types.IEnumerable);
         var nativeIterable = IL.DefineLabel();
         IL.Emit(OpCodes.Ldloc, source);
