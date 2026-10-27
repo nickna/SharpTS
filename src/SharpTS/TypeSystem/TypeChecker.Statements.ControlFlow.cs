@@ -51,6 +51,7 @@ public partial class TypeChecker
         var incomingFlow = CaptureValueFlow();
         var entries = new ValueFlowState[switchStmt.Clauses.Count];
         var canNarrow = new bool[switchStmt.Clauses.Count];
+        bool canNarrowUnmatched;
 
         // Check each test once in selection order. Default's direct entry sees
         // every failed test, even tests written after the default clause.
@@ -65,6 +66,9 @@ public partial class TypeChecker
                     ReferenceEquals(_environment.GetValueBinding(discriminatedVariable!.Name.Lexeme), discriminatedBinding) &&
                     !writes.Writes.ContainsKey(discriminatedBinding);
             }
+            canNarrowUnmatched = discriminatedBinding is not null &&
+                ReferenceEquals(_environment.GetValueBinding(discriminatedVariable!.Name.Lexeme), discriminatedBinding) &&
+                !writes.Writes.ContainsKey(discriminatedBinding);
         }
         var unmatchedFlow = CaptureValueFlow();
         int defaultIndex = switchStmt.Clauses.FindIndex(clause => clause.IsDefault);
@@ -91,6 +95,15 @@ public partial class TypeChecker
                         (_, var narrowed, _) = AnalyzeDiscriminatedUnionGuard(
                             discriminatedVariable.Name.Lexeme, discriminantProperty.Lexeme, literalValue);
                         entryType = narrowed ?? entryType;
+                    }
+                    else if (clause.IsDefault && canNarrowUnmatched && entryType is TypeInfo.Union union)
+                    {
+                        var tested = switchStmt.Clauses.Select(candidate => candidate.Value)
+                            .OfType<Expr.Literal>().Select(literal => literal.Value)
+                            .OfType<string>().ToHashSet(StringComparer.Ordinal);
+                        entryType = UnionTypeofProjections(union.FlattenedTypes.Where(member =>
+                            GetDiscriminantPropertyType(member, discriminantProperty.Lexeme) is not TypeInfo.StringLiteral literal ||
+                            !tested.Contains(literal.Value)));
                     }
                 }
                 if (fallthroughFlow is not null)
