@@ -2231,12 +2231,12 @@ public partial class ILEmitter
         if (iterableType is TypeInfo.Map)
         {
             // Map iteration yields [key, value] entries
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
+            EmitCallUnknown(_ctx.Runtime!.RequireMap().Entries);
         }
         else if (iterableType is TypeInfo.Set)
         {
             // Set iteration yields values
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
+            EmitCallUnknown(_ctx.Runtime!.RequireSet().Values);
         }
 
         if (iterableType is TypeInfo.Map or TypeInfo.Set)
@@ -2299,7 +2299,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Isinst, _ctx.Types.DictionaryObjectObject);
             builder.Emit_Brfalse(notDynamicMap);
             IL.Emit(OpCodes.Ldloc, iterableLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
+            EmitCallUnknown(_ctx.Runtime!.RequireMap().Entries);
             var start = builder.DefineLabel("forof_dynamic_map_start");
             var end = builder.DefineLabel("forof_dynamic_map_end");
             var cont = builder.DefineLabel("forof_dynamic_map_continue");
@@ -2316,7 +2316,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Isinst, _ctx.Types.HashSetOfObject);
             builder.Emit_Brfalse(notDynamicSet);
             IL.Emit(OpCodes.Ldloc, iterableLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
+            EmitCallUnknown(_ctx.Runtime!.RequireSet().Values);
             var start = builder.DefineLabel("forof_dynamic_set_start");
             var end = builder.DefineLabel("forof_dynamic_set_end");
             var cont = builder.DefineLabel("forof_dynamic_set_continue");
