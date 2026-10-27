@@ -67,6 +67,7 @@ internal static class ObjectReadTestSupport
                 "FunctionPrototypePopulateMethod" => runtime.FunctionPrototypes.Populate,
                 "GetFunctionMethod" => runtime.FunctionIntrospection.GetProperty,
                 "ToPropertyKey" => runtime.Reflect.ToPropertyKey,
+                "UserClasses" => false,
                 "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped,
                 "SafeGetMethod" => runtime.ReflectedMethods.FindMethod,
                 "InvokeValue" => runtime.Invocation.Value,

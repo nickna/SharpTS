@@ -146,7 +146,7 @@ public sealed class EmittedObjectStateRuntimeTests
         var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), Detect("const value = 1;"));
         var type = runtime.RuntimeClass.Type.DefineNestedType("DeletionProbe", TypeAttributes.NestedPublic);
         var supplied = CopyWithNewTables(runtime.ObjectState, type, nameof(EmittedObjectStateRuntime.MarkBuiltinDeleted), nameof(EmittedObjectStateRuntime.IsBuiltinDeleted));
-        typeof(RuntimeEmitter).GetMethod("EmitDeletedBuiltinsHelpers", InstanceMembers)!.Invoke(emitter, [type, supplied]);
+        typeof(RuntimeEmitter).GetMethod("EmitDeletedBuiltinsHelpers", InstanceMembers)!.Invoke(emitter, [type, supplied, runtime.ObjectKeys]);
         supplied.MarkIsExtensibleBodyEmitted(); supplied.CompleteEmission(); type.CreateType();
         var loaded = SaveVerifyLoad(builder); var probe = loaded.GetType(type.FullName!)!;
         var receiver = new object(); Call(probe, "MarkBuiltinDeleted", receiver, "name");
