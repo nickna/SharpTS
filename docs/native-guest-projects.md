@@ -282,7 +282,7 @@ Generic field access uses the actual closed owner, while the captured default
 prototype uses the existing semantic class owner.
 
 The current subset excludes inheritance, per-evaluation class templates, public
-computed fields, instance auto-accessors, parameter properties and colliding CLR
+computed instance fields, instance auto-accessors, parameter properties and colliding CLR
 field spellings tracked in [#3048](https://github.com/nickna/SharpTS/issues/3048).
 An exact receiver check prevents an unsupported subclass from inheriting
 admission. Other owners retain their existing dispatch. This step removes no
@@ -315,6 +315,15 @@ The exported project uses `PublishAot=true`, `SelfContained=true`, its explicit
 RID, individual trim/AOT diagnostics and warnings as errors. It adds no broad
 assembly roots or warning suppressions. Current emitted-runtime warnings therefore
 fail strict native publish instead of being hidden by successful project export.
+
+With the current changes combined, fresh strict `console.log(42)` publication
+reports 39 diagnostics: IL2059 (6), IL2060 (1), IL2070 (19), IL2075 (12), IL3050 (1).
+The two optional numeric-rest lookups and 39 Proxy bridge diagnostics are absent
+from the earlier 80-diagnostic checkpoint, with no additions. Strict publication
+still fails. Separate diagnostic publishes retain all warnings and pass focused
+native execution for own-property presence/order, generic storage/prototypes,
+suspended callbacks and rest-function binding; a managed-compiler export of the
+dynamic-code capability probe reports `false` as a native executable.
 
 An initial Windows measurement with SDK 10.0.402, runtime/ILC 10.0.13 and the VS18
 Insiders C++ toolchain found 101 diagnostics for `console.log(42)`: IL2026 (4),
