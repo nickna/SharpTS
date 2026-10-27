@@ -737,7 +737,8 @@ public partial class RuntimeEmitter
                 inputs.RegExps,
                 inputs.TSFunctionType,
                 inputs.UndefinedType,
-                inputs.OwnPrototype
+                inputs.OwnPrototype,
+                inputs.Operators.TypeOf
             ),
             propNameLocal
         );

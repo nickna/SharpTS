@@ -22,7 +22,8 @@ public partial class RuntimeEmitter
         EmittedRegExpRuntime RegExps,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
-        FunctionOwnPrototypeInputs OwnPrototype
+        FunctionOwnPrototypeInputs OwnPrototype,
+        MethodBuilder TypeOf
     );
 
     private readonly record struct DefinePropertyExistingArrayLengthInputs(
@@ -39,7 +40,8 @@ public partial class RuntimeEmitter
     private readonly record struct DefinePropertyExistingConstructorInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder GetOwnPropertyDescriptor,
-        MethodBuilder HasOwnPropertyHelperMethod
+        MethodBuilder HasOwnPropertyHelperMethod,
+        MethodBuilder TypeOf
     );
 
     private readonly record struct DefinePropertyExistingFunctionPrototypeInputs(
@@ -263,7 +265,8 @@ public partial class RuntimeEmitter
             new DefinePropertyExistingConstructorInputs(
                 inputs.DescriptorStorage,
                 inputs.GetOwnPropertyDescriptor,
-                inputs.HasOwnPropertyHelperMethod
+                inputs.HasOwnPropertyHelperMethod,
+                inputs.TypeOf
             ),
             propNameLocal,
             existingDescLocal,
@@ -346,9 +349,16 @@ public partial class RuntimeEmitter
     // through the same validation/merge path as an explicitly stored descriptor.
     private void EmitDefinePropertyExistingConstructor(
         ILGenerator il,
+        var intrinsicCallable = il.DefineLabel();
         DefinePropertyExistingConstructorInputs inputs,
         LocalBuilder propNameLocal,
+        il.Emit(OpCodes.Brtrue, intrinsicCallable);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
         LocalBuilder existingDescLocal,
+        il.MarkLabel(intrinsicCallable);
         Label skipSynthExistingLabel
     )
     {
