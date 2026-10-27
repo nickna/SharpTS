@@ -131,6 +131,7 @@ public partial class RuntimeEmitter
         EmittedReflectAssignment? ReflectAssignment,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
+        MethodInfo ToPropertyKey,
         Type UndefinedType
     );
 
@@ -3441,127 +3442,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        // Symbol-keyed write (symbols work on any receiver type) — route to the
-        // non-strict SetIndex, which has the symbol-key handler (registered
-        // accessor setter, else symbol-dict store with extensibility checks).
-        // SetIndexStrict otherwise dispatches only by RECEIVER type ($Array /
-        // List / Dictionary) and would ToString a symbol key into a bogus string
-        // key, dropping the write — so under "use strict" `obj[sym] = v` and
-        // `obj[Symbol.iterator] = fn` were lost (Test262 Object/
-        // getOwnPropertySymbols object-contains-symbol-property-without-description,
-        // Array/from iter-get-iter-val-err).
-        // The store itself (registered setter / symbol-dict write) is delegated
-        // to the non-strict SetIndex, but its symbol handler silently no-ops on a
-        // frozen/sealed/non-extensible receiver. In strict mode those must throw
-        // a TypeError (ECMA-262 PutValue), so enforce that here first:
-        //   frozen           → always throw (props non-writable + non-extensible);
-        //   sealed/non-ext    → throw only when the symbol key is NEW (adding it);
-        //   otherwise         → delegate to SetIndex (store / update / invoke setter).
-        // (Test262 Object/freeze frozen-object-contains-symbol-properties-strict.)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ToPropertyKey);
+        il.Emit(OpCodes.Starg_S, (byte)1);
+        // Symbol writes share the descriptor/prototype policy with sloppy assignment.
         var notSymbolKeyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, notSymbolKeyLabel);
 
-        var symThrowLabel = il.DefineLabel();
-        var symRouteLabel = il.DefineLabel();
-        var symCheckObjectStateLabel = il.DefineLabel();
-        var symStateTmp = il.DeclareLocal(_types.Object);
-        var cwtTryGetValue = _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType());
-
-        // Existing symbol descriptors can reject strict writes independently
-        // of the receiver's extensibility state.
-        var strictSymDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
-        var strictSymValueLocal = il.DeclareLocal(_types.Object);
-        var strictSymDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
-        var strictSymSetterLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.Symbols.TryGetStorage);
-        il.Emit(OpCodes.Stloc, strictSymDictLocal);
-        il.Emit(OpCodes.Ldloc, strictSymDictLocal);
-        il.Emit(OpCodes.Brfalse, symCheckObjectStateLabel);
-        il.Emit(OpCodes.Ldloc, strictSymDictLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloca, strictSymValueLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
-        il.Emit(OpCodes.Brfalse, symCheckObjectStateLabel);
-        il.Emit(OpCodes.Ldloc, strictSymValueLocal);
-        il.Emit(OpCodes.Isinst, inputs.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Stloc, strictSymDescriptorLocal);
-        il.Emit(OpCodes.Ldloc, strictSymDescriptorLocal);
-        il.Emit(OpCodes.Brfalse, symCheckObjectStateLabel);
-        il.Emit(OpCodes.Ldloc, strictSymDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, strictSymSetterLocal);
-        il.Emit(OpCodes.Ldloc, strictSymSetterLocal);
-        var strictSymNoSetterLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, strictSymNoSetterLabel);
-        il.Emit(OpCodes.Ldloc, strictSymSetterLocal);
-        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
-        // A callable accessor setter remains writable after freeze. Route
-        // directly to invocation, bypassing the receiver integrity-level
-        // checks that apply only to data writes.
-        var strictSymInvokeSetterLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, strictSymInvokeSetterLabel);
-        il.MarkLabel(strictSymNoSetterLabel);
-        il.Emit(OpCodes.Ldloc, strictSymDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, symThrowLabel);
-        il.Emit(OpCodes.Ldloc, strictSymSetterLocal);
-        il.Emit(OpCodes.Brtrue, symThrowLabel); // explicit undefined setter
-        il.Emit(OpCodes.Ldloc, strictSymDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, symThrowLabel);
-        il.Emit(OpCodes.Br, symCheckObjectStateLabel);
-
-        il.MarkLabel(strictSymInvokeSetterLabel);
-        EmitInvokePdsSetterWithValueAndReturn(il, inputs.InvokeMethodValue, strictSymSetterLocal);
-
-        il.MarkLabel(symCheckObjectStateLabel);
-
-        // frozen → throw.
-        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, symStateTmp);
-        il.Emit(OpCodes.Callvirt, cwtTryGetValue);
-        il.Emit(OpCodes.Brtrue, symThrowLabel);
-
-        // sealed OR non-extensible → throw only if the symbol key is not already present.
-        var symSealedOrNonExtLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.SealedObjects);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, symStateTmp);
-        il.Emit(OpCodes.Callvirt, cwtTryGetValue);
-        il.Emit(OpCodes.Brtrue, symSealedOrNonExtLabel);
-        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.NonExtensibleObjects);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, symStateTmp);
-        il.Emit(OpCodes.Callvirt, cwtTryGetValue);
-        il.Emit(OpCodes.Brfalse, symRouteLabel); // extensible → store
-        il.MarkLabel(symSealedOrNonExtLabel);
-        // sealed/non-ext: present symbol → allow update (route); absent → throw.
-        var symDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.Symbols.TryGetStorage);
-        il.Emit(OpCodes.Stloc, symDictLocal);
-        il.Emit(OpCodes.Ldloc, symDictLocal);
-        il.Emit(OpCodes.Brfalse, symThrowLabel); // no symbol dict → key absent → throw
-        il.Emit(OpCodes.Ldloc, symDictLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
-        il.Emit(OpCodes.Brfalse, symThrowLabel); // key absent → throw
-
-        il.MarkLabel(symRouteLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Call, objectWrite.SymbolIndex);
         il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(symThrowLabel);
-        EmitThrowTypeError(il, inputs.Errors, "Cannot assign to a read-only or non-extensible property");
-
         il.MarkLabel(notSymbolKeyLabel);
 
         // Check if $Array (for strict mode support)

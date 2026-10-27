@@ -1671,6 +1671,7 @@ public partial class RuntimeEmitter
                 runtime.Reflect.Assignment,
                 runtime.StringCoercion,
                 runtime.Symbols,
+                runtime.Reflect.ToPropertyKey,
                 runtime.Sentinels.UndefinedType
             )
         );
