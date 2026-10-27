@@ -12,11 +12,18 @@ internal static class StandaloneAsyncCaptureEmitter
     internal static void EmitOwnerReference(ILGenerator il, CompilationContext ctx,
         Type owner, string name, AsyncArrowStateMachineBuilder? caller = null)
     {
+        if (!TryEmitOwnerReference(il, ctx, owner, name, caller))
+            throw new CompileException($"Shared storage for async capture '{name}' is unavailable.");
+    }
+
+    internal static bool TryEmitOwnerReference(ILGenerator il, CompilationContext ctx,
+        Type owner, string name, AsyncArrowStateMachineBuilder? caller = null)
+    {
         foreach (var local in new[] { ctx.FunctionDisplayClassLocal, ctx.ArrowScopeDisplayClassLocal })
         {
             if (local?.LocalType != owner) continue;
             il.Emit(OpCodes.Ldloc, local);
-            return;
+            return true;
         }
 
         IEnumerable<FieldBuilder?> references = new[]
@@ -33,14 +40,14 @@ internal static class StandaloneAsyncCaptureEmitter
             if (reference?.FieldType != owner) continue;
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, reference);
-            return;
+            return true;
         }
         if (caller?.OuterStateMachineField is not null
             && ctx.OuterFunctionDCField?.FieldType == owner)
         {
             AsyncArrowStorageAccess.CapturedField(caller, name, ctx.OuterFunctionDCField).EmitLoad(il);
-            return;
+            return true;
         }
-        throw new CompileException($"Shared storage for async capture '{name}' is unavailable.");
+        return false;
     }
 }
