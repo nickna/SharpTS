@@ -722,7 +722,7 @@ public partial class ILCompiler
         // snapshot path the pivot redirects — no DC exclusion is needed here, unlike async functions (#837).
         var renameResult = GeneratorBlockScopeRenamer.Compute(arrow, arrowReadCapturesShareStorage: false,
             preserveDebugBindings: EmitDebugSymbols,
-            outerCaptureNames: _closures.Analyzer.GetLoopBodyCellCaptures(arrow)?.Keys);
+            outerCaptureNames: _closures.Analyzer.GetCaptures(arrow));
         _arrowBlockScopeRenames = renameResult.Renames;
         _arrowBlockScopeCaptureRenames = renameResult.CaptureRenames;
 

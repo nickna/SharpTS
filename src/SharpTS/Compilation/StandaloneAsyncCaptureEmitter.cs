@@ -7,8 +7,11 @@ internal static class StandaloneAsyncCaptureEmitter
 {
     internal static void EmitReference(ILGenerator il, CompilationContext ctx,
         FieldBuilder binding, string name, AsyncArrowStateMachineBuilder? caller = null)
+        => EmitOwnerReference(il, ctx, binding.DeclaringType!, name, caller);
+
+    internal static void EmitOwnerReference(ILGenerator il, CompilationContext ctx,
+        Type owner, string name, AsyncArrowStateMachineBuilder? caller = null)
     {
-        var owner = binding.DeclaringType!;
         foreach (var local in new[] { ctx.FunctionDisplayClassLocal, ctx.ArrowScopeDisplayClassLocal })
         {
             if (local?.LocalType != owner) continue;

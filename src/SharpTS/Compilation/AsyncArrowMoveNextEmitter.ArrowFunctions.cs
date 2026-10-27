@@ -63,12 +63,11 @@ public partial class AsyncArrowMoveNextEmitter
         // Follow-up to #838: if this sync arrow routes a captured write through THIS async arrow's own
         // function DC, share the reference: dc.$functionDC = this.<>__functionDC. The arrow body then
         // reads/writes that local through $functionDC (verifiable) instead of a by-value snapshot.
-        if (_ctx.ArrowFunctionDCFields?.TryGetValue(af, out var functionDCField) == true &&
-            _builder.FunctionDCField != null)
+        if (_ctx.ArrowFunctionDCFields?.TryGetValue(af, out var functionDCField) == true)
         {
             _il.Emit(OpCodes.Dup);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, _builder.FunctionDCField);
+            StandaloneAsyncCaptureEmitter.EmitOwnerReference(_il, _ctx,
+                functionDCField.FieldType, functionDCField.Name, _builder);
             _il.Emit(OpCodes.Stfld, functionDCField);
         }
 
