@@ -752,9 +752,7 @@ public partial class Interpreter
                 if (ReferenceEquals(symbol, SharpTSSymbol.Iterator))
                 {
                     var iterator = arrayPrototype.GetMember("values");
-                    return iterator is ArrayPrototypeMethodWrapper wrapper && receiver is SharpTSArray
-                        ? wrapper.Bind(receiver)
-                        : iterator ?? SharpTSUndefined.Instance;
+                    return iterator ?? SharpTSUndefined.Instance;
                 }
                 current = GetObjectPrototype();
                 continue;
