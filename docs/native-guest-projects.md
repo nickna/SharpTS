@@ -156,10 +156,11 @@ specific CLR boundary before output. Guest `any`, computed and Symbol property
 operations continue to use their existing semantics.
 
 This is catalog infrastructure, not a warning-free native compatibility claim.
-The strict `console.log(42)` publish measurement remains at 81 diagnostics with
-the same inventory as before the callable contract. Remaining work includes the
+The callable contract preserved the strict `console.log(42)` inventory. Omitting
+the unsupported runtime-eval bridge subsequently reduced it to 80 diagnostics.
+Remaining work includes the
 opaque callable bridge and signatures, property/shape metadata, class/Symbol
-initialization and runtime-eval reachability.
+initialization and source admission.
 
 ### CLR provenance boundary
 
@@ -245,7 +246,8 @@ This is an exact-method invocation plan, rather than a direct typed invocation
 thunk. Opaque CLR and source-reflection construction still use their legacy
 paths, including `$ErasedSourceInvokerTarget` and runtime `MakeGenericMethod`.
 They are retained until their producer/use provenance is proved. The basic
-strict console publish still fails on the unchanged 81-diagnostic inventory.
+strict console publish still fails on 80 diagnostics after the separate
+runtime-eval bridge omission; the source invocation plan itself removed none.
 
 ## Warning policy and remaining work
 
@@ -266,7 +268,10 @@ inventory to 89 diagnostics (IL2055: 0, IL3050: 1). Strict publish still fails.
 Replacing reflection lookup of four known coercion helpers with direct calls
 reduced the same measurement to 81 diagnostics, removing all four IL2026 and
 four corresponding IL2075 diagnostics from that helper. The measured sequence
-is 101, then 89, then 81; the remaining diagnostics still fail strict publish.
+is 101, then 89, then 81. Omitting the unsupported indirect-eval interpreter
+loading bridge removes the single IL2057 diagnostic, leaving 80 with no new
+diagnostics: IL2059 (6), IL2060 (1), IL2070 (19), IL2075 (53), IL3050 (1).
+The remaining diagnostics still fail strict publish.
 Separate diagnostic publishes retaining all warnings executed the ConsoleClear,
 generic-symbol and core-language probes correctly; a statically resolved BCL
 `RuntimeFeature.IsDynamicCodeSupported` probe returned `false` from the produced
