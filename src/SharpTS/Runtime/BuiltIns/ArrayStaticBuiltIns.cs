@@ -121,4 +121,6 @@ public static class ArrayStaticBuiltIns
 
     public static object? GetStaticMethod(string name)
         => _staticLookup.GetMember(name);
+
+    internal static IEnumerable<string> StaticMemberNames => _staticLookup.MemberNames;
 }

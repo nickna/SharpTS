@@ -1746,6 +1746,7 @@ public static partial class ObjectBuiltIns
             SharpTSObjectNamespace objectNamespace =>
                 new[] { "length", "name", "prototype" }.Concat(StaticMemberNames)
                     .Where(objectNamespace.HasOwnProperty).Cast<object?>().ToList(),
+            SharpTSArrayGlobal arrayGlobal => arrayGlobal.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSObject obj => GetOwnPropertyNamesFromObject(obj),
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.OwnStringKeys().Cast<object?>().ToList(),

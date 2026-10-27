@@ -21,7 +21,7 @@ namespace SharpTS.Runtime.Types;
 public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltIn
 {
     public static readonly SharpTSArrayGlobal Instance = new();
-    private readonly SharpTSObject _extras = new([]);
+    private readonly SharpTSObject _extras = FunctionObjectProperties.Create("Array", 1);
     private readonly HashSet<string> _deletedBuiltIns = [];
     internal SharpTSArrayGlobal() { }
 
@@ -61,6 +61,10 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
         return true;
     }
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+
+    internal IEnumerable<string> OwnStringKeys()
+        => new[] { "length", "name", "prototype" }.Concat(ArrayStaticBuiltIns.StaticMemberNames)
+            .Where(HasOwnProperty).Concat(_extras.OwnVisibleStringKeys()).Distinct();
 
     public int Arity() => 0;
 
