@@ -1696,6 +1696,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(tsFnDefineNewLabel);
+            EmitIntrinsicFunctionPrototypeAssignment(il, inputs.DescriptorStorage, inputs.ObjectDescriptors, inputs.UndefinedType);
             // Function `name` and `length` are intrinsic own data properties with
             // [[Writable]] false. It is synthesized by Get/descriptor helpers
             // rather than stored in PDS, so an absent PDS entry must not be
@@ -2473,6 +2474,53 @@ public partial class RuntimeEmitter
         il.MarkLabel(fallback);
     }
 
+    private void EmitIntrinsicFunctionPrototypeAssignment(ILGenerator il, EmittedDescriptorStorageRuntime storage,
+        EmittedObjectDescriptorRuntime descriptors, Type undefinedType)
+    {
+        var skip = il.DefineLabel();
+        var own = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "prototype");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, skip);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, descriptors.GetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, own);
+        il.Emit(OpCodes.Ldloc, own);
+        il.Emit(OpCodes.Brfalse, skip);
+        il.Emit(OpCodes.Ldloc, own);
+        il.Emit(OpCodes.Isinst, undefinedType);
+        il.Emit(OpCodes.Brtrue, skip);
+        il.Emit(OpCodes.Ldloc, own);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "writable");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "get_Item"));
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Brfalse, skip);
+        // A synthetic own prototype already exists even on a sealed function.
+        // Its first assignment materializes that same nonconfigurable slot.
+        var descriptor = il.DeclareLocal(storage.DescriptorType);
+        il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Call, storage.DefineValidatedProperty);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(skip);
+    }
+
     private void EmitDescriptorObjectSetStrict(ILGenerator il, SetPropertyStrictInputs inputs, bool requireDeletedBuiltin)
     {
         var descriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
@@ -3181,6 +3229,7 @@ public partial class RuntimeEmitter
             EmitThrowTypeErrorWithName(il, inputs.Errors, "Cannot assign to read only property '", "' of function");
             il.MarkLabel(tsFnStrictNotIntrinsicNameLabel);
             il.MarkLabel(tsFnStrictInheritedDescriptorLabel);
+            EmitIntrinsicFunctionPrototypeAssignment(il, inputs.DescriptorStorage, inputs.ObjectDescriptors, inputs.UndefinedType);
             EmitConstructorPrototypeSetGuard(il, inputs, () =>
             {
                 il.Emit(OpCodes.Ldarg_0);
