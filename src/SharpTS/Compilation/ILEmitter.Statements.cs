@@ -2335,7 +2335,9 @@ public partial class ILEmitter
         // run through the existing slow path — their runtime
         // representation can be a typed list OR a List<object> depending
         // on construction site, and the slow path already handles both.
-        if (arrayDesc != null && arrayDesc.Kind == ArrayElementsKind.Object)
+        if (arrayDesc != null && arrayDesc.Kind == ArrayElementsKind.Object
+            && _ctx.RuntimeFeatures?.UsesArrayPrototypeMutation != true
+            && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != true)
         {
             EmitForOfArrayDirect(f, iterableLocal, arrayDesc, labelNames);
             _ctx.Locals.ExitScope();
@@ -2357,6 +2359,13 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Sentinels.UndefinedType);
         var presentIteratorMethod = builder.DefineLabel("forof_present_iterator_method");
         builder.Emit_Brfalse(presentIteratorMethod);
+        var noOwnIteratorClaim = builder.DefineLabel("forof_no_own_iterator_claim");
+        IL.Emit(OpCodes.Ldloc, iterableLocal);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Symbols.Iterator);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectOwnProperties.HasOwnProperty);
+        builder.Emit_Brfalse(noOwnIteratorClaim);
+        GuestErrorEmitter.ThrowTypeError(IL, _ctx.Runtime, "Symbol.iterator is not callable");
+        builder.MarkLabel(noOwnIteratorClaim);
         // Constructor values have no indexed/CLR enumerable fallback. Reject
         // a missing method here instead of materializing and reading the
         // same observable iterator getter for a second time.

@@ -1163,6 +1163,13 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Br, ready);
 
         IL.MarkLabel(fallback);
+        var noOwnIteratorClaim = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
+        IL.Emit(OpCodes.Call, runtime.ObjectOwnProperties.HasOwnProperty);
+        IL.Emit(OpCodes.Brfalse, noOwnIteratorClaim);
+        GuestErrorEmitter.ThrowTypeError(IL, runtime, "Symbol.iterator is not callable");
+        IL.MarkLabel(noOwnIteratorClaim);
         var nativeEnumerable = IL.DeclareLocal(Types.IEnumerable);
         var nativeIterable = IL.DefineLabel();
         IL.Emit(OpCodes.Ldloc, source);
