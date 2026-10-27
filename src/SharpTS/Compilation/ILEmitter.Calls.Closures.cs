@@ -361,7 +361,7 @@ public partial class ILEmitter
                 if (!_ctx.LexicalCaptureWriteBacks.TryGetValue(
                         capturedVar, out var lexicalWriteBacks))
                     _ctx.LexicalCaptureWriteBacks[capturedVar] = lexicalWriteBacks = [];
-                lexicalWriteBacks.Add((lexicalDcInstance, field));
+                lexicalWriteBacks.Add((_ctx.Locals.GetLocal(capturedVar)!, lexicalDcInstance, field));
             }
 
             // Self-referential capture (issue #421): this arrow captures the

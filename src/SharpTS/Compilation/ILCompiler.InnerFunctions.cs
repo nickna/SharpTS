@@ -1292,7 +1292,7 @@ public partial class ILCompiler
                     {
                         if (!ctx.LexicalCaptureWriteBacks.TryGetValue(capturedVar, out var writeBacks))
                             ctx.LexicalCaptureWriteBacks[capturedVar] = writeBacks = [];
-                        writeBacks.Add((dcTemp, field));
+                        writeBacks.Add((existingLocal, dcTemp, field));
                     }
                 }
                 else

@@ -170,8 +170,10 @@ public abstract partial class ExpressionEmitterBase
         if (Ctx.LexicalCaptureWriteBacks.TryGetValue(name, out var writeBacks))
         {
             int start = Ctx.RuntimeClassCaptureWriteBackStarts.GetValueOrDefault(declaration);
-            foreach (var (displayClass, field) in writeBacks.Skip(start))
+            var lexicalBinding = Ctx.Locals.GetLocal(name);
+            foreach (var (capturedBinding, displayClass, field) in writeBacks.Skip(start))
             {
+                if (!ReferenceEquals(capturedBinding, lexicalBinding)) continue;
                 IL.Emit(OpCodes.Ldloc, displayClass);
                 IL.Emit(OpCodes.Ldloc, definition);
                 IL.Emit(OpCodes.Stfld, field);

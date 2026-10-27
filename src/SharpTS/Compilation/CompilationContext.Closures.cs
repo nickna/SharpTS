@@ -568,7 +568,7 @@ public partial class CompilationContext
     public Action<ILGenerator, CompilationContext, List<Stmt>>? PredeclareCapturedLexicalLocals { get; set; }
 
     /// <summary>Snapshot capture fields that must receive the lexical declaration's initialized value.</summary>
-    public Dictionary<string, List<(LocalBuilder DisplayClass, FieldBuilder Field)>> LexicalCaptureWriteBacks { get; } = [];
+    public Dictionary<string, List<(LocalBuilder Binding, LocalBuilder DisplayClass, FieldBuilder Field)>> LexicalCaptureWriteBacks { get; } = [];
 
     internal HashSet<Stmt.Class> RuntimeClassLexicalShadows { get; } = new(ReferenceEqualityComparer.Instance);
     internal Dictionary<Stmt.Class, int> RuntimeClassCaptureWriteBackStarts { get; } = new(ReferenceEqualityComparer.Instance);

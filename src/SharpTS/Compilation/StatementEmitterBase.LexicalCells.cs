@@ -299,8 +299,12 @@ public abstract partial class StatementEmitterBase
     protected void RefreshLexicalCaptureSnapshots(string name, LocalBuilder binding)
     {
         if (!Ctx.LexicalCaptureWriteBacks.TryGetValue(name, out var writeBacks)) return;
-        foreach (var (displayClass, field) in writeBacks)
+        var lexicalBinding = Ctx.Locals.GetLocal(name);
+        foreach (var (capturedBinding, displayClass, field) in writeBacks)
         {
+            // A loop body may be emitted for several mutually exclusive iterator
+            // paths. Only this lexical local owns the displays created on this path.
+            if (!ReferenceEquals(capturedBinding, lexicalBinding)) continue;
             IL.Emit(OpCodes.Ldloc, displayClass);
             IL.Emit(OpCodes.Ldloc, binding);
             IL.Emit(OpCodes.Stfld, field);
