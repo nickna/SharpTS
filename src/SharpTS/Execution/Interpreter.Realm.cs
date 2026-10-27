@@ -267,12 +267,7 @@ public partial class Interpreter
             && _builtInConstructorProperties.TryGetValue(constructor, out var existingProperties)
             && existingProperties.TryGetValue(name, out var existing))
         {
-            if (existing.Set is { } setter)
-            {
-                FunctionBuiltIns.CallWithThis(this, setter, constructor, [value]);
-                return;
-            }
-            if (!existing.Writable)
+            if (TryAssignThroughDescriptor(existing, constructor, name, value, strictMode))
                 return;
             existing.Value = value;
             existing.HasValue = true;
