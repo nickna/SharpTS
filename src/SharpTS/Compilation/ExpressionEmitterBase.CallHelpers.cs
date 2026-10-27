@@ -2173,6 +2173,13 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "GetType"));
         IL.Emit(OpCodes.Call, Ctx.Runtime.ClassPrototypes.Get);
+        if (GuardClassMethodPrototype)
+        {
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Ldstr, methodName);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectOwnProperties.HasOwnProperty);
+            IL.Emit(OpCodes.Brtrue, dynamicCall);
+        }
         IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Call, Ctx.Runtime.ObjectPrototypes.GetPrototypeOf);
         IL.Emit(OpCodes.Bne_Un, dynamicCall);
