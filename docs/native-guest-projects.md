@@ -271,6 +271,25 @@ IL3050, with no additions. This class-specific change does not reduce the basic
 Dynamic prototype/Symbol owner initialization and other reflection paths remain
 under #1351; strict native acceptance is still incomplete.
 
+### Bounded source own-property operations
+
+Native projects add own-property operations for a bounded set of source class
+declarations. Queries observe completed field definitions and actual property
+creation order, including an initializer that observes a later field or leaks its
+receiver before throwing. Successful definitions, assignments, redefinitions and
+deletions update the instance state; failed mutations leave it unchanged.
+Generic field access uses the actual closed owner, while the captured default
+prototype uses the existing semantic class owner.
+
+The current subset excludes inheritance, per-evaluation class templates, public
+computed fields, instance auto-accessors, parameter properties and colliding CLR
+field spellings tracked in [#3048](https://github.com/nickna/SharpTS/issues/3048).
+An exact receiver check prevents an unsupported subclass from inheriting
+admission. Other owners retain their existing dispatch. This step removes no
+reflection fallback and makes no strict native warning-reduction claim.
+Normal output and class-free native output omit the optional family.
+The general compiled-output fixes remain tracked in #3043 and #3044.
+
 ## Warning policy and remaining work
 
 The exported project uses `PublishAot=true`, `SelfContained=true`, its explicit
