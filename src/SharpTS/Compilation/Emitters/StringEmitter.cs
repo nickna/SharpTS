@@ -51,6 +51,9 @@ public sealed class StringEmitter : ITypeEmitterStrategy
                 case "search": EmitSearch(emitter, arguments); break;
                 case "split": EmitSplit(emitter, arguments); break;
             }
+            // Protocol helpers return an object, including arbitrary @@replace
+            // results. Argument emission must not leave a native string proof.
+            emitter.SetStackUnknown();
             return true;
         }
 
