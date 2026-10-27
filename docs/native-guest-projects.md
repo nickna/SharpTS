@@ -222,6 +222,15 @@ Guest-only and unrelated pure async callbacks/rejections remain guest values.
 Uncatalogued member-provider operations on a proven CLR origin remain unsupported. Ordinary guest objects,
 callbacks, catches, `any`, computed names and Symbol keys retain guest semantics.
 
+Static direct/indirect eval lowering reparses source outside that original AST
+inventory. Every successful static lowering records an unsupported proof boundary;
+when the final compilation contains any CLR origin/effect facts, `SHARPTS405`
+refuses it even if eval appeared before the CLR operation. Guest-only static eval
+and its known literal callable aliases retain their existing behavior. The
+compiled `Function` constructor does not reparse source: its existing runtime
+grammar accepts only no arguments or `return this`, and other source text keeps
+its existing refusal. This slice adds no redundant Function-constructor gate.
+
 The proof owner stays open during source emission, then freezes before native
 serialization. Failed admission also guards `Save`, `SaveToBytes` and
 `SaveArtifacts`; normal compilation has no admission owner. No runtime reflection

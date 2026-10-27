@@ -35,6 +35,7 @@ internal sealed partial class NativeClrAdmission
     private bool _complete;
     private readonly Dictionary<BindingSymbol, object> _functions = new(ReferenceEqualityComparer.Instance);
     private readonly List<Stmt.TryCatch> _tries = [];
+    private readonly List<(Expr? Source, string Reason)> _sourceProofBoundaries = [];
 
     private NativeClrAdmission(IEnumerable<Stmt> statements, TypeMap types, TypeProvider framework)
     {
@@ -98,6 +99,12 @@ internal sealed partial class NativeClrAdmission
         else if (!IsSafe(resultType, marshalling)) _opaque.Add(source);
     }
 
+    internal void RecordUnclassifiedSourceBoundary(Expr? expression, string reason)
+    {
+        EnsureOpen();
+        _sourceProofBoundaries.Add((expression, reason));
+    }
+
     internal void RecordTypeValue(Expr expression, Type type) =>
         Record(expression, type, typeof(Type), Marshalling.TypeValue);
 
@@ -151,6 +158,10 @@ internal sealed partial class NativeClrAdmission
         foreach (var expression in _opaque) CheckUse(expression, new(ReferenceEqualityComparer.Instance));
         CheckExceptionalCallableIngress();
         CheckExceptionIngress();
+        // Late selections must participate, even when the static eval appeared first.
+        if (_opaque.Count > 0 || _effects.Count > 0)
+            foreach (var boundary in _sourceProofBoundaries)
+                Fail(boundary.Reason, boundary.Source is null ? null : Source(boundary.Source));
         _complete = true;
         ThrowIfIncompatible();
     }

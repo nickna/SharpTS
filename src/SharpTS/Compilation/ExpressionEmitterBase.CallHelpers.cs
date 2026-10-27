@@ -473,6 +473,8 @@ public abstract partial class ExpressionEmitterBase
             && expression is Expr.Literal or Expr.Variable or Expr.Assign or Expr.Call
                 or Expr.PrefixIncrement or Expr.PostfixIncrement)
         {
+            Ctx.NativeClrAdmission?.RecordUnclassifiedSourceBoundary(call,
+                "static eval lowering is outside the captured CLR source proof");
             EmitCalleeSideEffect();
             EmitExpression(expression);
             EnsureBoxed();
@@ -493,6 +495,8 @@ public abstract partial class ExpressionEmitterBase
         if (!isStaticGlobal && !isCapturedGlobal)
             return false;
 
+        Ctx.NativeClrAdmission?.RecordUnclassifiedSourceBoundary(call,
+            "static eval global-read lowering is outside the captured CLR source proof");
         EmitCalleeSideEffect();
         if (isStaticGlobal)
         {

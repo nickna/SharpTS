@@ -391,6 +391,32 @@ public class NativeClrAdmissionTests
         Assert.Equal("typed\n", Execute(Compile(Builder + source, true).SaveToBytes()));
     }
 
+    [Theory]
+    [InlineData("const value: Builder = new Builder(); const leaked: any = eval('value');")]
+    [InlineData("const value: Builder = new Builder(); const leaked: any = (0, eval)('value');")]
+    [InlineData("const value: Builder = new Builder(); const indirect: any = eval; const leaked: any = indirect('value');")]
+    [InlineData("console.log(eval('1')); const value: Builder = new Builder();")]
+    [InlineData("console.log((0, eval)('1')); const value: Builder = new Builder();")]
+    public void StaticEvalBoundaryUsesTheFinalClrFactsRatherThanEmissionOrder(string body)
+    {
+        var error = Assert.Throws<CompileException>(() => Compile(Builder + body, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code); Assert.Contains("static eval", error.Message);
+    }
+
+    [Fact]
+    public void GuestOnlyStaticEvalAndLiteralCallableAliasRemainSupported()
+    {
+        const string source = "const value = 4; console.log(eval('value')); const indirect: any = eval; console.log(indirect('value'));";
+        Assert.Equal("4\n4\n", Execute(Compile(source, true).SaveToBytes()));
+    }
+
+    [Fact]
+    public void FunctionConstructorUsesItsExistingBoundedRuntimeGrammar()
+    {
+        Assert.Equal("7\n", Execute(Compile(Builder + "const value: Builder = new Builder(); const fn = Function('return this'); console.log(fn.call({ x: 7 }).x);", true).SaveToBytes()));
+        Assert.Equal("true\n", Execute(Compile("try { Function('return arbitrarySource'); } catch (e) { console.log(e.message.includes('source text is not supported')); }", true).SaveToBytes()));
+    }
+
     private static ILCompiler CompileModule(string source, bool native)
     {
         const string entry = "/native-clr/exceptional.ts";
