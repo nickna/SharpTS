@@ -289,7 +289,7 @@ public sealed class NativeSourceInvocationPlanTests
         return Assembly.Load(bytes);
     }
 
-    private static IEnumerable<(OpCode Code, MemberInfo? Member)> Instructions(MethodBase method)
+    internal static IEnumerable<(OpCode Code, MemberInfo? Member)> Instructions(MethodBase method)
     {
         byte[] bytes = method.GetMethodBody()!.GetILAsByteArray()!;
         for (int offset = 0; offset < bytes.Length;)

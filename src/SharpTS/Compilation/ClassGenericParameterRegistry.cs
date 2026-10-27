@@ -24,6 +24,9 @@ public sealed class ClassGenericParameterRegistry
         => _canonicalArguments.TryGetValue(owner, out var arguments) ? arguments
             : throw new InvalidOperationException("Class canonical generic arguments have not been declared.");
 
+    internal bool TryGetCanonicalArguments(TypeBuilder owner, out IReadOnlyList<Type> arguments) =>
+        _canonicalArguments.TryGetValue(owner, out arguments!);
+
     internal void Declare(TypeBuilder owner, IEnumerable<GenericTypeParameterBuilder> parameters,
         IEnumerable<Type>? canonicalArguments = null)
     {

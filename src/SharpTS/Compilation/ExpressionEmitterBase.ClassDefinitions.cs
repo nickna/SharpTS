@@ -578,9 +578,7 @@ public abstract partial class ExpressionEmitterBase
         }
         else IL.Emit(OpCodes.Ldnull);
         var parent = _helpers.SpillStoreObject();
-        IL.Emit(OpCodes.Ldtoken, factory!.Template);
-        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassInitialization.RunDefinition);
+        EmitClassDefinitionInitialization(factory!.Template);
         var keys = IL.DeclareLocal(Types.ObjectArray);
         EmitDefinitionKeyArray(factory.Keys);
         IL.Emit(OpCodes.Stloc, keys);
@@ -597,10 +595,18 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, parent);
         IL.Emit(OpCodes.Ldloc, keys);
         IL.Emit(OpCodes.Ldloc, captures);
-        IL.Emit(OpCodes.Call, Ctx.Runtime.ClassDefinitions.Create);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassDefinitions.Create);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Call, factory.Initializer);
         SetStackUnknown();
+    }
+
+    protected void EmitClassDefinitionInitialization(Type owner)
+    {
+        if (Ctx.NativeClassInitialization?.TryEmit(IL, owner) == true) return;
+        IL.Emit(OpCodes.Ldtoken, owner);
+        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassInitialization.RunDefinition);
     }
 
     protected void EmitDefinitionComputedKeys(MethodBuilder method, IReadOnlyList<Expr> keys)

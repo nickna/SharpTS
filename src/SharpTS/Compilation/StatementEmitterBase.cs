@@ -2043,9 +2043,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
             return;
 
         EmitClassHeritageExpression(classStmt.SuperclassExpr, classStmt.Name.Lexeme);
-        IL.Emit(OpCodes.Ldtoken, builder);
-        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassInitialization.RunDefinition);
+        EmitClassDefinitionInitialization(builder);
 
         if (Ctx.DeferredClassDefinitions?.TryGet(classStmt, out var deferred) == true)
             EmitDeferredComputedKeys(deferred.Registrar, deferred.Keys);

@@ -230,17 +230,15 @@ as `false`; all native warnings remain visible.
 
 A separately published NativeAOT SharpTS compiler also exports the source-alias
 corpus and callbacks created after `await`/`yield` in `Box<number>` and
-`Box<string>` methods. Both exports pass saved-IL verification and managed
-execution. The source-alias export additionally passes diagnostic native guest
-execution. Generic-owner member mapping uses the existing
+`Box<string>` methods. Both exports pass saved-IL verification, managed
+execution and diagnostic native guest execution. Generic-owner member mapping uses the existing
 `EmitterTypeHelpers.ResolveMethod` seam.
 
-The expanded suspension corpus has a remaining native guest blocker: its
-canonical `Box<object>` owner is missing native code/metadata when
-`$Runtime.RunClassDefinition(Type)` initializes the definition. The identical
-failure reproduces with the pre-source-plan compiler at `83400f023`. This is a
-class-definition rooting/catalog gap under #1351; successful native compiler
-export does not establish strict native guest acceptance for that corpus.
+The expanded suspension corpus originally failed when
+`$Runtime.RunClassDefinition(Type)` dynamically closed its canonical
+`Box<object>` owner. That failure also reproduced before source invocation plans
+at `83400f023`. Exact definition initialization, described below, supplies the
+literal canonical owner and resolves that missing native code/metadata failure.
 
 This is an exact-method invocation plan, rather than a direct typed invocation
 thunk. Opaque CLR and source-reflection construction still use their legacy
@@ -248,6 +246,30 @@ paths, including `$ErasedSourceInvokerTarget` and runtime `MakeGenericMethod`.
 They are retained until their producer/use provenance is proved. The basic
 strict console publish still fails on 80 diagnostics after the separate
 runtime-eval bridge omission; the source invocation plan itself removed none.
+
+### Exact class-definition initialization
+
+Native output calls a nongeneric, assembly-internal initializer stub at each
+existing class-definition evaluation site. Its literal closed type token flows
+directly to `RuntimeHelpers.RunClassConstructor`. Declarations use the canonical
+argument snapshot already owned by `ClassGenericParameterRegistry`; evaluated
+class expressions retain their existing closed factory template. The stub
+preserves the existing `TypeInitializationException` inner-exception unwrapping.
+
+Defining a stub does not run it. Heritage evaluation, the source declaration
+position and subsequent deferred computed-key registration retain their order.
+The separate stub also keeps its exception region outside any surrounding
+expression stack. Managed output retains its existing three-instruction
+`RunClassDefinition(Type)` call and emits no native initializer stubs. Unknown
+or open native owners retain that legacy path instead of guessing type arguments.
+
+The suspended generic-owner corpus now runs under a diagnostic native publish,
+including when exported by the native SharpTS compiler. Its strict diagnostic
+inventory loses four `RunClassDefinition` entries: IL2055 twice, IL2059 and
+IL3050, with no additions. This class-specific change does not reduce the basic
+80-diagnostic console inventory, which did not reach `RunClassDefinition`.
+Dynamic prototype/Symbol owner initialization and other reflection paths remain
+under #1351; strict native acceptance is still incomplete.
 
 ## Warning policy and remaining work
 

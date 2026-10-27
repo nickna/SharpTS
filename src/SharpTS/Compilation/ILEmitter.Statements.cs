@@ -3461,10 +3461,7 @@ public partial class ILEmitter
         // the emitted .cctor alongside static fields/blocks/computed keys. Force
         // every class definition, including classes whose only members are methods
         // or private instance fields, so `C.prototype` exists immediately.
-        IL.Emit(OpCodes.Ldtoken, builder!);
-        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
-            _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.ClassInitialization.RunDefinition);
+        EmitClassDefinitionInitialization(builder!);
         if (_ctx.DeferredClassDefinitions?.TryGet(classStmt, out var deferred) == true)
             EmitDeferredComputedKeys(deferred.Registrar, deferred.Keys);
 

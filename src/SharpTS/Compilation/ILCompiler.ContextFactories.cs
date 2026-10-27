@@ -80,6 +80,7 @@ public partial class ILCompiler
             // Compilation-wide services
             Runtime = _runtime,
             ProgramType = _programType,
+            NativeClassInitialization = GetNativeClassInitialization(),
             GetStaticReceiverCall = GetOrCreateStaticReceiverCall,
             RuntimeFeatures = _features,
             LexicalTdzNames = _lexicalBindingNames,
@@ -302,6 +303,7 @@ public partial class ILCompiler
             FunctionLengths = parentCtx.FunctionLengths,
             FunctionNames = parentCtx.FunctionNames,
             FunctionGenericParameters = parentCtx.FunctionGenericParameters,
+            NativeClassInitialization = parentCtx.NativeClassInitialization,
             TypeMap = parentCtx.TypeMap,
             CheckedClassNames = parentCtx.CheckedClassNames,
             ScopedClassNames = parentCtx.ScopedClassNames,

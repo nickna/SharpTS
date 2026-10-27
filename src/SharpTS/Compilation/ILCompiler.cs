@@ -1225,6 +1225,7 @@ public partial class ILCompiler
         {
             tb.CreateType();
         }
+        _nativeClassInitialization?.CompleteEmission();
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
@@ -1873,6 +1874,7 @@ public partial class ILCompiler
         {
             tb.CreateType();
         }
+        _nativeClassInitialization?.CompleteEmission();
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
