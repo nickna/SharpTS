@@ -30,7 +30,20 @@ public partial class Interpreter
             ? owner is null ? superclass : ObjectBuiltIns.PrototypeOf(this, owner)
             : owner is null ? superclass.Prototype : ObjectBuiltIns.PrototypeOf(this, owner.Prototype);
 
+        RuntimeValue current = RuntimeValue.Undefined;
+        if (expression.Operator is { } op)
+        {
+            if (target is null or SharpTSUndefined)
+                throw new ThrowException(new SharpTSTypeError($"Cannot read super property '{name}'"));
+            current = RuntimeValue.FromBoxed(GetPropertyValue(target, name, receiver));
+            if (op.Type == TokenType.AND_AND_EQUAL && !current.IsTruthy() ||
+                op.Type == TokenType.OR_OR_EQUAL && current.IsTruthy() ||
+                op.Type == TokenType.QUESTION_QUESTION_EQUAL && !current.IsNullish)
+                return current;
+        }
         RuntimeValue value = await context.EvaluateExprAsync(expression.Value);
+        if (expression.Operator is { Type: not (TokenType.AND_AND_EQUAL or TokenType.OR_OR_EQUAL or TokenType.QUESTION_QUESTION_EQUAL) } compound)
+            value = ApplyCompoundOperatorRV(compound.Type, current, value);
         if (target is null or SharpTSUndefined ||
             !SharpTSProxy.OrdinarySet(this, target, name, value.ToObject(), receiver))
         {

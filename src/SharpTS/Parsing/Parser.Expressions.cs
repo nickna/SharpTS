@@ -142,7 +142,8 @@ public partial class Parser
                 onVariable: (name, val) => new Expr.CompoundAssign(name, op, val),
                 onGet: (get, val) => new Expr.CompoundSet(get.Object, get.Name, op, val),
                 onGetIndex: (gi, val) => new Expr.CompoundSetIndex(gi.Object, gi.Index, op, val),
-                onGetPrivate: (gp, val) => new Expr.CompoundSetPrivate(gp.Object, gp.Name, op, val));
+                onGetPrivate: (gp, val) => new Expr.CompoundSetPrivate(gp.Object, gp.Name, op, val),
+                onSuper: (reference, val) => new Expr.SetSuper(reference, val, op));
         }
 
         // Logical assignment operators (&&=, ||=, ??=) - have short-circuit semantics
@@ -154,7 +155,8 @@ public partial class Parser
                 onVariable: (name, val) => new Expr.LogicalAssign(name, op, val),
                 onGet: (get, val) => new Expr.LogicalSet(get.Object, get.Name, op, val),
                 onGetIndex: (gi, val) => new Expr.LogicalSetIndex(gi.Object, gi.Index, op, val),
-                onGetPrivate: (gp, val) => new Expr.LogicalSetPrivate(gp.Object, gp.Name, op, val));
+                onGetPrivate: (gp, val) => new Expr.LogicalSetPrivate(gp.Object, gp.Name, op, val),
+                onSuper: (reference, val) => new Expr.SetSuper(reference, val, op));
         }
 
         return expr;
