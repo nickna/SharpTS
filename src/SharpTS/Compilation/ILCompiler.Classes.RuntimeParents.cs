@@ -35,7 +35,8 @@ public partial class ILCompiler
     private bool UsesReceiverConstruction(Stmt.Class declaration) => UsesLiveSuperConstruction(declaration)
         || RequiresConstructorReturnAdapter(declaration)
         || (_typeMapper.RequiresReceiverConstruction(_typeMap.GetClassType(declaration)
-                ?? _typeMap.GetClassType(declaration.Name.Lexeme)) && SupportsReceiverInitialization(declaration));
+                ?? _typeMap.GetClassType(declaration.Name.Lexeme)) && SupportsReceiverInitialization(declaration))
+        || (declaration.IsAbstract && SupportsReceiverInitialization(declaration));
 
     private void RegisterLiveSuperConstruction(Stmt.Class declaration, TypeSystem.TypeInfo? type)
     {
