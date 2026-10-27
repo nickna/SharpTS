@@ -464,7 +464,10 @@ public partial class SharpTSClass(
             return;
         }
         if (_staticMethods.ContainsKey(name))
+        {
+            if (!_deletedStaticMethods.Contains(name)) MaterializeOwnStaticProperty(name);
             _deletedStaticMethods.Add(name);
+        }
         _staticMethodCache.TryRemove(name, out _);
         if (_staticPropertyObject is not null)
             _staticPropertyObject.SetPropertyStrict(name, value, strictMode);
