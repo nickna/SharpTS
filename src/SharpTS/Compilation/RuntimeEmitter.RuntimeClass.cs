@@ -1920,6 +1920,7 @@ public partial class RuntimeEmitter
             new GetValuesInputs(
                 runtime.ArrayStorage,
                 runtime.Booleans,
+                runtime.BoxedPrimitives,
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.ObjectRead.Property,
@@ -1953,6 +1954,7 @@ public partial class RuntimeEmitter
             new GetEntriesInputs(
                 runtime.ArrayStorage,
                 runtime.Booleans,
+                runtime.BoxedPrimitives,
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.ObjectRead.Property,

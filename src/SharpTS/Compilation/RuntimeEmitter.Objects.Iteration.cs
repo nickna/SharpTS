@@ -26,6 +26,7 @@ public partial class RuntimeEmitter
     private readonly record struct GetValuesInputs(
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedBooleanRuntime Booleans,
+        EmittedBoxedPrimitiveRuntime BoxedPrimitives,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
         MethodBuilder GetProperty,
@@ -43,6 +44,7 @@ public partial class RuntimeEmitter
     private readonly record struct GetEntriesInputs(
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedBooleanRuntime Booleans,
+        EmittedBoxedPrimitiveRuntime BoxedPrimitives,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
         MethodBuilder GetProperty,
@@ -377,6 +379,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitEnumerableReceiverCoercion(ILGenerator il, EmittedErrorRuntime errors,
+        EmittedBoxedPrimitiveRuntime boxedPrimitives, Type undefinedType)
+    {
+        var absent = il.DefineLabel();
+        var present = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, absent);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, undefinedType);
+        il.Emit(OpCodes.Brfalse, present);
+        il.MarkLabel(absent);
+        GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor,
+            "Cannot convert undefined or null to object");
+        il.MarkLabel(present);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, boxedPrimitives.ToObject);
+        il.Emit(OpCodes.Starg_S, (byte)0);
+    }
+
     private void EmitGetValues(TypeBuilder typeBuilder, EmittedObjectOperationsRuntime objectOperations, GetValuesInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
@@ -388,6 +409,7 @@ public partial class RuntimeEmitter
         objectOperations.Values = method;
 
         var il = method.GetILGenerator();
+        EmitEnumerableReceiverCoercion(il, inputs.Errors, inputs.BoxedPrimitives, inputs.UndefinedType);
         // number[] unboxing: materialize a numeric-mode $Array before enumerating it as an object.
         EmitDeoptArgIfNumericArrayStorage(il, inputs.ArrayStorage, 0);
         var dictType = _types.DictionaryStringObject;
@@ -954,6 +976,7 @@ public partial class RuntimeEmitter
         objectOperations.Entries = method;
 
         var il = method.GetILGenerator();
+        EmitEnumerableReceiverCoercion(il, inputs.Errors, inputs.BoxedPrimitives, inputs.UndefinedType);
         // number[] unboxing: materialize a numeric-mode $Array before enumerating it as an object.
         EmitDeoptArgIfNumericArrayStorage(il, inputs.ArrayStorage, 0);
         var dictType = _types.DictionaryStringObject;

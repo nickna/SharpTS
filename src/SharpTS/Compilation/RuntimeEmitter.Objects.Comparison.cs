@@ -314,6 +314,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, nextSource);
 
         il.MarkLabel(sourcePresent);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Call, inputs.BoxedPrimitives.ToObject);
+        il.Emit(OpCodes.Stloc, source);
         EmitProxyTypeCheck(
             il, () => il.Emit(OpCodes.Ldloc, source),
             proxySource, ordinarySource);

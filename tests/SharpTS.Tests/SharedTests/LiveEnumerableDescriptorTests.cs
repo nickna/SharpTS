@@ -6,6 +6,36 @@ namespace SharpTS.Tests.SharedTests;
 public class LiveEnumerableDescriptorTests
 {
     [Theory, ModeData]
+    public void NullishReceiversStillThrowBeforeBoxing(ExecutionMode mode)
+    {
+        const string source = """
+            for (const kind of ['values', 'entries']) {
+                for (const value of [null, undefined]) {
+                    try {
+                        if (kind === 'values') Object.values(value as any);
+                        else Object.entries(value as any);
+                        console.log('accepted');
+                    } catch (error) { console.log(error instanceof TypeError); }
+                }
+            }
+            """;
+        Assert.Equal("true\ntrue\ntrue\ntrue\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void PrimitivesUseTheirBoxedOwnDescriptors(ExecutionMode mode)
+    {
+        const string source = """
+            console.log(JSON.stringify(Object.values('abc')));
+            console.log(JSON.stringify(Object.entries('abc')));
+            console.log(JSON.stringify(Object.assign({}, 'abc')));
+            console.log(Object.values(7).length, Object.entries(true).length);
+            """;
+        Assert.Equal("[\"a\",\"b\",\"c\"]\n[[\"0\",\"a\"],[\"1\",\"b\"],[\"2\",\"c\"]]\n{\"0\":\"a\",\"1\":\"b\",\"2\":\"c\"}\n0 0\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void EarlierGettersChangeLaterDescriptorAdmission(ExecutionMode mode)
     {
         const string source = """
