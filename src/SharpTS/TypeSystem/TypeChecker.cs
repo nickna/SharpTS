@@ -973,6 +973,7 @@ public partial class TypeChecker
     private bool _applySourceDiagnosticPolicy;
     private bool _checkJsDiagnostics;
     private TypeScriptPragmas _standalonePragmas = TypeScriptPragmas.Empty;
+    private readonly Dictionary<ParsedModule, HashSet<int>> _matchedModuleExpectErrors = new(ReferenceEqualityComparer.Instance);
 
     // Execution pipelines still need the checked graph for inference and emission. Only diagnostic
     // publication follows checkJs/pragmas; direct checker consumers keep their existing contract.
@@ -1632,6 +1633,20 @@ public partial class TypeChecker
         SourceLocation? location = diagnostic.Location is { } explicitLocation
             ? explicitLocation with { FilePath = explicitLocation.FilePath ?? _filePath }
             : _currentStatementLine is { } line ? new SourceLocation(_filePath, line) : null;
+        if (_applySourceDiagnosticPolicy && _currentModule is { } module &&
+            diagnostic.Severity == DiagnosticSeverity.Error && location is { Line: > 0 } &&
+            location.FilePath == module.Path)
+        {
+            int directiveLine = location.Line - 1;
+            if (module.Pragmas.IgnoreLines.Contains(directiveLine)) return;
+            if (module.Pragmas.ExpectErrorLines.Contains(directiveLine))
+            {
+                if (!_matchedModuleExpectErrors.TryGetValue(module, out var matched))
+                    _matchedModuleExpectErrors[module] = matched = [];
+                matched.Add(directiveLine);
+                return;
+            }
+        }
         _diagnostics.Add(diagnostic with
         {
             Location = location,
@@ -1811,6 +1826,7 @@ public partial class TypeChecker
     public TypeMap CheckModules(List<ParsedModule> modules, ModuleResolver resolver)
     {
         _diagnostics.Clear();
+        _matchedModuleExpectErrors.Clear();
         IndexNewTargetContexts(modules.SelectMany(module => module.Statements));
         Bindings.Clear();
         _typeMap.ClearDeclaredValueTypes();
@@ -2183,6 +2199,18 @@ public partial class TypeChecker
             ReportRootDeclarationImplicitAnyDiagnostics(module.Statements);
         }
 
+        if (_applySourceDiagnosticPolicy)
+        {
+            foreach (var module in modules.Where(module => !module.IsDefaultLibrary && !module.IsDeclarationFile &&
+                TypeCheckPolicy.ShouldTypeCheck(module.Path, module.Pragmas, _checkJsDiagnostics)))
+            {
+                _matchedModuleExpectErrors.TryGetValue(module, out var matched);
+                foreach (int line in module.Pragmas.ExpectErrorLines.Order())
+                    if (matched?.Contains(line) != true)
+                        _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, DiagnosticCode.TypeError,
+                            "Unused '@ts-expect-error' directive.", new SourceLocation(module.Path, line, 1), TsCode: "TS2578"));
+            }
+        }
         _currentModule = null;
         _filePath = null;
         _currentStatementLine = null;

@@ -91,7 +91,7 @@ public static class TypeCheckPolicy
                     DiagnosticSeverity.Error,
                     DiagnosticCode.TypeError,
                     "Unused '@ts-expect-error' directive.",
-                    new SourceLocation(null, line, 1)));
+                    new SourceLocation(null, line, 1), TsCode: "TS2578"));
             }
         }
 
