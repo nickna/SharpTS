@@ -62,8 +62,10 @@ internal sealed class NativeNumericRest4Binding
         foreach (var (original, entry) in _entries)
         {
             var next = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
             _types.EmitLoadMethodInfo(il, original);
+            // RuntimeMethodInfo must own equality; an unknown MethodInfo can
+            // override Equals and must not choose a compiler-owned entry.
+            il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, equality);
             il.Emit(OpCodes.Brfalse, next);
             // Preserve the established closed-static ABI. The entry ignores its

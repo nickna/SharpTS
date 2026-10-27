@@ -34,6 +34,7 @@ public sealed class NativeNumericRestBindingTests
         Assert.True(bound.Method.IsAssembly);
         Assert.Null(binder.Invoke(null, [unknown]));
         Assert.Null(binder.Invoke(null, [typeof(NativeNumericRestBindingTests).GetMethod(nameof(Foreign))]));
+        Assert.Null(binder.Invoke(null, [new ForeignMethodInfo()]));
         Assert.Null(binder.Invoke(null, [null]));
         Assert.Contains(Instructions(binder), instruction => instruction.Code == OpCodes.Ldtoken && Equals(instruction.Member, original));
         Assert.Contains(Instructions(binder), instruction => instruction.Code == OpCodes.Ldftn && Equals(instruction.Member, bound.Method));
@@ -104,6 +105,29 @@ public sealed class NativeNumericRestBindingTests
     }
 
     public static double Foreign(List<object> values) => 0d;
+
+    // Unknown MethodInfo implementations must not choose a source entry by
+    // overriding equality. The finite binder owns the comparison's left side.
+    private sealed class ForeignMethodInfo : MethodInfo
+    {
+        public override bool Equals(object? obj) => true;
+        public override int GetHashCode() => 0;
+        public override string Name => "Foreign";
+        public override Type DeclaringType => typeof(NativeNumericRestBindingTests);
+        public override Type ReflectedType => DeclaringType;
+        public override Type ReturnType => typeof(double);
+        public override ICustomAttributeProvider ReturnTypeCustomAttributes => typeof(double);
+        public override MethodAttributes Attributes => MethodAttributes.Public | MethodAttributes.Static;
+        public override RuntimeMethodHandle MethodHandle => default;
+        public override MethodInfo GetBaseDefinition() => this;
+        public override MethodImplAttributes GetMethodImplementationFlags() => MethodImplAttributes.IL;
+        public override ParameterInfo[] GetParameters() => [];
+        public override object[] GetCustomAttributes(bool inherit) => [];
+        public override object[] GetCustomAttributes(Type attributeType, bool inherit) => [];
+        public override bool IsDefined(Type attributeType, bool inherit) => false;
+        public override object? Invoke(object? obj, BindingFlags invokeAttr, Binder? binder, object?[]? parameters,
+            System.Globalization.CultureInfo? culture) => null;
+    }
 
     private static (PersistedAssemblyBuilder Assembly, ModuleBuilder Module, TypeBuilder Source,
         NativeNumericRest4Binding Binding, MethodBuilder Original, MethodBuilder Entry, ConstructorBuilder Marker) Fixture()
