@@ -2591,6 +2591,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.ObjectOwnProperties.LookupGetter,
                 runtime.ObjectOwnProperties.LookupSetter,
+        EmitArgumentsInitializer(runtime);
                 runtime.ObjectOwnProperties.IsEnumerable,
                 new PrototypeDescriptorInputs(
                     runtime.DescriptorStorage.DescriptorConstructor,

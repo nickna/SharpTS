@@ -1085,6 +1085,8 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Callvirt, ctx.Types.GetPropertyGetter(ctx.Types.ListOfObject, "Count"));
             il.Emit(OpCodes.Stfld, argsLengthField);
+            il.Emit(OpCodes.Ldloc, argsLocal);
+            il.Emit(OpCodes.Call, ctx.Runtime.Arguments.Initialize);
             il.MarkLabel(skipLengthSetLabel);
         }
 

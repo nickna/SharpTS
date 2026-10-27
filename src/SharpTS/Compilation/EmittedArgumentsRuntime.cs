@@ -17,6 +17,13 @@ public sealed class EmittedArgumentsRuntime
     }
 
     private ConstructorBuilder? _defaultCtor;
+    private MethodBuilder? _initialize;
+    public MethodBuilder Initialize
+    {
+        get => Require(_initialize);
+        internal set => SetHandle(ref _initialize, value);
+    }
+
     public ConstructorBuilder DefaultCtor
     {
         get => Require(_defaultCtor);
@@ -77,6 +84,7 @@ public sealed class EmittedArgumentsRuntime
     {
         EnsureMutable();
         _ = Type;
+        _ = Initialize;
         _ = DefaultCtor;
         _ = EnumerableCtor;
         _ = LengthField;
