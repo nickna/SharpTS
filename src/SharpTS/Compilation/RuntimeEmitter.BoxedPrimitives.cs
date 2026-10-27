@@ -616,13 +616,30 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
+        boxed.UnwrapIfBoxedOrdinary = typeBuilder.DefineMethod(
+            "UnwrapIfBoxedOrdinary", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
     }
 
     private void EmitUnwrapIfBoxedBody(EmittedBoxedPrimitiveRuntime boxed,
         UnwrapPrimitiveInputs peers,
         BoxedDateInputs? date)
     {
-        var method = (MethodBuilder)boxed.UnwrapIfBoxed;
+        var owner = (TypeBuilder)boxed.UnwrapIfBoxed.DeclaringType!;
+        var method = owner.DefineMethod("UnwrapPrimitiveCore", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.Boolean]);
+        EmitForwarder(boxed.UnwrapIfBoxed, skipExotic: false);
+        EmitForwarder(boxed.UnwrapIfBoxedOrdinary, skipExotic: true);
+
+        void EmitForwarder(MethodBuilder wrapper, bool skipExotic)
+        {
+            var body = wrapper.GetILGenerator();
+            body.Emit(OpCodes.Ldarg_0);
+            body.Emit(skipExotic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            body.Emit(OpCodes.Call, method);
+            body.Emit(OpCodes.Ret);
+        }
+
         var il = method.GetILGenerator();
         var passThruLabel = il.DefineLabel();
 
@@ -652,6 +669,8 @@ public partial class RuntimeEmitter
         // different from the interpreter.
         var ordinaryToPrimitiveLabel = il.DefineLabel();
         var toPrimitiveFn = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brtrue, ordinaryToPrimitiveLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldsfld, peers.SymbolToPrimitive);
         il.Emit(OpCodes.Call, peers.GetIndex);
