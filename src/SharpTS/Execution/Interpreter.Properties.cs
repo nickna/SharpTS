@@ -1923,6 +1923,7 @@ public partial class Interpreter
         if (receiver is null or SharpTSUndefined) return null;
         return callee switch
         {
+            SharpTSTextDecoder.TextDecoderDecodeMethod decode => decode.BindTo(receiver),
             SharpTSObjectUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
             SharpTSArrayUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
             ArrayPrototypeMethodWrapper m when receiver is SharpTSArray => m.Bind(receiver),
