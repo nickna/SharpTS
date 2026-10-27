@@ -76,6 +76,106 @@ function New-VersionMap {
     $map
 }
 
+function Remove-TestFixture($Fixture) {
+    $root = [IO.Path]::GetFullPath($Fixture.Root)
+    $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar)
+    if ([IO.Path]::GetDirectoryName($root) -cne $temporaryRoot -or
+        [IO.Path]::GetFileName($root) -notmatch '^sharpts-nuget-release-[a-f0-9]{32}$') {
+        throw "Refusing to remove an unexpected test fixture: $root"
+    }
+    Remove-Item -LiteralPath $root -Recurse -Force
+}
+
+Invoke-Test 'artifact action accepts a complete unregistered fixture without feed or credentials' {
+    $fixture = New-TestFixture
+    try {
+        $state = [pscustomobject]@{ Fetches = 0; Pushes = 0 }
+        $fetch = { param($Id, $Uri) $state.Fetches++; @() }.GetNewClosure()
+        $push = { param($Path, $Id, $Version, $Key, $Source) $state.Pushes++ }.GetNewClosure()
+        Invoke-NuGetRelease -Action ValidateArtifacts -Manifest $fixture.Manifest -PackageDirectory $fixture.PackageDirectory `
+            -Version $releaseVersion -RepositoryRoot $fixture.Root -FetchPackageVersions $fetch -PushPackage $push
+        Assert-True ($state.Fetches -eq 0 -and $state.Pushes -eq 0) 'Artifact validation crossed the registration or publication boundary.'
+        # Exercise the real CLI action too: this endpoint cannot serve a package index.
+        & (Join-Path $PSScriptRoot 'nuget-release.ps1') -Action ValidateArtifacts -Version $releaseVersion `
+            -PackageDirectory $fixture.PackageDirectory -ManifestPath $fixture.ManifestPath -FlatContainerBaseUri 'http://127.0.0.1:1/unused'
+    }
+    finally { Remove-TestFixture $fixture }
+}
+
+Invoke-Test 'preflight and publish reject unregistered or unavailable IDs before every push' {
+    $fixture = New-TestFixture
+    try {
+        foreach ($releaseAction in @('Preflight', 'Publish')) {
+            foreach ($unavailable in @($false, $true)) {
+                $state = [pscustomobject]@{ Fetches = 0; Pushes = 0 }
+                $fetch = {
+                    param($Id, $Uri)
+                    $state.Fetches++
+                    if ($Id -eq 'SharpTS.DebugAdapter') {
+                        if ($unavailable) { throw 'fixture feed unavailable' }
+                        return @()
+                    }
+                    @('1.0.7')
+                }.GetNewClosure()
+                $push = { param($Path, $Id, $Version, $Key, $Source) $state.Pushes++ }.GetNewClosure()
+                Assert-ThrowsContaining {
+                    Invoke-NuGetRelease -Action $releaseAction -Manifest $fixture.Manifest -PackageDirectory $fixture.PackageDirectory `
+                        -Version $releaseVersion -RepositoryRoot $fixture.Root -ApiKey key -FetchPackageVersions $fetch -PushPackage $push
+                } "Package ID 'SharpTS.DebugAdapter' is not registered"
+                Assert-True ($state.Fetches -eq $packageIds.Count) 'Registration did not inspect the complete package set.'
+                Assert-True ($state.Pushes -eq 0) "$releaseAction attempted a push before successful registration."
+            }
+        }
+    }
+    finally { Remove-TestFixture $fixture }
+}
+
+Invoke-Test 'every action rejects invalid versions and package artifacts before registration or push' {
+    foreach ($releaseAction in @('ValidateArtifacts', 'Preflight', 'Publish')) {
+        foreach ($invalid in @('release-version', 'missing-artifact', 'unexpected-artifact', 'embedded-id', 'embedded-version')) {
+            $fixture = New-TestFixture
+            try {
+                $version = $releaseVersion
+                $path = Join-Path $fixture.PackageDirectory "SharpTS.DebugAdapter.$releaseVersion.nupkg"
+                switch ($invalid) {
+                    'release-version' { $version = '01.0.0'; $expected = 'Invalid release version' }
+                    'missing-artifact' { Remove-Item -LiteralPath $path; $expected = 'Expected package artifact not found' }
+                    'unexpected-artifact' {
+                        New-TestPackage (Join-Path $fixture.PackageDirectory "Unexpected.$releaseVersion.nupkg") 'Unexpected' $releaseVersion
+                        $expected = 'Unexpected package artifact found'
+                    }
+                    'embedded-id' { New-TestPackage $path 'Wrong.DebugAdapter' $releaseVersion; $expected = "contains ID 'Wrong.DebugAdapter'" }
+                    'embedded-version' { New-TestPackage $path 'SharpTS.DebugAdapter' '2.0.1'; $expected = "contains version '2.0.1'" }
+                }
+                $state = [pscustomobject]@{ Fetches = 0; Pushes = 0 }
+                $fetch = { param($Id, $Uri) $state.Fetches++; @('1.0.7') }.GetNewClosure()
+                $push = { param($Path, $Id, $Version, $Key, $Source) $state.Pushes++ }.GetNewClosure()
+                Assert-ThrowsContaining {
+                    Invoke-NuGetRelease -Action $releaseAction -Manifest $fixture.Manifest -PackageDirectory $fixture.PackageDirectory `
+                        -Version $version -RepositoryRoot $fixture.Root -ApiKey key -FetchPackageVersions $fetch -PushPackage $push
+                } $expected
+                Assert-True ($state.Fetches -eq 0 -and $state.Pushes -eq 0) "$releaseAction crossed a remote boundary with $invalid."
+            }
+            finally { Remove-TestFixture $fixture }
+        }
+    }
+}
+
+Invoke-Test 'publish requires credentials after successful artifact and registration checks' {
+    $fixture = New-TestFixture
+    try {
+        $state = [pscustomobject]@{ Fetches = 0; Pushes = 0 }
+        $fetch = { param($Id, $Uri) $state.Fetches++; @('1.0.7') }.GetNewClosure()
+        $push = { param($Path, $Id, $Version, $Key, $Source) $state.Pushes++ }.GetNewClosure()
+        Assert-ThrowsContaining {
+            Invoke-NuGetRelease -Action Publish -Manifest $fixture.Manifest -PackageDirectory $fixture.PackageDirectory `
+                -Version $releaseVersion -RepositoryRoot $fixture.Root -FetchPackageVersions $fetch -PushPackage $push
+        } 'NUGET_API_KEY must be set'
+        Assert-True ($state.Fetches -eq $packageIds.Count -and $state.Pushes -eq 0) 'Missing credentials bypassed preflight or attempted a push.'
+    }
+    finally { Remove-TestFixture $fixture }
+}
+
 Invoke-Test 'schema v2 rejects per-package release overrides' {
     $fixture = New-TestFixture
     try {
@@ -89,7 +189,7 @@ Invoke-Test 'schema v2 rejects per-package release overrides' {
             Assert-ThrowsContaining { Get-NuGetReleaseManifest $fixture.ManifestPath } "unsupported field(s): $field"
         }
     }
-    finally { Remove-Item $fixture.Root -Recurse -Force }
+    finally { Remove-TestFixture $fixture }
 }
 
 Invoke-Test 'preflight rejects malformed release versions' {
@@ -103,7 +203,7 @@ Invoke-Test 'preflight rejects malformed release versions' {
             } "Invalid release version '$invalidVersion'"
         }
     }
-    finally { Remove-Item $fixture.Root -Recurse -Force }
+    finally { Remove-TestFixture $fixture }
 }
 
 Invoke-Test 'preflight requires all six tag-versioned files' {
@@ -117,7 +217,7 @@ Invoke-Test 'preflight requires all six tag-versioned files' {
             Assert-NuGetReleasePreflight $fixture.Manifest $fixture.PackageDirectory $releaseVersion $fixture.Root -FetchPackageVersions $fetch
         } "SharpTS.Gui.Sdk.$releaseVersion.nupkg"
     }
-    finally { Remove-Item $fixture.Root -Recurse -Force }
+    finally { Remove-TestFixture $fixture }
 }
 
 Invoke-Test 'preflight rejects an embedded package ID mismatch' {
@@ -131,7 +231,7 @@ Invoke-Test 'preflight rejects an embedded package ID mismatch' {
             Assert-NuGetReleasePreflight $fixture.Manifest $fixture.PackageDirectory $releaseVersion $fixture.Root -FetchPackageVersions $fetch
         } "contains ID 'Wrong.Gui.Sdk'"
     }
-    finally { Remove-Item $fixture.Root -Recurse -Force }
+    finally { Remove-TestFixture $fixture }
 }
 
 Invoke-Test 'preflight rejects an embedded package version mismatch' {
@@ -145,7 +245,7 @@ Invoke-Test 'preflight rejects an embedded package version mismatch' {
             Assert-NuGetReleasePreflight $fixture.Manifest $fixture.PackageDirectory $releaseVersion $fixture.Root -FetchPackageVersions $fetch
         } "contains version '2.0.1'"
     }
-    finally { Remove-Item $fixture.Root -Recurse -Force }
+    finally { Remove-TestFixture $fixture }
 }
 
 Invoke-Test 'preflight rejects unexpected package artifacts' {
@@ -158,7 +258,7 @@ Invoke-Test 'preflight rejects unexpected package artifacts' {
             Assert-NuGetReleasePreflight $fixture.Manifest $fixture.PackageDirectory $releaseVersion $fixture.Root -FetchPackageVersions $fetch
         } 'Unexpected package artifact found'
     }
-    finally { Remove-Item $fixture.Root -Recurse -Force }
+    finally { Remove-TestFixture $fixture }
 }
 
 Invoke-Test 'publication uses one version and all six filenames' {
@@ -176,7 +276,10 @@ Invoke-Test 'publication uses one version and all six filenames' {
             })
         }.GetNewClosure()
         $source = 'https://packages.example.test/v3/index.json'
-        Publish-NuGetPackages $fixture.Manifest $fixture.PackageDirectory $releaseVersion key -NuGetSource $source -PushPackage $push
+        $versions = New-VersionMap
+        $fetch = { param($Id, $Uri) @($versions[$Id]) }.GetNewClosure()
+        Invoke-NuGetRelease -Action Publish -Manifest $fixture.Manifest -PackageDirectory $fixture.PackageDirectory `
+            -Version $releaseVersion -RepositoryRoot $fixture.Root -ApiKey key -NuGetSource $source -FetchPackageVersions $fetch -PushPackage $push
         $expected = @($packageIds | ForEach-Object { "$($_).$releaseVersion.nupkg" } | Sort-Object)
         Assert-True ($pushes.Count -eq $packageIds.Count) 'Expected each package to be pushed once.'
         Assert-True (-not (Compare-Object $expected @($pushes.File | Sort-Object) -SyncWindow 0)) 'Expected filenames differ.'
@@ -187,7 +290,7 @@ Invoke-Test 'publication uses one version and all six filenames' {
         Assert-True ($keys.Count -eq 1 -and $keys[0] -ceq 'key') 'Pushes did not share the API key.'
         Assert-True ($sources.Count -eq 1 -and $sources[0] -ceq $source) 'Pushes did not share the NuGet source.'
     }
-    finally { Remove-Item $fixture.Root -Recurse -Force }
+    finally { Remove-TestFixture $fixture }
 }
 
 Invoke-Test 'publication attempts every package after a push failure' {
@@ -205,7 +308,7 @@ Invoke-Test 'publication attempts every package after a push failure' {
         Assert-True ($attempts.Count -eq $packageIds.Count) 'A failed push stopped the package inventory early.'
         Assert-True (-not (Compare-Object ($packageIds | Sort-Object) ($attempts | Sort-Object) -SyncWindow 0)) 'Not every package was attempted.'
     }
-    finally { Remove-Item $fixture.Root -Recurse -Force }
+    finally { Remove-TestFixture $fixture }
 }
 
 Invoke-Test 'publication reports multiple push failures together' {
@@ -223,7 +326,7 @@ Invoke-Test 'publication reports multiple push failures together' {
         Assert-True ($message -like '*SharpTS.LanguageServer 2.0.0: first failure*') 'First push failure was omitted.'
         Assert-True ($message -like '*SharpTS.Gui.Sdk 2.0.0: second failure*') 'Second push failure was omitted.'
     }
-    finally { Remove-Item $fixture.Root -Recurse -Force }
+    finally { Remove-TestFixture $fixture }
 }
 
 Invoke-Test 'publication contains no availability polling or sleeping' {

@@ -284,9 +284,27 @@ foreach ($requiredText in @('./scripts/test-smoke-process.ps1', './scripts/test-
     }
 }
 $adapterSmokePosition = $publishBuildJob.IndexOf('./scripts/test-debug-adapter-package.ps1', [StringComparison]::Ordinal)
-foreach ($boundary in @('Preflight NuGet package IDs and artifacts', 'Upload package artifacts')) {
+foreach ($boundary in @('Validate NuGet package artifacts', 'Preflight NuGet package IDs and artifacts', 'Upload package artifacts')) {
     if ($adapterSmokePosition -lt 0 -or $adapterSmokePosition -gt $publishBuildJob.IndexOf($boundary, [StringComparison]::Ordinal)) {
         $errors.Add("The exact debug adapter package must pass protocol smoke before $boundary.")
+    }
+}
+
+$artifactValidationStep = [regex]::Match($publishBuildJob, '(?ms)^      - name: Validate NuGet package artifacts\r?\n.*?(?=^      - |\z)').Value
+if (-not $artifactValidationStep.Contains('-Action ValidateArtifacts', [StringComparison]::Ordinal) -or
+    $artifactValidationStep -match '(?m)^        if:') {
+    $errors.Add('Every Publish build must validate local package artifacts without a conditional guard.')
+}
+$registrationStep = [regex]::Match($publishBuildJob, '(?ms)^      - name: Preflight NuGet package IDs and artifacts\r?\n.*?(?=^      - |\z)').Value
+if (-not $registrationStep.Contains("if: startsWith(github.ref, 'refs/tags/v')", [StringComparison]::Ordinal) -or
+    -not $registrationStep.Contains('-Action Preflight', [StringComparison]::Ordinal)) {
+    $errors.Add('Tagged Publish builds must retain full NuGet registration preflight; dispatches must reach binary validation without it.')
+}
+$dryRunSummaryStep = [regex]::Match($publishBuildJob, '(?ms)^      - name: Summarize dry-run validation boundary\r?\n.*?(?=^      - |\z)').Value
+foreach ($requiredText in @("if: github.event_name == 'workflow_dispatch'", 'GITHUB_STEP_SUMMARY',
+    'NuGet registration and publication credentials were not validated', 'does not establish publication readiness')) {
+    if (-not $dryRunSummaryStep.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Publish dry runs must disclose their validation boundary: $requiredText")
     }
 }
 

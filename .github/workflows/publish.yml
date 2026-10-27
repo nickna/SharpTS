@@ -149,16 +149,33 @@ jobs:
           -PackageVersion "${{ steps.version.outputs.VERSION }}"
           -PackageOnly
 
-      # A new package ID must be onboarded under the Trusted Publishing policy's
-      # NuGet owner before a tag can publish it. This also keeps every package
-      # artifact tied to a package ID that NuGet already serves.
+      # Every run checks local package identity and inventory. The binary dry
+      # run must not depend on onboarding a new package ID for publication.
+      - name: Validate NuGet package artifacts
+        shell: pwsh
+        run: >-
+          ./scripts/nuget-release.ps1
+          -Action ValidateArtifacts
+          -Version "${{ steps.version.outputs.VERSION }}"
+          -PackageDirectory ./nupkg
+
+      # Tags additionally require public package registration before any
+      # dependent job can publish. Publish repeats both checks before pushing.
       - name: Preflight NuGet package IDs and artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: >-
           ./scripts/nuget-release.ps1
           -Action Preflight
           -Version "${{ steps.version.outputs.VERSION }}"
           -PackageDirectory ./nupkg
+
+      - name: Summarize dry-run validation boundary
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '### Release dry run'
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Local package IDs, versions and artifact inventory were validated. NuGet registration and publication credentials were not validated. A successful dry run does not establish publication readiness.'
 
       - name: Smoke test packaged SDK
         shell: pwsh

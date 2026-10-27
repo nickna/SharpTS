@@ -92,20 +92,13 @@ function Get-NuGetPackageIdentity {
     return [pscustomobject]@{ Id = $id; Version = $version }
 }
 
-function Assert-NuGetReleasePreflight {
+function Assert-NuGetReleaseArtifacts {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] $Manifest,
         [Parameter(Mandatory)][string] $PackageDirectory,
-        [Parameter(Mandatory)][string] $Version,
-        [Parameter(Mandatory)][string] $RepositoryRoot,
-        [string] $FlatContainerBaseUri = 'https://api.nuget.org/v3-flatcontainer',
-        [scriptblock] $FetchPackageVersions
+        [Parameter(Mandatory)][string] $Version
     )
-
-    if ($null -eq $FetchPackageVersions) {
-        $FetchPackageVersions = { param($PackageId, $BaseUri) Get-NuGetPackageVersions -PackageId $PackageId -FlatContainerBaseUri $BaseUri }
-    }
 
     if (-not (Test-NuGetReleaseVersion $Version)) {
         throw "Invalid release version '$Version'."
@@ -141,6 +134,34 @@ function Assert-NuGetReleasePreflight {
             }
         }
 
+    }
+
+    if ($errors.Count -gt 0) {
+        throw "NuGet release artifact validation failed:`n - $($errors -join "`n - ")"
+    }
+
+    Write-Host "NuGet release artifacts validated for version $Version."
+}
+
+function Assert-NuGetReleasePreflight {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] $Manifest,
+        [Parameter(Mandatory)][string] $PackageDirectory,
+        [Parameter(Mandatory)][string] $Version,
+        [Parameter(Mandatory)][string] $RepositoryRoot,
+        [string] $FlatContainerBaseUri = 'https://api.nuget.org/v3-flatcontainer',
+        [scriptblock] $FetchPackageVersions
+    )
+
+    Assert-NuGetReleaseArtifacts -Manifest $Manifest -PackageDirectory $PackageDirectory -Version $Version
+    if ($null -eq $FetchPackageVersions) {
+        $FetchPackageVersions = { param($PackageId, $BaseUri) Get-NuGetPackageVersions -PackageId $PackageId -FlatContainerBaseUri $BaseUri }
+    }
+
+    $errors = [System.Collections.Generic.List[string]]::new()
+    foreach ($package in @($Manifest.packages)) {
+        $packageId = [string]$package.id
         try {
             $publishedVersions = @(& $FetchPackageVersions $packageId $FlatContainerBaseUri)
             if ($publishedVersions.Count -eq 0) {
@@ -215,10 +236,42 @@ function Publish-NuGetPackages {
     Write-Host "All expected NuGet packages were accepted for publication at version $Version."
 }
 
+function Invoke-NuGetRelease {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateSet('ValidateArtifacts', 'Preflight', 'Publish')][string] $Action,
+        [Parameter(Mandatory)] $Manifest,
+        [Parameter(Mandatory)][string] $PackageDirectory,
+        [Parameter(Mandatory)][string] $Version,
+        [Parameter(Mandatory)][string] $RepositoryRoot,
+        [string] $ApiKey,
+        [string] $NuGetSource = 'https://api.nuget.org/v3/index.json',
+        [string] $FlatContainerBaseUri = 'https://api.nuget.org/v3-flatcontainer',
+        [scriptblock] $FetchPackageVersions,
+        [scriptblock] $PushPackage
+    )
+
+    if ($Action -eq 'ValidateArtifacts') {
+        Assert-NuGetReleaseArtifacts -Manifest $Manifest -PackageDirectory $PackageDirectory -Version $Version
+        return
+    }
+
+    Assert-NuGetReleasePreflight -Manifest $Manifest -PackageDirectory $PackageDirectory -Version $Version `
+        -RepositoryRoot $RepositoryRoot -FlatContainerBaseUri $FlatContainerBaseUri -FetchPackageVersions $FetchPackageVersions
+    if ($Action -eq 'Preflight') { return }
+    if ([string]::IsNullOrWhiteSpace($ApiKey)) {
+        throw 'NUGET_API_KEY must be set for NuGet publication.'
+    }
+    Publish-NuGetPackages -Manifest $Manifest -PackageDirectory $PackageDirectory -Version $Version `
+        -ApiKey $ApiKey -NuGetSource $NuGetSource -PushPackage $PushPackage
+}
+
 Export-ModuleMember -Function @(
     'Get-NuGetReleaseManifest',
     'Get-NuGetPackageIdentity',
     'Get-NuGetPackageVersions',
+    'Assert-NuGetReleaseArtifacts',
     'Assert-NuGetReleasePreflight',
+    'Invoke-NuGetRelease',
     'Publish-NuGetPackages'
 )

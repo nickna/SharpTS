@@ -18,8 +18,14 @@ When adding a package:
 1. Onboard its ID on NuGet separately from a release tag and assign it to the `nbn` package owner.
 2. Confirm the `SharpTS` Trusted Publishing policy is active; it applies to packages owned by `nbn`.
 3. Add the entry in the intended push order and run `./scripts/test-nuget-release.ps1`.
-4. Run the Publish workflow manually. Its dry run builds and packs the set and performs public-feed
-   preflight without publishing.
+4. Run the Publish workflow manually. Its dry run builds and packs the set, validates local artifact
+   IDs, versions and inventory, and runs the managed/native binary matrix without publishing.
+
+Manual dry runs do not validate NuGet package registration or publishing credentials. Their job
+summary states this boundary explicitly, so a successful binary dry run does not establish NuGet
+publication readiness. Use `./scripts/nuget-release.ps1 -Action ValidateArtifacts -Version <version>`
+for the same local artifact checks. `-Action Preflight` additionally queries public package
+registration; `-Action Publish` repeats both checks before attempting any push.
 
 The tagged release is blocked if any manifest ID is not registered. This prevents an untested
 permission from publishing established packages before failing on a new ID.
@@ -60,7 +66,8 @@ included in tagged NuGet publication.
 
 ## Normal release
 
-The Publish workflow builds and tests artifacts before the release job. Preflight verifies that
+The Publish workflow builds and tests artifacts before the release job. Every build validates the
+package artifacts; tagged builds additionally run full registration preflight. Preflight verifies that
 every manifest-selected `.nupkg` exists, its embedded ID and version match the manifest and tag, and
 every package ID is registered. The release job pushes
 missing versions explicitly with `--skip-duplicate`, then queries NuGet up to 30 times at 20-second
