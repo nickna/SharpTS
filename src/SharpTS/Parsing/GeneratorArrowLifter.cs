@@ -990,7 +990,10 @@ internal sealed class GeneratorArrowLifter
         // generator expressions inside it are handled, and its own name (if any) stays bound natively —
         // no #679 self-binding rewrite is needed in place. The compiler has no generator-expression IL
         // path and reports a clear "Yield not supported in this context" error for the capturing case.
-        if (CapturesBlockScopedBinding(freeVars))
+        // Expressions without enclosing-function captures use the native
+        // expression path too: relocating one to a module declaration would
+        // reuse its function identity across repeated evaluations.
+        if (CapturesBlockScopedBinding(freeVars) || !ClosesOverEnclosingLocal(freeVars))
         {
             var inPlaceBody = RewriteFunctionBody(af.Parameters, af.BlockBody!, selfName: af.Name?.Lexeme);
             var inPlaceParams = RewriteParameters(af.Parameters);
