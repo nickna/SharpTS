@@ -6,9 +6,9 @@ name: Publish to NuGet
 # GitHub Release with all archives attached. A failing RID or unavailable NuGet
 # package therefore blocks downstream release work.
 #
-# workflow_dispatch is the dry-run mode: it exercises the full matrix (including
-# the six native RIDs and their runner labels) without publishing anything —
-# run it before the first real tag, and after runner-label or matrix changes.
+# workflow_dispatch is the dry-run mode: it exercises the current five-RID
+# managed/native matrix (#1324) without publishing anything. Run it before
+# the first real tag, and after runner-label or matrix changes.
 on:
   push:
     tags:
