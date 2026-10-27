@@ -227,6 +227,20 @@ private methods, computed methods and accessors. A Windows diagnostic native
 publish executes that corpus and reports `RuntimeFeature.IsDynamicCodeSupported`
 as `false`; all native warnings remain visible.
 
+A separately published NativeAOT SharpTS compiler also exports the source-alias
+corpus and callbacks created after `await`/`yield` in `Box<number>` and
+`Box<string>` methods. Both exports pass saved-IL verification and managed
+execution. The source-alias export additionally passes diagnostic native guest
+execution. Generic-owner member mapping uses the existing
+`EmitterTypeHelpers.ResolveMethod` seam.
+
+The expanded suspension corpus has a remaining native guest blocker: its
+canonical `Box<object>` owner is missing native code/metadata when
+`$Runtime.RunClassDefinition(Type)` initializes the definition. The identical
+failure reproduces with the pre-source-plan compiler at `83400f023`. This is a
+class-definition rooting/catalog gap under #1351; successful native compiler
+export does not establish strict native guest acceptance for that corpus.
+
 This is an exact-method invocation plan, rather than a direct typed invocation
 thunk. Opaque CLR and source-reflection construction still use their legacy
 paths, including `$ErasedSourceInvokerTarget` and runtime `MakeGenericMethod`.

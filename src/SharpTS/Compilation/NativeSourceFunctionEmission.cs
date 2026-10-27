@@ -55,7 +55,7 @@ internal static class NativeSourceFunctionEmission
             if (target is not MethodBuilder method || !owner.IsGenericType ||
                 owner.GetGenericTypeDefinition() != method.DeclaringType)
                 return false;
-            target = TypeBuilder.GetMethod(owner, method);
+            target = EmitterTypeHelpers.ResolveMethod(owner, method);
         }
         il.Emit(OpCodes.Ldtoken, target);
         il.Emit(OpCodes.Ldtoken, owner);

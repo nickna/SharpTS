@@ -4,6 +4,7 @@ using SharpTS.Compilation;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
+using SharpTS.Tests.SharedTests;
 using SharpTS.TypeSystem;
 using Xunit;
 
@@ -11,6 +12,22 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class NativeSourceInvocationPlanTests
 {
+    public static IEnumerable<object[]> ExistingAliasCases() => GenericFunctionAliasTests.Cases()
+        .SelectMany(row => new[] { false, true }.Select(native => new object[] { row[0], row[1], row[2], native }));
+
+    [Theory, MemberData(nameof(ExistingAliasCases))]
+    public void ExistingGenericAliasCorpusKeepsDeclarationConstraintErasure(string name, string source, string expected, bool native)
+    {
+        Assert.NotEmpty(name);
+        GenericFunctionAliasTests.AssertStrictSource(source);
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var types = new TypeChecker().Check(statements);
+        var compiler = Compiler(native);
+        compiler.Compile(statements, types);
+        Assembly saved = LoadVerified(compiler.SaveToBytes());
+        Assert.Equal(expected, TestHarness.RunCompiledWithTimeout(() => saved, TimeSpan.FromSeconds(20)));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -128,6 +145,48 @@ public sealed class NativeSourceInvocationPlanTests
         Assert.Equal("2 module true\n4 namespace true\n",
             TestHarness.RunCompiledWithTimeout(() => saved, TimeSpan.FromSeconds(20)));
         if (native) AssertNativeConstructorsDoNotCloseMethods(saved.GetType("$TSFunction")!);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GenericClassClosuresCreatedAfterSuspensionKeepTheirActualReceivers(bool native)
+    {
+        const string source = """
+            class Box<T> {
+                value: T;
+                constructor(value: T) { this.value = value; }
+                async make() { await Promise.resolve(0); return () => this.value; }
+                *values() { yield 0; yield () => this.value; }
+                async *stream() { yield 0; yield () => this.value; }
+            }
+            async function run() {
+                const first = new Box<number>(8);
+                const second = new Box<string>('string');
+                const a: any = await first.make();
+                const b: any = await second.make();
+                console.log(a(), b());
+                const left = first.values();
+                const right = second.values();
+                left.next(); right.next();
+                const c: any = left.next().value;
+                const d: any = right.next().value;
+                console.log(c(), d());
+                const leftAsync = first.stream();
+                const rightAsync = second.stream();
+                await leftAsync.next(); await rightAsync.next();
+                const e: any = (await leftAsync.next()).value;
+                const f: any = (await rightAsync.next()).value;
+                console.log(e(), f());
+            }
+            run();
+            """;
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var types = new TypeChecker().Check(statements);
+        var compiler = Compiler(native);
+        compiler.Compile(statements, types);
+        Assembly saved = LoadVerified(compiler.SaveToBytes());
+        Assert.Equal("8 string\n8 string\n8 string\n", TestHarness.RunCompiledWithTimeout(() => saved, TimeSpan.FromSeconds(20)));
     }
 
     [Fact]
