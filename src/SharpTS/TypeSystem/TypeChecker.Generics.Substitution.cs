@@ -83,9 +83,9 @@ public partial class TypeChecker
             TypeInfo.Promise promise =>
                 new TypeInfo.Promise(Sub(promise.ValueType)),
             TypeInfo.Generator generator =>
-                new TypeInfo.Generator(Sub(generator.YieldType)) { ReturnType = Sub(generator.ReturnType) },
+                new TypeInfo.Generator(Sub(generator.YieldType)) { ReturnType = Sub(generator.ReturnType), NextType = Sub(generator.NextType) },
             TypeInfo.AsyncGenerator generator =>
-                new TypeInfo.AsyncGenerator(Sub(generator.YieldType)) { ReturnType = Sub(generator.ReturnType) },
+                new TypeInfo.AsyncGenerator(Sub(generator.YieldType)) { ReturnType = Sub(generator.ReturnType), NextType = Sub(generator.NextType) },
             TypeInfo.FunctionSupertype => type,
             TypeInfo.GenericFunction generic => SubstituteGenericMethod(generic, substitutions, evalConditionals),
             TypeInfo.OverloadSet overloaded => new TypeInfo.OverloadSet(overloaded.Signatures.Select(Sub).ToList()),

@@ -1306,6 +1306,7 @@ public abstract record TypeInfo
     public record Generator(TypeInfo YieldType) : TypeInfo
     {
         public TypeInfo ReturnType { get; init; } = Any.Shared;
+        public TypeInfo NextType { get; init; } = Unknown.Shared;
         public override string ToString() => ReturnType is Any
             ? $"Generator<{YieldType}>" : $"Generator<{YieldType}, {ReturnType}>";
     }
@@ -1317,6 +1318,7 @@ public abstract record TypeInfo
     public record AsyncGenerator(TypeInfo YieldType) : TypeInfo
     {
         public TypeInfo ReturnType { get; init; } = Any.Shared;
+        public TypeInfo NextType { get; init; } = Unknown.Shared;
         public override string ToString() => ReturnType is Any
             ? $"AsyncGenerator<{YieldType}>" : $"AsyncGenerator<{YieldType}, {ReturnType}>";
     }

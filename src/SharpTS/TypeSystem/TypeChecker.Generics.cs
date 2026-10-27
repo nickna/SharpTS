@@ -70,7 +70,11 @@ public partial class TypeChecker
             {
                 throw new TypeCheckException($" Generator requires between 1 and 3 type arguments, got {typeArgs.Count}.", tsCode: "TS2707");
             }
-            result = new TypeInfo.Generator(typeArgs[0]) { ReturnType = typeArgs.Count > 1 ? typeArgs[1] : TypeInfo.Any.Shared };
+            result = new TypeInfo.Generator(typeArgs[0])
+            {
+                ReturnType = typeArgs.Count > 1 ? typeArgs[1] : TypeInfo.Any.Shared,
+                NextType = typeArgs.Count > 2 ? typeArgs[2] : TypeInfo.Unknown.Shared,
+            };
         }
         else if (baseName == "AsyncGenerator")
         {
@@ -78,7 +82,11 @@ public partial class TypeChecker
             {
                 throw new TypeCheckException($" AsyncGenerator requires between 1 and 3 type arguments, got {typeArgs.Count}.", tsCode: "TS2707");
             }
-            result = new TypeInfo.AsyncGenerator(typeArgs[0]) { ReturnType = typeArgs.Count > 1 ? typeArgs[1] : TypeInfo.Any.Shared };
+            result = new TypeInfo.AsyncGenerator(typeArgs[0])
+            {
+                ReturnType = typeArgs.Count > 1 ? typeArgs[1] : TypeInfo.Any.Shared,
+                NextType = typeArgs.Count > 2 ? typeArgs[2] : TypeInfo.Unknown.Shared,
+            };
         }
         // The built-in collections carry dedicated TypeInfo records (with IsCompatible + member-type
         // support) but were previously only constructed from `new Map()`/`new Set()` expressions — a

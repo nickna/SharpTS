@@ -432,18 +432,29 @@ public partial class TypeChecker
                 // (#548): `function* g() { yield* [1, 2]; }` yields `number`, so it must infer
                 // Generator<number>, not Generator<void>. Collected only while that type is being inferred.
                 _inferredYieldTypes?.Add(delegatedElement);
-                return delegatedElement;
+                return valueType switch
+                {
+                    TypeInfo.Generator generator => generator.ReturnType,
+                    TypeInfo.AsyncGenerator generator => generator.ReturnType,
+                    _ => TypeInfo.Any.Shared,
+                };
             }
 
             _inferredYieldTypes?.Add(valueType);
-            return valueType;
+            return GetGeneratorNextType();
         }
 
         // Bare `yield` yields `undefined`; it contributes `undefined` to the inferred yield type (#548).
         _inferredYieldTypes?.Add(TypeInfo.Undefined.Shared);
-        // The yield EXPRESSION still evaluates to the (modeled) void type for an operand-less yield.
-        return TypeInfo.Void.Shared;
+        return GetGeneratorNextType();
     }
+
+    private TypeInfo GetGeneratorNextType() => _currentFunctionReturnType switch
+    {
+        TypeInfo.Generator generator => generator.NextType,
+        TypeInfo.AsyncGenerator generator => generator.NextType,
+        _ => TypeInfo.Any.Shared,
+    };
 
     /// <summary>
     /// Gets the element type from an iterable type (for yield* delegation).
