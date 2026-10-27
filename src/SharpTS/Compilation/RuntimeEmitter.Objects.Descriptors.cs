@@ -1546,9 +1546,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, throwRedefineLabel);
         il.MarkLabel(checkValueChange);
         // New specifies value != existing.value → throw (data with writable=false).
-        // Skip the equality check when existing.value is null: the prior PDS
-        // descriptor was installed without an explicit value (\`defineProperty\`
-        // with {writable:false} alone, before any value was captured).
+        // Null is an actual current value; omitted data values are undefined.
         // For arrays, \`length\` is special — its value lives on the List<object?>
         // itself, not the PDS slot. ECMA-262 §10.4.2.4 ArraySetLength compares
         // newLen to oldLen (the current list length), so override
@@ -1587,8 +1585,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, existingValueForCompare);
         il.MarkLabel(afterArrayLenOverride);
 
-        il.Emit(OpCodes.Ldloc, existingValueForCompare);
-        il.Emit(OpCodes.Brfalse, skipWritableCheck);  // null existing → skip
         // ECMA-262 SameValue (Object.is) not Object.Equals: distinguishes
         // +0 vs -0 (returns false) and equates NaN with itself (returns true).
         // Test262 15.2.3.6-4-87 asserts redefining {value:+0,writable:false}

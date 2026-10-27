@@ -6,6 +6,23 @@ namespace SharpTS.Tests.SharedTests;
 public class FrozenPropertyRedefinitionTests
 {
     [Theory, ModeData]
+    public void FrozenNullIsComparedAsAnActualValue(ExecutionMode mode)
+    {
+        const string source = """
+            const target: any = { value: null };
+            Object.freeze(target);
+            try { Object.defineProperty(target, 'value', { value: 1 }); console.log('accepted'); }
+            catch (error) { console.log(error instanceof TypeError, target.value === null); }
+            console.log(Reflect.defineProperty(target, 'value', { value: null }),
+                Reflect.defineProperty(target, 'value', { value: undefined }), target.value === null);
+            const implicit: any = Object.defineProperty({}, 'value', { writable: false });
+            console.log(Reflect.defineProperty(implicit, 'value', { value: undefined }),
+                Reflect.defineProperty(implicit, 'value', { value: null }), implicit.value === undefined);
+            """;
+        Assert.Equal("true true\ntrue false true\ntrue false true\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void FrozenExistingPropertiesAcceptOnlyCompatibleDefinitions(ExecutionMode mode)
     {
         const string source = """
