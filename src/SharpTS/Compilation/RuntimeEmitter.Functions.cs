@@ -1321,12 +1321,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notRuntimeMethodLabel);
 
+        // Declaration receiver views share their prototype by MethodInfo.
+        // Evaluated function expressions own independent prototype objects.
+        var needCreate = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, tsfuncLocal);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionValues.PropertyIdentityField);
+        il.Emit(OpCodes.Brtrue, needCreate);
+
         // if (_prototypeCache.TryGetValue(methodKey, out cached)) return cached
         il.Emit(OpCodes.Ldsfld, inputs.FunctionValues.PrototypeCacheField);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Ldloca, cachedProto);
         il.Emit(OpCodes.Callvirt, tryGetValueM);
-        var needCreate = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, needCreate);
         il.Emit(OpCodes.Ldloc, cachedProto);
         il.Emit(OpCodes.Ret);
@@ -1396,6 +1402,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
+        var useSharedPrototypeCache = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, tsfuncLocal);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionValues.PropertyIdentityField);
+        il.Emit(OpCodes.Brfalse, useSharedPrototypeCache);
+        il.Emit(OpCodes.Ldloc, newProto);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(useSharedPrototypeCache);
         il.Emit(OpCodes.Ldsfld, inputs.FunctionValues.PrototypeCacheField);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Ldloc, newProto);

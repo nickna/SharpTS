@@ -340,9 +340,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 else
                 {
                     EmitArrowFunction(af);
-                    if (af.IsAsync && af.HasOwnThis && af.RuntimeName != null)
+                    if (Ctx.Runtime != null)
                     {
-                        // Lowered declarations own properties and integrity state per activation.
+                        // Every evaluation creates a function with its own properties,
+                        // even when its code reuses one emitted method.
                         var function = IL.DeclareLocal(Ctx.Runtime!.FunctionValues.Type);
                         IL.Emit(OpCodes.Castclass, Ctx.Runtime.FunctionValues.Type);
                         IL.Emit(OpCodes.Stloc, function);
