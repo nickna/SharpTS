@@ -160,6 +160,7 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
             if (name == "GlobalThisSingletonField") return runtime.GlobalObject.SingletonField;
             if (name == "LookupBuiltInStaticMember") return runtime.BuiltInStatics.Lookup;
             if (name == "NativeProxyRejection") return runtime.ReflectedMethods.NativeProxyRejection;
+            if (name == "SourceOwners") return runtime.ClassInitialization.SourceOwners;
             return name switch
             {
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,

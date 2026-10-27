@@ -71,7 +71,8 @@ public partial class RuntimeEmitter
         Type FunctionPrototypeType,
         FunctionOwnPrototypeInputs OwnPrototype,
         MethodInfo? NativeProxyRejection,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     private readonly record struct DefinePropertyArrayLengthCoercionInputs(
@@ -151,7 +152,8 @@ public partial class RuntimeEmitter
         FieldInfo UndefinedInstance,
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype,
-        GuestOwnQueryInputs? GuestOwnProperties = null
+        GuestOwnQueryInputs? GuestOwnProperties = null,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     private readonly record struct SymbolKeyDescriptorLookupInputs(
@@ -764,7 +766,8 @@ public partial class RuntimeEmitter
                 inputs.TSFunctionType,
                 inputs.UndefinedType,
                 inputs.OwnPrototype,
-                inputs.Operators.TypeOf
+                inputs.Operators.TypeOf,
+                SourceOwners: inputs.SourceOwners
             ),
             propNameLocal
         );
@@ -1772,7 +1775,8 @@ public partial class RuntimeEmitter
                 inputs.TSFunctionGetOrCreate,
                 inputs.TSFunctionType,
                 inputs.UndefinedInstance,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                SourceOwners: inputs.SourceOwners
             ),
             propNameLocal,
             resultDictLocal,

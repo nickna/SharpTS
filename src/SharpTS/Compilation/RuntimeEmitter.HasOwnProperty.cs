@@ -40,7 +40,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
-        GuestOwnQueryInputs? GuestOwnProperties = null
+        GuestOwnQueryInputs? GuestOwnProperties = null,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     /// <summary>
@@ -882,7 +883,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, constructor);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
         il.Emit(OpCodes.Brfalse, falseLabel);
-        var memberOwner = EmitStaticMemberLookupOwner(il, constructor, inputs.IHasFieldsInterface);
+        var memberOwner = EmitStaticMemberLookupOwner(il, constructor, inputs.IHasFieldsInterface, inputs.SourceOwners);
         var ownField = il.DeclareLocal(typeof(FieldInfo));
         il.Emit(OpCodes.Ldloc, memberOwner);
         il.Emit(OpCodes.Ldloc, nameLocal);

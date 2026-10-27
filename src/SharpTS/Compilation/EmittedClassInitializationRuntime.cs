@@ -10,6 +10,14 @@ public sealed class EmittedClassInitializationRuntime
     private MethodBuilder? _runDefinition;
     private ConstructorBuilder? _canonicalStaticStorageAttributeConstructor;
     private bool _bodyEmitted;
+    internal NativeSourceOwnerCatalog? SourceOwners { get; private set; }
+
+    internal void DeclareSourceOwners(NativeSourceOwnerCatalog catalog)
+    {
+        EnsureMutable();
+        if (SourceOwners != null) throw new InvalidOperationException("Source-owner catalog is already declared.");
+        SourceOwners = catalog;
+    }
 
     /// <summary>Forces a CLR class initializer and rethrows its original guest exception.</summary>
     public MethodBuilder RunDefinition

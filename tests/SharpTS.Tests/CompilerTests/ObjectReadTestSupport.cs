@@ -48,6 +48,7 @@ internal static class ObjectReadTestSupport
             if (parameter.Name == "ReflectedMethodCacheField") return runtime.ReflectedMethods.Cache;
             if (parameter.Name == "ToPascalCase") return runtime.ReflectedMethods.ToPascalCase;
             if (parameter.Name == "NativeProxyRejection") return runtime.ReflectedMethods.NativeProxyRejection;
+            if (parameter.Name == "SourceOwners") return runtime.ClassInitialization.SourceOwners;
             return parameter.Name switch
             {
                 "TSFunctionCtor" => runtime.FunctionConstruction.Constructor,

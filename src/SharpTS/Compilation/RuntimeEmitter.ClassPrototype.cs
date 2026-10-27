@@ -22,7 +22,8 @@ public partial class RuntimeEmitter
         FieldBuilder parentsField,
         Type arrayType,
         FieldBuilder arrayPrototype,
-        EmittedPromiseRuntime? promise
+        EmittedPromiseRuntime? promise,
+        NativeSourceOwnerCatalog? sourceOwners = null
     )
     {
         var cacheType = cacheField.FieldType;
@@ -153,7 +154,7 @@ public partial class RuntimeEmitter
             var constructorOwner = il.DeclareLocal(_types.Type);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Stloc, constructorOwner);
-            var prototypeOwner = EmitStaticMemberLookupOwner(il, constructorOwner, userClassInterface);
+            var prototypeOwner = EmitStaticMemberLookupOwner(il, constructorOwner, userClassInterface, sourceOwners);
             il.Emit(OpCodes.Ldloc, prototypeOwner);
             il.Emit(OpCodes.Starg_S, (byte)0);
 
@@ -430,7 +431,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Brfalse, unchanged);
             il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Stloc, owner);
-            var lookupOwner = EmitStaticMemberLookupOwner(il, owner, userClassInterface);
+            var lookupOwner = EmitStaticMemberLookupOwner(il, owner, userClassInterface, sourceOwners);
             il.Emit(OpCodes.Ldloc, lookupOwner); il.Emit(OpCodes.Starg_S, (byte)0);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, getMethod);

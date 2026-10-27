@@ -82,7 +82,7 @@ public partial class RuntimeEmitter
     // paths retain authority; no host/BCL member inventory is added.
     private void EmitClassConstructorKeys(TypeBuilder runtime, EmittedObjectKeysRuntime keys,
         EmittedDescriptorStorageRuntime descriptors, EmittedObjectStateRuntime state,
-        EmittedFunctionAttributesRuntime functions, Type fieldsInterface)
+        EmittedFunctionAttributesRuntime functions, Type fieldsInterface, NativeSourceOwnerCatalog? sourceOwners = null)
     {
         EmitClassConstructorKeyRecording(keys, descriptors);
         var method = runtime.DefineMethod("GetClassConstructorKeys", MethodAttributes.Public | MethodAttributes.Static,
@@ -104,7 +104,7 @@ public partial class RuntimeEmitter
 
         // Reflection uses a closed canonical lookup owner; descriptor/deletion
         // identity always remains the original guest constructor argument.
-        var lookup = EmitStaticMemberLookupOwner(il, owner, fieldsInterface);
+        var lookup = EmitStaticMemberLookupOwner(il, owner, fieldsInterface, sourceOwners);
         var candidates = il.DeclareLocal(_types.DictionaryStringObject);
         var result = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor); il.Emit(OpCodes.Stloc, candidates);

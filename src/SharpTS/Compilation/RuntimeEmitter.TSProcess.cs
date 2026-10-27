@@ -1327,7 +1327,7 @@ public partial class RuntimeEmitter
             "$Process",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.EventEmitter.Type);
-        EmitTypeDefinitions.AddInterfaceImplementation(tb, runtime.ObjectFields.Interface);
+        NativeSourceOwnerCatalog.Implement(tb, runtime.ObjectFields.Interface, runtime.ClassInitialization.SourceOwners);
 
         runtime.Process.FieldsField = tb.DefineField("_fields", _types.DictionaryStringObject, FieldAttributes.Private);
         var instanceField = tb.DefineField("_instance", tb, FieldAttributes.Private | FieldAttributes.Static);

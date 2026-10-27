@@ -747,9 +747,10 @@ public partial class ILCompiler
     /// </summary>
     private void Phase1_EmitRuntimeTypes()
     {
+        if (_nativeAotProjectOutput) _nativeSourceOwners = new(_moduleBuilder, _types);
         _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput,
             _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true)) { EntryModulePath = _entryModulePath }
-            .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy);
+            .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy, _nativeSourceOwners);
         if (_runtime.GuestOwnProperties is { } own) GetClassRegistry().BeginNativeOwnProperties(own);
         _typeMapper.SetRuntime(_runtime);
     }
@@ -1229,6 +1230,8 @@ public partial class ILCompiler
         {
             tb.CreateType();
         }
+        _nativeSourceOwners?.CompleteEmission(_classes.GenericParameters, _classes.Builders.Values
+            .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
         _nativeClassInitialization?.CompleteEmission();
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
@@ -1881,6 +1884,8 @@ public partial class ILCompiler
         {
             tb.CreateType();
         }
+        _nativeSourceOwners?.CompleteEmission(_classes.GenericParameters, _classes.Builders.Values
+            .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
         _nativeClassInitialization?.CompleteEmission();
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();

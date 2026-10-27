@@ -263,7 +263,8 @@ public partial class RuntimeEmitter
             classPrototypeParentsField,
             runtime.ArrayStorage.Type,
             runtime.ArrayOperations.PrototypeField,
-            runtime.Promise
+            runtime.Promise,
+                runtime.ClassInitialization.SourceOwners
         );
         if (runtime.GuestOwnProperties != null)
             EmitGuestRegisteredPrototypeLookup(typeBuilder, runtime.ClassPrototypes, classPrototypeCacheField,
@@ -935,7 +936,8 @@ public partial class RuntimeEmitter
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
-                runtime.GuestOwnProperties == null ? null : new GuestOwnQueryInputs(runtime.GuestOwnProperties, runtime.Reflect.ToPropertyKey)
+                runtime.GuestOwnProperties == null ? null : new GuestOwnQueryInputs(runtime.GuestOwnProperties, runtime.Reflect.ToPropertyKey),
+                SourceOwners: runtime.ClassInitialization.SourceOwners
             )
         );
         // Shell ObjectGetPrototypeOf early so IsPrototypeOfHelper can call it
@@ -1335,7 +1337,8 @@ public partial class RuntimeEmitter
                 runtime.WeakRef,
                 runtime.WeakSet,
                 _features.UsesUserClasses,
-                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                SourceOwners: runtime.ClassInitialization.SourceOwners
             )
         );
         EmitClassDefinitionBodies(runtime);
@@ -1425,7 +1428,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.InvokeWithThis,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
-                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                SourceOwners: runtime.ClassInitialization.SourceOwners
             )
         );
         EmitSetPropertyStrict(
@@ -1458,7 +1462,8 @@ public partial class RuntimeEmitter
                 runtime.SymbolAccessors,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
-                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                SourceOwners: runtime.ClassInitialization.SourceOwners
             )
         );
         EmitDeleteProperty(
@@ -1812,7 +1817,8 @@ public partial class RuntimeEmitter
         if (runtime.GuestOwnProperties is { } guestOwnProperties)
             EmitGuestOwnPropertySnapshot(guestOwnProperties, runtime.ObjectKeys.Normalize);
         EmitClassConstructorKeys(typeBuilder, runtime.ObjectKeys, runtime.DescriptorStorage,
-            runtime.ObjectState, runtime.FunctionAttributes, runtime.ObjectFields.Interface);
+            runtime.ObjectState, runtime.FunctionAttributes, runtime.ObjectFields.Interface,
+                runtime.ClassInitialization.SourceOwners);
         EmitGetOwnPropertyNames(
             typeBuilder,
             runtime.ObjectKeys,
@@ -2111,7 +2117,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionPrototypes.Type,
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
-                GuestOwnProperties: runtime.GuestOwnProperties
+                GuestOwnProperties: runtime.GuestOwnProperties,
+                SourceOwners: runtime.ClassInitialization.SourceOwners
             )
         );
         // Declare the Math adapters before the later singleton population installs
@@ -2162,7 +2169,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Sentinels.UndefinedType,
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
-                runtime.GuestOwnProperties == null ? null : new GuestOwnQueryInputs(runtime.GuestOwnProperties, runtime.Reflect.ToPropertyKey)
+                runtime.GuestOwnProperties == null ? null : new GuestOwnQueryInputs(runtime.GuestOwnProperties, runtime.Reflect.ToPropertyKey),
+                SourceOwners: runtime.ClassInitialization.SourceOwners
             )
         );
         EmitObjectDefineProperties(
@@ -3068,7 +3076,8 @@ public partial class RuntimeEmitter
                 runtime.Errors.TypeErrorConstructor));
         // Fill in the symbol-keyed accessor registry helper bodies (#266).
         EmitSymbolAccessorRegistryBodies(runtime.SymbolAccessors, runtime.Symbols, runtime.StringCoercion,
-            runtime.FunctionConstruction, runtime.FunctionValues, runtime.Symbols.MethodName, _features.UsesUserClasses);
+            runtime.FunctionConstruction, runtime.FunctionValues, runtime.Symbols.MethodName, _features.UsesUserClasses,
+                runtime.ClassInitialization.SourceOwners);
         // Microtask method (queueMicrotask) - must come before timer infrastructure so ProcessMicrotasks is available
         EmitQueueMicrotaskMethod(typeBuilder, runtime);
         // Virtual timer infrastructure (must come before DateMethods which calls ProcessPendingTimers)

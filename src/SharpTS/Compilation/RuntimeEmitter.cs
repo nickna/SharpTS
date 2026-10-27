@@ -51,12 +51,14 @@ public partial class RuntimeEmitter
     public EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, RuntimeFeatureSet features)
         => EmitAll(moduleBuilder, features, FunctionEmissionPolicy.Full);
 
-    internal EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, RuntimeFeatureSet features, FunctionEmissionPolicy functionPolicy)
+    internal EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, RuntimeFeatureSet features, FunctionEmissionPolicy functionPolicy,
+        NativeSourceOwnerCatalog? sourceOwners = null)
     {
         _features = features;
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (sourceOwners != null) runtime.ClassInitialization.DeclareSourceOwners(sourceOwners);
         if (_emitNativeCallables)
             DeclareNativeCallableCatalog(moduleBuilder, runtime);
         runtime.BuiltInModules.BeginEmission(moduleBuilder, features);
@@ -344,6 +346,7 @@ public partial class RuntimeEmitter
         // Emit $IHasFields interface for unified property access
         // Must come before $Object which implements it
         EmitHasFieldsInterface(moduleBuilder, runtime.ObjectFields);
+        sourceOwners?.DeclareContract(runtime.ObjectFields.Interface);
         runtime.ObjectFields.CompleteEmission();
         EmitCompactObjectRecordInterface(moduleBuilder, runtime.Records);
         DefineClassDefinitionTypes(moduleBuilder, runtime.ClassDefinitions, runtime.NativeCallables);
@@ -357,14 +360,14 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.FunctionValues.Type,
                     runtime.FunctionValues.InvokeWithThis, runtime.Sentinels.UndefinedInstance),
                 new ObjectInvokeInputs(runtime.FunctionValues.Type, runtime.FunctionValues.InvokeWithThis),
-                runtime.Errors.TypeErrorConstructor));
+                runtime.Errors.TypeErrorConstructor, sourceOwners));
 
         if (features.UsesJSON || features.UsesCompactObjectRecords)
         {
             runtime.Records.BeginScalarEmission();
             var recordContract = new RecordStorageContractInputs(
                 runtime.ObjectFields.Interface, runtime.ObjectFields.FieldsGetter,
-                runtime.ObjectFields.GetProperty, runtime.ObjectFields.SetProperty, runtime.ObjectFields.HasProperty);
+                runtime.ObjectFields.GetProperty, runtime.ObjectFields.SetProperty, runtime.ObjectFields.HasProperty, sourceOwners);
             EmitJsonScalarRecordClass(moduleBuilder, runtime.Records, recordContract, features.JsonScalarRecordShapes);
             EmitCompactObjectRecordClasses(moduleBuilder, runtime.Records, recordContract,
                 runtime.Sentinels.UndefinedInstance, features.CompactObjectRecordShapes, features.CompactObjectRecordSelfFields);

@@ -123,7 +123,8 @@ public partial class RuntimeEmitter
         EmittedFunctionConstructionRuntime functionConstruction,
         EmittedFunctionValueRuntime functionValues,
         MethodBuilder symbolMethodName,
-        bool userClasses
+        bool userClasses,
+        NativeSourceOwnerCatalog? sourceOwners = null
     )
     {
         var outer = SymOuterDictType;
@@ -157,7 +158,7 @@ public partial class RuntimeEmitter
             innerTryGetValue,
             innerSetItem
         );
-        EmitSymbolGenericHelperBodies(symbolAccessors, userClasses);
+        EmitSymbolGenericHelperBodies(symbolAccessors, userClasses, sourceOwners);
         EmitFindSymbolAccessorBody(
             symbolAccessors,
             symbolAccessors.FindGetter,
@@ -393,7 +394,8 @@ public partial class RuntimeEmitter
     /// two so the base-chain walk both finds the slot and produces an invokable
     /// (closed) accessor MethodInfo.
     /// </summary>
-    private void EmitSymbolGenericHelperBodies(EmittedSymbolAccessorRuntime symbolAccessors, bool userClasses)
+    private void EmitSymbolGenericHelperBodies(EmittedSymbolAccessorRuntime symbolAccessors, bool userClasses,
+        NativeSourceOwnerCatalog? sourceOwners = null)
     {
         var isConstructedGeneric = _types.GetProperty(_types.Type, "IsConstructedGenericType")!.GetGetMethod()!;
         var isGenericType = _types.GetProperty(_types.Type, "IsGenericType")!.GetGetMethod()!;
@@ -442,6 +444,19 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldloc, owner);
                 il.Emit(OpCodes.Callvirt, containsGenericParams);
                 il.Emit(OpCodes.Brfalse, closedOwner);
+                if (sourceOwners != null)
+                {
+                    var foreignOwner = il.DefineLabel();
+                    // The legacy helper accepts foreign open CLR owners too; the finite path needs its own guard.
+                    il.Emit(OpCodes.Ldtoken, sourceOwners.Contract);
+                    il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+                    il.Emit(OpCodes.Ldloc, owner);
+                    il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+                    il.Emit(OpCodes.Brfalse, foreignOwner);
+                    EmitCloseOwnedGenericOwner(il, owner, sourceOwners);
+                    il.Emit(OpCodes.Br, closedOwner);
+                    il.MarkLabel(foreignOwner);
+                }
                 EmitCloseOpenGenericOwner(il, owner);
             }
 

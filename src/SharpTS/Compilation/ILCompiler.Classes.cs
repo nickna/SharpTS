@@ -286,7 +286,7 @@ public partial class ILCompiler
         // Implement $IHasFields interface for unified property access
         // All classes implement this interface (including derived classes)
         // Each class emits its own GetProperty/SetProperty methods that access its _fields
-        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.ObjectFields.Interface);
+        NativeSourceOwnerCatalog.Implement(typeBuilder, _runtime.ObjectFields.Interface, _runtime.ClassInitialization.SourceOwners);
 
         string className = qualifiedClassName;
         if (_runtime.GuestOwnProperties != null && classStmt.SuperclassExpr == null && !classStmt.IsAbstract

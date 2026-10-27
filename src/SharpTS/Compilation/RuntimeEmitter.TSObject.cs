@@ -25,7 +25,7 @@ public partial class RuntimeEmitter
         Type HasFieldsInterface,
         ObjectReadInputs Read,
         ObjectInvokeInputs Invocation,
-        ConstructorBuilder TypeErrorCtor);
+        ConstructorBuilder TypeErrorCtor, NativeSourceOwnerCatalog? SourceOwners = null);
 
     private readonly record struct ObjectSetFields(
         FieldBuilder Fields,
@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
         storage.Type = typeBuilder;
 
         // Implement $IHasFields interface for unified property access
-        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, peers.HasFieldsInterface);
+        NativeSourceOwnerCatalog.Implement(typeBuilder, peers.HasFieldsInterface, peers.SourceOwners);
 
         // Fields
         var fieldsField = typeBuilder.DefineField("_fields", _types.DictionaryStringObject, FieldAttributes.Private);

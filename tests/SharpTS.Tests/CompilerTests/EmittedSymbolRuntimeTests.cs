@@ -122,7 +122,7 @@ public sealed class EmittedSymbolRuntimeTests
         var cctor = builder.DefineTypeInitializer().GetILGenerator();
         void EmitInitializer() => InvokeEmitter(emitter, "InitSymbolAccessorRegistry", cctor, accessors);
         void EmitBodies() => InvokeEmitter(emitter, "EmitSymbolAccessorRegistryBodies", accessors, localSymbols,
-            runtime.StringCoercion, runtime.FunctionConstruction, runtime.FunctionValues, runtime.Symbols.MethodName, true);
+            runtime.StringCoercion, runtime.FunctionConstruction, runtime.FunctionValues, runtime.Symbols.MethodName, true, null);
         if (omitInitializer) EmitBodies(); else EmitInitializer();
         var error = Assert.Throws<InvalidOperationException>(accessors.CompleteEmission);
         Assert.Contains(omitInitializer ? "initialization" : "bodies", error.Message);

@@ -24,7 +24,7 @@ public partial class RuntimeEmitter
             TypeAttributes.BeforeFieldInit,
             _types.Object);
         records.RequireScalars().Type = typeBuilder;
-        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, contract.IHasFieldsInterface);
+        NativeSourceOwnerCatalog.Implement(typeBuilder, contract.IHasFieldsInterface, contract.SourceOwners);
         EmitTypeDefinitions.AddInterfaceImplementation(
             typeBuilder, records.MarkerInterface);
 

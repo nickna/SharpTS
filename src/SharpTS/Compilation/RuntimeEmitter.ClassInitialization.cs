@@ -41,7 +41,7 @@ public partial class RuntimeEmitter
             var constructorOwner = il.DeclareLocal(_types.Type);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Stloc, constructorOwner);
-            var initializedOwner = EmitStaticMemberLookupOwner(il, constructorOwner, userClassInterface);
+            var initializedOwner = EmitStaticMemberLookupOwner(il, constructorOwner, userClassInterface, initialization.SourceOwners);
             il.Emit(OpCodes.Ldloc, initializedOwner);
             il.Emit(OpCodes.Starg_S, (byte)0);
 

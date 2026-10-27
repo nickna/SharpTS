@@ -24,7 +24,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype,
-        MethodBuilder TypeOf
+        MethodBuilder TypeOf,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     private readonly record struct DefinePropertyExistingArrayLengthInputs(
@@ -263,7 +264,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, staticOwner);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
         il.Emit(OpCodes.Brfalse, notOwnStaticField);
-        var staticFieldOwner = EmitStaticMemberLookupOwner(il, staticOwner, inputs.IHasFieldsInterface);
+        var staticFieldOwner = EmitStaticMemberLookupOwner(il, staticOwner, inputs.IHasFieldsInterface, inputs.SourceOwners);
         il.Emit(OpCodes.Ldloc, staticFieldOwner);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));

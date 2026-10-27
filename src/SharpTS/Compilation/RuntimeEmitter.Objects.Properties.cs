@@ -187,7 +187,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private LocalBuilder EmitStaticMemberLookupOwner(ILGenerator il, LocalBuilder owner, Type userClassInterface)
+    private LocalBuilder EmitStaticMemberLookupOwner(ILGenerator il, LocalBuilder owner, Type userClassInterface,
+        NativeSourceOwnerCatalog? sourceOwners = null)
     {
         // Only source classes can be generic implementers of this output's own
         // $IHasFields interface; its built-in carriers are non-generic.
@@ -210,7 +211,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, methodOwnerLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
         il.Emit(OpCodes.Brfalse, methodOwnerReady);
-        EmitCloseOpenGenericOwner(il, methodOwnerLocal);
+        EmitCloseOwnedGenericOwner(il, methodOwnerLocal, sourceOwners);
         il.MarkLabel(methodOwnerReady);
         return methodOwnerLocal;
     }
@@ -223,8 +224,17 @@ public partial class RuntimeEmitter
     private void EmitCloseOpenGenericOwner(ILGenerator il, LocalBuilder owner) =>
         GenericTypeClosingEmitter.Emit(il, _types, owner);
 
+    private void EmitCloseOwnedGenericOwner(ILGenerator il, LocalBuilder owner, NativeSourceOwnerCatalog? sourceOwners)
+    {
+        if (sourceOwners == null) { EmitCloseOpenGenericOwner(il, owner); return; }
+        il.Emit(OpCodes.Ldloc, owner);
+        il.Emit(OpCodes.Call, sourceOwners.Resolve);
+        il.Emit(OpCodes.Stloc, owner);
+    }
+
     private LocalBuilder EmitDeferredStaticFieldStorageOwner(ILGenerator il, LocalBuilder owner,
-        Type userClassInterface, ConstructorBuilder policyAttribute, bool userClasses)
+        Type userClassInterface, ConstructorBuilder policyAttribute, bool userClasses,
+        NativeSourceOwnerCatalog? sourceOwners = null)
     {
         // Only a deferred generic definition initializes all source statics in
         // canonical storage. Ordinary closed generic parents keep their own .cctor storage.
@@ -248,7 +258,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsDefined", _types.Type, _types.Boolean));
         il.Emit(OpCodes.Brfalse, ready);
-        GenericTypeClosingEmitter.Emit(il, _types, storageOwner);
+        EmitCloseOwnedGenericOwner(il, storageOwner, sourceOwners);
         il.MarkLabel(ready);
         return storageOwner;
     }
@@ -321,7 +331,8 @@ public partial class RuntimeEmitter
         EmittedWeakRefRuntime? WeakRef,
         EmittedWeakSetRuntime? WeakSet,
         bool UserClasses,
-        MethodInfo? NativeProxyRejection
+        MethodInfo? NativeProxyRejection,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     private readonly record struct GetFieldsPropertyInputs(
@@ -2743,7 +2754,7 @@ public partial class RuntimeEmitter
             // SafeGetMethod handles AmbiguousMatchException deterministically, which matters
             // because user-declared statics can collide with inherited Type overloads.
             var staticMethodLocal = il.DeclareLocal(_types.MethodInfo);
-            var methodOwnerLocal = EmitStaticMemberLookupOwner(il, typeLocal, inputs.IHasFieldsInterface);
+            var methodOwnerLocal = EmitStaticMemberLookupOwner(il, typeLocal, inputs.IHasFieldsInterface, inputs.SourceOwners);
             il.Emit(OpCodes.Ldloc, methodOwnerLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)staticPublic);
@@ -2762,7 +2773,7 @@ public partial class RuntimeEmitter
             // A live constructor-prototype read reenters here on its closed
             // generic parent. Select deferred storage without changing that parent identity.
             var fieldOwnerLocal = EmitDeferredStaticFieldStorageOwner(il, methodOwnerLocal,
-                inputs.IHasFieldsInterface, inputs.ClassInitialization.CanonicalStaticStorageAttributeConstructor, inputs.UserClasses);
+                inputs.IHasFieldsInterface, inputs.ClassInitialization.CanonicalStaticStorageAttributeConstructor, inputs.UserClasses, inputs.SourceOwners);
             // Static field: type.GetField(name, Public|Static).
             var staticFieldLocal = il.DeclareLocal(typeof(FieldInfo));
             il.Emit(OpCodes.Ldloc, fieldOwnerLocal);
@@ -3010,7 +3021,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, baseWalkLoop);
 
             // declared static method → $TSFunction(null, methodInfo)
-            var baseMethodOwner = EmitStaticMemberLookupOwner(il, walkTypeLocal, inputs.IHasFieldsInterface);
+            var baseMethodOwner = EmitStaticMemberLookupOwner(il, walkTypeLocal, inputs.IHasFieldsInterface, inputs.SourceOwners);
             il.Emit(OpCodes.Ldloc, baseMethodOwner);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)declaredStaticPublic);
@@ -3026,7 +3037,7 @@ public partial class RuntimeEmitter
             // Keep the ancestor's guest identity for descriptors/deletion above;
             // only deferred generic field storage uses the canonical closed owner.
             var baseFieldOwner = EmitDeferredStaticFieldStorageOwner(il, baseMethodOwner,
-                inputs.IHasFieldsInterface, inputs.ClassInitialization.CanonicalStaticStorageAttributeConstructor, inputs.UserClasses);
+                inputs.IHasFieldsInterface, inputs.ClassInitialization.CanonicalStaticStorageAttributeConstructor, inputs.UserClasses, inputs.SourceOwners);
             // declared static field → field.GetValue(null)
             il.Emit(OpCodes.Ldloc, baseFieldOwner);
             il.Emit(OpCodes.Ldarg_1);

@@ -85,7 +85,8 @@ public partial class RuntimeEmitter
         MethodBuilder TSFunctionInvokeWithThis,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
-        MethodInfo? NativeProxyRejection
+        MethodInfo? NativeProxyRejection,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     private readonly record struct SetPropertyStrictInputs(
@@ -115,7 +116,8 @@ public partial class RuntimeEmitter
         EmittedSymbolAccessorRuntime SymbolAccessors,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
-        MethodInfo? NativeProxyRejection
+        MethodInfo? NativeProxyRejection,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     private readonly record struct SetIndexStrictInputs(
@@ -1406,7 +1408,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(newTypeDescriptorLabel);
-            EmitRejectInheritedStaticDataWrite(il, inputs.DescriptorStorage, inputs.IHasFieldsInterface, inputs.Errors, strict: false);
+            EmitRejectInheritedStaticDataWrite(il, inputs.DescriptorStorage, inputs.IHasFieldsInterface, inputs.Errors, strict: false, inputs.SourceOwners);
             var noComputedSetter = il.DefineLabel();
             var computedSetter = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
@@ -1450,7 +1452,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
             il.Emit(OpCodes.Brtrue, noOwnUserField);
-            var fieldOwner = EmitStaticMemberLookupOwner(il, originalOwner, inputs.IHasFieldsInterface);
+            var fieldOwner = EmitStaticMemberLookupOwner(il, originalOwner, inputs.IHasFieldsInterface, inputs.SourceOwners);
             var ownField = il.DeclareLocal(typeof(FieldInfo));
             il.Emit(OpCodes.Ldloc, fieldOwner);
             il.Emit(OpCodes.Ldarg_1);
@@ -2081,7 +2083,7 @@ public partial class RuntimeEmitter
     // assignment creates the shadow. Existing own properties take precedence.
     private void EmitRejectInheritedStaticDataWrite(
         ILGenerator il, EmittedDescriptorStorageRuntime descriptors, Type fieldsInterface,
-        EmittedErrorRuntime errors, bool strict)
+        EmittedErrorRuntime errors, bool strict, NativeSourceOwnerCatalog? sourceOwners = null)
     {
         var done = il.DefineLabel();
         var owner = il.DeclareLocal(_types.Type);
@@ -2094,7 +2096,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, descriptors.GetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, done);
-        var fieldOwner = EmitStaticMemberLookupOwner(il, owner, fieldsInterface);
+        var fieldOwner = EmitStaticMemberLookupOwner(il, owner, fieldsInterface, sourceOwners);
         il.Emit(OpCodes.Ldloc, fieldOwner);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
@@ -2230,7 +2232,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, next);
-        var memberOwner = EmitStaticMemberLookupOwner(il, walk, inputs.IHasFieldsInterface);
+        var memberOwner = EmitStaticMemberLookupOwner(il, walk, inputs.IHasFieldsInterface, inputs.SourceOwners);
         const BindingFlags declaredStatic = BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;
         il.Emit(OpCodes.Ldloc, memberOwner);
         il.Emit(OpCodes.Ldarg_1);
@@ -2988,7 +2990,7 @@ public partial class RuntimeEmitter
         // same storage/shadow path as value-position writes outside the class.
         // Restrict this bridge to emitted classes with a reflected data
         // field; other receiver kinds retain their dedicated assignment paths.
-        EmitRejectInheritedStaticDataWrite(il, inputs.DescriptorStorage, inputs.IHasFieldsInterface, inputs.Errors, strict: true);
+        EmitRejectInheritedStaticDataWrite(il, inputs.DescriptorStorage, inputs.IHasFieldsInterface, inputs.Errors, strict: true, inputs.SourceOwners);
         var notGenericStaticField = il.DefineLabel();
         var genericOwner = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldarg_0);
@@ -3001,7 +3003,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, genericOwner);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
         il.Emit(OpCodes.Brfalse, notGenericStaticField);
-        var genericFieldOwner = EmitStaticMemberLookupOwner(il, genericOwner, inputs.IHasFieldsInterface);
+        var genericFieldOwner = EmitStaticMemberLookupOwner(il, genericOwner, inputs.IHasFieldsInterface, inputs.SourceOwners);
         var genericField = il.DeclareLocal(typeof(FieldInfo));
         il.Emit(OpCodes.Ldloc, genericFieldOwner);
         il.Emit(OpCodes.Ldarg_1);

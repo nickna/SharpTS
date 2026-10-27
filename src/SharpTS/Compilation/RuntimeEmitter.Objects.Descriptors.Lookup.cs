@@ -84,7 +84,8 @@ public partial class RuntimeEmitter
         MethodBuilder TSFunctionGetOrCreate,
         TypeBuilder TSFunctionType,
         FieldInfo UndefinedInstance,
-        Type UndefinedType
+        Type UndefinedType,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     private readonly record struct GetOwnDescriptorRegExpConstructorInputs(EmittedRegExpRuntime RegExps, MethodBuilder TSFunctionGetOrCreate);
@@ -113,7 +114,8 @@ public partial class RuntimeEmitter
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder GetProperty,
         Type IHasFieldsInterface,
-        MethodBuilder ObjectHasOwn
+        MethodBuilder ObjectHasOwn,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     private readonly record struct GetOwnDescriptorConstructorFallbackInputs(
@@ -622,7 +624,8 @@ public partial class RuntimeEmitter
                     inputs.DescriptorStorage,
                     inputs.GetProperty,
                     inputs.IHasFieldsInterface,
-                    inputs.ObjectHasOwn
+                    inputs.ObjectHasOwn,
+                inputs.SourceOwners
                 ),
                 propNameLocal,
                 resultDictLocal,
@@ -1096,7 +1099,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Call, inputs.ObjectHasOwn);
         il.Emit(OpCodes.Brfalse, returnNullLabel);
-        var fieldOwner = EmitStaticMemberLookupOwner(il, owner, inputs.IHasFieldsInterface);
+        var fieldOwner = EmitStaticMemberLookupOwner(il, owner, inputs.IHasFieldsInterface, inputs.SourceOwners);
         il.Emit(OpCodes.Ldloc, fieldOwner);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));

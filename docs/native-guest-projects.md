@@ -309,6 +309,47 @@ An eligible imported producer and alias mutation controls retain binding and
 fallback behavior. This proof does not remove other reflective invocation paths
 or establish strict native acceptance.
 
+### Finite canonical source owners
+
+Native runtime helpers can use a compiler-owned late catalog to obtain literal
+canonical source-class types. Registration occurs at the actual interface
+implementation declarations. Completion follows source type creation and checks
+the created interface metadata and `ClassGenericParameterRegistry` snapshots.
+Saved-PE tests account for every generic implementer with either a literal
+mapping or an explicit legacy blocker, and also check the runtime carriers.
+
+Static-member lookup still requires this output's owned field interface before
+using the catalog. Deferred static storage retains its additional canonical
+storage marker check and normalization of closed generic owners. Constructor
+closing with supplied type arguments keeps its separate existing behavior.
+The Symbol helper adds an owned-interface guard for this fast path; foreign
+open CLR owners retain their old closure. The catalog also retains shared legacy
+closure for unknown or unproved owners. For example, persisted reflection cannot
+enumerate interfaces through some constructed generic base types; those owners
+record a metadata blocker and keep legacy closure. No owner names substitute
+for interface or canonical-argument proof.
+
+The catalog does not run class initializers. Existing callers retain evaluation
+timing, receiver and constructor identities. Ordinary managed output and default
+runtime-emitter APIs retain their existing IL and emit no catalog.
+
+On the static/Symbol class corpus, strict publish at combined checkpoint
+`17ae47a8a` reports 108 diagnostics; the catalog candidate reports 65. The exact
+multiset removes 58 rows and adds 15: three shared catalog legacy-closure
+diagnostics, eleven member-metadata diagnostics now attributed to the resolver's
+return, and one additional analysis occurrence in the retained foreign Symbol
+closure. No diagnostic is suppressed and no broad metadata roots are added.
+This class-specific measurement makes no basic-console reduction claim.
+
+The native SharpTS compiler exports and IL-verifies the class corpus. A separate
+diagnostic native control passes typed static reads/writes, inherited Symbol
+getters/methods and constructor-alias identity. The broader corpus still loses
+dynamic generic constructor static/descriptor metadata under native execution,
+identically at `17ae47a8a` and with the catalog; the same exported DLL succeeds
+under CoreCLR. This concrete remaining preparation issue is tracked in
+[#3050](https://github.com/nickna/SharpTS/issues/3050). Strict native acceptance
+remains incomplete.
+
 ## Warning policy and remaining work
 
 The exported project uses `PublishAot=true`, `SelfContained=true`, its explicit

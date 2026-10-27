@@ -10,7 +10,7 @@ public partial class RuntimeEmitter
         MethodInfo IHasFieldsFieldsGetter,
         MethodInfo IHasFieldsGetProperty,
         MethodInfo IHasFieldsSetProperty,
-        MethodInfo IHasFieldsHasProperty);
+        MethodInfo IHasFieldsHasProperty, NativeSourceOwnerCatalog? SourceOwners = null);
 
     private void EmitCompactObjectRecordInterface(
         ModuleBuilder moduleBuilder, EmittedRecordStorageRuntime records)
@@ -50,7 +50,7 @@ public partial class RuntimeEmitter
                 TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed |
                 TypeAttributes.BeforeFieldInit,
                 _types.Object);
-            EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, contract.IHasFieldsInterface);
+            NativeSourceOwnerCatalog.Implement(typeBuilder, contract.IHasFieldsInterface, contract.SourceOwners);
             EmitTypeDefinitions.AddInterfaceImplementation(
                 typeBuilder, records.MarkerInterface);
             records.AddCompactTypes(fingerprint, typeBuilder, shape.Fields.Count);
