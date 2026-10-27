@@ -98,6 +98,32 @@ if ($ciGateJob -notmatch '(?m)^    needs: \[[^\r\n]*\bstandalone\b' -or
 }
 $coreJob = Get-WorkflowJob $ci 'build' 'ci.yml'
 $standaloneJob = Get-WorkflowJob $ci 'standalone' 'ci.yml'
+foreach ($requiredText in @('name: Acquire pinned independent Authenticode verifier', 'id: signature-verifier',
+    "if: runner.os == 'Windows'", './scripts/get-osslsigncode.ps1',
+    '"executable=$verifier" >> $env:GITHUB_OUTPUT',
+    'SHARPTS_TEST_OSSLSIGNCODE: ${{ steps.signature-verifier.outputs.executable }}')) {
+    if (-not $coreJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("ci.yml Windows core tests are missing independent signature verification: $requiredText")
+    }
+}
+if ($coreJob.IndexOf('name: Acquire pinned independent Authenticode verifier', [StringComparison]::Ordinal) -gt
+    $coreJob.IndexOf('name: Test core', [StringComparison]::Ordinal)) {
+    $errors.Add('ci.yml must acquire the independent signature verifier before running core tests.')
+}
+$signatureTool = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'get-osslsigncode.ps1') -Raw
+foreach ($requiredText in @("`$version = '2.14'",
+    'https://github.com/mtrojnar/osslsigncode/releases/download/2.14/osslsigncode-2.14-windows-x64-mingw.zip',
+    '9a1722aaf62a27852c4eb9c35749a0248065052d0ae0a93d4ed6bb49def027f2',
+    'Get-FileHash -LiteralPath $archivePath -Algorithm SHA256', 'archive checksum mismatch',
+    'Expand-Archive -LiteralPath $archivePath', '& $executable --version', '$LASTEXITCODE -ne 0')) {
+    if (-not $signatureTool.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Independent signature verifier acquisition is missing its pinned/fail-closed contract: $requiredText")
+    }
+}
+if ($signatureTool.IndexOf('Get-FileHash', [StringComparison]::Ordinal) -gt
+    $signatureTool.IndexOf('Expand-Archive', [StringComparison]::Ordinal)) {
+    $errors.Add('Independent signature verifier acquisition must validate SHA256 before extracting or executing.')
+}
 $coreFilter = 'Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests.'
 $standaloneFilter = $coreFilter.Replace('FullyQualifiedName!~', 'FullyQualifiedName~')
 foreach ($partition in @($coreJob, $standaloneJob)) {

@@ -179,7 +179,19 @@ jobs:
       # registry.npmjs.org (RealPackageSmokeTests) — same hermeticity policy as
       # LiveNetwork; the host-literal guardrail can't see package-name installs.
       # Run them on demand locally: dotnet test --filter "Category=npm"
+      - name: Acquire pinned independent Authenticode verifier
+        id: signature-verifier
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $verifier = ./scripts/get-osslsigncode.ps1
+          if (-not $verifier) { throw 'The independent signature verifier path is missing.' }
+          "executable=$verifier" >> $env:GITHUB_OUTPUT
+
       - name: Test core
+        env:
+          SHARPTS_TEST_OSSLSIGNCODE: ${{ steps.signature-verifier.outputs.executable }}
         run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests."
         # The standalone job runs the complementary class on its own runner;
         # its sequential child-process cases otherwise dominate this step.
