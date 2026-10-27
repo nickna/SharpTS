@@ -1817,7 +1817,9 @@ public partial class RuntimeEmitter
                 ),
                 runtime.RegExps,
                 runtime.Symbols,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
+                runtime.ObjectState.IsBuiltinDeleted
             )
         );
         // Object.assign consumes both halves of [[OwnPropertyKeys]], so make
@@ -1881,7 +1883,9 @@ public partial class RuntimeEmitter
                 ),
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
+                runtime.ObjectState.IsBuiltinDeleted
             )
         );
         EmitForInKeys(typeBuilder, new ForInInputs(runtime.ObjectKeys, runtime.ObjectPrototypes,

@@ -154,7 +154,7 @@ public sealed class EmittedObjectKeysRuntimeTests
         {
             string name = parameter.Name!;
             if (overrides.TryGetValue(name, out var value)) return value;
-            if (name is "ProxyDescriptor" or "ProxyOwnKeys") return MakeInputs(parameter.ParameterType, runtime, overrides);
+            if (name is "ProxyDescriptor" or "ProxyOwnKeys" or "OwnPrototype") return MakeInputs(parameter.ParameterType, runtime, overrides);
             return name switch
             {
                 "OwnKeys" => runtime.ObjectKeys.Ordinary,
@@ -164,6 +164,8 @@ public sealed class EmittedObjectKeysRuntimeTests
                 "IsSymbol" => runtime.Symbols.IsSymbol,
                 "GetProperty" => runtime.ObjectRead.Property,
                 "HasOwnProperty" => runtime.ObjectOwnProperties.HasOwnProperty,
+                "IsBuiltinDeleted" => runtime.ObjectState.IsBuiltinDeleted,
+                "GeneratorKind" => runtime.GeneratorPrototypes.Kind,
                 _ => (name switch { "TSFunctionType" => runtime.FunctionValues.Type, _ => (name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, _ => (name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => (name switch { "IHasFieldsInterface" => runtime.ObjectFields.Interface, "IHasFieldsFieldsGetter" => runtime.ObjectFields.FieldsGetter, "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime) }) }) }) })
             };
         }

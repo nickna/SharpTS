@@ -29,7 +29,9 @@ public partial class RuntimeEmitter
         ProxyOwnKeysCallInputs ProxyOwnKeys,
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        FunctionOwnPrototypeInputs OwnPrototype,
+        MethodInfo IsBuiltinDeleted
     );
 
     private readonly record struct GetOwnPropertyNamesInputs(
@@ -47,7 +49,9 @@ public partial class RuntimeEmitter
         ProxyOwnKeysCallInputs ProxyOwnKeys,
         EmittedRegExpRuntime RegExps,
         EmittedSymbolRuntime Symbols,
-        Type UndefinedType
+        Type UndefinedType,
+        FunctionOwnPrototypeInputs OwnPrototype,
+        MethodInfo IsBuiltinDeleted
     );
 
     /// <summary>
@@ -625,6 +629,10 @@ public partial class RuntimeEmitter
             var desc = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, inputs.IsBuiltinDeleted);
+            il.Emit(OpCodes.Brtrue, skip);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, desc);
             il.Emit(OpCodes.Ldloc, desc);
@@ -639,7 +647,10 @@ public partial class RuntimeEmitter
         }
         EmitEnumerableFunctionIntrinsic("length");
         EmitEnumerableFunctionIntrinsic("name");
+        var noIntrinsicFunctionPrototype = il.DefineLabel();
+        EmitFunctionOwnPrototypeGuard(il, () => il.Emit(OpCodes.Ldarg_0), inputs.OwnPrototype, noIntrinsicFunctionPrototype);
         EmitEnumerableFunctionIntrinsic("prototype");
+        il.MarkLabel(noIntrinsicFunctionPrototype);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
@@ -1332,6 +1343,29 @@ public partial class RuntimeEmitter
             AddName(name);
             il.MarkLabel(absent);
         }
+
+        // Intrinsic slots are created with the function, before user expandos.
+        // Attribute changes preserve that position; deletion and recreation do not.
+        var notFunctionForNames = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.OwnPrototype.FunctionValues.Type);
+        il.Emit(OpCodes.Brfalse, notFunctionForNames);
+        foreach (var name in new[] { "length", "name" })
+        {
+            var recreated = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, inputs.IsBuiltinDeleted);
+            il.Emit(OpCodes.Brtrue, recreated);
+            AddOwnName(name);
+            il.MarkLabel(recreated);
+        }
+        var noIntrinsicPrototype = il.DefineLabel();
+        EmitFunctionOwnPrototypeGuard(il, () => il.Emit(OpCodes.Ldarg_0), inputs.OwnPrototype, noIntrinsicPrototype);
+        AddOwnName("prototype");
+        il.MarkLabel(noIntrinsicPrototype);
+        il.Emit(OpCodes.Br, appendStoredNames);
+        il.MarkLabel(notFunctionForNames);
 
         // Anonymous host delegates back Proxy revocation functions.  They are
         // ECMAScript built-ins whose own keys are created in this order.
