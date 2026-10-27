@@ -22,6 +22,43 @@ public class SuperConstructorHandler : ICallHandler
             return false;
 
         var ctx = emitter.Context;
+        if (ctx.ConstructorSuperBound is { } bound)
+        {
+            var first = emitter.IL.DefineLabel();
+            emitter.IL.Emit(OpCodes.Ldloc, bound);
+            emitter.IL.Emit(OpCodes.Brfalse, first);
+            // A second super still constructs its own parent object and runs
+            // its effects before BindThisValue rejects the already-bound this.
+            if (ctx.ClassDefinitionParameterIndex is { } classDefinition)
+            {
+                emitter.IL.Emit(OpCodes.Ldarg, classDefinition);
+                emitter.IL.Emit(OpCodes.Call, ctx.Runtime!.ClassDefinitions.GetParent);
+            }
+            else if (ctx.CurrentSuperclassName == "Promise")
+            {
+                emitter.IL.Emit(OpCodes.Ldtoken, ctx.Types.TaskOfObject);
+                emitter.IL.Emit(OpCodes.Call, ctx.Types.TypeGetTypeFromHandle);
+            }
+            else
+            {
+                emitter.IL.Emit(OpCodes.Ldtoken, ctx.CurrentClassBuilder!);
+                emitter.IL.Emit(OpCodes.Call, ctx.Types.TypeGetTypeFromHandle);
+                emitter.IL.Emit(OpCodes.Call, ctx.Runtime!.ObjectPrototypes.GetPrototypeOf);
+            }
+            ConstructorReceiverEmitter.CloseNominalSuperTarget(emitter.IL, ctx);
+            emitter.EmitArgsArrayWithSpread(call.Arguments);
+            if (ctx.NewTargetParameterIndex is { } newTarget) emitter.IL.Emit(OpCodes.Ldarg, newTarget);
+            else
+            {
+                emitter.IL.Emit(OpCodes.Ldtoken, ctx.CurrentClassBuilder!);
+                emitter.IL.Emit(OpCodes.Call, ctx.Types.TypeGetTypeFromHandle);
+            }
+            emitter.IL.Emit(OpCodes.Call, ctx.Runtime!.DynamicConstruction.ConstructWithNewTarget);
+            emitter.IL.Emit(OpCodes.Pop);
+            GuestErrorEmitter.ThrowError(emitter.IL, ctx.Runtime.Errors.CreateException,
+                ctx.Runtime.Errors.ReferenceErrorConstructor, "Super constructor may only be called once");
+            emitter.IL.MarkLabel(first);
+        }
         if (ctx.IsRuntimeReceiverInitializer && ctx.ClassDefinitionParameterIndex is { } definitionParameter)
         {
             bool liveParent = ctx.RuntimeFeatures?.UsesClassPrototypeMutation != false;
@@ -35,6 +72,11 @@ public class SuperConstructorHandler : ICallHandler
             else emitter.IL.Emit(OpCodes.Ldsfld, ctx.Runtime.Sentinels.UndefinedInstance);
             emitter.IL.Emit(OpCodes.Call, liveParent
                 ? ctx.Runtime.DynamicConstruction.ConstructWithNewTarget : ctx.Runtime.ClassDefinitions.InitializeReceiver);
+            if (ctx.ConstructorSuperBound is { } completed)
+            {
+                emitter.IL.Emit(OpCodes.Ldc_I4_1);
+                emitter.IL.Emit(OpCodes.Stloc, completed);
+            }
             emitter.IL.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver!);
             emitter.IL.Emit(OpCodes.Ldloc, ctx.ClassConstructorThisCell!);
             emitter.IL.Emit(OpCodes.Ldc_I4_0);
@@ -333,6 +375,11 @@ public class SuperConstructorHandler : ICallHandler
     private static void CompleteConstructorSuper(IEmitterContext emitter)
     {
         var ctx = emitter.Context;
+        if (ctx.ConstructorSuperBound is { } bound)
+        {
+            emitter.IL.Emit(OpCodes.Ldc_I4_1);
+            emitter.IL.Emit(OpCodes.Stloc, bound);
+        }
         if (ctx.ClassConstructorReceiver != null)
         {
             emitter.IL.Emit(OpCodes.Ldarg_0);

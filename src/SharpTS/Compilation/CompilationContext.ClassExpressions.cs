@@ -46,6 +46,7 @@ public partial class CompilationContext
     internal bool HasGuestReceiver { get; set; }
     internal bool CapturesClassConstructorReturn { get; set; }
     internal bool IsDerivedClassConstructor { get; set; }
+    internal LocalBuilder? ConstructorSuperBound { get; set; }
     internal LocalBuilder? ClassConstructorReceiver { get; set; }
     internal LocalBuilder? ClassConstructorReturnValue { get; set; }
     internal LocalBuilder? ClassConstructorThisCell { get; set; }
