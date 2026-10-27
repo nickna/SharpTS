@@ -10,7 +10,8 @@ public abstract partial class ExpressionEmitterBase
         if (builder.PrivateSelfField == null)
         {
             Types.EmitLoadMethodInfoViaHandle(IL, builder.StubMethod);
-            IL.Emit(OpCodes.Newobj, Ctx.Runtime!.FunctionConstruction.Constructor);
+            NativeSourceFunctionEmission.EmitConstructor(IL, Types, Ctx.Runtime!, builder.StubMethod,
+                generics: Ctx.FunctionGenericParameters);
             SetStackUnknown();
             return;
         }
@@ -28,7 +29,8 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Stelem_Ref);
         IL.Emit(OpCodes.Ldloc, environment);
         Types.EmitLoadMethodInfoViaHandle(IL, builder.StubMethod);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(IL, Types, Ctx.Runtime, builder.StubMethod,
+            generics: Ctx.FunctionGenericParameters);
         IL.Emit(OpCodes.Stloc, function);
         IL.Emit(OpCodes.Ldloc, environment);
         IL.Emit(OpCodes.Ldc_I4_1);

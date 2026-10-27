@@ -692,7 +692,8 @@ public partial class ILEmitter
         }
 
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(IL, _ctx.Types, _ctx.Runtime!, method,
+            actualOwner: declaringType, generics: _ctx.FunctionGenericParameters);
     }
 
     /// <summary>

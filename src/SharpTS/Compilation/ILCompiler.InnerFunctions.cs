@@ -1123,7 +1123,8 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldtoken, displayClass);
             il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+            NativeSourceFunctionEmission.EmitConstructor(il, _types, _runtime, method,
+                actualOwner: displayClass, generics: _functions.GenericParameters);
         }
         else
         {
@@ -1132,7 +1133,8 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldtoken, method);
             il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+            NativeSourceFunctionEmission.EmitConstructor(il, _types, _runtime, method,
+                generics: _functions.GenericParameters);
         }
 
         // Store TSFunction in the appropriate location

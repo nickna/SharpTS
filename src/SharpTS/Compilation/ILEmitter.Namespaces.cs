@@ -126,7 +126,8 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldtoken, methodBuilder);
                     IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
                     IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-                    IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
+                    NativeSourceFunctionEmission.EmitConstructor(IL, _ctx.Types, _ctx.Runtime!, methodBuilder,
+                        generics: _ctx.FunctionGenericParameters);
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
                 }
                 break;

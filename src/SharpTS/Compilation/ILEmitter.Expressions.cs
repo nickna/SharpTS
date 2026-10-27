@@ -333,7 +333,8 @@ public partial class ILEmitter
             int arity = _ctx.GetFunctionLength(methodBuilder);
             IL.Emit(OpCodes.Ldstr, _ctx.GetFunctionName(methodBuilder, name));
             IL.Emit(OpCodes.Ldc_I4, arity);  // function length
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.FunctionConstruction.GetOrCreate);
+            NativeSourceFunctionEmission.EmitCachedFactory(IL, _ctx.Types, _ctx.Runtime!, methodBuilder,
+                generics: _ctx.FunctionGenericParameters);
             SetStackUnknown();
             return;
         }
@@ -359,7 +360,9 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
             }
             IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-            EmitNewobjUnknown(_ctx.Runtime!.FunctionConstruction.Constructor);
+            NativeSourceFunctionEmission.EmitConstructor(IL, _ctx.Types, _ctx.Runtime!, innerFuncMethod,
+                actualOwner: isCapturing ? innerDC : null, generics: _ctx.FunctionGenericParameters);
+            SetStackUnknown();
             return;
         }
 

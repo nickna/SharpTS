@@ -200,11 +200,38 @@ and Symbol keys remain governed by guest semantics.
 
 The callable interface itself does not prove this admission rule. Nor does its
 single erased invocation entry replace the receiver-sensitive collection and
-call/apply/bind paths. Those paths retain their existing dispatch. Source
-generic functions also retain `$ErasedSourceInvokerTarget`: a later producer
-change can carry an exact closed invocation thunk separately from the original
-method identity, but must preserve receiver, omitted-argument padding, rest,
-name/length and alias identity before removing runtime `MakeGenericMethod`.
+call/apply/bind paths. Those paths retain their existing dispatch.
+
+### Exact source invocation plans
+
+Known source callable producers can supply the invocation target separately
+from the original `MethodInfo`. Native output adds assembly-internal constructor
+and factory entries on the existing `$TSFunction`; managed output retains its
+existing ABI. The original method, target object, instance/prototype cache keys,
+name, length and JavaScript descriptor identity remain unchanged. Only the
+invocation plan uses the supplied exact method token with `MethodInvoker.Create`.
+
+For an erased generic function value, its declaration selects the canonical
+`object` or closed constraint argument once. Calling one alias with a number
+and then a string does not specialize its cache to the first call. Each producer
+loads its actual declaring-owner token; there is no global lookup mapping an
+open generic owner to a guessed invocation target. Methods on generic owners
+require the caller's instantiated owner form.
+
+Native factory method handles complete during runtime declaration. Per-source
+generic target registrations remain owned by `FunctionGenericParameterRegistry`
+through its existing body-emission completion phase. The emitted source target
+and factory paths are checked with saved-IL verification, including captured
+functions/arrows, defaults/rest, namespace/module aliases, generic owners,
+private methods, computed methods and accessors. A Windows diagnostic native
+publish executes that corpus and reports `RuntimeFeature.IsDynamicCodeSupported`
+as `false`; all native warnings remain visible.
+
+This is an exact-method invocation plan, rather than a direct typed invocation
+thunk. Opaque CLR and source-reflection construction still use their legacy
+paths, including `$ErasedSourceInvokerTarget` and runtime `MakeGenericMethod`.
+They are retained until their producer/use provenance is proved. The basic
+strict console publish still fails on the unchanged 81-diagnostic inventory.
 
 ## Warning policy and remaining work
 

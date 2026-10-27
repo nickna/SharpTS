@@ -107,7 +107,7 @@ public partial class ILCompiler
                 il = initializer.GetILGenerator();
                 il.Emit(OpCodes.Newobj, constructor);
                 EmitMethodInfoLiteral(il, method, type);
-                il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+                NativeSourceFunctionEmission.EmitConstructor(il, _types, _runtime, method, actualOwner: type);
                 il.Emit(OpCodes.Stsfld, cache);
                 il.Emit(OpCodes.Ret);
             }

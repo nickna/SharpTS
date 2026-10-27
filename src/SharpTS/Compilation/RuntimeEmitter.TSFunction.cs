@@ -407,6 +407,7 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Ret);
 
         var erasedInvokerTarget = EmitErasedSourceInvokerTarget(typeBuilder, inputs.FunctionAttributes);
+        var nativeSources = inputs.NativeCallables?.BeginSourceFunctionsEmission();
 
         // Constructor: public $TSFunction(object target, MethodInfo method)
         var ctorBuilder = typeBuilder.DefineConstructor(
@@ -509,6 +510,49 @@ public partial class RuntimeEmitter
         ctorCacheIL.MarkLabel(noCachedMethodLabel);
         ctorCacheIL.Emit(OpCodes.Ret);
 
+        if (nativeSources is not null)
+        {
+            nativeSources.Constructor = EmitNativeSourceConstructor(cachedMetadata: false);
+            nativeSources.CachedConstructor = EmitNativeSourceConstructor(cachedMetadata: true);
+        }
+
+        ConstructorBuilder EmitNativeSourceConstructor(bool cachedMetadata)
+        {
+            // The original method remains the JS identity and metadata source.
+            // Only invocation consumes the producer's exact, already-closed target.
+            Type[] signature = cachedMetadata
+                ? [_types.Object, _types.MethodInfo, _types.String, _types.Int32, _types.MethodInfo]
+                : [_types.Object, _types.MethodInfo, _types.MethodInfo];
+            var constructor = typeBuilder.DefineConstructor(MethodAttributes.Assembly, CallingConventions.Standard, signature);
+            var il = constructor.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Stfld, targetField);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Stfld, methodField);
+            il.Emit(OpCodes.Ldarg_0);
+            if (cachedMetadata) il.Emit(OpCodes.Ldarg_3); else il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Stfld, cachedNameField);
+            il.Emit(OpCodes.Ldarg_0);
+            if (cachedMetadata) il.Emit(OpCodes.Ldarg, 4); else il.Emit(OpCodes.Ldc_I4_M1);
+            il.Emit(OpCodes.Stfld, cachedLengthField);
+            EmitComputeReturnsVoid(il, returnsVoidField, methodArgIndex: 2);
+            if (!cachedMetadata)
+            {
+                EmitComputeFunctionLength(il, cachedLengthField, inputs.FunctionAttributes, methodArgIndex: 2);
+                EmitComputeFunctionName(il, cachedNameField, inputs.FunctionAttributes, methodArgIndex: 2);
+            }
+            EmitComputeExpectsThis(il, expectsThisField, inputs.FunctionAttributes, methodArgIndex: 2);
+            EmitComputeCapturesArguments(il, capturesArgumentsField, inputs.FunctionAttributes, methodArgIndex: 2);
+            EmitComputePadUndefinedMask(il, padUndefinedMaskField, inputs.FunctionAttributes, methodArgIndex: 2);
+            EmitComputeAdjustArgsCache(il, paramCountField, hasListRestField, hasArrayRestField, expectsThisField, methodArgIndex: 2);
+            EmitComputeNeedsArgConversion(il, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
+            EmitLookupOrCreateInvoker(il, invokerField, invokerCacheField, invokerCacheType, erasedInvokerTarget,
+                methodArgIndex: 2, invocationTargetArgIndex: cachedMetadata ? 5 : 3);
+            EmitComputeNumericRest4(il, numericRest4Field, inputs.FunctionAttributes);
+            il.Emit(OpCodes.Ret);
+            return constructor;
+        }
+
         EmitFunctionConstructor(
             typeBuilder,
             functionConstruction,
@@ -585,6 +629,31 @@ public partial class RuntimeEmitter
         gocIL.Emit(OpCodes.Ldloc, newInstLocal);
         gocIL.Emit(OpCodes.Callvirt, getOrAddM);
         gocIL.Emit(OpCodes.Ret);
+
+        if (nativeSources is not null)
+        {
+            var sourceFactory = typeBuilder.DefineMethod("GetOrCreateSource", MethodAttributes.Assembly | MethodAttributes.Static,
+                typeBuilder, [_types.MethodInfo, _types.String, _types.Int32, _types.MethodInfo]);
+            nativeSources.GetOrCreate = sourceFactory;
+            var il = sourceFactory.GetILGenerator();
+            var key = il.DeclareLocal(instanceCacheKeyType);
+            var value = il.DeclareLocal(typeBuilder);
+            // Share the existing source identity cache, never key it by the
+            // supplied invocation target or by the first call's type arguments.
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Newobj, cacheKeyCtor); il.Emit(OpCodes.Stloc, key);
+            il.Emit(OpCodes.Ldsfld, instanceCacheField); il.Emit(OpCodes.Ldloc, key); il.Emit(OpCodes.Ldloca, value);
+            il.Emit(OpCodes.Callvirt, tryGetValueM);
+            var create = il.DefineLabel();
+            il.Emit(OpCodes.Brfalse, create);
+            il.Emit(OpCodes.Ldloc, value); il.Emit(OpCodes.Ret);
+            il.MarkLabel(create);
+            il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Newobj, nativeSources.CachedConstructor); il.Emit(OpCodes.Stloc, value);
+            il.Emit(OpCodes.Ldsfld, instanceCacheField); il.Emit(OpCodes.Ldloc, key); il.Emit(OpCodes.Ldloc, value);
+            il.Emit(OpCodes.Callvirt, getOrAddM); il.Emit(OpCodes.Ret);
+            nativeSources.CompleteEmission();
+        }
 
         // Public getter for the internal _method field so sibling classes
         // (e.g., $Runtime.GetFunctionMethod's prototype cache) can read the
@@ -1488,7 +1557,8 @@ public partial class RuntimeEmitter
     /// has already been seen.
     /// </summary>
     private void EmitLookupOrCreateInvoker(ILGenerator il, FieldBuilder invokerField,
-        FieldBuilder invokerCacheField, Type invokerCacheType, MethodBuilder erasedInvokerTarget, int methodArgIndex)
+        FieldBuilder invokerCacheField, Type invokerCacheType, MethodBuilder erasedInvokerTarget, int methodArgIndex,
+        int? invocationTargetArgIndex = null)
     {
         var existingLocal = il.DeclareLocal(_types.MethodInvoker);
         var newInvokerLocal = il.DeclareLocal(_types.MethodInvoker);
@@ -1513,8 +1583,8 @@ public partial class RuntimeEmitter
 
         // Not in cache: create + GetOrAdd (handles race; either our or another
         // thread's invoker wins, both work the same)
-        il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Call, erasedInvokerTarget);
+        il.Emit(OpCodes.Ldarg, invocationTargetArgIndex ?? methodArgIndex);
+        if (invocationTargetArgIndex is null) il.Emit(OpCodes.Call, erasedInvokerTarget);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodInvoker, "Create", [_types.MethodBase])!);
         il.Emit(OpCodes.Stloc, newInvokerLocal);
 

@@ -25,6 +25,14 @@ public sealed class EmittedNativeCallableRuntime
     public MethodInfo Invoke { get; }
     public bool IsComplete { get; private set; }
     public int CarrierCount => _implementations.Count;
+    public EmittedNativeSourceFunctionRuntime? SourceFunctions { get; private set; }
+
+    internal EmittedNativeSourceFunctionRuntime BeginSourceFunctionsEmission()
+    {
+        if (IsComplete || SourceFunctions is not null)
+            throw new InvalidOperationException("Native source function declarations have already begun or completed.");
+        return SourceFunctions = new();
+    }
 
     /// <summary>Registers an exact erased invocation body before its owner is finalized.</summary>
     internal void Register(TypeBuilder carrier, MethodBuilder invoke)
@@ -55,6 +63,8 @@ public sealed class EmittedNativeCallableRuntime
     internal void CompleteEmission()
     {
         if (IsComplete) throw new InvalidOperationException("Native callable declarations are already complete.");
+        if (SourceFunctions is { IsComplete: false })
+            throw new InvalidOperationException("Native source function declarations are incomplete.");
         if (_implementations.Any(entry => !entry.Key.IsCreated() ||
             entry.Value.Target.GetILGenerator().ILOffset == 0 || entry.Value.Thunk.GetILGenerator().ILOffset == 0))
             throw new InvalidOperationException("Native callable bodies are incomplete.");

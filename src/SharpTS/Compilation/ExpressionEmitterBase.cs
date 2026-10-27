@@ -1999,7 +1999,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // state trips ILVerify PathStackDepth into an InvalidProgramException.
         IL.Emit(OpCodes.Ldnull);
         Types.EmitLoadMethodInfoViaHandle(IL, method);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(IL, Types, Ctx.Runtime!, method,
+            generics: Ctx.FunctionGenericParameters);
         SetStackUnknown();
     }
 
@@ -2038,7 +2039,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     {
         EmitCapturingArrowDisplayViaHooks(af, displayCtor);
         Types.EmitLoadMethodInfoViaHandle(IL, method);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(IL, Types, Ctx.Runtime!, method,
+            generics: Ctx.FunctionGenericParameters);
         SetStackUnknown();
     }
 

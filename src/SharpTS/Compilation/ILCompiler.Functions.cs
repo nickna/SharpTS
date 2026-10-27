@@ -208,6 +208,17 @@ public partial class ILCompiler
 
         _functions.GenericParameters.Declare(methodBuilder, genericParams);
 
+        if (_nativeAotProjectOutput && isGeneric && !FunctionGenericParameterRegistry.ContainsUnboundType(returnType) &&
+            paramTypes.All(type => !FunctionGenericParameterRegistry.ContainsUnboundType(type)))
+        {
+            // Match the callable value's existing erased semantics. These are
+            // declaration-time arguments, never the first invocation's T.
+            Type[] canonicalArguments = funcStmt.TypeParams!.Select(parameter => parameter.Constraint is { } constraint
+                ? ResolveConstraintType(constraint) : _types.Object).ToArray();
+            if (canonicalArguments.All(type => !FunctionGenericParameterRegistry.ContainsUnboundType(type)))
+                _functions.GenericParameters.DeclareErasedValueInvocationTarget(methodBuilder, canonicalArguments);
+        }
+
         _functions.Builders[qualifiedFunctionName] = methodBuilder;
 
         // User TS function: when invoked as a value, omitted trailing args must pad with the

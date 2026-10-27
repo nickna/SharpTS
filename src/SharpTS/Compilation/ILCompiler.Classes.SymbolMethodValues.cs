@@ -84,7 +84,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Newobj, adapter.Constructor);
         EmitMethodInfoLiteral(il, adapter.Method, adapter.Type);
-        il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(il, _types, _runtime, adapter.Method, actualOwner: adapter.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stsfld, adapter.Value);
         il.MarkLabel(haveValue);
@@ -151,7 +151,7 @@ public partial class ILCompiler
         var metadata = il.DeclareLocal(_runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, target);
         EmitMethodInfoLiteral(il, adapter.Method, adapter.Type);
-        il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(il, _types, _runtime, adapter.Method, actualOwner: adapter.Type);
         il.Emit(OpCodes.Stloc, metadata);
         il.Emit(OpCodes.Ldloc, target);
         EmitMethodInfoLiteral(il, adapter.Method, adapter.Type);
@@ -161,7 +161,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Call, _runtime.Symbols.MethodName);
         il.Emit(OpCodes.Ldloc, metadata);
         il.Emit(OpCodes.Callvirt, _runtime.FunctionValues.LengthGetter);
-        il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.CachedConstructor);
+        NativeSourceFunctionEmission.EmitCachedConstructor(il, _types, _runtime, adapter.Method, actualOwner: adapter.Type);
         il.Emit(OpCodes.Stsfld, adapter.Value);
         il.MarkLabel(haveValue);
 

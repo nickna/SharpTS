@@ -173,7 +173,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
 
         // Call $TSFunction constructor
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(IL, _ctx.Types, _ctx.Runtime!, method,
+            generics: _ctx.FunctionGenericParameters);
     }
 
     /// <summary>
@@ -625,7 +626,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldtoken, displayClass);
         IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandleWithType);
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(IL, _ctx.Types, _ctx.Runtime!, method,
+            actualOwner: displayClass, generics: _ctx.FunctionGenericParameters);
 
         if (selfRefField != null && displayClassLocal != null)
         {
