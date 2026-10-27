@@ -693,6 +693,25 @@ public partial class RuntimeEmitter
         // then send a partial or complete descriptor through
         // [[DefineOwnProperty]] as required.
         il.MarkLabel(distinctReceiverLabel);
+        // Only the data-property path requires an object Receiver. Accessor
+        // invocation above preserves explicitly supplied null/undefined values.
+        var receiverIsObject = il.DefineLabel();
+        var receiverIsPrimitive = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, receiverIsPrimitive);
+        foreach (var primitive in new[] { inputs.UndefinedType, _types.String, _types.Double, _types.Boolean, _types.BigInteger })
+        {
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Isinst, primitive);
+            il.Emit(OpCodes.Brtrue, receiverIsPrimitive);
+        }
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Call, inputs.IsSymbol);
+        il.Emit(OpCodes.Brfalse, receiverIsObject);
+        il.MarkLabel(receiverIsPrimitive);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(receiverIsObject);
         var receiverDescriptorLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Ldloc, keyLocal);
