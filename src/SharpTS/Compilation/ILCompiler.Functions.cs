@@ -284,7 +284,8 @@ public partial class ILCompiler
                         // floating-point argument shuffle on Windows x64.
                         var entry = _programType.DefineMethod(
                             $"{qualifiedFunctionName}$numericRest4<Entry>",
-                            MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
+                            (_nativeNumericRest4Binding is null ? MethodAttributes.Private : MethodAttributes.Assembly)
+                                | MethodAttributes.Static | MethodAttributes.HideBySig,
                             _types.Double,
                             [_types.Object, _types.Double, _types.Double, _types.Double, _types.Double]);
                         MarkCompilerGenerated(entry);
@@ -295,8 +296,11 @@ public partial class ILCompiler
                         entryIL.Emit(OpCodes.Call, companion);
                         entryIL.Emit(OpCodes.Ret);
                         _functionEmissionPolicy.RequireNumericRest4Producer();
-                        methodBuilder.SetCustomAttribute(_runtime!.FunctionAttributes.NumericRest4Ctor,
-                            CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.NumericRest4Ctor, entry.Name));
+                        if (_nativeNumericRest4Binding is { } nativeBinding)
+                            nativeBinding.RegisterProducer(methodBuilder, entry, _runtime!.FunctionAttributes.NumericRest4Ctor);
+                        else
+                            methodBuilder.SetCustomAttribute(_runtime!.FunctionAttributes.NumericRest4Ctor,
+                                CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.NumericRest4Ctor, entry.Name));
                     }
                     companions[variantIndex] = companion;
                     foreach (var call in variant.Calls)

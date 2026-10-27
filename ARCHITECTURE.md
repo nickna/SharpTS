@@ -882,6 +882,16 @@ their absent-runtime behavior and require declared attributes when a runtime exi
 Saved-output, marker payload, numeric-rest allocation, reuse and reference-assembly
 tests cover this boundary; invocation and per-output function caches remain separate.
 
+Native numeric-rest binding has a compiler-owned late helper, declared before
+function-wrapper emission and completed before the program type is created.
+`FunctionEmissionPolicy` supplies its exact optional method handle to the wrapper
+constructors. The sole eligible source-marker producer validates and atomically
+records its original method and exact closed-static entry while attaching the
+marker. The helper compares literal method tokens and constructs a known delegate;
+unknown methods return null and retain ordinary invocation. Captured targets still
+skip the optimization. The no-producer proof omits the helper, and ordinary/default
+runtime emission retains its reflective binding and private entry visibility.
+
 Readline helper emission relies on its supplied required declarations; feature
 selection remains at the orchestration boundary. AbortSignal.any receives its
 fine deployment selection explicitly through the Abort helper group. Ordinary

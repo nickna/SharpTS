@@ -11,6 +11,7 @@ public partial class ILCompiler
     private FunctionEmissionPolicy _functionEmissionPolicy = FunctionEmissionPolicy.Full;
     private NativeSourceOwnerCatalog? _nativeSourceOwners;
     internal NativeSourceOwnerCatalog? NativeSourceOwners => _nativeSourceOwners;
+    private NativeNumericRest4Binding? _nativeNumericRest4Binding;
 
     private NativeClassInitializationEmission? GetNativeClassInitialization() =>
         !_nativeAotProjectOutput || _programType is null ? null :

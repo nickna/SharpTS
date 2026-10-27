@@ -464,7 +464,7 @@ public partial class RuntimeEmitter
         EmitComputeNeedsArgConversion(ctorIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)  [pseudocode]
         EmitLookupOrCreateInvoker(ctorIL, invokerField, invokerCacheField, invokerCacheType, erasedInvokerTarget, methodArgIndex: 2);
-        if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(ctorIL, numericRest4Field, inputs.FunctionAttributes);
+        if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(ctorIL, numericRest4Field, inputs.FunctionAttributes, inputs.Policy.NativeNumericRest4Binder);
         ctorIL.MarkLabel(noMethodLabel);
         ctorIL.Emit(OpCodes.Ret);
 
@@ -509,7 +509,7 @@ public partial class RuntimeEmitter
         EmitComputeNeedsArgConversion(ctorCacheIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)
         EmitLookupOrCreateInvoker(ctorCacheIL, invokerField, invokerCacheField, invokerCacheType, erasedInvokerTarget, methodArgIndex: 2);
-        if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(ctorCacheIL, numericRest4Field, inputs.FunctionAttributes);
+        if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(ctorCacheIL, numericRest4Field, inputs.FunctionAttributes, inputs.Policy.NativeNumericRest4Binder);
         ctorCacheIL.MarkLabel(noCachedMethodLabel);
         ctorCacheIL.Emit(OpCodes.Ret);
 
@@ -551,7 +551,7 @@ public partial class RuntimeEmitter
             EmitComputeNeedsArgConversion(il, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
             EmitLookupOrCreateInvoker(il, invokerField, invokerCacheField, invokerCacheType, erasedInvokerTarget,
                 methodArgIndex: 2, invocationTargetArgIndex: cachedMetadata ? 5 : 3);
-            if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(il, numericRest4Field, inputs.FunctionAttributes);
+            if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(il, numericRest4Field, inputs.FunctionAttributes, inputs.Policy.NativeNumericRest4Binder);
             il.Emit(OpCodes.Ret);
             return constructor;
         }

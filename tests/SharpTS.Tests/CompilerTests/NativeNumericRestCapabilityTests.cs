@@ -46,6 +46,7 @@ public sealed class NativeNumericRestCapabilityTests
         Assert.NotNull(saved.GetType("$TSFunction")!.GetField("_numericRest4", BindingFlags.Instance | BindingFlags.NonPublic));
         foreach (var constructor in saved.GetType("$TSFunction")!.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
             Assert.Equal(!native, HasOptionalLookup(constructor));
+        Assert.Null(saved.GetType("$NativeNumericRest4Binding"));
     }
 
     [Theory]
@@ -75,7 +76,8 @@ public sealed class NativeNumericRestCapabilityTests
         object wrapper = factory.Invoke(null, native ? [original, "add", 0, original] : [original, "add", 0])!;
         Assert.NotNull(function.GetField("_numericRest4", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(wrapper));
         Assert.All(function.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance),
-            constructor => Assert.True(HasOptionalLookup(constructor)));
+            constructor => Assert.Equal(!native, HasOptionalLookup(constructor)));
+        if (native) Assert.NotNull(saved.GetType("$NativeNumericRest4Binding"));
     }
 
     [Fact]
@@ -99,7 +101,7 @@ public sealed class NativeNumericRestCapabilityTests
         Assert.Contains(saved.GetType("$Program")!.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static),
             method => method.CustomAttributes.Any(attribute => attribute.AttributeType.Name == "$NumericRest4"));
         Assert.All(saved.GetType("$TSFunction")!.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance),
-            constructor => Assert.True(HasOptionalLookup(constructor)));
+            constructor => Assert.False(HasOptionalLookup(constructor)));
     }
 
     [Fact]
@@ -117,7 +119,7 @@ public sealed class NativeNumericRestCapabilityTests
         Assert.Contains(saved.GetType("$Program")!.GetMethod("add")!.CustomAttributes,
             attribute => attribute.AttributeType.Name == "$NumericRest4");
         Assert.All(saved.GetType("$TSFunction")!.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance),
-            constructor => Assert.True(HasOptionalLookup(constructor)));
+            constructor => Assert.False(HasOptionalLookup(constructor)));
     }
 
     [Fact]

@@ -294,7 +294,7 @@ The general compiled-output fixes remain tracked in #3043 and #3044.
 
 Before declaring the native runtime, the compiler scans its prepared source,
 including every module, for potential rest-function producers. Any rest
-function keeps the existing NumericRest4 binding, even when it is ineligible
+function keeps NumericRest4 binding enabled, even when it is ineligible
 for the optimization. Source-execution names conservatively keep it as well.
 The scan is independent of runtime-feature overrides, and marker attachment
 checks the producer invariant.
@@ -305,9 +305,22 @@ field and ordinary invocation fallback remain unchanged. Managed output and
 standalone runtime-emitter calls retain the existing binding by default.
 The fresh strict console inventory falls from 80 to 78 diagnostics: precisely
 the two constructor IL2075 warnings for that lookup disappear, with no additions.
-An eligible imported producer and alias mutation controls retain binding and
-fallback behavior. This proof does not remove other reflective invocation paths
-or establish strict native acceptance.
+When binding is enabled, native output uses a finite compiler-owned helper. The
+sole marker producer records its original method and exact entry together, after
+checking their module, owner and signatures. Before finalizing the program type,
+the helper emits literal method-token comparisons and direct delegate construction.
+It preserves the existing unused-object-plus-four-double entry ABI with a non-null
+bound target. Unknown methods return null, and captured functions skip binding;
+both retain the ordinary invocation fallback. Imported producers, aliases, bind
+and alias mutation controls preserve their behavior.
+
+A separate Windows rest-producer/capability probe reduces its strict inventory
+from 43 to 40 diagnostics, removing three constructor IL2075 lookup diagnostics
+and adding none. A diagnostic-only publish retains all warnings and its native
+executable prints `10 true false` (sum, source-function identity, and dynamic-code
+availability). The basic no-producer inventory remains 39. This finite optional
+optimization does not remove other reflective invocation paths or establish strict
+native acceptance.
 
 ### Finite canonical source owners
 

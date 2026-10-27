@@ -748,6 +748,14 @@ public partial class ILCompiler
     private void Phase1_EmitRuntimeTypes()
     {
         if (_nativeAotProjectOutput) _nativeSourceOwners = new(_moduleBuilder, _types);
+        if (_nativeAotProjectOutput && _functionEmissionPolicy.BindNumericRest4)
+        {
+            _nativeNumericRest4Binding = new NativeNumericRest4Binding(_moduleBuilder, _types);
+            _functionEmissionPolicy = _functionEmissionPolicy with
+            {
+                NativeNumericRest4Binder = _nativeNumericRest4Binding.Bind
+            };
+        }
         _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput,
             _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true)) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy, _nativeSourceOwners);
@@ -1233,6 +1241,7 @@ public partial class ILCompiler
         _nativeSourceOwners?.CompleteEmission(_classes.GenericParameters, _classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
         _nativeClassInitialization?.CompleteEmission();
+        _nativeNumericRest4Binding?.CompleteEmission();
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
@@ -1887,6 +1896,7 @@ public partial class ILCompiler
         _nativeSourceOwners?.CompleteEmission(_classes.GenericParameters, _classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
         _nativeClassInitialization?.CompleteEmission();
+        _nativeNumericRest4Binding?.CompleteEmission();
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
