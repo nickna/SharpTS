@@ -395,9 +395,9 @@ public partial class ILCompiler
                     : superclassName == "Promise"
                         ? [typeof(object)]
                         : []);
-        // Declaration adapters keep the declaration's rest marker. Ordinary
-        // expression constructors retain their existing parameter representation.
-        if (constructor != null && _runtimeClassDeclarations.Values.Any(expression => ReferenceEquals(expression, classExpr)))
+        // Keep source rest parameters visible to both direct super calls and
+        // the flat-arguments constructor factory.
+        if (constructor != null)
             for (int index = 0; index < constructor.Parameters.Count; index++)
                 if (constructor.Parameters[index].IsRest) ctorParamTypes[index] = _types.ListOfObject;
 
