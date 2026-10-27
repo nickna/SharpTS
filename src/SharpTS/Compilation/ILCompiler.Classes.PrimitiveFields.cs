@@ -6,6 +6,18 @@ namespace SharpTS.Compilation;
 
 public partial class ILCompiler
 {
+    private void EmitUninitializedParameterProperties(ILGenerator il, TypeBuilder owner, Stmt.Function? constructor)
+    {
+        foreach (var parameter in constructor?.Parameters.Where(parameter => parameter.IsParameterProperty) ?? [])
+        {
+            if (!GetClassRegistry().TryGetOwnGuestDataField(owner, parameter.Name.Lexeme, out var field)
+                || (!field.IsPrimitive && field.NativeType != _types.Object && field.BackingField != null)) continue;
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(field.GuestSetter));
+        }
+    }
+
     private void DefineGuestDataField(TypeBuilder owner, Stmt.Field source, Type nativeType,
         FieldBuilder? backing = null, MethodBuilder? getter = null, MethodBuilder? setter = null)
     {

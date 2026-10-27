@@ -376,6 +376,7 @@ public partial class ILCompiler
 
         void EmitOrderedFieldInitializersCore()
         {
+            EmitUninitializedParameterProperties(il, typeBuilder, constructor);
             // Note: Declare fields are excluded - they have no initialization
             var instanceFieldsWithInit = classStmt.Fields.Where(f =>
                 !f.IsStatic && !f.IsDeclare &&
