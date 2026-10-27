@@ -2493,6 +2493,7 @@ public partial class RuntimeEmitter
     {
         var carrierFallback = il.DefineLabel();
         var reject = il.DefineLabel();
+        var create = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Brfalse, carrierFallback);
         il.Emit(OpCodes.Ldarg_0);
@@ -2514,7 +2515,12 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
-        }, carrierFallback, reject);
+        }, create, reject);
+        il.MarkLabel(create);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.CanAddProperty);
+        il.Emit(OpCodes.Brtrue, carrierFallback);
 
         il.MarkLabel(reject);
         EmitThrowTypeErrorWithName(il, inputs.Errors,
