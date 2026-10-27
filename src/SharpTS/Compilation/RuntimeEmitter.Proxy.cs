@@ -447,7 +447,8 @@ public partial class RuntimeEmitter
         ProxyDeleteCheckInputs inputs,
         Action emitLoadObj,
         Action emitLoadName,
-        Label notProxyLabel
+        Label notProxyLabel,
+        bool objectKey = false
     )
     {
         var proxyLabel = il.DefineLabel();
@@ -455,7 +456,8 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(proxyLabel);
         EmitProxyMethodCallUnwrapped(
-            il, inputs.InvokeMethodUnwrapped, emitLoadObj, "TrapDeletePropertyCompiled", () =>
+            il, inputs.InvokeMethodUnwrapped, emitLoadObj,
+            objectKey ? "TrapDeletePropertyKeyCompiled" : "TrapDeletePropertyCompiled", () =>
         {
             il.Emit(OpCodes.Ldc_I4_5);
             il.Emit(OpCodes.Newarr, _types.Object);
@@ -463,8 +465,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             emitLoadName();
             il.Emit(OpCodes.Stelem_Ref);
-            EmitDelegateArgument(1, objectDeletion.Property,
-                typeof(Func<object, string, bool>));
+            EmitDelegateArgument(1, objectKey ? objectDeletion.Index : objectDeletion.Property,
+                objectKey ? typeof(Func<object, object, bool>) : typeof(Func<object, string, bool>));
             EmitDelegateArgument(2, inputs.ObjectDescriptors.GetOwnPropertyDescriptor,
                 typeof(Func<object, object, object?>));
             EmitDelegateArgument(3, inputs.ObjectState.IsExtensible,

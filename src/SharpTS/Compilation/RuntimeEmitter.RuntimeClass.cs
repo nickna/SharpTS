@@ -1688,7 +1688,10 @@ public partial class RuntimeEmitter
                 runtime.Promise,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.FunctionValues.Type
+                runtime.FunctionValues.Type,
+                runtime.Reflect.ToPropertyKey,
+                new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
+                    runtime.ObjectDescriptors, runtime.ObjectState)
             )
         );
         EmitDeleteIndexStrict(
@@ -1704,7 +1707,10 @@ public partial class RuntimeEmitter
                 runtime.Promise,
                 runtime.StringCoercion,
                 runtime.Symbols,
-                runtime.FunctionValues.Type
+                runtime.FunctionValues.Type,
+                runtime.Reflect.ToPropertyKey,
+                new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
+                    runtime.ObjectDescriptors, runtime.ObjectState)
             )
         );
         EmitStrictModeHelpers(typeBuilder, runtime.Operators, runtime.Errors);

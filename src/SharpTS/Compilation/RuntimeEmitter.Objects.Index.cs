@@ -89,7 +89,9 @@ public partial class RuntimeEmitter
         EmittedPromiseRuntime? Promise,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
-        TypeBuilder TSFunctionType
+        TypeBuilder TSFunctionType,
+        MethodInfo ToPropertyKey,
+        ProxyDeleteCheckInputs ProxyDelete
     );
 
     private readonly record struct DeleteIndexCoreInputs(
@@ -102,7 +104,9 @@ public partial class RuntimeEmitter
         EmittedPromiseRuntime? Promise,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
-        TypeBuilder TSFunctionType
+        TypeBuilder TSFunctionType,
+        MethodInfo ToPropertyKey,
+        ProxyDeleteCheckInputs ProxyDelete
     );
 
     private readonly record struct DeleteIndexStrictInputs(
@@ -115,7 +119,9 @@ public partial class RuntimeEmitter
         EmittedPromiseRuntime? Promise,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
-        TypeBuilder TSFunctionType
+        TypeBuilder TSFunctionType,
+        MethodInfo ToPropertyKey,
+        ProxyDeleteCheckInputs ProxyDelete
     );
 
     private void EmitGetIndex(TypeBuilder typeBuilder, EmittedObjectReadRuntime objectRead, GetIndexInputs inputs)
@@ -2298,7 +2304,9 @@ public partial class RuntimeEmitter
                 inputs.Promise,
                 inputs.StringCoercion,
                 inputs.Symbols,
-                inputs.TSFunctionType
+                inputs.TSFunctionType,
+                inputs.ToPropertyKey,
+                inputs.ProxyDelete
             ),
             strict: false
         );
@@ -2357,6 +2365,24 @@ public partial class RuntimeEmitter
         // null check on obj - return true (deleting from null is allowed in JS)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, trueLabel);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ToPropertyKey);
+        il.Emit(OpCodes.Starg_S, (byte)1);
+        var notProxyDelete = il.DefineLabel();
+        EmitProxyDeleteCheck(il, objectDeletion, inputs.ProxyDelete,
+            () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1),
+            notProxyDelete, objectKey: true);
+        if (strict)
+        {
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            EmitDeleteIndexFail("Cannot delete property of proxy");
+        }
+        else
+        {
+            il.Emit(OpCodes.Ret);
+        }
+        il.MarkLabel(notProxyDelete);
 
         // Check if index is a symbol first
         il.Emit(OpCodes.Ldarg_1);
@@ -2877,7 +2903,9 @@ public partial class RuntimeEmitter
                 inputs.Promise,
                 inputs.StringCoercion,
                 inputs.Symbols,
-                inputs.TSFunctionType
+                inputs.TSFunctionType,
+                inputs.ToPropertyKey,
+                inputs.ProxyDelete
             ),
             strict: true
         );
