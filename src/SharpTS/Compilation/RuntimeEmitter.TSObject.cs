@@ -87,7 +87,7 @@ public partial class RuntimeEmitter
         EmitTSObjectPreventExtensions(typeBuilder, storage, isNonExtensibleField);
 
         // Methods: GetProperty, SetProperty, SetPropertyStrict, HasProperty, DeleteProperty
-        EmitTSObjectGetProperty(typeBuilder, storage, fieldsField, gettersField, peers.Read);
+        EmitTSObjectGetProperty(typeBuilder, storage, fieldsField, gettersField, settersField, peers.Read);
         EmitTSObjectSetProperty(typeBuilder, storage,
             new ObjectSetFields(fieldsField, isFrozenField, isSealedField, isNonExtensibleField, settersField),
             peers.Invocation);
@@ -303,7 +303,7 @@ public partial class RuntimeEmitter
     }
 
     private void EmitTSObjectGetProperty(TypeBuilder typeBuilder, EmittedObjectStorageRuntime storage,
-        FieldBuilder fieldsField, FieldBuilder gettersField, ObjectReadInputs peers)
+        FieldBuilder fieldsField, FieldBuilder gettersField, FieldBuilder settersField, ObjectReadInputs peers)
     {
         var method = typeBuilder.DefineMethod(
             "GetProperty",
@@ -382,6 +382,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noGetterLabel);
+
+        var noSetter = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, settersField);
+        il.Emit(OpCodes.Brfalse, noSetter);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, settersField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
+        il.Emit(OpCodes.Brfalse, noSetter);
+        il.Emit(OpCodes.Ldsfld, peers.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noSetter);
 
         // No getter - fall back to _fields
         // if (_fields.TryGetValue(name, out value)) return value;
