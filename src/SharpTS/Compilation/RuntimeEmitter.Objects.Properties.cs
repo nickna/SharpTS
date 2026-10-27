@@ -228,6 +228,8 @@ public partial class RuntimeEmitter
     {
         // Only a deferred generic definition initializes all source statics in
         // canonical storage. Ordinary closed generic parents keep their own .cctor storage.
+        // Built-in carriers cannot need this closure when no source class exists.
+        if (!_features.UsesUserClasses) return owner;
         var storageOwner = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldloc, owner);
         il.Emit(OpCodes.Stloc, storageOwner);

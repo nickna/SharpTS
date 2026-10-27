@@ -431,13 +431,18 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Stloc, owner);
-            il.Emit(OpCodes.Ldloc, owner);
-            il.Emit(OpCodes.Callvirt, isGenericType);
-            il.Emit(OpCodes.Brfalse, closedOwner);
-            il.Emit(OpCodes.Ldloc, owner);
-            il.Emit(OpCodes.Callvirt, containsGenericParams);
-            il.Emit(OpCodes.Brfalse, closedOwner);
-            EmitCloseOpenGenericOwner(il, owner);
+            // Only source classes contribute generic symbol owners. All built-in
+            // carriers are non-generic, so do not emit dynamic closure for them.
+            if (_features.UsesUserClasses)
+            {
+                il.Emit(OpCodes.Ldloc, owner);
+                il.Emit(OpCodes.Callvirt, isGenericType);
+                il.Emit(OpCodes.Brfalse, closedOwner);
+                il.Emit(OpCodes.Ldloc, owner);
+                il.Emit(OpCodes.Callvirt, containsGenericParams);
+                il.Emit(OpCodes.Brfalse, closedOwner);
+                EmitCloseOpenGenericOwner(il, owner);
+            }
 
             il.MarkLabel(closedOwner);
             il.Emit(OpCodes.Ldloc, owner);
