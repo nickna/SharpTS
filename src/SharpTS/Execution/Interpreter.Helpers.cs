@@ -190,7 +190,7 @@ public partial class Interpreter
     }
 
     private bool HasCanonicalIndexProperties(object? target)
-        => target is ISharpTSOwnPropertyObject
+        => target is ISharpTSOwnPropertyObject or SharpTSObject
             || FunctionObjectProperties.TryGetStorage(target, this, out _);
 
     // Callers supply an already normalized string or Symbol property key.
