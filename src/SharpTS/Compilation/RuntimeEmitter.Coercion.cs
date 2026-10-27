@@ -21,6 +21,7 @@ public partial class RuntimeEmitter
         MethodInfo DescriptorValueGetter,
         FieldInfo SymbolToPrimitive,
         MethodInfo GetSymbolDictionary,
+        MethodInfo GetIndex,
         MethodInfo GetProperty,
         MethodInfo InvokeMethodValue,
         MethodInfo TypeOf,
@@ -1298,70 +1299,16 @@ public partial class RuntimeEmitter
         // method and invoke with hint "number". Result must be primitive or TypeError.
         var afterToPrimSymN = il.DefineLabel();
         var doThrowN = il.DefineLabel();
-        var symDictForToPrimN = il.DeclareLocal(_types.DictionaryObjectObject);
         var toPrimFnLocalN = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Call, peers.GetSymbolDictionary);
-        il.Emit(OpCodes.Stloc, symDictForToPrimN);
-        il.Emit(OpCodes.Ldloc, symDictForToPrimN);
-        il.Emit(OpCodes.Brfalse, afterToPrimSymN);
-        il.Emit(OpCodes.Ldloc, symDictForToPrimN);
         il.Emit(OpCodes.Ldsfld, peers.SymbolToPrimitive);
-        il.Emit(OpCodes.Ldloca, toPrimFnLocalN);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
-        il.Emit(OpCodes.Brfalse, afterToPrimSymN);
-        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
-        il.Emit(OpCodes.Brfalse, afterToPrimSymN);
-        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
-        il.Emit(OpCodes.Isinst, peers.UndefinedType);
-        il.Emit(OpCodes.Brtrue, afterToPrimSymN);
-
-        // Apply ordinary [[Get]] semantics to data/accessor descriptors stored
-        // in the symbol dictionary.
-        var notDescLabelN = il.DefineLabel();
-        var descValueReadyLabelN = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
-        il.Emit(OpCodes.Isinst, peers.DescriptorType);
-        il.Emit(OpCodes.Brfalse, notDescLabelN);
-        var toPrimDescLocalN = il.DeclareLocal(peers.DescriptorType);
-        var descGetterLocalN = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
-        il.Emit(OpCodes.Castclass, peers.DescriptorType);
-        il.Emit(OpCodes.Stloc, toPrimDescLocalN);
-        il.Emit(OpCodes.Ldloc, toPrimDescLocalN);
-        il.Emit(OpCodes.Callvirt, peers.DescriptorGetterGetter);
-        il.Emit(OpCodes.Stloc, descGetterLocalN);
-        il.Emit(OpCodes.Ldloc, descGetterLocalN);
-        var descHasGetterLabelN = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, descHasGetterLabelN);
-        il.Emit(OpCodes.Ldloc, toPrimDescLocalN);
-        il.Emit(OpCodes.Callvirt, peers.DescriptorSetterGetter);
-        il.Emit(OpCodes.Brtrue, afterToPrimSymN);
-        il.Emit(OpCodes.Ldloc, toPrimDescLocalN);
-        il.Emit(OpCodes.Callvirt, peers.DescriptorValueGetter);
+        il.Emit(OpCodes.Call, peers.GetIndex);
         il.Emit(OpCodes.Stloc, toPrimFnLocalN);
-        il.Emit(OpCodes.Br, descValueReadyLabelN);
-        il.MarkLabel(descHasGetterLabelN);
-        il.Emit(OpCodes.Ldloc, descGetterLocalN);
-        il.Emit(OpCodes.Isinst, peers.UndefinedType);
-        il.Emit(OpCodes.Brtrue, afterToPrimSymN);
-        var emptyArgsForGetterNum = il.DeclareLocal(_types.ObjectArray);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Stloc, emptyArgsForGetterNum);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Ldloc, descGetterLocalN);
-        il.Emit(OpCodes.Ldloc, emptyArgsForGetterNum);
-        il.Emit(OpCodes.Call, peers.InvokeMethodValue);
-        il.Emit(OpCodes.Stloc, toPrimFnLocalN);
-        il.MarkLabel(descValueReadyLabelN);
         il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
         il.Emit(OpCodes.Brfalse, afterToPrimSymN);
         il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
         il.Emit(OpCodes.Isinst, peers.UndefinedType);
         il.Emit(OpCodes.Brtrue, afterToPrimSymN);
-        il.MarkLabel(notDescLabelN);
-
         var toPrimNumberCallableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
         il.Emit(OpCodes.Isinst, peers.FunctionType);

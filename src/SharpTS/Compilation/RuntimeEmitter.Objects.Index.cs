@@ -118,13 +118,7 @@ public partial class RuntimeEmitter
 
     private void EmitGetIndex(TypeBuilder typeBuilder, EmittedObjectReadRuntime objectRead, GetIndexInputs inputs)
     {
-        var method = typeBuilder.DefineMethod(
-            "GetIndex",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object]
-        );
-        objectRead.Index = method;
+        var method = (MethodBuilder)objectRead.Index;
 
         var il = method.GetILGenerator();
         var arrayLabel = il.DefineLabel();
@@ -1514,6 +1508,9 @@ public partial class RuntimeEmitter
         var tsFunctionIdxSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionIdxSetLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
         il.Emit(OpCodes.Brtrue, tsFunctionIdxSetLabel);
 
         if (_features.UsesUserClasses)

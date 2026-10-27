@@ -1359,11 +1359,14 @@ public partial class RuntimeEmitter
         // ToNumber/ConvertToNumber bodies: emit AFTER GetProperty/InvokeMethodValue
         // so their ToPrimitive(value, "number") on Dictionary/$Object args can
         // call those helpers.
+        runtime.ObjectRead.Index = typeBuilder.DefineMethod("GetIndex",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.Object]);
         var numberInputs = new AbstractNumberInputs(runtime.Sentinels.UndefinedType, runtime.Symbols.Type, runtime.ObjectStorage.Type,
                 runtime.FunctionValues.Type, runtime.FunctionBindings.AnyType, runtime.ObjectFields.Interface,
                 runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
                 runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
-                runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Property, runtime.Invocation.Method,
+                runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Index, runtime.ObjectRead.Property, runtime.Invocation.Method,
                 runtime.Operators.TypeOf, runtime.StringCoercion.ToJsString, runtime.BoxedPrimitives.UnwrapIfBoxedOrdinary,
                 runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         EmitToNumber(typeBuilder, runtime.NumericCoercion, numberInputs);
@@ -3009,6 +3012,7 @@ public partial class RuntimeEmitter
         EmitUnwrapIfBoxedBody(runtime.BoxedPrimitives,
             new UnwrapPrimitiveInputs(
                 runtime.ObjectStorage.Type,
+                runtime.ObjectFields.Interface,
                 runtime.Symbols.ToPrimitive,
                 runtime.ObjectRead.Index,
                 runtime.Sentinels.UndefinedType,

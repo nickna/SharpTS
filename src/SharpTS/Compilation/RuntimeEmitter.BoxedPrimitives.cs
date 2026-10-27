@@ -26,6 +26,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct UnwrapPrimitiveInputs(
         Type ObjectType,
+        Type HasFieldsType,
         FieldInfo SymbolToPrimitive,
         MethodInfo GetIndex,
         Type UndefinedType,
@@ -658,6 +659,9 @@ public partial class RuntimeEmitter
         }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, objectLikeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, peers.HasFieldsType);
         il.Emit(OpCodes.Brfalse, passThruLabel);
         il.MarkLabel(objectLikeLabel);
 
