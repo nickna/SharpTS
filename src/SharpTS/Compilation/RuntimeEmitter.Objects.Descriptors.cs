@@ -658,7 +658,7 @@ public partial class RuntimeEmitter
 
         EmitDefinePropertyExtensibilityValidation(
             il,
-            new DefinePropertyExtensibilityValidationInputs(inputs.DescriptorStorage, inputs.Errors),
+            new DefinePropertyExtensibilityValidationInputs(inputs.DescriptorStorage, inputs.Errors, inputs.HasOwnPropertyHelperMethod),
             propNameLocal
         );
 
@@ -782,11 +782,12 @@ public partial class RuntimeEmitter
             propNameLocal
         );
 
-        // Call $PropertyDescriptorStore.DefineProperty(obj, propName, descriptor)
+        // Extensibility and compatibility have been checked using complete own
+        // descriptors, including synthesized native and reflected class slots.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DefineProperty);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DefineValidatedProperty);
         var descriptorStoredLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, descriptorStoredLabel);
         GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,

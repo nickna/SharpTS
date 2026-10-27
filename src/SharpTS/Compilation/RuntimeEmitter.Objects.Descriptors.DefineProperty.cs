@@ -7,7 +7,8 @@ public partial class RuntimeEmitter
 {
     private readonly record struct DefinePropertyExtensibilityValidationInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
-        EmittedErrorRuntime Errors
+        EmittedErrorRuntime Errors,
+        MethodBuilder HasOwnProperty
     );
 
     private readonly record struct DefinePropertyExistingDescriptorInputs(
@@ -106,6 +107,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.CanAddProperty);
+        il.Emit(OpCodes.Brtrue, canAddLabel);
+        // Native fields and callable metadata may be synthesized rather than
+        // stored in PDS. Existing own slots still permit compatible updates.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Call, inputs.HasOwnProperty);
         il.Emit(OpCodes.Brtrue, canAddLabel);
 
         // Can't add - throw TypeError

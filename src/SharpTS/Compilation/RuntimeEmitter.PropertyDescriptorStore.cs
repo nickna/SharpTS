@@ -948,6 +948,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(canDefinePropertyLabel);
 
+        // Ordinary definition callers which resolve synthesized own slots have
+        // already checked extensibility and descriptor compatibility. They must
+        // not repeat a carrier-only existence check at the storage boundary.
+        var store = typeBuilder.DefineMethod("DefineValidatedProperty",
+            MethodAttributes.Assembly | MethodAttributes.Static, _types.Boolean,
+            [_types.Object, _types.String, storage.DescriptorType]);
+        storage.DefineValidatedProperty = store;
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, store);
+        il.Emit(OpCodes.Ret);
+        il = store.GetILGenerator();
+        dictLocal = il.DeclareLocal(descriptorsDictType);
+        keyLocal = il.DeclareLocal(_types.Object);
+        EmitNormalizePDSKey(il, keys, keyLocal);
+
         // var descriptors = _descriptors.GetOrCreateValue(key);
         il.Emit(OpCodes.Ldsfld, descriptorsField);
         il.Emit(OpCodes.Ldloc, keyLocal);
