@@ -380,7 +380,7 @@ public partial class ILCompiler
             var instanceFieldsWithInit = classStmt.Fields.Where(f =>
                 !f.IsStatic && !f.IsDeclare &&
                 (f.IsPrivate || f.Initializer != null || f.ComputedKey != null || f.TypeAnnotation == null)).ToList();
-            var instanceAutoAccessors = classStmt.AutoAccessors?.Where(accessor => !accessor.IsStatic && accessor.Initializer != null) ?? [];
+            var instanceAutoAccessors = classStmt.AutoAccessors?.Where(accessor => !accessor.IsStatic) ?? [];
             var elements = instanceFieldsWithInit.Cast<Stmt>().Concat(instanceAutoAccessors)
                 .OrderBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset).ToList();
             if (elements.Count > 0 || _classes.PrivateElements.Require(className).Storage != null)
