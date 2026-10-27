@@ -64,7 +64,7 @@ public partial class ILCompiler
                 || declaration.Fields.Any(field => field.Decorators is { Count: > 0 })
                 || (declaration.Accessors?.Any(accessor => accessor.Decorators is { Count: > 0 }) ?? false)
                 || Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(leaf ?? "")
-                || leaf is "Array" or "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer")
+                || leaf is "Array" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer")
                 continue;
             _repeatingClassDeclarations.Add(declaration);
             _runtimeClassDeclarations.TryAdd(declaration, CreateRuntimeClassExpression(declaration));
