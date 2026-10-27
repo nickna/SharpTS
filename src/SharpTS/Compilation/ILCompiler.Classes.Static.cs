@@ -105,13 +105,6 @@ public partial class ILCompiler
             && field.ComputedKey is null && field.Name.Lexeme is not ("name" or "length" or "prototype")
             && !classStmt.Methods.Any(method => method.IsStatic && method.Name.Lexeme == field.Name.Lexeme))
             .Select(field => field.Name.Lexeme).ToHashSet(StringComparer.Ordinal);
-        if (hasStaticInitializers)
-            foreach (var name in pendingFields)
-            {
-                EmitCanonicalClassConstructorValue(il, typeBuilder);
-                il.Emit(OpCodes.Ldstr, name);
-                il.Emit(OpCodes.Call, _runtime.ObjectState.MarkBuiltinDeleted);
-            }
 
         // Initialize static @lock decorator fields
         if (_locks.StaticSyncLockFields.TryGetValue(qualifiedClassName, out var staticSyncLockField))
@@ -162,8 +155,18 @@ public partial class ILCompiler
             emitter = new ILEmitter(ctx);
         }
 
+        // Hide fields in the canonical definition initializer, after any
+        // deferred split. Closed generic type initializers must not re-hide
+        // fields whose source initialization already finished.
+        if (hasStaticInitializers)
+            foreach (var name in pendingFields)
+            {
+                EmitCanonicalClassConstructorValue(il, typeBuilder);
+                il.Emit(OpCodes.Ldstr, name);
+                il.Emit(OpCodes.Call, _runtime.ObjectState.MarkBuiltinDeleted);
+            }
         // Methods exist before user static fields/blocks execute. Publish once
-        // here, so a guest replacement or deletion during initialization remains
+        // so a guest replacement or deletion during initialization remains
         // authoritative. Deferred keys were already published by the registrar.
         EmitComputedMemberRegistrations(emitter, il, typeBuilder);
 

@@ -23,4 +23,16 @@ public class P2StaticDefinitionExtensibilityTests
             """;
         Assert.Equal("true\nrhs false false\n", TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void DeferredGenericInitializersKeepCompletedFieldPresence(ExecutionMode mode)
+    {
+        const string source = """
+            const key = "method";
+            class Generic<T> { [key]() { return 1; } static observed = "ready"; }
+            const first = new Generic<number>(), second = new Generic<string>();
+            console.log(Generic.observed, Object.hasOwn(Generic, "observed"), first.method(), second.method());
+            """;
+        Assert.Equal("ready true 1 1\n", TestHarness.Run(source, mode));
+    }
 }
