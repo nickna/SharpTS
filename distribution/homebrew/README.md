@@ -2,7 +2,7 @@
 
 This directory prepares `nickna/homebrew-tap`; the tap has not been published by these files.
 Create it with `brew tap-new nickna/tap`, retain the generated maintenance workflows, and copy
-the cask CI workflow from this directory. Generate the two `Casks/*.rb` files from a successful
+the cask CI workflow and `global.json` from this directory. Generate the two `Casks/*.rb` files from a successful
 stable release using the upstream `scripts/generate-homebrew-casks.ps1` helper. Never substitute
 example checksums. Configure the two Apple Silicon cask jobs as required checks and enable
 repository auto-merge before enabling upstream update automation.

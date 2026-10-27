@@ -23,7 +23,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
       - name: Audit, install, execute, conflict, and uninstall
         shell: bash
         env:

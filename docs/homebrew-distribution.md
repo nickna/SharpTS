@@ -53,7 +53,7 @@ and Microsoft's [macOS deployment guidance](https://learn.microsoft.com/en-us/do
 
 1. Create the public `nickna/homebrew-tap` repository using `brew tap-new nickna/tap`. Retain
    its generated maintenance workflows and add the supplied cask CI workflow from
-   `distribution/homebrew/.github/workflows/cask-ci.yml`.
+   `distribution/homebrew/.github/workflows/cask-ci.yml`, along with its `global.json`.
 2. Run the release workflow in dispatch mode to validate all matching runners. Publish a new
    stable release only after the signing gates pass for both Apple Silicon archives.
 3. Download both exact stable assets and generate the initial casks:

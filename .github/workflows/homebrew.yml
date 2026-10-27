@@ -45,9 +45,18 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release download "$RELEASE_TAG" --repo nickna/SharpTS --dir archives \
-            --pattern "sharpts-$VERSION-osx-arm64.tar.gz" \
-            --pattern "sharpts-native-$VERSION-osx-arm64.tar.gz"
+          set -euo pipefail
+          # Publication can precede the release action's final asset uploads.
+          for attempt in $(seq 1 20); do
+            if gh release download "$RELEASE_TAG" --repo nickna/SharpTS --dir archives --clobber \
+                --pattern "sharpts-$VERSION-osx-arm64.tar.gz" \
+                --pattern "sharpts-native-$VERSION-osx-arm64.tar.gz"; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'Both published Apple Silicon archives must be available.' >&2
+          exit 1
       - name: Execute and assess the published signed archives
         shell: pwsh
         env:
@@ -84,7 +93,7 @@ jobs:
         with:
           repository: nickna/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          persist-credentials: true
+          persist-credentials: false
       - name: Require published initial casks
         shell: bash
         run: test -f Casks/sharpts.rb && test -f Casks/sharpts-native.rb
@@ -106,6 +115,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- Casks/sharpts.rb Casks/sharpts-native.rb
           git commit -m "Update SharpTS casks to $VERSION"
+          gh auth setup-git --hostname github.com
           git push origin "$branch"
           cat > "$RUNNER_TEMP/pr-body.md" <<'EOF'
           Update both Apple Silicon casks from the published stable release assets.
