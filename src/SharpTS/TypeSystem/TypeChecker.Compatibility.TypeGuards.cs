@@ -610,6 +610,20 @@ public partial class TypeChecker
             ? new TypeInfo.Union([TypeInfo.Null.Shared, TypeInfo.Undefined.Shared])
             : checkingForNull ? TypeInfo.Null.Shared : TypeInfo.Undefined.Shared;
 
+        if (currentType is TypeInfo.Intersection intersection &&
+            intersection.FlattenedTypes.Any(t => t is TypeInfo.Union facet && facet.FlattenedTypes.Any(IsNullish)))
+        {
+            // Generic typeof projections retain T alongside their selected domain.
+            // Exclude null from that domain without replacing the source parameter.
+            var nonNullishFacets = intersection.FlattenedTypes.Select(t => t is TypeInfo.Union facet
+                ? UnionTypeofProjections(facet.FlattenedTypes.Where(member => !IsNullish(member)))
+                : t).ToList();
+            TypeInfo nonNullishType = nonNullishFacets.Any(t => t is TypeInfo.Never)
+                ? TypeInfo.Never.Shared : new TypeInfo.Intersection(nonNullishFacets);
+            TypeInfo nullishResult = new TypeInfo.Intersection([currentType, nullishType]);
+            return negated ? (varName, nonNullishType, nullishResult) : (varName, nullishResult, nonNullishType);
+        }
+
         if (currentType is TypeInfo.Union union)
         {
             var flattenedTypes = union.FlattenedTypes;
