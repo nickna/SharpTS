@@ -843,6 +843,7 @@ public partial class RuntimeEmitter
         DefinePropertyArrayLengthCoercionInputs inputs,
         LocalBuilder propNameLocal
     )
+            existingDescLocal,
     {
         // ECMA-262 10.4.2.4 ArraySetLength steps 3-4: newLen =
         // ToUint32(Desc.[[Value]]), numberLen = ToNumber(Desc.[[Value]]) —

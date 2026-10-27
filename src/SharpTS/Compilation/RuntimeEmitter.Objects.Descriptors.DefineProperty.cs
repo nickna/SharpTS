@@ -927,6 +927,7 @@ public partial class RuntimeEmitter
         LocalBuilder propNameLocal,
         LocalBuilder dictLocal,
         LocalBuilder descriptorLocal,
+        LocalBuilder existingDescLocal,
         MethodInfo dictTryGetValue
     )
     {
@@ -971,6 +972,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, haveValueLabel);
         il.Emit(OpCodes.Ldloc, valueToWriteLocal);
         il.Emit(OpCodes.Brtrue, haveValueLabel);
+        // Null is a real merged data value. Only a new property (or an
+        // accessor-to-data conversion) supplies undefined when value is absent.
+        var noExistingData = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Brfalse, noExistingData);
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, noExistingData);
+        il.Emit(OpCodes.Ldloc, existingDescLocal);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, haveValueLabel);
+        il.MarkLabel(noExistingData);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, wasGenericLocal);
         il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
