@@ -1098,6 +1098,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.GetProperty,
                 runtime.ObjectFields.HasProperty,
                 runtime.ObjectFields.Interface,
+                runtime.DynamicConstruction.FactoryAttributeType,
                 runtime.Invocation.Method,
                 runtime.ReflectedMethods.CallableConstructor,
                 runtime.ObjectDescriptors,

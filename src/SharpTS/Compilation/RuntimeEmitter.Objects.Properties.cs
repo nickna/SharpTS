@@ -332,6 +332,7 @@ public partial class RuntimeEmitter
         MethodInfo IHasFieldsGetProperty,
         MethodInfo IHasFieldsHasProperty,
         Type IHasFieldsInterface,
+        Type GuestClassFactoryAttribute,
         MethodBuilder InvokeMethodValue,
         ConstructorBuilder MethodCallableCtor,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
@@ -600,7 +601,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, afterErrorCtorLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(object), "GetType"));
         il.Emit(OpCodes.Ret);
         il.MarkLabel(afterErrorCtorLabel);
 
@@ -805,6 +806,17 @@ public partial class RuntimeEmitter
         var classInstanceOwnDescriptor = il.DeclareLocal(_types.Object);
         var classInstanceOwn = il.DefineLabel();
         var classInstancePrototype = il.DeclareLocal(_types.Object);
+        // Native IHasFields carriers such as $Process expose their own live
+        // properties through the interface. Only emitted guest class templates
+        // need the class-prototype shadowing path below.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldtoken, inputs.GuestClassFactoryAttribute);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(System.Reflection.MemberInfo), "GetCustomAttributes", _types.Type, _types.Boolean));
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brfalse, classInstanceOwn);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
@@ -1137,10 +1149,10 @@ public partial class RuntimeEmitter
         var returnCallableAsIsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, getMemberResultLocal);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
-        il.Emit(OpCodes.Brtrue_S, returnCallableAsIsLabel);
+        il.Emit(OpCodes.Brtrue, returnCallableAsIsLabel);
         il.Emit(OpCodes.Ldloc, getMemberResultLocal);
         il.Emit(OpCodes.Isinst, inputs.BoundTSFunctionType);
-        il.Emit(OpCodes.Brtrue_S, returnCallableAsIsLabel);
+        il.Emit(OpCodes.Brtrue, returnCallableAsIsLabel);
 
         // Check if result has a "Call" method — if so it's a callable (BuiltInMethod etc.)
         // and should be wrapped in $MethodCallable for dispatch through InvokeMethodValue.
