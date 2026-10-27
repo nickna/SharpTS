@@ -23,7 +23,7 @@ public partial class ILCompiler
         var il = method.GetILGenerator();
         var sourceParameters = ResolveClassExpressionConstructorSourceParameters(expression);
         var emitter = new ILEmitter(CreateModuleMemberContext(il, method));
-        if (UsesLiveSuperConstruction(ClassExpressionDeclaration(expression)) && !builder.IsGenericTypeDefinition
+        if (UsesReceiverConstruction(ClassExpressionDeclaration(expression)) && !builder.IsGenericTypeDefinition
             && !_classes.ErrorSubclasses.Contains(_classExprs.Names[expression])
             && !_classes.PromiseSubclasses.Contains(_classExprs.Names[expression]))
         {

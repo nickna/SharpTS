@@ -37,7 +37,7 @@ public partial class ILCompiler
         var il = factory.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, factory);
         var emitter = new ILEmitter(ctx);
-        if (abstractReceiverFactory || (UsesLiveSuperConstruction(declaration) && !owner.IsGenericTypeDefinition
+        if (abstractReceiverFactory || (UsesReceiverConstruction(declaration) && !owner.IsGenericTypeDefinition
             && !_classes.ErrorSubclasses.Contains(GetQualifiedClassDeclarationName(declaration))
             && !_classes.PromiseSubclasses.Contains(GetQualifiedClassDeclarationName(declaration))))
         {

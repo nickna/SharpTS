@@ -116,7 +116,7 @@ public partial class ILCompiler
 
     private void EmitConstructedClassPrototype(CompilationContext context)
     {
-        if ((_features?.UsesReflect != true && _features?.UsesClassPrototypeMutation != true)
+        if ((!context.IsRuntimeReceiverInitializer && _features?.UsesReflect != true && _features?.UsesClassPrototypeMutation != true)
             || context.NewTargetParameterIndex is not { } argument)
             return;
 

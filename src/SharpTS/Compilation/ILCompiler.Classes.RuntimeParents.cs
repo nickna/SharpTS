@@ -19,10 +19,38 @@ public partial class ILCompiler
             ("Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer")
         && !Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(Expr.GetSuperclassLeafName(declaration.SuperclassExpr) ?? "");
 
+    private static bool RequiresConstructorReturnAdapter(Stmt.Class declaration)
+    {
+        if (declaration.SuperclassExpr == null || !SupportsReceiverInitialization(declaration)) return false;
+        var leaf = Expr.GetSuperclassLeafName(declaration.SuperclassExpr);
+        if (leaf is "Array" or "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer"
+            || Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(leaf ?? "")) return false;
+        var visitor = new EarlyConstructorReturnVisitor();
+        foreach (var statement in declaration.Methods.FirstOrDefault(method =>
+            !method.IsStatic && method.Name.Lexeme == "constructor" && method.Body != null)?.Body ?? [])
+            visitor.Visit(statement);
+        return visitor.Found;
+    }
+
+    private bool UsesReceiverConstruction(Stmt.Class declaration) => UsesLiveSuperConstruction(declaration)
+        || RequiresConstructorReturnAdapter(declaration)
+        || (_typeMapper.RequiresReceiverConstruction(_typeMap.GetClassType(declaration)
+                ?? _typeMap.GetClassType(declaration.Name.Lexeme)) && SupportsReceiverInitialization(declaration));
+
     private void RegisterLiveSuperConstruction(Stmt.Class declaration, TypeSystem.TypeInfo? type)
     {
-        if (!UsesLiveSuperConstruction(declaration)) return;
+        if (!UsesReceiverConstruction(declaration)) return;
         _usesRuntimeParents = true;
+        if (RequiresConstructorReturnAdapter(declaration))
+        {
+            var id = type switch
+            {
+                TypeSystem.TypeInfo.Class c => c.Core.DeclarationId,
+                TypeSystem.TypeInfo.GenericClass c => c.Core.DeclarationId,
+                _ => 0
+            };
+            _typeMapper.RegisterReceiverConstruction(id);
+        }
         var visited = new HashSet<TypeSystem.TypeInfo>(ReferenceEqualityComparer.Instance);
         while (type != null && visited.Add(type))
         {
@@ -234,6 +262,98 @@ public partial class ILCompiler
             Expr.Variable variable => parameters.Contains(variable.Name.Lexeme),
             _ => false
         });
+    }
+
+    private sealed class EarlyConstructorReturnVisitor : AstVisitorBase
+    {
+        private bool _superBound;
+        public bool Found { get; private set; }
+        protected override void VisitCall(Expr.Call expression)
+        {
+            base.VisitCall(expression);
+            if (expression.Callee is Expr.Super { Method: null }) _superBound = true;
+        }
+        protected override void VisitReturn(Stmt.Return statement)
+        {
+            base.VisitReturn(statement);
+            Found |= statement.Value != null && !_superBound;
+        }
+        protected override void VisitIf(Stmt.If statement)
+        {
+            Visit(statement.Condition);
+            bool before = _superBound;
+            Visit(statement.ThenBranch);
+            bool afterThen = _superBound;
+            _superBound = before;
+            if (statement.ElseBranch != null) Visit(statement.ElseBranch);
+            _superBound &= afterThen;
+        }
+        protected override void VisitTernary(Expr.Ternary expression)
+        {
+            Visit(expression.Condition);
+            bool before = _superBound;
+            Visit(expression.ThenBranch);
+            bool afterThen = _superBound;
+            _superBound = before;
+            Visit(expression.ElseBranch);
+            _superBound &= afterThen;
+        }
+        protected override void VisitLogical(Expr.Logical expression)
+        {
+            Visit(expression.Left);
+            bool beforeRight = _superBound;
+            Visit(expression.Right);
+            _superBound = beforeRight;
+        }
+        protected override void VisitNullishCoalescing(Expr.NullishCoalescing expression)
+        {
+            Visit(expression.Left);
+            bool beforeRight = _superBound;
+            Visit(expression.Right);
+            _superBound = beforeRight;
+        }
+        protected override void VisitTryCatch(Stmt.TryCatch statement)
+        {
+            bool before = _superBound;
+            foreach (var child in statement.TryBlock) Visit(child);
+            bool afterTry = _superBound;
+            if (statement.CatchBlock != null)
+            {
+                _superBound = before;
+                foreach (var child in statement.CatchBlock) Visit(child);
+                _superBound &= afterTry;
+            }
+            if (statement.FinallyBlock != null)
+                foreach (var child in statement.FinallyBlock) Visit(child);
+        }
+        protected override void VisitWhile(Stmt.While statement) { bool before = _superBound; base.VisitWhile(statement); _superBound = before; }
+        protected override void VisitFor(Stmt.For statement)
+        {
+            if (statement.Initializer != null) Visit(statement.Initializer);
+            if (statement.Condition != null) Visit(statement.Condition);
+            bool beforeBody = _superBound;
+            Visit(statement.Body);
+            if (statement.Increment != null) Visit(statement.Increment);
+            _superBound = beforeBody;
+        }
+        protected override void VisitForOf(Stmt.ForOf statement) { bool before = _superBound; base.VisitForOf(statement); _superBound = before; }
+        protected override void VisitForIn(Stmt.ForIn statement) { bool before = _superBound; base.VisitForIn(statement); _superBound = before; }
+        protected override void VisitSwitch(Stmt.Switch statement)
+        {
+            Visit(statement.Subject);
+            bool before = _superBound;
+            foreach (var clause in statement.Clauses)
+            {
+                _superBound = before;
+                if (clause.Value != null) Visit(clause.Value);
+                foreach (var child in clause.Body) Visit(child);
+            }
+            _superBound = before;
+        }
+        protected override void VisitFunction(Stmt.Function statement) { }
+        protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
+        protected override void VisitClass(Stmt.Class statement) { }
+        protected override void VisitClassExpr(Expr.ClassExpr expression) { }
     }
 
     private sealed class ConstructorReplacementVisitor : AstVisitorBase

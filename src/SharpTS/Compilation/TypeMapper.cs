@@ -22,6 +22,7 @@ public class TypeMapper
     private readonly TypeProvider _types;
     private readonly Dictionary<int, string> _checkedClassNames = [];
     private readonly HashSet<int> _dynamicClassInstances = [];
+    private readonly HashSet<int> _receiverConstructionClasses = [];
     internal HeldClassConstructionInfo? HeldClassConstructions { get; set; }
 
     internal void RegisterDynamicClassInstance(int declarationId)
@@ -30,9 +31,19 @@ public class TypeMapper
     }
 
     internal bool IsDynamicClassInstance(TypeInfo? type)
+        => HasClassInAncestry(type, _dynamicClassInstances);
+
+    internal void RegisterReceiverConstruction(int declarationId)
+    {
+        if (declarationId != 0) _receiverConstructionClasses.Add(declarationId);
+    }
+
+    internal bool RequiresReceiverConstruction(TypeInfo? type) => HasClassInAncestry(type, _receiverConstructionClasses);
+
+    private static bool HasClassInAncestry(TypeInfo? type, HashSet<int> declarations)
     {
         // A constructor's replacement can also become the result of derived construction.
-        if (_dynamicClassInstances.Count == 0) return false;
+        if (declarations.Count == 0) return false;
         var visited = new HashSet<TypeInfo>(ReferenceEqualityComparer.Instance);
         while (type != null && visited.Add(type))
         {
@@ -53,7 +64,7 @@ public class TypeMapper
                 TypeInfo.MutableClass c => (c.DeclarationId, c.Superclass),
                 _ => (0, (TypeInfo?)null)
             };
-            if (_dynamicClassInstances.Contains(declaration)) return true;
+            if (declarations.Contains(declaration)) return true;
             type = superclass;
         }
         return false;

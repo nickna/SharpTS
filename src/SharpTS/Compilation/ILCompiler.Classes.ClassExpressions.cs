@@ -724,7 +724,7 @@ public partial class ILCompiler
         var canonicalConstructor = ctorBuilder;
         ctorBuilder = NewTargetConstructor(ctorBuilder);
         var il = ctorBuilder.GetILGenerator();
-        if (HasRuntimeParent(classExpr))
+        if (HasRuntimeParent(classExpr) || RequiresConstructorReturnAdapter(ClassExpressionDeclaration(classExpr)))
         {
             // The definition factory allocates through the bookkeeping constructor
             // and uses the explicit-receiver adapter for guest initialization.

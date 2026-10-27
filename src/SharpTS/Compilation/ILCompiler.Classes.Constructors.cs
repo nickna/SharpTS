@@ -53,6 +53,14 @@ public partial class ILCompiler
         var canonicalConstructor = ctorBuilder;
         ctorBuilder = DefineNewTargetConstructor(canonicalConstructor);
         var il = ctorBuilder.GetILGenerator();
+        if (RequiresConstructorReturnAdapter(classStmt))
+        {
+            // Guest initialization runs in the factory's explicit-receiver method.
+            // Keep the CLR bookkeeping constructor valid on every return path.
+            EmitClassPrototypeBaseConstructorCall(il, typeBuilder);
+            il.Emit(OpCodes.Ret);
+            return;
+        }
         var ctx = CreateModuleMemberContext(il, ctorBuilder);
         if (ctorBuilder != canonicalConstructor) ctx.NewTargetParameterIndex = ctorBuilder.GetParameters().Length;
         ctx.IsStrictMode = true;
