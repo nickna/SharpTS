@@ -1946,6 +1946,16 @@ public partial class RuntimeEmitter
     private void EmitSetSymbolIndexBody(MethodBuilder method, SetIndexInputs inputs)
     {
         var il = method.GetILGenerator();
+        void EmitRejectedWrite()
+        {
+            var ignored = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, ignored);
+            GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
+                "Cannot assign to a read-only or non-extensible property");
+            il.MarkLabel(ignored);
+            il.Emit(OpCodes.Ret);
+        }
         // The strict and sloppy adapters share one prototype walk and setter
         // invocation. Inherited non-writable data properties reject creation.
         if (inputs.ProxySelected)
@@ -1955,7 +1965,7 @@ public partial class RuntimeEmitter
                 new ProxySetIndexCheckInputs(inputs.InvokeMethodUnwrapped, inputs.ObjectDescriptors,
                     inputs.ObjectRead, inputs.ReflectAssignment),
                 () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1),
-                () => il.Emit(OpCodes.Ldarg_2), notProxy);
+                () => il.Emit(OpCodes.Ldarg_2), notProxy, inputs.Errors);
             il.MarkLabel(notProxy);
         }
         EmitInheritedSymbolSetter(il, inputs.ObjectPrototypes, inputs.Symbols, inputs.DescriptorStorage,
@@ -1996,7 +2006,7 @@ public partial class RuntimeEmitter
         var symExistingValueLocal = il.DeclareLocal(_types.Object);
         var symExistingDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.TryGetStorage);
         il.Emit(OpCodes.Stloc, symDictLocal);
 
         // Frozen state restricts data stores, not calling an existing accessor setter.
@@ -2012,7 +2022,7 @@ public partial class RuntimeEmitter
                 _types.ConditionalWeakTable, "TryGetValue",
                 _types.Object, _types.Object.MakeByRefType()));
             il.Emit(OpCodes.Brfalse, notFrozen);
-            il.Emit(OpCodes.Ret);
+            EmitRejectedWrite();
             il.MarkLabel(notFrozen);
         }
 
@@ -2021,6 +2031,8 @@ public partial class RuntimeEmitter
         var symRawSetLabel = il.DefineLabel();
         var symCreateLabel = il.DefineLabel();
         var symCheckExtensibilityLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, symDictLocal);
+        il.Emit(OpCodes.Brfalse, symCheckExtensibilityLabel);
         il.Emit(OpCodes.Ldloc, symDictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, symExistingValueLocal);
@@ -2061,7 +2073,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, symDataDescriptorLabel);
-        il.Emit(OpCodes.Ret);
+        EmitRejectedWrite();
         il.MarkLabel(symDataDescriptorLabel);
         var symReturnWithoutSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
@@ -2076,10 +2088,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(symReturnWithoutSetLabel);
-        il.Emit(OpCodes.Ret);
+        EmitRejectedWrite();
 
         // Check extensibility (frozen/sealed/preventExt). On hit, no-op.
         il.MarkLabel(symCheckExtensibilityLabel);
+        var notDeclaredMethod = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindOwnMethod);
+        il.Emit(OpCodes.Brfalse, notDeclaredMethod);
+        EmitFrozenSymbolDataWriteGuard();
+        il.Emit(OpCodes.Br, symCreateLabel);
+        il.MarkLabel(notDeclaredMethod);
         var symExtTmp = il.DeclareLocal(_types.Object);
         var symNotNonExtLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldsfld, inputs.ObjectState.NonExtensibleObjects);
@@ -2087,7 +2107,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, symExtTmp);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
         il.Emit(OpCodes.Brfalse, symNotNonExtLabel);
-        il.Emit(OpCodes.Ret);
+        EmitRejectedWrite();
         il.MarkLabel(symNotNonExtLabel);
 
         var symNotFrozenLabel = il.DefineLabel();
@@ -2096,7 +2116,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, symExtTmp);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
         il.Emit(OpCodes.Brfalse, symNotFrozenLabel);
-        il.Emit(OpCodes.Ret);
+        EmitRejectedWrite();
         il.MarkLabel(symNotFrozenLabel);
 
         var symNotSealedLabel = il.DefineLabel();
@@ -2105,7 +2125,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, symExtTmp);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
         il.Emit(OpCodes.Brfalse, symNotSealedLabel);
-        il.Emit(OpCodes.Ret);
+        EmitRejectedWrite();
         il.MarkLabel(symNotSealedLabel);
 
         // A newly-created symbol property is an ordinary data descriptor,
@@ -2121,6 +2141,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(symCreateLabel);
+        var haveSymbolStorage = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, symDictLocal);
+        il.Emit(OpCodes.Brtrue, haveSymbolStorage);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
+        il.Emit(OpCodes.Stloc, symDictLocal);
+        il.MarkLabel(haveSymbolStorage);
         var newSymbolDescriptorLocal = il.DeclareLocal(
             inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
@@ -2146,12 +2173,19 @@ public partial class RuntimeEmitter
         var prototype = il.DeclareLocal(_types.Object);
         var value = il.DeclareLocal(_types.Object);
         var descriptor = il.DeclareLocal(storage.DescriptorType);
+        var ownStorage = il.DeclareLocal(_types.DictionaryObjectObject);
+        var checkConstructor = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, symbols.GetStorage);
+        il.Emit(OpCodes.Call, symbols.TryGetStorage);
+        il.Emit(OpCodes.Stloc, ownStorage);
+        il.Emit(OpCodes.Ldloc, ownStorage);
+        il.Emit(OpCodes.Brfalse, checkConstructor);
+        il.Emit(OpCodes.Ldloc, ownStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, value);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
         il.Emit(OpCodes.Brtrue, done);
+        il.MarkLabel(checkConstructor);
         // A declared static method is an existing own writable property even
         // while its value remains backed by the method registry.
         var notConstructor = il.DefineLabel();
@@ -2194,13 +2228,19 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notProxy);
         }
+        var checkGenericSource = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, prototype);
-        il.Emit(OpCodes.Call, symbols.GetStorage);
+        il.Emit(OpCodes.Call, symbols.TryGetStorage);
+        il.Emit(OpCodes.Stloc, ownStorage);
+        il.Emit(OpCodes.Ldloc, ownStorage);
+        il.Emit(OpCodes.Brfalse, checkGenericSource);
+        il.Emit(OpCodes.Ldloc, ownStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, value);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
         var propertyFound = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, propertyFound);
+        il.MarkLabel(checkGenericSource);
         // Match the read path: a closed generic base shares the descriptors
         // installed on its source constructor, after its exact own storage.
         var prototypeType = il.DeclareLocal(_types.Type);
@@ -2216,7 +2256,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, prototype);
         il.Emit(OpCodes.Beq, next);
         il.Emit(OpCodes.Ldloc, prototypeType);
-        il.Emit(OpCodes.Call, symbols.GetStorage);
+        il.Emit(OpCodes.Call, symbols.TryGetStorage);
+        il.Emit(OpCodes.Stloc, ownStorage);
+        il.Emit(OpCodes.Ldloc, ownStorage);
+        il.Emit(OpCodes.Brfalse, next);
+        il.Emit(OpCodes.Ldloc, ownStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, value);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));

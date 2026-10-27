@@ -289,7 +289,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits a proxy-aware index set: checks if obj is a proxy and calls TrapSet(key.ToString(), value, null).
+    /// Emits a proxy-aware indexed write while preserving the property key.
     /// </summary>
     private void EmitProxySetIndexCheck(
         ILGenerator il,
@@ -297,7 +297,8 @@ public partial class RuntimeEmitter
         Action emitLoadObj,
         Action emitLoadIndex,
         Action emitLoadValue,
-        Label notProxyLabel
+        Label notProxyLabel,
+        EmittedErrorRuntime? strictErrors = null
     )
     {
         var proxyLabel = il.DefineLabel();
@@ -308,7 +309,17 @@ public partial class RuntimeEmitter
             il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped), emitLoadObj,
             emitLoadIndex,
             emitLoadValue, emitLoadObj);
-        il.Emit(OpCodes.Pop);
+        if (strictErrors is not null)
+        {
+            var accepted = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, accepted);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, accepted);
+            GuestErrorEmitter.ThrowError(il, strictErrors.CreateException, strictErrors.TypeErrorConstructor,
+                "Proxy set trap returned false");
+            il.MarkLabel(accepted);
+        }
+        else il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
     }
 
