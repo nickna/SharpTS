@@ -1018,9 +1018,13 @@ public class CommandLineParser
         {
             if (nativeRuntimeIdentifier is null || !NativeAotProjectOptions.SupportedRuntimeIdentifiers.Contains(nativeRuntimeIdentifier))
                 return new ParsedCommand.Error("Error: --emit-native-project requires --runtime with a supported RID (win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64).", 64, ShowCompileUsage: true);
+            if (nativeRuntimeIdentifier != NativeAotProjectOptions.HostRuntimeIdentifier)
+                return new ParsedCommand.Error($"Error: --emit-native-project requires a matching compiler host RID ({NativeAotProjectOptions.HostRuntimeIdentifier ?? "unsupported host"}); export on the target OS and architecture.", 64, ShowCompileUsage: true);
             if (target != OutputTarget.Dll || hosted || pack || explicitOutput is not null || bundlerMode != BundlerMode.Auto ||
                 globalOptions.NoEmit || globalOptions.EmitDeclarationOnly || globalOptions.ShowConfig)
                 return new ParsedCommand.Error("Error: --emit-native-project requires ordinary DLL compilation without -o, hosted, packaging, bundler, or no-output modes.", 64, ShowCompileUsage: true);
+            if (gcProfile != GcProfile.Workstation)
+                return new ParsedCommand.Error("Error: --emit-native-project currently supports only the workstation GC profile.", 64, ShowCompileUsage: true);
             nativeProject = new(nativeProjectDirectory, nativeRuntimeIdentifier);
             useReferenceAssemblies = true;
         }

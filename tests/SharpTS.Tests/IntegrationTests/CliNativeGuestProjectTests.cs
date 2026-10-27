@@ -9,12 +9,14 @@ namespace SharpTS.Tests.IntegrationTests;
 
 public class CliNativeGuestProjectTests
 {
+    private static string HostRid => NativeAotProjectOptions.HostRuntimeIdentifier!;
+
     [Fact]
     public void ExportedGuestFacadeBuildsAndPreservesArgumentsAndExitCode()
     {
         using var directory = CliTestHelper.CreateTempDirectory();
         directory.CreateFile("main.ts", "console.log(process.argv.slice(2).join('|')); process.exitCode = 7;");
-        var export = CliTestHelper.RunCli("--no-tsconfig --compile main.ts --emit-native-project \"native project\" --runtime win-x64 --verify --debug", directory.Path);
+        var export = CliTestHelper.RunCli($"--no-tsconfig --compile main.ts --emit-native-project \"native project\" --runtime {HostRid} --verify --debug", directory.Path);
         Assert.True(export.ExitCode == 0, export.StandardOutput + export.StandardError);
         string native = directory.GetPath("native project");
         Assert.True(File.Exists(Path.Combine(native, "guest", "Guest.pdb")));
@@ -49,7 +51,7 @@ public class CliNativeGuestProjectTests
     {
         using var directory = CliTestHelper.CreateTempDirectory();
         directory.CreateFile("main.ts", source);
-        var result = CliTestHelper.RunCli("--no-tsconfig --compile main.ts --emit-native-project native --runtime win-x64 --msbuild-errors", directory.Path);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --compile main.ts --emit-native-project native --runtime {HostRid} --msbuild-errors", directory.Path);
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("SHARPTS401", result.StandardOutput + result.StandardError);
         Assert.Contains(feature, result.StandardOutput + result.StandardError, StringComparison.OrdinalIgnoreCase);
@@ -61,10 +63,28 @@ public class CliNativeGuestProjectTests
     {
         using var directory = CliTestHelper.CreateTempDirectory();
         directory.CreateFile("main.ts", "console.log(eval('40 + 2')); ");
-        var result = CliTestHelper.RunCli("--no-tsconfig --compile main.ts --emit-native-project native --runtime win-x64 --verify", directory.Path);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --compile main.ts --emit-native-project native --runtime {HostRid} --verify", directory.Path);
         Assert.True(result.ExitCode == 0, result.StandardOutput + result.StandardError);
         using var manifest = JsonDocument.Parse(File.ReadAllText(directory.GetPath("native/native-project.json")));
         Assert.Equal("None", manifest.RootElement.GetProperty("runtimeRequirements").GetString());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void InheritedDeclarationOnlyConfigRefusesBeforeWritingAnyOutput(bool explicitConfig)
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile("main.ts", "export const answer = 42;");
+        directory.CreateFile("base.json", "{\"compilerOptions\":{\"declaration\":true,\"emitDeclarationOnly\":true}}");
+        string config = explicitConfig ? "settings.json" : "tsconfig.json";
+        directory.CreateFile(config, "{\"extends\":\"./base.json\"}");
+        string project = explicitConfig ? " --project settings.json" : "";
+        var result = CliTestHelper.RunCli($"--compile main.ts --emit-native-project native --runtime {HostRid}{project}", directory.Path);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("emitDeclarationOnly", result.StandardOutput + result.StandardError);
+        Assert.False(Directory.Exists(directory.GetPath("native")));
+        Assert.False(File.Exists(directory.GetPath("main.d.ts")));
     }
 
     [Fact]
@@ -73,14 +93,26 @@ public class CliNativeGuestProjectTests
         using var directory = CliTestHelper.CreateTempDirectory();
         directory.CreateFile("main.ts", "console.log(42);");
         string reference = typeof(ILCompiler).Assembly.Location;
-        var external = CliTestHelper.RunCli($"--no-tsconfig --compile main.ts --emit-native-project native --runtime win-x64 -r \"{reference}\" --msbuild-errors", directory.Path);
+        var external = CliTestHelper.RunCli($"--no-tsconfig --compile main.ts --emit-native-project native --runtime {HostRid} -r \"{reference}\" --msbuild-errors", directory.Path);
         Assert.Contains("SHARPTS402", external.StandardOutput + external.StandardError);
         Assert.False(Directory.Exists(directory.GetPath("native")));
         directory.CreateFile("occupied/keep.txt", "user content");
-        var occupied = CliTestHelper.RunCli("--no-tsconfig --compile main.ts --emit-native-project occupied --runtime win-x64 --msbuild-errors", directory.Path);
+        var occupied = CliTestHelper.RunCli($"--no-tsconfig --compile main.ts --emit-native-project occupied --runtime {HostRid} --msbuild-errors", directory.Path);
         Assert.Contains("SHARPTS403", occupied.StandardOutput + occupied.StandardError);
         Assert.Equal("user content", File.ReadAllText(directory.GetPath("occupied/keep.txt")));
         Assert.Single(Directory.GetFileSystemEntries(directory.GetPath("occupied")));
+    }
+
+    [Fact]
+    public void ForeignRidRefusesBeforeWritingProject()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile("main.ts", "console.log(process.platform, process.arch);");
+        string foreign = NativeAotProjectOptions.SupportedRuntimeIdentifiers.First(rid => rid != HostRid);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --compile main.ts --emit-native-project native --runtime {foreign}", directory.Path);
+        Assert.Equal(64, result.ExitCode);
+        Assert.Contains("compiler host RID", result.StandardOutput + result.StandardError);
+        Assert.False(Directory.Exists(directory.GetPath("native")));
     }
 
     private static TestProcessResult RunDotnet(string directory, params string[] arguments)

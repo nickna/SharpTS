@@ -213,6 +213,10 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
                 propagateErrors: true));
         var (compileOptions, compileConfig) = resolved;
 
+        if (compile.CompileOptions.NativeProject is not null &&
+            (compileOptions.NoEmit || compileOptions.EmitDeclarationOnly || compileOptions.ShowConfig))
+            throw new CompileException("--emit-native-project cannot be combined with effective noEmit, emitDeclarationOnly or showConfig settings after applying tsconfig.");
+
         if (compile.CompileOptions.VerifyIL &&
             !System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
         {

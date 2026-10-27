@@ -3,6 +3,7 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using SharpTS.Compilation;
 using SharpTS.Diagnostics;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using Xunit;
@@ -11,6 +12,22 @@ namespace SharpTS.Tests.CompilerTests;
 
 public class NativeAotGuestContractTests
 {
+    [Fact]
+    public void DirectExporterRefusesOtherHostRidsBeforeSavingTheGuest()
+    {
+        string destination = Path.Combine(Path.GetTempPath(), $"sharpts_native_mismatch_{Guid.NewGuid():N}");
+        var compatibility = NativeAotCompatibilityReport.Analyze(SharpTSRuntimeRequirements.None, [], false);
+        foreach (string rid in NativeAotProjectOptions.SupportedRuntimeIdentifiers.Where(rid => rid != NativeAotProjectOptions.HostRuntimeIdentifier))
+        {
+            bool saved = false;
+            var error = Assert.Throws<CompileException>(() => NativeAotProjectExporter.Export(
+                new(destination, rid), compatibility, _ => saved = true));
+            Assert.Equal(DiagnosticCode.NativeGuestTargetMismatch, error.Diagnostic.Code);
+            Assert.False(saved);
+            Assert.False(Directory.Exists(destination));
+        }
+    }
+
     [Theory]
     [InlineData(SharpTSRuntimeRequirements.RuntimeAssembly)]
     [InlineData(SharpTSRuntimeRequirements.FullDependencyClosure)]

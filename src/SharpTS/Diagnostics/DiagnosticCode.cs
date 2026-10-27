@@ -60,6 +60,8 @@ public enum DiagnosticCode
     NativeGuestExternalReferences = 402,
     /// <summary>A native project destination is already occupied.</summary>
     NativeGuestOutputDirectory = 403,
+    /// <summary>Experimental native guest target differs from the compiler host.</summary>
+    NativeGuestTargetMismatch = 404,
 
     // Config errors (5XX)
     /// <summary>Configuration error.</summary>

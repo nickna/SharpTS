@@ -38,9 +38,11 @@ dotnet publish out/native-app/NativeApp.csproj -c Release
 ```
 
 Export requires SDK reference assemblies and selects `--ref-asm` automatically.
-The RID must be explicit: `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`,
-`osx-x64` or `osx-arm64`. Generation can prepare a project for another platform;
-native publish requires an appropriate matching OS and native toolchain. See the
+The RID must be explicit and match the compiler host's OS and process architecture.
+The recognized RIDs are `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`,
+`osx-x64` and `osx-arm64`. Current generated `process.platform` and `process.arch`
+values reflect the compiler host, so this first profile refuses cross-RID export.
+Native publish also requires an appropriate matching OS and native toolchain. See the
 [supported NativeAOT publish flow](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/)
 and [cross-compilation constraints](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/cross-compile).
 
@@ -87,11 +89,15 @@ closed interop universe.
 | `SHARPTS401` | Emitted guest requires the SharpTS runtime/managed compiler bridge. |
 | `SHARPTS402` | External reference closure is outside the first native profile. |
 | `SHARPTS403` | Output directory is already occupied. |
+| `SHARPTS404` | Direct export API target differs from the compiler host. |
 
 `--msbuild-errors` exposes those stable codes. Invalid/missing RIDs and conflicting
 CLI modes are usage errors. Project export requires ordinary DLL compilation and
 cannot combine with `-o`, hosted output, packaging, an EXE/bundler target or a
 no-output mode.
+The first profile also requires the default `workstation` GC policy; non-default
+`adaptive` and `throughput` policies are refused until their native configuration
+is part of the export contract.
 
 Refusal follows the emitted capability report. A constant eval that the compiler
 has fully lowered to ordinary IL does not require the runtime eval bridge and

@@ -16,6 +16,10 @@ public static class NativeAotProjectExporter
         ArgumentNullException.ThrowIfNull(options);
         if (!NativeAotProjectOptions.SupportedRuntimeIdentifiers.Contains(options.RuntimeIdentifier))
             throw new ArgumentException($"Unsupported native guest RID '{options.RuntimeIdentifier}'.", nameof(options));
+        if (options.RuntimeIdentifier != NativeAotProjectOptions.HostRuntimeIdentifier)
+            throw new CompileException(DiagnosticCode.NativeGuestTargetMismatch,
+                $"Experimental native guest export requires a matching compiler host RID ({NativeAotProjectOptions.HostRuntimeIdentifier ?? "unsupported host"}). " +
+                "Generated process.platform and process.arch currently reflect the compiler host; export on the target OS and architecture.");
         string directory = Path.GetFullPath(options.OutputDirectory);
         if (File.Exists(directory) || Directory.Exists(directory) && Directory.EnumerateFileSystemEntries(directory).Any())
             throw new CompileException(DiagnosticCode.NativeGuestOutputDirectory,

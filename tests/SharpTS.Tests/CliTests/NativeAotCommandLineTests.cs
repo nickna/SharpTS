@@ -13,10 +13,19 @@ public class NativeAotCommandLineTests
     [InlineData("linux-arm64")]
     [InlineData("osx-x64")]
     [InlineData("osx-arm64")]
-    public void NativeProjectUsesExplicitRidAndReferenceCompatibleGuest(string rid)
+    public void NativeProjectRecognizesRidsAndRequiresTheMatchingHost(string rid)
     {
-        var command = Assert.IsType<ParsedCommand.Compile>(new CommandLineParser().Parse(
-            ["--compile", "app.ts", "--emit-native-project", "native project", "--runtime", rid]));
+        Assert.Contains(rid, NativeAotProjectOptions.SupportedRuntimeIdentifiers);
+        var parsed = new CommandLineParser().Parse(
+            ["--compile", "app.ts", "--emit-native-project", "native project", "--runtime", rid]);
+        if (rid != NativeAotProjectOptions.HostRuntimeIdentifier)
+        {
+            var error = Assert.IsType<ParsedCommand.Error>(parsed);
+            Assert.Equal(64, error.ExitCode);
+            Assert.Contains("compiler host RID", error.Message);
+            return;
+        }
+        var command = Assert.IsType<ParsedCommand.Compile>(parsed);
         Assert.Equal(OutputTarget.Dll, command.CompileOptions.Target);
         Assert.True(command.CompileOptions.UseReferenceAssemblies);
         Assert.Equal(new NativeAotProjectOptions("native project", rid), command.CompileOptions.NativeProject);
@@ -32,7 +41,8 @@ public class NativeAotCommandLineTests
         foreach (string[] conflict in new string[][]
         {
             new[] { "--hosted" }, ["--target", "exe"], ["-o", "other.dll"], ["--bundler", "sdk"],
-            ["--pack"], ["--noEmit"], ["--emitDeclarationOnly"], ["--showConfig"]
+            ["--pack"], ["--noEmit"], ["--emitDeclarationOnly"], ["--showConfig"],
+            ["--gc-profile", "adaptive"], ["--gc-profile", "throughput"]
         })
             yield return [new[] { "--emit-native-project", "native", "--runtime", "win-x64" }.Concat(conflict).ToArray()];
     }
