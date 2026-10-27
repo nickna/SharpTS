@@ -160,6 +160,21 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldelem_Ref);
             il.MarkLabel(executorReady);
             il.Emit(OpCodes.Call, promise.FromExecutor);
+            var promiseValue = il.DeclareLocal(_types.Object);
+            var promisePrototype = il.DeclareLocal(_types.Object);
+            var nativePrototype = il.DefineLabel();
+            il.Emit(OpCodes.Stloc, promiseValue);
+            il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Beq, nativePrototype);
+            il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldstr, "prototype");
+            il.Emit(OpCodes.Call, inputs.ObjectRead.Property); il.Emit(OpCodes.Stloc, promisePrototype);
+            il.Emit(OpCodes.Ldloc, promisePrototype); il.Emit(OpCodes.Brfalse, nativePrototype);
+            il.Emit(OpCodes.Ldloc, promisePrototype); il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+            il.Emit(OpCodes.Brtrue, nativePrototype);
+            il.Emit(OpCodes.Ldloc, promiseValue); il.Emit(OpCodes.Ldloc, promisePrototype);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
+            il.MarkLabel(nativePrototype);
+            il.Emit(OpCodes.Ldloc, promiseValue);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notPromiseType);
         }

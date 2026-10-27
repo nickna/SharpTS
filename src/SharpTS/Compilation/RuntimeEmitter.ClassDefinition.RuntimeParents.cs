@@ -18,6 +18,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(inspectType); il.Emit(OpCodes.Stloc, parentType);
         var unsupported = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, parentType); il.Emit(OpCodes.Brfalse, unsupported);
+        if (runtime.Promise is not null)
+        {
+            il.Emit(OpCodes.Ldloc, parentType); il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle); il.Emit(OpCodes.Beq, supported);
+        }
         il.Emit(OpCodes.Ldloc, parentType); il.Emit(OpCodes.Ldstr, "$InitializeReceiver");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
         il.Emit(OpCodes.Brtrue, supported);
@@ -51,6 +56,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, useType); il.Emit(OpCodes.Ldfld, definitions.Template); il.Emit(OpCodes.Br, haveType);
         il.MarkLabel(useType); il.Emit(OpCodes.Pop); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Castclass, _types.Type);
         il.MarkLabel(haveType); il.Emit(OpCodes.Stloc, template);
+        if (runtime.Promise is not null)
+        {
+            var ordinaryParent = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, template); il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle); il.Emit(OpCodes.Bne_Un, ordinaryParent);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Call, runtime.DynamicConstruction.ConstructWithNewTarget); il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryParent);
+        }
         var adapter = il.DeclareLocal(_types.MethodInfo);
         il.Emit(OpCodes.Ldloc, template); il.Emit(OpCodes.Ldstr, "$InitializeReceiver");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String)); il.Emit(OpCodes.Stloc, adapter);
