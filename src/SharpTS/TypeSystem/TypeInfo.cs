@@ -570,6 +570,7 @@ public abstract record TypeInfo
         // Class-derived interface bases retain the exact source class for write access and
         // protected receiver checks. Public mapped projections deliberately omit this origin.
         internal TypeInfo? ClassOrigin { get; init; }
+        internal bool HasFunctionTypeofFacet { get; init; }
         public bool ReadonlyStringIndex { get; init; }
         public bool ReadonlySymbolIndex { get; init; }
         internal FrozenDictionary<BindingSymbol, string>? SymbolMemberNames { get; init; }

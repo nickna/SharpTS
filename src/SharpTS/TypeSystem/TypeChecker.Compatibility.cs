@@ -1412,7 +1412,7 @@ public partial class TypeChecker
         // signature still requires a callable source with a matching signature.
         if (expected is TypeInfo.FunctionSupertype &&
             (actual is TypeInfo.Class or TypeInfo.MutableClass or TypeInfo.GenericClass ||
-             GetConstructorSignatures(actual) is not null))
+             GetConstructorSignatures(actual) is not null || HasTypeofCallableFacet(actual)))
             return true;
 
         if (NormalizeSignature(expected) is { } expectedFnSig && GetCallSignatures(actual) is { } sourceCallSigs)

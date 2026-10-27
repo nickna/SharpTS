@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using SharpTS.Parsing;
+using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
@@ -944,6 +945,15 @@ public partial class TypeChecker
                 if (extendType is TypeInfo.Interface extendInterface)
                 {
                     AddBase(extendInterface);
+                }
+                else if (extendType is TypeInfo.FunctionSupertype functionBase)
+                {
+                    var functionMembers = new[] { "apply", "call", "bind", "prototype", "length", "name", "arguments", "caller" }
+                        .ToFrozenDictionary(name => name, name => BuiltInTypes.GetFunctionMemberType(name, functionBase)!, StringComparer.Ordinal);
+                    AddBase(new TypeInfo.Interface("Function", functionMembers, FrozenSet<string>.Empty,
+                        ReadonlyMembers: new[] { "length", "name" }.ToFrozenSet(StringComparer.Ordinal),
+                        MethodMembers: new[] { "apply", "call", "bind" }.ToFrozenSet(StringComparer.Ordinal))
+                    { HasFunctionTypeofFacet = true });
                 }
                 else if (extendType is TypeInfo.InstantiatedGeneric extendIG &&
                          FlattenInstantiatedInterface(extendIG) is { } flattened)
