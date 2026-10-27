@@ -155,6 +155,11 @@ public partial class ILCompiler
         il.MarkLabel(fresh);
         il.Emit(OpCodes.Ldloc, slots); il.Emit(OpCodes.Ldstr, source.Name.Lexeme); il.Emit(OpCodes.Ldloc, value);
         il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+        if (context.CurrentClassExpr != null && context.ClassDefinitionParameterIndex is { } definitionIndex)
+        {
+            il.Emit(OpCodes.Ldloc, slots); il.Emit(OpCodes.Ldstr, "'owner");
+            il.Emit(OpCodes.Ldarg, definitionIndex); il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+        }
         // Preserve the existing CLR backing default when no typed initializer
         // exists. The actual-object slot still records guest undefined.
         if (source.Initializer == null) return;

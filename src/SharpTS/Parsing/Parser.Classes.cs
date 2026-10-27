@@ -913,6 +913,7 @@ public partial class Parser
                 );
                 RecordWrittenMember(autoAccessor, accessorName);
                 autoAccessors.Add(autoAccessor);
+                if (isStatic) staticInitializers.Add(autoAccessor);
                 continue;
             }
 
