@@ -339,6 +339,12 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
 
     protected override void VisitVariable(Expr.Variable expr) => RecordRef(expr, expr.Name.Lexeme);
 
+    protected override void VisitNew(Expr.New expr)
+    {
+        Visit(expr.Callee);
+        base.VisitNew(expr);
+    }
+
     protected override void VisitAssign(Expr.Assign expr)
     {
         RecordAssignment(expr.Name.Lexeme);
