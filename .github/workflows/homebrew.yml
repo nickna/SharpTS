@@ -53,6 +53,7 @@ jobs:
                 --pattern "sharpts-native-$VERSION-osx-arm64.tar.gz"; then
               exit 0
             fi
+            echo "Waiting for Apple Silicon release archives (attempt $attempt/20)." >&2
             sleep 15
           done
           echo 'Both published Apple Silicon archives must be available.' >&2
@@ -129,6 +130,7 @@ jobs:
           for attempt in $(seq 1 20); do
             checks=$(gh pr checks --repo nickna/homebrew-tap "$pr" --required --json name,bucket || true)
             if jq -e 'map(.name) | index("Apple Silicon (sharpts)") != null and index("Apple Silicon (sharpts-native)") != null' <<< "$checks" >/dev/null; then break; fi
+            echo "Waiting for required cask checks (attempt $attempt/20)." >&2
             sleep 15
           done
           jq -e 'map(.name) | index("Apple Silicon (sharpts)") != null and index("Apple Silicon (sharpts-native)") != null' <<< "$checks" >/dev/null
