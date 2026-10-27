@@ -193,7 +193,7 @@ public partial class ILCompiler
             ctx.CurrentClassBuilder = _classExprs.Builders[owner.Expression];
             ctx.ClassDefinitionOwnerField = owner.Definition;
             ctx.IsStaticSuperContext = owner.IsStatic;
-            ctx.GuestThisVariableName = "__this";
+            ctx.GuestThisVariableName = CompilationContext.ThisParameterName;
             foreach (var parameter in owner.Expression.TypeParams ?? [])
                 ctx.GenericTypeParameters[parameter.Name.Lexeme] = _types.Object;
         }

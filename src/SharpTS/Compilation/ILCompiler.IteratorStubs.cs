@@ -61,7 +61,7 @@ public partial class ILCompiler
                 context.ParentArrowCapturedLocals?.Remove(name);
             (context.ExtraArrowScopeBindings ??= [])[name] = new(reference, capture.TargetPath[1]);
         }
-        if (source.HasOwnThis) context.DefineParameter("__this", 1, _types.Object);
+        if (source.HasOwnThis) context.DefineParameter(CompilationContext.ThisParameterName, 1, _types.Object);
         for (int i = 0; i < source.Parameters.Count; i++)
             context.DefineParameter(source.Parameters[i].Name.Lexeme, i + argumentOffset, sourceTypes[i]);
         ApplyCapturedTopLevelVariableAccess(context);

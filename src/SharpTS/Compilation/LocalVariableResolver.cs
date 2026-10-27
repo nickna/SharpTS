@@ -636,7 +636,7 @@ public class LocalVariableResolver : IVariableResolver
         }
 
         // 2. __this parameter (object method shorthand, function-expression receiver)
-        if (_ctx.TryGetParameter("__this", out var thisArgIndex))
+        if (_ctx.TryGetParameter(CompilationContext.ThisParameterName, out var thisArgIndex))
         {
             _il.Emit(OpCodes.Ldarg, thisArgIndex);
             // A nullish __this denotes a sloppy-mode bare call with no receiver

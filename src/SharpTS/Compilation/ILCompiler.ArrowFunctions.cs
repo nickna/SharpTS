@@ -1888,7 +1888,7 @@ public partial class ILCompiler
             if (arrow.HasOwnThis)
             {
                 // __this is at index 1, actual parameters start at index 2
-                ctx.DefineParameter("__this", 1);
+                ctx.DefineParameter(CompilationContext.ThisParameterName, 1);
                 for (int i = 0; i < arrow.Parameters.Count; i++)
                 {
                     Type? paramType = arrowParamTypes != null && i < arrowParamTypes.Length ? arrowParamTypes[i] : null;
@@ -1913,7 +1913,7 @@ public partial class ILCompiler
             if (arrow.HasOwnThis)
             {
                 // __this is at index 0, actual parameters start at index 1
-                ctx.DefineParameter("__this", 0);
+                ctx.DefineParameter(CompilationContext.ThisParameterName, 0);
                 for (int i = 0; i < arrow.Parameters.Count; i++)
                 {
                     Type? paramType = arrowParamTypes != null && i < arrowParamTypes.Length ? arrowParamTypes[i] : null;

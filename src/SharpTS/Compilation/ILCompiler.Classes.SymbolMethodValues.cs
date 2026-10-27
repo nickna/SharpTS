@@ -56,7 +56,7 @@ public partial class ILCompiler
         context.IsStaticSuperContext = owner.Source.IsStatic;
         context.HasGuestReceiver = true;
         context.UseNominalSuperCallBridge = true;
-        context.GuestThisVariableName = "__this";
+        context.GuestThisVariableName = CompilationContext.ThisParameterName;
         var genericParameters = _classes.GenericParameters.Require(owner.Owner);
         var canonicalArguments = owner.Owner.IsGenericTypeDefinition
             ? CanonicalGenericClassOwner(owner.Owner).GetGenericArguments() : Type.EmptyTypes;

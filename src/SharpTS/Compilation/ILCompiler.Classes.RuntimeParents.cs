@@ -269,10 +269,10 @@ public partial class ILCompiler
         ctx.EmittingTypeBuilder = owner;
         ctx.IsInstanceMethod = true;
         ctx.HasGuestReceiver = true;
-        ctx.GuestThisVariableName = "__this";
+        ctx.GuestThisVariableName = CompilationContext.ThisParameterName;
         ctx.ClassDefinitionParameterIndex = 2;
         ctx.NewTargetParameterIndex = 3;
-        ctx.DefineParameter("__this", 0, _types.Object);
+        ctx.DefineParameter(CompilationContext.ThisParameterName, 0, _types.Object);
         ApplyCapturedTopLevelVariableAccess(ctx);
         var constructor = declaration.Methods.FirstOrDefault(source => source.Body != null && source.Name.Lexeme == "constructor" && !source.IsStatic);
         if (constructor != null)
@@ -428,7 +428,7 @@ public partial class ILCompiler
             ctx.CurrentClassBuilder = owner; ctx.CurrentClassName = owner.FullName;
             ctx.EmittingTypeBuilder = type; ctx.IsStrictMode = true; ctx.IsInstanceMethod = !source.IsStatic;
             ctx.IsStaticSuperContext = source.IsStatic;
-            ctx.HasGuestReceiver = true; ctx.GuestThisVariableName = "__this";
+            ctx.HasGuestReceiver = true; ctx.GuestThisVariableName = CompilationContext.ThisParameterName;
             ApplyCapturedTopLevelVariableAccess(ctx);
             return ctx;
         }, owner.FullName!);

@@ -51,7 +51,7 @@ public partial class ILCompiler
             ctx.IsInstanceMethod = !source.IsStatic;
             ctx.IsStaticSuperContext = source.IsStatic;
             ctx.ClassDefinitionOwnerField = field;
-            ctx.GuestThisVariableName = "__this";
+            ctx.GuestThisVariableName = CompilationContext.ThisParameterName;
             ctx.HasGuestReceiver = true;
             foreach (var parameter in expression.TypeParams ?? []) ctx.GenericTypeParameters[parameter.Name.Lexeme] = _types.Object;
             return ctx;

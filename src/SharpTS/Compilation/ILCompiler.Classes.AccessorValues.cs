@@ -33,7 +33,7 @@ public partial class ILCompiler
             var ctx = CreateModuleMemberContext(method.GetILGenerator(), method);
             ctx.IsStrictMode = true; ctx.CurrentClassName = owner.FullName; ctx.CurrentClassBuilder = owner;
             ctx.EmittingTypeBuilder = type; ctx.IsInstanceMethod = !accessor.IsStatic;
-            ctx.IsStaticSuperContext = accessor.IsStatic; ctx.HasGuestReceiver = true; ctx.GuestThisVariableName = "__this";
+            ctx.IsStaticSuperContext = accessor.IsStatic; ctx.HasGuestReceiver = true; ctx.GuestThisVariableName = CompilationContext.ThisParameterName;
             var genericParameters = _classes.GenericParameters.Require(owner);
             var canonicalArguments = owner.IsGenericTypeDefinition
                 ? CanonicalGenericClassOwner(owner).GetGenericArguments() : Type.EmptyTypes;
