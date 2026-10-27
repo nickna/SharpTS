@@ -40,10 +40,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Call, getter);
 
-                if (property.PropertyType.IsValueType)
-                {
-                    IL.Emit(OpCodes.Box, property.PropertyType);
-                }
+                BoxResultIfValueType(property.PropertyType);
                 SetStackUnknown();
                 return true;
             }
