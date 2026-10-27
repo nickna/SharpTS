@@ -167,6 +167,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct ObjectDefinePropertiesInputs(
         EmittedBooleanRuntime Booleans,
+        EmittedBoxedPrimitiveRuntime BoxedPrimitives,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
         MethodBuilder GetProperty,
@@ -1994,6 +1995,9 @@ public partial class RuntimeEmitter
         il.MarkLabel(dpsPropsThrowLabel);
         GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot convert undefined or null to object");
         il.MarkLabel(dpsPropsOkLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.BoxedPrimitives.ToObject);
+        il.Emit(OpCodes.Starg_S, (byte)1);
 
         // Capture all own keys before any descriptor getter runs. Keep current
         // enumerability and descriptor conversion live for each retained key.

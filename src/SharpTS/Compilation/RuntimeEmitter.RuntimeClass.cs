@@ -2119,6 +2119,7 @@ public partial class RuntimeEmitter
             runtime.ObjectDescriptors,
             new ObjectDefinePropertiesInputs(
                 runtime.Booleans,
+                runtime.BoxedPrimitives,
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.ObjectRead.Property,
