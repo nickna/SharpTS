@@ -734,7 +734,7 @@ public partial class RuntimeEmitter
             new ClassConstructorReturnInputs(runtime.Errors, runtime.Sentinels.UndefinedType, runtime.Symbols.Type));
 
         // Emit $Runtime class with all helper methods
-        EmitRuntimeClass(moduleBuilder, runtime, netConstruction);
+        EmitRuntimeClass(moduleBuilder, runtime, netConstruction, allowInterpreterBridge: !_emitNativeCallables);
 
         // Emit $Runtime.NewOnFunction — the JS `new` protocol for runtime-valued
         // function callees. Depends on $Object, $TSFunction, $BoundTSFunction, and

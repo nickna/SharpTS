@@ -35,7 +35,8 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Int32, _types.Int32]);
     }
 
-    private void EmitRuntimeClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime, NetConstruction? netConstruction)
+    private void EmitRuntimeClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime, NetConstruction? netConstruction,
+        bool allowInterpreterBridge)
     {
         // $Runtime TypeBuilder + early helper-method signatures (Stringify,
         // CreateException) were forward-declared by DefineRuntimeClassPhase1
@@ -3281,7 +3282,7 @@ public partial class RuntimeEmitter
         if (_features.UsesDgram)
             EmitDgramModuleMethods(typeBuilder, runtime);
         // globalThis methods (ES2020) - must be after HTTP for fetch reference
-        EmitGlobalThisMethods(typeBuilder, runtime);
+        EmitGlobalThisMethods(typeBuilder, runtime, allowInterpreterBridge);
         // Define util inspect method signatures before ConsoleExtensions (ConsoleDir uses UtilInspectValue)
         DefineUtilInspectSignatures(typeBuilder, runtime.Inspection);
         // Console extensions (error, warn, clear, time, timeEnd, timeLog)

@@ -105,7 +105,7 @@ public sealed class EmittedGlobalObjectRuntimeTests
         Assert.Null(typeof(EmittedRuntime).GetProperty("GlobalObject")!.SetMethod);
         foreach (var old in new[] { "GlobalThisSingletonField", "GlobalThisGetProperty", "GlobalThisSetProperty", "GlobalThisProperties", "EvalIndirect" })
             Assert.Null(typeof(EmittedRuntime).GetProperty(old));
-        Assert.Equal(new[] { typeof(TypeBuilder), typeof(EmittedGlobalObjectRuntime), typeof(FieldInfo) },
+        Assert.Equal(new[] { typeof(TypeBuilder), typeof(EmittedGlobalObjectRuntime), typeof(FieldInfo), typeof(bool) },
             typeof(RuntimeEmitter).GetMethod("EmitIndirectEval", Members)!.GetParameters().Select(p => p.ParameterType));
         foreach (var name in new[] { "EmitGlobalThisGetProperty", "EmitGlobalThisSetProperty", "EmitCachedTSFunction" })
             Assert.DoesNotContain(typeof(RuntimeEmitter).GetMethod(name, Members)!.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime));

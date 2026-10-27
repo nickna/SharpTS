@@ -8,7 +8,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits globalThis helper methods (GetProperty, SetProperty).
     /// </summary>
-    private void EmitGlobalThisMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGlobalThisMethods(TypeBuilder typeBuilder, EmittedRuntime runtime, bool allowInterpreterBridge)
     {
         // Static field to cache the fetch TSFunction for reference equality
         runtime.Fetch.CachedFunction = typeBuilder.DefineField(
@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
             _types.Object,
             FieldAttributes.Private | FieldAttributes.Static);
 
-        EmitIndirectEval(typeBuilder, runtime.GlobalObject, runtime.Sentinels.UndefinedInstance);
+        EmitIndirectEval(typeBuilder, runtime.GlobalObject, runtime.Sentinels.UndefinedInstance, allowInterpreterBridge);
         EmitUriComponentFunctions(typeBuilder, runtime.UriComponents,
             new UriComponentInputs(runtime.FunctionAttributes.PadUndefinedCtor, runtime.StringCoercion.ToJsString));
         runtime.UriComponents.CompleteEmission();
@@ -607,7 +607,8 @@ public partial class RuntimeEmitter
     /// string input uses the optional SharpTS interpreter bridge without adding
     /// a hard assembly reference to standalone output.
     /// </summary>
-    private void EmitIndirectEval(TypeBuilder typeBuilder, EmittedGlobalObjectRuntime globalObject, FieldInfo undefinedInstance)
+    private void EmitIndirectEval(TypeBuilder typeBuilder, EmittedGlobalObjectRuntime globalObject, FieldInfo undefinedInstance,
+        bool allowInterpreterBridge)
     {
         var method = typeBuilder.DefineMethod(
             "EvalIndirect", MethodAttributes.Public | MethodAttributes.Static,
@@ -622,6 +623,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(stringInput);
+
+        // Native guest projects never include the interpreter dependency. Keep
+        // non-string eval's identity semantics, but do not leave an optional
+        // assembly-loading bridge in their runtime closure. This also guards
+        // dynamically obtained eval values that bypass a static source check.
+        if (!allowInterpreterBridge)
+        {
+            il.Emit(OpCodes.Ldstr, "String eval is not supported in native guest output. Use --target dll or --target exe.");
+            il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
+            il.Emit(OpCodes.Throw);
+            return;
+        }
 
         var bridgeType = il.DeclareLocal(_types.Type);
         // Build the optional bridge name at runtime so standalone late-binding

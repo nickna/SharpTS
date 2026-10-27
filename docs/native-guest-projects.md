@@ -103,6 +103,13 @@ Refusal follows the emitted capability report. A constant eval that the compiler
 has fully lowered to ordinary IL does not require the runtime eval bridge and
 can export; an eval whose source comes from a runtime argument is refused.
 
+Native guest runtimes omit the optional interpreter assembly-loading bridge.
+Their indirect eval helper preserves non-string input identity and refuses string
+input, even when the generated DLL is inspected under a managed host that has
+SharpTS loaded. Dynamic aliases can still evade the early capability check;
+the runtime refusal protects that boundary while source admission is completed
+under [#3047](https://github.com/nickna/SharpTS/issues/3047).
+
 ## Entry, arguments and symbols
 
 The opt-in guest assembly exposes the direct C# entry facade:

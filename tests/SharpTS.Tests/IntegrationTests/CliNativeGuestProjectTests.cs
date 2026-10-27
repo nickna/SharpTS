@@ -44,6 +44,10 @@ public class CliNativeGuestProjectTests
 
     [Theory]
     [InlineData("eval(process.argv[2]);", "eval")]
+    [InlineData("const run: any = eval; run(process.argv[2]);", "eval")]
+    [InlineData("const run: any = globalThis.eval; run(process.argv[2]);", "eval")]
+    [InlineData("const run: any = globalThis['eval']; run(process.argv[2]);", "eval")]
+    [InlineData("const key = String('eval'); const run: any = globalThis[key]; run(process.argv[2]);", "eval")]
     [InlineData("new Proxy({}, {});", "Proxy")]
     [InlineData("new Intl.NumberFormat();", "Intl")]
     [InlineData("import * as vm from 'vm'; new vm.Script('1');", "vm")]

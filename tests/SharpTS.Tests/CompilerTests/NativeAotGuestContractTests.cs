@@ -52,6 +52,37 @@ public class NativeAotGuestContractTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void NativeEvalCannotLoadTheInterpreterEvenWhenItIsPresent(bool native)
+    {
+        var statements = new Parser(new Lexer("console.log(42);").ScanTokens()).ParseOrThrow();
+        var types = new TypeChecker().Check(statements);
+        var compiler = new ILCompiler($"native_eval_{Guid.NewGuid():N}", false, true, null, null, null, OutputTarget.Dll);
+        if (native) compiler.EnableNativeAotProjectOutput();
+        compiler.Compile(statements, types);
+        byte[] bytes = compiler.SaveToBytes();
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        using var stream = new MemoryStream(bytes);
+        Assert.Empty(verifier.Verify(stream));
+        Assembly assembly = Assembly.Load(bytes);
+        MethodInfo eval = assembly.GetType("$Runtime")!.GetMethod("EvalIndirect")!;
+
+        // Non-string eval returns the exact input, without parsing or cloning.
+        object value = new();
+        Assert.Same(value, eval.Invoke(null, [value]));
+        Assert.Null(eval.Invoke(null, [null]));
+        Assert.Equal(42d, eval.Invoke(null, [42d]));
+
+        if (native)
+        {
+            var error = Assert.Throws<TargetInvocationException>(() => eval.Invoke(null, ["40 + 2"]));
+            Assert.Contains("String eval is not supported in native guest output", error.InnerException!.Message);
+        }
+        else Assert.Equal(42d, eval.Invoke(null, ["40 + 2"]));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void SingleFileFacadeIsDirectVerifiableAndOptIn(bool enabled)
     {
         var statements = new Parser(new Lexer("console.log(42);").ScanTokens()).ParseOrThrow();
