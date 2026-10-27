@@ -92,6 +92,10 @@ public class SharpTSObjectNamespace : ISharpTSCallable
 
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
+    internal IEnumerable<string> OwnStringKeys()
+        => new[] { "length", "name", "prototype" }.Concat(ObjectBuiltIns.StaticMemberNames)
+            .Where(HasOwnProperty).Concat(_extras.OwnVisibleStringKeys()).Distinct();
+
     /// <summary>
     /// ECMA-262 §19.1.1 Object(value): if value is null/undefined, return a new empty object;
     /// otherwise return ToObject(value). For already-object values this is a pass-through.

@@ -1745,9 +1745,7 @@ public static partial class ObjectBuiltIns
             : target switch
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.OwnVisibleStringKeys().Cast<object?>().ToList(),
-            SharpTSObjectNamespace objectNamespace =>
-                new[] { "length", "name", "prototype" }.Concat(StaticMemberNames)
-                    .Where(objectNamespace.HasOwnProperty).Cast<object?>().ToList(),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSObject obj => GetOwnPropertyNamesFromObject(obj),
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.OwnStringKeys().Cast<object?>().ToList(),
