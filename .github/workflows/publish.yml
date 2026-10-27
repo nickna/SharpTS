@@ -1,8 +1,9 @@
 name: Publish to NuGet
 
-# Ordering is the release gate: build/pack and every managed/native smoke test
-# run first, then `publish-nuget` uploads the packages, `verify-nuget` waits for
-# consumer-facing NuGet availability, and only then does `release` create the
+# Ordering is the release gate: build/pack, every managed/native smoke test,
+# and the complete standalone shards run first. Then `publish-nuget` uploads
+# packages, `verify-nuget` waits for consumer-facing NuGet availability,
+# and only then does `release` create the
 # GitHub Release with all archives attached. A failing RID or unavailable NuGet
 # package therefore blocks downstream release work.
 #
@@ -25,7 +26,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Match CI's core/build/pack budget; standalone child-process tests have
+    # their own complete six-shard gate below.
+    timeout-minutes: 50
 
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
@@ -75,12 +78,12 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      # Same exclusions as ci.yml: LiveNetwork tests make real outbound DNS/HTTP
+      # Same core partition as ci.yml: LiveNetwork tests make real outbound DNS/HTTP
       # calls and npm tests run a real `npm install`; both can false-red on runner
       # network hiccups — which here would block a tagged release after build but
-      # before pack/push.
+      # before pack/push. The standalone job covers the complementary class.
       - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests." --blame-hang-timeout 120s --blame-hang-dump-type mini
 
       - name: Test NuGet release helper
         shell: pwsh
@@ -170,6 +173,40 @@ jobs:
           name: nupkg
           path: ./nupkg/*.nupkg
           if-no-files-found: error
+          retention-days: 7
+
+  # Keep every standalone method, balanced by the same discovery-based planner
+  # as CI. Both public-write jobs require the entire matrix to succeed.
+  standalone:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Restore standalone tests
+        run: dotnet restore tests/SharpTS.Tests/SharpTS.Tests.csproj
+      - name: Build standalone tests
+        run: dotnet build tests/SharpTS.Tests/SharpTS.Tests.csproj --no-restore --configuration Release
+      - name: Test standalone
+        shell: pwsh
+        run: ./scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 6 -ResultsDirectory artifacts/release-standalone/${{ matrix.shard }}
+        timeout-minutes: 35
+      - name: Upload standalone shard evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-standalone-${{ matrix.shard }}
+          path: artifacts/release-standalone/
+          if-no-files-found: warn
           retention-days: 7
 
   # Managed SKU (#1324 Track 0): self-contained single-file binaries per RID,
@@ -604,7 +641,7 @@ jobs:
   # index can be retried without republishing. --skip-duplicate makes a rerun of
   # this job safe after a partial or ambiguous upload response.
   publish-nuget:
-    needs: [build, binaries, native-binaries]
+    needs: [build, standalone, binaries, native-binaries]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
@@ -681,7 +718,7 @@ jobs:
   # Create public release assets only after NuGet's catalog/search view exposes
   # every uploaded package. WinGet remains downstream of this job.
   release:
-    needs: [build, binaries, native-binaries, verify-nuget]
+    needs: [build, standalone, binaries, native-binaries, verify-nuget]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write

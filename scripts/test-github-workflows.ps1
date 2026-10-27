@@ -258,6 +258,25 @@ $publishNuGetJob = Get-PublishJob 'publish-nuget'
 $verifyNuGetJob = Get-PublishJob 'verify-nuget'
 $releaseJob = Get-PublishJob 'release'
 $publishBuildJob = Get-PublishJob 'build'
+$publishStandaloneJob = Get-PublishJob 'standalone'
+if (-not $publishBuildJob.Contains($coreFilter, [StringComparison]::Ordinal) -or
+    -not $standaloneScript.Contains('$baseFilter = ''' + $standaloneFilter + '''', [StringComparison]::Ordinal)) {
+    $errors.Add('Publish core and standalone discovery must retain the complete complementary CI partitions.')
+}
+foreach ($requiredText in @('timeout-minutes: 50', '--blame-hang-timeout 120s', '--blame-hang-dump-type mini')) {
+    if (-not $publishBuildJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Publish build must retain its bounded core budget and per-test hang guard: $requiredText")
+    }
+}
+foreach ($requiredText in @('runs-on: ubuntu-24.04', 'shard: [0, 1, 2, 3, 4, 5]', 'shell: pwsh',
+    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 6',
+    '-ResultsDirectory artifacts/release-standalone/${{ matrix.shard }}',
+    'timeout-minutes: 35', 'timeout-minutes: 40', 'fail-fast: false', 'if: always()',
+    'name: release-standalone-${{ matrix.shard }}', 'path: artifacts/release-standalone/', 'retention-days: 7')) {
+    if (-not $publishStandaloneJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Publish standalone job is missing its complete shard contract: $requiredText")
+    }
+}
 foreach ($requiredText in @('./scripts/test-smoke-process.ps1', './scripts/test-debug-adapter-package.ps1',
     '-PackagePath "./nupkg/SharpTS.DebugAdapter.${{ steps.version.outputs.VERSION }}.nupkg"')) {
     if (-not $publishBuildJob.Contains($requiredText, [StringComparison]::Ordinal)) {
@@ -272,7 +291,7 @@ foreach ($boundary in @('Preflight NuGet package IDs and artifacts', 'Upload pac
 }
 
 foreach ($requiredText in @(
-    'needs: [build, binaries, native-binaries]',
+    'needs: [build, standalone, binaries, native-binaries]',
     "if: startsWith(github.ref, 'refs/tags/v')",
     'contents: read',
     'id-token: write',
@@ -311,7 +330,7 @@ foreach ($forbiddenText in @('id-token:', 'contents: write', 'environment:', 'se
 }
 
 foreach ($requiredText in @(
-    'needs: [build, binaries, native-binaries, verify-nuget]',
+    'needs: [build, standalone, binaries, native-binaries, verify-nuget]',
     'contents: write',
     'timeout-minutes: 20',
     "pattern: 'managed-*'",
