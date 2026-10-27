@@ -22,7 +22,7 @@ public partial class ILCompiler
 
         // Resolve typed parameters from TypeMap
         var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
-            className, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
+            className, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap, isStaticMethod: true);
         // Keep return type as object (async methods return Task<object>)
         var returnType = method.IsAsync ? _types.TaskOfObject : typeof(object);
         var methodBuilder = typeBuilder.DefineMethod(
