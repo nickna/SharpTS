@@ -12,7 +12,7 @@ public partial class ILCompiler
     private void DefineStaticAutoAccessorValue(TypeBuilder owner, Stmt.AutoAccessor source, FieldBuilder backing)
     {
         bool evaluated = _classExprs.Names.ContainsValue(owner.FullName!);
-        var type = _moduleBuilder.DefineType("$StaticAutoAccessor_" + _staticAutoAccessorValues.Count,
+        var type = EmitTypeDefinitions.DefineType(_moduleBuilder, "$StaticAutoAccessor_" + _staticAutoAccessorValues.Count,
             TypeAttributes.Public | TypeAttributes.Sealed, _types.Object);
         var home = type.DefineField("Owner", _types.Object, FieldAttributes.Private | FieldAttributes.InitOnly);
         var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.Object]);
