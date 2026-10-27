@@ -856,7 +856,9 @@ public partial class RuntimeEmitter
         EmitCapturedIteratorMethods(
             typeBuilder,
             runtime.IteratorRecords,
-            new CapturedIteratorInputs(runtime.Sentinels.UndefinedType, runtime.Symbols, runtime.ObjectRead, runtime.Invocation, runtime.Errors)
+            new CapturedIteratorInputs(runtime.Sentinels.UndefinedType, runtime.Symbols, runtime.ObjectRead, runtime.Invocation, runtime.Errors,
+                runtime.Operators.HasIn, runtime.FunctionConstruction, runtime.FunctionAttributes, runtime.Sentinels.UndefinedInstance,
+                runtime.Generators.Type)
         );
         runtime.IteratorRecords.CompleteEmission();
         EmitGetIteratorDone(
