@@ -1294,6 +1294,25 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(nativeConstructor);
 
+            var notNativeMetadata = il.DefineLabel();
+            var nativeMetadata = il.DefineLabel();
+            foreach (var key in new[] { "name", "length" })
+            {
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Ldstr, key);
+                il.Emit(OpCodes.Call, _types.StringOpEquality);
+                il.Emit(OpCodes.Brtrue, nativeMetadata);
+            }
+            il.Emit(OpCodes.Br, notNativeMetadata);
+            il.MarkLabel(nativeMetadata);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, objectWrite.PropertyStrict);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notNativeMetadata);
+
             // Per ECMA-262 §17, constructor static "prototype"/"name"/"length"
             // are non-writable; non-strict writes silently no-op. Same for
             // Number constants (MAX_VALUE etc.) which are W:F,E:F,C:F.
@@ -2397,6 +2416,79 @@ public partial class RuntimeEmitter
 
     }
 
+    private void EmitNativeMetadataSetStrict(ILGenerator il, SetPropertyStrictInputs inputs)
+    {
+        var fallback = il.DefineLabel();
+        var metadata = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.Type);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+        il.Emit(OpCodes.Brtrue, fallback);
+        foreach (var key in new[] { "name", "length" })
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, key);
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, metadata);
+        }
+        il.Emit(OpCodes.Br, fallback);
+        il.MarkLabel(metadata);
+        var descriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        var absent = il.DefineLabel();
+        var writableOwn = il.DefineLabel();
+        var reject = il.DefineLabel();
+        var create = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Brfalse, absent);
+        EmitArrayDescriptorSetPolicy(il, inputs.DescriptorStorage, inputs.UndefinedType,
+            inputs.InvokeMethodValue, descriptor, writableOwn, reject);
+        il.MarkLabel(writableOwn);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
+        il.Emit(OpCodes.Brtrue, reject);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(absent);
+        // Initial native metadata is readonly; deletion transfers authority to
+        // the live prototype, including inherited setters and readonly slots.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
+        il.Emit(OpCodes.Brfalse, reject);
+        EmitConstructorPrototypeSetGuard(il, inputs, () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        }, create, reject);
+        il.MarkLabel(create);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.CanAddProperty);
+        il.Emit(OpCodes.Brfalse, reject);
+        EmitDefineDataDescriptorFromValue(il, inputs.DescriptorStorage);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(reject);
+        var silent = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, silent);
+        EmitThrowTypeErrorWithName(il, inputs.Errors, "Cannot assign to property '", "' of constructor");
+        il.MarkLabel(silent);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(fallback);
+    }
+
     private void EmitClassInstanceSetStrict(ILGenerator il, SetPropertyStrictInputs inputs)
     {
         var carrierFallback = il.DefineLabel();
@@ -2662,6 +2754,7 @@ public partial class RuntimeEmitter
 
         // Constructor metadata descriptors are synthesized rather than stored
         // in PDS. Strict writes must consult that same guest descriptor.
+        EmitNativeMetadataSetStrict(il, inputs);
         var notConstructorPrototype = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Type);
