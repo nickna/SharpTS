@@ -57,7 +57,8 @@ if ($Sku -eq 'Native') {
         if ($_.Exception.Message -notmatch 'failed with exit code') { throw }
         $rejected = $true
     }
-    if (-not $rejected -or (Get-Content (Join-Path $root 'managed-only.log') -Raw) -notmatch 'requires a managed SharpTS build') { throw 'Native archive did not retain its managed-only verification diagnostic.' }
+    $rejectionLog = Get-Content (Join-Path $root 'managed-only.log') -Raw
+    if (-not $rejected -or $rejectionLog -notmatch 'Error SHARPTS007:\s+--verify\b') { throw 'Native archive did not retain its managed-only verification diagnostic.' }
     if (Test-Path -LiteralPath (Join-Path $root 'unsupported.dll')) { throw 'Rejected native verification wrote an output assembly.' }
 }
 [ordered]@{ archive = [IO.Path]::GetFileName($archive); sku = $Sku; version = $Version; executableSha256 = $hash; signed = [bool]$RequireSigned } |
