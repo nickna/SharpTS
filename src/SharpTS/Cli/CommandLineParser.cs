@@ -144,6 +144,7 @@ public record GlobalOptions(
 /// <param name="Hosted">Emit the experimental versioned hosted runtime ABI.</param>
 /// <param name="GcProfile">Deployment-time garbage-collection profile.</param>
 /// <param name="NativeProject">Optional experimental generated-guest NativeAOT project export.</param>
+/// <param name="Signing">Opt-in Authenticode signing after successful EXE bundling.</param>
 public record CompileOptions(
     OutputTarget Target = OutputTarget.Dll,
     bool PreserveConstEnums = false,
@@ -160,7 +161,8 @@ public record CompileOptions(
     bool TimingsJson = false,
     bool Hosted = false,
     GcProfile GcProfile = GcProfile.Workstation,
-    NativeAotProjectOptions? NativeProject = null
+    NativeAotProjectOptions? NativeProject = null,
+    AuthenticodeSigningOptions? Signing = null
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -797,6 +799,11 @@ public class CommandLineParser
         string? sdkPath = null;
         BundlerMode bundlerMode = BundlerMode.Auto;
         GcProfile gcProfile = GcProfile.Workstation;
+        string? signCertificate = null;
+        string? signPassword = null;
+        string? signTimestamp = AuthenticodeSigningOptions.DefaultTimestampUrl;
+        string signDigest = "sha256";
+        bool signDetailsProvided = false;
 
         // Packaging options
         bool pack = false;
@@ -873,6 +880,41 @@ public class CommandLineParser
                         64,
                         ShowCompileUsage: true
                     );
+                }
+            }
+            else if (args[i] is "--sign" or "--sign-pass" or "--sign-timestamp" or "--sign-digest")
+            {
+                var option = args[i];
+                if (++i >= args.Length)
+                    return new ParsedCommand.Error($"Error: {option} requires a value", 64, ShowCompileUsage: true);
+                var value = args[i];
+                switch (option)
+                {
+                    case "--sign":
+                        if (string.IsNullOrWhiteSpace(value) || value.StartsWith('-'))
+                            return new ParsedCommand.Error("Error: --sign requires a certificate file or sha1: thumbprint.", 64, ShowCompileUsage: true);
+                        signCertificate = value;
+                        break;
+                    case "--sign-pass":
+                        signPassword = value;
+                        signDetailsProvided = true;
+                        break;
+                    case "--sign-timestamp":
+                        if (value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                            signTimestamp = null;
+                        else if (Uri.TryCreate(value, UriKind.Absolute, out var timestamp) && timestamp.Scheme is "http" or "https"
+                            && string.IsNullOrEmpty(timestamp.UserInfo))
+                            signTimestamp = value;
+                        else
+                            return new ParsedCommand.Error("Error: --sign-timestamp requires an HTTP(S) RFC 3161 URL or 'none'.", 64, ShowCompileUsage: true);
+                        signDetailsProvided = true;
+                        break;
+                    case "--sign-digest":
+                        signDigest = value.ToLowerInvariant();
+                        if (signDigest is not ("sha256" or "sha384" or "sha512"))
+                            return new ParsedCommand.Error("Error: --sign-digest must be sha256, sha384, or sha512.", 64, ShowCompileUsage: true);
+                        signDetailsProvided = true;
+                        break;
                 }
             }
             else if (args[i] == "--gc-profile")
@@ -979,6 +1021,13 @@ public class CommandLineParser
             }
         }
 
+        if (signCertificate is null && signDetailsProvided)
+            return new ParsedCommand.Error("Error: signing options require --sign <certificate>.", 64, ShowCompileUsage: true);
+        if (signCertificate is not null && signCertificate.StartsWith("sha1:", StringComparison.OrdinalIgnoreCase) && signPassword is not null)
+            return new ParsedCommand.Error("Error: --sign-pass applies only to a .pfx/.p12 certificate file.", 64, ShowCompileUsage: true);
+        if (signCertificate is not null && (target != OutputTarget.Exe || globalOptions.NoEmit || globalOptions.EmitDeclarationOnly || globalOptions.ShowConfig))
+            return new ParsedCommand.Error("Error: --sign requires --target exe and executable output (without --noEmit/--emitDeclarationOnly/--showConfig).", 64, ShowCompileUsage: true);
+
         if ((globalOptions.NoEmit || globalOptions.EmitDeclarationOnly) && pack)
         {
             return new ParsedCommand.Error(
@@ -1052,7 +1101,15 @@ public class CommandLineParser
             TimingsJson: timingsJson,
             Hosted: hosted,
             GcProfile: gcProfile,
-            NativeProject: nativeProject
+            NativeProject: nativeProject,
+            Signing: signCertificate is null ? null : new AuthenticodeSigningOptions
+            {
+                Certificate = signCertificate,
+                Password = signPassword ?? (signCertificate.StartsWith("sha1:", StringComparison.OrdinalIgnoreCase)
+                    ? null : Environment.GetEnvironmentVariable("SHARPTS_SIGN_PASS")),
+                TimestampUrl = signTimestamp,
+                DigestAlgorithm = signDigest
+            }
         );
 
         var packOptions = new PackOptions(

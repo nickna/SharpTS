@@ -217,6 +217,10 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
             (compileOptions.NoEmit || compileOptions.EmitDeclarationOnly || compileOptions.ShowConfig))
             throw new CompileException("--emit-native-project cannot be combined with effective noEmit, emitDeclarationOnly or showConfig settings after applying tsconfig.");
 
+        if (compile.CompileOptions.Signing is not null &&
+            (compileOptions.NoEmit || compileOptions.EmitDeclarationOnly || compileOptions.ShowConfig))
+            throw new CompileException("--sign requires executable output after applying tsconfig; no-output modes are incompatible.");
+
         if (compile.CompileOptions.VerifyIL &&
             !System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
         {
@@ -236,7 +240,8 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
                 compile.CompileOptions.QuietMode || json,
                 compile.CompileOptions.Standalone,
                 compile.CompileOptions.EmitDebugSymbols,
-                compile.CompileOptions.NativeProject);
+                compile.CompileOptions.NativeProject,
+                compile.CompileOptions.Signing);
             exitCode = CompileFile(
                 compile.InputFile,
                 compile.OutputFile,
@@ -775,6 +780,14 @@ static int CompileFile(string inputPath, string outputPath, bool preserveConstEn
 
         // These modes stopped before any assembly was written, so there is nothing to pack.
         if (globalOptions.NoEmit || globalOptions.EmitDeclarationOnly) return 0;
+
+        // Sign the final bundle before packaging can copy or publish it.
+        if (outputOptions.Signing is { } signing)
+        {
+            SharpTS.Cli.AuthenticodeSigner.SignAsync(outputPath, signing).GetAwaiter().GetResult();
+            if (!outputOptions.QuietMode)
+                Console.WriteLine($"Signed {outputPath}");
+        }
 
         // Package if requested
         if (packOptions.Pack)
@@ -1743,6 +1756,10 @@ static void PrintHelp()
     Console.WriteLine("  -o <path>                     Output file path (default: <input>.dll or .exe)");
     Console.WriteLine("  -t, --target <type>           Output type: dll (default) or exe");
     Console.WriteLine("  --bundler <mode>              Bundler selection: auto (default), sdk, or builtin");
+    Console.WriteLine("  --sign <pfx|sha1:thumbprint>   Authenticode-sign final Windows EXE output");
+    Console.WriteLine("  --sign-pass <password>        PFX password (or SHARPTS_SIGN_PASS environment variable)");
+    Console.WriteLine("  --sign-timestamp <url|none>    RFC 3161 URL (default: DigiCert); none disables timestamping");
+    Console.WriteLine("  --sign-digest <algorithm>     sha256 (default), sha384, or sha512");
     Console.WriteLine("  --gc-profile <profile>        GC policy: workstation (default), adaptive, or throughput");
     Console.WriteLine("  --preserveConstEnums          Preserve const enum declarations");
     Console.WriteLine("  --declaration                 Emit .d.ts declarations alongside the assembly");
@@ -1789,6 +1806,10 @@ static void PrintCompileUsage()
     Console.WriteLine("  -o <path>              Output file path (default: <input>.dll or .exe)");
     Console.WriteLine("  -t, --target <type>    Output type: dll (default) or exe");
     Console.WriteLine("  --bundler <mode>       Bundler selection: auto (default), sdk, or builtin");
+    Console.WriteLine("  --sign <pfx|sha1:hash>  Sign final Windows EXE output after bundling");
+    Console.WriteLine("  --sign-pass <value>    PFX password (or SHARPTS_SIGN_PASS)");
+    Console.WriteLine("  --sign-timestamp <url|none>  RFC 3161 timestamp; none disables timestamping");
+    Console.WriteLine("  --sign-digest <value>  sha256 (default), sha384, or sha512");
     Console.WriteLine("  --gc-profile <profile> GC policy: workstation (default), adaptive, or throughput");
     Console.WriteLine("  -r, --reference <dll>  Add assembly reference (repeatable)");
     Console.WriteLine("  --preserveConstEnums   Preserve const enum declarations");
@@ -1815,5 +1836,6 @@ static void PrintCompileUsage()
 private sealed class CompilationAbortedException : Exception;
 
 record OutputOptions(bool MsBuildErrors, bool QuietMode, bool Standalone = false, bool EmitDebugSymbols = false,
-    NativeAotProjectOptions? NativeProject = null);
+    NativeAotProjectOptions? NativeProject = null,
+    SharpTS.Cli.AuthenticodeSigningOptions? Signing = null);
 }
