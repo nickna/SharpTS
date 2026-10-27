@@ -276,7 +276,23 @@ public partial class ILCompiler
             }
         }
 
-        if (staticMethods != null)
+        var nominalDeclaration = GetNominalClassDeclaration(typeBuilder);
+        if (nominalDeclaration != null)
+        {
+            var staticMembers = nominalDeclaration.Methods
+                .Where(method => method.IsStatic && !method.IsPrivate && method.Body != null && method.ComputedKey == null)
+                .Cast<Stmt>().Concat((nominalDeclaration.Accessors ?? []).Where(accessor => accessor.IsStatic))
+                .OrderBy(member => member is Stmt.Function method ? method.Name.SourceOrderOffset
+                    : ((Stmt.Accessor)member).Name.SourceOrderOffset);
+            foreach (var member in staticMembers)
+            {
+                if (member is Stmt.Function method && staticMethods?.TryGetValue(method.Name.Lexeme, out var builder) == true)
+                    EmitStaticDataDescriptor(method.Name.Lexeme, builder);
+                else if (member is Stmt.Accessor accessor)
+                    EmitKnownDeclaredAccessorDescriptors(il, typeBuilder, staticOnly: true, selected: accessor);
+            }
+        }
+        else if (staticMethods != null)
         {
             foreach (var (methodName, methodBuilder) in staticMethods)
             {
@@ -289,7 +305,8 @@ public partial class ILCompiler
 
         // Instance methods/accessors share the later source-ordered installer.
         // Expression definitions likewise install on their owned prototype.
-        EmitKnownDeclaredAccessorDescriptors(il, typeBuilder, staticOnly: true);
+        if (nominalDeclaration == null)
+            EmitKnownDeclaredAccessorDescriptors(il, typeBuilder, staticOnly: true);
         if (GetNominalClassDeclaration(typeBuilder) == null)
             EmitReceiverAutoAccessorDescriptors(il, typeBuilder);
 
@@ -361,20 +378,22 @@ public partial class ILCompiler
         => _classes.Declarations.FirstOrDefault(source => !_runtimeClassDeclarations.ContainsKey(source)
             && _classes.DeclarationNames.GetValueOrDefault(source) == typeBuilder.FullName);
 
-    private void EmitKnownDeclaredAccessorDescriptors(ILGenerator il, TypeBuilder typeBuilder, bool staticOnly = false)
+    private void EmitKnownDeclaredAccessorDescriptors(ILGenerator il, TypeBuilder typeBuilder, bool staticOnly = false,
+        Stmt.Accessor? selected = null)
     {
         var declaration = GetNominalClassDeclaration(typeBuilder);
         bool hasDeferredKeys = _classes.DeferredDefinitions.TryGet(typeBuilder, out _);
         var computedAccessors = _classes.ComputedMembers.GetAccessors(typeBuilder);
         foreach (var accessor in (declaration?.Accessors ?? []).OrderBy(accessor => accessor.Name.SourceOrderOffset))
         {
+            if (selected != null && !ReferenceEquals(selected, accessor)) continue;
             if (staticOnly && !accessor.IsStatic) continue;
             string? name = accessor.ComputedKey == null ? accessor.Name.Lexeme
                 : accessor.IsStatic && !hasDeferredKeys ? GetConstantComputedAccessorName(accessor.ComputedKey) : null;
             if (name is null) continue;
 
             // A later data method replaces both halves of an earlier accessor.
-            if (declaration!.Methods.Any(method => method.Body != null && !method.IsPrivate && method.ComputedKey == null
+            if (selected == null && declaration!.Methods.Any(method => method.Body != null && !method.IsPrivate && method.ComputedKey == null
                     && method.IsStatic == accessor.IsStatic && (method.IsStatic || method.Name.Lexeme != "constructor")
                     && method.Name.Lexeme == name && method.Name.SourceOrderOffset > accessor.Name.SourceOrderOffset)) continue;
             MethodBuilder? accessorMethod = null;

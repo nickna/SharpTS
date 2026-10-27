@@ -63,10 +63,32 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, candidates); il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Box, _types.Boolean); il.Emit(OpCodes.Callvirt, setCandidate);
         }
+        var index = il.DeclareLocal(_types.Int32);
+        // Evaluated computed names and expandos are already stored under their
+        // JavaScript keys. Synthetic CLR backing fields/methods are unmarked.
+        var extras = il.DeclareLocal(_types.ListOfObject); var key = il.DeclareLocal(_types.String);
+        var extraLoop = il.DefineLabel(); var extraNext = il.DefineLabel(); var extraEnd = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Call, descriptors.GetAllExtraKeys);
+        il.Emit(OpCodes.Stloc, extras); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(extraLoop);
+        il.Emit(OpCodes.Ldloc, index); il.Emit(OpCodes.Ldloc, extras);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Count")); il.Emit(OpCodes.Bge, extraEnd);
+        il.Emit(OpCodes.Ldloc, extras); il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        il.Emit(OpCodes.Castclass, _types.String); il.Emit(OpCodes.Stloc, key);
+        il.Emit(OpCodes.Ldloc, candidates); il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
+        il.Emit(OpCodes.Brtrue, extraNext);
+        il.Emit(OpCodes.Ldloc, candidates); il.Emit(OpCodes.Ldloc, key); il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Box, _types.Boolean); il.Emit(OpCodes.Callvirt, setCandidate);
+        il.MarkLabel(extraNext);
+        il.Emit(OpCodes.Ldloc, index); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, extraLoop); il.MarkLabel(extraEnd);
+
         var members = il.DeclareLocal(typeof(MemberInfo[]));
         var member = il.DeclareLocal(typeof(MemberInfo));
         var attribute = il.DeclareLocal(keys.ClassStaticPropertyType);
-        var index = il.DeclareLocal(_types.Int32);
+
         var memberLoop = il.DefineLabel(); var memberNext = il.DefineLabel(); var memberEnd = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, lookup);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
@@ -91,27 +113,6 @@ public partial class RuntimeEmitter
         il.MarkLabel(memberNext);
         il.Emit(OpCodes.Ldloc, index); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, index);
         il.Emit(OpCodes.Br, memberLoop); il.MarkLabel(memberEnd);
-
-        // Evaluated computed names and expandos are already stored under their
-        // JavaScript keys. Synthetic CLR backing fields/methods are unmarked.
-        var extras = il.DeclareLocal(_types.ListOfObject); var key = il.DeclareLocal(_types.String);
-        var extraLoop = il.DefineLabel(); var extraNext = il.DefineLabel(); var extraEnd = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Call, descriptors.GetAllExtraKeys);
-        il.Emit(OpCodes.Stloc, extras); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stloc, index);
-        il.MarkLabel(extraLoop);
-        il.Emit(OpCodes.Ldloc, index); il.Emit(OpCodes.Ldloc, extras);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Count")); il.Emit(OpCodes.Bge, extraEnd);
-        il.Emit(OpCodes.Ldloc, extras); il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        il.Emit(OpCodes.Castclass, _types.String); il.Emit(OpCodes.Stloc, key);
-        il.Emit(OpCodes.Ldloc, candidates); il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
-        il.Emit(OpCodes.Brtrue, extraNext);
-        il.Emit(OpCodes.Ldloc, candidates); il.Emit(OpCodes.Ldloc, key); il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Box, _types.Boolean); il.Emit(OpCodes.Callvirt, setCandidate);
-        il.MarkLabel(extraNext);
-        il.Emit(OpCodes.Ldloc, index); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, index);
-        il.Emit(OpCodes.Br, extraLoop); il.MarkLabel(extraEnd);
 
         var iterator = il.DeclareLocal(_types.IEnumeratorOfString);
         var descriptor = il.DeclareLocal(descriptors.DescriptorType);
