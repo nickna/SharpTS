@@ -3148,15 +3148,10 @@ public partial class RuntimeEmitter
                 runtime.RequireMap(),
                 new MapGroupByInputs(
                     runtime.ArrayStorage,
-                    runtime.Errors.CreateException,
-                    runtime.IteratorProtocol.Function,
+                    runtime.Errors,
                     runtime.Invocation.Value,
-                    runtime.IteratorCollection.ToList,
-                    runtime.RuntimeClass.Type,
-                    runtime.Symbols.Iterator,
-                    runtime.Errors.TypeErrorConstructor,
                     runtime.Operators.TypeOf,
-                    runtime.Sentinels.UndefinedType
+                    GetCollectionConsumerInputs(runtime)
                 )
             );
         }
