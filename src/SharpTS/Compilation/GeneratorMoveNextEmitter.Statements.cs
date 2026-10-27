@@ -113,80 +113,11 @@ public partial class GeneratorMoveNextEmitter
         var endLabel = _il.DefineLabel();
         var continueLabel = _il.DefineLabel();
 
-        // Get compile-time type info for the iterable expression
-        TypeInfo? iterableType = _ctx!.TypeMap?.Get(f.Iterable);
-
         // Emit iterable and get enumerator
         EmitExpression(f.Iterable);
         EnsureBoxed();
 
-        // Handle Map/Set specially - convert to List before iteration
-        // This matches the behavior in ILEmitter.Statements.cs EmitForOf
-        if (iterableType is TypeInfo.Map)
-        {
-            // Map iteration yields [key, value] entries (compile-time known)
-            _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
-        }
-        else if (iterableType is TypeInfo.Set)
-        {
-            // Set iteration yields values (compile-time known)
-            _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
-        }
-        else
-        {
-            // Fallback: runtime type checking for Map/Set when compile-time
-            // type isn't available. Each arm gates on whether the corresponding
-            // $Runtime helper was emitted (null MethodBuilder ⇒ feature off).
-            var hasMapEntries = _ctx.Runtime?.Map is not null;
-            var hasSetValues = _ctx.Runtime?.Set is not null;
-            var iterableLocal = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, iterableLocal);
-
-            if (hasMapEntries || hasSetValues)
-            {
-                var afterMapSetLabel = _il.DefineLabel();
-                var checkSetLabel = _il.DefineLabel();
-                var dictionaryType = typeof(Dictionary<object, object?>);
-                var hashSetType = typeof(HashSet<object>);
-
-                if (hasMapEntries)
-                {
-                    // Check if iterable is Dictionary<object, object?> (Map)
-                    _il.Emit(OpCodes.Ldloc, iterableLocal);
-                    _il.Emit(OpCodes.Isinst, dictionaryType);
-                    _il.Emit(OpCodes.Brfalse, checkSetLabel);
-
-                    // It's a Map - call MapEntries to get List<object?>
-                    _il.Emit(OpCodes.Ldloc, iterableLocal);
-                    _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
-                    _il.Emit(OpCodes.Stloc, iterableLocal);
-                    _il.Emit(OpCodes.Br, afterMapSetLabel);
-                }
-
-                if (hasSetValues)
-                {
-                    _il.MarkLabel(checkSetLabel);
-                    _il.Emit(OpCodes.Ldloc, iterableLocal);
-                    _il.Emit(OpCodes.Isinst, hashSetType);
-                    _il.Emit(OpCodes.Brfalse, afterMapSetLabel);
-
-                    // It's a Set - call SetValues to get List<object?>
-                    _il.Emit(OpCodes.Ldloc, iterableLocal);
-                    _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
-                    _il.Emit(OpCodes.Stloc, iterableLocal);
-                }
-                else
-                {
-                    // Map-only: still need checkSetLabel as the Map arm's Brfalse target.
-                    _il.MarkLabel(checkSetLabel);
-                }
-
-                _il.MarkLabel(afterMapSetLabel);
-            }
-            _il.Emit(OpCodes.Ldloc, iterableLocal);
-        }
-
-        // Acquire the guest iterator from the (possibly converted) iterable once.
+        // Acquire the selected guest iterator from the original iterable once.
         EmitSynchronousForOfEnumeratorFromStack();
 
         // Store enumerator to hoisted field (need temp local for the stack swap)
