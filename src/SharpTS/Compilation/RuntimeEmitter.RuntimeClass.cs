@@ -1977,7 +1977,7 @@ public partial class RuntimeEmitter
         EmitObjectFromEntries(
             typeBuilder,
             runtime.ObjectOperations,
-            new ObjectFromEntriesInputs(runtime.Errors, runtime.Reflect.Get,
+            new ObjectFromEntriesInputs(runtime.Errors, runtime.DescriptorStorage, runtime.Reflect.Get, runtime.Reflect.ToPropertyKey,
                 GetCollectionConsumerInputs(runtime), runtime.Symbols, runtime.Sentinels.UndefinedType)
         );
         EmitObjectHasOwn(

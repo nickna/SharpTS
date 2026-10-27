@@ -59,7 +59,9 @@ public partial class RuntimeEmitter
 
     private readonly record struct ObjectFromEntriesInputs(
         EmittedErrorRuntime Errors,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder GetWithReceiver,
+        MethodBuilder ToPropertyKey,
         CollectionConsumerInputs Iteration,
         EmittedSymbolRuntime Symbols,
         Type UndefinedType
@@ -1666,8 +1668,9 @@ public partial class RuntimeEmitter
         var dictType = _types.DictionaryStringObject;
         var resultLocal = il.DeclareLocal(dictType);
         var keyValueLocal = il.DeclareLocal(_types.Object);
-        var keyLocal = il.DeclareLocal(_types.String);
+        var keyLocal = il.DeclareLocal(_types.Object);
         var valueLocal = il.DeclareLocal(_types.Object);
+        var symbolDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(dictType));
         il.Emit(OpCodes.Stloc, resultLocal);
 
@@ -1701,23 +1704,33 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Stloc, valueLocal);
 
                 il.Emit(OpCodes.Ldloc, keyValueLocal);
-                var keyNullLabel = il.DefineLabel();
-                var keyDoneLabel = il.DefineLabel();
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Brfalse, keyNullLabel);
-                il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-                il.Emit(OpCodes.Br, keyDoneLabel);
-                il.MarkLabel(keyNullLabel);
-                il.Emit(OpCodes.Pop);
-                il.Emit(OpCodes.Ldstr, "");
-                il.MarkLabel(keyDoneLabel);
+                il.Emit(OpCodes.Call, inputs.ToPropertyKey);
                 il.Emit(OpCodes.Stloc, keyLocal);
 
-                // result[key] = value
+                var stringKeyLabel = il.DefineLabel();
+                var storedLabel = il.DefineLabel();
+                il.Emit(OpCodes.Ldloc, keyLocal);
+                il.Emit(OpCodes.Isinst, inputs.Symbols.Type);
+                il.Emit(OpCodes.Brfalse, stringKeyLabel);
+                il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
+                il.Emit(OpCodes.Stloc, symbolDescriptorLocal);
+                il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+                il.Emit(OpCodes.Ldloc, valueLocal);
+                il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+                il.Emit(OpCodes.Ldloc, resultLocal);
+                il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
+                il.Emit(OpCodes.Ldloc, keyLocal);
+                il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
+                il.Emit(OpCodes.Br, storedLabel);
+
+                il.MarkLabel(stringKeyLabel);
                 il.Emit(OpCodes.Ldloc, resultLocal);
                 il.Emit(OpCodes.Ldloc, keyLocal);
+                il.Emit(OpCodes.Castclass, _types.String);
                 il.Emit(OpCodes.Ldloc, valueLocal);
                 il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "set_Item", _types.String, _types.Object));
+                il.MarkLabel(storedLabel);
 
                 il.Emit(OpCodes.Br, validEntry);
                 il.MarkLabel(throwLabel);

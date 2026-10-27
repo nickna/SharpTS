@@ -271,7 +271,7 @@ public static partial class ObjectBuiltIns
                 "Object.fromEntries requires an iterable argument"));
 
         var elements = interpreter.GetIterableElements(args[0]);
-        Dictionary<string, object?> result = [];
+        var result = new SharpTSObject([]);
 
         var iterator = elements.GetEnumerator();
         bool preserveThrow = false;
@@ -298,7 +298,9 @@ public static partial class ObjectBuiltIns
                     key = interpreter.GetPropertyValue(element, "0");
                     value = interpreter.GetPropertyValue(element, "1");
                 }
-                result[key?.ToString() ?? ""] = value;
+                var propertyKey = interpreter.ToPropertyKey(key);
+                if (propertyKey is SharpTSSymbol symbol) result.SetBySymbol(symbol, value);
+                else result.SetProperty((string)propertyKey, value);
             }
         }
         catch
@@ -314,7 +316,7 @@ public static partial class ObjectBuiltIns
                 // IteratorClose cannot replace the entry-processing throw.
             }
         }
-        return new SharpTSObject(result);
+        return result;
     }
 
     private static RuntimeValue HasOwnV2(
