@@ -78,7 +78,6 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
             case "get":
             {
                 // Reflect.get(target, propertyKey, receiver?) → value
-                var targetLocal = il.DeclareLocal(ctx.Types.Object);
                 if (arguments.Count > 0)
                 {
                     emitter.EmitExpression(arguments[0]);
@@ -86,7 +85,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                     il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Stloc, targetLocal);
+                var targetLocal = emitter.SpillStackToObjectLocal();
 
                 if (arguments.Count > 1)
                 {
@@ -96,10 +95,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                var keyLocal = il.DeclareLocal(ctx.Types.Object);
-                il.Emit(OpCodes.Stloc, keyLocal);
-                il.Emit(OpCodes.Ldloc, targetLocal);
-                il.Emit(OpCodes.Ldloc, keyLocal);
+                var keyLocal = emitter.SpillStackToObjectLocal();
                 if (arguments.Count > 2)
                 {
                     emitter.EmitExpression(arguments[2]);
@@ -109,6 +105,10 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldloc, targetLocal);
                 }
+                var receiverLocal = emitter.SpillStackToObjectLocal();
+                il.Emit(OpCodes.Ldloc, targetLocal);
+                il.Emit(OpCodes.Ldloc, keyLocal);
+                il.Emit(OpCodes.Ldloc, receiverLocal);
                 il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.Get);
                 return true;
             }
