@@ -523,6 +523,20 @@ public class ClosureAnalyzer : AstVisitorBase
                             _captureSources[expression] = classSources = [];
                         classSources[name] = definingFunc;
                     }
+                    // Creating this evaluated class needs the same enclosing
+                    // binding even when only one of its initializers reads it.
+                    foreach (var frame in _functionStack)
+                    {
+                        if (ReferenceEquals(frame, definingFunc)) break;
+                        if (frame == null || !enclosingFunctions.Contains(frame)) continue;
+                        _captures[frame].Add(name);
+                        if (definingFunc != null)
+                        {
+                            if (!_captureSources.TryGetValue(frame, out var relaySources))
+                                _captureSources[frame] = relaySources = [];
+                            relaySources[name] = definingFunc;
+                        }
+                    }
                 }
             if (definingFunc != null)
             {
@@ -643,6 +657,9 @@ public class ClosureAnalyzer : AstVisitorBase
                 break; // sync arrow / function boundary — different relay mechanism applies
             if (_captures.TryGetValue(intermediateArrow, out var caps) && caps.Add(name))
                 _allCapturedVariables.Add(name);
+            if (!_captureSources.TryGetValue(intermediateArrow, out var sources))
+                _captureSources[intermediateArrow] = sources = [];
+            sources[name] = definingFunc;
         }
     }
 
