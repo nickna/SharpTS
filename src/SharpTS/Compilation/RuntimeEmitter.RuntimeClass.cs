@@ -988,10 +988,8 @@ public partial class RuntimeEmitter
         EmitArrayConstructor(typeBuilder, runtime);
         // InvokeValue/InvokeMethodValue must come before GetFieldsProperty (needs InvokeMethodValue for getters)
         // and before Promise methods (needed by InvokeCallback)
-        // Pre-declare ArrayLikeMaterialize's MethodBuilder so InvokeMethodValue
-        // can reference it for the $BoundArrayMethod receiver-rebind path.
-        // The body is filled in later (EmitArrayLikeMaterialize, line 544).
-        DeclareArrayLikeMaterialize(typeBuilder, runtime.ArrayOperations);
+        // ArrayLikeMaterialize was reserved in phase 1 for $TSFunction coercion;
+        // InvokeMethodValue also uses it for receiver rebinding.
         // Companion lazy-aware materializer + element reader for iterator
         // helpers (issue #90). Pre-declared so the iterator emitters can
         // reference them; bodies emitted after EmitGetProperty (which they
@@ -2551,10 +2549,8 @@ public partial class RuntimeEmitter
         EmitArrayLikeMaterializeForCopy(typeBuilder, runtime);
         EmitHasArrayLikeProperty(typeBuilder, runtime);
         EmitLoadArrayLikeElement(typeBuilder, runtime);
-        // RequireObjectCoercible(this) — emitted after TSError so it can
-        // construct $TypeError directly. Called from $TSFunction.CoercePrimitiveArgs
-        // via late-bound reflection.
-        EmitRequireObjectCoercibleThis(typeBuilder, runtime.ReceiverGuard,
+        // Fill the early receiver guard after TSError can construct $TypeError.
+        EmitRequireObjectCoercibleThis(runtime.ReceiverGuard,
             runtime.Sentinels.UndefinedType, runtime.Symbols.Type,
             runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         runtime.ReceiverGuard.CompleteEmission();

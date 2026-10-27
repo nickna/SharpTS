@@ -201,6 +201,11 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object]);
 
+        // $TSFunction is finalized before runtime bodies. Reserve its exact
+        // coercion callees under their existing owners so it can call directly.
+        DeclareArrayLikeMaterialize(typeBuilder, runtime.ArrayOperations);
+        DeclareRequireObjectCoercibleThis(typeBuilder, runtime.ReceiverGuard);
+
         // Reserve the full RegExp.prototype[@@split] protocol. $RegExp is
         // emitted before the runtime helpers it needs (dynamic construction,
         // generic Get/Set, and RegExpExec), so its public symbol wrapper calls

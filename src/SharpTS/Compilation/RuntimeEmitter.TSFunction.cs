@@ -11,7 +11,15 @@ public partial class RuntimeEmitter
         EmittedFunctionAttributesRuntime FunctionAttributes,
         FieldBuilder GlobalThisSingletonField,
         FieldInfo UndefinedInstance,
-        Type UndefinedType
+        Type UndefinedType,
+        TSFunctionCoercionInputs Coercion
+    );
+
+    private readonly record struct TSFunctionCoercionInputs(
+        MethodInfo ToJsString,
+        MethodInfo ToNumber,
+        MethodInfo ArrayLikeMaterialize,
+        MethodInfo RequireObjectCoercibleThis
     );
 
     /// <summary>
@@ -623,7 +631,7 @@ public partial class RuntimeEmitter
         // Used for borrowed prototype methods like
         // `Number.prototype.split = String.prototype.split; new Number(x).split(...)`
         // where the wrapped helper expects (string, ...) but receives a non-string `this`.
-        var coercePrimitivesMethod = EmitTSFunctionCoercePrimitivesHelper(typeBuilder, inputs.UndefinedType);
+        var coercePrimitivesMethod = EmitTSFunctionCoercePrimitivesHelper(typeBuilder, inputs.UndefinedType, inputs.Coercion);
 
         void EmitConvertArguments(ILGenerator il, LocalBuilder args)
         {
@@ -2450,32 +2458,12 @@ public partial class RuntimeEmitter
     /// Pattern: <c>Number.prototype.split = String.prototype.split; new
     /// Number(100).split(1, 1)</c> — the wrapped StringSplit helper takes
     /// (string, string, ...) but receives a $Object boxed-Number receiver.
-    /// Iterates parameters and calls <c>$Runtime.ToJsString</c> via late-bound
-    /// reflection on args[i] when paramType == typeof(string) and args[i] is
-    /// not already a string. Late-bound because $TSFunction is finalized
-    /// before $Runtime, so the MethodBuilder reference isn't available at IL
-    /// emit time. Caches the resolved MethodInfo in a static field.
+    /// Calls the exact early-declared runtime coercion helpers without reflective
+    /// discovery, invocation wrappers, or per-argument temporary arrays.
     /// </summary>
-    private MethodBuilder EmitTSFunctionCoercePrimitivesHelper(TypeBuilder typeBuilder, Type undefinedType)
+    private MethodBuilder EmitTSFunctionCoercePrimitivesHelper(TypeBuilder typeBuilder, Type undefinedType,
+        TSFunctionCoercionInputs inputs)
     {
-        // Static cache fields for resolved $Runtime helpers.
-        var toJsStringCacheField = typeBuilder.DefineField(
-            "_toJsStringCache",
-            _types.MethodInfo,
-            FieldAttributes.Private | FieldAttributes.Static);
-        var toNumberCacheField = typeBuilder.DefineField(
-            "_toNumberCache",
-            _types.MethodInfo,
-            FieldAttributes.Private | FieldAttributes.Static);
-        var arrayLikeMaterializeCacheField = typeBuilder.DefineField(
-            "_arrayLikeMaterializeCache",
-            _types.MethodInfo,
-            FieldAttributes.Private | FieldAttributes.Static);
-        var requireObjectCoercibleThisCacheField = typeBuilder.DefineField(
-            "_requireObjectCoercibleThisCache",
-            _types.MethodInfo,
-            FieldAttributes.Private | FieldAttributes.Static);
-
         var method = typeBuilder.DefineMethod(
             "CoercePrimitiveArgs",
             MethodAttributes.Private | MethodAttributes.Static,
@@ -2492,11 +2480,6 @@ public partial class RuntimeEmitter
         var doubleTypeLocal = il.DeclareLocal(_types.Type);
         var int32TypeLocal = il.DeclareLocal(_types.Type);
         var listTypeLocal = il.DeclareLocal(_types.Type);
-        var toJsStringLocal = il.DeclareLocal(_types.MethodInfo);
-        var toNumberLocal = il.DeclareLocal(_types.MethodInfo);
-        var arrayLikeMaterializeLocal = il.DeclareLocal(_types.MethodInfo);
-        var requireObjectCoercibleThisLocal = il.DeclareLocal(_types.MethodInfo);
-        var oneArgLocal = il.DeclareLocal(_types.ObjectArray);
 
         // Reuse immutable signature metadata captured at wrapper construction.
         il.Emit(OpCodes.Ldarg_0);
@@ -2527,54 +2510,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Stloc, int32TypeLocal);
 
-        // Local helper: resolve a $Runtime static method by name into a cache field.
-        // Stack-in/out: nothing; stores resolved MethodInfo in `localOut`.
-        void ResolveRuntimeMethod(string methodName, FieldBuilder cacheField, LocalBuilder localOut)
-        {
-            il.Emit(OpCodes.Ldsfld, cacheField);
-            il.Emit(OpCodes.Stloc, localOut);
-            var have = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, localOut);
-            il.Emit(OpCodes.Brtrue, have);
-            il.Emit(OpCodes.Ldtoken, typeBuilder);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
-            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Assembly")!.GetGetMethod()!);
-            il.Emit(OpCodes.Ldstr, "$Runtime");
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Assembly, "GetType", [_types.String])!);
-            il.Emit(OpCodes.Ldstr, methodName);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", [_types.String])!);
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Stsfld, cacheField);
-            il.Emit(OpCodes.Stloc, localOut);
-            il.MarkLabel(have);
-        }
-        ResolveRuntimeMethod("ToJsString", toJsStringCacheField, toJsStringLocal);
-        ResolveRuntimeMethod("ToNumber", toNumberCacheField, toNumberLocal);
-        ResolveRuntimeMethod("ArrayLikeMaterialize", arrayLikeMaterializeCacheField, arrayLikeMaterializeLocal);
-        ResolveRuntimeMethod("RequireObjectCoercibleThis", requireObjectCoercibleThisCacheField, requireObjectCoercibleThisLocal);
-
-        // If any resolution failed, bail. Each branch checks its own resolved
-        // method again before invoking, so the bail-on-any approach is
-        // conservative — a failed ArrayLikeMaterialize lookup shouldn't block
-        // the string/double coercion paths. But all three are defined on $Runtime
-        // unconditionally, so in practice all resolve.
-        var bail = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, toJsStringLocal);
-        il.Emit(OpCodes.Brfalse, bail);
-        il.Emit(OpCodes.Ldloc, toNumberLocal);
-        il.Emit(OpCodes.Brfalse, bail);
-        il.Emit(OpCodes.Ldloc, arrayLikeMaterializeLocal);
-        il.Emit(OpCodes.Brfalse, bail);
-        il.Emit(OpCodes.Ldloc, requireObjectCoercibleThisLocal);
-        il.Emit(OpCodes.Brfalse, bail);
-
         // ECMA-262 RequireObjectCoercible(this) for String.prototype helpers
         // and Array.prototype helpers whose `this` slot the wire layer names
         // "__this". String helpers always pass through the guard because it
         // also rejects Symbol receivers before ToString. Array helpers invoke
         // it only for null/undefined because other primitives are valid
-        // ToObject receivers. Late-bound to avoid forward-referencing
-        // TSTypeErrorCtor from TSFunction's IL (TSError is emitted later).
+        // ToObject receivers. The early-declared guard body owns guest errors.
         // Closes ~50 String.prototype/* and Array.prototype/* tests in the
         // `this-value-not-obj-coercible.js` / `this-is-{null,undefined}-throws`
         // / `return-abrupt-from-this.js` clusters.
@@ -2627,31 +2568,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipNullishThisCheckLabel);
 
         il.MarkLabel(invokeHelperLabel);
-        // requireObjectCoercibleThis.Invoke(null, new object[] { args[0] }) — throws.
-        // The reflection invoke wraps the helper's TypeError in a
-        // TargetInvocationException; unwrap and rethrow the InnerException so
-        // the JS-level catch sees the original $TypeError (with __tsValue
-        // intact and `e.constructor === TypeError` holding correctly).
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Stloc, oneArgLocal);
-        il.BeginExceptionBlock();
-        il.Emit(OpCodes.Ldloc, requireObjectCoercibleThisLocal);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldloc, oneArgLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", [_types.Object, _types.ObjectArray])!);
+        il.Emit(OpCodes.Call, inputs.RequireObjectCoercibleThis);
         il.Emit(OpCodes.Pop);
-        il.BeginCatchBlock(_types.TargetInvocationException);
-        // Rethrow inner exception so JS catch sees the original error shape.
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "InnerException").GetGetMethod()!);
-        il.Emit(OpCodes.Throw);
-        il.EndExceptionBlock();
         il.MarkLabel(skipNullishThisCheckLabel);
 
         // i = 0
@@ -2713,24 +2634,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, continueLbl);
 
-        // oneArg = new object[1] { args[i] }
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
+        // args[i] = ToJsString(args[i]).
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Stloc, oneArgLocal);
-
-        // args[i] = (string) toJsString.Invoke(null, oneArg)
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldloc, toJsStringLocal);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldloc, oneArgLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", [_types.Object, _types.ObjectArray])!);
+        il.Emit(OpCodes.Call, inputs.ToJsString);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Br, continueLbl);
 
@@ -2758,30 +2668,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brtrue, continueLbl);
 
-        // oneArg = new object[1] { args[i] }
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
+        // args[i] = boxed ToNumber(args[i]).
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Stloc, oneArgLocal);
-
-        // args[i] = (double) toNumber.Invoke(null, oneArg)
-        // toNumber.Invoke returns object boxing a double already, so just store it.
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldloc, toNumberLocal);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldloc, oneArgLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", [_types.Object, _types.ObjectArray])!);
+        il.Emit(OpCodes.Call, inputs.ToNumber);
+        il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Br, continueLbl);
 
         // Int32 branch — helpers like StringSlice take an int argCount param.
-        // Coerce via ToNumber, then unbox + Conv_I4 + box Int32. Bool/double/
+        // Coerce via ToNumber, then Conv_I4 + box Int32. Bool/double/
         // string args all flow through ECMA-262 ToInteger.
         il.MarkLabel(int32Branch);
 
@@ -2806,25 +2705,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Int32);
         il.Emit(OpCodes.Brtrue, continueLbl);
 
-        // oneArg = new object[1] { args[i] }
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
+        // args[i] = boxed (int)ToNumber(args[i]).
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Stloc, oneArgLocal);
-
-        // d = (double) toNumber.Invoke(null, oneArg); args[i] = (Int32)(int)d (boxed).
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldloc, toNumberLocal);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldloc, oneArgLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", [_types.Object, _types.ObjectArray])!);
-        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Call, inputs.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Box, _types.Int32);
         il.Emit(OpCodes.Stelem_Ref);
@@ -2850,24 +2737,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, continueLbl);
 
-        // oneArg = new object[1] { args[i] }
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
+        // args[i] = ArrayLikeMaterialize(args[i]).
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Stloc, oneArgLocal);
-
-        // args[i] = (List<object>) arrayLikeMaterialize.Invoke(null, oneArg)
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldloc, arrayLikeMaterializeLocal);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldloc, oneArgLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", [_types.Object, _types.ObjectArray])!);
+        il.Emit(OpCodes.Call, inputs.ArrayLikeMaterialize);
         il.Emit(OpCodes.Stelem_Ref);
 
         il.MarkLabel(continueLbl);
@@ -2882,7 +2758,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, countLocal);
         il.Emit(OpCodes.Blt, loopBody);
 
-        il.MarkLabel(bail);
         il.Emit(OpCodes.Ret);
         return method;
     }

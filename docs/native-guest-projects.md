@@ -142,6 +142,10 @@ point, not an accepted warning baseline.
 
 Feature guards for unused class-owner generic closure reduced the basic guest
 inventory to 89 diagnostics (IL2055: 0, IL3050: 1). Strict publish still fails.
+Replacing reflection lookup of four known coercion helpers with direct calls
+reduced the same measurement to 81 diagnostics, removing all four IL2026 and
+four corresponding IL2075 diagnostics from that helper. The measured sequence
+is 101, then 89, then 81; the remaining diagnostics still fail strict publish.
 Separate diagnostic publishes retaining all warnings executed the ConsoleClear,
 generic-symbol and core-language probes correctly; a statically resolved BCL
 `RuntimeFeature.IsDynamicCodeSupported` probe returned `false` from the produced

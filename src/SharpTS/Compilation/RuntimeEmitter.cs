@@ -235,7 +235,10 @@ public partial class RuntimeEmitter
                 runtime.FunctionAttributes,
                 runtime.GlobalObject.SingletonField,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                new TSFunctionCoercionInputs(runtime.StringCoercion.ToJsString,
+                    runtime.NumericCoercion.ToNumber, runtime.ArrayOperations.Materialize,
+                    runtime.ReceiverGuard.RequireObjectCoercibleThis)
             )
         );
         runtime.FunctionValues.CompleteEmission();

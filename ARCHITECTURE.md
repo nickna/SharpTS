@@ -682,18 +682,20 @@ primitive prototype hooks and borrowed receivers) are retained separately;
 preserving them establishes refactor parity, not passing language conformance.
 Shared reflection metadata and local builders remain in the full ownership audit.
 
-Required `ReceiverGuard` owns the receiver-validation helper. Its emitter takes
-the destination type, owner, undefined and Symbol types, exception wrapper and
-TypeError constructor. Completion follows the original helper emission point.
+Required `ReceiverGuard` owns the receiver-validation helper. Its declaration
+receives the destination type and owner during the early runtime phase; body
+emission takes the owner, undefined and Symbol types, exception wrapper and
+TypeError constructor. Completion follows the original body emission point.
 Missing/null/duplicate declarations are rejected, failed completion can be
 repaired, and completed metadata is frozen. The helper preserves receiver
-identity and the original null, undefined and Symbol errors, signature,
-instructions and declaration order. `$TSFunction` continues resolving the helper
-by name in its own emitted assembly, with a fresh cache for each emitted type.
+identity and the original null, undefined and Symbol errors and signature.
+`$TSFunction` receives this exact method handle together with ToJsString,
+ToNumber and ArrayLikeMaterialize through scoped coercion inputs. These calls
+use early declarations owned by their existing families; no helper-name
+reflection lookup, invocation wrapper or coercion method cache is emitted.
 Tests cover these contracts, borrowed and bound methods, primitive conversion,
 custom conversion hooks, standalone execution and hosted declarations. Shared
-reflection metadata, local builders and the reflection cache remain in the full
-ownership audit.
+reflection metadata and local builders remain in the full ownership audit.
 
 Required `Enums` owns the enum reverse-lookup declaration. Its emitter receives
 only the destination type and owner; completion follows the original helper
