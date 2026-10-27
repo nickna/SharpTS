@@ -2446,7 +2446,10 @@ public static partial class ObjectBuiltIns
                 return true;
 
             case SharpTSInstance instance:
-                return ReferenceEquals(PrototypeOf(interpreter, instance), proto);
+                if (ReferenceEquals(PrototypeOf(interpreter, instance), proto)) return true;
+                if (!instance.IsExtensible || WouldCreatePrototypeCycle(interpreter, instance, proto)) return false;
+                instance.SetExplicitPrototype(proto);
+                return true;
 
             case SharpTSClassPrototype classPrototype:
                 if (ReferenceEquals(PrototypeOf(interpreter, classPrototype), proto)) return true;

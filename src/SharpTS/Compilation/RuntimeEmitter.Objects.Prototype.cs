@@ -1331,36 +1331,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullCheckDoneLabel);
 
-        // Check if object is a class instance (IHasFields but not $Object) - throw TypeError
-        var notClassInstanceLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
-        il.Emit(OpCodes.Brfalse, notClassInstanceLabel);
-        if (inputs.Records.Scalars is not null)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, inputs.Records.MarkerInterface);
-            il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
-        }
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
-        il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
-        // Array subclass instances retain their exotic storage while their
-        // ordinary prototype can change.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
-        il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
-        // A declaration's stable prototype uses the same CLR carrier as its
-        // instances, but has an ordinary mutable internal prototype of its own.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
-        il.Emit(OpCodes.Call, inputs.ClassPrototypes.Get);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Beq, notClassInstanceLabel);
-        // It's a class instance - throw TypeError
-        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot set prototype of class instance");
-        il.MarkLabel(notClassInstanceLabel);
-
         // Check if object is extensible - if not, throw TypeError
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.ObjectState.IsExtensible);
