@@ -127,7 +127,7 @@ public partial class ILEmitter
         }
 
         // 7. ILEmitter-specific: class expression constructor
-        if (_ctx.VarToClassExpr != null &&
+        if (n.Callee is Expr.Variable && _ctx.VarToClassExpr != null &&
             _ctx.VarToClassExpr.TryGetValue(className, out var classExpr) &&
             _ctx.ClassExprConstructors != null &&
             _ctx.ClassExprConstructors.TryGetValue(classExpr, out var classExprCtor))
