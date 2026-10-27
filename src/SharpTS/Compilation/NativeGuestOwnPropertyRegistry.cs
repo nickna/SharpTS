@@ -11,6 +11,7 @@ internal sealed class NativeGuestOwnPropertyRegistry(
     internal bool DeclarationsComplete { get; private set; }
     internal bool IsComplete { get; private set; }
     internal int Count => _implementations.Count;
+    internal bool ContainsOwner(TypeBuilder owner) => _implementations.ContainsKey(owner);
 
     internal void Register(TypeBuilder owner, MethodBuilder descriptor, MethodBuilder keys, MethodBuilder prototype)
     {
@@ -52,6 +53,19 @@ internal sealed class NativeGuestOwnPropertyRegistry(
             owner.DefineMethodOverride(thunk, slot);
             methods.Add(thunk);
         }
+        var accepts = owner.DefineMethod("$IGuestOwnProperties.IsOwnPropertyReceiver",
+            MethodAttributes.Private | MethodAttributes.Virtual | MethodAttributes.Final
+                | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            runtime.IsReceiver.ReturnType, Type.EmptyTypes);
+        var acceptsIL = accepts.GetILGenerator();
+        acceptsIL.Emit(OpCodes.Ldarg_0);
+        acceptsIL.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        Type self = owner.IsGenericTypeDefinition ? EmitGenerics.MakeGenericType(owner, owner.GetGenericArguments()) : owner;
+        acceptsIL.Emit(OpCodes.Ldtoken, self);
+        acceptsIL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+        acceptsIL.Emit(OpCodes.Ceq); acceptsIL.Emit(OpCodes.Ret);
+        owner.DefineMethodOverride(accepts, runtime.IsReceiver);
+        methods.Add(accepts);
         _implementations.Add(owner, methods.ToArray());
     }
 

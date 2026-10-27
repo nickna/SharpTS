@@ -7,16 +7,18 @@ namespace SharpTS.Compilation;
 public sealed class EmittedGuestOwnPropertyRuntime
 {
     internal EmittedGuestOwnPropertyRuntime(Type contract, MethodInfo descriptor, MethodInfo keys, MethodInfo prototype,
-        Type descriptorType, Type objectType, Type listType, TypeBuilder stateType, TypeBuilder operationsType,
+        MethodInfo isReceiver, Type descriptorType, Type objectType, Type listType, Type booleanType, TypeBuilder stateType, TypeBuilder operationsType,
         IReadOnlyDictionary<string, MethodBuilder> operations, FieldInfo stateOrder, MethodInfo getState)
     {
         ArgumentNullException.ThrowIfNull(contract);
         ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(keys);
         ArgumentNullException.ThrowIfNull(prototype);
+        ArgumentNullException.ThrowIfNull(isReceiver);
         ArgumentNullException.ThrowIfNull(operations);
         if (!contract.IsInterface || contract.IsGenericType || !Matches(descriptor, descriptorType, [objectType])
             || !Matches(keys, listType, []) || !Matches(prototype, objectType, [])
+            || !Matches(isReceiver, booleanType, [])
             || stateType.Module.ModuleVersionId != contract.Module.ModuleVersionId
             || operationsType.Module.ModuleVersionId != contract.Module.ModuleVersionId
             || stateOrder.DeclaringType != stateType || getState.DeclaringType != operationsType
@@ -27,6 +29,7 @@ public sealed class EmittedGuestOwnPropertyRuntime
         GetOwnDescriptor = descriptor;
         OwnPropertyKeys = keys;
         InitialPrototype = prototype;
+        IsReceiver = isReceiver;
         DescriptorType = descriptorType;
         ObjectType = objectType;
         ListType = listType;
@@ -47,6 +50,7 @@ public sealed class EmittedGuestOwnPropertyRuntime
     public MethodInfo GetOwnDescriptor { get; }
     public MethodInfo OwnPropertyKeys { get; }
     public MethodInfo InitialPrototype { get; }
+    public MethodInfo IsReceiver { get; }
     public Type DescriptorType { get; }
     internal Type ObjectType { get; }
     internal Type ListType { get; }

@@ -29,7 +29,8 @@ public partial class RuntimeEmitter
     private readonly record struct DefinePropertySymbolReceiverInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
-        EmittedSymbolRuntime Symbols
+        EmittedSymbolRuntime Symbols,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct DefinePropertyProxyReceiverInputs(
@@ -67,7 +68,8 @@ public partial class RuntimeEmitter
         FieldInfo UndefinedInstance,
         Type UndefinedType,
         Type FunctionPrototypeType,
-        FunctionOwnPrototypeInputs OwnPrototype
+        FunctionOwnPrototypeInputs OwnPrototype,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct DefinePropertyArrayLengthCoercionInputs(
@@ -146,7 +148,8 @@ public partial class RuntimeEmitter
         EmittedFunctionBindingRuntime FunctionBindings,
         FieldInfo UndefinedInstance,
         Type UndefinedType,
-        FunctionOwnPrototypeInputs OwnPrototype
+        FunctionOwnPrototypeInputs OwnPrototype,
+        GuestOwnQueryInputs? GuestOwnProperties = null
     );
 
     private readonly record struct SymbolKeyDescriptorLookupInputs(
@@ -495,6 +498,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
+        EmitGuestOwnMutation(il, inputs.GuestOwnProperties, false, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1));
         // Return the target object
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
@@ -656,7 +660,7 @@ public partial class RuntimeEmitter
 
         EmitDefinePropertySymbolReceiver(
             il,
-            new DefinePropertySymbolReceiverInputs(inputs.DescriptorStorage, inputs.Errors, inputs.Symbols),
+            new DefinePropertySymbolReceiverInputs(inputs.DescriptorStorage, inputs.Errors, inputs.Symbols, inputs.GuestOwnProperties),
             method,
             descriptorLocal
         );
@@ -1654,6 +1658,7 @@ public partial class RuntimeEmitter
             il,
             new GetOwnDescriptorProxyReceiverInputs(inputs.ProxyDescriptor, inputs.UndefinedInstance)
         );
+        EmitGuestOwnDescriptorQuery(il, inputs.GuestOwnProperties, descriptorLocal, hasDescriptorLabel, returnNullLabel);
 
         // ECMA-262 §7.3.5 + §19.1.2.4: when the property key is a Symbol,
         // look it up in the per-object symbol dict (same one that handles

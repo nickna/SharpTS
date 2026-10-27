@@ -15,7 +15,8 @@ public partial class RuntimeEmitter
         ProxyDescriptorCallInputs ProxyDescriptor,
         ProxyOwnKeysCallInputs ProxyOwnKeys,
         EmittedSymbolRuntime Symbols,
-        Type UndefinedType
+        Type UndefinedType,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct ObjectCreateInputs(
@@ -56,7 +57,8 @@ public partial class RuntimeEmitter
         EmittedRegExpRuntime RegExps,
         EmittedStringRuntime Strings,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct ObjectSetPrototypeOfInputs(
@@ -487,6 +489,7 @@ public partial class RuntimeEmitter
         objectKeys.Symbols = method;
 
         var il = method.GetILGenerator();
+        EmitGuestOwnKeyQuery(il, inputs.GuestOwnProperties, symbolsOnly: true);
 
         // ECMA-262 §20.1.2.11 step 1: Let obj be ? ToObject(O). ToObject throws
         // TypeError on null/undefined.
@@ -700,6 +703,13 @@ public partial class RuntimeEmitter
         var tryGetValue = _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue");
         il.Emit(OpCodes.Callvirt, tryGetValue!);
         il.Emit(OpCodes.Brtrue, foundInLocalLabel);
+        if (inputs.GuestOwnProperties is { } own)
+        {
+            var legacy = EmitGuestOwnReceiverGuard(il, own, () => il.Emit(OpCodes.Ldarg_0));
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Castclass, own.Contract);
+            il.Emit(OpCodes.Callvirt, own.InitialPrototype); il.Emit(OpCodes.Ret);
+            il.MarkLabel(legacy);
+        }
 
         // The compact JSON scalar carrier implements IHasFields for ordinary
         // object operations, but it is not a user class instance. Its default

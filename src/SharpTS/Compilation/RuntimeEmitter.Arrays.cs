@@ -31,7 +31,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype,
-        MethodInfo IsBuiltinDeleted
+        MethodInfo IsBuiltinDeleted,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct GetOwnPropertyNamesInputs(
@@ -51,7 +52,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype,
-        MethodInfo IsBuiltinDeleted
+        MethodInfo IsBuiltinDeleted,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     /// <summary>
@@ -321,6 +323,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         // number[] unboxing: materialize a numeric-mode $Array before enumerating it as an object.
         EmitDeoptArgIfNumericArrayStorage(il, inputs.ArrayStorage, 0);
+        EmitGuestOwnKeyQuery(il, inputs.GuestOwnProperties, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         var dictType = _types.DictionaryStringObject;
         var listType = _types.ListOfObject;
 
@@ -1086,6 +1089,7 @@ public partial class RuntimeEmitter
         objectKeys.Names = method;
 
         var il = method.GetILGenerator();
+        EmitGuestOwnKeyQuery(il, inputs.GuestOwnProperties);
 
         var dictLabel = il.DefineLabel();
         var listLabel = il.DefineLabel();

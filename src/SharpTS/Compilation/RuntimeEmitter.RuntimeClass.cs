@@ -265,6 +265,9 @@ public partial class RuntimeEmitter
             runtime.ArrayOperations.PrototypeField,
             runtime.Promise
         );
+        if (runtime.GuestOwnProperties != null)
+            EmitGuestRegisteredPrototypeLookup(typeBuilder, runtime.ClassPrototypes, classPrototypeCacheField,
+                runtime.ObjectPrototypes.Prototype);
 
         EmitCancellationCheck(typeBuilder, runtime.Cancellation);
         EmitCancellationExceptionFactory(typeBuilder, runtime.Cancellation);
@@ -879,6 +882,9 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Object]);
         DeclareObjectGetOwnPropertyDescriptor(typeBuilder, runtime.ObjectDescriptors);
+        if (runtime.GuestOwnProperties != null)
+            runtime.Reflect.ToPropertyKey = typeBuilder.DefineMethod("ToPropertyKey", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.Object]);
         EmitHasOwnPropertyHelper(
             typeBuilder,
             runtime.ObjectOwnProperties,
@@ -907,7 +913,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.FunctionBindings,
                 runtime.Sentinels.UndefinedType,
-                new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind)
+                new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
+                runtime.GuestOwnProperties == null ? null : new GuestOwnQueryInputs(runtime.GuestOwnProperties, runtime.Reflect.ToPropertyKey)
             )
         );
         // propertyIsEnumerable shares HasOwn's plumbing (PDS lookup + dict
@@ -925,7 +932,8 @@ public partial class RuntimeEmitter
                 runtime.RegExps,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                runtime.GuestOwnProperties == null ? null : new GuestOwnQueryInputs(runtime.GuestOwnProperties, runtime.Reflect.ToPropertyKey)
             )
         );
         // Shell ObjectGetPrototypeOf early so IsPrototypeOfHelper can call it
@@ -1002,7 +1010,7 @@ public partial class RuntimeEmitter
         // their normalization path consumes arbitrary iterables. Reserve the
         // method token now and fill its body in EmitIteratorMethodsAdvanced.
         DeclareIterateToList(typeBuilder, runtime.IteratorCollection, runtime.Symbols.Type);
-        runtime.Reflect.ToPropertyKey = typeBuilder.DefineMethod(
+        if (runtime.GuestOwnProperties == null) runtime.Reflect.ToPropertyKey = typeBuilder.DefineMethod(
             "ToPropertyKey",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -1468,7 +1476,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.Records,
                 runtime.FunctionValues.Type,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                runtime.GuestOwnProperties
             )
         );
         EmitDeletePropertyStrict(
@@ -1492,7 +1501,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectStorage,
                 runtime.Records,
                 runtime.FunctionValues.Type,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                runtime.GuestOwnProperties
             )
         );
         EmitMergeIntoTSObject(
@@ -1575,7 +1585,8 @@ public partial class RuntimeEmitter
                 runtime.Booleans,
                 runtime.Numbers,
                 runtime.BigInt,
-                runtime.Reflect.ToPropertyKey
+                runtime.Reflect.ToPropertyKey,
+                runtime.GuestOwnProperties
             )
         );
         // Apply wrappers were finalized earlier against the forward declaration;
@@ -1652,7 +1663,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.TypedArrays,
                 runtime.Reflect.ToPropertyKey,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                runtime.GuestOwnProperties, runtime.ObjectWrite.Property
             )
         );
         EmitSetIndexStrict(
@@ -1693,7 +1705,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.Reflect.ToPropertyKey,
                 new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
-                    runtime.ObjectDescriptors, runtime.ObjectState)
+                    runtime.ObjectDescriptors, runtime.ObjectState),
+                runtime.GuestOwnProperties
             )
         );
         EmitDeleteIndexStrict(
@@ -1712,7 +1725,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.Reflect.ToPropertyKey,
                 new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
-                    runtime.ObjectDescriptors, runtime.ObjectState)
+                    runtime.ObjectDescriptors, runtime.ObjectState),
+                runtime.GuestOwnProperties
             )
         );
         EmitStrictModeHelpers(typeBuilder, runtime.Operators, runtime.Errors);
@@ -1820,7 +1834,8 @@ public partial class RuntimeEmitter
                 runtime.Symbols,
                 runtime.Sentinels.UndefinedType,
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
-                runtime.ObjectState.IsBuiltinDeleted
+                runtime.ObjectState.IsBuiltinDeleted,
+                runtime.GuestOwnProperties
             )
         );
         // Object.assign consumes both halves of [[OwnPropertyKeys]], so make
@@ -1848,7 +1863,8 @@ public partial class RuntimeEmitter
                     runtime.ReflectedMethods.InvokeUnwrapped
                 ),
                 runtime.Symbols,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                runtime.GuestOwnProperties
             )
         );
         EmitProxyOwnKeysHelperBodies(
@@ -1886,7 +1902,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
-                runtime.ObjectState.IsBuiltinDeleted
+                runtime.ObjectState.IsBuiltinDeleted,
+                runtime.GuestOwnProperties
             )
         );
         EmitForInKeys(typeBuilder, new ForInInputs(runtime.ObjectKeys, runtime.ObjectPrototypes,
@@ -2068,7 +2085,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Sentinels.UndefinedType,
                 runtime.FunctionPrototypes.Type,
-                new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind)
+                new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
+                runtime.GuestOwnProperties
             )
         );
         // Declare the Math adapters before the later singleton population installs
@@ -2117,7 +2135,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionBindings,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Sentinels.UndefinedType,
-                new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind)
+                new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
+                runtime.GuestOwnProperties == null ? null : new GuestOwnQueryInputs(runtime.GuestOwnProperties, runtime.Reflect.ToPropertyKey)
             )
         );
         EmitObjectDefineProperties(
@@ -2235,7 +2254,8 @@ public partial class RuntimeEmitter
                 runtime.RegExps,
                 runtime.Strings,
                 runtime.FunctionValues.Type,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                runtime.GuestOwnProperties
             ),
             prototypeStoreField
         );

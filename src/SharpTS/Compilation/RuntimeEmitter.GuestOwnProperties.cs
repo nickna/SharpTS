@@ -5,6 +5,19 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitGuestRegisteredPrototypeLookup(TypeBuilder host, EmittedClassPrototypeRuntime prototypes,
+        FieldBuilder cache, FieldInfo objectPrototype)
+    {
+        var method = host.DefineMethod("LookupRegisteredClassPrototype", MethodAttributes.Assembly | MethodAttributes.Static,
+            _types.Object, [_types.Type]);
+        prototypes.DeclareRegisteredLookup(method);
+        var il = method.GetILGenerator(); var result = il.DeclareLocal(_types.Object); var found = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, cache); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloca, result);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(cache.FieldType, "TryGetValue", _types.Type, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brtrue, found); il.Emit(OpCodes.Ldsfld, objectPrototype); il.Emit(OpCodes.Ret);
+        il.MarkLabel(found); il.Emit(OpCodes.Ldloc, result); il.Emit(OpCodes.Ret);
+    }
+
     /// <summary>Declares an opt-in source contract and a weak ledger. No existing object operation is rerouted.</summary>
     private EmittedGuestOwnPropertyRuntime DeclareGuestOwnProperties(ModuleBuilder module, Type descriptorType, Type symbolType)
     {
@@ -16,6 +29,7 @@ public partial class RuntimeEmitter
         var descriptor = Slot("GetOwnDescriptor", descriptorType, _types.Object);
         var keys = Slot("OwnPropertyKeys", _types.ListOfObject);
         var prototype = Slot("InitialPrototype", _types.Object);
+        var isReceiver = Slot("IsOwnPropertyReceiver", _types.Boolean);
         contract.CreateType();
 
         var state = EmitTypeDefinitions.DefineType(module, "$GuestOwnState", TypeAttributes.NotPublic | TypeAttributes.Sealed, _types.Object);
@@ -117,7 +131,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, activeState); il.Emit(OpCodes.Ldfld, active); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldloca, identity);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue", _types.Object, _types.Object.MakeByRefType())); il.Emit(OpCodes.Pop);
         il.MarkLabel(activeDone); il.Emit(OpCodes.Ldloc, identity); il.Emit(OpCodes.Ret);
-        return new(contract, descriptor, keys, prototype, descriptorType, _types.Object, _types.ListOfObject,
+        return new(contract, descriptor, keys, prototype, isReceiver, descriptorType, _types.Object, _types.ListOfObject, _types.Boolean,
             state, operations, declarations, order, getState);
     }
 

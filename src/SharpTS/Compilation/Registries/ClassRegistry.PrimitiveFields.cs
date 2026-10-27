@@ -59,6 +59,7 @@ public sealed partial class ClassRegistry
 
     public bool CanUseNativePrimitiveField(PrimitiveGuestField field)
     {
+        if (NativeOwnProperties?.ContainsOwner(field.DeclaringType) == true) return false;
         foreach (var owner in _builders.Values.Concat(_guestFieldOwners.Values).Distinct<TypeBuilder>(ReferenceEqualityComparer.Instance))
         {
             if (ReferenceEquals(owner, field.DeclaringType)) continue;

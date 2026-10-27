@@ -25,7 +25,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         EmittedFunctionBindingRuntime FunctionBindings,
         Type UndefinedType,
-        FunctionOwnPrototypeInputs OwnPrototype
+        FunctionOwnPrototypeInputs OwnPrototype,
+        GuestOwnQueryInputs? GuestOwnProperties = null
     );
 
     private readonly record struct PropertyIsEnumerableHelperInputs(
@@ -38,7 +39,8 @@ public partial class RuntimeEmitter
         EmittedRegExpRuntime RegExps,
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        GuestOwnQueryInputs? GuestOwnProperties = null
     );
 
     /// <summary>
@@ -124,6 +126,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Br, trueLabel);
         il.MarkLabel(notProxyLabel);
+        EmitGuestOwnPresenceQuery(il, inputs.GuestOwnProperties);
 
         // ECMA-262 §20.1.3.2 step 1: Let P be ? ToPropertyKey(V). For Symbol,
         // ToPropertyKey returns the symbol itself — NOT a string. Symbol keys
@@ -706,6 +709,7 @@ public partial class RuntimeEmitter
         method.DefineParameter(2, ParameterAttributes.None, "name");
 
         var il = method.GetILGenerator();
+        EmitGuestOwnPresenceQuery(il, inputs.GuestOwnProperties, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         var nameLocal = il.DeclareLocal(_types.String);
         var descLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         var falseLabel = il.DefineLabel();

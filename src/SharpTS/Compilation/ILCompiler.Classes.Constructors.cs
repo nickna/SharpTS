@@ -298,7 +298,10 @@ public partial class ILCompiler
         // The base constructor owns allocation. Install newTarget's prototype
         // before either instance fields or the guest constructor body can read it.
         if (classStmt.SuperclassExpr == null)
+        {
             EmitConstructedClassPrototype(ctx);
+            EmitNativeOwnPrototypeCapture(ctx);
+        }
 
         if (constructor?.Body?.Any(ContainsSuperCall) != true)
         {
@@ -384,6 +387,22 @@ public partial class ILCompiler
 
         void EmitOrderedFieldInitializersCore()
         {
+            Label? nativeDone = null;
+            if (_nativeOwnAdapters.ContainsKey(typeBuilder))
+            {
+                var legacy = EmitNativeOwnReceiverGuard(il); nativeDone = il.DefineLabel();
+                ctx.FieldsField = fieldsField;
+                ctx.IsInstanceMethod = true;
+                var previousReceiver = ctx.ClassConstructorReceiver;
+                ctx.ClassConstructorReceiver = il.DeclareLocal(_types.Object);
+                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver);
+                EmitEffectiveClassElements(ctx, classStmt.Fields,
+                    _typedInterop.PropertyBackingFields.GetValueOrDefault(className),
+                    _typedInterop.PropertyTypes.GetValueOrDefault(className),
+                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)));
+                ctx.ClassConstructorReceiver = previousReceiver;
+                il.Emit(OpCodes.Br, nativeDone.Value); il.MarkLabel(legacy);
+            }
             EmitUninitializedParameterProperties(il, typeBuilder, constructor);
             // Note: Declare fields are excluded - they have no initialization
             var instanceFieldsWithInit = classStmt.Fields.Where(f =>
@@ -490,7 +509,7 @@ public partial class ILCompiler
                     }
                 }
             }
-
+            if (nativeDone is { } done) il.MarkLabel(done);
         }
     }
 

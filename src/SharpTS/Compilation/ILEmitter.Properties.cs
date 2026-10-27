@@ -2505,6 +2505,9 @@ public partial class ILEmitter
         var getterBuilder = _ctx.ResolveInstanceGetter(className, pascalPropertyName);
         if (getterBuilder == null)
             return false;
+        if (_ctx.Classes.TryGetValue(className, out var nativeOwnReadOwner)
+            && _ctx.ClassRegistry?.NativeOwnProperties?.ContainsOwner(nativeOwnReadOwner) == true)
+            return false;
 
         if (_ctx.ClassRegistry!.TryGetPrimitiveGuestField(className, propertyName, out var guestField))
         {
@@ -2629,6 +2632,9 @@ public partial class ILEmitter
         // Look up the setter in the class hierarchy
         var setterBuilder = _ctx.ResolveInstanceSetter(className, pascalPropertyName);
         if (setterBuilder == null)
+            return false;
+        if (_ctx.Classes.TryGetValue(className, out var nativeOwnWriteOwner)
+            && _ctx.ClassRegistry?.NativeOwnProperties?.ContainsOwner(nativeOwnWriteOwner) == true)
             return false;
 
         if (_ctx.ClassRegistry!.TryGetPrimitiveGuestField(className, propertyName, out var guestField))

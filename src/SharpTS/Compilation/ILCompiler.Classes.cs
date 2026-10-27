@@ -289,6 +289,16 @@ public partial class ILCompiler
         EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.ObjectFields.Interface);
 
         string className = qualifiedClassName;
+        if (_runtime.GuestOwnProperties != null && classStmt.SuperclassExpr == null && !classStmt.IsAbstract
+            && !_repeatingClassDeclarations.Contains(classStmt) && !_runtimeClassDeclarations.ContainsKey(classStmt)
+            && !(classStmt.AutoAccessors?.Any(accessor => !accessor.IsStatic) ?? false)
+            && !classStmt.Fields.Any(field => !field.IsStatic && !field.IsPrivate && field.ComputedKey != null)
+            && !classStmt.Fields.Where(field => !field.IsStatic && !field.IsPrivate && !field.IsDeclare)
+                .GroupBy(field => NamingConventions.ToPascalCase(field.Name.Lexeme), StringComparer.Ordinal)
+                .Any(group => group.Skip(1).Any())
+            && !classStmt.Methods.Any(method => method.Name.Lexeme == "constructor"
+                && method.Parameters.Any(parameter => parameter.IsParameterProperty)))
+            _nativeOwnSourceDeclarations.Add(typeBuilder, classStmt);
 
         // Initialize property tracking dictionaries for this class
         _typedInterop.PropertyBackingFields[className] = [];
@@ -430,6 +440,8 @@ public partial class ILCompiler
         // Define $IHasFields interface method stubs
         // Bodies are emitted later in EmitHasFieldsInterfaceMethodBodies after method definitions are available
         DefineHasFieldsInterfaceMethods(typeBuilder, className, fieldsField);
+        if (_nativeOwnSourceDeclarations.ContainsKey(typeBuilder))
+            DefineNativeOwnPropertyAdapter(typeBuilder, className);
 
         // ES2022 Private Class Elements: Define storage for private fields and methods
         DefinePrivateClassElements(typeBuilder, className, classStmt, classGenericParams);

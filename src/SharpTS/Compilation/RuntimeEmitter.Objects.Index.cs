@@ -33,7 +33,9 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         EmittedTypedArrayRuntime TypedArrays,
         MethodInfo ToPropertyKey,
-        Type UndefinedType
+        Type UndefinedType,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        MethodInfo? GuestOwnSetProperty = null
     );
 
     private readonly record struct GetIndexInputs(
@@ -70,7 +72,8 @@ public partial class RuntimeEmitter
         EmittedBooleanRuntime Booleans,
         EmittedNumberRuntime Numbers,
         EmittedBigIntRuntime BigInt,
-        MethodInfo ToPropertyKey
+        MethodInfo ToPropertyKey,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct RegExpSymbolDispatchInputs(
@@ -91,7 +94,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         MethodInfo ToPropertyKey,
-        ProxyDeleteCheckInputs ProxyDelete
+        ProxyDeleteCheckInputs ProxyDelete,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct DeleteIndexCoreInputs(
@@ -106,7 +110,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         MethodInfo ToPropertyKey,
-        ProxyDeleteCheckInputs ProxyDelete
+        ProxyDeleteCheckInputs ProxyDelete,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct DeleteIndexStrictInputs(
@@ -121,7 +126,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         MethodInfo ToPropertyKey,
-        ProxyDeleteCheckInputs ProxyDelete
+        ProxyDeleteCheckInputs ProxyDelete,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private void EmitGetIndex(TypeBuilder typeBuilder, EmittedObjectReadRuntime objectRead, GetIndexInputs inputs)
@@ -166,6 +172,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notProxyLabel);
 
+        EmitGuestOwnNamedIndex(il, inputs.GuestOwnProperties, objectRead.Property, write: false);
         // Check if index is a symbol first (symbols work on any object type)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
@@ -1394,6 +1401,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
+        EmitGuestOwnNamedIndex(il, inputs.GuestOwnProperties, inputs.GuestOwnSetProperty, write: true);
+
         // A missing indexed own property may resolve to an inherited Proxy.
         // OrdinarySet must invoke that proxy's [[Set]] with the original
         // receiver before any carrier-specific direct store below.
@@ -2138,6 +2147,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item"));
+        EmitGuestOwnMutation(il, inputs.GuestOwnProperties, false, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(symCreateLabel);
@@ -2161,6 +2171,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, newSymbolDescriptorLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.DictionaryObjectObject, "set_Item"));
+        EmitGuestOwnMutation(il, inputs.GuestOwnProperties, false, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ret);
     }
 
@@ -2350,7 +2361,8 @@ public partial class RuntimeEmitter
                 inputs.Symbols,
                 inputs.TSFunctionType,
                 inputs.ToPropertyKey,
-                inputs.ProxyDelete
+                inputs.ProxyDelete,
+                inputs.GuestOwnProperties
             ),
             strict: false
         );
@@ -2797,6 +2809,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Blt, compactLoop);
         il.MarkLabel(symbolDeleteDone);
+        EmitGuestOwnMutation(il, inputs.GuestOwnProperties, true, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
@@ -2949,7 +2962,8 @@ public partial class RuntimeEmitter
                 inputs.Symbols,
                 inputs.TSFunctionType,
                 inputs.ToPropertyKey,
-                inputs.ProxyDelete
+                inputs.ProxyDelete,
+                inputs.GuestOwnProperties
             ),
             strict: true
         );

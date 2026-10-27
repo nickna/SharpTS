@@ -746,8 +746,10 @@ public partial class ILCompiler
     /// </summary>
     private void Phase1_EmitRuntimeTypes()
     {
-        _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput) { EntryModulePath = _entryModulePath }
+        _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput,
+            _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true)) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything());
+        if (_runtime.GuestOwnProperties is { } own) GetClassRegistry().BeginNativeOwnProperties(own);
         _typeMapper.SetRuntime(_runtime);
     }
 
@@ -1180,6 +1182,7 @@ public partial class ILCompiler
     /// </summary>
     private void Phase9_FinalizeTypes()
     {
+        GetClassRegistry().NativeOwnProperties?.CompleteDeclarations(_nativeOwnSourceDeclarations.Keys);
         _classes.GenericParameters.CompleteEmission(_classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
         _functions.GenericParameters.CompleteEmission();
@@ -1231,6 +1234,7 @@ public partial class ILCompiler
         _hostedRuntimeType?.CreateType();
         _hostedFactoryType?.CreateType();
         _runtime.JsonShapes.CompleteEmission();
+        GetClassRegistry().NativeOwnProperties?.CompleteEmission();
         _runtime.Deployment.CompleteEmission();
     }
 
@@ -1825,6 +1829,7 @@ public partial class ILCompiler
     /// </summary>
     private void ModulePhase11_FinalizeTypes()
     {
+        GetClassRegistry().NativeOwnProperties?.CompleteDeclarations(_nativeOwnSourceDeclarations.Keys);
         _classes.GenericParameters.CompleteEmission(_classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
         _functions.GenericParameters.CompleteEmission();
@@ -1880,6 +1885,7 @@ public partial class ILCompiler
         _hostedRuntimeType?.CreateType();
         _hostedFactoryType?.CreateType();
         _runtime.JsonShapes.CompleteEmission();
+        GetClassRegistry().NativeOwnProperties?.CompleteEmission();
         _runtime.Deployment.CompleteEmission();
     }
 

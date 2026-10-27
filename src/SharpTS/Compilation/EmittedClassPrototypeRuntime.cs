@@ -8,6 +8,9 @@ public sealed class EmittedClassPrototypeRuntime
 {
     internal EmittedClassPrototypeRuntime() { }
     public bool IsComplete { get; private set; }
+    private MethodBuilder? _lookupRegistered;
+    internal MethodBuilder? LookupRegistered => _lookupRegistered;
+    internal void DeclareRegisteredLookup(MethodBuilder method) => SetHandle(ref _lookupRegistered, method);
 
     private Type? _markerType;
     public Type MarkerType

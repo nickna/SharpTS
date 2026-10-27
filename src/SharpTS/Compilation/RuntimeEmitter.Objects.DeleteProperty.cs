@@ -26,7 +26,8 @@ public partial class RuntimeEmitter
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedRecordStorageRuntime Records,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct DeletePropertyCoreInputs(
@@ -47,7 +48,8 @@ public partial class RuntimeEmitter
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedRecordStorageRuntime Records,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct DeletePropertyStrictInputs(
@@ -68,7 +70,8 @@ public partial class RuntimeEmitter
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedRecordStorageRuntime Records,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     /// <summary>
@@ -105,7 +108,8 @@ public partial class RuntimeEmitter
                 inputs.ObjectStorage,
                 inputs.Records,
                 inputs.TSFunctionType,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                inputs.GuestOwnProperties
             ),
             strict: false
         );
@@ -1240,6 +1244,7 @@ public partial class RuntimeEmitter
 
         // Return true (default for null and other types)
         il.MarkLabel(trueLabel);
+        EmitGuestOwnMutation(il, inputs.GuestOwnProperties, true, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
@@ -1273,7 +1278,8 @@ public partial class RuntimeEmitter
                 inputs.ObjectStorage,
                 inputs.Records,
                 inputs.TSFunctionType,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                inputs.GuestOwnProperties
             ),
             strict: true
         );

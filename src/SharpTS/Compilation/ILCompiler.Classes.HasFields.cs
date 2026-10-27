@@ -435,6 +435,14 @@ public partial class ILCompiler
     private void EmitHasPropertyBodyCore(MethodBuilder method, Dictionary<string, FieldBuilder>? backingFields, FieldInfo fieldsField)
     {
         var il = method.GetILGenerator();
+        if (_nativeOwnAdapters.TryGetValue((TypeBuilder)method.DeclaringType!, out var own))
+        {
+            var legacy = EmitNativeOwnReceiverGuard(il);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(own.Read));
+            il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Cgt_Un); il.Emit(OpCodes.Ret);
+            il.MarkLabel(legacy);
+        }
         var returnTrueLabel = il.DefineLabel();
         var noFieldsLabel = il.DefineLabel();
         var dynamicFieldsLabel = il.DefineLabel();
@@ -564,6 +572,12 @@ public partial class ILCompiler
         FieldInfo fieldsField)
     {
         var il = method.GetILGenerator();
+        if (_nativeOwnAdapters.ContainsKey((TypeBuilder)method.DeclaringType!))
+        {
+            var legacy = EmitNativeOwnReceiverGuard(il);
+            EmitNativeOwnPropertyRead(method, (TypeBuilder)method.DeclaringType!);
+            il.MarkLabel(legacy);
+        }
         EmitClassPrototypeReadBranch(il);
         var valueLocal = il.DeclareLocal(_types.Object);
         var fieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -763,6 +777,12 @@ public partial class ILCompiler
         MethodInfo ensureFields)
     {
         var il = method.GetILGenerator();
+        if (_nativeOwnAdapters.ContainsKey((TypeBuilder)method.DeclaringType!))
+        {
+            var legacy = EmitNativeOwnReceiverGuard(il);
+            EmitNativeOwnPropertyWrite(method, className, ensureFields);
+            il.MarkLabel(legacy);
+        }
         EmitClassPrototypeWriteBranch(il);
         var setFieldsLabel = il.DefineLabel();
         EmitDictionaryGuestFieldBranches(il, (TypeBuilder)method.DeclaringType!, write: true);

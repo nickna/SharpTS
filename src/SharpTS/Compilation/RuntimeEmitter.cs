@@ -323,10 +323,11 @@ public partial class RuntimeEmitter
         // $Array: array length truncation must remove indexed descriptors as
         // well as dense/sparse storage. The descriptor store itself depends
         // only on helper types emitted above.
-        EmitPropertyDescriptorTypes(moduleBuilder, runtime.DescriptorStorage,
+        var guestOwnProperties = EmitPropertyDescriptorTypes(moduleBuilder, runtime.DescriptorStorage,
             new DescriptorKeyInputs(runtime.FunctionValues.Type, runtime.FunctionValues.GetMethodInfo,
                 runtime.FunctionValues.PropertyIdentityField, runtime.ObjectKeys.ForgetConstructorKey),
-            runtime.Sentinels.UndefinedType);
+            runtime.Sentinels.UndefinedType, _emitNativeOwnProperties ? runtime.Symbols.Type : null);
+        if (guestOwnProperties != null) runtime.BeginGuestOwnPropertiesEmission(guestOwnProperties);
 
         // Emit $Array class for standalone array support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSArray
@@ -336,9 +337,6 @@ public partial class RuntimeEmitter
         // Must come before $Object which implements it
         EmitHasFieldsInterface(moduleBuilder, runtime.ObjectFields);
         runtime.ObjectFields.CompleteEmission();
-        if (_emitNativeOwnProperties)
-            runtime.BeginGuestOwnPropertiesEmission(DeclareGuestOwnProperties(moduleBuilder,
-                runtime.DescriptorStorage.DescriptorType, runtime.Symbols.Type));
         EmitCompactObjectRecordInterface(moduleBuilder, runtime.Records);
         DefineClassDefinitionTypes(moduleBuilder, runtime.ClassDefinitions, runtime.NativeCallables);
 
