@@ -205,7 +205,13 @@ public partial class ILCompiler
             }
         }
         if (!autoAccessor.IsStatic)
+        {
             DefineReceiverAutoAccessor(typeBuilder, autoAccessor, backingField);
+            if (_classExprs.Names.ContainsValue(className))
+                DefineStaticAutoAccessorValue(typeBuilder, autoAccessor, backingField);
+        }
+        else
+            DefineStaticAutoAccessorValue(typeBuilder, autoAccessor, backingField);
     }
 
     /// <summary>

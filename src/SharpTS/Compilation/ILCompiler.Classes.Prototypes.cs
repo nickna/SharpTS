@@ -285,14 +285,22 @@ public partial class ILCompiler
             var staticMembers = nominalDeclaration.Methods
                 .Where(method => method.IsStatic && !method.IsPrivate && method.Body != null && method.ComputedKey == null)
                 .Cast<Stmt>().Concat((nominalDeclaration.Accessors ?? []).Where(accessor => accessor.IsStatic))
-                .OrderBy(member => member is Stmt.Function method ? method.Name.SourceOrderOffset
-                    : ((Stmt.Accessor)member).Name.SourceOrderOffset);
+                .Concat((nominalDeclaration.AutoAccessors ?? []).Where(accessor => accessor.IsStatic))
+                .OrderBy(member => member switch
+                {
+                    Stmt.Function method => method.Name.SourceOrderOffset,
+                    Stmt.Accessor accessor => accessor.Name.SourceOrderOffset,
+                    Stmt.AutoAccessor accessor => accessor.Name.SourceOrderOffset,
+                    _ => 0
+                });
             foreach (var member in staticMembers)
             {
                 if (member is Stmt.Function method && staticMethods?.TryGetValue(method.Name.Lexeme, out var builder) == true)
                     EmitStaticDataDescriptor(method.Name.Lexeme, builder);
                 else if (member is Stmt.Accessor accessor)
                     EmitKnownDeclaredAccessorDescriptors(il, typeBuilder, staticOnly: true, selected: accessor);
+                else if (member is Stmt.AutoAccessor autoAccessor)
+                    EmitStaticAutoAccessorDescriptor(il, typeBuilder, autoAccessor);
             }
         }
         else if (staticMethods != null)
