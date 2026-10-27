@@ -1084,6 +1084,7 @@ public partial class RuntimeEmitter
         // Local for result list
         var namesLocal = il.DeclareLocal(_types.ListOfObject);
         var iLocal = il.DeclareLocal(_types.Int32);
+        var appendStoredNames = il.DefineLabel();
 
         // ECMA-262 §20.1.2.10 step 1: Let O be ? ToObject(obj). ToObject throws
         // TypeError for null/undefined. Tests 15.2.3.4-1-{1,2,3} verify each.
@@ -1402,8 +1403,7 @@ public partial class RuntimeEmitter
         AddOwnName("seal");
         AddOwnName("setPrototypeOf");
         AddOwnName("values");
-        il.Emit(OpCodes.Ldloc, namesLocal);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Br, appendStoredNames);
         il.MarkLabel(notObjectTypeLabel);
 
         // IList<object> Type → JS Array constructor own static names.
@@ -1419,8 +1419,7 @@ public partial class RuntimeEmitter
         AddOwnName("fromAsync");
         AddOwnName("isArray");
         AddOwnName("of");
-        il.Emit(OpCodes.Ldloc, namesLocal);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Br, appendStoredNames);
         il.MarkLabel(notArrayTypeForNamesLabel);
 
         // System.Double Type → JS Number constructor own static names.
@@ -1446,8 +1445,7 @@ public partial class RuntimeEmitter
         AddOwnName("isSafeInteger");
         AddOwnName("parseFloat");
         AddOwnName("parseInt");
-        il.Emit(OpCodes.Ldloc, namesLocal);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Br, appendStoredNames);
         il.MarkLabel(notNumberTypeForNamesLabel);
 
         // RegExp instances are created with an own non-enumerable lastIndex
@@ -1586,6 +1584,7 @@ public partial class RuntimeEmitter
         // earlier. Receiver is arg0; pass the fieldsDict as the "already in"
         // set when present (null when not $IHasFields, so PDS-only props
         // surface).
+        il.MarkLabel(appendStoredNames);
         var objPdsExtraNamesLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fieldsDictLocal);
