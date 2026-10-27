@@ -2589,6 +2589,7 @@ public partial class RuntimeEmitter
         // helpers above. Must come AFTER all the Array* MethodBuilders are
         // defined.
         EmitArrayPrototypePopulate(typeBuilder, runtime);
+        EmitArgumentsInitializer(runtime);
         // Object.prototype populate body — uses HasOwnPropertyHelper +
         // IsPrototypeOfHelper which are emitted before GetFunctionMethod above.
         EmitObjectPrototypePopulate(
@@ -2600,7 +2601,6 @@ public partial class RuntimeEmitter
                 runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.ObjectOwnProperties.LookupGetter,
                 runtime.ObjectOwnProperties.LookupSetter,
-        EmitArgumentsInitializer(runtime);
                 runtime.ObjectOwnProperties.IsEnumerable,
                 new PrototypeDescriptorInputs(
                     runtime.DescriptorStorage.DescriptorConstructor,
