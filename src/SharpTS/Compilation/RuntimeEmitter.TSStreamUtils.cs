@@ -78,6 +78,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             _types.Object,
             [_types.ObjectArray]);
+        runtime.NativeCallables?.Register(typeBuilder, runtime.RequireNodeStreams().FinishedCleanupInvokeMethod);
         {
             var il = runtime.RequireNodeStreams().FinishedCleanupInvokeMethod.GetILGenerator();
 

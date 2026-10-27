@@ -5,7 +5,8 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void DefineClassDefinitionTypes(ModuleBuilder module, EmittedClassDefinitionRuntime definitions)
+    private void DefineClassDefinitionTypes(ModuleBuilder module, EmittedClassDefinitionRuntime definitions,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         var contract = module.DefineType("$IClassDefinitionInstance",
             TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract);
@@ -35,6 +36,7 @@ public partial class RuntimeEmitter
         var read = type.DefineMethod("ReadProperty", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [type, _types.String]);
         var invoke = type.DefineMethod("Invoke", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
+        nativeCallables?.Register(type, invoke);
         TypeBuilder? captureType = null;
         FieldBuilder? captureOwner = null, captureField = null;
         ConstructorBuilder? captureConstructor = null;

@@ -129,15 +129,20 @@ stepping/sequence-point support contract.
 ## Callable catalog foundation
 
 Native-project emission adds a generated `$INativeCallable.Invoke(object[])`
-contract to the ordinary function, bound-function, call/apply/bind and method
-wrapper carriers. Private forwarding methods call their exact existing invocation
+contract to all 24 generated runtime carriers with the `object Invoke(object[])`
+ABI: function and method wrappers, collection methods, Promise callbacks, text
+decoder, metadata and stream callbacks, and crypto method wrappers. This includes
+the callable Function prototype and the class-definition body's existing
+call-without-`new` rejection. Private forwarding methods call their exact existing invocation
 bodies. The original methods, receiver handling and function identities remain
 the source of behavior. Interface dispatch also works for generic carrier
 instances without enumerating open generic `Type` tokens. Ordinary managed
 output does not emit this contract.
 
-The method wrapper probes this contract before its existing CLR reflection
-bridge. That bridge is deliberately retained: a BCL-returned opaque CLR value
+The method wrapper probes this contract and the exact `Func<object[], object>`
+delegate ABI before its existing CLR reflection bridge. Covariant results use
+the same CLR delegate contract; other delegate signatures keep the bridge. That
+bridge is deliberately retained: a BCL-returned opaque CLR value
 cannot yet be proved to belong to a finite invocation catalog. A subsequent
 closed-world admission pass must either prove that provenance or reject the
 specific CLR boundary before output. Guest `any`, computed and Symbol property
@@ -148,6 +153,51 @@ The strict `console.log(42)` publish measurement remains at 81 diagnostics with
 the same inventory as before the callable contract. Remaining work includes the
 opaque callable bridge and signatures, property/shape metadata, class/Symbol
 initialization and runtime-eval reachability.
+
+### CLR provenance boundary
+
+External-reference absence does not prove a closed guest. Known BCL interop can
+still produce an opaque CLR value. For example, this preparation-stage export
+currently succeeds, and its managed facade prints `-1`:
+
+```typescript
+import { StringComparer } from 'dotnet:System.StringComparer';
+const owner: any = StringComparer.ordinal;
+const key: string = 'Compare';
+console.log(owner[key]('a', 'b'));
+```
+
+The selected property getter is known during compilation, but `any` storage
+erases the result's CLR origin before the computed member call. This is valid
+guest code; rejecting all `any` or computed operations would be incorrect.
+Removing its reflection fallback without an admission diagnostic would also
+drop existing behavior. The current exporter therefore retains the fallback and
+does not claim this preparation profile is warning-free.
+
+A future closed profile needs producer-to-use provenance at these boundaries:
+
+| Producer | Information available at emission | Required closure |
+|---|---|---|
+| CLR constructors and class values | Exact selected constructor or external type | Preserve the closed type through aliases and escapes. |
+| CLR property and field reads | Selected member and declared result type | Classify primitive results directly; retain possible CLR owners for other values. |
+| CLR method results, including arrays and ref/out tuples | Selected method and each result/element type | Track nested values as well as the outer guest container. |
+| Managed `IMemberProvider.GetMember` bridges | Runtime bridge family | Admit only catalogued bridge results; do not infer safety from import spelling. |
+| Reflection APIs and erased `Delegate` results | A declared CLR API result, possibly without the actual target type/signature | Diagnose unbounded dynamic provenance before output unless an exact target catalog is proved. |
+
+Origins must survive assignments, parameters/returns, closures and container
+storage, joining across branches. Typed direct BCL calls and primitive results
+can keep their existing direct IL. A dynamic use of a proven CLR owner can
+request an exact generated member/virtual-call thunk; an unbounded owner needs
+a source-boundary diagnostic. Ordinary guest objects, `any`, computed names
+and Symbol keys remain governed by guest semantics.
+
+The callable interface itself does not prove this admission rule. Nor does its
+single erased invocation entry replace the receiver-sensitive collection and
+call/apply/bind paths. Those paths retain their existing dispatch. Source
+generic functions also retain `$ErasedSourceInvokerTarget`: a later producer
+change can carry an exact closed invocation thunk separately from the original
+method identity, but must preserve receiver, omitted-argument padding, rest,
+name/length and alias identity before removing runtime `MakeGenericMethod`.
 
 ## Warning policy and remaining work
 

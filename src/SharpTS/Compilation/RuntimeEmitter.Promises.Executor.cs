@@ -1571,6 +1571,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [typeof(object[])]
         );
+        runtime.NativeCallables?.Register(typeBuilder, invokeMethod);
         {
             var il = invokeMethod.GetILGenerator();
             var alreadySettledLabel = il.DefineLabel();
@@ -1811,6 +1812,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [typeof(object[])]
         );
+        runtime.NativeCallables?.Register(typeBuilder, invokeMethod);
         {
             var il = invokeMethod.GetILGenerator();
             var alreadySettledLabel = il.DefineLabel();

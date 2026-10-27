@@ -36,5 +36,23 @@ public partial class RuntimeEmitter
         EmitNormalizeClrNumericReturn(il);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(miss);
+
+        // This exact delegate ABI is already emitted by CreateBoundMethod and
+        // accepted by InvokeValue. Other Delegate signatures retain the CLR
+        // bridge: DynamicInvoke would require signature provenance we do not
+        // yet have, and treating them as this delegate would change semantics.
+        var notDelegate = il.DefineLabel();
+        var callback = il.DeclareLocal(_types.FuncObjectArrayToObject);
+        loadCallable();
+        il.Emit(OpCodes.Isinst, _types.FuncObjectArrayToObject);
+        il.Emit(OpCodes.Stloc, callback);
+        il.Emit(OpCodes.Ldloc, callback);
+        il.Emit(OpCodes.Brfalse, notDelegate);
+        il.Emit(OpCodes.Ldloc, callback);
+        loadArguments();
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.FuncObjectArrayToObject, "Invoke", _types.ObjectArray));
+        EmitNormalizeClrNumericReturn(il);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notDelegate);
     }
 }

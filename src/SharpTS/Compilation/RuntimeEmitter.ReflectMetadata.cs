@@ -328,7 +328,8 @@ public partial class RuntimeEmitter
     /// Emits $ReflectMetadataDecorator: a closure class that captures (key, value)
     /// and returns a decorator function (target) => { defineMetadata(key, value, target); return target; }.
     /// </summary>
-    private void EmitReflectMetadataDecoratorClass(ModuleBuilder moduleBuilder, EmittedReflectMetadata metadata)
+    private void EmitReflectMetadataDecoratorClass(ModuleBuilder moduleBuilder, EmittedReflectMetadata metadata,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$ReflectMetadataDecorator",
@@ -370,6 +371,7 @@ public partial class RuntimeEmitter
             [_types.ObjectArray]
         );
         metadata.DecoratorInvoke = invoke;
+        nativeCallables?.Register(typeBuilder, invoke);
         {
             var il = invoke.GetILGenerator();
 

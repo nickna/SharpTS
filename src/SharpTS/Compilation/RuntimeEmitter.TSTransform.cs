@@ -62,6 +62,7 @@ public partial class RuntimeEmitter
             [_types.ObjectArray]
         );
         runtime.RequireNodeStreams().TransformDoneCallbackInvoke = invokeBuilder;
+        runtime.NativeCallables?.Register(typeBuilder, invokeBuilder);
 
         var invokeIL = invokeBuilder.GetILGenerator();
         var noDataLabel = invokeIL.DefineLabel();

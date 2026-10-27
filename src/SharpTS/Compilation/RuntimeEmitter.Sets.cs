@@ -1364,7 +1364,8 @@ public partial class RuntimeEmitter
     /// `typeof === 'function'`. Mirrors $BoundArrayMethod / $BoundMapMethod.
     /// Must be called before EmitRuntimeClass so GetSetProperty can use the constructor.
     /// </summary>
-    internal void EmitBoundSetMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedSetRuntime set)
+    internal void EmitBoundSetMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedSetRuntime set,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundSetMethod",
@@ -1405,6 +1406,7 @@ public partial class RuntimeEmitter
             [_types.ObjectArray]
         );
         set.BoundMethodInvoke = invokeBuilder;
+        nativeCallables?.Register(typeBuilder, invokeBuilder);
     }
 
     /// <summary>

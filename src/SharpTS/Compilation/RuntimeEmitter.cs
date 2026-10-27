@@ -163,7 +163,7 @@ public partial class RuntimeEmitter
 
         // Emit $Undefined singleton class first (other methods need this type)
         EmitUndefinedClass(moduleBuilder, runtime.Sentinels);
-        EmitFunctionPrototypeType(moduleBuilder, runtime.FunctionPrototypes, runtime.Sentinels.UndefinedInstance);
+        EmitFunctionPrototypeType(moduleBuilder, runtime.FunctionPrototypes, runtime.Sentinels.UndefinedInstance, runtime.NativeCallables);
         runtime.ArrayStorage.NumberQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double);
         runtime.ArrayStorage.BooleanQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Bool);
         runtime.ArrayStorage.NumberQueueWithHoles = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double, true);
@@ -330,7 +330,7 @@ public partial class RuntimeEmitter
         EmitHasFieldsInterface(moduleBuilder, runtime.ObjectFields);
         runtime.ObjectFields.CompleteEmission();
         EmitCompactObjectRecordInterface(moduleBuilder, runtime.Records);
-        DefineClassDefinitionTypes(moduleBuilder, runtime.ClassDefinitions);
+        DefineClassDefinitionTypes(moduleBuilder, runtime.ClassDefinitions, runtime.NativeCallables);
 
         // Emit $Object class for standalone object support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
@@ -509,7 +509,7 @@ public partial class RuntimeEmitter
             // $BoundTypedArrayMethod Phase 1 (#940): callable wrapper for typed-array bulk methods.
             // Needs $TypedArray defined (above); must precede EmitRuntimeClass, whose invocation
             // helpers and GetTypedArrayMember reference its type/ctor/Invoke.
-            EmitBoundTypedArrayMethodTypeDefinition(moduleBuilder, runtime.TypedArrays.RequireImplementation());
+            EmitBoundTypedArrayMethodTypeDefinition(moduleBuilder, runtime.TypedArrays.RequireImplementation(), runtime.NativeCallables);
         }
 
         // Emit stream classes for standalone stream support
@@ -553,7 +553,7 @@ public partial class RuntimeEmitter
         {
             EmitTSTextEncoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer());
             EmitTSTextDecoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer(), runtime.TypedArrays);
-            EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer(), runtime.TypedArrays);
+            EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer(), runtime.TypedArrays, runtime.NativeCallables);
         }
 
         // $StringDecoder class removed — StringDecoder migrated to
@@ -580,15 +580,15 @@ public partial class RuntimeEmitter
 
         // Emit $BoundArrayMethod type and constructor (Phase 1)
         // Must come before EmitRuntimeClass so GetListProperty can use the constructor
-        EmitBoundArrayMethodTypeDefinition(moduleBuilder, runtime.ArrayOperations);
+        EmitBoundArrayMethodTypeDefinition(moduleBuilder, runtime.ArrayOperations, runtime.NativeCallables);
 
         // Emit $BoundMapMethod / $BoundSetMethod types and constructors (Phase 1)
         // Must come before EmitRuntimeClass so GetMapProperty/GetSetProperty can use them.
         // Gated alongside the rest of Map/Set emission.
         if (runtime.Map is not null)
-            EmitBoundMapMethodTypeDefinition(moduleBuilder, runtime.RequireMap());
+            EmitBoundMapMethodTypeDefinition(moduleBuilder, runtime.RequireMap(), runtime.NativeCallables);
         if (runtime.Set is not null)
-            EmitBoundSetMethodTypeDefinition(moduleBuilder, runtime.RequireSet());
+            EmitBoundSetMethodTypeDefinition(moduleBuilder, runtime.RequireSet(), runtime.NativeCallables);
 
         // Emit $BoundAnyFunction (the partial-apply wrapper for .bind on non-$TSFunction
         // callables) and the function bind/call/apply wrappers. All reference the
@@ -914,7 +914,7 @@ public partial class RuntimeEmitter
         // External usage in ReflectStaticEmitter has a null-check fallback, so
         // skipping this is safe even if some path slips past the detector.
         if (runtime.Reflect.Metadata is not null)
-            EmitReflectMetadataDecoratorClass(moduleBuilder, runtime.Reflect.RequireMetadata());
+            EmitReflectMetadataDecoratorClass(moduleBuilder, runtime.Reflect.RequireMetadata(), runtime.NativeCallables);
 
         // Finalize $BoundArrayMethod with Invoke method (Phase 2)
         // Must come after EmitRuntimeClass (needs array methods defined)
@@ -1010,9 +1010,9 @@ public partial class RuntimeEmitter
             EmitTSSignFinalize(signConstruction!, runtime);
             EmitTSVerifyFinalize(verifyConstruction!, runtime);
             EmitTSECDHFinalize(ecdhConstruction!, runtime.RequireCrypto());
-            EmitBoundECDHMethodFinalize(boundEcdhConstruction!, runtime.RequireCrypto());
+            EmitBoundECDHMethodFinalize(boundEcdhConstruction!, runtime.RequireCrypto(), runtime.NativeCallables);
             EmitTSDHFinalize(dhConstruction!, runtime);
-            EmitBoundDHMethodFinalize(boundDhConstruction!, runtime.RequireCrypto());
+            EmitBoundDHMethodFinalize(boundDhConstruction!, runtime.RequireCrypto(), runtime.NativeCallables);
         }
 
         runtime.ArrayBuffer?.CompleteEmission();

@@ -1812,7 +1812,8 @@ public partial class RuntimeEmitter
     /// Phase 1: Define $BoundArrayMethod type, fields, and constructor.
     /// Must be called before EmitRuntimeClass so GetListProperty can use the constructor.
     /// </summary>
-    internal void EmitBoundArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedArrayOperationsRuntime arrays)
+    internal void EmitBoundArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedArrayOperationsRuntime arrays,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         // Define class: public sealed class $BoundArrayMethod
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -1860,6 +1861,7 @@ public partial class RuntimeEmitter
             [_types.ObjectArray]
         );
         arrays.BoundMethodInvoke = invokeBuilder;
+        nativeCallables?.Register(typeBuilder, invokeBuilder);
     }
 
     /// <summary>

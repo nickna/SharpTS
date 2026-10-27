@@ -14,7 +14,8 @@ public partial class RuntimeEmitter
     // helpers and GetTypedArrayMember can reference it); the Invoke body is finalized afterward.
 
     /// <summary>Phase 1: define $BoundTypedArrayMethod, its fields, ctor, and Invoke signature.</summary>
-    internal void EmitBoundTypedArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedTypedArrayImplementation arrays)
+    internal void EmitBoundTypedArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedTypedArrayImplementation arrays,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundTypedArrayMethod",
@@ -43,6 +44,7 @@ public partial class RuntimeEmitter
         var invoke = typeBuilder.DefineMethod(
             "Invoke", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
         arrays.BoundMethodInvoke = invoke;
+        nativeCallables?.Register(typeBuilder, invoke);
     }
 
     /// <summary>Phase 2: emit Invoke body and create the type. Must run after EmitRuntimeClass

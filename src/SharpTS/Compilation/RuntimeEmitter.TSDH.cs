@@ -1523,7 +1523,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Phase 2: Add Invoke method and finalize $BoundDHMethod type.
     /// </summary>
-    private void EmitBoundDHMethodFinalize(BoundDhConstruction construction, EmittedCryptoRuntime crypto)
+    private void EmitBoundDHMethodFinalize(BoundDhConstruction construction, EmittedCryptoRuntime crypto,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         var invoke = construction.TypeBuilder.DefineMethod(
             "Invoke",
@@ -1532,6 +1533,7 @@ public partial class RuntimeEmitter
             [typeof(object[])]
         );
         _ = invoke;
+        nativeCallables?.Register(construction.TypeBuilder, invoke);
 
         var il = invoke.GetILGenerator();
 

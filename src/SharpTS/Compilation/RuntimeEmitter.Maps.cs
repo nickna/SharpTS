@@ -781,7 +781,8 @@ public partial class RuntimeEmitter
     /// `typeof === 'function'`. Mirrors $BoundArrayMethod.
     /// Must be called before EmitRuntimeClass so GetMapProperty can use the constructor.
     /// </summary>
-    internal void EmitBoundMapMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedMapRuntime map)
+    internal void EmitBoundMapMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedMapRuntime map,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundMapMethod",
@@ -822,6 +823,7 @@ public partial class RuntimeEmitter
             [_types.ObjectArray]
         );
         map.BoundMethodInvoke = invokeBuilder;
+        nativeCallables?.Register(typeBuilder, invokeBuilder);
     }
 
     /// <summary>

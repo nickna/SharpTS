@@ -78,6 +78,108 @@ public sealed class NativeCallableCatalogTests
         Assert.Equal("direct", wrapped.GetType().GetMethod("Invoke")!.Invoke(wrapped, [new object[] { "direct" }]));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AllRuntimeCarrierFamiliesAreExplicitlyCataloguedOnlyForNativeOutput(bool native)
+    {
+        var builder = NewAssembly();
+        var module = builder.DefineDynamicModule("main");
+        var runtime = new RuntimeEmitter(TypeProvider.Runtime, false, native)
+            .EmitAll(module, RuntimeFeatureSet.EmitEverything());
+        Assembly saved = LoadVerified(Save(builder));
+        var names = new[]
+        {
+            "$TSFunction", "$BoundTSFunction", "$BoundAnyFunction", "$FunctionBindWrapper", "$FunctionCallWrapper",
+            "$FunctionApplyWrapper", "$FunctionPrototype", "$MethodCallable", "$ClassDefinition", "$BoundArrayMethod", "$BoundMapMethod",
+            "$BoundSetMethod", "$BoundTypedArrayMethod", "$TextDecoderDecodeMethod", "$PromiseResolveCallback",
+            "$PromiseRejectCallback", "$ReflectMetadataDecorator", "$MapTransformCallback", "$FilterTransformCallback",
+            "$StreamFinishedCleanup", "$TransformDoneCallback", "$WriteCallbackWrapper", "$BoundDHMethod", "$BoundECDHMethod"
+        };
+        var carriers = saved.GetTypes().Where(type => !type.IsInterface && type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Any(method => method.Name == "Invoke" && method.ReturnType == typeof(object) &&
+                method.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(new[] { typeof(object[]) })))
+            .OrderBy(type => type.Name, StringComparer.Ordinal).ToArray();
+        Assert.Equal(names.Order(StringComparer.Ordinal), carriers.Select(type => type.Name));
+        Type? contract = saved.GetType("$INativeCallable");
+        if (native)
+        {
+            Assert.NotNull(contract);
+            Assert.True(runtime.NativeCallables!.IsComplete);
+            Assert.Equal(names.Length, runtime.NativeCallables.CarrierCount);
+            foreach (Type carrier in carriers)
+            {
+                var implementation = Assert.Single(carrier.GetInterfaceMap(contract).TargetMethods);
+                Assert.True(implementation.IsPrivate);
+                Assert.True(implementation.IsFinal);
+                Assert.Equal("$INativeCallable.Invoke", implementation.Name);
+            }
+        }
+        else
+        {
+            Assert.Null(contract);
+            Assert.Null(runtime.NativeCallables);
+            Assert.All(carriers, carrier => Assert.Null(carrier.GetMethod("$INativeCallable.Invoke", BindingFlags.Instance | BindingFlags.NonPublic)));
+        }
+    }
+
+    [Fact]
+    public void ExactGuestDelegateUsesDirectInvokeAndOtherDelegateSignaturesKeepTheirBridge()
+    {
+        var builder = NewAssembly();
+        var module = builder.DefineDynamicModule("main");
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime);
+        var catalog = DeclareCatalog(emitter, module);
+        var reflected = new EmittedReflectedMethodRuntime();
+        emitter.EmitMethodCallableTypeDefinition(module, reflected, catalog);
+        emitter.EmitMethodCallableFinalize(reflected, catalog);
+        catalog.CompleteEmission();
+        Assembly saved = LoadVerified(Save(builder));
+        Type wrapperType = saved.GetType("$MethodCallable")!;
+        MethodInfo invoke = wrapperType.GetMethod("Invoke")!;
+        object? Call(object callable, params object[] args) => invoke.Invoke(Activator.CreateInstance(wrapperType, [callable]), [args]);
+        Func<object[], object> exact = arguments => (int)arguments[0] + 1;
+        Assert.Equal(42d, Call(exact, 41));
+        Func<object[], string> covariant = arguments => "typed:" + arguments[0];
+        Assert.Equal("typed:result", Call(covariant, "result"));
+        object? received = null;
+        Action<object[]> action = arguments => received = arguments[0];
+        Assert.Null(Call(action, "action"));
+        Assert.Equal("action", received);
+        HostDelegate other = arguments => arguments[0];
+        Assert.Equal("other signature", Call(other, "other signature"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReferenceAssemblyGuestPreservesCollectionDecoderAndPromiseCallbacks(bool native)
+    {
+        const string source = """
+            const numbers: any = [1, 2];
+            const append: any = numbers.push;
+            console.log(append.call(numbers, 3), numbers.join(','));
+            const map: any = new Map<string, number>();
+            const put: any = map.set;
+            put.call(map, 'x', 4);
+            console.log(map.get('x'));
+            const set: any = new Set<number>();
+            const add: any = set.add;
+            add.call(set, 5);
+            console.log(set.has(5));
+            const bytes: any = new Uint8Array([65]);
+            const fill: any = bytes.fill;
+            fill.call(bytes, 66);
+            const decoder: any = new TextDecoder();
+            const decode: any = decoder.decode;
+            console.log(decode.call(decoder, bytes));
+            Promise.resolve(6).then(n => console.log(n));
+            """;
+        Assembly saved = LoadVerified(Compile(source, native));
+        Assert.Equal("3 1,2,3\n4\ntrue\nB\n6\n",
+            TestHarness.RunCompiledWithTimeout(() => saved, TimeSpan.FromSeconds(20)));
+    }
+
     [Fact]
     public void UnknownHostCarrierKeepsTheExistingBridgeUntilAdmissionIsClosed()
     {
@@ -125,6 +227,7 @@ public sealed class NativeCallableCatalogTests
     }
 
     public sealed class HostCallable { public object Invoke(object[] arguments) => arguments[0]; }
+    public delegate object HostDelegate(object[] arguments);
 
     private static EmittedNativeCallableRuntime DeclareCatalog(RuntimeEmitter emitter, ModuleBuilder module)
     {
