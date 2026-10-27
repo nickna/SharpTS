@@ -8,6 +8,7 @@ public partial class RuntimeEmitter
 {
     private readonly record struct IteratorProtocolCallInputs(
         EmittedGeneratorRuntime Generators,
+        EmittedDescriptorStorageRuntime Descriptors,
         EmittedInvocationRuntime Invocation,
         EmittedObjectReadRuntime ObjectRead,
         FieldInfo UndefinedInstance
@@ -1232,6 +1233,11 @@ public partial class RuntimeEmitter
 
         var notEnumeratorLabel = il.DefineLabel();
         var returnBranchLabel = il.DefineLabel();
+        var ordinaryGeneratorMember = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.Descriptors.GetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, ordinaryGeneratorMember);
 
         // SharpTS generators implement $IGenerator. For an explicit next(v), call
         // $IGenerator.next(value) directly so the sent value reaches the suspended
@@ -1296,6 +1302,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(notGeneratorThrowLabel);
         }
 
+        il.MarkLabel(ordinaryGeneratorMember);
         // Resolve the JS-level member first. Generators and user-defined
         // iterators expose a real `next`/`return` callable here; only when the
         // receiver has NO such member (a bare BCL enumerator) do we synthesize

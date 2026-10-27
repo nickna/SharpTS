@@ -908,7 +908,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var returnMethod = il.DeclareLocal(_types.Object);
         var closeResult = il.DeclareLocal(_types.Object);
-        var lookupReturn = il.DefineLabel();
+        var lookupGuestReturn = il.DefineLabel();
         var validateResult = il.DefineLabel();
         var finishTry = il.DefineLabel();
         var done = il.DefineLabel();
@@ -918,24 +918,14 @@ public partial class RuntimeEmitter
         // IteratorClose. A small catch around the normal algorithm preserves it.
         il.BeginExceptionBlock();
 
-        // Emitted generators expose return through $IGenerator rather than an
-        // own-property dictionary. Keep that representation detail inside the
-        // shared close primitive so every iterator consumer observes the same
-        // GeneratorResumeAbrupt semantics.
+        // Generators expose mutable ordinary return properties even though
+        // their native storage also implements IEnumerator.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.Generators.Type);
-        il.Emit(OpCodes.Brfalse, lookupReturn);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, inputs.Generators.Type);
-        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, inputs.Generators.Return);
-        il.Emit(OpCodes.Stloc, closeResult);
-        il.Emit(OpCodes.Br, validateResult);
+        il.Emit(OpCodes.Brtrue, lookupGuestReturn);
 
-        il.MarkLabel(lookupReturn);
         // Internal adapters and lazy helpers forward close through IDisposable.
         // Generators above retain their guest return-result validation.
-        var lookupGuestReturn = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.IEnumerator);
         il.Emit(OpCodes.Brfalse, lookupGuestReturn);

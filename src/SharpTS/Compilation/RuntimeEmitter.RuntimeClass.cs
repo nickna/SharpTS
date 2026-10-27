@@ -1333,7 +1333,7 @@ public partial class RuntimeEmitter
         EmitIteratorProtocolCall(
             typeBuilder,
             runtime.IteratorProtocol,
-            new IteratorProtocolCallInputs(runtime.Generators, runtime.Invocation, runtime.ObjectRead, runtime.Sentinels.UndefinedInstance)
+            new IteratorProtocolCallInputs(runtime.Generators, runtime.DescriptorStorage, runtime.Invocation, runtime.ObjectRead, runtime.Sentinels.UndefinedInstance)
         );
         // GetSymbolDict / IsSymbol already emitted above (moved earlier so
         // HasOwnPropertyHelper's Symbol-key arm can call them).
