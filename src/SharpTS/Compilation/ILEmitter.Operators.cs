@@ -2489,6 +2489,7 @@ public partial class ILEmitter
 
         IL.Emit(OpCodes.Ldloc, oldValue);
         EmitExternalTypeConversion(method.GetParameters()[0].ParameterType);
+        RecordExternalSelection(method, method.ReturnType);
         IL.Emit(OpCodes.Call, method);
         BoxResultIfValueType(method.ReturnType);
         var newValue = IL.DeclareLocal(_ctx.Types.Object);
@@ -2835,6 +2836,7 @@ public partial class ILEmitter
         EmitExternalTypeConversion(parameters[0].ParameterType);
         EmitExpression(rightExpression);
         EmitExternalTypeConversion(parameters[1].ParameterType);
+        RecordExternalSelection(method, method.ReturnType);
         IL.Emit(OpCodes.Call, method);
         BoxResultIfValueType(method.ReturnType);
         var newValue = IL.DeclareLocal(_ctx.Types.Object);
@@ -2848,6 +2850,7 @@ public partial class ILEmitter
     {
         IL.Emit(OpCodes.Ldloc, oldValue);
         EmitExternalTypeConversion(method.GetParameters()[0].ParameterType);
+        RecordExternalSelection(method, method.ReturnType);
         IL.Emit(OpCodes.Call, method);
         BoxResultIfValueType(method.ReturnType);
         var newValue = IL.DeclareLocal(_ctx.Types.Object);

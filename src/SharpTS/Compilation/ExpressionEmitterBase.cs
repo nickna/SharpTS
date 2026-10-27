@@ -208,10 +208,21 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     #endregion
 
     #region Core Expression Dispatch
+    protected Expr? CurrentSourceExpression { get; private set; }
+
     /// <summary>
     /// Dispatches expression emission to the appropriate handler method.
     /// </summary>
     public virtual void EmitExpression(Expr expr)
+    {
+        if (Ctx.NativeClrAdmission is null) { EmitExpressionCore(expr); return; }
+        var previousExpression = CurrentSourceExpression;
+        CurrentSourceExpression = expr;
+        try { EmitExpressionCore(expr); }
+        finally { CurrentSourceExpression = previousExpression; }
+    }
+
+    private void EmitExpressionCore(Expr expr)
     {
         switch (expr)
         {

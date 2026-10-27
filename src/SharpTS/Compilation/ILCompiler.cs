@@ -653,8 +653,9 @@ public partial class ILCompiler
         _deadCodeInfo = deadCodeInfo;
         _isStrictMode = Parsing.DirectivePrologue.HasUseStrict(statements);
         _typeMapper.HeldClassConstructions = HeldClassConstructionInfo.Analyze(statements, typeMap, _typeMapper);
+        _nativeClrAdmission = _nativeAotProjectOutput ? NativeClrAdmission.Capture(statements, typeMap, _types) : null;
         _rawCallStorage = RawCallStorageAnalysis.Capture(statements, typeMap);
-        statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans, typeMap, _rawCallStorage.RecordRewrite);
+        statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans, typeMap, RecordSourceRewrite);
         _functionEmissionPolicy = FunctionEmissionPolicy.ForPreparedSource(statements, _nativeAotProjectOutput);
         _lexicalBindingNames = LexicalBindingNameCollector.Collect(statements);
         _features ??= new RuntimeFeatureDetector().Detect(statements, _typeMap);
@@ -1249,6 +1250,7 @@ public partial class ILCompiler
         _runtime.JsonShapes.CompleteEmission();
         GetClassRegistry().NativeOwnProperties?.CompleteEmission();
         _runtime.Deployment.CompleteEmission();
+        _nativeClrAdmission?.Complete();
     }
 
     /// <summary>
@@ -1342,6 +1344,8 @@ public partial class ILCompiler
         RegisterModuleDocuments(modules);
         _typeMapper.HeldClassConstructions = HeldClassConstructionInfo.Analyze(
             modules.SelectMany(module => module.Statements), typeMap, _typeMapper);
+        _nativeClrAdmission = _nativeAotProjectOutput
+            ? NativeClrAdmission.Capture(modules.SelectMany(module => module.Statements), typeMap, _types) : null;
         _rawCallStorage = RawCallStorageAnalysis.Capture(
             modules.SelectMany(module => module.Statements), typeMap,
             modules.Where(module => !module.IsCommonJs).Select(module => (IEnumerable<Stmt>)module.Statements));
@@ -1352,7 +1356,7 @@ public partial class ILCompiler
         // in place.
         foreach (var m in modules)
         {
-            var lifted = NestedFunctionLifter.Lift(m.Statements, m.Document?.Spans, typeMap, _rawCallStorage.RecordRewrite);
+            var lifted = NestedFunctionLifter.Lift(m.Statements, m.Document?.Spans, typeMap, RecordSourceRewrite);
             if (!ReferenceEquals(lifted, m.Statements))
             {
                 m.Statements.Clear();
@@ -1904,6 +1908,7 @@ public partial class ILCompiler
         _runtime.JsonShapes.CompleteEmission();
         GetClassRegistry().NativeOwnProperties?.CompleteEmission();
         _runtime.Deployment.CompleteEmission();
+        _nativeClrAdmission?.Complete();
     }
 
     #endregion
@@ -2041,6 +2046,7 @@ public partial class ILCompiler
 
     public CompilationArtifacts SaveArtifacts(string? pdbPath = null)
     {
+        EnsureNativeClrAdmissionComplete();
         if (_timingCollector is null)
             return BuildArtifacts(pdbPath);
 
@@ -2079,6 +2085,7 @@ public partial class ILCompiler
 
     private void SaveCore(string outputPath, string? pdbPath)
     {
+        EnsureNativeClrAdmissionComplete();
         if (EmitDebugSymbols)
             pdbPath ??= Path.ChangeExtension(outputPath, ".pdb");
 

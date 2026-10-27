@@ -62,6 +62,8 @@ public enum DiagnosticCode
     NativeGuestOutputDirectory = 403,
     /// <summary>Experimental native guest target differs from the compiler host.</summary>
     NativeGuestTargetMismatch = 404,
+    /// <summary>A CLR value escapes the bounded native typed domain.</summary>
+    NativeGuestClrEscape = 405,
 
     // Config errors (5XX)
     /// <summary>Configuration error.</summary>

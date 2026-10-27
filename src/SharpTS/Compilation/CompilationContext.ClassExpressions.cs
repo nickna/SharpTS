@@ -29,6 +29,7 @@ public partial class CompilationContext
     public Dictionary<Expr.ClassExpr, ConstructorBuilder>? ClassExprConstructors { get; set; }
     public ClassGenericParameterRegistry? ClassGenericParameters { get; set; }
     internal NativeClassInitializationEmission? NativeClassInitialization { get; set; }
+    internal NativeClrAdmission? NativeClrAdmission { get; init; }
     public Dictionary<Expr.ClassExpr, string?>? ClassExprSuperclass { get; set; }
     public Dictionary<Expr.ClassExpr, Dictionary<string, int>>? ClassExprCaptureSlots { get; set; }
     internal const string PrivateOwnerCaptureName = "'privateOwner";

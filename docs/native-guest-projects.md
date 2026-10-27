@@ -164,8 +164,8 @@ initialization and source admission.
 ### CLR provenance boundary
 
 External-reference absence does not prove a closed guest. Known BCL interop can
-still produce an opaque CLR value. For example, this preparation-stage export
-currently succeeds, and its managed facade prints `-1`:
+still produce an opaque CLR value. For example, ordinary managed output
+prints `-1`, while native project preparation now refuses it with `SHARPTS405`:
 
 ```typescript
 import { StringComparer } from 'dotnet:System.StringComparer';
@@ -178,10 +178,48 @@ The selected property getter is known during compilation, but `any` storage
 erases the result's CLR origin before the computed member call. This is valid
 guest code; rejecting all `any` or computed operations would be incorrect.
 Removing its reflection fallback without an admission diagnostic would also
-drop existing behavior. The current exporter therefore retains the fallback and
+drop existing behavior. The exporter retains the fallback and
 does not claim this preparation profile is warning-free.
 
-A future closed profile needs producer-to-use provenance at these boundaries:
+The first native admission slice captures original source expressions and checked
+binding identities before lowering. Selected CLR constructors, type values,
+properties, fields, indexers, operators and methods record their exact metadata
+and emitted conversion. It permits direct typed CLR receivers/arguments and
+simple immutable checked local bindings whose reads remain in that domain.
+Explicitly discarded results do not escape. Primitive results and arrays that
+are actually materialized entirely into safe guest values retain guest semantics.
+
+`SHARPTS405` names unsupported CLR-origin flows before native output is written:
+source returns/throws, guest heap/container writes, dynamic or `any` use, mutable
+or unresolved aliases, captures and unclassified implicit consumers. A declared
+`System.Object` result is refused without scalar proof; boxing an arbitrary CLR
+struct does not make it a guest primitive. Value-type construction is also
+refused pending the existing guest-storage boxing defect (#3051); boxed results
+from proven getters can still feed typed consumers. Missing selected-source
+context is negative evidence, rather than a guest-safety default.
+
+Reference stores through CLR setter/indexer syntax are currently unimplemented.
+This does not prove that CLR state retains no references: admitted CLR method
+arguments can be retained internally. Every later result, callback or exception
+ingress still requires classification. A separate exception-effect fixed point
+follows known checked source function bindings and immutable callable aliases,
+including guest `any` aliases. Catch bindings receiving CLR effects are refused;
+unresolved dynamic calls or implicit user-code operations are conservative
+exception effects when CLR code is present. An otherwise unrelated dynamic operation in a read catch boundary can therefore
+be refused when the compilation also contains CLR effects. Known pure source
+calls and their checked aliases retain ordinary guest catch behavior. Callback signatures are checked using
+their actual boxing/materialization convention; opaque reference, unsupported
+boxed-struct and by-ref callback slots are refused. Uncatalogued member-provider
+operations on a proven CLR origin remain unsupported. Ordinary guest objects,
+callbacks, catches, `any`, computed names and Symbol keys retain guest semantics.
+
+The proof owner stays open during source emission, then freezes before native
+serialization. Failed admission also guards `Save`, `SaveToBytes` and
+`SaveArtifacts`; normal compilation has no admission owner. No runtime reflection
+fallback is removed, and this bounded slice is not a complete closure or a
+warning-free native compatibility claim.
+
+A broader closed profile still needs producer-to-use provenance at these boundaries:
 
 | Producer | Information available at emission | Required closure |
 |---|---|---|

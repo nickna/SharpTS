@@ -81,6 +81,7 @@ public partial class ILEmitter
         var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
         var candidate = resolver.ResolveMethod(getters, arguments);
         var getter = (MethodInfo)candidate.Method;
+        RecordExternalSelection(getter, getter.ReturnType, NativeClrAdmission.Marshalling.BoxedSlot, receiver, arguments);
 
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
@@ -112,6 +113,7 @@ public partial class ILEmitter
         var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
         var candidate = resolver.ResolveMethod(setters, arguments);
         var setter = (MethodInfo)candidate.Method;
+        RecordExternalSelection(setter, typeof(void), receiver: receiver, arguments: arguments);
         var parameters = setter.GetParameters();
 
         EmitExpression(receiver);
@@ -181,6 +183,7 @@ public partial class ILEmitter
         string? hint = _ctx.TypeMapper.GetOverloadHint(externalType, methodName);
         var candidate = resolver.ResolveMethod(methods, arguments, hint);
         var method = (MethodInfo)candidate.Method;
+        RecordExternalSelection(method, method.ReturnType, receiver: receiver, arguments: arguments);
 
         // Emit receiver and prepare for member access
         EmitExpression(receiver);
@@ -237,6 +240,7 @@ public partial class ILEmitter
         var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
         var candidate = resolver.ResolveMethod(methods, allArguments);
         var method = (MethodInfo)candidate.Method;
+        RecordExternalSelection(method, method.ReturnType, receiver: receiver, arguments: allArguments);
         var byRefOutputs = EmitExternalCallArguments(
             allArguments, method, candidate);
         IL.Emit(OpCodes.Call, method);
@@ -279,6 +283,7 @@ public partial class ILEmitter
         string? hint = _ctx.TypeMapper.GetOverloadHint(externalType, "constructor");
         var candidate = resolver.ResolveConstructor(ctors, arguments, hint);
         var ctor = (ConstructorInfo)candidate.Method;
+        RecordExternalSelection(ctor, externalType, NativeClrAdmission.Marshalling.Constructed, arguments: arguments);
 
         // Emit arguments with type conversion (handles params arrays)
         EmitExternalCallArguments(arguments, ctor, candidate);
@@ -326,6 +331,7 @@ public partial class ILEmitter
         string? hint = _ctx.TypeMapper.GetOverloadHint(externalType, methodName);
         var candidate = resolver.ResolveMethod(methods, arguments, hint);
         var method = (MethodInfo)candidate.Method;
+        RecordExternalSelection(method, method.ReturnType, arguments: arguments);
 
         // Emit arguments with type conversion (handles params arrays)
         var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
@@ -497,6 +503,7 @@ public partial class ILEmitter
         MethodInfo method,
         List<(ParameterInfo Parameter, LocalBuilder Local)> byRefOutputs)
     {
+        RecordExternalSelection(method, method.ReturnType);
         if (byRefOutputs.Count == 0)
         {
             if (method.ReturnType == typeof(void))
@@ -1007,6 +1014,8 @@ public partial class ILEmitter
             ?? throw new CompileException(
                 $"Event '{eventName}' on '{externalType.FullName}' has no {(isAdd ? "add" : "remove")} accessor.");
 
+        RecordExternalSelection(accessor, typeof(void), receiver: receiver, arguments: [handlerExpr]);
+
         // Evaluate handler (tsFunction) into a local.
         var tsFuncLocal = IL.DeclareLocal(_ctx.Types.Object);
         EmitExpression(handlerExpr);
@@ -1029,6 +1038,7 @@ public partial class ILEmitter
         if (isAdd)
         {
             // Build the delegate via a per-handler-type adapter.
+            _ctx.NativeClrAdmission?.RecordCallback(handlerDelegateType);
             var adapter = _ctx.TypeMapper.DelegateAdapters.GetOrEmit(handlerDelegateType);
             var delegateLocal = IL.DeclareLocal(handlerDelegateType);
 
@@ -1267,6 +1277,7 @@ public partial class ILEmitter
     /// </remarks>
     private void EmitDelegateConversion(Type delegateType)
     {
+        _ctx.NativeClrAdmission?.RecordCallback(delegateType);
         var adapter = _ctx.TypeMapper.DelegateAdapters.GetOrEmit(delegateType);
 
         // Optional handlers must stay null; an adapter around null is a non-null

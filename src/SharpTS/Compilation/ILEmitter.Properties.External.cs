@@ -38,6 +38,7 @@ public partial class ILEmitter
             var getter = property.GetGetMethod();
             if (getter != null)
             {
+                RecordExternalSelection(getter, getter.ReturnType, NativeClrAdmission.Marshalling.BoxedSlot);
                 IL.Emit(OpCodes.Call, getter);
 
                 BoxResultIfValueType(property.PropertyType);
@@ -63,6 +64,7 @@ public partial class ILEmitter
 
         if (field != null)
         {
+            RecordExternalSelection(field, field.FieldType, field.IsLiteral ? NativeClrAdmission.Marshalling.Literal : NativeClrAdmission.Marshalling.RawBox);
             // Literal (const) fields — enum members included — have no storage slot, so
             // Ldsfld is invalid IL on them. Embed the compile-time constant instead.
             if (field.IsLiteral)
@@ -363,6 +365,7 @@ public partial class ILEmitter
                 EmitExpression(receiver);
                 EmitBoxIfNeeded(receiver);
                 PrepareReceiverForMemberAccess(externalType);
+                RecordExternalSelection(field, field.FieldType, NativeClrAdmission.Marshalling.BoxedSlot, receiver);
                 IL.Emit(OpCodes.Ldfld, field);
                 BoxResultIfValueType(field.FieldType);
                 SetStackUnknown();
@@ -382,6 +385,7 @@ public partial class ILEmitter
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
         bool isValueType = PrepareReceiverForMemberAccess(externalType);
+        RecordExternalSelection(getter, getter.ReturnType, NativeClrAdmission.Marshalling.BoxedSlot, receiver);
         IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, getter);
         BoxResultIfValueType(property.PropertyType);
         SetStackUnknown();
@@ -441,6 +445,7 @@ public partial class ILEmitter
                 var valueTemp = IL.DeclareLocal(field.FieldType);
                 IL.Emit(OpCodes.Stloc, valueTemp);
 
+                RecordExternalSelection(field, field.FieldType, NativeClrAdmission.Marshalling.RawBox, receiver, [value]);
                 IL.Emit(OpCodes.Stfld, field);
 
                 // Put value back on stack as boxed result
@@ -474,6 +479,7 @@ public partial class ILEmitter
         var propValueTemp = IL.DeclareLocal(property.PropertyType);
         IL.Emit(OpCodes.Stloc, propValueTemp);
 
+        RecordExternalSelection(setter, property.PropertyType, NativeClrAdmission.Marshalling.RawBox, receiver, [value]);
         IL.Emit(OpCodes.Callvirt, setter);
 
         // Put value back on stack as boxed result

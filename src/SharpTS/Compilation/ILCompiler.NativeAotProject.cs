@@ -6,6 +6,7 @@ namespace SharpTS.Compilation;
 public partial class ILCompiler
 {
     private bool _nativeAotProjectOutput;
+    private NativeClrAdmission? _nativeClrAdmission;
     private TypeBuilder? _nativeAotEntryFacade;
     private NativeClassInitializationEmission? _nativeClassInitialization;
     private FunctionEmissionPolicy _functionEmissionPolicy = FunctionEmissionPolicy.Full;
@@ -23,6 +24,19 @@ public partial class ILCompiler
         if (_outputTarget != OutputTarget.Dll || _hosted)
             throw new InvalidOperationException("Native guest projects require ordinary DLL output without the hosted ABI.");
         _nativeAotProjectOutput = true;
+    }
+
+    private void EnsureNativeClrAdmissionComplete()
+    {
+        if (!_nativeAotProjectOutput) return;
+        (_nativeClrAdmission ?? throw new InvalidOperationException("Native CLR admission has not started source emission."))
+            .ThrowIfIncompatible();
+    }
+
+    private void RecordSourceRewrite(object source, object target)
+    {
+        _rawCallStorage!.RecordRewrite(source, target);
+        _nativeClrAdmission?.RecordRewrite(source, target);
     }
 
     private void EmitNativeAotEntryFacade()
