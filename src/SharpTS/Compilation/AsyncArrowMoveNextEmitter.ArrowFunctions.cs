@@ -84,6 +84,7 @@ public partial class AsyncArrowMoveNextEmitter
         // Populate captured fields from async arrow state machine context
         foreach (var (capturedVar, field) in fieldMap)
         {
+            var captureSource = PivotCaptureSource(_analysis.BlockScopeCaptureRenames, af, capturedVar);
             _il.Emit(OpCodes.Dup); // Keep display class instance on stack
 
             // Per-iteration cell capture (#650): snapshot the StrongBox REFERENCE, not its
@@ -92,11 +93,11 @@ public partial class AsyncArrowMoveNextEmitter
             else if (capturedVar == CompilationContext.NewTargetCaptureName) EmitNewTargetValue();
             else if (capturedVar == CompilationContext.SuperOwnerCaptureName && TryEmitOwnedClassDefinition()) { }
             else if (LexicalEnvironmentCellAccess.TryEmitCaptureReference(_il, _ctx, af, capturedVar)) { }
-            else if (_ctx.CellBindingLocals.TryGetValue(capturedVar, out var cellLocal))
+            else if (_ctx.CellBindingLocals.TryGetValue(captureSource, out var cellLocal))
                 _il.Emit(OpCodes.Ldloc, cellLocal);
             else
                 // #767: pivot a captured nested-block shadow to its renamed storage (identity otherwise).
-                LoadVariableForCapture(PivotCaptureSource(_analysis.BlockScopeCaptureRenames, af, capturedVar));
+                LoadVariableForCapture(captureSource);
 
             _il.Emit(OpCodes.Stfld, field);
         }

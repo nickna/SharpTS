@@ -657,7 +657,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         var cellNames = Ctx.ClosureAnalyzer?.GetForLoopCells(f);
         List<(string Name, LocalBuilder? Prior)>? activeCells = null;
         if (cellNames != null && cellNames.Count > 0)
-            activeCells = EmitForLoopCellInit(cellNames);
+            activeCells = EmitForLoopCellInit(cellNames.Select(name => GetForLoopCellStorageName(f, name)));
 
         var startLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
@@ -1008,6 +1008,8 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Throw);
         IL.MarkLabel(notCancelled);
     }
+
+    protected virtual string GetForLoopCellStorageName(Stmt.For loop, string name) => name;
 
     /// <summary>
     /// For each per-iteration cell binding (#650), wraps the loop variable's initial value
