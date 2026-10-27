@@ -143,6 +143,7 @@ public record GlobalOptions(
 /// <param name="TimingsJson">Print the compilation timing report as JSON.</param>
 /// <param name="Hosted">Emit the experimental versioned hosted runtime ABI.</param>
 /// <param name="GcProfile">Deployment-time garbage-collection profile.</param>
+/// <param name="NativeProject">Optional experimental generated-guest NativeAOT project export.</param>
 public record CompileOptions(
     OutputTarget Target = OutputTarget.Dll,
     bool PreserveConstEnums = false,
@@ -158,7 +159,8 @@ public record CompileOptions(
     bool Timings = false,
     bool TimingsJson = false,
     bool Hosted = false,
-    GcProfile GcProfile = GcProfile.Workstation
+    GcProfile GcProfile = GcProfile.Workstation,
+    NativeAotProjectOptions? NativeProject = null
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -790,6 +792,8 @@ public class CommandLineParser
         bool timings = false;
         bool timingsJson = false;
         bool hosted = false;
+        string? nativeProjectDirectory = null;
+        string? nativeRuntimeIdentifier = null;
         string? sdkPath = null;
         BundlerMode bundlerMode = BundlerMode.Auto;
         GcProfile gcProfile = GcProfile.Workstation;
@@ -835,6 +839,14 @@ public class CommandLineParser
                         ShowCompileUsage: true
                     );
                 }
+            }
+            else if (args[i] == "--emit-native-project" && i + 1 < args.Length && !args[i + 1].StartsWith('-'))
+            {
+                nativeProjectDirectory = args[++i];
+            }
+            else if (args[i] == "--runtime" && i + 1 < args.Length && !args[i + 1].StartsWith('-'))
+            {
+                nativeRuntimeIdentifier = args[++i];
             }
             else if (args[i] == "--bundler")
             {
@@ -955,7 +967,8 @@ public class CommandLineParser
                 // Global flags are already stripped by ParseGlobalOptions, so anything reaching
                 // here is genuinely unrecognized by compile mode.
                 bool needsValue = args[i] is "-o" or "-t" or "--target" or "--bundler" or "--gc-profile"
-                    or "--sdk-path" or "--push" or "--api-key" or "--package-id" or "--version";
+                    or "--sdk-path" or "--push" or "--api-key" or "--package-id" or "--version"
+                    or "--emit-native-project" or "--runtime";
 
                 return new ParsedCommand.Error(
                     needsValue
@@ -1000,8 +1013,24 @@ public class CommandLineParser
                 ShowCompileUsage: true);
         }
 
-        // Determine output file: use explicit output if provided, otherwise derive from input + target
-        string outputFile = explicitOutput ?? Path.ChangeExtension(inputFile, target == OutputTarget.Exe ? ".exe" : ".dll");
+        NativeAotProjectOptions? nativeProject = null;
+        if (nativeProjectDirectory is not null)
+        {
+            if (nativeRuntimeIdentifier is null || !NativeAotProjectOptions.SupportedRuntimeIdentifiers.Contains(nativeRuntimeIdentifier))
+                return new ParsedCommand.Error("Error: --emit-native-project requires --runtime with a supported RID (win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64).", 64, ShowCompileUsage: true);
+            if (target != OutputTarget.Dll || hosted || pack || explicitOutput is not null || bundlerMode != BundlerMode.Auto ||
+                globalOptions.NoEmit || globalOptions.EmitDeclarationOnly || globalOptions.ShowConfig)
+                return new ParsedCommand.Error("Error: --emit-native-project requires ordinary DLL compilation without -o, hosted, packaging, bundler, or no-output modes.", 64, ShowCompileUsage: true);
+            nativeProject = new(nativeProjectDirectory, nativeRuntimeIdentifier);
+            useReferenceAssemblies = true;
+        }
+        else if (nativeRuntimeIdentifier is not null)
+            return new ParsedCommand.Error("Error: --runtime is valid only with --emit-native-project.", 64, ShowCompileUsage: true);
+
+        // Native projects own their guest path; ordinary output retains its existing defaults.
+        string outputFile = nativeProject is not null
+            ? Path.Combine(nativeProject.OutputDirectory, "guest", "Guest.dll")
+            : explicitOutput ?? Path.ChangeExtension(inputFile, target == OutputTarget.Exe ? ".exe" : ".dll");
 
         var compileOptions = new CompileOptions(
             Target: target,
@@ -1018,7 +1047,8 @@ public class CommandLineParser
             Timings: timings,
             TimingsJson: timingsJson,
             Hosted: hosted,
-            GcProfile: gcProfile
+            GcProfile: gcProfile,
+            NativeProject: nativeProject
         );
 
         var packOptions = new PackOptions(

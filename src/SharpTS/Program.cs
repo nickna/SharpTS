@@ -221,11 +221,18 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
         }
         else
         {
+            if (compile.CompileOptions.NativeProject is { } nativeProject)
+            {
+                NativeAotProjectExporter.ValidateDestination(nativeProject);
+                NativeAotCompatibilityReport.Analyze(SharpTSRuntimeRequirements.None, [],
+                    compile.CompileOptions.References.Count > 0).ThrowIfIncompatible();
+            }
             var outputOptions = new OutputOptions(
                 compile.CompileOptions.MsBuildErrors,
                 compile.CompileOptions.QuietMode || json,
                 compile.CompileOptions.Standalone,
-                compile.CompileOptions.EmitDebugSymbols);
+                compile.CompileOptions.EmitDebugSymbols,
+                compile.CompileOptions.NativeProject);
             exitCode = CompileFile(
                 compile.InputFile,
                 compile.OutputFile,
@@ -702,6 +709,8 @@ static int CompileFile(string inputPath, string outputPath, bool preserveConstEn
             ExecutionPhaseTiming.LoadReferences,
             () => LoadDotNetReferences(
                 Path.GetDirectoryName(absolutePath) ?? ".", references, propagateErrors: true));
+        if (outputOptions.NativeProject is not null)
+            NativeAotCompatibilityReport.Analyze(SharpTSRuntimeRequirements.None, [], !externalRefs.IsEmpty).ThrowIfIncompatible();
 
         // Load package.json if packaging is enabled
         PackageJson? packageJson = null;
@@ -1061,8 +1070,22 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         compiler.SetDecoratorMode(decoratorMode);
         compiler.EmitDebugSymbols = outputOptions.EmitDebugSymbols;
         if (hosted) compiler.EnableHostedOutput();
+        if (outputOptions.NativeProject is not null) compiler.EnableNativeAotProjectOutput();
         compileBody(compiler);
         PrintCompilerWarnings(compiler);
+        if (outputOptions.NativeProject is { } nativeProject)
+        {
+            var compatibility = NativeAotCompatibilityReport.Analyze(compiler.RequiredSharpTSRuntimeRequirements,
+                compiler.RequiredSharpTSRuntimeReasons, !externalRefs.IsEmpty);
+            NativeAotProjectExporter.Export(nativeProject, compatibility, guest =>
+            {
+                compiler.Save(guest);
+                if (verifyIL) VerifyCompiledAssembly(guest, sdkPath, externalRefs);
+            });
+            if (!outputOptions.QuietMode)
+                Console.WriteLine($"Exported experimental native guest project to {Path.GetFullPath(nativeProject.OutputDirectory)}");
+            return;
+        }
         ValidateCompiledRuntimeRequirements(compiler);
         compiler.Save(outputPath);
         if (hosted)
@@ -1781,9 +1804,12 @@ static void PrintCompileUsage()
     Console.WriteLine("  --api-key <key>        NuGet API key for push");
     Console.WriteLine("  --package-id <id>      Override package ID");
     Console.WriteLine("  --version <ver>        Override package version");
+    Console.WriteLine("  --emit-native-project <dir>  Export an experimental generated-guest NativeAOT project");
+    Console.WriteLine("  --runtime <rid>        Explicit RID for --emit-native-project (for example win-x64)");
 }
 
 private sealed class CompilationAbortedException : Exception;
 
-record OutputOptions(bool MsBuildErrors, bool QuietMode, bool Standalone = false, bool EmitDebugSymbols = false);
+record OutputOptions(bool MsBuildErrors, bool QuietMode, bool Standalone = false, bool EmitDebugSymbols = false,
+    NativeAotProjectOptions? NativeProject = null);
 }

@@ -54,6 +54,12 @@ public enum DiagnosticCode
     // Compile errors (4XX)
     /// <summary>IL compilation error (general).</summary>
     CompileError = 4,
+    /// <summary>The native guest profile requires a standalone emitted assembly.</summary>
+    NativeGuestRuntimeDependency = 401,
+    /// <summary>The experimental native guest profile does not accept external references.</summary>
+    NativeGuestExternalReferences = 402,
+    /// <summary>A native project destination is already occupied.</summary>
+    NativeGuestOutputDirectory = 403,
 
     // Config errors (5XX)
     /// <summary>Configuration error.</summary>

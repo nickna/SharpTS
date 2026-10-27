@@ -1088,6 +1088,7 @@ public partial class ILCompiler
     private void Phase8_EmitEntryPoint(List<Stmt> statements)
     {
         EmitEntryPoint(statements);
+        EmitNativeAotEntryFacade();
     }
 
     /// <summary>
@@ -1225,6 +1226,7 @@ public partial class ILCompiler
             tb.CreateType();
         }
         _programType.CreateType();
+        _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
         _hostedFactoryType?.CreateType();
         _runtime.JsonShapes.CompleteEmission();
@@ -1814,6 +1816,7 @@ public partial class ILCompiler
     private void ModulePhase10_EmitEntryPoint(List<ParsedModule> modules)
     {
         EmitModulesEntryPoint(modules);
+        EmitNativeAotEntryFacade();
     }
 
     /// <summary>
@@ -1871,6 +1874,7 @@ public partial class ILCompiler
             tb.CreateType();
         }
         _programType.CreateType();
+        _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
         _hostedFactoryType?.CreateType();
         _runtime.JsonShapes.CompleteEmission();
