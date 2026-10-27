@@ -1849,7 +1849,14 @@ public partial class RuntimeEmitter
             var enumDoneLabel = il.DefineLabel();
             var enumLocal = il.DeclareLocal(_types.IEnumerator);
 
-            // Check if obj is IEnumerable
+            // Guest ordinary objects use a CLR dictionary for storage, but do
+            // not acquire an iterator from that carrier's IEnumerable contract.
+            // An explicit guest iterator has already been handled above.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+            il.Emit(OpCodes.Brtrue, throwLabel);
+
+            // Preserve the native enumerable interop fallback.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.IEnumerable);
             il.Emit(OpCodes.Brfalse, tryBufferLabel);
