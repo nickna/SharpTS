@@ -163,6 +163,7 @@ public partial class ILEmitter
     /// </summary>
     private bool EmitStaticMemberAccess(string className, System.Reflection.Emit.TypeBuilder classBuilder, Expr receiver, string propertyName, bool optional = false)
     {
+        if (optional) return false;
         if (_ctx.ClassRegistry!.IsSourceStaticGetter(className, propertyName))
         {
             EmitRuntimeStaticMemberRead(receiver, propertyName);
@@ -181,9 +182,6 @@ public partial class ILEmitter
         {
             if (receiver is Expr.This)
             {
-                // Let the ordinary optional read perform its nullish check.
-                // Getter priority above remains unchanged for auto-accessors.
-                if (optional) return false;
                 EmitRuntimeStaticMemberRead(receiver, propertyName);
             }
             else
