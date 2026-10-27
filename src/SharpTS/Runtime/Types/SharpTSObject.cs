@@ -850,7 +850,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         // Apply the descriptor
         if (descHasRealAccessor
             || descSpecifiesAccessor
-            || (!descSpecifiesAccessor && !descriptor.HasValue && existingIsAccessor))
+            || (!descSpecifiesAccessor && !descriptor.HasValue && !descriptor.HasWritable && existingIsAccessor))
         {
             // Accessor property - remove any data property value
             _fields.Remove(name);
@@ -885,7 +885,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             {
                 _fields[name] = descriptor.Value;
             }
-            else if (!hasExisting)
+            else if (!hasExisting || existingIsAccessor)
             {
                 // A brand-new data property whose descriptor omits `value` defaults
                 // to undefined per spec — store the sentinel (not C# null, which
