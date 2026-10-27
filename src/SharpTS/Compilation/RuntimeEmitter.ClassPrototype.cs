@@ -21,7 +21,8 @@ public partial class RuntimeEmitter
         FieldBuilder cacheField,
         FieldBuilder parentsField,
         Type arrayType,
-        FieldBuilder arrayPrototype
+        FieldBuilder arrayPrototype,
+        EmittedPromiseRuntime? promise
     )
     {
         var cacheType = cacheField.FieldType;
@@ -63,6 +64,18 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, parent);
             il.Emit(OpCodes.Br, ready);
             il.MarkLabel(nativeErrorParent);
+            if (promise != null)
+            {
+                var otherNativeParent = il.DefineLabel();
+                il.Emit(OpCodes.Ldloc, parentType);
+                il.Emit(OpCodes.Ldtoken, promise.Type);
+                il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+                il.Emit(OpCodes.Bne_Un, otherNativeParent);
+                il.Emit(OpCodes.Ldsfld, promise.PrototypeField);
+                il.Emit(OpCodes.Stloc, parent);
+                il.Emit(OpCodes.Br, ready);
+                il.MarkLabel(otherNativeParent);
+            }
             foreach (var (errorType, prototype) in new[]
             {
                 (errors.Type, errors.Prototype),

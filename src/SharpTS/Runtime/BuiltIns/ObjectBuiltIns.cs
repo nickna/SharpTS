@@ -119,9 +119,12 @@ public static partial class ObjectBuiltIns
                 // EnumerableOwnProperties snapshots [[OwnPropertyKeys]] before
                 // reading values. A getter may add or delete siblings without
                 // changing the key list being traversed by entries()/values().
-                foreach (var k in obj.OwnEnumerableKeys().ToList())
+                foreach (var k in obj.OwnVisibleStringKeys().ToList())
+                {
+                    if (obj.GetOwnPropertyDescriptor(k)?.Enumerable != true) continue;
                     yield return new(k,
                         includeValues ? interpreter.GetProperty(obj, k) : null);
+                }
                 yield break;
             case SharpTSArray arr:
                 foreach (var key in arr.OwnEnumerableKeys())
@@ -2338,6 +2341,8 @@ public static partial class ObjectBuiltIns
             => classPrototype.ExplicitPrototype,
         SharpTSClassPrototype classPrototype when ReferenceEquals(classPrototype.Class.Superclass, SharpTSArrayClass.ArrayBase)
             => interp?.GetArrayPrototype(),
+        SharpTSClassPrototype classPrototype when ReferenceEquals(classPrototype.Class.Superclass, SharpTSPromiseClass.PromiseBase)
+            => interp?.GetPromisePrototype(),
         SharpTSClassPrototype classPrototype
             => (object?)classPrototype.Class.Superclass?.Prototype ?? interp?.GetObjectPrototype(),
         // The Number prototype object is ordinary and inherits from this realm's
@@ -2376,6 +2381,8 @@ public static partial class ObjectBuiltIns
         SharpTSClass { HasExplicitPrototype: true } klass => klass.ExplicitPrototype,
         SharpTSClass klass when ReferenceEquals(klass.Superclass, SharpTSArrayClass.ArrayBase)
             => interp?.GetArrayGlobal(),
+        SharpTSClass klass when ReferenceEquals(klass.Superclass, SharpTSPromiseClass.PromiseBase)
+            => Interpreter.PromiseGlobalValue,
         SharpTSClass klass => (object?)klass.Superclass ?? interp?.GetFunctionPrototype(),
         SharpTSArrayGlobal { HasExplicitPrototype: true } arrayGlobal => arrayGlobal.ExplicitPrototype,
         ISharpTSCallable function when FunctionObjectProperties.TryGetExplicitPrototype(function, interp, out var prototype)

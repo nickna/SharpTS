@@ -154,6 +154,9 @@ public partial class ILCompiler
         // also lets registration preserve a generic family's explicit override.
         if (baseType == _runtime.ArrayStorage.Type)
             il.Emit(OpCodes.Call, _runtime.ArrayOperations.PrototypePopulateMethod);
+        bool nativePromiseBase = _runtime.Promise is { } promise && baseType == promise.Type;
+        if (nativePromiseBase)
+            il.Emit(OpCodes.Call, _runtime.RequirePromise().PrototypePopulateMethod);
         var nativeErrorPrototypePopulate = GetNativeErrorPrototypePopulate(baseType);
         if (nativeErrorPrototypePopulate != null)
             il.Emit(OpCodes.Call, nativeErrorPrototypePopulate);
@@ -174,7 +177,7 @@ public partial class ILCompiler
         }
 
         Type? basePrototypeType = null;
-        if (baseType != null && (baseType == _runtime.ArrayStorage.Type
+        if (baseType != null && (baseType == _runtime.ArrayStorage.Type || nativePromiseBase
             || nativeErrorPrototypePopulate != null
             || TryResolveClassPrototypeConstructor(baseType, out _)))
             basePrototypeType = baseType;

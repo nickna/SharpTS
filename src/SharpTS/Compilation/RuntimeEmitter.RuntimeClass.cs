@@ -261,7 +261,8 @@ public partial class RuntimeEmitter
             classPrototypeCacheField,
             classPrototypeParentsField,
             runtime.ArrayStorage.Type,
-            runtime.ArrayOperations.PrototypeField
+            runtime.ArrayOperations.PrototypeField,
+            runtime.Promise
         );
 
         EmitCancellationCheck(typeBuilder, runtime.Cancellation);
@@ -2180,6 +2181,7 @@ public partial class RuntimeEmitter
                 runtime.ClassDefinitions,
                 runtime.ArrayOperations,
                 runtime.ArrayStorage.Type,
+                runtime.Promise?.Type,
                 runtime.Booleans,
                 runtime.FunctionBindings.BoundType,
                 runtime.FunctionBindings.AnyType,

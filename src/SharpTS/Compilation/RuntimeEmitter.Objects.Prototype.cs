@@ -31,6 +31,7 @@ public partial class RuntimeEmitter
         EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedArrayOperationsRuntime ArrayOperations,
         Type NativeArrayType,
+        Type? NativePromiseType,
         EmittedBooleanRuntime Booleans,
         TypeBuilder BoundTSFunctionType,
         TypeBuilder BoundAnyFunctionType,
@@ -969,6 +970,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryUserParent);
+        if (inputs.NativePromiseType != null)
+        {
+            var ordinaryPromiseParent = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
+            il.Emit(OpCodes.Ldtoken, inputs.NativePromiseType);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, ordinaryPromiseParent);
+            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryPromiseParent);
+        }
         var canonicalUserParent = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsConstructedGenericType").GetGetMethod()!);
