@@ -424,20 +424,22 @@ public partial class RuntimeEmitter
         il.MarkLabel(notProxyForValuesLabel);
 
         // EnumerableOwnProperties is defined in terms of [[OwnPropertyKeys]],
-        // followed by [[Get]] for each enumerable string key. Keep that single
+        // followed by a live own-descriptor check and [[Get]] for each admitted
+        // string key. Keep that single
         // algorithm here instead of maintaining carrier-specific copies of the
         // key filtering and ordering logic below. This is also essential for
-        // Proxy observability: ownKeys/gOPD happen in GetKeys, then each value
-        // read dispatches the proxy's get trap.
+        // descriptor checks after an earlier getter mutates later properties.
         {
             var keysLocal = il.DeclareLocal(listType);
             var keyIndexLocal = il.DeclareLocal(_types.Int32);
             var keyLocal = il.DeclareLocal(_types.String);
+            var descriptorLocal = il.DeclareLocal(_types.Object);
+            var nextKey = il.DefineLabel();
             var loopStart = il.DefineLabel();
             var loopEnd = il.DefineLabel();
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, inputs.ObjectKeys.Keys);
+            il.Emit(OpCodes.Call, inputs.ObjectKeys.Names);
             il.Emit(OpCodes.Stloc, keysLocal);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, resultLocal);
@@ -453,11 +455,26 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
             il.Emit(OpCodes.Castclass, _types.String);
             il.Emit(OpCodes.Stloc, keyLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Call, inputs.ProxyDescriptor.GetOwnPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, descriptorLocal);
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Brfalse, nextKey);
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+            il.Emit(OpCodes.Brtrue, nextKey);
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Ldstr, "enumerable");
+            il.Emit(OpCodes.Call, inputs.GetProperty);
+            il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
+            il.Emit(OpCodes.Brfalse, nextKey);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, keyLocal);
             il.Emit(OpCodes.Call, inputs.GetProperty);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
+            il.MarkLabel(nextKey);
             il.Emit(OpCodes.Ldloc, keyIndexLocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
@@ -974,17 +991,19 @@ public partial class RuntimeEmitter
         il.MarkLabel(notProxyForEntriesLabel);
 
         // Object.entries shares the same EnumerableOwnProperties key walk as
-        // Object.values. Build pairs from GetKeys + GetProperty so ordering,
+        // Object.values. Snapshot names and check live descriptors so ordering,
         // descriptor filtering, getters, and Proxy traps stay aligned.
         {
             var keysLocal = il.DeclareLocal(listType);
             var keyIndexLocal = il.DeclareLocal(_types.Int32);
             var keyLocal = il.DeclareLocal(_types.String);
+            var descriptorLocal = il.DeclareLocal(_types.Object);
+            var nextKey = il.DefineLabel();
             var loopStart = il.DefineLabel();
             var loopEnd = il.DefineLabel();
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, inputs.ObjectKeys.Keys);
+            il.Emit(OpCodes.Call, inputs.ObjectKeys.Names);
             il.Emit(OpCodes.Stloc, keysLocal);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, resultLocal);
@@ -1000,6 +1019,20 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
             il.Emit(OpCodes.Castclass, _types.String);
             il.Emit(OpCodes.Stloc, keyLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Call, inputs.ProxyDescriptor.GetOwnPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, descriptorLocal);
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Brfalse, nextKey);
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+            il.Emit(OpCodes.Brtrue, nextKey);
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Ldstr, "enumerable");
+            il.Emit(OpCodes.Call, inputs.GetProperty);
+            il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
+            il.Emit(OpCodes.Brfalse, nextKey);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, entryLocal);
             il.Emit(OpCodes.Ldloc, entryLocal);
@@ -1013,6 +1046,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, entryLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
+            il.MarkLabel(nextKey);
             il.Emit(OpCodes.Ldloc, keyIndexLocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
