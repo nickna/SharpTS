@@ -8,6 +8,10 @@ public partial class RuntimeEmitter
     private void EmitArgumentsInitializer(EmittedRuntime runtime)
     {
         var il = runtime.Arguments.Initialize.GetILGenerator();
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.Populate);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
 
         var descriptor = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
