@@ -199,7 +199,7 @@ public partial class ILCompiler
             || declaration.Fields.Any(field => field.IsPrivate || field.ComputedKey != null)
             || declaration.Methods.Any(method => method.IsPrivate || method.IsAsync
                 || method.TypeParams is { Count: > 0 } || method.ComputedKey != null
-                || method.Parameters.Any(parameter => parameter.IsParameterProperty || parameter.DestructuredProperties != null))) return false;
+                || method.Parameters.Any(parameter => parameter.IsParameterProperty))) return false;
         return true;
     }
 
