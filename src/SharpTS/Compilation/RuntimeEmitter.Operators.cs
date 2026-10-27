@@ -1287,6 +1287,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
         il.Emit(OpCodes.Brtrue, ordinaryPrototypeHas);
+        il.Emit(OpCodes.Ldloc, rhsType);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brtrue, ordinaryPrototypeHas);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, defaultFunctionHas);

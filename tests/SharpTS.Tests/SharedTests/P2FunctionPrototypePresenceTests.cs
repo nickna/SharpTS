@@ -5,8 +5,7 @@ namespace SharpTS.Tests.SharedTests;
 
 public class P2FunctionPrototypePresenceTests
 {
-    // The compiled native constructor carrier has an independent Has path.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void InheritedAccessorPresenceDoesNotReadGetter(ExecutionMode mode)
     {
         const string source = """
