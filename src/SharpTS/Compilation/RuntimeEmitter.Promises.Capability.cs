@@ -26,6 +26,7 @@ public partial class RuntimeEmitter
     {
         EmitPromiseCapabilityType(moduleBuilder, runtime);
         EmitPreparePromiseCapabilityBody(runtime);
+        EmitPromiseWithResolversStaticBody(runtime);
         EmitAdoptPromiseCapabilityBody(runtime);
         EmitAdoptCompletedPromiseCapabilityBody(runtime);
         EmitResolvePreparedPromiseCapabilityBody(runtime);

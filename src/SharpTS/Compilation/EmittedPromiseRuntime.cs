@@ -254,6 +254,13 @@ public sealed class EmittedPromiseRuntime
     }
 
     private MethodBuilder? _withResolvers;
+    private MethodBuilder? _withResolversStatic;
+    public MethodBuilder WithResolversStatic
+    {
+        get => Require(_withResolversStatic);
+        internal set => Set(ref _withResolversStatic, value);
+    }
+
     public MethodBuilder WithResolvers
     {
         get => Require(_withResolvers);
@@ -672,6 +679,7 @@ public sealed class EmittedPromiseRuntime
         _ = FromExecutor;
         _ = FromDirectExecutor;
         _ = WithResolvers;
+        _ = WithResolversStatic;
         _ = UnwrapPromiseReceiverMethod;
         _ = NormalizePromiseListMethod;
         _ = PrepareDerivedPromiseCapabilityMethod;

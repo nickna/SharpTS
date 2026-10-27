@@ -386,172 +386,18 @@ public partial class RuntimeEmitter
             EmitPromiseStaticCapabilityResult(il, runtime, reject);
         }
 
-        // Promise.withResolvers() - returns object? ($Object with {promise, resolve, reject})
-        // Unlike other Promise statics, withResolvers is synchronous and returns a plain object.
-        var withResolvers = typeBuilder.DefineMethod(
-            "PromiseWithResolvers",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            Type.EmptyTypes
-        );
+        var withResolversStatic = typeBuilder.DefineMethod("PromiseWithResolversStatic",
+            MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
+        withResolversStatic.DefineParameter(1, ParameterAttributes.None, "__this");
+        runtime.RequirePromise().WithResolversStatic = withResolversStatic;
+        var withResolvers = typeBuilder.DefineMethod("PromiseWithResolvers",
+            MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
         runtime.RequirePromise().WithResolvers = withResolvers;
-        {
-            var il = withResolvers.GetILGenerator();
-
-            // var tcs = new TaskCompletionSource<object?>()
-            var tcsType = typeof(TaskCompletionSource<object?>);
-            var tcsLocal = il.DeclareLocal(tcsType);
-            il.Emit(OpCodes.Newobj, tcsType.GetConstructor(Type.EmptyTypes)!);
-            il.Emit(OpCodes.Stloc, tcsLocal);
-
-            // var promise = tcs.Task (this is Task<object?>, which is our promise representation)
-            var promiseLocal = il.DeclareLocal(taskType);
-            il.Emit(OpCodes.Ldloc, tcsLocal);
-            il.Emit(OpCodes.Callvirt, tcsType.GetProperty("Task")!.GetGetMethod()!);
-            il.Emit(OpCodes.Stloc, promiseLocal);
-
-            // Build resolve callback: a $TSFunction that calls tcs.TrySetResult
-            // We need to emit a closure class for this
-            // Instead, use a simple approach: emit static methods that take tcs as captured state
-
-            // Create the resolve function using a lambda-like approach
-            // We'll create an inner class to hold the TCS reference
-            var resolveClosureType = moduleBuilder.DefineType(
-                "$PromiseResolverClosure",
-                TypeAttributes.NotPublic | TypeAttributes.Sealed,
-                typeof(object)
-            );
-            var resolveClosureTcsField = resolveClosureType.DefineField("_tcs", tcsType, FieldAttributes.Public);
-            var resolveClosureCtor = resolveClosureType.DefineConstructor(
-                MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
-            {
-                var ctorIl = resolveClosureCtor.GetILGenerator();
-                ctorIl.Emit(OpCodes.Ldarg_0);
-                ctorIl.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
-                ctorIl.Emit(OpCodes.Ret);
-            }
-            var resolveMethod = resolveClosureType.DefineMethod(
-                "Resolve",
-                MethodAttributes.Public,
-                typeof(object),
-                [typeof(object)]
-            );
-            {
-                var rIl = resolveMethod.GetILGenerator();
-                // tcs.TrySetResult(value)  — value is arg1 directly
-                rIl.Emit(OpCodes.Ldarg_0);
-                rIl.Emit(OpCodes.Ldfld, resolveClosureTcsField);
-                rIl.Emit(OpCodes.Ldarg_1);
-                rIl.Emit(OpCodes.Callvirt, tcsType.GetMethod("TrySetResult", [typeof(object)])!);
-                rIl.Emit(OpCodes.Pop);
-
-                rIl.Emit(OpCodes.Ldnull);
-                rIl.Emit(OpCodes.Ret);
-            }
-
-            // Create reject closure
-            var rejectMethod = resolveClosureType.DefineMethod(
-                "Reject",
-                MethodAttributes.Public,
-                typeof(object),
-                [typeof(object)]
-            );
-            {
-                var rIl = rejectMethod.GetILGenerator();
-                // reason is arg1 directly
-
-                // tcs.TrySetException(new Exception(reason?.ToString() ?? "Promise rejected"))
-                rIl.Emit(OpCodes.Ldarg_0);
-                rIl.Emit(OpCodes.Ldfld, resolveClosureTcsField);
-
-                // Build exception message
-                var reasonNullLabel = rIl.DefineLabel();
-                var afterReasonLabel = rIl.DefineLabel();
-                rIl.Emit(OpCodes.Ldarg_1);
-                rIl.Emit(OpCodes.Brfalse, reasonNullLabel);
-                rIl.Emit(OpCodes.Ldarg_1);
-                rIl.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
-                rIl.Emit(OpCodes.Br, afterReasonLabel);
-                rIl.MarkLabel(reasonNullLabel);
-                rIl.Emit(OpCodes.Ldstr, "Promise rejected");
-                rIl.MarkLabel(afterReasonLabel);
-
-                rIl.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String]));
-                rIl.Emit(OpCodes.Callvirt, tcsType.GetMethod("TrySetException", [typeof(Exception)])!);
-                rIl.Emit(OpCodes.Pop);
-
-                rIl.Emit(OpCodes.Ldnull);
-                rIl.Emit(OpCodes.Ret);
-            }
-
-            resolveClosureType.CreateType();
-
-            // Now emit the main body of PromiseWithResolvers
-            // var closure = new $PromiseResolverClosure()
-            var closureLocal = il.DeclareLocal(resolveClosureType);
-            il.Emit(OpCodes.Newobj, resolveClosureCtor);
-            il.Emit(OpCodes.Stloc, closureLocal);
-
-            // closure._tcs = tcs
-            il.Emit(OpCodes.Ldloc, closureLocal);
-            il.Emit(OpCodes.Ldloc, tcsLocal);
-            il.Emit(OpCodes.Stfld, resolveClosureTcsField);
-
-            // var resolveFunc = new $TSFunction(closure, resolveMethod, "resolve", 1)
-            var resolveFuncLocal = il.DeclareLocal(runtime.FunctionValues.Type);
-            il.Emit(OpCodes.Ldloc, closureLocal);
-            il.Emit(OpCodes.Castclass, typeof(object));
-            il.Emit(OpCodes.Ldtoken, resolveMethod);
-            il.Emit(OpCodes.Call, typeof(System.Reflection.MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
-            il.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
-            il.Emit(OpCodes.Ldstr, "resolve");
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
-            il.Emit(OpCodes.Stloc, resolveFuncLocal);
-
-            // var rejectFunc = new $TSFunction(closure, rejectMethod, "reject", 1)
-            var rejectFuncLocal = il.DeclareLocal(runtime.FunctionValues.Type);
-            il.Emit(OpCodes.Ldloc, closureLocal);
-            il.Emit(OpCodes.Castclass, typeof(object));
-            il.Emit(OpCodes.Ldtoken, rejectMethod);
-            il.Emit(OpCodes.Call, typeof(System.Reflection.MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
-            il.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
-            il.Emit(OpCodes.Ldstr, "reject");
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
-            il.Emit(OpCodes.Stloc, rejectFuncLocal);
-
-            // Build result object: { promise, resolve, reject }
-            var dictLocal = il.DeclareLocal(typeof(Dictionary<string, object?>));
-            il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor(Type.EmptyTypes)!);
-            il.Emit(OpCodes.Stloc, dictLocal);
-
-            // dict["promise"] = promiseTask (Task<object?> IS our promise)
-            il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Ldstr, "promise");
-            il.Emit(OpCodes.Ldloc, promiseLocal);
-            il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("set_Item", [typeof(string), typeof(object)])!);
-
-            // dict["resolve"] = resolveFunc
-            il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Ldstr, "resolve");
-            il.Emit(OpCodes.Ldloc, resolveFuncLocal);
-            il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("set_Item", [typeof(string), typeof(object)])!);
-
-            // dict["reject"] = rejectFunc
-            il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Ldstr, "reject");
-            il.Emit(OpCodes.Ldloc, rejectFuncLocal);
-            il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("set_Item", [typeof(string), typeof(object)])!);
-
-            // var result = new $Object(dict)
-            il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Newobj, runtime.ObjectStorage.Constructor);
-
-            // return result directly (not wrapped in Task - withResolvers is synchronous)
-            il.Emit(OpCodes.Ret);
-        }
-
+        var withResolversIl = withResolvers.GetILGenerator();
+        withResolversIl.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+        withResolversIl.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        withResolversIl.Emit(OpCodes.Call, withResolversStatic);
+        withResolversIl.Emit(OpCodes.Ret);
         // Reserve NormalizePromiseList before the combinators so their state
         // machines can reference it. Its body is emitted after the iterator
         // protocol helpers and $IteratorWrapper exist.

@@ -248,6 +248,7 @@ public partial class RuntimeEmitter
             EmitLookup(_types.TaskOfObject, "allSettled", promise.AllSettledStatic, 1);
             EmitLookup(_types.TaskOfObject, "allSettledKeyed", promise.AllSettledKeyedStatic, 1);
             EmitLookup(_types.TaskOfObject, "any", promise.AnyStatic, 1);
+            EmitLookup(_types.TaskOfObject, "withResolvers", promise.WithResolversStatic, 0);
             // Guest classes that `extend Promise` derive from the emitted wrapper.
             EmitLookup(promise.Type, "resolve", promise.ResolveStatic, 1);
             EmitLookup(promise.Type, "reject", promise.RejectStatic, 1);
@@ -257,6 +258,7 @@ public partial class RuntimeEmitter
             EmitLookup(promise.Type, "allSettled", promise.AllSettledStatic, 1);
             EmitLookup(promise.Type, "allSettledKeyed", promise.AllSettledKeyedStatic, 1);
             EmitLookup(promise.Type, "any", promise.AnyStatic, 1);
+            EmitLookup(promise.Type, "withResolvers", promise.WithResolversStatic, 0);
         }
         EmitLookup(inputs.ErrorType, "isError", inputs.ErrorIsError, 1);
 

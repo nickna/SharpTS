@@ -260,8 +260,8 @@ public static class PromiseBuiltIns
                 PerformCombinator(interp, receiver, args, PromiseCombinatorKind.Any))
                 .WithSpecLength(1).AsNonConstructor(),
 
-            "withResolvers" => BuiltInMethod.CreateV2("withResolvers", 0, (interp, _, _) =>
-                RuntimeValue.FromBoxed(WithResolversImpl(interp, factory))),
+            "withResolvers" => BuiltInMethod.CreateV2("withResolvers", 0, (interp, receiver, _) =>
+                RuntimeValue.FromBoxed(WithResolversImpl(interp, receiver.ToObject()))),
 
             _ => null
         };
@@ -1583,38 +1583,18 @@ public static class PromiseBuiltIns
     /// <summary>
     /// Implementation of Promise.withResolvers()
     /// Returns {promise, resolve, reject} for external promise resolution.
-    /// The promise comes from <paramref name="promiseFactory"/> when called
-    /// off a Promise subclass (#242), else is a plain SharpTSPromise.
+    /// The selected constructor runs once with the capability executor.
     /// </summary>
     private static object? WithResolversImpl(
         Interpreter interpreter,
-        Func<Interpreter, Task<object?>, object?>? promiseFactory)
+        object? constructor)
     {
-        var tcs = new TaskCompletionSource<object?>();
-
-        var resolveMethod = BuiltInMethod.CreateV2("resolve", 1, (_, _, args) =>
-        {
-            var value = args.Length > 0 ? args[0].ToObject() : null;
-            tcs.TrySetResult(value);
-            return RuntimeValue.Null;
-        });
-
-        var rejectMethod = BuiltInMethod.CreateV2("reject", 1, (_, _, args) =>
-        {
-            var reason = args.Length > 0 ? args[0].ToObject() : null;
-            tcs.TrySetException(new SharpTSPromiseRejectedException(reason));
-            return RuntimeValue.Null;
-        });
-
-        var promise = promiseFactory != null
-            ? promiseFactory(interpreter, tcs.Task)
-            : new SharpTSPromise(tcs.Task);
-
+        var (promise, resolve, reject) = CreatePromiseCapability(interpreter, constructor);
         return new SharpTSObject(new Dictionary<string, object?>
         {
             ["promise"] = promise,
-            ["resolve"] = resolveMethod,
-            ["reject"] = rejectMethod
+            ["resolve"] = resolve,
+            ["reject"] = reject
         });
     }
 

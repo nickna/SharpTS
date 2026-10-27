@@ -2417,18 +2417,6 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected bool TryEmitDerivedPromiseStatic(Type classBuilder, string methodName, List<Expr> arguments)
     {
-        // withResolvers returns a {promise, resolve, reject} object, not a
-        // task — delegate to the base emitter without subclass wrapping.
-        if (methodName == "withResolvers")
-        {
-            if (Ctx.TypeEmitterRegistry?.GetStaticStrategy("Promise") is not { } promiseStatics)
-                return false;
-            if (!promiseStatics.TryEmitStaticCall(this, methodName, arguments))
-                return false;
-            SetStackUnknown();
-            return true;
-        }
-
         var promise = Ctx.Runtime!.RequirePromise();
         MethodInfo? wrapper = methodName switch
         {
@@ -2440,6 +2428,7 @@ public abstract partial class ExpressionEmitterBase
             "allSettled" => promise.AllSettledStatic,
             "allSettledKeyed" => promise.AllSettledKeyedStatic,
             "any" => promise.AnyStatic,
+            "withResolvers" => promise.WithResolversStatic,
             _ => null
         };
         if (wrapper is null) return false;
@@ -2448,7 +2437,7 @@ public abstract partial class ExpressionEmitterBase
         // list first so spreads, surplus effects and suspension retain normal
         // call order before the static wrapper constructs its capability.
         EmitStaticCallArguments(arguments, wrapper, wrapper.GetParameters()[1..]);
-        var value = _helpers.SpillStoreObject();
+        var value = wrapper.GetParameters().Length > 1 ? _helpers.SpillStoreObject() : null;
         Type constructorType = classBuilder;
         if (classBuilder.IsGenericTypeDefinition)
         {
@@ -2457,7 +2446,7 @@ public abstract partial class ExpressionEmitterBase
         }
         IL.Emit(OpCodes.Ldtoken, constructorType);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Ldloc, value);
+        if (value is not null) IL.Emit(OpCodes.Ldloc, value);
         IL.Emit(OpCodes.Call, wrapper);
         SetStackUnknown();
         return true;

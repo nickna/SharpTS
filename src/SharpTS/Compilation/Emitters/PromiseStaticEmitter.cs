@@ -184,7 +184,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
             "allSettled"     => runtime.RequirePromise().AllSettledStatic,
             "allSettledKeyed" => runtime.RequirePromise().AllSettledKeyedStatic,
             "any"            => runtime.RequirePromise().AnyStatic,
-            "withResolvers"  => runtime.RequirePromise().WithResolvers,
+            "withResolvers"  => runtime.RequirePromise().WithResolversStatic,
             _ => null
         };
         if (method == null) return false;
