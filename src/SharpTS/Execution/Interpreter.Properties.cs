@@ -173,6 +173,14 @@ public partial class Interpreter
         }
         if (callable is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise })
             return CreatePromiseFromExecutor(args.Count > 0 ? args[0] : SharpTSUndefined.Instance);
+        if (callable is SharpTSArrayGlobal or SharpTSBuiltInConstructor { Name: BuiltInNames.Array })
+        {
+            var prototype = GetPropertyValue(newTarget, "prototype");
+            var array = (SharpTSArray)GetArrayGlobal().Call(this, [.. args])!;
+            if (IsConstructorReturnObject(prototype) && !ReferenceEquals(prototype, GetArrayPrototype()))
+                array.SetExplicitPrototype(prototype);
+            return array;
+        }
         if (callable is SharpTSBuiltInConstructor builtIn && BuiltInConstructorFactory.IsBuiltIn(builtIn.Name))
             return BuiltInConstructorFactory.TryCreate(builtIn.Name, [.. args], this);
         if (callable is SharpTSStringNamespace)
