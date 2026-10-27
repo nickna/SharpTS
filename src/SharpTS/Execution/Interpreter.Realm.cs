@@ -353,6 +353,17 @@ public partial class Interpreter
         return descriptor;
     }
 
+    internal IEnumerable<string> GetBuiltInConstructorEnumerableKeys(SharpTSBuiltInConstructor constructor)
+    {
+        if (_builtInConstructorProperties is null
+            || !_builtInConstructorProperties.TryGetValue(constructor, out var properties))
+            yield break;
+
+        foreach (var name in properties.Keys.ToList())
+            if (properties.TryGetValue(name, out var descriptor) && descriptor.Enumerable)
+                yield return name;
+    }
+
     internal bool DeleteBuiltInConstructorProperty(
         SharpTSBuiltInConstructor constructor, string name)
     {

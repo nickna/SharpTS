@@ -229,6 +229,10 @@ public static partial class ObjectBuiltIns
                     yield return new(key, includeValues ? interpreter.GetPropertyValue(klass, key) : null);
                 }
                 yield break;
+            case SharpTSBuiltInConstructor constructor:
+                foreach (var key in interpreter.GetBuiltInConstructorEnumerableKeys(constructor))
+                    yield return new(key, includeValues ? interpreter.GetPropertyValue(constructor, key) : null);
+                yield break;
             case ISharpTSCallable:
                 yield break;
             default:
