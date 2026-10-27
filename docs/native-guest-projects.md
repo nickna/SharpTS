@@ -126,6 +126,29 @@ NativeAOT produces platform native symbols separately by default. Guest portable
 PDBs are retained when requested, but do not establish a TypeScript native
 stepping/sequence-point support contract.
 
+## Callable catalog foundation
+
+Native-project emission adds a generated `$INativeCallable.Invoke(object[])`
+contract to the ordinary function, bound-function, call/apply/bind and method
+wrapper carriers. Private forwarding methods call their exact existing invocation
+bodies. The original methods, receiver handling and function identities remain
+the source of behavior. Interface dispatch also works for generic carrier
+instances without enumerating open generic `Type` tokens. Ordinary managed
+output does not emit this contract.
+
+The method wrapper probes this contract before its existing CLR reflection
+bridge. That bridge is deliberately retained: a BCL-returned opaque CLR value
+cannot yet be proved to belong to a finite invocation catalog. A subsequent
+closed-world admission pass must either prove that provenance or reject the
+specific CLR boundary before output. Guest `any`, computed and Symbol property
+operations continue to use their existing semantics.
+
+This is catalog infrastructure, not a warning-free native compatibility claim.
+The strict `console.log(42)` publish measurement remains at 81 diagnostics with
+the same inventory as before the callable contract. Remaining work includes the
+opaque callable bridge and signatures, property/shape metadata, class/Symbol
+initialization and runtime-eval reachability.
+
 ## Warning policy and remaining work
 
 The exported project uses `PublishAot=true`, `SelfContained=true`, its explicit

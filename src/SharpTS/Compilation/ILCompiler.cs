@@ -746,7 +746,7 @@ public partial class ILCompiler
     /// </summary>
     private void Phase1_EmitRuntimeTypes()
     {
-        _runtime = new RuntimeEmitter(_types, _hosted) { EntryModulePath = _entryModulePath }
+        _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything());
         _typeMapper.SetRuntime(_runtime);
     }

@@ -11,6 +11,7 @@ public partial class RuntimeEmitter
 {
     private readonly TypeProvider _types;
     private readonly bool _emitHosted;
+    private readonly bool _emitNativeCallables;
 
     /// <summary>
     /// Feature gating set — populated by <see cref="EmitAll(ModuleBuilder, RuntimeFeatureSet)"/>
@@ -21,9 +22,15 @@ public partial class RuntimeEmitter
     private RuntimeFeatureSet _features = RuntimeFeatureSet.EmitEverything();
 
     public RuntimeEmitter(TypeProvider types, bool emitHosted = false)
+        : this(types, emitHosted, emitNativeCallables: false)
+    {
+    }
+
+    internal RuntimeEmitter(TypeProvider types, bool emitHosted, bool emitNativeCallables)
     {
         _types = types;
         _emitHosted = emitHosted;
+        _emitNativeCallables = emitNativeCallables;
     }
 
     /// <summary>
@@ -40,6 +47,8 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (_emitNativeCallables)
+            DeclareNativeCallableCatalog(moduleBuilder, runtime);
         runtime.BuiltInModules.BeginEmission(moduleBuilder, features);
         if (features.UsesRegExp)
             runtime.RegExps.BeginImplementationEmission();
@@ -238,7 +247,7 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 new TSFunctionCoercionInputs(runtime.StringCoercion.ToJsString,
                     runtime.NumericCoercion.ToNumber, runtime.ArrayOperations.Materialize,
-                    runtime.ReceiverGuard.RequireObjectCoercibleThis)
+                    runtime.ReceiverGuard.RequireObjectCoercibleThis), runtime.NativeCallables
             )
         );
         runtime.FunctionValues.CompleteEmission();
@@ -450,7 +459,7 @@ public partial class RuntimeEmitter
         // Emit $BoundTSFunction class for bound functions
         // Must come after TSFunction (uses TSFunctionType, TSFunctionInvokeWithThis)
         DefineBoundFunctionMetadata(runtime.RuntimeClass.Type, runtime.FunctionBindings);
-        EmitBoundTSFunctionClass(moduleBuilder, runtime.FunctionBindings, runtime.FunctionValues);
+        EmitBoundTSFunctionClass(moduleBuilder, runtime.FunctionBindings, runtime.FunctionValues, runtime.NativeCallables);
 
         // Emit $AsyncLocalStorage class for async context propagation
         // Must come after TSFunction (Run/Exit invoke callbacks via TSFunctionInvoke)
@@ -589,7 +598,7 @@ public partial class RuntimeEmitter
         EmitBoundAnyFunctionClass(
             moduleBuilder,
             runtime.FunctionBindings,
-            new BoundAnyFunctionClassInputs(runtime.FunctionValues, runtime.ArrayOperations, runtime.Map, runtime.Set, runtime.Invocation)
+            new BoundAnyFunctionClassInputs(runtime.FunctionValues, runtime.ArrayOperations, runtime.Map, runtime.Set, runtime.Invocation, runtime.NativeCallables)
         );
         EmitFunctionCallWrapperClass(
             moduleBuilder,
@@ -603,7 +612,7 @@ public partial class RuntimeEmitter
                 runtime.TypedArrays,
                 runtime.TextEncoding,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Errors
+                runtime.Errors, runtime.NativeCallables
             )
         );
         EmitFunctionApplyWrapperClass(
@@ -619,7 +628,7 @@ public partial class RuntimeEmitter
                 runtime.TypedArrays,
                 runtime.TextEncoding,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Errors
+                runtime.Errors, runtime.NativeCallables
             )
         );
         EmitFunctionBindWrapperClass(
@@ -633,14 +642,14 @@ public partial class RuntimeEmitter
                 runtime.Set,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Errors,
-                runtime.FunctionPrototypes.Type
+                runtime.FunctionPrototypes.Type, runtime.NativeCallables
             )
         );
         runtime.FunctionBindings.CompleteEmission();
 
         // Emit $MethodCallable type and constructor (Phase 1)
         // Must come before EmitRuntimeClass so GetFieldsProperty can wrap GetMember results
-        EmitMethodCallableTypeDefinition(moduleBuilder, runtime.ReflectedMethods);
+        EmitMethodCallableTypeDefinition(moduleBuilder, runtime.ReflectedMethods, runtime.NativeCallables);
 
         // Emit $TemplateStringsList class for tagged template literals
         // Must come before EmitRuntimeClass so InvokeTaggedTemplate can use the constructor
@@ -925,7 +934,7 @@ public partial class RuntimeEmitter
             EmitBoundSetMethodFinalize(runtime.RequireSet(), runtime.Sentinels.UndefinedInstance);
 
         // Finalize $MethodCallable with Invoke method (Phase 2)
-        EmitMethodCallableFinalize(runtime.ReflectedMethods);
+        EmitMethodCallableFinalize(runtime.ReflectedMethods, runtime.NativeCallables);
         runtime.ReflectedMethods.CompleteEmission();
 
         NetClosureConstruction? netClosures = null;
@@ -1096,6 +1105,7 @@ public partial class RuntimeEmitter
         runtime.Fetch.CompleteEmission();
         runtime.Promise?.CompleteEmission();
         runtime.BuiltInModules.CompleteEmission();
+        runtime.NativeCallables?.CompleteEmission();
         return runtime;
     }
 }

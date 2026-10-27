@@ -12,7 +12,8 @@ public partial class RuntimeEmitter
         FieldBuilder GlobalThisSingletonField,
         FieldInfo UndefinedInstance,
         Type UndefinedType,
-        TSFunctionCoercionInputs Coercion
+        TSFunctionCoercionInputs Coercion,
+        EmittedNativeCallableRuntime? NativeCallables = null
     );
 
     private readonly record struct TSFunctionCoercionInputs(
@@ -1308,6 +1309,7 @@ public partial class RuntimeEmitter
         );
         nameProperty.SetGetMethod(nameGetterBuilder);
 
+        inputs.NativeCallables?.Register(typeBuilder, invokeBuilder);
         typeBuilder.CreateType();
     }
 

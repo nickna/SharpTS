@@ -157,7 +157,7 @@ public sealed class EmittedFunctionInvocationRuntimeTests
         captureType.CreateType();
         var bindings = new EmittedFunctionBindingRuntime
             { CaptureName = captureName, CaptureLength = captureLength, CapturePrototype = capturePrototype };
-        typeof(RuntimeEmitter).GetMethod("EmitBoundTSFunctionClass", Members)!.Invoke(new RuntimeEmitter(TypeProvider.Runtime), [module, bindings, values]);
+        typeof(RuntimeEmitter).GetMethod("EmitBoundTSFunctionClass", Members)!.Invoke(new RuntimeEmitter(TypeProvider.Runtime), [module, bindings, values, null]);
         Assert.True(bindings.BoundType.IsCreated()); Assert.NotNull(bindings.BoundInvoke); Assert.NotNull(bindings.BoundInvokeWithThis);
         Assert.False(bindings.IsComplete); Assert.Throws<InvalidOperationException>(bindings.CompleteEmission);
         Assert.Throws<InvalidOperationException>(() => bindings.AnyType); Assert.Throws<InvalidOperationException>(() => bindings.ApplyInvoke);

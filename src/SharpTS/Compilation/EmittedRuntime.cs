@@ -17,6 +17,17 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    /// <summary>Opt-in direct invocation contracts for generated native guest carriers.</summary>
+    public EmittedNativeCallableRuntime? NativeCallables { get; private set; }
+
+    internal void BeginNativeCallablesEmission(EmittedNativeCallableRuntime declarations)
+    {
+        ArgumentNullException.ThrowIfNull(declarations);
+        if (NativeCallables is not null)
+            throw new InvalidOperationException("Native callable emission has already started.");
+        NativeCallables = declarations;
+    }
+
     /// <summary>Required lazy iterator adapter construction and helper declarations.</summary>
     public EmittedIteratorHelpersRuntime IteratorHelpers { get; } = new();
 

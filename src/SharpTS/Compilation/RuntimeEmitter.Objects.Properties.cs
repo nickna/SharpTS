@@ -3413,7 +3413,8 @@ public partial class RuntimeEmitter
     /// Phase 1: Define $MethodCallable type (wraps BuiltInMethod or other callable objects
     /// returned by GetMember so they can be dispatched through InvokeMethodValue/InvokeValue).
     /// </summary>
-    internal void EmitMethodCallableTypeDefinition(ModuleBuilder moduleBuilder, EmittedReflectedMethodRuntime reflectedMethods)
+    internal void EmitMethodCallableTypeDefinition(ModuleBuilder moduleBuilder, EmittedReflectedMethodRuntime reflectedMethods,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$MethodCallable",
@@ -3450,13 +3451,15 @@ public partial class RuntimeEmitter
             [_types.ObjectArray]
         );
         reflectedMethods.CallableInvoke = invokeBuilder;
+        nativeCallables?.Register(typeBuilder, invokeBuilder);
     }
 
     /// <summary>
     /// Phase 2: Emit Invoke method body for $MethodCallable and create the type.
     /// Uses reflection to call "Invoke" (for TSFunction) or "Call" (for BuiltInMethod) on the wrapped object.
     /// </summary>
-    internal void EmitMethodCallableFinalize(EmittedReflectedMethodRuntime reflectedMethods)
+    internal void EmitMethodCallableFinalize(EmittedReflectedMethodRuntime reflectedMethods,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         var callableField = reflectedMethods.CallableField;
         var invokeBuilder = reflectedMethods.CallableInvoke;
@@ -3472,6 +3475,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, callableField);
         il.Emit(OpCodes.Stloc, callableLocal);
+
+        if (nativeCallables is not null)
+            EmitNativeCallableFastPath(il, nativeCallables,
+                () => il.Emit(OpCodes.Ldloc, callableLocal), () => il.Emit(OpCodes.Ldarg_1));
 
         // Get type
         il.Emit(OpCodes.Ldloc, callableLocal);

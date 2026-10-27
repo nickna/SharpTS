@@ -33,7 +33,8 @@ public partial class RuntimeEmitter
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedMapRuntime? Map,
         EmittedSetRuntime? Set,
-        EmittedInvocationRuntime Invocation
+        EmittedInvocationRuntime Invocation,
+        EmittedNativeCallableRuntime? NativeCallables = null
     );
 
     private readonly record struct FunctionBindWrapperClassInputs(
@@ -44,7 +45,8 @@ public partial class RuntimeEmitter
         EmittedSetRuntime? Set,
         FieldInfo UndefinedInstance,
         EmittedErrorRuntime Errors,
-        Type FunctionPrototypeType
+        Type FunctionPrototypeType,
+        EmittedNativeCallableRuntime? NativeCallables = null
     );
 
     private readonly record struct FunctionCallWrapperClassInputs(
@@ -56,7 +58,8 @@ public partial class RuntimeEmitter
         EmittedTypedArrayRuntime TypedArrays,
         EmittedTextEncodingRuntime? TextEncoding,
         FieldInfo UndefinedInstance,
-        EmittedErrorRuntime Errors
+        EmittedErrorRuntime Errors,
+        EmittedNativeCallableRuntime? NativeCallables = null
     );
 
     private readonly record struct FunctionApplyWrapperClassInputs(
@@ -69,7 +72,8 @@ public partial class RuntimeEmitter
         EmittedTypedArrayRuntime TypedArrays,
         EmittedTextEncodingRuntime? TextEncoding,
         FieldInfo UndefinedInstance,
-        EmittedErrorRuntime Errors
+        EmittedErrorRuntime Errors,
+        EmittedNativeCallableRuntime? NativeCallables = null
     );
 
     private readonly record struct DispatchToTargetInputs(
@@ -164,7 +168,8 @@ public partial class RuntimeEmitter
     private void EmitBoundTSFunctionClass(
         ModuleBuilder moduleBuilder,
         EmittedFunctionBindingRuntime functionBindings,
-        EmittedFunctionValueRuntime functionValues
+        EmittedFunctionValueRuntime functionValues,
+        EmittedNativeCallableRuntime? nativeCallables = null
     )
     {
         // Define class: public sealed class $BoundTSFunction
@@ -342,6 +347,7 @@ public partial class RuntimeEmitter
         toStringIL.Emit(OpCodes.Ret);
 
         // Finalize the type
+        nativeCallables?.Register(typeBuilder, invokeBuilder);
         typeBuilder.CreateType();
     }
 
@@ -527,6 +533,7 @@ public partial class RuntimeEmitter
         iwtIL.Emit(OpCodes.Callvirt, invokeBuilder);
         iwtIL.Emit(OpCodes.Ret);
 
+        inputs.NativeCallables?.Register(typeBuilder, invokeBuilder);
         typeBuilder.CreateType();
     }
 
@@ -1868,6 +1875,7 @@ public partial class RuntimeEmitter
         iwtIL.Emit(OpCodes.Ret);
 
         // Finalize the type
+        inputs.NativeCallables?.Register(typeBuilder, invokeBuilder);
         typeBuilder.CreateType();
     }
 
@@ -2127,6 +2135,7 @@ public partial class RuntimeEmitter
         iwtIL.Emit(OpCodes.Ret);
 
         // Finalize the type
+        inputs.NativeCallables?.Register(typeBuilder, invokeBuilder);
         typeBuilder.CreateType();
     }
 
@@ -2292,6 +2301,7 @@ public partial class RuntimeEmitter
         iwtIL.Emit(OpCodes.Ret);
 
         // Finalize the type
+        inputs.NativeCallables?.Register(typeBuilder, invokeBuilder);
         typeBuilder.CreateType();
     }
 }
