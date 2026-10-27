@@ -1644,7 +1644,7 @@ public partial class Interpreter
         // Proxy: intercept index assignment via set trap
         if (obj is SharpTSProxy proxy)
         {
-            string key = index?.ToString() ?? "";
+            object key = ToPropertyKey(index);
             bool assigned = proxy.TrapSetProperty(key, value, this, proxy);
             if (!assigned && strictMode)
                 throw new ThrowException(new SharpTSTypeError(

@@ -32,6 +32,7 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         EmittedTypedArrayRuntime TypedArrays,
+        MethodInfo ToPropertyKey,
         Type UndefinedType
     );
 
@@ -1359,6 +1360,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ToPropertyKey);
+        il.Emit(OpCodes.Starg_S, (byte)1);
+
         if (inputs.ProxySelected)
         {
             var notProxyLabel = il.DefineLabel();
@@ -1368,8 +1373,7 @@ public partial class RuntimeEmitter
                     inputs.InvokeMethodUnwrapped,
                     inputs.ObjectDescriptors,
                     inputs.ObjectRead,
-                    inputs.ReflectAssignment,
-                    inputs.StringCoercion
+                    inputs.ReflectAssignment
                 ),
                 () => il.Emit(OpCodes.Ldarg_0),
                 () => il.Emit(OpCodes.Ldarg_1),
@@ -1943,7 +1947,7 @@ public partial class RuntimeEmitter
             var notProxy = il.DefineLabel();
             EmitProxySetIndexCheck(il,
                 new ProxySetIndexCheckInputs(inputs.InvokeMethodUnwrapped, inputs.ObjectDescriptors,
-                    inputs.ObjectRead, inputs.ReflectAssignment, inputs.StringCoercion),
+                    inputs.ObjectRead, inputs.ReflectAssignment),
                 () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1),
                 () => il.Emit(OpCodes.Ldarg_2), notProxy);
             il.MarkLabel(notProxy);

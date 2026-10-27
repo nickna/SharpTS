@@ -1649,6 +1649,7 @@ public partial class RuntimeEmitter
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
                 runtime.TypedArrays,
+                runtime.Reflect.ToPropertyKey,
                 runtime.Sentinels.UndefinedType
             )
         );

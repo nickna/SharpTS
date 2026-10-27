@@ -26,8 +26,7 @@ public partial class RuntimeEmitter
         MethodBuilder InvokeMethodUnwrapped,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectReadRuntime ObjectRead,
-        EmittedReflectAssignment? ReflectAssignment,
-        EmittedStringCoercionRuntime StringCoercion
+        EmittedReflectAssignment? ReflectAssignment
     );
 
     private readonly record struct ProxyGetPropertyCheckInputs(
@@ -307,11 +306,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(proxyLabel);
         EmitProxySetCompiledCall(
             il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped), emitLoadObj,
-            () =>
-            {
-                emitLoadIndex();
-                il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
-            },
+            emitLoadIndex,
             emitLoadValue, emitLoadObj);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
