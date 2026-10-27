@@ -97,20 +97,6 @@ public partial class RuntimeEmitter
         LocalBuilder propNameLocal
     )
     {
-        // Check if object is frozen - if so, throw TypeError
-        var notFrozenLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
-        il.Emit(OpCodes.Brfalse, notFrozenLabel);
-
-        // Throw TypeError: Cannot define property on frozen object
-        il.Emit(OpCodes.Ldstr, "Cannot define property: object is not extensible");
-        il.Emit(OpCodes.Newobj, inputs.Errors.TypeErrorConstructor);
-        il.Emit(OpCodes.Call, inputs.Errors.CreateException);  // Wrap in .NET exception
-        il.Emit(OpCodes.Throw);
-
-        il.MarkLabel(notFrozenLabel);
-
         // ECMA-262 §10.1.6.3 [[DefineOwnProperty]]: throw TypeError when
         // adding a new property to a non-extensible object. \`PDSCanAddProperty\`
         // returns true when the object IS extensible OR the property already

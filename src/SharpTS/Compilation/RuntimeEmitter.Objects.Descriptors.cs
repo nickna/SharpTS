@@ -763,6 +763,8 @@ public partial class RuntimeEmitter
         );
 
         EmitDefinePropertyDescriptorMerge(
+        EmitExistingDescriptorIntegrity(il, inputs.DescriptorStorage, existingDescLocal);
+
             il,
             inputs.DescriptorStorage,
             dictLocal,
