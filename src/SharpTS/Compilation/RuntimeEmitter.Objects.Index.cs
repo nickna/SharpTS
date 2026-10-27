@@ -1648,7 +1648,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, objectWrite.FieldsProperty);
+        il.Emit(OpCodes.Call, objectWrite.Property);
         il.Emit(OpCodes.Ret);
 
         // $Array handler: unwrap to List<object?> elements, then set

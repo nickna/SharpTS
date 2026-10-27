@@ -866,6 +866,7 @@ public partial class RuntimeEmitter
         // carriers (boxed primitives, Date, and bound functions) whose own
         // storage branches otherwise created a shadow even for a getter-only
         // inherited accessor.
+        EmitSloppyClassInstanceSetGuard(il, inputs);
         var inheritedSetContinueLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -2349,8 +2350,52 @@ public partial class RuntimeEmitter
         il.MarkLabel(notUserConstructor);
     }
 
+    private readonly record struct ConstructorPrototypeSetGuardInputs(
+        bool ProxySelected,
+        EmittedReflectAssignment? ReflectAssignment,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        EmittedObjectReadRuntime ObjectRead,
+        MethodBuilder InvokeMethodUnwrapped,
+        MethodBuilder InvokeMethodValue,
+        EmittedErrorRuntime Errors,
+        Type UndefinedType,
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
+        bool HasStrictArgument);
+
     private void EmitConstructorPrototypeSetGuard(
         ILGenerator il, SetPropertyStrictInputs inputs, Action emitPrototype, Label create, Label reject)
+        => EmitConstructorPrototypeSetGuard(il,
+            new ConstructorPrototypeSetGuardInputs(inputs.ProxySelected, inputs.ReflectAssignment,
+                inputs.ObjectDescriptors, inputs.ObjectRead, inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue,
+                inputs.Errors, inputs.UndefinedType, inputs.ObjectPrototypes, true), emitPrototype, create, reject);
+
+    private void EmitSloppyClassInstanceSetGuard(ILGenerator il, SetPropertyInputs inputs)
+    {
+        var proceed = il.DefineLabel();
+        var reject = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Brfalse, proceed);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brfalse, proceed);
+        EmitConstructorPrototypeSetGuard(il,
+            new ConstructorPrototypeSetGuardInputs(inputs.ProxySelected, inputs.ReflectAssignment,
+                inputs.ObjectDescriptors, inputs.ObjectRead, inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue,
+                inputs.Errors, inputs.UndefinedType, inputs.ObjectPrototypes, false), () =>
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+            }, proceed, reject);
+        il.MarkLabel(reject);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(proceed);
+    }
+
+    private void EmitConstructorPrototypeSetGuard(
+        ILGenerator il, ConstructorPrototypeSetGuardInputs inputs, Action emitPrototype, Label create, Label reject)
     {
         var setter = il.DeclareLocal(_types.Object);
         var prototype = il.DeclareLocal(_types.Object);
@@ -2383,9 +2428,12 @@ public partial class RuntimeEmitter
                 () => il.Emit(OpCodes.Ldarg_0));
             var proxySetSucceeded = il.DefineLabel();
             il.Emit(OpCodes.Brtrue, proxySetSucceeded);
-            il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Brfalse, proxySetSucceeded);
-            GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Proxy set trap returned false");
+            if (inputs.HasStrictArgument)
+            {
+                il.Emit(OpCodes.Ldarg_3);
+                il.Emit(OpCodes.Brfalse, proxySetSucceeded);
+                GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Proxy set trap returned false");
+            }
             il.MarkLabel(proxySetSucceeded);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notProxy);
@@ -2575,7 +2623,6 @@ public partial class RuntimeEmitter
         EmitThrowTypeErrorWithName(il, inputs.Errors, "Cannot assign to property '", "' of constructor");
         il.MarkLabel(silent);
         il.Emit(OpCodes.Ret);
-        il.MarkLabel(fallback);
     }
 
     private void EmitClassInstanceSetStrict(ILGenerator il, SetPropertyStrictInputs inputs)
@@ -2583,8 +2630,6 @@ public partial class RuntimeEmitter
         var carrierFallback = il.DefineLabel();
         var reject = il.DefineLabel();
         var create = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Brfalse, carrierFallback);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, carrierFallback);
@@ -2612,6 +2657,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, carrierFallback);
 
         il.MarkLabel(reject);
+        var rejectStrict = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brtrue, rejectStrict);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(rejectStrict);
         EmitThrowTypeErrorWithName(il, inputs.Errors,
             "Cannot assign to read only property '", "' of object");
         il.MarkLabel(carrierFallback);
