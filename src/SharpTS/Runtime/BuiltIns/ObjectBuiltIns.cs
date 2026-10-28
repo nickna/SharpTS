@@ -1532,6 +1532,29 @@ public static partial class ObjectBuiltIns
             return target;
         }
 
+        if (props is SharpTSProxy proxySource)
+        {
+            var keys = proxySource.TrapOwnPropertyKeys(interpreter).ToList();
+            List<KeyValuePair<object, object?>> proxyEntries = [];
+            foreach (var key in keys)
+            {
+                if (key is null) continue;
+                var descriptor = key is SharpTSSymbol symbol
+                    ? proxySource.TrapGetOwnPropertyDescriptor(symbol, interpreter)
+                    : proxySource.TrapGetOwnPropertyDescriptor((string)key, interpreter);
+                if (descriptor is null or SharpTSUndefined
+                    || !SharpTSPropertyDescriptor.FromAnyObject(descriptor).Enumerable)
+                    continue;
+                var value = key is SharpTSSymbol symbolKey
+                    ? interpreter.GetSymbolPropertyValue(proxySource, symbolKey)
+                    : proxySource.TrapGet((string)key, interpreter);
+                proxyEntries.Add(new(key, ConvertDefinePropertiesDescriptor(interpreter, value)));
+            }
+            foreach (var entry in proxyEntries)
+                DefineProperty(interpreter, [target, entry.Key, entry.Value]);
+            return target;
+        }
+
         var ownProperties = props switch
         {
             ISharpTSOwnPropertyObject ownSource => ownSource.OwnProperties,
