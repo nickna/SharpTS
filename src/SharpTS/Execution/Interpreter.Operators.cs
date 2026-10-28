@@ -1222,6 +1222,7 @@ public partial class Interpreter
             SharpTSClass klass => klass.DeleteStaticSymbolProperty(symbol, strictMode),
             SharpTSClassPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSArray array => array.DeleteBySymbolStrict(symbol, strictMode),
+            SharpTSDate date => date.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSMath math => math.DeleteBySymbolStrict(symbol, strictMode),
             ISharpTSPrimitiveConstructor constructor => constructor.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSStringPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),

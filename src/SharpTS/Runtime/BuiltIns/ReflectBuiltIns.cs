@@ -520,6 +520,7 @@ public static class ReflectBuiltIns
                         SharpTSClassPrototype prototype => prototype.DefineSymbolProperty(symbolKey, descriptor),
                         SharpTSFunctionPrototype prototype => prototype.DefineProperty(symbolKey, descriptor),
                         ISharpTSPrimitiveConstructor constructor => constructor.DefineProperty(symbolKey, descriptor),
+                        SharpTSDate date => date.DefineProperty(symbolKey, descriptor),
                         SharpTSMath math => math.DefineProperty(symbolKey, descriptor),
                         SharpTSJSON json => json.DefineProperty(symbolKey, descriptor),
                         SharpTSStringPrototype prototype => prototype.DefineProperty(symbolKey, descriptor),
@@ -615,6 +616,10 @@ public static class ReflectBuiltIns
                     case SharpTSInstance inst:
                         keys.AddRange(inst.GetFieldNames().Select(k => (object?)k));
                         keys.AddRange(inst.GetSymbolPropertyNames().Select(s => (object?)s));
+                        break;
+                    case SharpTSDate date:
+                        keys.AddRange(date.OwnStringKeys().Cast<object?>());
+                        keys.AddRange(date.GetSymbolPropertyNames().Cast<object?>());
                         break;
                     case SharpTSMath math:
                         keys.AddRange(math.OwnStringKeys().Cast<object?>());

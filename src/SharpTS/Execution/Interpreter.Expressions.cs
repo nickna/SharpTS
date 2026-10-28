@@ -1285,6 +1285,9 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(GetPrimitiveConstructorSymbolValue(
                 primitiveConstructor, constructorSymbol, primitiveConstructor));
 
+        if (obj is SharpTSDate date && index is SharpTSSymbol dateSymbol)
+            return RuntimeValue.FromBoxed(GetSymbolPropertyValue(date, dateSymbol));
+
         if (obj is ISharpTSSymbolPropertyBag symbolBag
             && index is SharpTSSymbol bagSymbol)
         {
@@ -1701,6 +1704,13 @@ public partial class Interpreter
                 FunctionObjectProperties.TryGetStorage(obj, this, out var storage);
                 storage.SetPropertyStrict(key, value, strictMode);
             }
+            return RuntimeValue.FromBoxed(value);
+        }
+
+        if (obj is SharpTSDate && index is SharpTSSymbol dateSymbol)
+        {
+            if (!SharpTSProxy.OrdinarySet(this, obj, dateSymbol, value, obj) && strictMode)
+                throw StrictModeErrors.TypeError($"Cannot assign to symbol property '{dateSymbol}'");
             return RuntimeValue.FromBoxed(value);
         }
 

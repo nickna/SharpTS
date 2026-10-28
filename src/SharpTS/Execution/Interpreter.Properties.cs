@@ -871,6 +871,14 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is SharpTSDate date)
+            {
+                if (TryReadDescriptor(date.GetOwnPropertyDescriptor(symbol), receiver, out var value))
+                    return value;
+                current = ObjectBuiltIns.PrototypeOf(this, date);
+                continue;
+            }
+
             if (current is ISharpTSSymbolPropertyBag symbolBag)
             {
                 if (symbolBag.TryGetSymbolAccessor(symbol, out var getter, out _))
