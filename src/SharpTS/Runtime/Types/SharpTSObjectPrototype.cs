@@ -292,30 +292,26 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
 
     private static object? ToStringImpl(Interp? interpreter, object? target, List<object?> args)
     {
-        // ECMA-262 20.1.3.6: toString uses the @@toStringTag tag of the
-        // receiver. Kept conservative — extending this to every built-in tag
-        // broke Lodash's typeof detection (it uses `Object.prototype.toString.call`
-        // on functions and expected "[object Object]" back). Add new tags
-        // only when a specific spec test needs them.
         if (target == null) return "[object Null]";
         if (target is SharpTSUndefined) return "[object Undefined]";
-        if (target is SharpTSObject or SharpTSFunction or SharpTSArrowFunction
-            or SharpTSArray or SharpTSProxy or SharpTSInstance or SharpTSClass
-            or ISharpTSSymbolPropertyBag or SharpTSMath or SharpTSStringPrototype
-            or SharpTSRegExp or ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator
-            && interpreter?.GetSymbolPropertyValue(target, SharpTSSymbol.ToStringTag) is string customTag)
-            return $"[object {customTag}]";
+        if (interpreter is not null)
+        {
+            object tagReceiver = target switch
+            {
+                string => interpreter.GetStringPrototype(),
+                bool => interpreter.GetBooleanPrototype(),
+                double or int => interpreter.GetNumberPrototype(),
+                SharpTSBigInt or System.Numerics.BigInteger => interpreter.GetBigIntPrototype(),
+                SharpTSSymbol => interpreter.GetSymbolPrototype(),
+                _ => target,
+            };
+            if (interpreter.GetSymbolPropertyValue(tagReceiver, SharpTSSymbol.ToStringTag, target) is string customTag)
+                return $"[object {customTag}]";
+        }
         if (target is string) return "[object String]";
         if (target is double or int) return "[object Number]";
         if (target is bool) return "[object Boolean]";
-        if (target is SharpTSBigInt or System.Numerics.BigInteger)
-        {
-            object? tag = interpreter?.GetSymbolPropertyValue(
-                interpreter.GetBigIntPrototype(), SharpTSSymbol.ToStringTag);
-            return tag is string text
-                ? $"[object {text}]"
-                : "[object Object]";
-        }
+        if (target is SharpTSBigInt or System.Numerics.BigInteger) return "[object Object]";
         if (target is SharpTSArguments) return "[object Arguments]";
         if (target is SharpTSArray) return "[object Array]";
         if (target is SharpTSDate) return "[object Date]";
