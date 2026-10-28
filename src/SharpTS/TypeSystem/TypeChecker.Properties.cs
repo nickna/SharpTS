@@ -245,7 +245,7 @@ public partial class TypeChecker
 
         if (_hasDefaultLibraries &&
             get.Object is Expr.Variable { Name.Lexeme: "self" or "window" } &&
-            GetGlobalThisType().Members.TryGetValue(get.Name.Lexeme, out TypeInfo? windowGlobalMember))
+            TryGetGlobalThisMember(get.Name.Lexeme, out TypeInfo? windowGlobalMember))
             return windowGlobalMember;
 
         TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(get.Object));

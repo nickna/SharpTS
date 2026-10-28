@@ -1,6 +1,6 @@
 # SharpTS baseline-format=1 suite=TypeScriptTypes corpus=050880ce59e30b356b686bd3144efe24f875ebc8
 tests/cases/conformance/es2017/es2017DateAPIs.ts Mismatch matches=3 mismatches=0 missing=2 extra=0 unsupported=0 sha256=adcfe5e0d88eacfa502825bb30ab2eefe7da94ccfdf0bfc6fd8974074df56139
-tests/cases/conformance/es2019/globalThisTypeIndexAccess.ts Mismatch matches=0 mismatches=1 missing=1 extra=0 unsupported=0 sha256=823c6d83efd3b7c3da7ca672dd006b201b7831aa9c6887f30b8dac5c16007891
+tests/cases/conformance/es2019/globalThisTypeIndexAccess.ts Mismatch matches=1 mismatches=0 missing=1 extra=0 unsupported=0 sha256=261ee738817e936f42eeac4fbc4d6821676fa0ad2c68034010a0eb443e5de5f3
 tests/cases/conformance/es2020/constructBigint.ts Mismatch matches=12 mismatches=1 missing=11 extra=0 unsupported=4 sha256=e70bd73f2713e11ad7704b3c0c00670fa0b582982cdb4fc4567d304b7f30c3f6
 tests/cases/conformance/es2021/logicalAssignment/logicalAssignment9.ts Mismatch matches=5 mismatches=4 missing=3 extra=0 unsupported=0 sha256=cdfa66e1673b44da08d93547cb167d5a4427c04e4512369ba2ec8a007cbbb262
 tests/cases/conformance/es6/Symbols/symbolDeclarationEmit1.ts Mismatch matches=4 mismatches=0 missing=1 extra=0 unsupported=0 sha256=4fd95f4c9fcaae4d83046b0513373c3e307d7af7dcba7e66766f46401f795c48

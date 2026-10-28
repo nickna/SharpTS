@@ -2263,7 +2263,14 @@ public partial class TypeChecker
             ["globalThis"] = TypeInfo.Any.Shared,
         }).ToFrozenDictionary(StringComparer.Ordinal),
         FrozenSet<string>.Empty,
-        ReadonlyMembers: new[] { "globalThis" }.ToFrozenSet(StringComparer.Ordinal));
+        ReadonlyMembers: new[] { "globalThis" }.ToFrozenSet(StringComparer.Ordinal)) { IsGlobalThisObject = true };
+
+    private bool TryGetGlobalThisMember(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TypeInfo? member)
+    {
+        var global = GetGlobalThisType();
+        if (name == "globalThis") { member = global; return true; }
+        return global.Members.TryGetValue(name, out member);
+    }
 
     private void ReportUnusedImports(ParsedModule module)
     {

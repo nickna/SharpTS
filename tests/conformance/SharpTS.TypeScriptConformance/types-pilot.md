@@ -6,8 +6,8 @@ Measured against the fixed TypeScript v6.0.3 revision
 All twelve have the type outcome `Mismatch`; the pilot measures existing gaps
 and does not claim inferred-type parity.
 
-The upstream references contain **584 observations**: **164 exact matches**,
-**72 type-text differences**, **161 missing source observations**, and
+The upstream references contain **584 observations**: **165 exact matches**,
+**71 type-text differences**, **161 missing source observations**, and
 **187 unsupported displays**. There are **zero extra observations**, harness
 errors or missing baselines. SharpTS produces 423 corresponding source facts;
 unsupported facts are included in that count and never count as matches.
@@ -15,7 +15,7 @@ unsupported facts are included in that count and never count as matches.
 | Pinned case | Match | Text difference | Missing | Unsupported |
 |---|---:|---:|---:|---:|
 | `es2017/es2017DateAPIs.ts` | 3 | 0 | 2 | 0 |
-| `es2019/globalThisTypeIndexAccess.ts` | 0 | 1 | 1 | 0 |
+| `es2019/globalThisTypeIndexAccess.ts` | 1 | 0 | 1 | 0 |
 | `es2020/constructBigint.ts` | 12 | 1 | 11 | 4 |
 | `es2021/logicalAssignment/logicalAssignment9.ts` | 5 | 4 | 3 | 0 |
 | `es6/Symbols/symbolDeclarationEmit1.ts` | 4 | 0 | 1 | 0 |
@@ -29,19 +29,22 @@ unsupported facts are included in that count and never count as matches.
 
 ## Triage of every text difference
 
-The first fix for **50 differences** belongs in checking/inference. Seven scoped
+The first fix for **49 differences** belongs in checking/inference. Six scoped
 follow-ups preserve the pinned source evidence instead of expanding this pilot
 into a general checker campaign:
 
 | Cluster | Observations | Follow-up |
 |---|---:|---|
-| Indexed global-object access becomes `any` | 1 | [#3024](https://github.com/nickna/SharpTS/issues/3024) |
 | Logical property assignment results/member types become `any` | 4 | [#3025](https://github.com/nickna/SharpTS/issues/3025) |
 | Mutable object fields and inferred returns retain fresh literal types | 5 | [#3026](https://github.com/nickna/SharpTS/issues/3026) |
 | Switch case/default bodies retain the original literal union | 18 | [#3027](https://github.com/nickna/SharpTS/issues/3027) |
 | Recursive conditional mapping retains unresolved `Jsonified<...>` branches | 12 | [#3028](https://github.com/nickna/SharpTS/issues/3028) |
 | Higher-order indexed/conditional inference retains `infer R` or loses constraints | 7 | [#3029](https://github.com/nickna/SharpTS/issues/3029) |
 | Inherited `hasOwnProperty` replaces `PropertyKey` with `any` | 3 | [#3030](https://github.com/nickna/SharpTS/issues/3030) |
+
+The indexed global-object mismatch from [#3024](https://github.com/nickna/SharpTS/issues/3024)
+is now an exact match. Its missing type-query name observation remains visible;
+the twelve-case scope, diagnostic oracle and other eleven fingerprints are unchanged.
 
 The remaining **22 differences** first need display/source-query context work:
 
@@ -92,7 +95,7 @@ anonymous cycles. The complete standalone TypeScript conformance project passes
 baseline and externally consumed vocabulary are unchanged.
 
 Two consecutive explicit type-baseline generations are byte-identical:
-SHA-256 `1f22bd910842bc560f91a06bd80f1bb6d57d56ed503c71e928d1f4f521726db1`.
+SHA-256 `9fa50137f43557bc30d0e61b73cfb067b00356db144364882fbece5cc6e783ec`.
 Normal execution then verifies the committed counts and complete-result
 fingerprints with update mode disabled. The README documents generation,
 structured JSON output and full failure diffs. Future semantic or coverage fixes

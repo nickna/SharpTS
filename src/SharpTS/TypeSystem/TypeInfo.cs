@@ -571,6 +571,7 @@ public abstract record TypeInfo
         // protected receiver checks. Public mapped projections deliberately omit this origin.
         internal TypeInfo? ClassOrigin { get; init; }
         internal bool HasFunctionTypeofFacet { get; init; }
+        internal bool IsGlobalThisObject { get; init; }
         public bool ReadonlyStringIndex { get; init; }
         public bool ReadonlySymbolIndex { get; init; }
         internal FrozenDictionary<BindingSymbol, string>? SymbolMemberNames { get; init; }
@@ -623,7 +624,9 @@ public abstract record TypeInfo
             // Return own members first
             foreach (var member in Members)
             {
-                yield return member;
+                yield return IsGlobalThisObject && member.Key == "globalThis"
+                    ? new KeyValuePair<string, TypeInfo>(member.Key, this)
+                    : member;
             }
 
             // Then inherited members (that don't shadow own members)

@@ -63,7 +63,7 @@ public partial class TypeChecker
             (getIndex.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
              getIndex.Object is Expr.This && _currentClass is null))
         {
-            if (GetGlobalThisType().Members.TryGetValue(directGlobalProperty, out TypeInfo? directMember))
+            if (TryGetGlobalThisMember(directGlobalProperty, out TypeInfo? directMember))
                 return directMember;
             if (_globalObjectLexicalNames.Contains(directGlobalProperty))
                 throw new TypeCheckException(
@@ -81,7 +81,7 @@ public partial class TypeChecker
         if (_hasDefaultLibraries &&
             getIndex.Index is Expr.Literal { Value: string globalProperty } &&
             ContainsGlobalThisType(objType) &&
-            !GetGlobalThisType().Members.TryGetValue(globalProperty, out TypeInfo? globalMember))
+            !TryGetGlobalThisMember(globalProperty, out TypeInfo? globalMember))
         {
             bool direct = getIndex.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
                 getIndex.Object is Expr.This && _currentClass is null;
@@ -95,7 +95,7 @@ public partial class TypeChecker
         if (_hasDefaultLibraries &&
             getIndex.Index is Expr.Literal { Value: string knownGlobalProperty } &&
             ContainsGlobalThisType(objType) &&
-            GetGlobalThisType().Members.TryGetValue(knownGlobalProperty, out TypeInfo? knownGlobalMember))
+            TryGetGlobalThisMember(knownGlobalProperty, out TypeInfo? knownGlobalMember))
             return knownGlobalMember;
 
         // An enum-typed index (`x[E.A]` — enum member accesses type as the enum) participates
@@ -628,7 +628,7 @@ public partial class TypeChecker
     }
 
     private static bool ContainsGlobalThisType(TypeInfo type) =>
-        type is TypeInfo.Interface { Name: "typeof globalThis" } ||
+        type is TypeInfo.Interface { IsGlobalThisObject: true } ||
         type is TypeInfo.Intersection intersection &&
             intersection.FlattenedTypes.Any(ContainsGlobalThisType);
 
