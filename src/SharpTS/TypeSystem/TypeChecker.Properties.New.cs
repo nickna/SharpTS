@@ -377,7 +377,11 @@ public partial class TypeChecker
         }
 
         // Handle new EventEmitter() constructor
-        if (isSimpleName && simpleClassName == "EventEmitter")
+        if (isSimpleName && simpleClassName == "EventEmitter" &&
+            (_environment.Get(simpleClassName) is null ||
+             _environment.GetValueBinding(simpleClassName)?.Declarations.Any(declaration =>
+                 declaration.Name.Lexeme == "EventEmitter" &&
+                 Modules.Stdlib.Providers.EmbeddedStdlibProvider.TryExtractSpecifier(declaration.Document.Path) == "events") == true))
         {
             // Node's EventEmitter accepts an optional options object
             // ({ captureRejections?: boolean }). Reject anything beyond that.
@@ -741,6 +745,10 @@ public partial class TypeChecker
         if (calleeType is TypeInfo.Interface itf && itf.IsConstructable)
         {
             return CheckInterfaceConstructorCall(itf, newExpr.TypeArgs, newExpr.Arguments, qualifiedName, newExpr.TypeArgNodes);
+        }
+        if (calleeType is TypeInfo.Record record && record.IsConstructable)
+        {
+            return CheckInterfaceConstructorCall(record, newExpr.TypeArgs, newExpr.Arguments, qualifiedName, newExpr.TypeArgNodes);
         }
         if (calleeType is TypeInfo.GenericInterface gi && gi.IsConstructable)
         {
@@ -1196,13 +1204,14 @@ public partial class TypeChecker
     /// Returns the type produced by calling the constructor.
     /// </summary>
     private TypeInfo CheckInterfaceConstructorCall(
-        TypeInfo.Interface itf,
+        TypeInfo type,
         List<string>? typeArgs,
         List<Expr> arguments,
         string qualifiedName,
         List<TypeNode?>? typeArgNodes = null)
     {
-        if (itf.ConstructorSignatures == null || itf.ConstructorSignatures.Count == 0)
+        var signatures = GetConstructorSignatures(type);
+        if (signatures == null || signatures.Count == 0)
         {
             throw new TypeCheckException($" Interface '{qualifiedName}' is not constructable.", tsCode: "TS2351");
         }
@@ -1210,7 +1219,7 @@ public partial class TypeChecker
         List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
 
         // Try each constructor signature
-        foreach (var ctorSig in itf.ConstructorSignatures)
+        foreach (var ctorSig in signatures)
         {
             if (ctorSig.IsGeneric)
             {
