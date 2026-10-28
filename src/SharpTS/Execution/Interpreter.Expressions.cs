@@ -1838,7 +1838,7 @@ public partial class Interpreter
             if (ownDescriptor is { HasGet: true } or { HasSet: true }
                 && TryAssignThroughDescriptor(ownDescriptor, regexStringSet, key, value, strictMode))
                 return RuntimeValue.FromBoxed(value);
-            regexStringSet.SetProperty(key, value);
+            SetRegExpProperty(regexStringSet, key, value, strictMode);
             return RuntimeValue.FromBoxed(value);
         }
 

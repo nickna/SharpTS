@@ -3069,27 +3069,7 @@ public partial class Interpreter
                 return EvaluateSetOnRecord(set, obj!, memberName, value, strictMode);
 
             case TypeCategory.RegExp when obj is SharpTSRegExp regex:
-                // User-installed accessor (Object.defineProperty path) wins
-                // over configurable built-in slots, so a throwing setter MUST
-                // fire and propagate.
-                if (regex.TryGetAccessor(memberName, out _, out var userSetter)
-                    && userSetter != null)
-                {
-                    FunctionBuiltIns.CallWithThis(this, userSetter, regex, [value]);
-                    return value;
-                }
-                if (memberName == "lastIndex")
-                {
-                    // Route through RegExpBuiltIns.SetMember so the setter does
-                    // ECMA ToLength coercion (handles `undefined`, string, bool,
-                    // boxed objects) instead of a hard (double) cast that throws.
-                    Runtime.BuiltIns.RegExpBuiltIns.SetMember(
-                        regex, memberName, value, strictMode);
-                    return value;
-                }
-                // JS: RegExp instances are objects; allow arbitrary property assignment
-                // (minimatch stores `_src`/`_glob` this way).
-                regex.SetPropertyStrict(memberName, value, strictMode);
+                SetRegExpProperty(regex, memberName, value, strictMode);
                 return value;
 
             case TypeCategory.Error when obj is SharpTSError error:
@@ -3211,6 +3191,35 @@ public partial class Interpreter
             default:
                 return EvaluateSetFallback(obj, memberName, value);
         }
+    }
+
+    private void SetRegExpProperty(SharpTSRegExp regex, string name, object? value, bool strictMode)
+    {
+        var own = regex.GetOwnPropertyDescriptor(name);
+        if (TryAssignThroughDescriptor(own, regex, name, value, strictMode)) return;
+        if (own is null)
+        {
+            object? current = GetRegExpPrototype();
+            for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
+            {
+                if (current is SharpTSProxy proxy)
+                {
+                    if (!proxy.TrapSetProperty(name, value, this, regex) && strictMode)
+                        throw StrictModeErrors.TypeError($"Cannot assign to property '{name}'");
+                    return;
+                }
+                if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, current, name) is { } descriptor)
+                {
+                    if (TryAssignThroughDescriptor(descriptor, regex, name, value, strictMode)) return;
+                    break;
+                }
+                current = ObjectBuiltIns.PrototypeOf(this, current);
+            }
+        }
+        if (name == "lastIndex")
+            RegExpBuiltIns.SetMember(regex, name, value, strictMode);
+        else
+            regex.SetPropertyStrict(name, value, strictMode);
     }
 
     private object? GetArrayNamedProperty(
