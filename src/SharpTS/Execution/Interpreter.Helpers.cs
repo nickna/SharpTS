@@ -541,7 +541,7 @@ public partial class Interpreter
     {
         if (executor is not ISharpTSCallable callable)
         {
-            throw new InterpreterException("Promise executor must be callable.");
+            throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError("Promise executor must be callable."));
         }
 
         // The executor wiring (host resolve/reject callbacks, promise

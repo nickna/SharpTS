@@ -95,11 +95,7 @@ public partial class Interpreter
             if (simpleClassName == BuiltInNames.Promise)
             {
                 var promiseArgs = await EvaluateNewArgumentsCore(ctx, newExpr.Arguments);
-                if (promiseArgs.Count != 1)
-                {
-                    throw new InterpreterException($"{BuiltInNames.Promise} constructor requires exactly 1 argument (executor function), got {promiseArgs.Count}.");
-                }
-                return CreatePromiseFromExecutor(promiseArgs[0]);
+                return CreatePromiseFromExecutor(promiseArgs.Count > 0 ? promiseArgs[0] : SharpTSUndefined.Instance);
             }
 
             // Try factory for all other built-in constructors
@@ -254,11 +250,7 @@ public partial class Interpreter
             if (simpleClassName == BuiltInNames.Promise)
             {
                 var promiseArgs = EvaluateNewArguments(newExpr.Arguments);
-                if (promiseArgs.Count != 1)
-                {
-                    throw new InterpreterException($"{BuiltInNames.Promise} constructor requires exactly 1 argument (executor function), got {promiseArgs.Count}.");
-                }
-                return RuntimeValue.FromObject(CreatePromiseFromExecutor(promiseArgs[0]));
+                return RuntimeValue.FromObject(CreatePromiseFromExecutor(promiseArgs.Count > 0 ? promiseArgs[0] : SharpTSUndefined.Instance));
             }
 
             // Try factory for all other built-in constructors
