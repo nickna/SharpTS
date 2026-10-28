@@ -1246,7 +1246,18 @@ public static partial class ObjectBuiltIns
         // __proto__ can't spin here.
         for (int i = 0; i < 64 && current is not null and not SharpTSUndefined; i++)
         {
-            var descriptor = OwnPropertyDescriptorOf(interpreter, current, propertyKey);
+            SharpTSPropertyDescriptor? descriptor;
+            if (current is SharpTSProxy proxy)
+            {
+                var result = proxy.TrapGetOwnPropertyDescriptor(propertyKey, interpreter);
+                descriptor = result is null or SharpTSUndefined
+                    ? null
+                    : SharpTSPropertyDescriptor.FromAnyObject(result);
+            }
+            else
+            {
+                descriptor = OwnPropertyDescriptorOf(interpreter, current, propertyKey);
+            }
             if (descriptor != null)
             {
                 var accessor = isGetter ? descriptor.Get : descriptor.Set;
