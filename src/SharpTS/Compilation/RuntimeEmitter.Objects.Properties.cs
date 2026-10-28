@@ -362,7 +362,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         MethodBuilder ToPascalCase,
         FieldInfo UndefinedInstance,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativePropertyGetter = null
     );
 
     private readonly record struct GetListPropertyInputs(
@@ -1053,26 +1054,42 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.ToPascalCase);
         il.Emit(OpCodes.Stloc, pascalNameLocal);
 
-        // Try to get property: obj.GetType().GetProperty(pascalName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase)
-        var propertyInfoLocal = il.DeclareLocal(_types.PropertyInfo);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldloc, pascalNameLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
-        il.Emit(OpCodes.Stloc, propertyInfoLocal);
-
-        // If property found, call getter
         var noPropertyLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, propertyInfoLocal);
-        il.Emit(OpCodes.Brfalse, noPropertyLabel);
+        if (inputs.NativePropertyGetter is { } nativeGetter)
+        {
+            var getter = il.DeclareLocal(_types.MethodInfo);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldloc, pascalNameLocal);
+            il.Emit(OpCodes.Call, nativeGetter); il.Emit(OpCodes.Stloc, getter);
+            il.Emit(OpCodes.Ldloc, getter); il.Emit(OpCodes.Brfalse, noPropertyLabel);
+            il.Emit(OpCodes.Ldloc, getter); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+            EmitNormalizeClrNumericReturn(il); il.Emit(OpCodes.Ret);
+        }
+        else
+        {
+            // Try to get property: obj.GetType().GetProperty(pascalName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase)
+            var propertyInfoLocal = il.DeclareLocal(_types.PropertyInfo);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldloc, pascalNameLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
+            il.Emit(OpCodes.Stloc, propertyInfoLocal);
 
-        // return propertyInfo.GetValue(obj)
-        il.Emit(OpCodes.Ldloc, propertyInfoLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.PropertyInfo, "GetValue", _types.Object));
-        EmitNormalizeClrNumericReturn(il);
-        il.Emit(OpCodes.Ret);
+            // If property found, call getter
+            il.Emit(OpCodes.Ldloc, propertyInfoLocal);
+            il.Emit(OpCodes.Brfalse, noPropertyLabel);
+
+            // return propertyInfo.GetValue(obj)
+            il.Emit(OpCodes.Ldloc, propertyInfoLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.PropertyInfo, "GetValue", _types.Object));
+            EmitNormalizeClrNumericReturn(il);
+            il.Emit(OpCodes.Ret);
+
+        }
 
         il.MarkLabel(noPropertyLabel);
 

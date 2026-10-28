@@ -53,12 +53,13 @@ public partial class RuntimeEmitter
 
     internal EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, RuntimeFeatureSet features, FunctionEmissionPolicy functionPolicy,
         NativeSourceOwnerCatalog? sourceOwners = null, MethodInfo? nativeClassInitializer = null,
-        MethodInfo? nativeStaticMemberPresence = null)
+        MethodInfo? nativeStaticMemberPresence = null, MethodBuilder? nativePropertyGetter = null)
     {
         _features = features;
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
+        if (nativePropertyGetter is not null) runtime.ReflectedMethods.DeclareNativePropertyGetter(moduleBuilder, nativePropertyGetter);
         if (sourceOwners != null) runtime.ClassInitialization.DeclareSourceOwners(sourceOwners);
         if (nativeClassInitializer != null)
             runtime.ClassInitialization.DeclareNativeInitializer(nativeClassInitializer);

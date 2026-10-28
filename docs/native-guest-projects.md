@@ -309,6 +309,22 @@ than guest variable names or type annotations. Pure metadata reads and ordinary
 typed CLR calls remain supported. This bounded refusal does not certify other
 reflection or metadata execution capabilities.
 
+The optional property-lookup catalog replaces only the `GetFieldsProperty`
+property reflection operation. It admits exact registered same-output role types,
+completed source-owner declarations and explicit framework guest carriers. Rows
+come from their complete public instance property inventory; receiver subclasses
+do not inherit admission. Unique rows use a declaring-type-qualified getter token
+and the existing reflective invocation/numeric normalization. Duplicate case-insensitive
+candidate groups retain a literal, positively owned `Type.GetProperty` operation.
+Owners with nonpublic accessors anywhere in their base chain, or unsupported
+builder enumeration, retain that same literal-owner operation for all names.
+This avoids treating builder visibility/hiding as proof of saved runtime absence;
+the actual runtime binder and its exceptions remain authoritative.
+A complete owner miss continues to the existing method/prototype lookup; an
+unproved owner or a setter-only property produces an explicit native TypeError at
+this operation. Default managed output retains its original lookup body.
+`SafeGetMethod` and general runtime reflection fallbacks remain separate work.
+
 A broader closed profile still needs producer-to-use provenance at these boundaries:
 
 | Producer | Information available at emission | Required closure |

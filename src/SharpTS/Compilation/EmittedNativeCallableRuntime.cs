@@ -25,6 +25,8 @@ public sealed class EmittedNativeCallableRuntime
     public MethodInfo Invoke { get; }
     public bool IsComplete { get; private set; }
     public int CarrierCount => _implementations.Count;
+    internal IReadOnlyList<TypeBuilder> Carriers => IsComplete ? Array.AsReadOnly(_implementations.Keys.ToArray()) :
+        throw new InvalidOperationException("Native callable carrier metadata is incomplete.");
     public EmittedNativeSourceFunctionRuntime? SourceFunctions { get; private set; }
 
     internal EmittedNativeSourceFunctionRuntime BeginSourceFunctionsEmission()

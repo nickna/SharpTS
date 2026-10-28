@@ -9,6 +9,18 @@ public sealed class EmittedReflectedMethodRuntime
     internal EmittedReflectedMethodRuntime() { }
     public bool IsComplete { get; private set; }
     private bool _callableFinalized;
+    internal System.Reflection.MethodInfo? NativePropertyGetter { get; private set; }
+
+    internal void DeclareNativePropertyGetter(ModuleBuilder module, MethodBuilder getter)
+    {
+        EnsureMutable();
+        if (NativePropertyGetter is not null || !ReferenceEquals(module, getter.Module) || !getter.IsStatic || getter.IsGenericMethod ||
+            getter.ReturnType != typeof(System.Reflection.MethodInfo) || getter.GetParameters().Length != 2 ||
+            getter.GetParameters()[0].ParameterType != typeof(Type) || getter.GetParameters()[1].ParameterType != typeof(string))
+            throw new InvalidOperationException("Native property lookup requires one exact static Type/string metadata helper.");
+        NativePropertyGetter = getter;
+    }
+
     public MethodBuilder? NativeProxyRejection { get; private set; }
 
     internal void DeclareNativeProxyRejection(TypeBuilder owner, MethodBuilder method)

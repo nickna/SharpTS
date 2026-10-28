@@ -1466,6 +1466,10 @@ public class TypeProvider
         return type.GetInterfaces();
     }
 
+    /// <summary>Reads registered owner property metadata for serialization, never invoking its getters.</summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = EmitMetadataLookupJustification)]
+    internal PropertyInfo[] GetProperties(Type type, BindingFlags bindingFlags) => type.GetProperties(bindingFlags);
+
     /// <summary>
     /// Gets all public methods from a type.
     /// </summary>

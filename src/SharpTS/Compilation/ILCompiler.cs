@@ -757,6 +757,7 @@ public partial class ILCompiler
             _nativeStaticMemberPresence = new(_moduleBuilder, _types);
 
             _nativeReceiverBinding = new(_moduleBuilder, _types);
+            _nativePropertyLookup = new(_moduleBuilder, _types);
             _functionEmissionPolicy = _functionEmissionPolicy with
             {
                 NativeGenericNormalizer = _nativeGenericMethodNormalization.Normalize,
@@ -775,7 +776,9 @@ public partial class ILCompiler
         _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput,
             _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true)) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy,
-                _nativeSourceOwners, _nativeRuntimeClassInitialization?.Initialize, _nativeStaticMemberPresence?.HasMember);
+                _nativeSourceOwners, nativeClassInitializer: _nativeRuntimeClassInitialization?.Initialize,
+                nativeStaticMemberPresence: _nativeStaticMemberPresence?.HasMember,
+                nativePropertyGetter: _nativePropertyLookup?.FindGetter);
         if (_runtime.GuestOwnProperties is { } own) GetClassRegistry().BeginNativeOwnProperties(own);
         _typeMapper.SetRuntime(_runtime);
     }
@@ -1265,6 +1268,7 @@ public partial class ILCompiler
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
 
         _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
+        _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
@@ -1929,6 +1933,7 @@ public partial class ILCompiler
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
 
         _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
+        _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();

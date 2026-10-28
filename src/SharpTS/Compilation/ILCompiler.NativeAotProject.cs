@@ -6,6 +6,8 @@ namespace SharpTS.Compilation;
 public partial class ILCompiler
 {
     private bool _nativeAotProjectOutput;
+    private NativePropertyLookupCatalog? _nativePropertyLookup;
+    internal NativePropertyLookupCatalog? NativeProperties => _nativePropertyLookup;
     private NativeClrAdmission? _nativeClrAdmission;
     private TypeBuilder? _nativeAotEntryFacade;
     private NativeClassInitializationEmission? _nativeClassInitialization;
@@ -41,6 +43,8 @@ public partial class ILCompiler
         if (!_nativeAotProjectOutput) return;
         (_nativeClrAdmission ?? throw new InvalidOperationException("Native CLR admission has not started source emission."))
             .ThrowIfIncompatible();
+        if (_nativePropertyLookup?.IsComplete != true)
+            throw new InvalidOperationException("Native property metadata has not completed source emission.");
     }
 
     private void RecordSourceRewrite(object source, object target)

@@ -1127,7 +1127,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.ReflectedMethods.ToPascalCase,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Sentinels.UndefinedType
+                runtime.Sentinels.UndefinedType,
+                runtime.ReflectedMethods.NativePropertyGetter
             )
         );
         EmitGetListProperty(
