@@ -86,6 +86,7 @@ internal sealed partial class NativeClrAdmission
             return;
         }
         _selections.Add(new(source, member, resultType, marshalling));
+        CheckReflectedMetadataCapability(member, source);
         _effects.Add(source);
         if (receiver is not null) AllowReceiver(source, receiver);
         else if (source is Expr.Call { Callee: Expr.Get get }) AllowReceiver(source, get.Object);

@@ -96,10 +96,13 @@ public class NativeClrAdmissionTests
         Assert.Equal("true true\n", Execute(Compile(source, true).SaveToBytes()));
     }
 
-    [Fact]
-    public void FailedAdmissionAlsoGuardsEverySaveEntryBeforeWriting()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FailedAdmissionAlsoGuardsEverySaveEntryBeforeWriting(bool reflection)
     {
-        var statements = new Parser(new Lexer(Builder + "throw new Builder();").ScanTokens(), DecoratorMode.Legacy).ParseOrThrow();
+        string source = reflection ? ReflectionWrite : Builder + "throw new Builder();";
+        var statements = new Parser(new Lexer(source).ScanTokens(), DecoratorMode.Legacy).ParseOrThrow();
         var checker = new TypeChecker(); checker.SetDecoratorMode(DecoratorMode.Legacy); var types = checker.Check(statements);
         var compiler = new ILCompiler("native_clr_save", false, true, null, null, null, OutputTarget.Dll);
         compiler.EnableNativeAotProjectOutput();
@@ -631,6 +634,104 @@ public class NativeClrAdmissionTests
         var error = Assert.Throws<CompileException>(() => Compile(source, true));
         Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code);
         Assert.Contains("guest reference pass-through", error.Message);
+    }
+
+    private const string ReflectionMetadata = Builder + """
+        @DotNetType("System.Reflection.Assembly")
+        declare class ClrAssembly { static getExecutingAssembly(): ClrAssembly; getType(name: string): ClrType; }
+        @DotNetType("System.Type")
+        declare class ClrType { getField(name: string): ClrField; name: string; }
+        @DotNetType("System.Reflection.FieldInfo")
+        declare class ClrField { setValue(target: any, value: any): void; name: string; }
+        class Guest { static leaked: any = null; }
+        const value: Builder = new Builder(); value.append('opaque');
+        const assembly: ClrAssembly = ClrAssembly.getExecutingAssembly();
+        const owner: ClrType = assembly.getType('Guest');
+        const field: ClrField = owner.getField('leaked');
+        """;
+    private const string ReflectionWrite = ReflectionMetadata + "field.setValue(null, value); console.log('reflection', Guest.leaked.toString());";
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReflectedFieldWriteCannotAddressGuestStorageThroughMetadataOrItsCheckedAlias(bool alias)
+    {
+        string source = alias ? ReflectionWrite.Replace("field.setValue", "const alias: ClrField = field; alias.setValue") : ReflectionWrite;
+        Assert.Equal("reflection opaque\n", Execute(Compile(source, false).SaveToBytes()));
+        var error = Assert.Throws<CompileException>(() => Compile(source, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code);
+        Assert.Contains("reflected metadata execution/mutation", error.Message);
+        Assert.Contains("target ownership", error.Message); Assert.NotNull(error.Diagnostic.Location);
+    }
+
+    [Fact]
+    public void PureReflectedMetadataReadsAndDirectTypedCallsRemainSupported()
+    {
+        Assert.Equal("Guest leaked opaque\n", Execute(Compile(ReflectionMetadata + "console.log(owner.name, field.name, value.toString());", true).SaveToBytes()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReflectedDelegateCannotInvokeAGuestFunctionWithAnOpaqueClrArgument(bool staticFactory)
+    {
+        string source = Builder + """
+            @DotNetType("System.Reflection.Assembly")
+            declare class ClrAssembly { static getExecutingAssembly(): ClrAssembly; getType(name: string): ClrType; }
+            @DotNetType("System.Type")
+            declare class ClrType { getMethod(name: string): ClrMethod; }
+            @DotNetType("System.Reflection.MethodInfo")
+            declare class ClrMethod { createDelegate(type: any): ClrFunction; }
+            @DotNetType("System.Func`2[System.Object,System.Double]")
+            declare class ClrFunction { invoke(value: any): number; }
+            class Guest { static leaked: any = null; }
+            function store(value: any): number { Guest.leaked = value; return 1; }
+            const value: Builder = new Builder(); value.append('opaque');
+            const assembly: ClrAssembly = ClrAssembly.getExecutingAssembly();
+            const owner: ClrType = assembly.getType('$Program');
+            const method: ClrMethod = owner.getMethod('store');
+            const action: ClrFunction = method.createDelegate(ClrFunction);
+            action.invoke(value); console.log('delegate', Guest.leaked.toString());
+            """;
+        if (staticFactory)
+            source = source.Replace("class Guest {", "@DotNetType(\"System.Delegate\") declare class ClrDelegate { static createDelegate(type: any, method: ClrMethod): ClrFunction; } class Guest {")
+                .Replace("method.createDelegate(ClrFunction)", "ClrDelegate.createDelegate(ClrFunction, method)");
+        Assert.Equal("delegate opaque\n", Execute(Compile(source, false).SaveToBytes()));
+        var error = Assert.Throws<CompileException>(() => Compile(source, true));
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code);
+        Assert.Contains(staticFactory ? "System.Delegate.CreateDelegate" : "MethodInfo.CreateDelegate", error.Message);
+        Assert.Contains("target ownership", error.Message);
+    }
+
+    public static IEnumerable<object[]> ReflectedExecutionOverloads()
+    {
+        foreach (var type in new[] { typeof(FieldInfo), typeof(PropertyInfo), typeof(MethodBase), typeof(ConstructorInfo), typeof(MethodInfo), typeof(Delegate), typeof(System.Reflection.TypeDelegator) })
+            foreach (var method in type.GetMethods().Where(method => method.Name is "SetValue" or "Invoke" or "InvokeMember" or "CreateDelegate"))
+                yield return [method];
+    }
+
+    [Theory]
+    [MemberData(nameof(ReflectedExecutionOverloads))]
+    public void ReflectedExecutionUsesActualOverloadAndInheritedDeclaringTypeIdentity(MethodInfo method)
+    {
+        var source = new Expr.Literal(1d);
+        var admission = NativeClrAdmission.Capture([new Stmt.Expression(source)], new TypeMap(), TypeProvider.Runtime);
+        admission.Record(source, method, method.ReturnType, NativeClrAdmission.Marshalling.MethodResult);
+        var error = Assert.Throws<CompileException>(admission.Complete);
+        Assert.Equal(DiagnosticCode.NativeGuestClrEscape, error.Diagnostic.Code);
+        Assert.Contains("reflected metadata execution/mutation", error.Message);
+    }
+
+    [Fact]
+    public void OrdinaryClrMembersWithTheSameNamesAreNotMetadataCapabilities()
+    {
+        foreach (var method in new[] { typeof(Array).GetMethod("SetValue", [typeof(object), typeof(int)])!, typeof(Action).GetMethod("Invoke")! })
+        {
+            var source = new Expr.Literal(1d);
+            var admission = NativeClrAdmission.Capture([new Stmt.Expression(source)], new TypeMap(), TypeProvider.Runtime);
+            admission.Record(source, method, method.ReturnType, NativeClrAdmission.Marshalling.MethodResult);
+            admission.Complete();
+        }
     }
 
     private static ILCompiler CompileModule(string source, bool native) =>

@@ -256,7 +256,14 @@ serialization. Failed admission also guards `Save`, `SaveToBytes` and
 fallback is removed, and this bounded slice is not a complete closure or a
 warning-free native compatibility claim. In particular, consumer conversion proof does
 not certify reflection or metadata capabilities: a selected API may address guest
-state by assembly/type/member identity without receiving a guest object argument.
+state by assembly/type/member identity without receiving a guest object argument. Selected `FieldInfo.SetValue`, `PropertyInfo.SetValue`,
+`MethodBase`/`ConstructorInfo.Invoke`, `Type.InvokeMember` and
+`MethodInfo.CreateDelegate`/`Delegate.CreateDelegate` operations therefore
+refuse with `SHARPTS405` until their addressed target ownership is proved. The
+rule follows actual metadata declaring-type ancestry and all overloads, rather
+than guest variable names or type annotations. Pure metadata reads and ordinary
+typed CLR calls remain supported. This bounded refusal does not certify other
+reflection or metadata execution capabilities.
 
 A broader closed profile still needs producer-to-use provenance at these boundaries:
 
