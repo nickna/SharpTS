@@ -2258,6 +2258,25 @@ the full legacy operation. The optional handle is passed through class and
 Symbol initialization inputs rather than inferred by a runtime helper. Ordinary
 managed and default runtime-emitter output retain their existing operations.
 
+Native receiver binding has a separate per-output producer session. The actual
+arrow display-field declaration registers a mutable public object `this` field
+and adds its exact direct setter interface implementation. Both finalization
+pipelines freeze producers before serialization. The late receiver helper trusts
+that interface only after comparing actual assembly objects; external types do
+not gain ownership from a name or an interface alone.
+
+`BuildArtifacts` checks the final PE after reference/debug rewriting, before any
+save API returns bytes or writes files. Every public instance exact-name `this`
+field and direct interface implementation must match its registered owner,
+field, setter signature, override and direct store. All owned base chains must
+end in fixed literal roots queried by the helper; dependent foreign generic
+ancestry and unregistered or unusual fields refuse with SHARPTS406. Framework
+fields are queried through literal types, including inherited fields, rather
+than assumed absent. External receivers require exact type equality with a
+finite framework set; all other targets get a guest TypeError. The private
+CoreLib RuntimeType literal has a native-only checked reference-index seam;
+ordinary retargeting and the default reflective BindThis body remain unchanged.
+
 ### Generated union metadata
 
 `UnionTypeGenerator` fixes its type mapper and marker interface at construction. The

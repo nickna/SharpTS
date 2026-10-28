@@ -594,6 +594,45 @@ guest suppressions or metadata-root configuration. Normal output keeps its PE si
 and every method body. Strict console diagnostics fall from 30 to 27, removing
 exactly the three HasOwnPropertyHelper IL2070 records with no additions.
 
+### Receiver-field binding
+
+Prepared native output supplies a scoped receiver binder to `$TSFunction`.
+Compiler-created lexical receiver fields use a direct setter on their actual
+display-class owner, including generic owners. No function constructor, cache
+key, receiver convention or function identity changes. Dictionary acquisition
+keeps its existing `_expectsThis` guard and lexical-arrow exclusion.
+
+Before returning or writing any saved image, a final PE certificate accounts for
+every public instance field named `this`, its exact setter and interface
+implementation, and every generated base chain. Unregistered, readonly or
+non-object receiver fields and unproved foreign/dependent generic ancestry
+refuse with SHARPTS406. The certificate trusts actual output assembly identity,
+not a type name or interface supplied by another assembly.
+
+Generated receivers without such a field query their fixed framework root using
+literal `GetField("this", Public|Instance)` and preserve any real inherited field.
+Exact framework receiver types use the same literal lookup: object, object array,
+object List, string/object and object/object Dictionaries, object HashSet,
+`Func<object[],object>`, string, bool, double, BigInteger, RuntimeType, Exception,
+SocketException, object/object ConditionalWeakTable and object WeakReference.
+Other CLR receivers, including field-bearing subclasses of these types, throw a
+guest TypeError at the former reflective lookup point. This boundary does not
+silently treat an unknown target as having no field. Ordinary/default emitter
+APIs retain the public reflective behavior.
+
+Literal framework queries need no SDK certificate, runtime-pack pin, publish
+hook, broad roots or warning suppression. The private RuntimeType token retains
+its exact CoreLib reference; public signatures still use normal facade
+retargeting. Actual native-compiler export and native execution cover generic
+owners, async/generator suspension, captured functions, defaults/rest arguments,
+aliases and inherited Object helpers. An independent native public-constructor
+probe accepts all sixteen exact framework types and rejects a foreign Exception
+subclass without changing its public field. Ordinary console and larger function
+corpus outputs retain identical sizes and every method body. Against immutable
+`5073a305d`, strict console publication changes 36 diagnostics to 35, removing
+only `$TSFunction.BindThis` IL2075 and adding none. Strict acceptance remains
+incomplete.
+
 ## Warning policy and remaining work
 
 The exported project uses `PublishAot=true`, `SelfContained=true`, its explicit

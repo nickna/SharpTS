@@ -1095,6 +1095,17 @@ public partial class RuntimeEmitter
         functionValues.BindThis = bindThisBuilder;
 
         var bindThisIL = bindThisBuilder.GetILGenerator();
+        if (inputs.Policy.NativeReceiverBinder is { } receiverBinder)
+        {
+            if (receiverBinder.Module.ModuleVersionId != moduleBuilder.ModuleVersionId || !receiverBinder.IsStatic ||
+                receiverBinder.ReturnType != _types.Void || receiverBinder.IsGenericMethod ||
+                !receiverBinder.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual([_types.Object, _types.Object]))
+                throw new InvalidOperationException("Native receiver binding requires this output's exact static void(object,object) helper.");
+            bindThisIL.Emit(OpCodes.Ldarg_0); bindThisIL.Emit(OpCodes.Ldfld, targetField);
+            bindThisIL.Emit(OpCodes.Ldarg_1); bindThisIL.Emit(OpCodes.Call, receiverBinder); bindThisIL.Emit(OpCodes.Ret);
+        }
+        else
+        {
         var noTargetLabel = bindThisIL.DefineLabel();
         var endLabel = bindThisIL.DefineLabel();
         var thisFieldLocal = bindThisIL.DeclareLocal(_types.FieldInfo);
@@ -1161,6 +1172,7 @@ public partial class RuntimeEmitter
         bindThisIL.MarkLabel(noTargetLabel);
         bindThisIL.MarkLabel(endLabel);
         bindThisIL.Emit(OpCodes.Ret);
+        }
 
         // Length property: returns the number of required parameters (excluding rest, optional, and those with defaults)
         // public int get_Length()

@@ -755,10 +755,13 @@ public partial class ILCompiler
             _nativeUnionArgumentConversion = new(_moduleBuilder, _types);
             _nativeRuntimeClassInitialization = new(_moduleBuilder, _types);
             _nativeStaticMemberPresence = new(_moduleBuilder, _types);
+
+            _nativeReceiverBinding = new(_moduleBuilder, _types);
             _functionEmissionPolicy = _functionEmissionPolicy with
             {
                 NativeGenericNormalizer = _nativeGenericMethodNormalization.Normalize,
-                NativeUnionConverter = _nativeUnionArgumentConversion.Convert
+                NativeUnionConverter = _nativeUnionArgumentConversion.Convert,
+                NativeReceiverBinder = _nativeReceiverBinding.Bind
             };
         }
         if (_nativeAotProjectOutput && _functionEmissionPolicy.BindNumericRest4)
@@ -1260,6 +1263,8 @@ public partial class ILCompiler
         _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
         _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
+
+        _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
@@ -1922,6 +1927,8 @@ public partial class ILCompiler
         _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
         _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
+
+        _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
@@ -2032,6 +2039,9 @@ public partial class ILCompiler
                 ? new DirectoryReferenceAssemblyIndex(_sdkPath)
                 : EmbeddedReferenceAssemblyIndex.Default;
 
+            if (_nativeReceiverBinding is not null)
+                referenceIndex = new NativeRuntimeTypeReferenceIndex(referenceIndex, _nativeReceiverBinding.RuntimeType, tempStream.ToArray());
+
             image = AssemblyReferenceRewriteCompatibility.Rewrite(
                 tempStream.ToArray(), referenceIndex, ReferencePolicy.DroppingReferences("SharpTS"));
         }
@@ -2041,7 +2051,10 @@ public partial class ILCompiler
         }
 
         if (!EmitDebugSymbols)
+        {
+            _nativeReceiverBinding?.ValidateImage(image);
             return new CompilationArtifacts(image, null, null);
+        }
 
         // The rewriter rebuilds the PE from scratch; prove it kept MethodDef identities before
         // describing the result with symbols derived from the pre-rewrite emit.
@@ -2061,6 +2074,8 @@ public partial class ILCompiler
 
         image = DebugDirectoryInjector.Inject(
             image, pdb.ContentId, pdb.FormatVersion, pdbPath, pdb.Checksum, PdbEmitter.ChecksumAlgorithmName);
+
+        _nativeReceiverBinding?.ValidateImage(image);
 
         return new CompilationArtifacts(image, pdb.Bytes, Path.GetFileName(pdbPath));
     }

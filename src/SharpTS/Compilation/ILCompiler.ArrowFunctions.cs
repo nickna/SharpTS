@@ -441,6 +441,7 @@ public partial class ILCompiler
                         ? _types.Double
                         : _types.Object;
                     var field = displayClass.DefineField(capturedVar, captureType, FieldAttributes.Public);
+                    if (capturedVar == "this") _nativeReceiverBinding?.Register(field);
                     fieldMap[capturedVar] = field;
                 }
                 _closures.DisplayClassFields[arrow] = fieldMap;

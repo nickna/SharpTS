@@ -64,6 +64,8 @@ public enum DiagnosticCode
     NativeGuestTargetMismatch = 404,
     /// <summary>A CLR value escapes the bounded native typed domain.</summary>
     NativeGuestClrEscape = 405,
+    /// <summary>The final native guest image does not prove receiver-field coverage.</summary>
+    NativeGuestReceiverCertificate = 406,
 
     // Config errors (5XX)
     /// <summary>Configuration error.</summary>

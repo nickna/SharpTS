@@ -22,6 +22,8 @@ public partial class ILCompiler
     private NativeStaticMemberPresence? _nativeStaticMemberPresence;
     internal NativeStaticMemberPresence? NativeStaticMembers => _nativeStaticMemberPresence;
 
+    private NativeReceiverBinding? _nativeReceiverBinding;
+
     private NativeClassInitializationEmission? GetNativeClassInitialization() =>
         !_nativeAotProjectOutput || _programType is null ? null :
             _nativeClassInitialization ??= new(_programType, _types, _classes.GenericParameters);
