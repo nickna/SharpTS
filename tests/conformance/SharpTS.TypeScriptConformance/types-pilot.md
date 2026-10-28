@@ -29,7 +29,7 @@ unsupported facts are included in that count and never count as matches.
 
 ## Triage of every text difference
 
-The first fix for **45 differences** belongs in checking/inference. Five scoped
+The first fix for **42 differences** belongs in checking/inference. Four scoped
 follow-ups preserve the pinned source evidence instead of expanding this pilot
 into a general checker campaign:
 
@@ -39,7 +39,6 @@ into a general checker campaign:
 | Switch case/default bodies retain the original literal union | 18 | [#3027](https://github.com/nickna/SharpTS/issues/3027) |
 | Recursive conditional mapping retains unresolved `Jsonified<...>` branches | 12 | [#3028](https://github.com/nickna/SharpTS/issues/3028) |
 | Higher-order indexed/conditional inference retains `infer R` or loses constraints | 7 | [#3029](https://github.com/nickna/SharpTS/issues/3029) |
-| Inherited `hasOwnProperty` replaces `PropertyKey` with `any` | 3 | [#3030](https://github.com/nickna/SharpTS/issues/3030) |
 
 The indexed global-object mismatch from [#3024](https://github.com/nickna/SharpTS/issues/3024)
 is now an exact match. Its missing type-query name observation remains visible;
@@ -48,13 +47,19 @@ the twelve-case scope, diagnostic oracle and other eleven fingerprints are uncha
 assignment results and their distinct member-name types, and records two real
 left-hand member reads. That case now has eleven exact matches and only its
 type-literal declaration-name observation remains missing.
+[#3030](https://github.com/nickna/SharpTS/issues/3030) retains the canonical loaded
+Object member's actual string/number/symbol domain and written parameter name.
+Its three observations now show `(v: string | number | symbol) => boolean`;
+the remaining `PropertyKey` alias spelling difference stays an exact mismatch
+tracked separately in [#3070](https://github.com/nickna/SharpTS/issues/3070).
 
-The remaining **22 differences** first need display/source-query context work:
+The remaining **25 differences** first need display/source-query context work:
 
 - `inferTypes1`: two observations, alias-name retention for `Example` and the
   upstream spread-element query context for `...args`.
 - `literalTypes1`: five `Falsy` alias presentations and two union-order differences.
 - `intersectionIncludingPropFromGlobalAugmentation`: three union-order differences.
+- The same case: three expanded `PropertyKey` parameter-alias presentations (#3070).
 - `stringLiteralTypeIsSubtypeOfString`: two empty-object whitespace differences
   and seven optional-parameter presentations with `strict: false`. The latter
   need the selected nullability policy when displaying declarations; they are
@@ -98,7 +103,7 @@ anonymous cycles. The complete standalone TypeScript conformance project passes
 baseline and externally consumed vocabulary are unchanged.
 
 Two consecutive explicit type-baseline generations are byte-identical:
-SHA-256 `42c5d227dad757de223818db136830dbaad42b535fa66a5126fc4669ab632f27`.
+SHA-256 `d1e4c8ad786975207ad3748891210a5073191aa7309052e7df04f414a20ad4af`.
 Normal execution then verifies the committed counts and complete-result
 fingerprints with update mode disabled. The README documents generation,
 structured JSON output and full failure diffs. Future semantic or coverage fixes

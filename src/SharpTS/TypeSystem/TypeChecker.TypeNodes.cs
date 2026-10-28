@@ -270,6 +270,7 @@ public partial class TypeChecker
                     return null;
                 if (TryToTypeInfo(fn.ReturnType) is not { } returnType) return null;
                 return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRestParam, thisType,
+                    ParamNames: fn.Parameters.Select((parameter, index) => parameter.Name ?? $"arg{index}").ToList(),
                     InstantiatedTypeParamPositions: MarkInstantiatedParamPositions(fn.Parameters));
             }
 

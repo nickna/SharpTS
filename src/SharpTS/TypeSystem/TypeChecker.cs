@@ -276,6 +276,7 @@ public partial class TypeChecker
     // execution-oriented built-in fallbacks used by standalone checking.
     private bool _hasDefaultLibraries;
     private BindingSymbol? _defaultLibraryArrayBinding;
+    private TypeInfo.Interface? _defaultLibraryObjectType;
     private readonly Dictionary<string, BindingSymbol> _defaultLibraryErrorBindings = new(StringComparer.Ordinal);
     private bool _hasEs2023IntlLibrary;
     private readonly HashSet<string> _globalObjectLexicalNames = new(StringComparer.Ordinal);
@@ -1407,6 +1408,7 @@ public partial class TypeChecker
     /// </summary>
     public TypeMap Check(List<Stmt> statements, SourceDocument? sourceDocument)
     {
+        _defaultLibraryObjectType = null;
         IndexNewTargetContexts(statements);
         _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
@@ -1856,6 +1858,7 @@ public partial class TypeChecker
         _moduleResolver = resolver;
         _hasDefaultLibraries = modules.Any(module => module.IsDefaultLibrary);
         _defaultLibraryArrayBinding = null;
+        _defaultLibraryObjectType = null;
         _defaultLibraryErrorBindings.Clear();
         _hasEs2023IntlLibrary = modules.Any(module =>
             module.IsDefaultLibrary &&
@@ -1948,6 +1951,7 @@ public partial class TypeChecker
             foreach (var module in modules.Where(module => module.IsDefaultLibrary))
                 PrepareModule(module);
             _defaultLibraryArrayBinding = scriptEnv.GetValueBinding("Array");
+            _defaultLibraryObjectType = scriptEnv.GetTypeBinding("Object") as TypeInfo.Interface;
             _defaultLibraryPromiseBinding = scriptEnv.GetValueBinding("Promise");
             CaptureDefaultLibraryErrorBindings(scriptEnv);
             foreach (var module in modules.Where(module => !module.IsDefaultLibrary && module.IsScript))

@@ -362,8 +362,11 @@ public partial class TypeChecker
     /// not an Object.prototype member. Used as a fallback by the object-like member-access paths
     /// before reporting TS2339.
     /// </summary>
-    private static TypeInfo? ResolveObjectPrototypeMember(string name)
+    private TypeInfo? ResolveObjectPrototypeMember(string name)
     {
+        if (_hasDefaultLibraries && _defaultLibraryObjectType is { } loadedObject &&
+            ResolveNamedInterfaceMember(loadedObject, name) is { } declared)
+            return declared;
         var boolean = TypeInfo.Primitive.Boolean;
         var str = TypeInfo.String.Shared;
         var anyArg = new List<TypeInfo> { TypeInfo.Any.Shared };
