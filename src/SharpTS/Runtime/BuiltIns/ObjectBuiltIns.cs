@@ -1167,6 +1167,11 @@ public static partial class ObjectBuiltIns
             SharpTSGlobalThis globalThis => globalThis.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSClass klass => klass.GetOwnStaticPropertyDescriptor(propertyKey),
+            SharpTSFunctionGlobal when propertyKey == "prototype" => DataDescriptor(
+                interpreter.GetFunctionPrototype(),
+                writable: false,
+                enumerable: false,
+                configurable: false),
             SharpTSBuiltInConstructor { Name: BuiltInNames.RegExp }
                 when propertyKey == "prototype" => DataDescriptor(
                     interpreter.GetRegExpPrototype(),
