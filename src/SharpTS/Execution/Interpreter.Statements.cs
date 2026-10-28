@@ -797,7 +797,8 @@ public partial class Interpreter
         IEnumerable<string> keys = obj switch
         {
             SharpTSProxy proxy => proxy.TrapOwnEnumerableKeys(this),
-            SharpTSClass klass => EnumerateClassConstructorForInKeys(klass),
+            SharpTSClass klass => EnumeratePrototypeForInKeys(klass),
+            ISharpTSCallable callable => EnumeratePrototypeForInKeys(callable),
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.OwnEnumerableKeys(),
             // Own enumerable keys only, hiding boxed-primitive internal slots and
             // honoring enumerability — consistent with Object.keys (#475).
@@ -807,17 +808,10 @@ public partial class Interpreter
             // for...in skips holes per ECMA-262 (only own enumerable index properties
             // that actually exist — holes don't).
             SharpTSArray a => a.OwnEnumerableKeys(),
-            // JS functions are objects; enumerate user-assigned properties. Lodash iterates
-            // its own utility namespace (which is a function returning the wrapper) with
-            // `for (var key in _) { ... }` to copy members onto the mixin target.
-            ISharpTSFunctionObject function => function.OwnProperties.OwnEnumerableKeys(),
-            SharpTSFunction f => f.PropertyKeys,
-            SharpTSArrowFunction af => af.PropertyKeys,
             SharpTSMath math => math.OwnEnumerableKeys(),
             SharpTSJSON json => json.OwnEnumerableKeys(),
             SharpTSDate date => date.OwnEnumerableKeys(),
             SharpTSRegExp regex => regex.OwnEnumerableKeys(),
-            SharpTSObjectNamespace objectNamespace => objectNamespace.OwnEnumerableKeys(),
             SharpTSGlobalThis globalThis => globalThis.OwnEnumerableKeys(),
             // Every built-in prototype singleton at once — Object/Array/String/Number/
             // Boolean/Function.prototype. Naming them individually is how Object.prototype
@@ -826,21 +820,16 @@ public partial class Interpreter
             // Plain Dictionary<string, object?> from runtime helpers (e.g.,
             // Web Streams iterator results) — see SharpTSReadableStream.MakeReadResult.
             IDictionary<string, object?> d => d.Keys,
-            // ECMA-262 §17 — built-in functions have only `name` and `length`
-            // as own properties, both non-enumerable. for-in yields nothing,
-            // but throwing here would crash test262's verifyProperty (which
-            // for-in iterates its target object before checking enumerability).
-            ISharpTSCallable => Enumerable.Empty<string>(),
             _ => throw new InterpreterException("for...in requires an object.")
         };
 
         return IterateWithBreakContinue(keys.Cast<object?>(), forIn.Variable, forIn.IsDeclaration && !forIn.IsVar, forIn.Body, labels);
     }
 
-    private IEnumerable<string> EnumerateClassConstructorForInKeys(SharpTSClass klass)
+    private IEnumerable<string> EnumeratePrototypeForInKeys(object receiver)
     {
         var visited = new HashSet<string>(StringComparer.Ordinal);
-        object? current = klass;
+        object? current = receiver;
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
             var keys = (SharpTSArray)ObjectBuiltIns.GetOwnPropertyNames(this, [current])!;
