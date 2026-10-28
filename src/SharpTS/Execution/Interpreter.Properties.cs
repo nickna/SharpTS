@@ -3257,6 +3257,11 @@ public partial class Interpreter
             return;
         }
 
+        if (!array.HasNamedProperty(name))
+        {
+            SetOwnPropertyObjectValue(array, name, value, strictMode);
+            return;
+        }
         array.SetNamedProperty(name, value);
     }
 
