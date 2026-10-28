@@ -1372,7 +1372,7 @@ public partial class Interpreter
         if (isDeclaration)
             loopEnv.Define(variable.Lexeme, value);
         else
-            _environment.Assign(variable, value);
+            AssignVariableValue(variable, RuntimeValue.FromBoxed(value));
         return loopEnv;
     }
 

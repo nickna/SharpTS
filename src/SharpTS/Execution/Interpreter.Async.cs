@@ -824,7 +824,7 @@ public partial class Interpreter
         }
         else
         {
-            _environment.Assign(assign.Name, value);
+            AssignVariableValue(assign.Name, rv);
         }
 
         return rv;

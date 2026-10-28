@@ -265,20 +265,20 @@ public partial class Interpreter
     /// <summary>Increments a variable l-value, returning the old or new value.</summary>
     private RuntimeValue IncrementVariable(Expr.Variable variable, double delta, bool returnOld)
     {
-        RuntimeValue oldValue = _environment.Get(variable.Name);
+        RuntimeValue oldValue = LookupVariableRV(variable.Name, variable);
         if (TryEvaluateDotNetIncrement(
                 oldValue,
                 delta > 0 ? TokenType.PLUS_PLUS : TokenType.MINUS_MINUS,
                 out var clrValue))
         {
-            _environment.Assign(variable.Name, clrValue);
+            AssignVariableValue(variable.Name, clrValue);
             return returnOld ? oldValue : clrValue;
         }
         if (oldValue.IsBigInt)
         {
             var newBigInt = new SharpTSBigInt(
                 oldValue.AsBigInt().Value + (delta > 0 ? 1 : -1));
-            _environment.Assign(variable.Name, RuntimeValue.FromBigInt(newBigInt));
+            AssignVariableValue(variable.Name, RuntimeValue.FromBigInt(newBigInt));
             return returnOld ? oldValue : RuntimeValue.FromBigInt(newBigInt);
         }
 
@@ -287,7 +287,7 @@ public partial class Interpreter
         // string ("5"→5), undefined (→NaN), etc. — so coerce rather than asserting a boxed double.
         double current = CoerceToNumber(oldValue);
         double newValue = current + delta;
-        _environment.Assign(variable.Name, RuntimeValue.FromNumber(newValue));
+        AssignVariableValue(variable.Name, RuntimeValue.FromNumber(newValue));
         return RuntimeValue.FromNumber(returnOld ? current : newValue);
     }
 

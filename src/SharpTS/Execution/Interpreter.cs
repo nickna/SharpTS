@@ -1292,9 +1292,9 @@ public partial class Interpreter : IDisposable
             return RuntimeValue.FromBoxed(GlobalThis);
         }
 
-        // Global function bindings live on the global object. Keep lexical bindings
-        // above this lookup, and leave immutable constants on their existing path.
-        if (IsGlobalFunctionBinding(name.Lexeme))
+        // Mutable global bindings live on the global object. Lexical bindings
+        // above this lookup and immutable constants retain their existing paths.
+        if (IsMutableGlobalObjectBinding(name.Lexeme))
         {
             if (GlobalThis.HasUserProperty(name.Lexeme))
                 return RuntimeValue.FromBoxed(GetPropertyValue(GlobalThis, name.Lexeme));
@@ -1332,6 +1332,18 @@ public partial class Interpreter : IDisposable
         // is what routes this to a guest ReferenceError at the catch binding
         // (Interpreter.Statements.cs TryCreateGuestErrorFromMessage).
         throw new InterpreterException($"ReferenceError: Undefined variable '{name.Lexeme}'.");
+    }
+
+    private static bool IsMutableGlobalObjectBinding(string name)
+        => (IsRealmIntrinsicName(name) || _globalConstants.ContainsKey(name))
+            && name is not (BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity);
+
+    private void AssignVariableValue(Token name, RuntimeValue value)
+    {
+        if (!_environment.IsDefined(name.Lexeme) && IsMutableGlobalObjectBinding(name.Lexeme))
+            WriteClassicGlobalVariable(name.Lexeme, value, _environment.IsStrictMode);
+        else
+            _environment.Assign(name, value);
     }
 
     private bool IsGlobalFunctionBinding(string name)

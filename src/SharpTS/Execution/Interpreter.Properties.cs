@@ -88,7 +88,8 @@ public partial class Interpreter
         // Handle built-in constructors via factory
         if (isSimpleName && simpleClassName != null
             && newExpr.Callee is Expr.Variable intrinsicReference
-            && !_locals.ContainsKey(intrinsicReference) && !_environment.IsDefined(simpleClassName))
+            && !_locals.ContainsKey(intrinsicReference) && !_environment.IsDefined(simpleClassName)
+            && !GlobalThis.HasUserProperty(simpleClassName) && !GlobalThis.IsDeletedProperty(simpleClassName))
         {
             // Special case: Promise needs executor function evaluation, not standard arg evaluation
             if (simpleClassName == BuiltInNames.Promise)
@@ -246,7 +247,8 @@ public partial class Interpreter
         // Handle built-in constructors via factory
         if (isSimpleName && simpleClassName != null
             && newExpr.Callee is Expr.Variable intrinsicReference
-            && !_locals.ContainsKey(intrinsicReference) && !_environment.IsDefined(simpleClassName))
+            && !_locals.ContainsKey(intrinsicReference) && !_environment.IsDefined(simpleClassName)
+            && !GlobalThis.HasUserProperty(simpleClassName) && !GlobalThis.IsDeletedProperty(simpleClassName))
         {
             // Special case: Promise needs executor function evaluation, not standard arg evaluation
             if (simpleClassName == BuiltInNames.Promise)
@@ -3491,7 +3493,7 @@ public partial class Interpreter
         }
         else
         {
-            _environment.Assign(assign.Name, value);
+            AssignVariableValue(assign.Name, value);
         }
 
         return value;
