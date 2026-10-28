@@ -11,6 +11,15 @@ public sealed class EmittedClassInitializationRuntime
     private ConstructorBuilder? _canonicalStaticStorageAttributeConstructor;
     private bool _bodyEmitted;
     internal NativeSourceOwnerCatalog? SourceOwners { get; private set; }
+    internal System.Reflection.MethodInfo? NativeInitializer { get; private set; }
+
+    internal void DeclareNativeInitializer(System.Reflection.MethodInfo initializer)
+    {
+        EnsureMutable();
+        ArgumentNullException.ThrowIfNull(initializer);
+        if (NativeInitializer != null) throw new InvalidOperationException("Native initializer is already declared.");
+        NativeInitializer = initializer;
+    }
 
     internal void DeclareSourceOwners(NativeSourceOwnerCatalog catalog)
     {

@@ -23,7 +23,8 @@ public partial class RuntimeEmitter
         Type arrayType,
         FieldBuilder arrayPrototype,
         EmittedPromiseRuntime? promise,
-        NativeSourceOwnerCatalog? sourceOwners = null
+        NativeSourceOwnerCatalog? sourceOwners = null,
+        MethodInfo? nativeInitializer = null
     )
     {
         var cacheType = cacheField.FieldType;
@@ -169,9 +170,13 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(initializeType);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Callvirt,
-                typeof(Type).GetProperty(nameof(Type.TypeHandle))!.GetGetMethod()!);
-            il.Emit(OpCodes.Call, _types.RuntimeHelpersRunClassConstructor);
+            if (nativeInitializer is not null) il.Emit(OpCodes.Call, nativeInitializer);
+            else
+            {
+                il.Emit(OpCodes.Callvirt,
+                    typeof(Type).GetProperty(nameof(Type.TypeHandle))!.GetGetMethod()!);
+                il.Emit(OpCodes.Call, _types.RuntimeHelpersRunClassConstructor);
+            }
 
             // The generated initializer registers user-class prototypes. If the
             // type was a runtime implementation rather than a user class, the

@@ -47,9 +47,13 @@ public partial class RuntimeEmitter
 
             il.BeginExceptionBlock();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Callvirt,
-                typeof(Type).GetProperty(nameof(Type.TypeHandle))!.GetGetMethod()!);
-            il.Emit(OpCodes.Call, _types.RuntimeHelpersRunClassConstructor);
+            if (initialization.NativeInitializer is not null) il.Emit(OpCodes.Call, initialization.NativeInitializer);
+            else
+            {
+                il.Emit(OpCodes.Callvirt,
+                    typeof(Type).GetProperty(nameof(Type.TypeHandle))!.GetGetMethod()!);
+                il.Emit(OpCodes.Call, _types.RuntimeHelpersRunClassConstructor);
+            }
             il.Emit(OpCodes.Leave, returnLabel);
 
             il.BeginCatchBlock(typeof(TypeInitializationException));

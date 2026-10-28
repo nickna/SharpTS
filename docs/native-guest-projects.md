@@ -501,6 +501,30 @@ under CoreCLR. This concrete remaining preparation issue is tracked in
 [#3050](https://github.com/nickna/SharpTS/issues/3050). Strict native acceptance
 remains incomplete.
 
+### Literal runtime class initialization
+
+The native runtime's class-prototype and static Symbol lookups use a late
+initializer dispatcher completed from this output's source-owner catalog.
+For a fully resolved nongeneric source inventory, it compares exact Type
+identities and calls `RunClassConstructor` with the matching literal type token.
+The inventory includes source owners, their base chains and the emitted
+intrinsic constructor identities, including closed BCL representations such as
+`Task<object>` and `IList<object>`. These entries run the actual initializer at
+the original lookup position; no framework type is assumed to have no effects.
+
+An unlisted owner receives an explicit guest TypeError at the former dynamic
+initializer operation. Generic or unresolved source owners retain the complete
+legacy operation until their independent static-state domain is proved.
+The dispatcher is absent from ordinary managed and default runtime-emitter
+output. Literal registration and completion do not run initializers. Tests cover
+initialization order, repeated lookup, intrinsic missing-Symbol reads, inherited
+methods, module declarations and the explicit unknown-owner boundary.
+
+The strict console inventory falls from 36 to 30, removing exactly six IL2059
+diagnostics with no additions. The IL-verified diagnostic native executable
+prints `42`. Ordinary console, rest-producer and generic-class outputs retain
+their PE sizes and every method-body hash against the preserved managed baseline.
+
 ## Warning policy and remaining work
 
 The exported project uses `PublishAot=true`, `SelfContained=true`, its explicit
@@ -509,10 +533,11 @@ assembly roots or warning suppressions. Current emitted-runtime warnings therefo
 fail strict native publish instead of being hidden by successful project export.
 
 With the current changes combined, fresh strict `console.log(42)` publication
-reports 36 diagnostics: IL2059 (6), IL2070 (19), IL2075 (11).
+reports 30 diagnostics: IL2070 (19), IL2075 (11).
 The two optional numeric-rest lookups, 39 Proxy bridge diagnostics and two
 certified generic-normalizer diagnostics and the certified union-converter lookup
-are absent from the earlier 80-diagnostic checkpoint, with no additions. Strict publication
+and six literal-initializer diagnostics are absent from the earlier 80-diagnostic checkpoint,
+with no additions. Strict publication
 still fails. Separate diagnostic publishes retain all warnings and pass focused
 native execution for own-property presence/order, generic storage/prototypes,
 suspended callbacks and rest-function binding; a managed-compiler export of the

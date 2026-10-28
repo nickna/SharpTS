@@ -753,6 +753,7 @@ public partial class ILCompiler
             _nativeSourceOwners = new(_moduleBuilder, _types);
             _nativeGenericMethodNormalization = new(_moduleBuilder, _types);
             _nativeUnionArgumentConversion = new(_moduleBuilder, _types);
+            _nativeRuntimeClassInitialization = new(_moduleBuilder, _types);
             _functionEmissionPolicy = _functionEmissionPolicy with
             {
                 NativeGenericNormalizer = _nativeGenericMethodNormalization.Normalize,
@@ -769,7 +770,8 @@ public partial class ILCompiler
         }
         _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput,
             _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true)) { EntryModulePath = _entryModulePath }
-            .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy, _nativeSourceOwners);
+            .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy,
+                _nativeSourceOwners, _nativeRuntimeClassInitialization?.Initialize);
         if (_runtime.GuestOwnProperties is { } own) GetClassRegistry().BeginNativeOwnProperties(own);
         _typeMapper.SetRuntime(_runtime);
     }
@@ -1255,6 +1257,7 @@ public partial class ILCompiler
         _nativeNumericRest4Binding?.CompleteEmission();
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
         _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
+        _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
@@ -1915,6 +1918,7 @@ public partial class ILCompiler
         _nativeNumericRest4Binding?.CompleteEmission();
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
         _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
+        _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();

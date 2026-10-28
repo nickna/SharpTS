@@ -2234,6 +2234,15 @@ identity and explicitly rejects foreign generic definitions carrying this output
 public source markers. With a producer or without the certificate it emits the
 full legacy normalization body. Ordinary managed emission remains unchanged.
 
+Native runtime class initialization is a separate late capability. It completes
+against the exact source-owner catalog and emits literal initializer calls for
+registered nongeneric owners, their resolved bases and intrinsic constructor
+identities. Registration never executes an initializer. An unknown owner has an
+explicit native error boundary; generic or unresolved source ownership retains
+the full legacy operation. The optional handle is passed through class and
+Symbol initialization inputs rather than inferred by a runtime helper. Ordinary
+managed and default runtime-emitter output retain their existing operations.
+
 ### Generated union metadata
 
 `UnionTypeGenerator` fixes its type mapper and marker interface at construction. The

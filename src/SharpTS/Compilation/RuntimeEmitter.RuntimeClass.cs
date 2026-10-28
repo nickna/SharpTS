@@ -264,7 +264,8 @@ public partial class RuntimeEmitter
             runtime.ArrayStorage.Type,
             runtime.ArrayOperations.PrototypeField,
             runtime.Promise,
-                runtime.ClassInitialization.SourceOwners
+                runtime.ClassInitialization.SourceOwners,
+                runtime.ClassInitialization.NativeInitializer
         );
         if (runtime.GuestOwnProperties != null)
             EmitGuestRegisteredPrototypeLookup(typeBuilder, runtime.ClassPrototypes, classPrototypeCacheField,
@@ -3077,7 +3078,7 @@ public partial class RuntimeEmitter
         // Fill in the symbol-keyed accessor registry helper bodies (#266).
         EmitSymbolAccessorRegistryBodies(runtime.SymbolAccessors, runtime.Symbols, runtime.StringCoercion,
             runtime.FunctionConstruction, runtime.FunctionValues, runtime.Symbols.MethodName, _features.UsesUserClasses,
-                runtime.ClassInitialization.SourceOwners);
+                runtime.ClassInitialization.SourceOwners, runtime.ClassInitialization.NativeInitializer);
         // Microtask method (queueMicrotask) - must come before timer infrastructure so ProcessMicrotasks is available
         EmitQueueMicrotaskMethod(typeBuilder, runtime);
         // Virtual timer infrastructure (must come before DateMethods which calls ProcessPendingTimers)

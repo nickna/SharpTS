@@ -17,6 +17,8 @@ public partial class ILCompiler
     internal NativeGenericMethodNormalization? NativeGenericMethods => _nativeGenericMethodNormalization;
     private NativeUnionArgumentConversion? _nativeUnionArgumentConversion;
     internal NativeUnionArgumentConversion? NativeUnionArguments => _nativeUnionArgumentConversion;
+    private NativeRuntimeClassInitialization? _nativeRuntimeClassInitialization;
+    internal NativeRuntimeClassInitialization? NativeRuntimeInitializers => _nativeRuntimeClassInitialization;
 
     private NativeClassInitializationEmission? GetNativeClassInitialization() =>
         !_nativeAotProjectOutput || _programType is null ? null :

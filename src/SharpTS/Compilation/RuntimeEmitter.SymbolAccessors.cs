@@ -124,7 +124,8 @@ public partial class RuntimeEmitter
         EmittedFunctionValueRuntime functionValues,
         MethodBuilder symbolMethodName,
         bool userClasses,
-        NativeSourceOwnerCatalog? sourceOwners = null
+        NativeSourceOwnerCatalog? sourceOwners = null,
+        MethodInfo? nativeInitializer = null
     )
     {
         var outer = SymOuterDictType;
@@ -169,7 +170,8 @@ public partial class RuntimeEmitter
             outerTryGetValue,
             innerTryGetValue,
             getBaseType,
-            getType
+            getType,
+            nativeInitializer: nativeInitializer
         );
         EmitFindSymbolAccessorBody(
             symbolAccessors,
@@ -182,7 +184,8 @@ public partial class RuntimeEmitter
             innerTryGetValue,
             getBaseType,
             getType,
-            ownOnly: true
+            ownOnly: true,
+            nativeInitializer: nativeInitializer
         );
         EmitFindSymbolAccessorBody(
             symbolAccessors,
@@ -194,7 +197,8 @@ public partial class RuntimeEmitter
             outerTryGetValue,
             innerTryGetValue,
             getBaseType,
-            getType
+            getType,
+            nativeInitializer: nativeInitializer
         );
         // #647: methods reuse the same base-chain walk, reading the method slots.
         EmitFindSymbolAccessorBody(
@@ -207,7 +211,8 @@ public partial class RuntimeEmitter
             outerTryGetValue,
             innerTryGetValue,
             getBaseType,
-            getType
+            getType,
+            nativeInitializer: nativeInitializer
         );
         EmitFindSymbolAccessorBody(
             symbolAccessors,
@@ -220,7 +225,8 @@ public partial class RuntimeEmitter
             innerTryGetValue,
             getBaseType,
             getType,
-            ownOnly: true
+            ownOnly: true,
+            nativeInitializer: nativeInitializer
         );
         EmitGetOrCreateStaticSymbolMethod(symbolAccessors, functionConstruction, functionValues, symbolMethodName);
         symbolAccessors.MarkBodiesEmitted();
@@ -630,7 +636,8 @@ public partial class RuntimeEmitter
         MethodInfo innerTryGetValue,
         MethodInfo getBaseType,
         MethodInfo getType,
-        bool ownOnly = false
+        bool ownOnly = false,
+        MethodInfo? nativeInitializer = null
     )
     {
         var il = method.GetILGenerator();
@@ -697,8 +704,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, asTypeLocal);
             il.Emit(OpCodes.Brfalse, skipCctor);
             il.Emit(OpCodes.Ldloc, closedOwnerLocal);
-            il.Emit(OpCodes.Callvirt, getTypeHandle);
-            il.Emit(OpCodes.Call, runClassCtor);
+            if (nativeInitializer is not null) il.Emit(OpCodes.Call, nativeInitializer);
+            else
+            {
+                il.Emit(OpCodes.Callvirt, getTypeHandle);
+                il.Emit(OpCodes.Call, runClassCtor);
+            }
             il.MarkLabel(skipCctor);
         }
         // if (!reg.TryGetValue(SymbolRegistryKey(owner), out inner)) goto nextBase;

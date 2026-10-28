@@ -52,13 +52,15 @@ public partial class RuntimeEmitter
         => EmitAll(moduleBuilder, features, FunctionEmissionPolicy.Full);
 
     internal EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, RuntimeFeatureSet features, FunctionEmissionPolicy functionPolicy,
-        NativeSourceOwnerCatalog? sourceOwners = null)
+        NativeSourceOwnerCatalog? sourceOwners = null, MethodInfo? nativeClassInitializer = null)
     {
         _features = features;
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
         if (sourceOwners != null) runtime.ClassInitialization.DeclareSourceOwners(sourceOwners);
+        if (nativeClassInitializer != null)
+            runtime.ClassInitialization.DeclareNativeInitializer(nativeClassInitializer);
         if (_emitNativeCallables)
             DeclareNativeCallableCatalog(moduleBuilder, runtime);
         runtime.BuiltInModules.BeginEmission(moduleBuilder, features);

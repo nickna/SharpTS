@@ -22,6 +22,7 @@ internal sealed class NativeSourceOwnerCatalog
     }
 
     internal MethodBuilder Resolve { get; }
+    internal Module Module => _catalog.Module;
     internal Type Contract => _contract ?? throw new InvalidOperationException("Source-owner interface is not declared.");
     internal bool IsComplete { get; private set; }
     internal int MappedOwnerCount { get; private set; }
