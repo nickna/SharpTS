@@ -249,6 +249,52 @@ public sealed class NativeReceiverBindingTests
         Assert.Equal("5\n", TestHarness.RunCompiledWithTimeout(() => assembly, TimeSpan.FromSeconds(20)));
     }
 
+    [Fact]
+    public void FinalBaseQueryAndAdmittingGuardMustMatchEvenWhenAnOwnedBaseIsChangedTogether()
+    {
+        var builder = NewAssembly(); var module = builder.DefineDynamicModule("main");
+        var session = new NativeReceiverBinding(module, TypeProvider.Runtime);
+        var runtime = new RuntimeEmitter(TypeProvider.Runtime, false, true).EmitAll(module,
+            new RuntimeFeatureDetector().Detect(new Parser(new Lexer("console.log(42);").ScanTokens()).ParseOrThrow()),
+            FunctionEmissionPolicy.Full with { NativeReceiverBinder = session.Bind });
+        var owner = module.DefineType("ReceiverWithChangedBase", TypeAttributes.Public);
+        var marker = owner.DefineMethod("ForeignTypeReference", MethodAttributes.Public | MethodAttributes.Static, typeof(Type), Type.EmptyTypes);
+        var il = marker.GetILGenerator(); il.Emit(OpCodes.Ldtoken, typeof(ForeignInheritedReceiver));
+        il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!); il.Emit(OpCodes.Ret);
+        owner.CreateType(); session.CompleteEmission(runtime.Errors);
+        using var stream = new MemoryStream(); builder.Save(stream); byte[] image = stream.ToArray();
+        session.ValidateImage(image);
+        using var pe = new PEReader(new MemoryStream(image)); var metadata = pe.GetMetadataReader();
+        var ownerHandle = MetadataTokens.TypeDefinitionHandle(owner.MetadataToken);
+        int originalBase = MetadataTokens.GetToken(metadata.GetTypeDefinition(ownerHandle).BaseType);
+        var foreign = metadata.TypeReferences.Single(handle => metadata.GetString(metadata.GetTypeReference(handle).Name) == nameof(ForeignInheritedReceiver));
+        int foreignToken = MetadataTokens.GetToken(foreign);
+        var method = metadata.GetMethodDefinition(MetadataTokens.MethodDefinitionHandle(session.Bind.MetadataToken));
+        byte[] body = pe.GetMethodBody(method.RelativeVirtualAddress).GetILBytes()!;
+        int query = Enumerable.Range(0, body.Length - 4).First(offset => body[offset] == 0xd0 &&
+            System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(offset + 1, 4)) == originalBase);
+        int bodyOffset = FileOffset(method.RelativeVirtualAddress);
+        int headerSize = (image[bodyOffset] & 3) == 2 ? 1 : (image[bodyOffset + 1] >> 4) * 4;
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(bodyOffset + headerSize + query + 1, 4), foreignToken);
+        int strings = metadata.GetHeapSize(HeapIndex.String) > ushort.MaxValue ? 4 : 2;
+        int parentOffset = pe.PEHeaders.MetadataStartOffset + metadata.GetTableMetadataOffset(TableIndex.TypeDef) +
+            (MetadataTokens.GetRowNumber(ownerHandle) - 1) * metadata.GetTableRowSize(TableIndex.TypeDef) + 4 + strings * 2;
+        int parentWidth = Math.Max(metadata.TypeDefinitions.Count, Math.Max(metadata.TypeReferences.Count,
+            metadata.GetTableRowCount(TableIndex.TypeSpec))) < (1 << 14) ? 2 : 4;
+        uint coded = ((uint)MetadataTokens.GetRowNumber(foreign) << 2) | 1;
+        if (parentWidth == 2) System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(parentOffset, 2), (ushort)coded);
+        else System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(parentOffset, 4), coded);
+        var failure = Assert.Throws<CompileException>(() => session.ValidateImage(image));
+        Assert.Contains("matches its admitting guard", failure.Message);
+
+        int FileOffset(int rva)
+        {
+            var section = pe.PEHeaders.SectionHeaders.Single(section => rva >= section.VirtualAddress &&
+                rva < section.VirtualAddress + Math.Max(section.VirtualSize, section.SizeOfRawData));
+            return section.PointerToRawData + rva - section.VirtualAddress;
+        }
+    }
+
     private static void Bind(Assembly assembly, object? target, object marker)
     {
         var type = assembly.GetType("$TSFunction")!;
@@ -273,4 +319,5 @@ public sealed class NativeReceiverBindingTests
     public sealed class ForeignException : Exception { public object? @this; }
     public sealed class ForeignList : List<object> { public object? @this; }
     public sealed class ForeignDictionary : Dictionary<string, object> { public object? @this; }
+    public class ForeignInheritedReceiver { public object? @this; }
 }

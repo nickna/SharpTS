@@ -2270,8 +2270,10 @@ save API returns bytes or writes files. Every public instance exact-name `this`
 field and direct interface implementation must match its registered owner,
 field, setter signature, override and direct store. All owned base chains must
 end in fixed literal roots queried by the helper; dependent foreign generic
-ancestry and unregistered or unusual fields refuse with SHARPTS406. Framework
-fields are queried through literal types, including inherited fields, rather
+ancestry and unregistered or unusual fields refuse with SHARPTS406. Base
+witnesses require the final `isinst` and queried `ldtoken` to be identical,
+including constructed TypeSpecs after facade rewriting. Framework fields are
+queried through literal types, including inherited fields, rather
 than assumed absent. External receivers require exact type equality with a
 finite framework set; all other targets get a guest TypeError. The private
 CoreLib RuntimeType literal has a native-only checked reference-index seam;

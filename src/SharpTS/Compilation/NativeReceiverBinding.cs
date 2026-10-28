@@ -18,7 +18,7 @@ internal sealed class NativeReceiverBinding
     private readonly TypeBuilder _contract;
     private readonly MethodBuilder _set;
     private readonly List<(TypeBuilder Owner, FieldBuilder Field, MethodBuilder Setter)> _fields = [];
-    private readonly List<(int Offset, Type Type)> _baseWitnesses = [];
+    private readonly List<(int GuardOffset, int QueryOffset, Type Type)> _baseWitnesses = [];
     private readonly Type[] _roots;
 
     internal NativeReceiverBinding(ModuleBuilder module, TypeProvider types)
@@ -87,8 +87,10 @@ internal sealed class NativeReceiverBinding
         foreach (var root in _roots)
         {
             var next = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Isinst, root); il.Emit(OpCodes.Brfalse, next);
-            _baseWitnesses.Add((il.ILOffset, root));
+            il.Emit(OpCodes.Ldarg_0);
+            int guardOffset = il.ILOffset;
+            il.Emit(OpCodes.Isinst, root); il.Emit(OpCodes.Brfalse, next);
+            _baseWitnesses.Add((guardOffset, il.ILOffset, root));
             EmitLiteralQuery(il, root, field);
             il.MarkLabel(next);
         }
@@ -194,8 +196,15 @@ internal sealed class NativeReceiverBinding
         var allowedRoots = new HashSet<EntityHandle>();
         foreach (var witness in _baseWitnesses)
         {
-            if (body[witness.Offset] != unchecked((byte)OpCodes.Ldtoken.Value)) Refuse("A receiver base literal changed");
-            allowedRoots.Add(MetadataTokens.EntityHandle(System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(witness.Offset + 1, 4))));
+            if (body[witness.GuardOffset] != unchecked((byte)OpCodes.Isinst.Value) ||
+                body[witness.QueryOffset] != unchecked((byte)OpCodes.Ldtoken.Value))
+                Refuse("A receiver base guard or literal changed");
+            int guardToken = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(witness.GuardOffset + 1, 4));
+            int queryToken = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(witness.QueryOffset + 1, 4));
+            // The queried literal must be the type that actually admits the target.
+            // Compare final tokens after facade rewriting, including TypeSpecs.
+            if (guardToken != queryToken) Refuse("A receiver base literal no longer matches its admitting guard");
+            allowedRoots.Add(MetadataTokens.EntityHandle(queryToken));
         }
         foreach (var handle in metadata.TypeDefinitions)
             CheckBase(handle, new HashSet<TypeDefinitionHandle>());
