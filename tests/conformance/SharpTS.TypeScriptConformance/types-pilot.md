@@ -6,10 +6,10 @@ Measured against the fixed TypeScript v6.0.3 revision
 All twelve have the type outcome `Mismatch`; the pilot measures existing gaps
 and does not claim inferred-type parity.
 
-The upstream references contain **584 observations**: **165 exact matches**,
-**71 type-text differences**, **161 missing source observations**, and
+The upstream references contain **584 observations**: **171 exact matches**,
+**67 type-text differences**, **159 missing source observations**, and
 **187 unsupported displays**. There are **zero extra observations**, harness
-errors or missing baselines. SharpTS produces 423 corresponding source facts;
+errors or missing baselines. SharpTS produces 425 corresponding source facts;
 unsupported facts are included in that count and never count as matches.
 
 | Pinned case | Match | Text difference | Missing | Unsupported |
@@ -17,7 +17,7 @@ unsupported facts are included in that count and never count as matches.
 | `es2017/es2017DateAPIs.ts` | 3 | 0 | 2 | 0 |
 | `es2019/globalThisTypeIndexAccess.ts` | 1 | 0 | 1 | 0 |
 | `es2020/constructBigint.ts` | 12 | 1 | 11 | 4 |
-| `es2021/logicalAssignment/logicalAssignment9.ts` | 5 | 4 | 3 | 0 |
+| `es2021/logicalAssignment/logicalAssignment9.ts` | 11 | 0 | 1 | 0 |
 | `es6/Symbols/symbolDeclarationEmit1.ts` | 4 | 0 | 1 | 0 |
 | `types/conditional/inferTypes1.ts` | 28 | 25 | 79 | 89 |
 | `types/conditional/inferTypesWithExtends2.ts` | 0 | 0 | 4 | 2 |
@@ -29,13 +29,12 @@ unsupported facts are included in that count and never count as matches.
 
 ## Triage of every text difference
 
-The first fix for **49 differences** belongs in checking/inference. Six scoped
+The first fix for **45 differences** belongs in checking/inference. Five scoped
 follow-ups preserve the pinned source evidence instead of expanding this pilot
 into a general checker campaign:
 
 | Cluster | Observations | Follow-up |
 |---|---:|---|
-| Logical property assignment results/member types become `any` | 4 | [#3025](https://github.com/nickna/SharpTS/issues/3025) |
 | Mutable object fields and inferred returns retain fresh literal types | 5 | [#3026](https://github.com/nickna/SharpTS/issues/3026) |
 | Switch case/default bodies retain the original literal union | 18 | [#3027](https://github.com/nickna/SharpTS/issues/3027) |
 | Recursive conditional mapping retains unresolved `Jsonified<...>` branches | 12 | [#3028](https://github.com/nickna/SharpTS/issues/3028) |
@@ -45,6 +44,10 @@ into a general checker campaign:
 The indexed global-object mismatch from [#3024](https://github.com/nickna/SharpTS/issues/3024)
 is now an exact match. Its missing type-query name observation remains visible;
 the twelve-case scope, diagnostic oracle and other eleven fingerprints are unchanged.
+[#3025](https://github.com/nickna/SharpTS/issues/3025) also fixes both logical
+assignment results and their distinct member-name types, and records two real
+left-hand member reads. That case now has eleven exact matches and only its
+type-literal declaration-name observation remains missing.
 
 The remaining **22 differences** first need display/source-query context work:
 
@@ -63,7 +66,7 @@ and actual string remains in its structured diff and baseline fingerprint.
 
 ## Coverage and unsupported results
 
-The first work for all 161 missing observations belongs in source fact coverage:
+The first work for all 159 missing observations belongs in source fact coverage:
 built-in callee fast paths (`Date`, `BigInt`, `Symbol`), type-query value names,
 assignment-left access nodes, computed member names, and parameter/member names
 inside function/type-literal signatures. An absent fact is not assumed to have
@@ -95,7 +98,7 @@ anonymous cycles. The complete standalone TypeScript conformance project passes
 baseline and externally consumed vocabulary are unchanged.
 
 Two consecutive explicit type-baseline generations are byte-identical:
-SHA-256 `9fa50137f43557bc30d0e61b73cfb067b00356db144364882fbece5cc6e783ec`.
+SHA-256 `42c5d227dad757de223818db136830dbaad42b535fa66a5126fc4669ab632f27`.
 Normal execution then verifies the committed counts and complete-result
 fingerprints with update mode disabled. The README documents generation,
 structured JSON output and full failure diffs. Future semantic or coverage fixes

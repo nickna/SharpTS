@@ -360,7 +360,6 @@ public sealed class SourceMemberOccurrenceTests
 
     [Theory]
     [InlineData("object./*use*/value += 1;")]
-    [InlineData("object./*use*/value ||= 1;")]
     [InlineData("object[/*use*/'value'];")]
     [InlineData("object[/*use*/'value'] = 2;")]
     public void ExistingClassFallbacksDoNotFabricateASelection(string expression)
@@ -368,6 +367,15 @@ public sealed class SourceMemberOccurrenceTests
         var value = Check("class C { value: number = 1; } const object = new C(); " + expression);
         AssertClean(value);
         Assert.False(value.Members.FindResolution(value.Document, Offset(value, "use")).IsResolved);
+    }
+
+    [Fact]
+    public void LogicalAssignmentPublishesItsCheckedReadWithoutInventingWriteSelection()
+    {
+        var value = Check("class C { value:number=1; } const object=new C(); object./*read*/value; object./*logical*/value ||= 1;");
+        AssertClean(value);
+        Assert.Same(Symbol(value, "read"), Symbol(value, "logical"));
+        Assert.Equal(MemberOperation.Read, Occurrence(value, "logical").Operations);
     }
 
     [Theory]

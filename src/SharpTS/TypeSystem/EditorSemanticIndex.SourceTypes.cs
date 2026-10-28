@@ -12,6 +12,13 @@ public sealed partial class EditorSemanticIndex
     // Like signature proofs, they may survive a discarded source pass because the exact
     // resolved type can be reused by the checker's alias cache in the authoritative pass.
     private readonly Dictionary<TypeNode, OccurrenceDraft> _resolvedAliasDefinitions = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<OwnerKey, OccurrenceDraft> _memberReadTypes = new(OwnerComparer.Instance);
+
+    internal void RecordMemberReadType(SourceDocument? document, Expr owner, TypeInfo type)
+    {
+        if (IsEnabled && document is not null)
+            _memberReadTypes[new(document, owner)] = new(type, EditorFactAvailability.Available);
+    }
 
     internal void RecordResolvedAliasDefinition(TypeNode? definition, TypeInfo type, bool isProven)
     {
@@ -48,8 +55,18 @@ public sealed partial class EditorSemanticIndex
                 Add(view.Span, fact.Type, fact.Availability, key, 10);
         }
         foreach (var member in syntax.Members.Where(member => !member.IsRecovered))
-            if (_occurrences.TryGetValue(new(document, member.Owner), out var fact))
-                Add(member.Name.Span, fact.Type, fact.Availability, new(document, member.Owner), 15);
+        {
+            var key = new OwnerKey(document, member.Owner);
+            bool separateRead = _memberReadTypes.TryGetValue(key, out var read);
+            if (separateRead || _occurrences.TryGetValue(key, out read))
+            {
+                Add(member.Name.Span, read!.Type, read.Availability, key, 15);
+                if (separateRead)
+                    foreach (var view in syntax.GetRecords(member.Owner).Where(view => view.IsAuthoritative &&
+                                 view.Kind == EditorSyntaxKind.MemberAccess && view.Role == EditorSyntaxRole.Whole))
+                        Add(view.Span, read.Type, read.Availability, key, 15);
+            }
+        }
         foreach (var (key, declarations) in _declarations)
         {
             if (!ReferenceEquals(key.Document, document) || key.Owner is TypeParam or Stmt.Interface) continue;
