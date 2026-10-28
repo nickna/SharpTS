@@ -29,14 +29,19 @@ public partial class TypeChecker
 
     private void CheckSwitch(Stmt.Switch switchStmt)
     {
-        CheckExpr(switchStmt.Subject);
+        var subjectType = CheckExpr(switchStmt.Subject);
         using var editorScope = EnterEditorLexicalScope(switchStmt);
         var enclosingEnvironment = _environment;
         var switchEnvironment = new TypeEnvironment(enclosingEnvironment);
         Expr.Variable? discriminatedVariable = null;
         Token? discriminantProperty = null;
         BindingSymbol? discriminatedBinding = null;
-        if (switchStmt.Subject is Expr.Get { Object: Expr.Variable variable, Name: var property })
+        if (switchStmt.Subject is Expr.Variable subjectVariable)
+        {
+            discriminatedVariable = subjectVariable;
+            discriminatedBinding = _environment.GetValueBinding(subjectVariable.Name.Lexeme);
+        }
+        else if (switchStmt.Subject is Expr.Get { Object: Expr.Variable variable, Name: var property })
         {
             discriminatedVariable = variable;
             discriminantProperty = property;
@@ -48,9 +53,11 @@ public partial class TypeChecker
         HoistClassDeclarations(statements);
         HoistFunctionDeclarations(statements);
         HoistLexicalDeclarations(statements);
-        var incomingFlow = CaptureValueFlow();
+        var forcedBinding = discriminantProperty is null ? discriminatedBinding : null;
+        var incomingFlow = CaptureValueFlow(forcedBinding);
         var entries = new ValueFlowState[switchStmt.Clauses.Count];
         var canNarrow = new bool[switchStmt.Clauses.Count];
+        var caseTypes = new TypeInfo?[switchStmt.Clauses.Count];
         bool canNarrowUnmatched;
 
         // Check each test once in selection order. Default's direct entry sees
@@ -60,8 +67,8 @@ public partial class TypeChecker
             for (int index = 0; index < switchStmt.Clauses.Count; index++)
             {
                 if (switchStmt.Clauses[index].Value is not { } test) continue;
-                CheckExpr(test);
-                entries[index] = CaptureValueFlow();
+                caseTypes[index] = CheckExpr(test);
+                entries[index] = CaptureValueFlow(forcedBinding);
                 canNarrow[index] = discriminatedBinding is not null &&
                     ReferenceEquals(_environment.GetValueBinding(discriminatedVariable!.Name.Lexeme), discriminatedBinding) &&
                     !writes.Writes.ContainsKey(discriminatedBinding);
@@ -70,7 +77,7 @@ public partial class TypeChecker
                 ReferenceEquals(_environment.GetValueBinding(discriminatedVariable!.Name.Lexeme), discriminatedBinding) &&
                 !writes.Writes.ContainsKey(discriminatedBinding);
         }
-        var unmatchedFlow = CaptureValueFlow();
+        var unmatchedFlow = CaptureValueFlow(forcedBinding);
         int defaultIndex = switchStmt.Clauses.FindIndex(clause => clause.IsDefault);
         if (defaultIndex >= 0) entries[defaultIndex] = unmatchedFlow;
         List<ValueFlowState> exits = [];
@@ -86,17 +93,25 @@ public partial class TypeChecker
                 var clause = switchStmt.Clauses[index];
                 RestoreValueFlow(entries[index]);
                 TypeInfo? entryType = null;
-                if (discriminatedVariable is not null && discriminantProperty is not null &&
+                if (discriminatedVariable is not null &&
                     ReferenceEquals(_environment.GetValueBinding(discriminatedVariable.Name.Lexeme), discriminatedBinding))
                 {
                     entryType = _environment.Get(discriminatedVariable.Name.Lexeme);
-                    if (canNarrow[index] && clause.Value is Expr.Literal { Value: string literalValue })
+                    if (discriminantProperty is null && entryType is not null &&
+                        (clause.IsDefault ? canNarrowUnmatched : canNarrow[index]))
+                    {
+                        entryType = NarrowSwitchVariableType(entryType,
+                            clause.IsDefault ? caseTypes : [caseTypes[index]], clause.IsDefault);
+                    }
+                    else if (discriminantProperty is not null && canNarrow[index] &&
+                        clause.Value is Expr.Literal { Value: string literalValue })
                     {
                         (_, var narrowed, _) = AnalyzeDiscriminatedUnionGuard(
                             discriminatedVariable.Name.Lexeme, discriminantProperty.Lexeme, literalValue);
                         entryType = narrowed ?? entryType;
                     }
-                    else if (clause.IsDefault && canNarrowUnmatched && entryType is TypeInfo.Union union)
+                    else if (discriminantProperty is not null && clause.IsDefault &&
+                        canNarrowUnmatched && entryType is TypeInfo.Union union)
                     {
                         var tested = switchStmt.Clauses.Select(candidate => candidate.Value)
                             .OfType<Expr.Literal>().Select(literal => literal.Value)
@@ -109,12 +124,16 @@ public partial class TypeChecker
                 if (fallthroughFlow is not null)
                     JoinValueFlow(incomingFlow, entries[index], fallthroughFlow);
                 if (discriminatedVariable is not null && entryType is not null)
-                    _environment.Define(discriminatedVariable.Name.Lexeme, fallthroughType is null
-                        ? entryType : CreateUnion(entryType, fallthroughType));
+                {
+                    var clauseType = fallthroughType is null ? entryType : discriminantProperty is null
+                        ? CreateUnion(fallthroughType, entryType) : CreateUnion(entryType, fallthroughType);
+                    _environment.Define(discriminatedVariable.Name.Lexeme, discriminantProperty is null
+                        ? NormalizeSwitchVariableType(clauseType, subjectType) : clauseType);
+                }
 
                 CheckStmtList(clause.Body);
                 bool exitsClause = !StatementCompletionAnalysis.CanCompleteNormally(clause.Body);
-                fallthroughFlow = exitsClause ? null : CaptureValueFlow();
+                fallthroughFlow = exitsClause ? null : CaptureValueFlow(forcedBinding);
                 fallthroughType = !exitsClause && entryType is not null
                     ? _environment.Get(discriminatedVariable!.Name.Lexeme) : null;
             }
@@ -128,6 +147,10 @@ public partial class TypeChecker
         }
         exits.AddRange(flowTarget.Breaks);
         JoinValueFlow(incomingFlow, exits.ToArray());
+        if (forcedBinding is not null &&
+            ReferenceEquals(_environment.GetValueBinding(discriminatedVariable!.Name.Lexeme), forcedBinding) &&
+            _environment.Get(discriminatedVariable.Name.Lexeme) is { } exitType)
+            _environment.Define(discriminatedVariable.Name.Lexeme, NormalizeSwitchVariableType(exitType, subjectType));
         PublishInheritedValueFlow(switchEnvironment, enclosingEnvironment);
     }
 

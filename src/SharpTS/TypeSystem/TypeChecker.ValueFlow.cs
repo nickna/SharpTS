@@ -59,7 +59,7 @@ public partial class TypeChecker
 
     // Capture checked binding flow, rather than replaying expressions. Declaration identities
     // distinguish source shadows from the transient environments used for narrowing.
-    private ValueFlowState CaptureValueFlow()
+    private ValueFlowState CaptureValueFlow(BindingSymbol? forcedBinding = null)
     {
         List<ValueFlowEnvironment> environments = [];
         Dictionary<BindingSymbol, ValueFlowBinding> bindings = new(ReferenceEqualityComparer.Instance);
@@ -75,7 +75,8 @@ public partial class TypeChecker
                 var binding = new ValueFlowBinding(name, symbol, type);
                 locals[name] = binding;
                 bindings.TryAdd(symbol, binding);
-                if (declared.Type is TypeInfo.Union or TypeInfo.TypeParameter || !ReferenceEquals(type, declared.Type))
+                if (declared.Type is TypeInfo.Union or TypeInfo.TypeParameter || !ReferenceEquals(type, declared.Type) ||
+                    ReferenceEquals(symbol, forcedBinding))
                     tracked.Add(symbol);
             }
             environments.Add(new(environment, locals));
