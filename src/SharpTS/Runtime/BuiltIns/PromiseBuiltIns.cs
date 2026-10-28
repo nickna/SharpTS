@@ -95,7 +95,8 @@ public static class PromiseBuiltIns
         ReadOnlySpan<RuntimeValue> args)
     {
         object? target = receiver.ToObject();
-        object? then = interpreter.GetPropertyValue(target, "then");
+        object? boxed = BuiltInConstructorFactory.ToObject(target, interpreter);
+        object? then = interpreter.GetPropertyValue(boxed, "then", target);
         if (then is not ISharpTSCallable callable)
             throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
                 "Promise.prototype.catch: then is not callable"));

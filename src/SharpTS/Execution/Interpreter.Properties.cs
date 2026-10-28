@@ -502,6 +502,16 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is SharpTSSymbolPrototype symbolPrototype)
+            {
+                if (TryReadDescriptor(symbolPrototype.GetOwnPropertyDescriptor(name), receiver, out var prototypeValue))
+                    return prototypeValue;
+                if (symbolPrototype.HasOwnProperty(name))
+                    return symbolPrototype.GetMember(name);
+                current = ObjectBuiltIns.PrototypeOf(this, symbolPrototype);
+                continue;
+            }
+
             if (current is bool)
             {
                 var prototype = GetBooleanPrototype();
