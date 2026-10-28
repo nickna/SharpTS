@@ -3472,7 +3472,7 @@ public partial class RuntimeEmitter
     /// Uses reflection to call "Invoke" (for TSFunction) or "Call" (for BuiltInMethod) on the wrapped object.
     /// </summary>
     internal void EmitMethodCallableFinalize(EmittedReflectedMethodRuntime reflectedMethods,
-        EmittedNativeCallableRuntime? nativeCallables = null)
+        EmittedNativeCallableRuntime? nativeCallables = null, MethodInfo? reflectiveCallRejection = null)
     {
         var callableField = reflectedMethods.CallableField;
         var invokeBuilder = reflectedMethods.CallableInvoke;
@@ -3498,65 +3498,70 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Stloc, typeLocal);
 
-        // Try "Invoke" method first (TSFunction, Func<>, etc.)
-        il.Emit(OpCodes.Ldloc, typeLocal);
-        il.Emit(OpCodes.Ldstr, "Invoke");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        il.Emit(OpCodes.Stloc, methodLocal);
+        if (reflectiveCallRejection is not null)
+            EmitReflectiveCallableRejection(il, invokeBuilder.Module, reflectiveCallRejection);
+        else
+        {
+            // Try "Invoke" method first (TSFunction, Func<>, etc.)
+            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldstr, "Invoke");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+            il.Emit(OpCodes.Stloc, methodLocal);
 
-        var noInvokeLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Brfalse, noInvokeLabel);
+            var noInvokeLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, methodLocal);
+            il.Emit(OpCodes.Brfalse, noInvokeLabel);
 
-        // Found "Invoke" - call: methodInfo.Invoke(_callable, new object[] { args })
-        il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Ldloc, callableLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_1); // args (object[])
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
-        EmitNormalizeClrNumericReturn(il);
-        il.Emit(OpCodes.Ret);
+            // Found "Invoke" - call: methodInfo.Invoke(_callable, new object[] { args })
+            il.Emit(OpCodes.Ldloc, methodLocal);
+            il.Emit(OpCodes.Ldloc, callableLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldarg_1); // args (object[])
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+            EmitNormalizeClrNumericReturn(il);
+            il.Emit(OpCodes.Ret);
 
-        // Try "Call" method (BuiltInMethod.Call(Interpreter, List<object?>))
-        il.MarkLabel(noInvokeLabel);
-        il.Emit(OpCodes.Ldloc, typeLocal);
-        il.Emit(OpCodes.Ldstr, "Call");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        il.Emit(OpCodes.Stloc, methodLocal);
+            // Try "Call" method (BuiltInMethod.Call(Interpreter, List<object?>))
+            il.MarkLabel(noInvokeLabel);
+            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldstr, "Call");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+            il.Emit(OpCodes.Stloc, methodLocal);
 
-        var noCallLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Brfalse, noCallLabel);
+            var noCallLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, methodLocal);
+            il.Emit(OpCodes.Brfalse, noCallLabel);
 
-        // Found "Call" - call: methodInfo.Invoke(_callable, new object[] { null, new List<object?>(args) })
-        // null interpreter is an established pattern (SharpTSEventEmitter.InvokeListenerDirect)
-        il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Ldloc, callableLocal);
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        // args[0] = null (interpreter)
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stelem_Ref);
-        // args[1] = new List<object?>(args)
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldarg_1); // args (object[])
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, [typeof(IEnumerable<object>)])!);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
-        EmitNormalizeClrNumericReturn(il);
-        il.Emit(OpCodes.Ret);
+            // Found "Call" - call: methodInfo.Invoke(_callable, new object[] { null, new List<object?>(args) })
+            // null interpreter is an established pattern (SharpTSEventEmitter.InvokeListenerDirect)
+            il.Emit(OpCodes.Ldloc, methodLocal);
+            il.Emit(OpCodes.Ldloc, callableLocal);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            // args[0] = null (interpreter)
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Stelem_Ref);
+            // args[1] = new List<object?>(args)
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldarg_1); // args (object[])
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, [typeof(IEnumerable<object>)])!);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+            EmitNormalizeClrNumericReturn(il);
+            il.Emit(OpCodes.Ret);
 
-        // No callable method found - return null
-        il.MarkLabel(noCallLabel);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ret);
+            // No callable method found - return null
+            il.MarkLabel(noCallLabel);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ret);
+        }
 
         reflectedMethods.CallableType.CreateType();
         reflectedMethods.MarkCallableFinalized();

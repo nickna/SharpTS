@@ -36,7 +36,7 @@ public partial class RuntimeEmitter
     }
 
     private void EmitRuntimeClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime, NetConstruction? netConstruction,
-        bool allowInterpreterBridge)
+        bool allowInterpreterBridge, MethodInfo? reflectiveCallRejection)
     {
         // $Runtime TypeBuilder + early helper-method signatures (Stringify,
         // CreateException) were forward-declared by DefineRuntimeClassPhase1
@@ -1087,7 +1087,8 @@ public partial class RuntimeEmitter
                 _features.UsesPromise,
                 _features.UsesTextEncoding,
                 runtime.FunctionPrototypes,
-                runtime.Sentinels.UndefinedInstance
+                runtime.Sentinels.UndefinedInstance,
+                reflectiveCallRejection
             )
         );
         EmitInvokeMethodValue0(

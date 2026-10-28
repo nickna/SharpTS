@@ -199,6 +199,11 @@ public partial class RuntimeEmitter
         // during EmitRuntimeClass / EmitStringify / EmitCreateException, which
         // re-use the pre-allocated TypeBuilder + MethodBuilders.
         DefineRuntimeClassPhase1(moduleBuilder, runtime);
+        if (functionPolicy.RejectReflectiveCallableFallback && runtime.NativeCallables is null)
+            throw new InvalidOperationException("Native reflective-call refusal requires the actual native callable capability.");
+        var reflectiveCallRejection = functionPolicy.RejectReflectiveCallableFallback
+            ? runtime.RuntimeClass.Type.DefineMethod("RejectReflectiveCallableFallback", MethodAttributes.Assembly | MethodAttributes.Static,
+                _types.Object, Type.EmptyTypes) : null;
         if (_emitNativeCallables)
             runtime.ReflectedMethods.DeclareNativeProxyRejection(runtime.RuntimeClass.Type, runtime.RuntimeClass.Type.DefineMethod(
                 "RejectNativeProxy", MethodAttributes.Assembly | MethodAttributes.Static, _types.Object, Type.EmptyTypes));
@@ -309,6 +314,9 @@ public partial class RuntimeEmitter
         // Emit $Error class hierarchy for standalone error support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
         EmitTSErrorClasses(moduleBuilder, runtime.Errors);
+        if (reflectiveCallRejection is not null)
+            GuestErrorEmitter.ThrowError(reflectiveCallRejection.GetILGenerator(), runtime.Errors.CreateException,
+                runtime.Errors.TypeErrorConstructor, NativeReflectiveCallableMessage);
         if (runtime.ReflectedMethods.NativeProxyRejection is { } nativeProxyRejection)
             EmitNativeProxyRejection(nativeProxyRejection, runtime.Errors);
 
@@ -761,7 +769,7 @@ public partial class RuntimeEmitter
             new ClassConstructorReturnInputs(runtime.Errors, runtime.Sentinels.UndefinedType, runtime.Symbols.Type));
 
         // Emit $Runtime class with all helper methods
-        EmitRuntimeClass(moduleBuilder, runtime, netConstruction, allowInterpreterBridge: !_emitNativeCallables);
+        EmitRuntimeClass(moduleBuilder, runtime, netConstruction, allowInterpreterBridge: !_emitNativeCallables, reflectiveCallRejection);
 
         // Emit $Runtime.NewOnFunction — the JS `new` protocol for runtime-valued
         // function callees. Depends on $Object, $TSFunction, $BoundTSFunction, and
@@ -961,7 +969,7 @@ public partial class RuntimeEmitter
             EmitBoundSetMethodFinalize(runtime.RequireSet(), runtime.Sentinels.UndefinedInstance);
 
         // Finalize $MethodCallable with Invoke method (Phase 2)
-        EmitMethodCallableFinalize(runtime.ReflectedMethods, runtime.NativeCallables);
+        EmitMethodCallableFinalize(runtime.ReflectedMethods, runtime.NativeCallables, reflectiveCallRejection);
         runtime.ReflectedMethods.CompleteEmission();
 
         NetClosureConstruction? netClosures = null;

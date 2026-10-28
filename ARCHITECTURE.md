@@ -827,6 +827,21 @@ behavior. Tests preserve overload selection, stable cached wrappers, cache
 isolation, exception identity, inherited lookup, generator and async super values, Invoke/Call
 fallback behavior and standalone crypto/event dispatch.
 
+Prepared native source output selects an optional reflective-call refusal through
+`FunctionEmissionPolicy`. Orchestration declares its static object-returning shell
+on the already-declared runtime type, fills its TypeError body after errors exist,
+and passes the exact nullable handle to scoped invocation/finalization inputs.
+Helpers check module and signature rather than reading ambient feature state.
+`$MethodCallable` keeps actual native-capability and exact delegate fast paths,
+including their numeric normalization and exception behavior, then preserves the
+original GetType/null dereference before refusing the residual Invoke/Call lookup.
+`InvokeMethodValue` retains its receiver-sensitive dispatch and rejects only its
+last Call reflection operation; it gains no general delegate/interface dispatch.
+The boundary names an unsupported operation, not alleged foreign ownership: even
+a source class's named Call method can reach the old duck-Call path (#3052).
+Ordinary output and default/uncertified runtime emission keep both legacy bodies
+and declaration order. Other CLR reflection remains separate and unchanged.
+
 For native guest output, orchestration declares an optional, checked
 `ReflectedMethods.NativeProxyRejection` helper before its consumers and fills its
 guest TypeError body after error metadata is available. Scoped Proxy bridge inputs

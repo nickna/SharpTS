@@ -73,7 +73,8 @@ public partial class RuntimeEmitter
         bool UsesPromise,
         bool UsesTextEncoding,
         EmittedFunctionPrototypeRuntime FunctionPrototypes,
-        FieldInfo UndefinedInstance
+        FieldInfo UndefinedInstance,
+        MethodInfo? ReflectiveCallRejection = null
     );
 
     /// <summary>
@@ -1138,52 +1139,60 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noCallMethodLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldstr, "Call");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        var callMiLocal = il.DeclareLocal(typeof(MethodInfo));
-        il.Emit(OpCodes.Stloc, callMiLocal);
-        il.Emit(OpCodes.Ldloc, callMiLocal);
-        il.Emit(OpCodes.Brfalse, noCallMethodLabel);
+        if (inputs.ReflectiveCallRejection is not null)
+        {
+            il.Emit(OpCodes.Pop); // retain the original GetType/null behavior before the boundary
+            EmitReflectiveCallableRejection(il, method.Module, inputs.ReflectiveCallRejection);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldstr, "Call");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+            var callMiLocal = il.DeclareLocal(typeof(MethodInfo));
+            il.Emit(OpCodes.Stloc, callMiLocal);
+            il.Emit(OpCodes.Ldloc, callMiLocal);
+            il.Emit(OpCodes.Brfalse, noCallMethodLabel);
 
-        // Call(interpreter=null, args=new List<object?>(object[]))
-        // Wrapped in try/catch so a guest error thrown by the BuiltInMethod (which
-        // reflection re-wraps in TargetInvocationException) is unwrapped to the real
-        // guest exception — without this, a throwing cross-boundary BuiltInMethod (e.g.
-        // vm.Module.link/evaluate failing) escapes guest try/catch as a raw
-        // TargetInvocationException and crashes the program.
-        var reflectResultLocal = il.DeclareLocal(_types.Object);
-        il.BeginExceptionBlock();
-        il.Emit(OpCodes.Ldloc, callMiLocal);
-        il.Emit(OpCodes.Ldarg_1); // the callable object
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldnull); // interpreter = null
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        // Convert object[] to List<object?>
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Newobj, _types.ListObjectNullableCtor_IEnumerable);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
-        il.Emit(OpCodes.Stloc, reflectResultLocal);
-        il.BeginCatchBlock(typeof(TargetInvocationException));
-        // ex on stack → rethrow ex.InnerException (the real guest error) if present.
-        il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("InnerException")!.GetGetMethod()!);
-        var innerLocal = il.DeclareLocal(typeof(Exception));
-        il.Emit(OpCodes.Stloc, innerLocal);
-        var rethrowOriginal = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, innerLocal);
-        il.Emit(OpCodes.Brfalse, rethrowOriginal);
-        il.Emit(OpCodes.Ldloc, innerLocal);
-        il.Emit(OpCodes.Throw);
-        il.MarkLabel(rethrowOriginal);
-        il.Emit(OpCodes.Rethrow);
-        il.EndExceptionBlock();
-        il.Emit(OpCodes.Ldloc, reflectResultLocal);
-        il.Emit(OpCodes.Ret);
+            // Call(interpreter=null, args=new List<object?>(object[]))
+            // Wrapped in try/catch so a guest error thrown by the BuiltInMethod (which
+            // reflection re-wraps in TargetInvocationException) is unwrapped to the real
+            // guest exception — without this, a throwing cross-boundary BuiltInMethod (e.g.
+            // vm.Module.link/evaluate failing) escapes guest try/catch as a raw
+            // TargetInvocationException and crashes the program.
+            var reflectResultLocal = il.DeclareLocal(_types.Object);
+            il.BeginExceptionBlock();
+            il.Emit(OpCodes.Ldloc, callMiLocal);
+            il.Emit(OpCodes.Ldarg_1); // the callable object
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldnull); // interpreter = null
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_1);
+            // Convert object[] to List<object?>
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Newobj, _types.ListObjectNullableCtor_IEnumerable);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+            il.Emit(OpCodes.Stloc, reflectResultLocal);
+            il.BeginCatchBlock(typeof(TargetInvocationException));
+            // ex on stack → rethrow ex.InnerException (the real guest error) if present.
+            il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("InnerException")!.GetGetMethod()!);
+            var innerLocal = il.DeclareLocal(typeof(Exception));
+            il.Emit(OpCodes.Stloc, innerLocal);
+            var rethrowOriginal = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, innerLocal);
+            il.Emit(OpCodes.Brfalse, rethrowOriginal);
+            il.Emit(OpCodes.Ldloc, innerLocal);
+            il.Emit(OpCodes.Throw);
+            il.MarkLabel(rethrowOriginal);
+            il.Emit(OpCodes.Rethrow);
+            il.EndExceptionBlock();
+            il.Emit(OpCodes.Ldloc, reflectResultLocal);
+            il.Emit(OpCodes.Ret);
+        }
 
         // Unrecognized non-callable (plain object, number, $Undefined, …):
         // throw TypeError per ECMA-262 instead of silently returning null (#260).

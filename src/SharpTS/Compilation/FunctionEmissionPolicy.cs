@@ -10,6 +10,7 @@ internal readonly record struct FunctionEmissionPolicy(bool BindNumericRest4)
     internal MethodInfo? NativeNumericRest4Binder { get; init; }
     internal MethodInfo? NativeGenericNormalizer { get; init; }
     internal MethodInfo? NativeUnionConverter { get; init; }
+    internal bool RejectReflectiveCallableFallback { get; init; }
     internal static FunctionEmissionPolicy Full => new(true);
 
     internal static FunctionEmissionPolicy ForPreparedSource(IEnumerable<Stmt> statements, bool native)
@@ -17,7 +18,7 @@ internal readonly record struct FunctionEmissionPolicy(bool BindNumericRest4)
         if (!native) return Full;
         var probe = new PotentialProducerProbe();
         foreach (var statement in statements) probe.Visit(statement);
-        return new(probe.MayProduce);
+        return new(probe.MayProduce) { RejectReflectiveCallableFallback = true };
     }
 
     internal void RequireNumericRest4Producer()

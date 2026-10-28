@@ -146,20 +146,64 @@ the source of behavior. Interface dispatch also works for generic carrier
 instances without enumerating open generic `Type` tokens. Ordinary managed
 output does not emit this contract.
 
-The method wrapper probes this contract and the exact `Func<object[], object>`
-delegate ABI before its existing CLR reflection bridge. Covariant results use
-the same CLR delegate contract; other delegate signatures keep the bridge. That
-bridge is deliberately retained: a BCL-returned opaque CLR value
-cannot yet be proved to belong to a finite invocation catalog. A subsequent
-closed-world admission pass must either prove that provenance or reject the
-specific CLR boundary before output. Guest `any`, computed and Symbol property
-operations continue to use their existing semantics.
+The method wrapper probes this actual contract and the exact `Func<object[], object>`
+delegate ABI before any remaining CLR reflection bridge. Covariant results use
+the same CLR delegate contract. This is a checked invocation capability, not proof
+that an arbitrary value belongs to this compiler. Ordinary managed output and
+uncertified runtime-emitter APIs keep the legacy bridge for other signatures.
+Prepared native source output has the explicit operation boundary below; typed
+BCL and other CLR metadata paths remain separate.
 
 This is catalog infrastructure, not a warning-free native compatibility claim.
 At the callable-contract checkpoint, strict `console.log(42)` publish retained
 the same 81 diagnostics as before the contract. Remaining work includes the
 opaque callable bridge and signatures, property/shape metadata, class/Symbol
 initialization and source admission.
+
+### Residual reflective callable boundary
+
+Prepared native source output declares one assembly-internal rejection helper on
+the already-declared runtime type and fills it after error metadata is available.
+Scoped consumers receive its exact nullable MethodInfo and validate the module,
+static object-returning signature and zero parameters. Default runtime-emitter
+calls have no selected boundary, even when emitting a native callable catalog;
+ordinary managed output also retains the original bodies and declaration order.
+
+`$MethodCallable.Invoke` keeps the existing native-capability and exact
+`Func<object[], object>` arms first, with their existing numeric normalization and
+exception behavior. The old GetType dereference remains, including the null-wrapper
+NullReferenceException. Remaining reflective Invoke/Call lookup instead throws a
+guest TypeError naming that unsupported operation. No general Delegate.DynamicInvoke
+bridge is added. Other delegate signatures can still use the ordinary/default
+legacy wrapper; this selected native profile diagnoses their residual operation.
+
+`InvokeMethodValue` keeps all existing receiver-aware function, wrapper, MethodBase,
+collection, Proxy, exact delegate and Type handling. Only its final reflective
+Call bridge is refused. It gains no general delegate or interface dispatch: a
+value with only Invoke was not callable through that route, and promoting it would
+change behavior. The two legacy bridges also differ in argument packing, numeric
+normalization and exception unwrapping; ordinary/default controls retain those
+precise differences.
+
+A verified all-feature runtime inventory has 24 actual erased-ABI callable carriers,
+all with the exact capability, and no declared Call method. The five additional
+Invoke bodies are zero-argument worker/finally thunks: they enter typed delegates or
+an explicitly tokenized TSFunction wrapper. The sole generated MethodCallable
+construction site is GetFieldsProperty's GetMember compatibility path; its actual
+emitted bound DH/ECDH carriers are already catalogued. These facts preserve known
+runtime behavior, but are not a whole-program ownership certificate. In particular,
+an unrelated source class with a public Call member can reach the legacy bridge;
+that ordinary baseline defect remains tracked separately in
+[#3052](https://github.com/nickna/SharpTS/issues/3052). The native boundary therefore
+names the reflective operation rather than claiming every rejected value is foreign.
+
+Saved-IL tests cover actual carriers, foreign Invoke/Call priority, argument identity,
+null/bare values, delegate behavior, and exception wrapping in ordinary, default and
+selected native output. A diagnostic native golden executes function aliases,
+array and Promise callbacks and the source-class refusal. Ordinary console and
+callback/class programs retain their PE sizes and every method-body hash. Strict
+console publication drops from 36 to 33 diagnostics, removing exactly the three
+residual IL2075 entries with none added; it still fails the production warning gate.
 
 ### CLR provenance boundary
 
@@ -557,12 +601,13 @@ RID, individual trim/AOT diagnostics and warnings as errors. It adds no broad
 assembly roots or warning suppressions. Current emitted-runtime warnings therefore
 fail strict native publish instead of being hidden by successful project export.
 
-With the current changes combined, fresh strict `console.log(42)` publication
-reports 27 diagnostics: IL2070 (16), IL2075 (11).
-The two optional numeric-rest lookups, 39 Proxy bridge diagnostics and two
-certified generic-normalizer diagnostics and the certified union-converter lookup
-and six literal-initializer diagnostics are absent from the earlier 80-diagnostic checkpoint,
-with no additions. Strict publication
+The last combined checkpoint before the residual-callable integration reports
+27 strict `console.log(42)` diagnostics: IL2070 (16), IL2075 (11).
+The two optional numeric-rest lookups, 39 Proxy bridge diagnostics, two
+generic-normalizer diagnostics, the union-converter lookup, six dynamic
+initializer diagnostics and three static-presence lookups are absent from the
+earlier 80-diagnostic checkpoint. The residual-callable slice separately removes
+three IL2075 records with no additions; combined measurement is in progress. Strict publication
 still fails. Separate diagnostic publishes retain all warnings and pass focused
 native execution for own-property presence/order, generic storage/prototypes,
 suspended callbacks and rest-function binding; a managed-compiler export of the
