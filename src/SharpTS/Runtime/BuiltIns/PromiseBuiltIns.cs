@@ -514,8 +514,17 @@ public static class PromiseBuiltIns
     /// the constructor passes it; calling it more than once, or with already-set
     /// slots, is a TypeError.
     /// </summary>
-    private sealed class PromiseCapabilityExecutor : ISharpTSNonConstructorCallable
+    private sealed class PromiseCapabilityExecutor : ISharpTSNonConstructorCallable, ISharpTSFunctionObject, IBuiltInFunctionMetadata
     {
+        private SharpTSObject? _properties;
+        private SharpTSObject OwnPropertyStorage => _properties ??= FunctionObjectProperties.Create(FunctionName, Arity());
+        SharpTSObject ISharpTSFunctionObject.OwnProperties => OwnPropertyStorage;
+        public string FunctionName => "";
+        public bool HasMetadataProperty(string name) => name is "name" or "length" &&
+            OwnPropertyStorage.GetOwnPropertyDescriptor(name) is not null;
+        public bool DeleteMetadataProperty(string name) => name is not ("name" or "length") ||
+            OwnPropertyStorage.DeletePropertyStrict(name, false);
+
         public ISharpTSCallable? ResolveFn { get; private set; }
         public ISharpTSCallable? RejectFn { get; private set; }
         private bool _resolveIsNonUndefined;
