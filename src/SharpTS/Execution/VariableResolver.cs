@@ -575,15 +575,17 @@ public class VariableResolver : AstVisitorBase
         var enclosingFunction = _currentFunction;
         _currentFunction = FunctionType.Function;
 
+        // Ordinary synchronous expressions have a separate private self owner.
+        // Async/generator runtimes retain their existing single call scope.
+        bool separateSelf = expr.Name != null && !expr.IsAsync && !expr.IsGenerator;
         BeginScope();
-
-        // For named function expressions, declare the name in the function scope
         if (expr.Name != null)
         {
             Declare(expr.Name.Lexeme);
             Define(expr.Name.Lexeme);
         }
 
+        if (separateSelf) BeginScope();
         ResolveParameters(expr.Parameters, expr.BlockBody ?? []);
         var statements = ParameterBinder.BodyStatements(expr.BlockBody ?? []);
         bool separateBody = BeginParameterBodyScope(expr.Parameters, statements);
@@ -599,6 +601,7 @@ public class VariableResolver : AstVisitorBase
 
         if (separateBody) EndScope();
         EndScope();
+        if (separateSelf) EndScope();
 
         _currentFunction = enclosingFunction;
     }
