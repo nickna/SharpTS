@@ -1842,8 +1842,11 @@ public partial class ILCompiler
     internal void MarkPadsUndefined(MethodBuilder method)
     {
         if (_runtime?.FunctionAttributes.PadUndefinedCtor != null)
+        {
             method.SetCustomAttribute(
                 _runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
+            _nativeGenericMethodNormalization?.RecordSourceMarker(method, NativeGenericMethodNormalization.SourceMarker.PadUndefined);
+        }
     }
 
     /// <summary>
@@ -1869,15 +1872,19 @@ public partial class ILCompiler
         method.SetCustomAttribute(
             _runtime.FunctionAttributes.FunctionLengthCtor,
             CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.FunctionLengthCtor, length));
+        _nativeGenericMethodNormalization?.RecordSourceMarker(method, NativeGenericMethodNormalization.SourceMarker.FunctionLength);
     }
 
     internal void MarkFunctionName(MethodBuilder method, string name)
     {
         _functions.Names[method] = name;
         if (_runtime?.FunctionAttributes.FunctionNameCtor != null)
+        {
             method.SetCustomAttribute(
                 _runtime.FunctionAttributes.FunctionNameCtor,
                 CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.FunctionNameCtor, name));
+            _nativeGenericMethodNormalization?.RecordSourceMarker(method, NativeGenericMethodNormalization.SourceMarker.FunctionName);
+        }
     }
 
     internal void MarkNonConstructible(MethodBuilder method)

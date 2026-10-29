@@ -48,6 +48,12 @@ public sealed class FunctionGenericParameterRegistry
     internal bool TryGetErasedValueInvocationTarget(MethodBuilder owner, out MethodInfo target) =>
         _erasedValueInvocationTargets.TryGetValue(owner, out target!);
 
+    internal IReadOnlyDictionary<MethodBuilder, MethodInfo> RequireCompletedErasedValueInvocationTargets()
+    {
+        if (!IsComplete) throw new InvalidOperationException("Function generic parameter metadata is not complete.");
+        return new System.Collections.ObjectModel.ReadOnlyDictionary<MethodBuilder, MethodInfo>(_erasedValueInvocationTargets);
+    }
+
     // Reflection.Emit generic parameters can report ContainsGenericParameters
     // false before Save, so inspect the metadata shape as well as that property.
     internal static bool ContainsUnboundType(Type type) => type.IsGenericParameter || type.IsGenericTypeDefinition ||

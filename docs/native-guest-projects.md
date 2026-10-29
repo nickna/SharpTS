@@ -384,10 +384,9 @@ at `83400f023`. Exact definition initialization, described below, supplies the
 literal canonical owner and resolves that missing native code/metadata failure.
 
 This is an exact-method invocation plan, rather than a direct typed invocation
-thunk. Opaque CLR and source-reflection construction still use their legacy
-paths, including `$ErasedSourceInvokerTarget` and runtime `MakeGenericMethod`,
-for producer-present or uncertified outputs. A completed zero-producer native
-certificate has the explicit foreign-marker boundary described below. Omitting the
+thunk. Uncertified output retains the legacy source-reflection paths. Prepared
+native output uses the completed finite generic-target catalog and explicit
+foreign-marker boundary described below. Omitting the
 unavailable interpreter eval bridge reduced the basic strict console inventory
 to 80 diagnostics; the source invocation plan itself removed none. The optional
 numeric-rest proof below reduces it further.
@@ -476,25 +475,50 @@ the exact method and parameter snapshots against the completed
 output is serialized. Saved-PE tests compare every generic method token with that
 inventory, including imported definitions and feature overrides.
 
-When the completed inventory is empty, the helper retains the original method
-identity for nongeneric methods, closed generic methods and foreign methods without
-all three source markers. A generic definition carrying this output's
+The helper retains the original method identity for nongeneric methods, closed
+generic methods and foreign methods without all three source markers. A generic
+definition outside the completed owned inventory carrying this output's
 `FunctionName`, `FunctionLength` and `PadUndefined` markers instead receives a
 guest TypeError naming the unsupported foreign-marker boundary. These public
 attributes alone do not prove that a method belongs to the compiler: a verified
 foreign assembly can carry them. The refusal therefore makes that native profile
 boundary explicit rather than silently dropping its previous generic closure.
 
-Any owned generic producer keeps the full legacy normalizer. Ordinary managed
-output and runtime-emitter calls without the optional certificate retain it as
-well. Source MethodInfo and wrapper/cache identity remain unchanged. Tests retain
-the verified foreign-marker legacy closure alongside the native refusal, and
-diagnostic native executions pass both the zero-producer capability control
-(`42 false`) and a generic alias control (`7 text`).
+For each ordinary owned definition, the completed catalog proves every legacy
+eligibility condition: all three source markers recorded at their actual emission
+hooks, closed owner/signature, no special generic-parameter attributes, and zero
+constraints or exactly one closed constraint per parameter. Its declaration-owned
+MethodSpec must use precisely `object` for an unconstrained parameter or that
+single constraint. The helper compares a literal real MethodInfo to the input and
+returns the corresponding literal closed MethodSpec. Caller-defined MethodInfo
+equality cannot select a target. An unproved owned definition records a blocker
+and retains the full legacy operation; it does not admit foreign marked methods.
+
+Constructed calls use a separate exact entry/core catalog, with the original
+source MethodInfo, cache identity, receiver/default/rest shaping and final
+`__newTarget` slot preserved. Only the proved entry definition or its exact
+canonical closed entry selects the corresponding literal closed core. Other
+closed entries and foreign generic cores receive a guest TypeError at the former
+dynamic generic-closing operation. Construct-only cores keep their unmarked
+ordinary-call behavior. The finite native canonical path also avoids the open-core
+failure tracked separately for ordinary managed output in [#3080](https://github.com/nickna/SharpTS/issues/3080).
+
+Ordinary managed output and runtime-emitter calls without the optional certificate
+retain their original method bodies. Saved-PE tests cover constraints, completed
+metadata changes, exact definition/closed inputs, hostile equality, imports and
+generic `new`, bound construction and `Reflect.construct` with defaults/rest.
+Diagnostic native executions pass both the zero-producer capability control
+(`42 false`) and the generic alias control (`7 text`).
 
 The same basic strict console measurement falls from 39 to 37 diagnostics,
 removing exactly the normalizer's IL2060 and IL3050 findings with none added.
 This does not establish general CLR provenance or strict native acceptance.
+An isolated generic constructor control against immutable `c440c0ee5` falls from
+34 to 30 strict diagnostics, removing exactly IL2060/IL3050 from the late generic
+normalizer and `InvokeConstructed`, with none added. Strict publication still
+fails. A separate publish retaining all warnings executes the native constructor
+as `7 true`; ordinary console, generic alias, constrained alias and `new.target`
+output retain identical PE sizes and every method-body hash.
 
 ### Completed union-conversion inventory
 

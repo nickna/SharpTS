@@ -762,6 +762,7 @@ public partial class ILCompiler
             _functionEmissionPolicy = _functionEmissionPolicy with
             {
                 NativeGenericNormalizer = _nativeGenericMethodNormalization.Normalize,
+                NativeConstructedGenericResolver = _nativeGenericMethodNormalization.ResolveConstructed,
                 NativeUnionConverter = _nativeUnionArgumentConversion.Convert,
                 NativeReceiverBinder = _nativeReceiverBinding.Bind
             };

@@ -1057,7 +1057,7 @@ public partial class RuntimeEmitter
 
         EmitTSFunctionInvokeConstructed(typeBuilder, functionValues, inputs.FunctionAttributes,
             inputs.Arguments.CurrentField, methodField, targetField, expectsThisField, currentThisField,
-            adjustArgsMethod, EmitConvertArguments);
+            adjustArgsMethod, EmitConvertArguments, inputs.Policy.NativeConstructedGenericResolver);
 
         EmitTSFunctionInvokeWithThis0(
             typeBuilder,

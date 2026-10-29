@@ -8,7 +8,8 @@ public partial class RuntimeEmitter
     private void EmitTSFunctionInvokeConstructed(TypeBuilder owner, EmittedFunctionValueRuntime functions,
         EmittedFunctionAttributesRuntime attributes, FieldInfo? currentArguments, FieldBuilder methodField,
         FieldBuilder targetField, FieldBuilder expectsThisField, FieldBuilder currentThisField,
-        MethodBuilder adjustArguments, Action<ILGenerator, LocalBuilder> convertArguments)
+        MethodBuilder adjustArguments, Action<ILGenerator, LocalBuilder> convertArguments,
+        MethodInfo? nativeGenericResolver)
     {
         var method = owner.DefineMethod("InvokeConstructed", MethodAttributes.Public, _types.Object,
             [_types.Object, _types.ObjectArray, _types.Object]);
@@ -36,8 +37,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notGeneric);
         il.Emit(OpCodes.Ldloc, core);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, methodField);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.MethodInfo, "GetGenericArguments"));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "MakeGenericMethod", _types.MakeArrayType(_types.Type)));
+        if (nativeGenericResolver is null)
+        {
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.MethodInfo, "GetGenericArguments"));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "MakeGenericMethod", _types.MakeArrayType(_types.Type)));
+        }
+        else
+        {
+            if (!nativeGenericResolver.IsStatic || nativeGenericResolver.IsGenericMethod ||
+                nativeGenericResolver.ReturnType != _types.MethodInfo ||
+                !nativeGenericResolver.GetParameters().Select(parameter => parameter.ParameterType)
+                    .SequenceEqual([_types.MethodInfo, _types.MethodInfo]))
+                throw new InvalidOperationException("Native constructed generic resolution requires an exact static (core, entry) MethodInfo helper.");
+            il.Emit(OpCodes.Call, nativeGenericResolver);
+        }
         il.Emit(OpCodes.Stloc, core);
         il.MarkLabel(notGeneric);
 

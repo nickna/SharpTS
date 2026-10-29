@@ -52,6 +52,12 @@ public partial class ILCompiler
         body.DefineParameter(sourceParameters.Length + 1, ParameterAttributes.None, "__newTarget");
         entry.SetCustomAttribute(_runtime.FunctionAttributes.NewTargetCoreCtor,
             CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.NewTargetCoreCtor, body.Name));
+        if (_nativeGenericMethodNormalization is not null && genericParameters.Length > 0)
+        {
+            if (_functions.GenericParameters.TryGetErasedValueInvocationTarget(entry, out var erased))
+                _functions.GenericParameters.DeclareErasedValueInvocationTarget(body, erased.GetGenericArguments());
+            _nativeGenericMethodNormalization.RecordConstructedBody(entry, body);
+        }
         _newTargetBodies.Add(entry, body);
         var il = entry.GetILGenerator();
         int first = entry.IsStatic ? 0 : 1;
