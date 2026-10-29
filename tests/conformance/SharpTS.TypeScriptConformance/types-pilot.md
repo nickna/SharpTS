@@ -6,8 +6,8 @@ Measured against the fixed TypeScript v6.0.3 revision
 All twelve have the type outcome `Mismatch`; the pilot measures existing gaps
 and does not claim inferred-type parity.
 
-The upstream references contain **584 observations**: **176 exact matches**,
-**62 type-text differences**, **159 missing source observations**, and
+The upstream references contain **584 observations**: **180 exact matches**,
+**58 type-text differences**, **159 missing source observations**, and
 **187 unsupported displays**. There are **zero extra observations**, harness
 errors or missing baselines. SharpTS produces 425 corresponding source facts;
 unsupported facts are included in that count and never count as matches.
@@ -19,7 +19,7 @@ unsupported facts are included in that count and never count as matches.
 | `es2020/constructBigint.ts` | 13 | 0 | 11 | 4 |
 | `es2021/logicalAssignment/logicalAssignment9.ts` | 11 | 0 | 1 | 0 |
 | `es6/Symbols/symbolDeclarationEmit1.ts` | 4 | 0 | 1 | 0 |
-| `types/conditional/inferTypes1.ts` | 32 | 21 | 79 | 89 |
+| `types/conditional/inferTypes1.ts` | 36 | 17 | 79 | 89 |
 | `types/conditional/inferTypesWithExtends2.ts` | 0 | 0 | 4 | 2 |
 | `types/keyof/keyofIntersection.ts` | 0 | 0 | 2 | 18 |
 | `types/literal/literalTypes1.ts` | 36 | 25 | 2 | 0 |
@@ -29,14 +29,13 @@ unsupported facts are included in that count and never count as matches.
 
 ## Triage of every text difference
 
-The first fix for **37 differences** belongs in checking/inference. Three scoped
+The first fix for **25 differences** belongs in checking/inference. Two scoped
 follow-ups preserve the pinned source evidence instead of expanding this pilot
 into a general checker campaign:
 
 | Cluster | Observations | Follow-up |
 |---|---:|---|
 | Switch case/default bodies retain the original literal union | 18 | [#3027](https://github.com/nickna/SharpTS/issues/3027) |
-| Recursive conditional mapping retains unresolved `Jsonified<...>` branches | 12 | [#3028](https://github.com/nickna/SharpTS/issues/3028) |
 | Higher-order indexed/conditional inference retains `infer R` or loses constraints | 7 | [#3029](https://github.com/nickna/SharpTS/issues/3029) |
 
 The indexed global-object mismatch from [#3024](https://github.com/nickna/SharpTS/issues/3024)
@@ -56,11 +55,19 @@ by widening fresh mutable members and single-literal inferred returns. Explicit
 literal annotations, `as const`, literal unions and contextual discriminants retain
 their source-owned types. The pinned TypeScript 6.0.3 oracle confirms the focused
 freshness/context controls; no comparison strings are normalized.
+[#3028](https://github.com/nickna/SharpTS/issues/3028) resolves the recursive
+conditional/mapped members. Four leaf observations now match exactly. The eight
+surrounding observations contain fully materialized records, with focused concrete
+member and bidirectional compatibility assertions; their selected mapped-alias
+presentation differences remain visible in [#3081](https://github.com/nickna/SharpTS/issues/3081).
+Recursion guards retain lazy recursive edges, and materialization resolves aliases
+in their current source scope instead of reusing a spelling-based relation cache.
 
-The remaining **25 differences** first need display/source-query context work:
+The remaining **33 differences** first need display/source-query context work:
 
 - `inferTypes1`: two observations, alias-name retention for `Example` and the
-  upstream spread-element query context for `...args`.
+  upstream spread-element query context for `...args`, plus eight selected
+  mapped-alias presentations (#3081).
 - `literalTypes1`: five `Falsy` alias presentations and two union-order differences.
 - `intersectionIncludingPropFromGlobalAugmentation`: three union-order differences.
 - The same case: three expanded `PropertyKey` parameter-alias presentations (#3070).
@@ -107,7 +114,7 @@ anonymous cycles. The complete standalone TypeScript conformance project passes
 baseline and externally consumed vocabulary are unchanged.
 
 Two consecutive explicit type-baseline generations are byte-identical:
-SHA-256 `8491f24a027e85f196d40614246ff2a90a65c3473411a2d3ff17431fd27e6ae0`.
+SHA-256 `b0776d0a280b47f7c88d9bffa430a702ecbe94fef411f552037df93acbf580c6`.
 Normal execution then verifies the committed counts and complete-result
 fingerprints with update mode disabled. The README documents generation,
 structured JSON output and full failure diffs. Future semantic or coverage fixes

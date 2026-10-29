@@ -312,8 +312,10 @@ public partial class TypeChecker
     /// enabling identity-based caching to break infinite recursion.
     /// </summary>
     /// <param name="rta">The recursive type alias to expand.</param>
+    /// <param name="cacheExpansion">Retain legacy relation identity caching. New mapped-member
+    /// materialization disables the spelling-based cache and resolves in its current source scope.</param>
     /// <returns>The expanded type.</returns>
-    private TypeInfo ExpandRecursiveTypeAlias(TypeInfo.RecursiveTypeAlias rta)
+    private TypeInfo ExpandRecursiveTypeAlias(TypeInfo.RecursiveTypeAlias rta, bool cacheExpansion = true)
     {
         // For generic aliases, create a cache key that includes type arguments
         string cacheKey = rta.TypeArguments is { Count: > 0 }
@@ -322,7 +324,7 @@ public partial class TypeChecker
 
         // Check cache first - reusing the same TypeInfo object is crucial for breaking recursion
         _expandedTypeAliasCache ??= new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
-        if (_expandedTypeAliasCache.TryGetValue(cacheKey, out var cached))
+        if (cacheExpansion && _expandedTypeAliasCache.TryGetValue(cacheKey, out var cached))
         {
             return cached;
         }
@@ -369,7 +371,7 @@ public partial class TypeChecker
             }
 
             // Cache the expanded type
-            _expandedTypeAliasCache[cacheKey] = expanded;
+            if (cacheExpansion) _expandedTypeAliasCache[cacheKey] = expanded;
             return expanded;
         }
         finally

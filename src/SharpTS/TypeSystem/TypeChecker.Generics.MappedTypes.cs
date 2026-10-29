@@ -452,7 +452,7 @@ public partial class TypeChecker
             // A deferred generic alias reference (#185) carries its arguments unresolved —
             // resolve T[K] inside them so the eventual expansion sees concrete arguments.
             TypeInfo.RecursiveTypeAlias rta when rta.TypeArguments is { Count: > 0 } =>
-                new TypeInfo.RecursiveTypeAlias(rta.AliasName, rta.TypeArguments.Select(t => ResolveIndexedAccessTypes(t, subs)).ToList()),
+                ResolveMappedAliasValue(rta, subs),
             TypeInfo.Function func => new TypeInfo.Function(
                 func.ParamTypes.Select(p => ResolveIndexedAccessTypes(p, subs)).ToList(),
                 ResolveIndexedAccessTypes(func.ReturnType, subs),
@@ -460,6 +460,26 @@ public partial class TypeChecker
                 func.HasRestParam),
             _ => type
         };
+    }
+
+    private TypeInfo ResolveMappedAliasValue(TypeInfo.RecursiveTypeAlias alias, Dictionary<string, TypeInfo> substitutions)
+    {
+        var arguments = alias.TypeArguments!.Select(argument =>
+        {
+            TypeInfo resolvedArgument = ResolveIndexedAccessTypes(argument, substitutions);
+            HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);
+            while (resolvedArgument is TypeInfo.RecursiveTypeAlias { TypeArguments: null or { Count: 0 } } reference &&
+                _typeAliasExpansionStack?.Contains(reference.AliasName) != true && visited.Add(reference))
+                resolvedArgument = ExpandRecursiveTypeAlias(reference, cacheExpansion: false);
+            return resolvedArgument;
+        }).ToList();
+        var resolved = alias with { TypeArguments = arguments };
+        // A recursive mapped value starts as an alias placeholder while its key is open.
+        // Once that key has selected a concrete member, evaluate the alias's conditional
+        // head. An active instantiation remains lazy so recursive object edges do not unroll.
+        string key = $"{alias.AliasName}<{string.Join(",", arguments.Select(TypeInfoToString))}>";
+        return arguments.Any(ContainsOpenTypeVariable) || _typeAliasExpansionStack?.Contains(key) == true
+            ? resolved : ExpandRecursiveTypeAlias(resolved, cacheExpansion: false);
     }
 
     /// <summary>
