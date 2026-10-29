@@ -197,11 +197,7 @@ internal static class GlobalFunctionHandlers
         if (arguments.Count < 1) return RuntimeValue.True;
 
         var argRV = await evaluateArg(arguments[0]);
-        if (argRV.IsNumber) return RuntimeValue.FromBoolean(double.IsNaN(Interpreter.ToNumber(argRV)));
-        if (argRV.IsString) return RuntimeValue.FromBoolean(!double.TryParse(argRV.AsString(), out _));
-        if (argRV.IsNull) return RuntimeValue.True;
-        if (argRV.IsBoolean) return RuntimeValue.False;
-        return RuntimeValue.True;
+        return RuntimeValue.FromBoolean(double.IsNaN(interpreter.ToNumberWithPrimitive(argRV.ToObject())));
     }
 
     private static async ValueTask<RuntimeValue> HandleIsFinite(
