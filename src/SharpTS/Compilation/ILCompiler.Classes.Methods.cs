@@ -13,6 +13,7 @@ namespace SharpTS.Compilation;
 public partial class ILCompiler
 {
     private readonly HashSet<MethodBuilder> _rawObservingPrimitiveMethodCores = [];
+    private readonly HashSet<TypeBuilder> _classMethodSignatureOwners = new(ReferenceEqualityComparer.Instance);
     /// <summary>
     /// Defines all class methods (without emitting bodies) so they're available for
     /// direct dispatch in async state machines.
@@ -88,8 +89,9 @@ public partial class ILCompiler
         if (classStmt.Methods.Any(method => !method.IsStatic && !method.IsPrivate && method.ComputedKey != null))
             registry.RegisterInstancePrototypeBarrier(typeBuilder, null);
 
-        // Skip if instance methods are already defined for this class
-        if (_classes.InstanceMethods.ContainsKey(qualifiedClassName))
+        // Static-only/accessor-only classes need the same idempotency guarantee
+        // as classes with instance methods. Revisit aliases by exact output owner.
+        if (!_classMethodSignatureOwners.Add(typeBuilder))
             return;
 
         // Pre-define constructor (if not already defined)
