@@ -161,6 +161,7 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
             if (name == "LookupBuiltInStaticMember") return runtime.BuiltInStatics.Lookup;
             if (name == "NativeProxyRejection") return runtime.ReflectedMethods.NativeProxyRejection;
             if (name == "SourceOwners") return runtime.ClassInitialization.SourceOwners;
+            if (name == "NativeStaticMemberPresence") return runtime.ClassInitialization.NativeStaticMemberPresence;
             return name switch
             {
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
