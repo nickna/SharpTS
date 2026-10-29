@@ -481,7 +481,7 @@ public partial class TypeChecker
                         mergedFields.ToFrozenDictionary(),
                         optionalFields.ToFrozenSet(),
                         CallSignatures: callSignatures.Count == 0 ? null : callSignatures,
-                        ReadonlyMembers: readonlyFields.ToFrozenSet(StringComparer.Ordinal));
+                        ReadonlyMembers: readonlyFields.ToFrozenSet(StringComparer.Ordinal)) { IsGlobalThisObject = containsGlobalThis };
                 }
                 return new TypeInfo.Record(mergedFields.ToFrozenDictionary(),
                     CallSignatures: callSignatures.Count == 0 ? null : callSignatures,

@@ -9,6 +9,18 @@ namespace SharpTS.Tests.TypeCheckerTests;
 public sealed class GlobalThisSelfIndexTests
 {
     [Fact]
+    public void GlobalObjectIntersectionKeepsUnknownIndexedReadImplicitAnyDiagnostic()
+    {
+        const string source = "declare let win:Window & typeof globalThis; win['missing'];";
+        var entry = new ParsedModule("main.ts", new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
+        var library = new ParsedModule("lib.global.d.ts", new Parser(new Lexer("interface Window {} declare var setting:number;").ScanTokens()).ParseOrThrow())
+            { IsDefaultLibrary = true, IsDeclarationFile = true };
+        var checker = new TypeChecker(new TypeCheckerOptions { NoImplicitAny = true });
+        checker.CheckModules([library,entry], new ModuleResolver(Path.GetTempPath()));
+        Assert.Equal("TS7015", Assert.Single(checker.GetDiagnostics()).TsCode);
+    }
+
+    [Fact]
     public void PinnedIndexedGlobalObjectAndRepeatedSelfAccessKeepTheLoadedShape()
     {
         const string source = """
