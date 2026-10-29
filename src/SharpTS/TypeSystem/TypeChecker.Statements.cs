@@ -425,7 +425,7 @@ public partial class TypeChecker
                 else
                 {
                     if (!_annotatedParameterBindings.Contains(stmt))
-                        initializerType = WidenLiteralType(initializerType);
+                        initializerType = WidenClassFieldInitializerType(initializer, initializerType);
                     // JS: `let x = null` / `let x = undefined` leave x freely reassignable.
                     // Widen top-level null/undefined to any for untyped let/var.
                     if (initializerType is TypeInfo.Null or TypeInfo.Undefined)

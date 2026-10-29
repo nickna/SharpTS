@@ -1023,6 +1023,8 @@ public partial class TypeChecker
                 {
                     var distinct = collected.Distinct(TypeInfoEqualityComparer.Instance).ToList();
                     inferredReturn = CollapseOrCreateUnion(distinct);
+                    if (!funcStmt.IsGenerator)
+                        inferredReturn = WidenInferredClassMemberReturn(body, inferredReturn);
                 }
 
                 // Apply async/generator wrapping. A generator's type argument is its YIELD type (collected

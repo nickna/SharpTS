@@ -6,8 +6,8 @@ Measured against the fixed TypeScript v6.0.3 revision
 All twelve have the type outcome `Mismatch`; the pilot measures existing gaps
 and does not claim inferred-type parity.
 
-The upstream references contain **584 observations**: **171 exact matches**,
-**67 type-text differences**, **159 missing source observations**, and
+The upstream references contain **584 observations**: **176 exact matches**,
+**62 type-text differences**, **159 missing source observations**, and
 **187 unsupported displays**. There are **zero extra observations**, harness
 errors or missing baselines. SharpTS produces 425 corresponding source facts;
 unsupported facts are included in that count and never count as matches.
@@ -16,10 +16,10 @@ unsupported facts are included in that count and never count as matches.
 |---|---:|---:|---:|---:|
 | `es2017/es2017DateAPIs.ts` | 3 | 0 | 2 | 0 |
 | `es2019/globalThisTypeIndexAccess.ts` | 1 | 0 | 1 | 0 |
-| `es2020/constructBigint.ts` | 12 | 1 | 11 | 4 |
+| `es2020/constructBigint.ts` | 13 | 0 | 11 | 4 |
 | `es2021/logicalAssignment/logicalAssignment9.ts` | 11 | 0 | 1 | 0 |
 | `es6/Symbols/symbolDeclarationEmit1.ts` | 4 | 0 | 1 | 0 |
-| `types/conditional/inferTypes1.ts` | 28 | 25 | 79 | 89 |
+| `types/conditional/inferTypes1.ts` | 32 | 21 | 79 | 89 |
 | `types/conditional/inferTypesWithExtends2.ts` | 0 | 0 | 4 | 2 |
 | `types/keyof/keyofIntersection.ts` | 0 | 0 | 2 | 18 |
 | `types/literal/literalTypes1.ts` | 36 | 25 | 2 | 0 |
@@ -29,13 +29,12 @@ unsupported facts are included in that count and never count as matches.
 
 ## Triage of every text difference
 
-The first fix for **42 differences** belongs in checking/inference. Four scoped
+The first fix for **37 differences** belongs in checking/inference. Three scoped
 follow-ups preserve the pinned source evidence instead of expanding this pilot
 into a general checker campaign:
 
 | Cluster | Observations | Follow-up |
 |---|---:|---|
-| Mutable object fields and inferred returns retain fresh literal types | 5 | [#3026](https://github.com/nickna/SharpTS/issues/3026) |
 | Switch case/default bodies retain the original literal union | 18 | [#3027](https://github.com/nickna/SharpTS/issues/3027) |
 | Recursive conditional mapping retains unresolved `Jsonified<...>` branches | 12 | [#3028](https://github.com/nickna/SharpTS/issues/3028) |
 | Higher-order indexed/conditional inference retains `infer R` or loses constraints | 7 | [#3029](https://github.com/nickna/SharpTS/issues/3029) |
@@ -52,6 +51,11 @@ Object member's actual string/number/symbol domain and written parameter name.
 Its three observations now show `(v: string | number | symbol) => boolean`;
 the remaining `PropertyKey` alias spelling difference stays an exact mismatch
 tracked separately in [#3070](https://github.com/nickna/SharpTS/issues/3070).
+[#3026](https://github.com/nickna/SharpTS/issues/3026) resolves five observations
+by widening fresh mutable members and single-literal inferred returns. Explicit
+literal annotations, `as const`, literal unions and contextual discriminants retain
+their source-owned types. The pinned TypeScript 6.0.3 oracle confirms the focused
+freshness/context controls; no comparison strings are normalized.
 
 The remaining **25 differences** first need display/source-query context work:
 
@@ -103,7 +107,7 @@ anonymous cycles. The complete standalone TypeScript conformance project passes
 baseline and externally consumed vocabulary are unchanged.
 
 Two consecutive explicit type-baseline generations are byte-identical:
-SHA-256 `d1e4c8ad786975207ad3748891210a5073191aa7309052e7df04f414a20ad4af`.
+SHA-256 `8491f24a027e85f196d40614246ff2a90a65c3473411a2d3ff17431fd27e6ae0`.
 Normal execution then verifies the committed counts and complete-result
 fingerprints with update mode disabled. The README documents generation,
 structured JSON output and full failure diffs. Future semantic or coverage fixes

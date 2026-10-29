@@ -115,6 +115,12 @@ public partial class TypeChecker
                 _typeMap.Set(expr, tupleType);
                 return tupleType;
             }
+            case Expr.ArrayLiteral array when contextualType is TypeInfo.Array elementContext:
+            {
+                TypeInfo result = CheckArray(array, elementContext.ElementType);
+                _typeMap.Set(expr, result);
+                return result;
+            }
             // The destructuring desugarer wraps the source in `__arrayDestructure(src)` (#685). Re-thread
             // the contextual shape to the wrapped source so a mixed array literal infers as a tuple, then
             // normalize as the plain call branch does (#783).
@@ -133,6 +139,12 @@ public partial class TypeChecker
             case Expr.ArrowFunction arrow:
             {
                 TypeInfo result = CheckArrowFunction(arrow, contextualType);
+                _typeMap.Set(expr, result);
+                return result;
+            }
+            case Expr.ObjectLiteral literal:
+            {
+                TypeInfo result = CheckObject(literal, contextualType);
                 _typeMap.Set(expr, result);
                 return result;
             }
@@ -578,13 +590,13 @@ public partial class TypeChecker
 
     private TypeInfo CheckSatisfies(Expr.Satisfies sat)
     {
-        TypeInfo inferredType = CheckExpr(sat.Expression);
         // Node-first, mirroring CheckTypeAssertion (#346): a composite constraint such as a
         // conditional with a function-type extends clause garbles in the string resolver.
         long editorVersion = BeginEditorExpressionAnnotation(sat);
         TypeInfo constraintType = (sat.ConstraintTypeNode is { } constraintNode ? TryToTypeInfo(constraintNode) : null)
             ?? ToTypeInfo(sat.ConstraintType);
         CompleteEditorExpressionAnnotation(sat, editorVersion);
+        TypeInfo inferredType = CheckExprWithContext(sat.Expression, constraintType);
 
         // Escape hatches - any/unknown constraints always pass
         if (constraintType is TypeInfo.Any or TypeInfo.Unknown)
@@ -613,13 +625,19 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo InferConstType(Expr expr, TypeInfo sourceType)
     {
-        return expr switch
+        TypeInfo result = expr switch
         {
             Expr.ArrayLiteral arr => InferConstArrayType(arr),
             Expr.ObjectLiteral obj => InferConstObjectType(obj),
             Expr.Literal lit => InferConstLiteralType(lit.Value),
             _ => sourceType // Variables and other expressions keep their inferred type
         };
+        if (expr is Expr.ObjectLiteral or Expr.ArrayLiteral)
+        {
+            _typeMap.Set(expr, result);
+            RecordEditorExpressionType(expr, result);
+        }
+        return result;
     }
 
     /// <summary>
@@ -879,7 +897,7 @@ public partial class TypeChecker
         }
     }
 
-    private TypeInfo CheckObject(Expr.ObjectLiteral obj)
+    private TypeInfo CheckObject(Expr.ObjectLiteral obj, TypeInfo? contextualType = null)
     {
         Dictionary<string, TypeInfo> fields = [];
         HashSet<string> optionalFields = [];
@@ -975,7 +993,9 @@ public partial class TypeChecker
                         tsCode: "TS1312");
                 }
 
-                TypeInfo valueType = CheckExpr(prop.Value);
+                TypeInfo? context = ObjectMemberContext(contextualType, prop.Key);
+                TypeInfo rawValue = CheckExprWithContext(prop.Value, context);
+                TypeInfo valueType = WidenMutableMemberValue(prop.Value, rawValue, context);
 
                 switch (prop.Key)
                 {
@@ -1050,18 +1070,12 @@ public partial class TypeChecker
         // Pass 2: If there are accessors, build the object type and re-check accessor bodies with proper 'this'
         if (hasAccessors)
         {
-            // Widen literal types for 'this' inference (e.g., 0 -> number, "test" -> string)
-            var widenedFields = fields.ToDictionary(
-                kv => kv.Key,
-                kv => WidenLiteralType(kv.Value)
-            );
-
-            // Build the object type for 'this' inference
+            // Data members have already completed fresh/contextual inference.
             var objectType = new TypeInfo.Record(
-                widenedFields.ToFrozenDictionary(),
-                stringIndexType != null ? WidenLiteralType(stringIndexType) : null,
-                numberIndexType != null ? WidenLiteralType(numberIndexType) : null,
-                symbolIndexType != null ? WidenLiteralType(symbolIndexType) : null
+                fields.ToFrozenDictionary(),
+                stringIndexType,
+                numberIndexType,
+                symbolIndexType
             );
 
             // Set contextual 'this' type for accessor bodies
@@ -1254,7 +1268,7 @@ public partial class TypeChecker
             // A fresh object literal widens each member; a member that is itself `as const`, or a
             // spread of a non-fresh source, is preserved per-member (see WidenConstObjectLiteralFields).
             case Expr.ObjectLiteral obj when type is TypeInfo.Record rec:
-                return WidenConstObjectLiteralFields(obj, rec);
+                return rec;
 
             // A fresh array literal widens only the elements that are themselves fresh. Types
             // contributed by a variable/call/non-fresh spread are already fixed and must retain
@@ -1429,7 +1443,7 @@ public partial class TypeChecker
         return name != null;
     }
 
-    private TypeInfo CheckArray(Expr.ArrayLiteral array)
+    private TypeInfo CheckArray(Expr.ArrayLiteral array, TypeInfo? elementContext = null)
     {
         if (array.Elements.Count == 0) return new TypeInfo.Array(TypeInfo.Any.Shared); // Empty array is any[]? or generic?
 
@@ -1467,7 +1481,7 @@ public partial class TypeChecker
             }
             else
             {
-                elemType = CheckExpr(element);
+                elemType = CheckExprWithContext(element, elementContext);
             }
             elementTypes.Add(elemType);
         }
@@ -1965,7 +1979,11 @@ public partial class TypeChecker
             {
                 RecordStableCaptureParameters(arrow.Parameters, null, arrow.ExpressionBody);
                 // Expression body - infer return type if not specified
-                TypeInfo exprType = CheckExpr(arrow.ExpressionBody);
+                TypeInfo? expressionContext = arrow.ReturnType != null ? returnType :
+                    useContextualReturnType ? expectedFuncType?.ReturnType : null;
+                if (arrow.IsAsync && expressionContext is not null) expressionContext = ResolveAwaitedType(expressionContext);
+                TypeInfo exprType = UnwrapTransparentForWidening(arrow.ExpressionBody) is Expr.ObjectLiteral
+                    ? CheckExprWithContext(arrow.ExpressionBody, expressionContext) : CheckExpr(arrow.ExpressionBody);
                 if (arrow.ReturnType == null && expectedFuncType is not null && useContextualReturnType)
                 {
                     TypeInfo expectedRetType = expectedFuncType.ReturnType;
@@ -2104,6 +2122,8 @@ public partial class TypeChecker
         TypeInfo completedType = typeParams != null && typeParams.Count > 0
             ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
             : new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
+        if (arrow.ReturnType == null && !arrow.IsGenerator)
+            completedType = WidenFreshArrowReturn(arrow, completedType, useContextualReturnType ? expectedFuncType?.ReturnType : null);
         RecordEditorExpressionType(arrow, completedType);
         if (arrow.Name is { } sourceName)
         {
@@ -2233,7 +2253,7 @@ public partial class TypeChecker
         TypeInfo valueType;
         try
         {
-            valueType = CheckExpr(assign.Value);
+            valueType = CheckExprWithContext(assign.Value, declaredType);
         }
         catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2454")
         {

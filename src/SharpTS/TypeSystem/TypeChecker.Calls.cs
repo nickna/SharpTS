@@ -437,7 +437,8 @@ public partial class TypeChecker
                         }
                         else
                         {
-                            argType = CheckExpr(arg);
+                            argType = UnwrapTransparentForWidening(arg) is Expr.ObjectLiteral or Expr.ArrayLiteral
+                                ? CheckExprWithContext(arg, expectedParamType) : CheckExpr(arg);
                             if (tupleCallableOriginals is not null && ContainsGenericTupleCallback(arg))
                             {
                                 ContextualizeNestedGenericCallback(arg, expectedParamType);

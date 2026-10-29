@@ -1,10 +1,10 @@
 # SharpTS baseline-format=1 suite=TypeScriptTypes corpus=050880ce59e30b356b686bd3144efe24f875ebc8
 tests/cases/conformance/es2017/es2017DateAPIs.ts Mismatch matches=3 mismatches=0 missing=2 extra=0 unsupported=0 sha256=adcfe5e0d88eacfa502825bb30ab2eefe7da94ccfdf0bfc6fd8974074df56139
 tests/cases/conformance/es2019/globalThisTypeIndexAccess.ts Mismatch matches=1 mismatches=0 missing=1 extra=0 unsupported=0 sha256=261ee738817e936f42eeac4fbc4d6821676fa0ad2c68034010a0eb443e5de5f3
-tests/cases/conformance/es2020/constructBigint.ts Mismatch matches=12 mismatches=1 missing=11 extra=0 unsupported=4 sha256=e70bd73f2713e11ad7704b3c0c00670fa0b582982cdb4fc4567d304b7f30c3f6
+tests/cases/conformance/es2020/constructBigint.ts Mismatch matches=13 mismatches=0 missing=11 extra=0 unsupported=4 sha256=375c6f4ab0a7e1e10ab6dd27b8395faa8a3532702f32db11b35a3689fe31ae05
 tests/cases/conformance/es2021/logicalAssignment/logicalAssignment9.ts Mismatch matches=11 mismatches=0 missing=1 extra=0 unsupported=0 sha256=9e0f8973b24604ca05bccbf03ce6934507c8336e6599660719789baf0d59d5b6
 tests/cases/conformance/es6/Symbols/symbolDeclarationEmit1.ts Mismatch matches=4 mismatches=0 missing=1 extra=0 unsupported=0 sha256=4fd95f4c9fcaae4d83046b0513373c3e307d7af7dcba7e66766f46401f795c48
-tests/cases/conformance/types/conditional/inferTypes1.ts Mismatch matches=28 mismatches=25 missing=79 extra=0 unsupported=89 sha256=94fed3d519d0589a49ac329e0fe4cee265bbd9adda94f5f57f4f92527a029801
+tests/cases/conformance/types/conditional/inferTypes1.ts Mismatch matches=32 mismatches=21 missing=79 extra=0 unsupported=89 sha256=e70ebfe3665270ec8ab9639af9fe54a319c28b7cca5a6e74a4a642f0fd26914f
 tests/cases/conformance/types/conditional/inferTypesWithExtends2.ts Mismatch matches=0 mismatches=0 missing=4 extra=0 unsupported=2 sha256=8264e52f79eab26e49dd1831d2cd8d1a44170b41ff9e63d7a8425e0ec9ec8a30
 tests/cases/conformance/types/keyof/keyofIntersection.ts Mismatch matches=0 mismatches=0 missing=2 extra=0 unsupported=18 sha256=46563c7a9c0f8a074dc3f446277bb8b9036a0b0d755962702c06b861a9dc215c
 tests/cases/conformance/types/literal/literalTypes1.ts Mismatch matches=36 mismatches=25 missing=2 extra=0 unsupported=0 sha256=e4f393ad19f1a9526558e9f15ff88f1960b92fdd4f396202cf5611640a78655e
