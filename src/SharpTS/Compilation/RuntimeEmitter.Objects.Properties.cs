@@ -2796,7 +2796,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, fieldOwnerLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)staticPublic);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+            EmitStaticFieldLookup(il);
             il.Emit(OpCodes.Stloc, staticFieldLocal);
 
             var noStaticFieldLabel = il.DefineLabel();
@@ -3059,7 +3059,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, baseFieldOwner);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)declaredStaticPublic);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+            EmitStaticFieldLookup(il);
             il.Emit(OpCodes.Stloc, baseStaticFieldLocal);
             il.Emit(OpCodes.Ldloc, baseStaticFieldLocal);
             il.Emit(OpCodes.Brfalse, baseWalkLoop);

@@ -1103,7 +1103,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, fieldOwner);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        EmitStaticFieldLookup(il);
         il.Emit(OpCodes.Brfalse, unhandled);
 
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);

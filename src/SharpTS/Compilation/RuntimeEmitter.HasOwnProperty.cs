@@ -636,7 +636,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, typeLocal2);
             il.Emit(OpCodes.Ldloc, nameLocal);
             il.Emit(OpCodes.Ldc_I4, (int)staticPub);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(System.Reflection.BindingFlags)));
+            EmitStaticFieldLookup(il);
             il.Emit(OpCodes.Brtrue, trueLabel);
             // GetProperty(name) — covers static .NET property accessors.
             il.Emit(OpCodes.Ldloc, typeLocal2);
@@ -897,7 +897,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, memberOwner);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        EmitStaticFieldLookup(il);
         il.Emit(OpCodes.Stloc, ownField);
         il.Emit(OpCodes.Ldloc, ownField);
         il.Emit(OpCodes.Brfalse, falseLabel);

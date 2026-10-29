@@ -730,7 +730,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, typeDelLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)typeDelStaticPub);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(System.Reflection.BindingFlags)));
+            EmitStaticFieldLookup(il);
             il.Emit(OpCodes.Brtrue, typeBuiltinNameTrueLabel);
             il.Emit(OpCodes.Ldloc, typeDelLocal);
             il.Emit(OpCodes.Ldarg_1);

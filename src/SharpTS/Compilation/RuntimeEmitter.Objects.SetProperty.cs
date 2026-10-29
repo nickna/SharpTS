@@ -1457,7 +1457,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, fieldOwner);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+            EmitStaticFieldLookup(il);
             il.Emit(OpCodes.Stloc, ownField);
             il.Emit(OpCodes.Ldloc, ownField);
             il.Emit(OpCodes.Brfalse, noOwnUserField);
@@ -2100,7 +2100,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, fieldOwner);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        EmitStaticFieldLookup(il);
         il.Emit(OpCodes.Brtrue, done);
         var descriptor = il.DeclareLocal(descriptors.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
@@ -2237,7 +2237,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, memberOwner);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4, (int)declaredStatic);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        EmitStaticFieldLookup(il);
         il.Emit(OpCodes.Stloc, field);
         var noField = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, field);
@@ -3008,7 +3008,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, genericFieldOwner);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        EmitStaticFieldLookup(il);
         il.Emit(OpCodes.Stloc, genericField);
         il.Emit(OpCodes.Ldloc, genericField);
         il.Emit(OpCodes.Brfalse, notGenericStaticField);

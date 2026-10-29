@@ -703,3 +703,22 @@ AOT-safe dispatch, automatic native publishing with structured diagnostics,
 static third-party dependency closure, caching/owned regeneration, SharpTS.Sdk
 integration, native debugging validation, a warning-free feature corpus and
 cross-platform release evidence. The profile can graduate only with that evidence.
+
+### Exact static field selection
+
+Native static field queries use a late helper completed from the existing
+class-initializer owner inventory. Exact owner identities select the actual
+loaded `Type.GetField` operation with one of the three emitted public-static
+flag combinations: ordinary, declared-only, or flattened inheritance. This
+preserves field hiding, missing fields, null-name exceptions and initialization
+timing. Unknown owners or flags receive a guest TypeError. An inventory with
+unproved generic owners retains the complete legacy operation and its warnings.
+Ordinary managed output retains its original lookup instructions.
+
+After combining the callable, receiver, property and static-presence changes,
+the strict Windows console inventory contains 22 diagnostics. This field helper
+reduces it to 9, removing exactly 13 IL2070/IL2075 findings with none added.
+Saved IL verification and native execution pass for console output and a class
+control covering inherited fields, own shadowing, descriptors, deletion and
+redefinition. Three managed output controls retain their PE sizes and every
+method-body hash. Strict publication still fails on the remaining diagnostics.

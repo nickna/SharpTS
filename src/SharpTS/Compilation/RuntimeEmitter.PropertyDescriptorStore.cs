@@ -1374,7 +1374,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, descriptorOwner);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        EmitStaticFieldLookup(il);
         il.Emit(OpCodes.Brtrue, returnNullLabel);
 
         // walkType = walkType.BaseType; continue;

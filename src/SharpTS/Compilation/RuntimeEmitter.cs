@@ -13,6 +13,7 @@ public partial class RuntimeEmitter
     private readonly bool _emitHosted;
     private readonly bool _emitNativeCallables;
     private readonly bool _emitNativeOwnProperties;
+    private readonly MethodInfo? _nativeStaticFieldLookup;
 
     /// <summary>
     /// Feature gating set — populated by <see cref="EmitAll(ModuleBuilder, RuntimeFeatureSet)"/>
@@ -32,12 +33,14 @@ public partial class RuntimeEmitter
     {
     }
 
-    internal RuntimeEmitter(TypeProvider types, bool emitHosted, bool emitNativeCallables, bool emitNativeOwnProperties)
+    internal RuntimeEmitter(TypeProvider types, bool emitHosted, bool emitNativeCallables, bool emitNativeOwnProperties,
+        MethodInfo? nativeStaticFieldLookup = null)
     {
         _types = types;
         _emitHosted = emitHosted;
         _emitNativeCallables = emitNativeCallables;
         _emitNativeOwnProperties = emitNativeOwnProperties;
+        _nativeStaticFieldLookup = nativeStaticFieldLookup;
     }
 
     /// <summary>
@@ -55,6 +58,9 @@ public partial class RuntimeEmitter
         NativeSourceOwnerCatalog? sourceOwners = null, MethodInfo? nativeClassInitializer = null,
         MethodInfo? nativeStaticMemberPresence = null, MethodBuilder? nativePropertyGetter = null)
     {
+        if (_nativeStaticFieldLookup is { } fields &&
+            (!_emitNativeCallables || !ReferenceEquals(fields.Module, moduleBuilder)))
+            throw new InvalidOperationException("Native static field lookup must belong to this native output module.");
         _features = features;
         if (_emitHosted)
             _features.UsesPromise = true;
