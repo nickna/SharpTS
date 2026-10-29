@@ -161,7 +161,8 @@ public partial class RuntimeEmitter
         var memberLoop = il.DefineLabel(); var memberNext = il.DefineLabel(); var memberEnd = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, lookup);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMembers", typeof(BindingFlags)));
+        if (_nativeConstructorMembers is { } memberLookup) il.Emit(OpCodes.Call, memberLookup);
+        else il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMembers", typeof(BindingFlags)));
         il.Emit(OpCodes.Stloc, members); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stloc, index);
         il.MarkLabel(memberLoop);
         il.Emit(OpCodes.Ldloc, index); il.Emit(OpCodes.Ldloc, members); il.Emit(OpCodes.Ldlen); il.Emit(OpCodes.Conv_I4);

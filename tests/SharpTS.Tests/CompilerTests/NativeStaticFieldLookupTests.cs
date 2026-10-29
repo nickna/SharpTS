@@ -93,6 +93,9 @@ public sealed class NativeStaticFieldLookupTests
         Assert.Throws<InvalidOperationException>(() => foreign.Owners);
         Assert.Throws<InvalidOperationException>(() => foreign.CompleteEmission(compiler.NativeRuntimeInitializers!, compiler.NativeSourceOwners!, runtime));
         Assert.Throws<InvalidOperationException>(() => new RuntimeEmitter(TypeProvider.Runtime, false, true, false, completed.FindField).EmitAll(module));
+        var wrong = module.DefineType("WrongShape").DefineMethod("Lookup", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object), [typeof(Type), typeof(string), typeof(BindingFlags)]);
+        Assert.Throws<InvalidOperationException>(() => new RuntimeEmitter(TypeProvider.Runtime, false, true, false, wrong).EmitAll(module));
     }
 
     public sealed class Foreign { public static int Field = 7; }

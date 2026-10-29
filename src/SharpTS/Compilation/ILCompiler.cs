@@ -756,6 +756,7 @@ public partial class ILCompiler
             _nativeRuntimeClassInitialization = new(_moduleBuilder, _types);
             _nativeStaticMemberPresence = new(_moduleBuilder, _types);
             _nativeStaticFieldLookup = new(_moduleBuilder, _types);
+            _nativeConstructorMembers = new(_moduleBuilder, _types);
 
             _nativeReceiverBinding = new(_moduleBuilder, _types);
             _nativePropertyLookup = new(_moduleBuilder, _types);
@@ -776,7 +777,8 @@ public partial class ILCompiler
             };
         }
         _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput,
-            _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true), _nativeStaticFieldLookup?.FindField) { EntryModulePath = _entryModulePath }
+            _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true),
+            _nativeStaticFieldLookup?.FindField, _nativeConstructorMembers?.GetMembers) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy,
                 _nativeSourceOwners, nativeClassInitializer: _nativeRuntimeClassInitialization?.Initialize,
                 nativeStaticMemberPresence: _nativeStaticMemberPresence?.HasMember,
@@ -1269,6 +1271,7 @@ public partial class ILCompiler
         _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
         _nativeStaticFieldLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
+        _nativeConstructorMembers?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
 
         _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
         _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);
@@ -1935,6 +1938,7 @@ public partial class ILCompiler
         _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
         _nativeStaticFieldLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
+        _nativeConstructorMembers?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
 
         _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
         _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);

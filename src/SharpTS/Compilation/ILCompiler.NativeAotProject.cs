@@ -25,6 +25,8 @@ public partial class ILCompiler
     internal NativeStaticMemberPresence? NativeStaticMembers => _nativeStaticMemberPresence;
     private NativeStaticFieldLookup? _nativeStaticFieldLookup;
     internal NativeStaticFieldLookup? NativeStaticFields => _nativeStaticFieldLookup;
+    private NativeConstructorMemberLookup? _nativeConstructorMembers;
+    internal NativeConstructorMemberLookup? NativeConstructorMembers => _nativeConstructorMembers;
 
     private NativeReceiverBinding? _nativeReceiverBinding;
 
@@ -49,6 +51,8 @@ public partial class ILCompiler
             throw new InvalidOperationException("Native property metadata has not completed source emission.");
         if (_nativeStaticFieldLookup?.IsComplete != true)
             throw new InvalidOperationException("Native static field metadata has not completed source emission.");
+        if (_nativeConstructorMembers?.IsComplete != true)
+            throw new InvalidOperationException("Native constructor member metadata has not completed source emission.");
     }
 
     private void RecordSourceRewrite(object source, object target)

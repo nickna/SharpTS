@@ -14,6 +14,7 @@ public partial class RuntimeEmitter
     private readonly bool _emitNativeCallables;
     private readonly bool _emitNativeOwnProperties;
     private readonly MethodInfo? _nativeStaticFieldLookup;
+    private readonly MethodInfo? _nativeConstructorMembers;
 
     /// <summary>
     /// Feature gating set — populated by <see cref="EmitAll(ModuleBuilder, RuntimeFeatureSet)"/>
@@ -34,13 +35,14 @@ public partial class RuntimeEmitter
     }
 
     internal RuntimeEmitter(TypeProvider types, bool emitHosted, bool emitNativeCallables, bool emitNativeOwnProperties,
-        MethodInfo? nativeStaticFieldLookup = null)
+        MethodInfo? nativeStaticFieldLookup = null, MethodInfo? nativeConstructorMembers = null)
     {
         _types = types;
         _emitHosted = emitHosted;
         _emitNativeCallables = emitNativeCallables;
         _emitNativeOwnProperties = emitNativeOwnProperties;
         _nativeStaticFieldLookup = nativeStaticFieldLookup;
+        _nativeConstructorMembers = nativeConstructorMembers;
     }
 
     /// <summary>
@@ -59,8 +61,15 @@ public partial class RuntimeEmitter
         MethodInfo? nativeStaticMemberPresence = null, MethodBuilder? nativePropertyGetter = null)
     {
         if (_nativeStaticFieldLookup is { } fields &&
-            (!_emitNativeCallables || !ReferenceEquals(fields.Module, moduleBuilder)))
-            throw new InvalidOperationException("Native static field lookup must belong to this native output module.");
+            (!_emitNativeCallables || !ReferenceEquals(fields.Module, moduleBuilder) || !fields.IsStatic || fields.IsGenericMethod ||
+             (fields.CallingConvention & CallingConventions.VarArgs) != 0 || fields.ReturnType != _types.FieldInfo ||
+             !fields.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual([_types.Type, _types.String, typeof(BindingFlags)])))
+            throw new InvalidOperationException("Native static field lookup must have the exact native output module and signature.");
+        if (_nativeConstructorMembers is { } members &&
+            (!_emitNativeCallables || !ReferenceEquals(members.Module, moduleBuilder) || !members.IsStatic || members.IsGenericMethod ||
+             (members.CallingConvention & CallingConventions.VarArgs) != 0 || members.ReturnType != typeof(MemberInfo[]) ||
+             !members.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual([_types.Type, typeof(BindingFlags)])))
+            throw new InvalidOperationException("Native constructor members must have the exact native output module and signature.");
         _features = features;
         if (_emitHosted)
             _features.UsesPromise = true;

@@ -746,3 +746,13 @@ Saved IL verification and native execution pass for console output and a class
 control covering inherited fields, own shadowing, descriptors, deletion and
 redefinition. Three managed output controls retain their PE sizes and every
 method-body hash. Strict publication still fails on the remaining diagnostics.
+
+Native constructor-key enumeration separately selects exact completed source
+owners and executes the existing declared public-static `GetMembers` query on
+their literal type tokens. It preserves loaded member order and attribute
+identity without enumerating framework types. Generic or unresolved owner
+inventories keep the entire legacy query. This removes one further IL2070
+finding from the console control, reducing 9 diagnostics to 8 with none added.
+Native own-key order, enumerability, deletion and redefinition controls pass.
+The accompanying repeated-signature fix (#3082) prevents an older bodyless
+accessor declaration from becoming reachable through metadata enumeration.
