@@ -4,6 +4,30 @@ namespace SharpTS.TypeSystem;
 
 public partial class TypeChecker
 {
+    private TypeInfo? ContextualArrayElement(TypeInfo context) => context switch
+    {
+        TypeInfo.Array array => array.ElementType,
+        TypeInfo.Union union => union.FlattenedTypes.Select(ContextualArrayElement).OfType<TypeInfo>().ToList() is { Count: > 0 } elements
+            ? CollapseOrCreateUnion(elements) : null,
+        _ => null,
+    };
+
+    private TypeInfo? SelectObjectLiteralContext(Expr.ObjectLiteral expression, TypeInfo? context)
+    {
+        if (context is not TypeInfo.Union union) return context;
+        var candidates = union.FlattenedTypes.ToList();
+        foreach (var property in expression.Properties)
+        {
+            if (property.IsSpread || property.Kind != Expr.ObjectPropertyKind.Value ||
+                UnwrapTransparentForWidening(property.Value) is not Expr.Literal literal) continue;
+            TypeInfo value = InferConstLiteralType(literal.Value);
+            var matching = candidates.Where(candidate => ObjectMemberContext(candidate, property.Key) is not { } member ||
+                IsCompatible(member, value)).ToList();
+            if (matching.Count > 0) candidates = matching;
+        }
+        return candidates.Count == union.FlattenedTypes.Count ? context : CollapseOrCreateUnion(candidates);
+    }
+
     private TypeInfo WidenMutableMemberValue(Expr expression, TypeInfo value, TypeInfo? context)
     {
         Expr source = UnwrapTransparentForWidening(expression);
@@ -40,6 +64,8 @@ public partial class TypeChecker
 
     private static bool KeepsLiteralInContext(TypeInfo value, TypeInfo? context)
     {
+        if (value is TypeInfo.Union values && context is not null)
+            return values.FlattenedTypes.All(member => KeepsLiteralInContext(member, context));
         if (context is TypeInfo.Union union) return union.FlattenedTypes.Any(member => KeepsLiteralInContext(value, member));
         if (context is TypeInfo.TypeParameter { Constraint: { } constraint }) return KeepsLiteralInContext(value, constraint);
         return (value, context) switch
@@ -48,6 +74,7 @@ public partial class TypeChecker
             (TypeInfo.StringLiteral, TypeInfo.StringLiteral) => true,
             (TypeInfo.BooleanLiteral, TypeInfo.BooleanLiteral or TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN }) => true,
             (TypeInfo.BigIntLiteral, TypeInfo.BigIntLiteral) => true,
+            (TypeInfo.Null or TypeInfo.Undefined, _) => true,
             _ => false,
         };
     }

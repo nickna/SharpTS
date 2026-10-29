@@ -115,9 +115,9 @@ public partial class TypeChecker
                 _typeMap.Set(expr, tupleType);
                 return tupleType;
             }
-            case Expr.ArrayLiteral array when contextualType is TypeInfo.Array elementContext:
+            case Expr.ArrayLiteral array when ContextualArrayElement(contextualType) is { } elementContext:
             {
-                TypeInfo result = CheckArray(array, elementContext.ElementType);
+                TypeInfo result = CheckArray(array, elementContext);
                 _typeMap.Set(expr, result);
                 return result;
             }
@@ -899,6 +899,8 @@ public partial class TypeChecker
 
     private TypeInfo CheckObject(Expr.ObjectLiteral obj, TypeInfo? contextualType = null)
     {
+        contextualType ??= _jsxAttributeContexts.GetValueOrDefault(obj);
+        contextualType = SelectObjectLiteralContext(obj, contextualType);
         Dictionary<string, TypeInfo> fields = [];
         HashSet<string> optionalFields = [];
         TypeInfo? stringIndexType = null;
@@ -994,8 +996,12 @@ public partial class TypeChecker
                 }
 
                 TypeInfo? context = ObjectMemberContext(contextualType, prop.Key);
+                if (_jsxAttributeObjects.Contains(obj) &&
+                    UnwrapTransparentForWidening(prop.Value) is not (Expr.ObjectLiteral or Expr.ArrayLiteral))
+                    context = null; // The JSX pipeline selects and contextualizes direct callbacks later.
                 TypeInfo rawValue = CheckExprWithContext(prop.Value, context);
-                TypeInfo valueType = WidenMutableMemberValue(prop.Value, rawValue, context);
+                TypeInfo valueType = _jsxAttributeObjects.Contains(obj)
+                    ? rawValue : WidenMutableMemberValue(prop.Value, rawValue, context);
 
                 switch (prop.Key)
                 {
@@ -1921,7 +1927,9 @@ public partial class TypeChecker
         int previousSwitchDepth = _switchDepth;
         var previousActiveLabels = new Dictionary<string, ActiveLabel>(_activeLabels);
 
-        bool inferringArrowReturn = returnType is TypeInfo.Inferred;
+        bool inferringArrowReturn = returnType is TypeInfo.Inferred ||
+            arrow.ReturnType is null && !arrow.IsAsync && !arrow.IsGenerator &&
+            expectedFuncType?.ReturnType is TypeInfo.Void;
         _environment = arrowEnv;
         MarkEditorBodyEntered(arrow);
         if (inferringArrowReturn)
@@ -2253,7 +2261,8 @@ public partial class TypeChecker
         TypeInfo valueType;
         try
         {
-            valueType = CheckExprWithContext(assign.Value, declaredType);
+            valueType = UnwrapTransparentForWidening(assign.Value) is Expr.ObjectLiteral or Expr.ArrayLiteral
+                ? CheckExprWithContext(assign.Value, declaredType) : CheckExpr(assign.Value);
         }
         catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2454")
         {

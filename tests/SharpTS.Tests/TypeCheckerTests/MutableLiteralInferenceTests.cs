@@ -65,11 +65,29 @@ public sealed class MutableLiteralInferenceTests
             accept({kind:'line',x:1}); many([{kind:'line',x:1}]);
             let command:Command={kind:'line',x:1}; command={kind:'stop'};
             const boolContext:()=>boolean=()=>true;
+            type Item={x?:'ok'};
+            const items:Item|Item[]=[{x:'ok'}]; items.push({x:'ok'});
+            function select(props:{multi:true,changed:(value:string[])=>void}|{multi:false,changed:(value:string)=>void}):void{}
+            select({multi:false,changed:value=>{value.toUpperCase();}});
             """;
         var (checker, document, _, _) = Check(source);
         Assert.DoesNotContain(checker.GetDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(checker.EditorFacts.GetSourceTypeObservations(document), observation =>
             source[observation.Span.Start..observation.Span.End] == "()=>true" && observation.Display.Text == "() => true");
+    }
+
+    [Fact]
+    public void ContextualVoidMethodsCanDiscardTheirActualReturnValue()
+    {
+        const string source = """
+            interface Target { f(x:number):void; }
+            declare let target:Target;
+            target={f:()=>1}; target={f:<U>(x:U)=>1};
+            target={f:function(){return 1;}}; target={f(x:number){return '';}};
+            declare let callable:{f(x:number):void}; callable={f:()=>1};
+            """;
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        Assert.Empty(new TypeChecker().CheckWithRecovery(statements).Diagnostics);
     }
 
     private static (TypeChecker Checker, SourceDocument Document, List<Stmt> Statements, TypeMap Map) Check(string source)
