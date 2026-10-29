@@ -8,6 +8,17 @@ namespace SharpTS.Tests.TypeCheckerTests;
 
 public sealed class LogicalPropertyCheckedTypeTests
 {
+    [Theory]
+    [InlineData("||=")]
+    [InlineData("&&=")]
+    [InlineData("??=")]
+    public void ReadonlyClassIndexWritesAreDiagnosedBeforeTheImplicitMemberRead(string operation)
+    {
+        string source = "class C { readonly [key:string]:number; } const c=new C(); c.value " + operation + " 1;";
+        var result = new TypeChecker().CheckWithRecovery(new Parser(new Lexer(source).ScanTokens()).ParseOrThrow());
+        Assert.Equal("TS2542", Assert.Single(result.Diagnostics).TsCode);
+    }
+
     [Fact]
     public void PinnedPropertyAssignmentResultsAndMemberReadsHaveDifferentCheckedTypes()
     {

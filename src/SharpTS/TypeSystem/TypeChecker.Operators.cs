@@ -1105,12 +1105,12 @@ public partial class TypeChecker
         using var lookup = BeginSourceMemberLookup(logical, logical.Name, MemberOperation.Read);
         TypeInfo objType = CheckExpr(logical.Object);
         ExpectSourceMemberReceiver(objType);
-        TypeInfo readType = CheckGetOnType(objType, logical.Name);
-        if (ShouldCaptureEditorFacts)
-            EditorFacts.RecordMemberReadType(CurrentSourceDocument, logical, readType);
         CheckReadonlyRecordProperty(objType, logical.Name.Lexeme, logical.Name.Line);
         EnsureWritableClassIndex(objType, new TypeInfo.StringLiteral(logical.Name.Lexeme), new Expr.Literal(logical.Name.Lexeme));
         EnsureWritableInterfaceIndex(objType, new TypeInfo.StringLiteral(logical.Name.Lexeme), new Expr.Literal(logical.Name.Lexeme));
+        TypeInfo readType = CheckGetOnType(objType, logical.Name);
+        if (ShouldCaptureEditorFacts)
+            EditorFacts.RecordMemberReadType(CurrentSourceDocument, logical, readType);
         TypeInfo valueType = CheckExpr(logical.Value);
 
         // Invalidate any narrowings affected by this property assignment
