@@ -26,7 +26,8 @@ public partial class RuntimeEmitter
         EmittedFunctionBindingRuntime FunctionBindings,
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype,
-        GuestOwnQueryInputs? GuestOwnProperties = null
+        GuestOwnQueryInputs? GuestOwnProperties = null,
+        MethodInfo? NativeStaticMemberPresence = null
     );
 
     private readonly record struct PropertyIsEnumerableHelperInputs(
@@ -624,44 +625,52 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
         il.Emit(OpCodes.Stloc, typeLocal2);
-        // GetField
-        il.Emit(OpCodes.Ldloc, typeLocal2);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)staticPub);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(System.Reflection.BindingFlags)));
-        il.Emit(OpCodes.Brtrue, trueLabel);
-        // GetProperty(name) — covers static .NET property accessors.
-        il.Emit(OpCodes.Ldloc, typeLocal2);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)staticPub);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
-        il.Emit(OpCodes.Brtrue, trueLabel);
-        // Guest classes declare JavaScript methods as CLR statics. Native
-        // constructor tokens use their explicit JS inventory above, because
-        // BCL methods such as System.Double.Parse are not Number properties.
-        var checkStoredTypeProperties = il.DefineLabel();
-        il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
-        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-        il.Emit(OpCodes.Ldloc, typeLocal2);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
-        il.Emit(OpCodes.Brfalse, checkStoredTypeProperties);
-        // GetMember handles overloaded static methods without AmbiguousMatchException.
-        il.Emit(OpCodes.Ldloc, typeLocal2);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)MemberTypes.Method);
-        il.Emit(OpCodes.Ldc_I4, (int)staticPub);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMember", _types.String,
-            typeof(MemberTypes), typeof(BindingFlags)));
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Brtrue, trueLabel);
-        // Computed string method names live in the shared registry under their
-        // evaluated JavaScript key, rather than their synthetic CLR name.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindOwnMethod);
-        il.Emit(OpCodes.Brtrue, trueLabel);
-        il.MarkLabel(checkStoredTypeProperties);
+        if (inputs.NativeStaticMemberPresence is not null)
+        {
+            il.Emit(OpCodes.Ldloc, typeLocal2); il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Call, inputs.NativeStaticMemberPresence); il.Emit(OpCodes.Brtrue, trueLabel);
+        }
+        else
+        {
+            // GetField
+            il.Emit(OpCodes.Ldloc, typeLocal2);
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)staticPub);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(System.Reflection.BindingFlags)));
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            // GetProperty(name) — covers static .NET property accessors.
+            il.Emit(OpCodes.Ldloc, typeLocal2);
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)staticPub);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            // Guest classes declare JavaScript methods as CLR statics. Native
+            // constructor tokens use their explicit JS inventory above, because
+            // BCL methods such as System.Double.Parse are not Number properties.
+            var checkStoredTypeProperties = il.DefineLabel();
+            il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldloc, typeLocal2);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+            il.Emit(OpCodes.Brfalse, checkStoredTypeProperties);
+            // GetMember handles overloaded static methods without AmbiguousMatchException.
+            il.Emit(OpCodes.Ldloc, typeLocal2);
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)MemberTypes.Method);
+            il.Emit(OpCodes.Ldc_I4, (int)staticPub);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMember", _types.String,
+                typeof(MemberTypes), typeof(BindingFlags)));
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            // Computed string method names live in the shared registry under their
+            // evaluated JavaScript key, rather than their synthetic CLR name.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindOwnMethod);
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            il.MarkLabel(checkStoredTypeProperties);
+        }
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notTypeLabel);
 

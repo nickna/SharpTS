@@ -12,6 +12,15 @@ public sealed class EmittedClassInitializationRuntime
     private bool _bodyEmitted;
     internal NativeSourceOwnerCatalog? SourceOwners { get; private set; }
     internal System.Reflection.MethodInfo? NativeInitializer { get; private set; }
+    internal System.Reflection.MethodInfo? NativeStaticMemberPresence { get; private set; }
+
+    internal void DeclareNativeStaticMemberPresence(System.Reflection.MethodInfo lookup)
+    {
+        EnsureMutable();
+        ArgumentNullException.ThrowIfNull(lookup);
+        if (NativeStaticMemberPresence != null) throw new InvalidOperationException("Native static-member presence is already declared.");
+        NativeStaticMemberPresence = lookup;
+    }
 
     internal void DeclareNativeInitializer(System.Reflection.MethodInfo initializer)
     {

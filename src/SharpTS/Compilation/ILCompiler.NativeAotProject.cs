@@ -19,6 +19,8 @@ public partial class ILCompiler
     internal NativeUnionArgumentConversion? NativeUnionArguments => _nativeUnionArgumentConversion;
     private NativeRuntimeClassInitialization? _nativeRuntimeClassInitialization;
     internal NativeRuntimeClassInitialization? NativeRuntimeInitializers => _nativeRuntimeClassInitialization;
+    private NativeStaticMemberPresence? _nativeStaticMemberPresence;
+    internal NativeStaticMemberPresence? NativeStaticMembers => _nativeStaticMemberPresence;
 
     private NativeClassInitializationEmission? GetNativeClassInitialization() =>
         !_nativeAotProjectOutput || _programType is null ? null :

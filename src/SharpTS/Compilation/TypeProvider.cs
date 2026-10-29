@@ -1490,6 +1490,19 @@ public class TypeProvider
         return type.GetMethods(bindingFlags);
     }
 
+    /// <summary>Reads completed builder metadata for serialization, never trimmed runtime types.</summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070",
+        Justification = "The input is a completed TypeBuilder from this compiler's output. Its live emitted metadata is not subject to trimming; only member names are serialized into a guest presence table.")]
+    internal (FieldInfo[] Fields, PropertyInfo[] Properties) GetDeclaredStaticMetadata(TypeBuilder owner)
+    {
+        if (!owner.IsCreated()) throw new InvalidOperationException("Emitted static metadata is incomplete.");
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Public |
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.DeclaredOnly;
+        // Public-only persisted-builder lookup can omit mixed-visibility
+        // properties that the loaded runtime binder includes.
+        return (owner.GetFields(flags), owner.GetProperties(flags | System.Reflection.BindingFlags.NonPublic));
+    }
+
     /// <summary>
     /// Gets a parameterless method from a type. Safe to use for overloaded methods.
     /// </summary>

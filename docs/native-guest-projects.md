@@ -532,6 +532,24 @@ diagnostics with no additions. The IL-verified diagnostic native executable
 prints `42`. Ordinary console, rest-producer and generic-class outputs retain
 their PE sizes and every method-body hash against the preserved managed baseline.
 
+### Exact static-member presence
+
+Native constructor own-property queries can use a completed exact-owner presence
+table. Created output builders contribute their declared public static field,
+property and method names; literal known framework owners retain their actual
+field/property queries with the original binding flags. The compiler never treats
+a name as owner identity. Generic, ambiguous or unresolved output metadata keeps
+the complete legacy operation. Unknown owners receive an explicit guest TypeError.
+
+Descriptor/deletion checks, declared-only inheritance and computed-method lookup
+retain their ordering, including the latter's initializer effects. Literal field
+handles retain the exact metadata needed by companion descriptor and deletion
+operations. The compiler's
+builder enumeration seam reads live metadata solely for serialization; it adds no
+guest suppressions or metadata-root configuration. Normal output keeps its PE size
+and every method body. Strict console diagnostics fall from 30 to 27, removing
+exactly the three HasOwnPropertyHelper IL2070 records with no additions.
+
 ## Warning policy and remaining work
 
 The exported project uses `PublishAot=true`, `SelfContained=true`, its explicit
@@ -540,7 +558,7 @@ assembly roots or warning suppressions. Current emitted-runtime warnings therefo
 fail strict native publish instead of being hidden by successful project export.
 
 With the current changes combined, fresh strict `console.log(42)` publication
-reports 30 diagnostics: IL2070 (19), IL2075 (11).
+reports 27 diagnostics: IL2070 (16), IL2075 (11).
 The two optional numeric-rest lookups, 39 Proxy bridge diagnostics and two
 certified generic-normalizer diagnostics and the certified union-converter lookup
 and six literal-initializer diagnostics are absent from the earlier 80-diagnostic checkpoint,

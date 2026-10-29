@@ -918,7 +918,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionBindings,
                 runtime.Sentinels.UndefinedType,
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
-                runtime.GuestOwnProperties == null ? null : new GuestOwnQueryInputs(runtime.GuestOwnProperties, runtime.Reflect.ToPropertyKey)
+                runtime.GuestOwnProperties == null ? null : new GuestOwnQueryInputs(runtime.GuestOwnProperties, runtime.Reflect.ToPropertyKey),
+                runtime.ClassInitialization.NativeStaticMemberPresence
             )
         );
         // propertyIsEnumerable shares HasOwn's plumbing (PDS lookup + dict
