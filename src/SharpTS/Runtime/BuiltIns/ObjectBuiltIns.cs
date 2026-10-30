@@ -1052,6 +1052,10 @@ public static partial class ObjectBuiltIns
     internal static bool DefinePropertyOnProxyTarget(
         Interpreter interpreter, object target, object propertyKey, object descriptor)
     {
+        // OrdinarySet consumes a boolean refusal. The public Object entry point
+        // below translates the same refusal into TypeError for its own callers.
+        if (target is SharpTSObjectNamespace objectNamespace && propertyKey is string name)
+            return objectNamespace.DefineProperty(name, ToPropertyDescriptor(interpreter, descriptor));
         if (target is ISharpTSOwnPropertyObject carrier)
         {
             var key = interpreter.ToPropertyKey(propertyKey);
