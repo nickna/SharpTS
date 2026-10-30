@@ -43,7 +43,8 @@ public partial class TypeChecker
         if (call.OriginalGeneratorCallee is { } originalGenerator)
             CheckClassOrderCallTarget(originalGenerator);
         using var immediateArguments = BeginImmediateArrowArguments(call);
-        TypeInfo calleeType = CheckClassOrderCallTarget(call.Callee);
+        TypeInfo sourceCalleeType = CheckClassOrderCallTarget(call.Callee);
+        TypeInfo calleeType = IndexedCallableConstraint(sourceCalleeType);
         if (call.Callee is Expr.Get extensionGet &&
             calleeType is not (TypeInfo.Function or TypeInfo.OverloadedFunction or
                 TypeInfo.GenericFunction) &&
@@ -141,7 +142,7 @@ public partial class TypeChecker
                     typeArgs = InferTypeArguments(
                         genericFunc,
                         tupleSlots is null
-                            ? PrepareFreshCallArgumentsForInference(genericFunc.ParamTypes, call.Arguments, argTypes)
+                            ? PrepareFreshCallArgumentsForInference(genericFunc, call.Arguments, argTypes)
                             : PrepareGenericTupleInferenceArguments(genericFunc, tupleSlots),
                         contextualResultType,
                         tupleRestArguments: tupleSlots is null ? null : GenericTupleCallType(
@@ -194,7 +195,7 @@ public partial class TypeChecker
                     argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
                     instFunc = (TypeInfo.Function)InstantiateGenericFunction(genericFunc,
                         InferTypeArguments(genericFunc,
-                            PrepareFreshCallArgumentsForInference(genericFunc.ParamTypes, call.Arguments, argTypes),
+                            PrepareFreshCallArgumentsForInference(genericFunc, call.Arguments, argTypes),
                             contextualResultType));
                     ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
                 }
@@ -364,6 +365,13 @@ public partial class TypeChecker
                     // retained array values still have an unknown length. Other iterables may
                     // start once the signature's required parameters have been supplied.
                     TypeInfo spreadType = CheckSpreadOperand(spread.Expression, paramIndex);
+                    if (sourceCalleeType is TypeInfo.IndexedAccess && !ReferenceEquals(sourceCalleeType, calleeType))
+                    {
+                        // The constraint selects the invocation signature, not a new
+                        // source type for a spread that was already checked as A.
+                        _typeMap.Set(spread, spreadType);
+                        RecordEditorExpressionType(spread, spreadType);
+                    }
                     if (spreadType is TypeInfo.Tuple tupleSpread)
                     {
                         tupleSpread = (TypeInfo.Tuple)FlattenTupleSpreads(tupleSpread);
@@ -1702,7 +1710,7 @@ public partial class TypeChecker
                     : InferTypeArguments(
                         candidate,
                         tupleArguments is null
-                            ? PrepareFreshCallArgumentsForInference(candidate.ParamTypes, call.Arguments, argTypes)
+                            ? PrepareFreshCallArgumentsForInference(candidate, call.Arguments, argTypes)
                             : PrepareGenericTupleInferenceArguments(candidate, tupleArguments),
                         tupleRestArguments: tupleArguments is null ? null : GenericTupleCallType(
                             tupleArguments.Skip(candidate.ParamTypes.Count - 1), (TypeInfo.Tuple)candidate.ParamTypes[^1]));
@@ -1935,7 +1943,7 @@ public partial class TypeChecker
             : InferTypeArguments(
                 generic,
                 tupleArguments is null
-                    ? PrepareFreshCallArgumentsForInference(generic.ParamTypes, call.Arguments, argTypes)
+                    ? PrepareFreshCallArgumentsForInference(generic, call.Arguments, argTypes)
                     : PrepareGenericTupleInferenceArguments(generic, tupleArguments),
                 tupleRestArguments: tupleArguments is null ? null : GenericTupleCallType(
                     tupleArguments.Skip(generic.ParamTypes.Count - 1), (TypeInfo.Tuple)generic.ParamTypes[^1]));
@@ -1943,10 +1951,13 @@ public partial class TypeChecker
     }
 
     private List<TypeInfo> PrepareFreshCallArgumentsForInference(
-        IReadOnlyList<TypeInfo> parameterTypes,
+        TypeInfo.GenericFunction signature,
         IReadOnlyList<Expr> arguments,
         List<TypeInfo> argumentTypes)
     {
+        var parameterTypes = signature.ParamTypes;
+        bool widenRest = signature.HasRestParam && parameterTypes.LastOrDefault() is
+            TypeInfo.TypeParameter { IsConst: false, Constraint: TypeInfo.Array { ElementType: TypeInfo.Any or TypeInfo.Unknown } };
         var prepared = new List<TypeInfo>(argumentTypes.Count);
         for (int i = 0; i < argumentTypes.Count; i++)
         {
@@ -1963,6 +1974,13 @@ public partial class TypeChecker
                         prepared.Add(array.ElementType);
                         continue;
                 }
+            }
+            if (widenRest && i >= parameterTypes.Count - 1 && i < arguments.Count)
+            {
+                // Mutable inferred rest tuples widen fresh values. Source assertions,
+                // literal annotations and const type parameters retain their facts.
+                prepared.Add(WidenClassFieldInitializerType(arguments[i], argumentTypes[i]));
+                continue;
             }
             prepared.Add(i < parameterTypes.Count && i < arguments.Count
                 ? PrepareFreshCallArgumentForInference(

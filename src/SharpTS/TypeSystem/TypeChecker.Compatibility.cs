@@ -241,6 +241,8 @@ public partial class TypeChecker
         TypeInfo.ConditionalType => true,
         TypeInfo.KeyOf { SourceType: TypeInfo.TypeParameter } => true,
         TypeInfo.TypeParameter => true,
+        TypeInfo.IndexedAccess => true,
+        TypeInfo.Union union => union.FlattenedTypes.Any(IsDeferredKeyDomain),
         _ => false
     };
 

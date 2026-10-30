@@ -309,7 +309,10 @@ public partial class TypeChecker
             if (objTp.Constraint != null)
             {
                 var constrainedResult = CheckGetIndexOnType(objTp.Constraint, indexType, getIndex);
-                if (constrainedResult != null) return constrainedResult;
+                if (constrainedResult != null)
+                    return indexType is TypeInfo.TypeParameter && IsPropertyKeyDomain(indexType)
+                        ? new TypeInfo.IndexedAccess(objTp, indexType)
+                        : constrainedResult;
             }
 
             // Check if the index type has a keyof constraint on this type parameter
@@ -336,7 +339,7 @@ public partial class TypeChecker
                 ApparentTypeOf(genericKeyForTp) is { } keyLikeApparent &&
                 IsCompatible(KeyLikeUnion, keyLikeApparent))
             {
-                return TypeInfo.Any.Shared;
+                return new TypeInfo.IndexedAccess(objTp, indexType);
             }
 
             // Unconstrained type parameter can't be indexed with arbitrary types

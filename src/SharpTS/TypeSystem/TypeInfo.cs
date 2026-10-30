@@ -1757,10 +1757,12 @@ public abstract record TypeInfo
     /// match, the inferred type must satisfy it or the conditional takes its false branch.</param>
     public record InferredTypeParameter(string Name, TypeInfo? Constraint = null) : TypeInfo
     {
+        internal string? IntrinsicDisplayName { get; init; }
+        internal string DisplayName => IntrinsicDisplayName ?? Name;
         // Constraint must participate in ToString: CacheKey/TypeInfoEqualityComparer compare via
         // ToString, and `infer U extends string` vs `infer U extends number` must not collide.
         public override string ToString() =>
-            Constraint is null ? $"infer {Name}" : $"infer {Name} extends {Constraint}";
+            Constraint is null ? $"infer {DisplayName}" : $"infer {DisplayName} extends {Constraint}";
     }
 
     /// <summary>

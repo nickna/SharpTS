@@ -28,6 +28,8 @@ internal sealed class CheckedTypeRenderer(bool conformance)
 
     private string RenderCore(TypeInfo type, int parentPrecedence)
     {
+        if (DeferredTypeAliasPresentation.Get(type) is { } alias)
+            return $"{alias.Name}<{string.Join(", ", alias.Arguments.Select(argument => Render(argument)))}>";
         const int conditionalPrecedence = 1;
         const int unionPrecedence = 2;
         const int intersectionPrecedence = 3;
@@ -77,7 +79,7 @@ internal sealed class CheckedTypeRenderer(bool conformance)
                 primaryPrecedence),
             TypeInfo.TypeParameter p => (p.Name, primaryPrecedence),
             TypeInfo.InferredTypeParameter p => (
-                p.Constraint is null ? $"infer {p.Name}" : $"infer {p.Name} extends {Render(p.Constraint)}",
+                p.Constraint is null ? $"infer {p.DisplayName}" : $"infer {p.DisplayName} extends {Render(p.Constraint)}",
                 primaryPrecedence),
 
             TypeInfo.Array a => (
@@ -102,9 +104,9 @@ internal sealed class CheckedTypeRenderer(bool conformance)
 
             TypeInfo.FunctionSupertype => ("Function", primaryPrecedence),
             TypeInfo.Function f => (RenderFunction(f.ParamTypes, f.ReturnType, f.MinArity,
-                f.HasRestParam, f.ParamNames, null, f.ThisType), conditionalPrecedence),
+                f.HasRestParam, f.ParamNames, null, f.ThisType, expandedRestTuple: InstantiatedRestTuplePresentation.HasExpandedRest(f)), conditionalPrecedence),
             TypeInfo.GenericFunction f => (RenderFunction(f.ParamTypes, f.ReturnType, f.MinArity,
-                f.HasRestParam, f.ParamNames, f.TypeParams, f.ThisType), conditionalPrecedence),
+                f.HasRestParam, f.ParamNames, f.TypeParams, f.ThisType, expandedRestTuple: InstantiatedRestTuplePresentation.HasExpandedRest(f)), conditionalPrecedence),
             TypeInfo.OverloadedFunction f when conformance => (
                 $"{{ {string.Join(" ", f.Signatures.Select(signature => RenderFunction(signature.ParamTypes,
                     signature.ReturnType, signature.MinArity, signature.HasRestParam, signature.ParamNames,
@@ -206,7 +208,8 @@ internal sealed class CheckedTypeRenderer(bool conformance)
         IReadOnlyList<string>? names,
         IReadOnlyList<TypeInfo.TypeParameter>? typeParameters,
         TypeInfo? thisType,
-        bool callSignature = false)
+        bool callSignature = false,
+        bool expandedRestTuple = false)
     {
         var parameters = new List<string>();
         if (thisType is not null)
@@ -219,6 +222,18 @@ internal sealed class CheckedTypeRenderer(bool conformance)
             string name = names is not null && index < names.Count && !string.IsNullOrWhiteSpace(names[index])
                 ? names[index]
                 : $"arg{index}";
+            if (rest && expandedRestTuple && parameterTypes[index] is TypeInfo.Tuple tuple)
+            {
+                for (int elementIndex = 0; elementIndex < tuple.Elements.Count; elementIndex++)
+                {
+                    var element = tuple.Elements[elementIndex];
+                    string elementName = element.Name ?? $"{name}_{elementIndex}";
+                    parameters.Add($"{(element.IsSpread ? "..." : "")}{elementName}{(element.IsOptional ? "?" : "")}: {Render(element.Type)}");
+                }
+                if (tuple.RestElementType is { } restElement)
+                    parameters.Add($"...{name}_{tuple.Elements.Count}: {Render(restElement, 4)}[]");
+                continue;
+            }
             parameters.Add($"{(rest ? "..." : "")}{name}{(optional ? "?" : "")}: {Render(parameterTypes[index])}");
         }
 

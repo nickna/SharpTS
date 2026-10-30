@@ -1561,7 +1561,7 @@ public partial class TypeChecker
             try
             {
                 var arguments = InferTypeArguments(genericMethod,
-                    PrepareFreshCallArgumentsForInference(genericMethod.ParamTypes, call.Arguments, argumentTypes));
+                    PrepareFreshCallArgumentsForInference(genericMethod, call.Arguments, argumentTypes));
                 methodType = InstantiateGenericFunction(genericMethod, arguments);
             }
             catch (TypeCheckException exception) when (exception.Diagnostic.TsCode == "TS2344")

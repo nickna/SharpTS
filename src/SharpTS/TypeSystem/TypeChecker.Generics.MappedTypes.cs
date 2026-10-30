@@ -19,6 +19,9 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo EvaluateKeyOf(TypeInfo sourceType)
     {
+        if (sourceType is TypeInfo.MappedType { AsClause: null } mapped)
+            return mapped.Constraint is TypeInfo.KeyOf keyOf
+                ? EvaluateKeyOf(keyOf.SourceType) : mapped.Constraint;
         var keys = ExtractKeys(sourceType);
 
         if (keys.Count == 0)
@@ -495,6 +498,8 @@ public partial class TypeChecker
         {
             objectType = subObj;
         }
+        if (objectType is TypeInfo.TypeParameter)
+            return new TypeInfo.IndexedAccess(objectType, indexType);
 
         // keyof in index position resolves to the union of keys, and a concrete mapped
         // object expands so per-key property lookup sees real fields (#185).
@@ -539,14 +544,15 @@ public partial class TypeChecker
             return property ?? TypeInfo.Any.Shared;
         }
 
+        if (indexType is TypeInfo.NumberLiteral numericKey &&
+            GetPropertyType(objectType, Compilation.RuntimeTypes.FormatNumber(numericKey.Value)) is { } numericProperty)
+            return numericProperty;
+
         // For union of keys, return union of property types
         if (indexType is TypeInfo.Union union)
         {
             var types = union.FlattenedTypes
-                .OfType<TypeInfo.StringLiteral>()
-                .Select(k => GetPropertyType(objectType, k.Value))
-                .Where(t => t != null)
-                .Cast<TypeInfo>()
+                .Select(key => ResolveIndexedAccess(new TypeInfo.IndexedAccess(objectType, key), subs))
                 .Distinct(TypeInfoEqualityComparer.Instance)
                 .ToList();
 
@@ -582,6 +588,14 @@ public partial class TypeChecker
                     return ComputeTupleElementUnion(tup);
             }
         }
+
+        if (indexType is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
+            return objectType switch
+            {
+                TypeInfo.Record { SymbolIndexType: { } symbolIndex } => symbolIndex,
+                TypeInfo.Interface { SymbolIndexType: { } symbolIndex } => symbolIndex,
+                _ => TypeInfo.Any.Shared,
+            };
 
         return TypeInfo.Any.Shared;
     }

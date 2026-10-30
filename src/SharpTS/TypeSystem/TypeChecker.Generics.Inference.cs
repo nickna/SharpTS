@@ -45,7 +45,7 @@ public partial class TypeChecker
                 foreach (var restArg in restArgs)
                     InferFromType(restArr.ElementType, restArg, inferred, combineCandidates);
             }
-            else if (restDeclared is TypeInfo.TypeParameter && restArgs.Count > 0)
+            else if (restDeclared is TypeInfo.TypeParameter)
             {
                 InferFromType(restDeclared, TypeInfo.Tuple.FromTypes(restArgs, restArgs.Count), inferred, combineCandidates);
             }

@@ -14,6 +14,9 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 public partial class TypeChecker
 {
+    // This intrinsic binding cannot be spelled by a source type parameter.
+    // Its deferred source display is retained independently as ReturnType<T>.
+    private const string ReturnTypeInferenceName = "<ReturnType:result>";
     /// <summary>
     /// True when a type's shape can't be inspected yet — a type variable or a construct whose
     /// resolution depends on one (a deferred conditional, T[K], keyof T). The conditional-shaped
@@ -200,6 +203,15 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo ExpandRecordType(TypeInfo keyType, TypeInfo valueType)
     {
+        if (IsGenericTypeShape(keyType))
+        {
+            HashSet<string> names = [];
+            CollectSubstitutionParameterNames(keyType, names);
+            CollectSubstitutionParameterNames(valueType, names);
+            string parameter = "P";
+            for (int suffix = 1; names.Contains(parameter); suffix++) parameter = $"P{suffix}";
+            return new TypeInfo.MappedType(parameter, keyType, valueType);
+        }
         // Record over an enum requires one property per enum member, keyed by the member's
         // value ("0" for E.A = 0, the literal string for string enums), so assigning {} to
         // Record<E, V> is a missing-property error like tsc's. Index signatures are added
@@ -408,19 +420,21 @@ public partial class TypeChecker
 
     /// <summary>
     /// Expands ReturnType&lt;T&gt; to extract the return type of a function type.
-    /// Equivalent to: T extends (...args: any[]) => infer R ? R : never
+    /// Equivalent to: T extends (...args: any) => infer R ? R : any
     /// </summary>
     private TypeInfo ExpandReturnType(TypeInfo functionType)
     {
         // Defer for type variables and constructs that depend on them
         if (IsAbstractTypeReference(functionType))
         {
+            var result = new TypeInfo.InferredTypeParameter(ReturnTypeInferenceName) { IntrinsicDisplayName = "R" };
             // Return a conditional type for lazy evaluation
             return new TypeInfo.ConditionalType(
                 functionType,
-                new TypeInfo.Function([TypeInfo.Any.Shared], TypeInfo.Any.Shared, HasRestParam: true),
-                new TypeInfo.InferredTypeParameter("R"),
-                TypeInfo.Never.Shared
+                new TypeInfo.Function([TypeInfo.Any.Shared], result,
+                    RequiredParams: 0, HasRestParam: true),
+                result,
+                TypeInfo.Any.Shared
             ) { IsDistributive = true };
         }
 

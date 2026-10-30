@@ -58,7 +58,7 @@ public partial class TypeChecker
     ///         (<c>false</c>, the recursion-safe form used while a conditional is mid-evaluation);</item>
     ///   <item>function parameter positions: marked as instantiated (<c>true</c>, gates the callback comparison
     ///         rule) vs. left unmarked (<c>false</c>);</item>
-    ///   <item>records: rebuilt fields-only (<c>true</c> — see the NOTE) vs. signature/index preserving
+    ///   <item>records: fields/index preserving (<c>true</c> — see the NOTE) vs. additionally signature preserving
     ///         (<c>false</c>, which #316 needs so <c>T extends new (...) =&gt; infer U</c> can bind U);</item>
     ///   <item>indexed access: concrete accesses collapsed to the member type (<c>true</c>) vs. left as a
     ///         deferred node (<c>false</c>; the conditional machinery resolves these itself).</item>
@@ -96,7 +96,7 @@ public partial class TypeChecker
                     func.RequiredParams,
                     func.HasRestParam,
                     ThisType: null,
-                    ParamNames: null,
+                    ParamNames: func.ParamNames,
                     // Marking instantiated parameter positions gates the callback comparison rule; only the
                     // assignability path (evalConditionals) needs it. The conditional path leaves them unmarked.
                     InstantiatedTypeParamPositions: evalConditionals
@@ -110,7 +110,7 @@ public partial class TypeChecker
                 new TypeInfo.Union(union.Types.Select(Sub).ToList()),
             TypeInfo.Intersection intersection =>
                 CollapseSubstitutedIntersection(intersection.Types.Select(Sub).ToList()),
-            // Assignability path (evalConditionals): fields only. Preserving call/construct signatures here
+            // Assignability path (evalConditionals): fields and indices. Preserving call/construct signatures here
             // would feed generic construct-signature *assignment* relating (which erases/instantiates via
             // Substitute) types it does not yet compare correctly, regressing
             // assignmentCompatWithConstructSignatures. The conditional-type path that #316 needs preserves
@@ -121,6 +121,9 @@ public partial class TypeChecker
                         rec.Fields.ToDictionary(
                             kvp => kvp.Key,
                             kvp => Sub(kvp.Value)).ToFrozenDictionary(),
+                        StringIndexType: rec.StringIndexType is { } stringIndex ? Sub(stringIndex) : null,
+                        NumberIndexType: rec.NumberIndexType is { } numberIndex ? Sub(numberIndex) : null,
+                        SymbolIndexType: rec.SymbolIndexType is { } symbolIndex ? Sub(symbolIndex) : null,
                         OptionalFields: rec.OptionalFields,
                         IsReadonly: rec.IsReadonly,
                         GetterOnlyFields: rec.GetterOnlyFields,
@@ -187,6 +190,9 @@ public partial class TypeChecker
             // Primitives, Any, Void, Never, Unknown, Null pass through unchanged
             _ => type
         };
+        if (!evalConditionals || type is not TypeInfo.ConditionalType)
+            DeferredTypeAliasPresentation.Substitute(type, result, Sub);
+        InstantiatedRestTuplePresentation.Capture(type, result);
         if (EditorFacts.IsEnabled) CopyEditorSignatureMetadata(type, result);
         if (!ReferenceEquals(type, result) && _typeMap.GetClassMethodImplementation(type) is { } implementation)
         {
@@ -371,7 +377,7 @@ public partial class TypeChecker
     /// signatures and index types instead of dropping them. Used by relationships where callable
     /// structure is semantically significant: generic signature contextual instantiation/erasure,
     /// generic calls, interface extends (TS2430), and class-extends index signatures (TS2415). General
-    /// <see cref="Substitute"/> intentionally keeps its historical fields-only Record behavior;
+    /// <see cref="Substitute"/> intentionally keeps its historical call/construct-signature dropping behavior;
     /// these focused paths preserve the full shape.
     /// Records recurse so a nested Record field keeps its signatures too; every non-Record type
     /// delegates to <see cref="Substitute"/> (whose only signature-dropping happens at Record nodes,

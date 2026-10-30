@@ -160,7 +160,7 @@ public static class EditorTypeRenderer
                             Type(replacement, depth + 1, context);
                         else Name(parameter.Name);
                         break;
-                    case TypeInfo.InferredTypeParameter parameter: Text("infer "); Name(parameter.Name); if (parameter.Constraint is not null) { Text(" extends "); Type(parameter.Constraint, depth + 1); } break;
+                    case TypeInfo.InferredTypeParameter parameter: Text("infer "); Name(parameter.DisplayName); if (parameter.Constraint is not null) { Text(" extends "); Type(parameter.Constraint, depth + 1); } break;
                     case TypeInfo.RecursiveTypeAlias alias: Name(alias.AliasName); Arguments(alias.TypeArguments, depth + 1); break;
                     case TypeInfo.InstantiatedGeneric generic:
                         switch (generic.GenericDefinition)

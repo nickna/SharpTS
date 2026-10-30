@@ -209,7 +209,7 @@ public partial class TypeChecker
         {
             if (typeArgs.Count != 2)
                 throw new TypeCheckException($" Record<K, V> requires exactly 2 type arguments, got {typeArgs.Count}.", tsCode: "TS2314");
-            result = ExpandRecordType(typeArgs[0], typeArgs[1]);
+            result = DeferredTypeAliasPresentation.Retain(ExpandRecordType(typeArgs[0], typeArgs[1]), baseName, typeArgs);
         }
         else if (baseName == "Pick")
         {
@@ -229,6 +229,8 @@ public partial class TypeChecker
             if (typeArgs.Count != 1)
                 throw new TypeCheckException($" ReturnType<T> requires exactly 1 type argument, got {typeArgs.Count}.", tsCode: "TS2314");
             result = ExpandReturnType(typeArgs[0]);
+            if (IsAbstractTypeReference(typeArgs[0]))
+                result = DeferredTypeAliasPresentation.Retain(result, baseName, typeArgs);
         }
         else if (baseName == "Parameters")
         {
