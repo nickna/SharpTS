@@ -273,7 +273,8 @@ public partial class RuntimeEmitter
             "Array", "ArrayBuffer", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
             "Promise", "Function", "Object", "Number", "String", "Boolean",
             "Symbol", "Error", "TypeError", "RangeError", "ReferenceError",
-            "SyntaxError", "URIError", "EvalError", "AggregateError", "Math", "JSON"
+            "SyntaxError", "URIError", "EvalError", "AggregateError", "Math", "JSON",
+            "AbortController"
         })
         {
             EmitGlobalDescriptorCheck(globalName, writableGlobalLabel);
