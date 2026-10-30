@@ -46,20 +46,27 @@ internal sealed record NativePublishToolchain(string DotnetPath, string SdkVersi
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         void Text(string value) { hash.AppendData(Encoding.UTF8.GetBytes(value)); hash.AppendData([0]); }
-        void FileInput(string path)
+        async Task FileInput(string path)
         {
             token.ThrowIfCancellationRequested();
-            Text(Path.GetFullPath(path)); using var stream = File.OpenRead(path); hash.AppendData(SHA256.HashData(stream));
+            Text(Path.GetFullPath(path));
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                bufferSize: 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            hash.AppendData(await SHA256.HashDataAsync(stream, token).ConfigureAwait(false));
         }
-        void DirectoryInputs(string path, Func<string, bool>? include = null)
+        async Task DirectoryInputs(string path, Func<string, bool>? include = null)
         {
-            foreach (string file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Where(file => include?.Invoke(file) ?? true).Order(StringComparer.Ordinal))
-                FileInput(file);
+            foreach (string file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Where(file =>
+            {
+                token.ThrowIfCancellationRequested();
+                return include?.Invoke(file) ?? true;
+            }).Order(StringComparer.Ordinal))
+                await FileInput(file).ConfigureAwait(false);
         }
-        Text("SharpTS.NativeToolchain.v1"); Text(SdkVersion); FileInput(DotnetPath);
-        FileInput(Path.Combine(SdkDirectory, "dotnet.dll"));
-        DirectoryInputs(Path.Combine(SdkDirectory, "Sdks", "Microsoft.NET.Sdk"));
-        DirectoryInputs(Path.Combine(SdkDirectory, "Roslyn", "bincore"));
+        Text("SharpTS.NativeToolchain.v1"); Text(SdkVersion); await FileInput(DotnetPath).ConfigureAwait(false);
+        await FileInput(Path.Combine(SdkDirectory, "dotnet.dll")).ConfigureAwait(false);
+        await DirectoryInputs(Path.Combine(SdkDirectory, "Sdks", "Microsoft.NET.Sdk")).ConfigureAwait(false);
+        await DirectoryInputs(Path.Combine(SdkDirectory, "Roslyn", "bincore")).ConfigureAwait(false);
         // These values can change SDK and native tool selection. Hash values, never persist them.
         foreach (string key in new[] { "PATH", "DOTNET_ROOT", "DOTNET_ROOT_X64", "DOTNET_ROOT_ARM64", "MSBuildSDKsPath", "MSBUILD_EXE_PATH", "DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR",
             "LIB", "LIBPATH", "INCLUDE", "LINK", "_LINK_", "VSINSTALLDIR", "VCINSTALLDIR", "VCToolsInstallDir", "VCToolsVersion", "WindowsSdkDir", "WindowsSDKVersion", "UniversalCRTSdkDir", "UCRTVersion", "CC", "CXX", "LD", "AR", "SDKROOT", "DEVELOPER_DIR" })
@@ -69,7 +76,7 @@ internal sealed record NativePublishToolchain(string DotnetPath, string SdkVersi
         string managedCompiler = Path.Combine(AppContext.BaseDirectory, "SharpTS.dll");
         string compiler = System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported && File.Exists(managedCompiler)
             ? managedCompiler : Environment.ProcessPath!;
-        FileInput(compiler);
+        await FileInput(compiler).ConfigureAwait(false);
         string assets = Path.Combine(workspace.ProjectDirectory, "obj", "project.assets.json");
         using var document = JsonDocument.Parse(File.ReadAllBytes(assets));
         // Attempt-specific paths carry no build meaning; all other restore data participates.
@@ -82,7 +89,7 @@ internal sealed record NativePublishToolchain(string DotnetPath, string SdkVersi
             string? package = packageFolders.Select(folder => Path.Combine(folder, relative)).FirstOrDefault(Directory.Exists);
             if (package is null) throw new IOException("A resolved native publish package is missing.");
             foreach (var item in library.Value.GetProperty("files").EnumerateArray())
-                FileInput(Path.Combine(package, item.GetString()!));
+                await FileInput(Path.Combine(package, item.GetString()!)).ConfigureAwait(false);
         }
         bool nativeKnown = false;
         if (OperatingSystem.IsWindows())
@@ -90,7 +97,7 @@ internal sealed record NativePublishToolchain(string DotnetPath, string SdkVersi
             string vswhere = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft Visual Studio", "Installer", "vswhere.exe");
             if (File.Exists(vswhere))
             {
-                FileInput(vswhere);
+                await FileInput(vswhere).ConfigureAwait(false);
                 var installations = await RunCapture(vswhere, workspace.ProjectDirectory, token, "-all", "-prerelease", "-products", "*", "-format", "json", "-utf8").ConfigureAwait(false);
                 if (installations.ExitCode == 0)
                 {
@@ -108,9 +115,9 @@ internal sealed record NativePublishToolchain(string DotnetPath, string SdkVersi
                         {
                             Text(version);
                             string binaries = Path.Combine(version, "bin", host, architecture);
-                            if (File.Exists(Path.Combine(binaries, "link.exe"))) { DirectoryInputs(binaries); linker = true; }
+                            if (File.Exists(Path.Combine(binaries, "link.exe"))) { await DirectoryInputs(binaries).ConfigureAwait(false); linker = true; }
                             foreach (string libraries in new[] { Path.Combine(version, "lib", architecture), Path.Combine(version, "ATLMFC", "lib", architecture) })
-                                if (Directory.Exists(libraries)) DirectoryInputs(libraries);
+                                if (Directory.Exists(libraries)) await DirectoryInputs(libraries).ConfigureAwait(false);
                         }
                     }
                     string kits = Environment.GetEnvironmentVariable("WindowsSdkDir") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Windows Kits", "10");
@@ -121,16 +128,17 @@ internal sealed record NativePublishToolchain(string DotnetPath, string SdkVersi
                             {
                                 string libraries = Path.Combine(version, kind, architecture);
                                 if (!Directory.Exists(libraries)) continue;
-                                DirectoryInputs(libraries); runtimeLibraries = true;
+                                await DirectoryInputs(libraries).ConfigureAwait(false); runtimeLibraries = true;
                             }
                     string netfx = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Windows Kits", "NETFXSDK");
                     if (Directory.Exists(netfx))
                         foreach (string version in Directory.EnumerateDirectories(netfx).Order(StringComparer.Ordinal))
                         {
                             string libraries = Path.Combine(version, "lib", "um", architecture);
-                            if (Directory.Exists(libraries)) DirectoryInputs(libraries);
+                            if (Directory.Exists(libraries)) await DirectoryInputs(libraries).ConfigureAwait(false);
                         }
-                    foreach (string path in (Environment.GetEnvironmentVariable("LIB") ?? "").Split(Path.PathSeparator).Where(Directory.Exists)) DirectoryInputs(path);
+                    foreach (string path in (Environment.GetEnvironmentVariable("LIB") ?? "").Split(Path.PathSeparator).Where(Directory.Exists))
+                        await DirectoryInputs(path).ConfigureAwait(false);
                     nativeKnown = linker && runtimeLibraries;
                 }
             }

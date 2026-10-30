@@ -79,6 +79,11 @@ publishes strictly but bypasses final-artifact reuse. This cache is not a source
 graph cache. Temporary attempt directories are owned and cleaned separately from
 user-exported projects. Guest portable PDBs do not promise TypeScript native stepping.
 
+CLI cache identity preparation and lock acquisition have a bounded deadline. If
+they cannot finish, publication continues through the same strict SDK pipeline
+without reading or writing a cached artifact. Caller cancellation still stops
+publication. A partial or late fingerprint cannot authorize cache reuse.
+
 `--emit-native-project` remains a separate inspect mode and never starts publication:
 
 ```sh

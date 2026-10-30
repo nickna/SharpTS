@@ -25,49 +25,43 @@ internal static class NativeAotPublishDriver
             if (Failed(restore.ExitCode, restore.Diagnostics)) throw new CompileException(DiagnosticCode.NativeGuestPublish, $"Native SDK restore failed (exit {restore.ExitCode}). See the original SDK diagnostics above.");
             string pdb = Path.ChangeExtension(workspace.GuestPath, ".pdb");
             var revision = NativeGuestRevision.Compute(File.ReadAllBytes(workspace.GuestPath), File.Exists(pdb) ? File.ReadAllBytes(pdb) : null);
-            (string Fingerprint, bool CanReuse) fingerprint;
-            try { fingerprint = await toolchain.FingerprintAsync(workspace, token).ConfigureAwait(false); }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
-            { fingerprint = ("unidentified", false); }
-            string key = NativePublishCache.Key(workspace, revision, fingerprint.Fingerprint);
             string root = Path.GetFullPath(cacheRoot ?? NativePublishCache.DefaultRoot);
+            using var cache = await NativePublishCachePreparation.PrepareAsync(
+                preparationToken => toolchain.FingerprintAsync(workspace, preparationToken),
+                fingerprint => NativePublishCache.Key(workspace, revision, fingerprint),
+                root, output, quiet, token).ConfigureAwait(false);
+            string key = cache.Key;
             string nativeName = workspace.AssemblyName + (workspace.Options.RuntimeIdentifier.StartsWith("win-", StringComparison.Ordinal) ? ".exe" : "");
-            FileStream? cacheLock = null;
-            try
+            string? artifacts = cache.CanReuse ? NativePublishCache.Find(root, key, nativeName) : null;
+            bool cacheHit = artifacts is not null;
+            IReadOnlyList<NativePublishDiagnostic> diagnostics = restore.Diagnostics;
+            if (!cacheHit)
             {
-                if (fingerprint.CanReuse) cacheLock = await NativePublishCache.LockAsync(root, key, token).ConfigureAwait(false);
-                string? artifacts = fingerprint.CanReuse ? NativePublishCache.Find(root, key, nativeName) : null;
-                bool cacheHit = artifacts is not null;
-                IReadOnlyList<NativePublishDiagnostic> diagnostics = restore.Diagnostics;
-                if (!cacheHit)
-                {
-                    if (!quiet) output.WriteLine(fingerprint.CanReuse ? "Publishing native output..." : "Publishing native output (final-artifact cache unavailable for this toolchain)...");
-                    var publish = await NativePublishProcess.RunAsync(toolchain.Start(workspace.ProjectDirectory,
-                        "publish", "NativeApp.csproj", "--no-restore", "-c", "Release", "--runtime", workspace.Options.RuntimeIdentifier,
-                        "--output", workspace.PublishDirectory, "--disable-build-servers", "--nologo", "--verbosity", "minimal"), output, error, token).ConfigureAwait(false);
-                    diagnostics = restore.Diagnostics.Concat(publish.Diagnostics).ToArray();
-                    // The generated project makes individual trim/AOT warnings errors. Keep a
-                    // second boundary in case a tool reports one while returning success.
-                    if (Failed(publish.ExitCode, diagnostics))
-                        throw new CompileException(DiagnosticCode.NativeGuestPublish, $"Native SDK publish failed (exit {publish.ExitCode}). Trim/AOT diagnostics are never suppressed; see the original SDK/ILC output above.");
-                    ValidateNativeImage(Path.Combine(workspace.PublishDirectory, nativeName), workspace.Options.RuntimeIdentifier);
-                    token.ThrowIfCancellationRequested();
-                    artifacts = workspace.PublishDirectory;
-                }
+                if (!quiet) output.WriteLine(cache.CanReuse ? "Publishing native output..." : "Publishing native output (final-artifact cache unavailable for this toolchain)...");
+                var publish = await NativePublishProcess.RunAsync(toolchain.Start(workspace.ProjectDirectory,
+                    "publish", "NativeApp.csproj", "--no-restore", "-c", "Release", "--runtime", workspace.Options.RuntimeIdentifier,
+                    "--output", workspace.PublishDirectory, "--disable-build-servers", "--nologo", "--verbosity", "minimal"), output, error, token).ConfigureAwait(false);
+                diagnostics = restore.Diagnostics.Concat(publish.Diagnostics).ToArray();
+                // The generated project makes individual trim/AOT warnings errors. Keep a
+                // second boundary in case a tool reports one while returning success.
+                if (Failed(publish.ExitCode, diagnostics))
+                    throw new CompileException(DiagnosticCode.NativeGuestPublish, $"Native SDK publish failed (exit {publish.ExitCode}). Trim/AOT diagnostics are never suppressed; see the original SDK/ILC output above.");
+                ValidateNativeImage(Path.Combine(workspace.PublishDirectory, nativeName), workspace.Options.RuntimeIdentifier);
                 token.ThrowIfCancellationRequested();
-                await NativePublishOutput.PromoteAsync(artifacts!, nativeName, workspace, signing, token).ConfigureAwait(false);
-                if (!cacheHit && fingerprint.CanReuse)
-                {
-                    // Only a completed operation enters the unsigned cache. Cache I/O cannot
-                    // turn an already committed output into a reported publish failure.
-                    try { NativePublishCache.Store(root, key, workspace, nativeName, revision); }
-                    catch (IOException) { }
-                    catch (UnauthorizedAccessException) { }
-                }
-                if (!quiet) output.WriteLine($"Published native output to {workspace.Options.OutputPath}{(cacheHit ? " (cache hit)" : "")}");
-                return new(cacheHit, diagnostics);
+                artifacts = workspace.PublishDirectory;
             }
-            finally { cacheLock?.Dispose(); }
+            token.ThrowIfCancellationRequested();
+            await NativePublishOutput.PromoteAsync(artifacts!, nativeName, workspace, signing, token).ConfigureAwait(false);
+            if (!cacheHit && cache.CanReuse)
+            {
+                // Only a completed operation enters the unsigned cache. Cache I/O cannot
+                // turn an already committed output into a reported publish failure.
+                try { NativePublishCache.Store(root, key, workspace, nativeName, revision); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+            if (!quiet) output.WriteLine($"Published native output to {workspace.Options.OutputPath}{(cacheHit ? " (cache hit)" : "")}");
+            return new(cacheHit, diagnostics);
         }
         catch (Win32Exception)
         { throw new CompileException(DiagnosticCode.NativeGuestToolchain, "Could not start the .NET SDK/native publish toolchain. Install dotnet and the matching native compiler/linker prerequisites."); }

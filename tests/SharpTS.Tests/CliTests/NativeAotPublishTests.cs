@@ -288,6 +288,125 @@ public sealed class NativeAotPublishTests
         finally { NativePublishWorkspace.DeleteOwned(root); }
     }
 
+    [Fact]
+    public async Task CachePreparationDeadlineTerminatesItsOwnedProbeAndDisablesReuse()
+    {
+        string root = NativePublishWorkspace.CreateOwned(Path.GetTempPath(), "native-cache-deadline");
+        try
+        {
+            string pidFile = Path.Combine(root, "child.pid");
+            int keys = 0;
+            async Task<(string Fingerprint, bool CanReuse)> Probe(CancellationToken token)
+            {
+                await NativePublishProcess.RunAsync(Fixture("parent-with-pid-file", pidFile), TextWriter.Null, TextWriter.Null, token);
+                return ("incomplete", true);
+            }
+            using var output = new StringWriter();
+            using var preparation = await NativePublishCachePreparation.PrepareAsync(Probe,
+                _ => { keys++; return new string('a', 64); }, root, output, false,
+                CancellationToken.None, TimeSpan.FromSeconds(3));
+            Assert.False(preparation.CanReuse);
+            Assert.Empty(preparation.Key);
+            Assert.Equal(0, keys);
+            Assert.Contains("timed out", output.ToString());
+            Assert.True(File.Exists(pidFile));
+            int child = int.Parse(File.ReadAllText(pidFile));
+            try { using var process = Process.GetProcessById(child); Assert.True(process.WaitForExit(5000)); }
+            catch (ArgumentException) { }
+        }
+        finally { NativePublishWorkspace.DeleteOwned(root); }
+    }
+
+    [Fact]
+    public async Task OptionalCacheLockTimeoutPreservesEntriesAndDoesNotKeepTheLock()
+    {
+        string root = NativePublishWorkspace.CreateOwned(Path.GetTempPath(), "native-cache-lock-deadline");
+        try
+        {
+            string key = new('a', 64);
+            string prior = Path.Combine(root, "prior.txt"); File.WriteAllText(prior, "preserve");
+            using var output = new StringWriter();
+            using (await NativePublishCache.LockAsync(root, key, CancellationToken.None))
+            using (var preparation = await NativePublishCachePreparation.PrepareAsync(
+                _ => Task.FromResult(("complete", true)), _ => key, root, output, false,
+                CancellationToken.None, TimeSpan.FromMilliseconds(100)))
+            {
+                Assert.False(preparation.CanReuse);
+                Assert.Empty(preparation.Key);
+                Assert.Contains("Acquiring the matching native cache lock", output.ToString());
+                Assert.Equal("preserve", File.ReadAllText(prior));
+            }
+            using var available = await NativePublishCache.LockAsync(root, key, CancellationToken.None);
+        }
+        finally { NativePublishWorkspace.DeleteOwned(root); }
+    }
+
+    [Fact]
+    public async Task LateFingerprintCompletionCannotAuthorizeAKeyAfterTheDeadline()
+    {
+        string root = NativePublishWorkspace.CreateOwned(Path.GetTempPath(), "native-cache-late-probe");
+        try
+        {
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource<(string, bool)>(TaskCreationOptions.RunContinuationsAsynchronously);
+            int keys = 0;
+            var pending = NativePublishCachePreparation.PrepareAsync(_ => { started.SetResult(); return release.Task; },
+                _ => { keys++; return new string('a', 64); }, root, TextWriter.Null, true,
+                CancellationToken.None, TimeSpan.FromMilliseconds(100));
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await Task.Delay(200);
+            release.SetResult(("late", true));
+            using var preparation = await pending;
+            Assert.False(preparation.CanReuse);
+            Assert.Empty(preparation.Key);
+            Assert.Equal(0, keys);
+        }
+        finally { NativePublishWorkspace.DeleteOwned(root); }
+    }
+
+    [Fact]
+    public async Task CallerCancellationStillCancelsInsteadOfStartingAnUncachedPublish()
+    {
+        string root = NativePublishWorkspace.CreateOwned(Path.GetTempPath(), "native-cache-caller-cancel");
+        try
+        {
+            using var caller = new CancellationTokenSource();
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            async Task<(string, bool)> Probe(CancellationToken token)
+            { started.SetResult(); await Task.Delay(Timeout.Infinite, token); return ("cancelled", true); }
+            var pending = NativePublishCachePreparation.PrepareAsync(Probe, _ => new string('a', 64),
+                root, TextWriter.Null, true, caller.Token);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await caller.CancelAsync();
+            bool cancelled = false;
+            try { using var unexpected = await pending; }
+            catch (OperationCanceledException) { cancelled = true; }
+            Assert.True(cancelled);
+        }
+        finally { NativePublishWorkspace.DeleteOwned(root); }
+    }
+
+    [Fact]
+    public async Task CompletedCachePreparationOwnsItsLockUntilPublicationFinishes()
+    {
+        string root = NativePublishWorkspace.CreateOwned(Path.GetTempPath(), "native-cache-complete");
+        try
+        {
+            string key = new('a', 64);
+            using (var preparation = await NativePublishCachePreparation.PrepareAsync(
+                _ => Task.FromResult(("complete", true)), _ => key, root, TextWriter.Null, true,
+                CancellationToken.None))
+            {
+                Assert.True(preparation.CanReuse);
+                Assert.Equal(key, preparation.Key);
+                using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => NativePublishCache.LockAsync(root, key, cancellation.Token));
+            }
+            using var available = await NativePublishCache.LockAsync(root, key, CancellationToken.None);
+        }
+        finally { NativePublishWorkspace.DeleteOwned(root); }
+    }
+
     private static (byte[] Assembly, byte[]? Pdb) Guest(string source, bool debug)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow(); var map = new TypeChecker().Check(statements);
