@@ -23,7 +23,7 @@ public partial class ILEmitter
                 EmitExpressionAsDouble(a.Elements[i]);
                 IL.Emit(OpCodes.Stelem_R8);
             }
-            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ArrayStorage.NumericLiteralCtor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, _ctx.Runtime!.ArrayStorage.NumericLiteralCtor);
             SetStackUnknown();
             return;
         }
@@ -55,7 +55,7 @@ public partial class ILEmitter
             // Literal initialization is private: append into the final backing store,
             // without calling observable Array.prototype methods or copying a list.
             IL.Emit(OpCodes.Ldc_I4, a.Elements.Count);
-            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ArrayStorage.RestCtor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, _ctx.Runtime!.ArrayStorage.RestCtor);
             foreach (var element in a.Elements)
             {
                 IL.Emit(OpCodes.Dup);
@@ -197,7 +197,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.Emit(numeric ? OpCodes.Stelem_R8 : OpCodes.Stelem_Ref);
         }
-        if (numeric) IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ArrayStorage.NumericLiteralCtor);
+        if (numeric) NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, _ctx.Runtime!.ArrayStorage.NumericLiteralCtor);
         else IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Create);
         SetStackUnknown();
     }
@@ -397,7 +397,7 @@ public partial class ILEmitter
                         break;
                 }
             }
-            IL.Emit(OpCodes.Newobj, typedCtor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, typedCtor);
         }
         else if (_ctx.Runtime.Records.ScalarInlineCtors.TryGetValue(
             literal.Properties.Count, out var inlineCtor))
@@ -407,7 +407,7 @@ public partial class ILEmitter
                 EmitExpression(property.Value);
                 EmitBoxIfNeeded(property.Value);
             }
-            IL.Emit(OpCodes.Newobj, inlineCtor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, inlineCtor);
         }
         else
         {
@@ -421,7 +421,7 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(literal.Properties[i].Value);
                 IL.Emit(OpCodes.Stelem_Ref);
             }
-            IL.Emit(OpCodes.Newobj, _ctx.Runtime.Records.RequireScalars().ArrayConstructor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, _ctx.Runtime.Records.RequireScalars().ArrayConstructor);
         }
         return true;
     }
@@ -481,7 +481,7 @@ public partial class ILEmitter
             else
                 EmitConversionForParameter(property.Value, ctorParameters[index].ParameterType);
         }
-        IL.Emit(OpCodes.Newobj, exactCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, exactCtor);
         return true;
     }
 
@@ -493,7 +493,7 @@ public partial class ILEmitter
     {
         // Create $Object: new $Object(new Dictionary<string, object?>())
         IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.DictionaryStringObject));
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ObjectStorage.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, _ctx.Runtime!.ObjectStorage.Constructor);
 
         // Store in local for repeated use
         var objLocal = IL.DeclareLocal(_ctx.Runtime!.ObjectStorage.Type);

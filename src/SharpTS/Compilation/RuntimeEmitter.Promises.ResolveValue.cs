@@ -59,7 +59,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(tcsType, "TrySetResult", _types.Object));
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, tcsLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
+        NativePrototypeFieldsLookup.EmitUnprovedCarrierResult(_nativePrototypeFields, il, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, doneLabel);
 
@@ -78,7 +78,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rootLocal);
         il.Emit(OpCodes.Brtrue, haveRootLabel);
         il.Emit(OpCodes.Ldloc, tcsLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
+        NativePrototypeFieldsLookup.EmitUnprovedCarrierResult(_nativePrototypeFields, il, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, rootLocal);
         il.MarkLabel(haveRootLabel);
 
@@ -99,7 +99,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
 
         il.Emit(OpCodes.Ldloc, tcsLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
+        NativePrototypeFieldsLookup.EmitUnprovedCarrierResult(_nativePrototypeFields, il, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, doneLabel);
 

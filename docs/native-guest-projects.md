@@ -1087,3 +1087,36 @@ The remaining prototype $EnsureFields query is a separate acceptance item. Stric
 warnings remain enabled. Seven ordinary managed fixtures retain all 8,306 raw
 method bodies (8,474 method definitions) and PE sizes; PE bytes differ only in
 module MVID and COFF timestamp.
+
+## Native prototype dynamic-store lookup
+
+Native guest output specializes only the private `$EnsureFields` query used by
+`$ClassDefinition.ReadPrototypeProperty`. Its certificate records the actual
+source accessor declaration/body and the actual source owner token, prototype
+allocation, and `ClassPrototypes.Register` sequence. Ordinary runtime carrier
+rows come from emitted allocation operations or completed literal Activator
+arms. Constructor-function carriers reuse the existing exact CoreLib runtime
+Type certificate and completed Type-value producers. Existing callable
+registrations impose coverage obligations; they cannot supply query rows.
+
+Each finite row still calls the original name-only
+`Type.GetMethod("$EnsureFields", Instance | NonPublic | DeclaredOnly)` on its
+literal owner. Missing results, binder exceptions, and the subsequent
+`MethodInfo.Invoke` stay intact. Descriptor reads and original getter receivers
+precede the query, and ordinary `Reflect.get` follows an absent result. No
+`IHasFields` assumption substitutes for the private prototype store.
+
+Completion requires the same output's CLR ingress proof and finalized source
+metadata. Missing allocation coverage, unproved source generic families, and
+actual Task-returning producers whose concrete subclass is unproved preserve
+the entire original query and its NativeAOT diagnostics. Unknown carriers outside
+the completed finite domain receive a named native-profile TypeError before
+metadata lookup. Ordinary managed output retains its original instructions and
+metadata layout; source-catalog completion and type-creation phases are unchanged.
+
+This is a bounded operation proof, not a claim that all generic class prototype
+contexts support strict native publication. The unrelated Array-iterator property
+lookup refusal is tracked by #3121, and the ordinary compiled generic superclass
+prototype identity defect is tracked by #3122. Verification preserves those
+separate baseline observations rather than changing their expected JavaScript
+behavior.

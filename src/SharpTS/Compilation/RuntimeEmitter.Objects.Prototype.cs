@@ -138,7 +138,7 @@ public partial class RuntimeEmitter
         var noPropsLabel = il.DefineLabel();
 
         // result = new Dictionary<string, object?>()
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Set prototype: $PropertyDescriptorStore.SetPrototype(result, proto)

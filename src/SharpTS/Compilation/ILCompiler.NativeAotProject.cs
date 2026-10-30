@@ -11,6 +11,8 @@ public partial class ILCompiler
     private NativeMethodLookupCatalog? _nativeMethodLookup;
     private NativeHasInMemberLookup? _nativeHasInMembers;
     private NativeReceiverInitializerLookup? _nativeReceiverInitializerLookup;
+    private NativePrototypeFieldsLookup? _nativePrototypeFields;
+    internal NativePrototypeFieldsLookup? NativePrototypeFields => _nativePrototypeFields;
     private NativeOwnerClosure? _nativeOwnerClosure;
     internal NativeOwnerClosure? NativeOwnerClosures => _nativeOwnerClosure;
     internal NativeReceiverInitializerLookup? NativeReceiverInitializers => _nativeReceiverInitializerLookup;
@@ -82,6 +84,8 @@ public partial class ILCompiler
             throw new InvalidOperationException("Native in-operator member metadata has not completed source emission.");
         if (_nativeReceiverInitializerLookup?.IsComplete != true)
             throw new InvalidOperationException("Native receiver-initializer metadata has not completed source emission.");
+        if (_nativePrototypeFields?.IsComplete != true)
+            throw new InvalidOperationException("Native prototype-store metadata has not completed source emission.");
         if (_nativeOwnerClosure?.IsComplete != true)
             throw new InvalidOperationException("Native owner-closure evidence has not completed source emission.");
         if (_nativeEvaluatedConstructors?.IsComplete != true)

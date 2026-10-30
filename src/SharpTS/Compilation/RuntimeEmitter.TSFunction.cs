@@ -652,7 +652,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, value); il.Emit(OpCodes.Ret);
             il.MarkLabel(create);
             il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldarg_3);
-            il.Emit(OpCodes.Newobj, nativeSources.CachedConstructor); il.Emit(OpCodes.Stloc, value);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, nativeSources.CachedConstructor); il.Emit(OpCodes.Stloc, value);
             il.Emit(OpCodes.Ldsfld, instanceCacheField); il.Emit(OpCodes.Ldloc, key); il.Emit(OpCodes.Ldloc, value);
             il.Emit(OpCodes.Callvirt, getOrAddM); il.Emit(OpCodes.Ret);
             nativeSources.CompleteEmission();

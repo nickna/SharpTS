@@ -504,7 +504,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
-        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.BoundCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.FunctionBindings.BoundCtor);
         il.Emit(OpCodes.Ret);
 
         // Constructor Type values and already-bound callables need the generic
@@ -513,7 +513,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
-        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.AnyCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.FunctionBindings.AnyCtor);
         il.Emit(OpCodes.Ret);
 
         return method;

@@ -88,7 +88,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Ldstr, "anonymous");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, functionConstruction.CachedConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, functionConstruction.CachedConstructor);
         il.Emit(OpCodes.Ret);
     }
 }

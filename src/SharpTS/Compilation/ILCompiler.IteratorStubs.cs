@@ -93,7 +93,7 @@ public partial class ILCompiler
                 sourceTypes, argumentOffset, publishedArgsLeadingSkip: receiverSkip);
         new ILEmitter(context).EmitDefaultParameters(source.Parameters, argumentOffset, sourceTypes, source.BlockBody);
 
-        il.Emit(OpCodes.Newobj, iterator.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, iterator.Constructor);
         EmitIteratorArgumentsStore(il, iterator, arguments);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
@@ -183,7 +183,7 @@ public partial class ILCompiler
         var environment = EmitIteratorStubEnvironment(
             methodBuilder, funcStmt, isInstanceMethod: false, funcDCKey: qualifiedName);
 
-        il.Emit(OpCodes.Newobj, smBuilder.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, smBuilder.Constructor);
         EmitIteratorArgumentsStore(il, smBuilder, environment.Arguments);
 
         // #775: capture the active dynamic `this` into <>4__this. The receiver is the thread-local
@@ -275,7 +275,7 @@ public partial class ILCompiler
             currentClassName,
             funcDCKey);
 
-        il.Emit(OpCodes.Newobj, smBuilder.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, smBuilder.Constructor);
         EmitIteratorArgumentsStore(il, smBuilder, environment.Arguments);
 
         if (smBuilder.ThisField != null)

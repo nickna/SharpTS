@@ -115,7 +115,7 @@ public partial class RuntimeEmitter
         var ctorWithComparer = _types.GetConstructor(dictType, [_types.IEqualityComparerOfObject])!;
 
         il.Emit(OpCodes.Ldsfld, collectionKeys.ComparerInstance);
-        il.Emit(OpCodes.Newobj, ctorWithComparer);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, ctorWithComparer);
         il.Emit(OpCodes.Ret);
     }
 
@@ -154,7 +154,7 @@ public partial class RuntimeEmitter
 
         // var map = new Dictionary<object, object?>($ReferenceEqualityComparer.Instance)
         il.Emit(OpCodes.Ldsfld, collectionKeys.ComparerInstance);
-        il.Emit(OpCodes.Newobj, ctorWithComparer);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, ctorWithComparer);
         il.Emit(OpCodes.Stloc, mapLocal);
 
         // number[] unboxing: materialize a numeric-mode $Array entries source before reading its base list.
@@ -499,7 +499,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
@@ -507,7 +507,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -578,7 +578,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
@@ -586,7 +586,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -659,7 +659,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
@@ -667,7 +667,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newobj, map.IteratorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, map.IteratorConstructor);
         il.Emit(OpCodes.Ret);
     }
 

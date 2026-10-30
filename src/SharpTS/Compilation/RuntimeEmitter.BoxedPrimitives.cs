@@ -161,7 +161,7 @@ public partial class RuntimeEmitter
 
         // obj = new $Object(dict)
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Newobj, peers.ObjectCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, peers.ObjectCtor);
         il.Emit(OpCodes.Stloc, objLocal);
 
         // String exotic own properties have fixed descriptors: length is
@@ -390,7 +390,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, notNullLabel);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Newobj, objectCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, objectCtor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notNullLabel);
 
@@ -400,7 +400,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brfalse, notUndefLabel);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Newobj, objectCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, objectCtor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notUndefLabel);
 

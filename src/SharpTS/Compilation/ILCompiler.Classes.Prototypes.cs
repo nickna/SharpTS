@@ -172,19 +172,18 @@ public partial class ILCompiler
         if (nativeErrorPrototypePopulate != null)
             il.Emit(OpCodes.Call, nativeErrorPrototypePopulate);
 
-        il.Emit(OpCodes.Ldtoken, selfType);
-        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        var prototypeEmission = NativePrototypeFieldsLookup.EmitOwner(_nativePrototypeFields, _types, il, selfType);
         if ((typeBuilder.Attributes & TypeAttributes.Abstract) != 0)
         {
             // The guest prototype exists independently of its abstract CLR
             // owner. Concrete descendants still chain the bookkeeping constructor.
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-            il.Emit(OpCodes.Newobj, _runtime.ObjectStorage.Constructor);
+            NativePrototypeFieldsLookup.EmitPrototypeCreate(_nativePrototypeFields, il, prototypeEmission, _runtime.ObjectStorage.Constructor);
         }
         else
         {
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Newobj, constructor);
+            NativePrototypeFieldsLookup.EmitPrototypeCreate(_nativePrototypeFields, il, prototypeEmission, constructor);
         }
 
         Type? basePrototypeType = null;
@@ -203,7 +202,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         }
 
-        il.Emit(OpCodes.Call, _runtime.ClassPrototypes.Register);
+        NativePrototypeFieldsLookup.EmitRegister(_nativePrototypeFields, il, prototypeEmission, _runtime.ClassPrototypes.Register);
 
         // Create the constructor property before the source-ordered instance
         // member installer. Reflective operations use these stable descriptors

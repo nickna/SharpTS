@@ -119,13 +119,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldloc, lockLocal);
-        il.Emit(OpCodes.Newobj, runtime.RequirePromise().ResolveCallbackCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, runtime.RequirePromise().ResolveCallbackCtor);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldloc, lockLocal);
-        il.Emit(OpCodes.Newobj, runtime.RequirePromise().RejectCallbackCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, runtime.RequirePromise().RejectCallbackCtor);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Call, runtime.Invocation.Method);
         il.Emit(OpCodes.Pop);

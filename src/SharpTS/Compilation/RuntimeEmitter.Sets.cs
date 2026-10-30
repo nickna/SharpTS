@@ -103,7 +103,7 @@ public partial class RuntimeEmitter
         var ctorWithComparer = _types.GetConstructor(setType, [_types.IEqualityComparerOfObject])!;
 
         il.Emit(OpCodes.Ldsfld, collectionKeys.ComparerInstance);
-        il.Emit(OpCodes.Newobj, ctorWithComparer);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, ctorWithComparer);
         il.Emit(OpCodes.Ret);
     }
 
@@ -140,7 +140,7 @@ public partial class RuntimeEmitter
 
         // var set = new HashSet<object>($ReferenceEqualityComparer.Instance)
         il.Emit(OpCodes.Ldsfld, collectionKeys.ComparerInstance);
-        il.Emit(OpCodes.Newobj, ctorWithComparer);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, ctorWithComparer);
         il.Emit(OpCodes.Stloc, setLocal);
 
         // number[] unboxing: materialize a numeric-mode $Array before reading its base list.
@@ -461,7 +461,7 @@ public partial class RuntimeEmitter
         // return result;
         il.Emit(OpCodes.Ldloc, setLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Newobj, set.IteratorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, set.IteratorConstructor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
@@ -696,7 +696,7 @@ public partial class RuntimeEmitter
 
         // var result = new HashSet<object>($ReferenceEqualityComparer.Instance);
         il.Emit(OpCodes.Ldsfld, collectionKeys.ComparerInstance);
-        il.Emit(OpCodes.Newobj, ctorWithComparer);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, ctorWithComparer);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // if (set1 is HashSet<object> hashSet1)
@@ -792,7 +792,7 @@ public partial class RuntimeEmitter
 
         // var result = new HashSet<object>($ReferenceEqualityComparer.Instance);
         il.Emit(OpCodes.Ldsfld, collectionKeys.ComparerInstance);
-        il.Emit(OpCodes.Newobj, ctorWithComparer);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, ctorWithComparer);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // if (set1 is not HashSet<object> hashSet1) return result;
@@ -881,7 +881,7 @@ public partial class RuntimeEmitter
 
         // var result = new HashSet<object>($ReferenceEqualityComparer.Instance);
         il.Emit(OpCodes.Ldsfld, collectionKeys.ComparerInstance);
-        il.Emit(OpCodes.Newobj, ctorWithComparer);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, ctorWithComparer);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // if (set1 is not HashSet<object> hashSet1) return result;
@@ -977,7 +977,7 @@ public partial class RuntimeEmitter
 
         // var result = new HashSet<object>($ReferenceEqualityComparer.Instance);
         il.Emit(OpCodes.Ldsfld, collectionKeys.ComparerInstance);
-        il.Emit(OpCodes.Newobj, ctorWithComparer);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, ctorWithComparer);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // var hashSet1 = set1 as HashSet<object>;

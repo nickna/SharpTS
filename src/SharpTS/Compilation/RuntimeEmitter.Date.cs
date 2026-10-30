@@ -321,7 +321,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         // new $TSDate()
-        il.Emit(OpCodes.Newobj, date.NoArgsConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, date.NoArgsConstructor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -348,7 +348,7 @@ public partial class RuntimeEmitter
         // Double case: new $TSDate((double)value)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Newobj, date.MillisecondsConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, date.MillisecondsConstructor);
         il.Emit(OpCodes.Ret);
 
         // Date(value) copies the [[DateValue]] directly. It must not run the
@@ -360,7 +360,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, date.Type);
         il.Emit(OpCodes.Callvirt, date.GetInstanceMethod("GetTime"));
-        il.Emit(OpCodes.Newobj, date.MillisecondsConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, date.MillisecondsConstructor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(stringLabel);
@@ -372,12 +372,12 @@ public partial class RuntimeEmitter
         // String case: new $TSDate((string)value)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Newobj, date.StringConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, date.StringConstructor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(defaultLabel);
         // Default: new $TSDate()
-        il.Emit(OpCodes.Newobj, date.NoArgsConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, date.NoArgsConstructor);
         il.Emit(OpCodes.Ret);
     }
 

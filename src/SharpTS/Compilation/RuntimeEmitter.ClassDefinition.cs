@@ -99,7 +99,7 @@ public partial class RuntimeEmitter
         var definition = il.DeclareLocal(definitions.Type);
         var prototype = il.DeclareLocal(_types.Object);
         var templatePrototype = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Newobj, definitions.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, definitions.Constructor);
         il.Emit(OpCodes.Stloc, definition);
         il.Emit(OpCodes.Ldloc, definition);
         il.Emit(OpCodes.Ldarg_0);

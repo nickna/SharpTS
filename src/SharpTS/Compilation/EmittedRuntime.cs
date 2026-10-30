@@ -17,6 +17,7 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    internal NativePrototypeFieldsLookup? NativePrototypeFields { get; set; }
     internal NativeConstructorActivationLookup? NativeConstructorActivation { get; set; }
     internal NativeReceiverInitializerLookup? NativeReceiverInitializers { get; set; }
 

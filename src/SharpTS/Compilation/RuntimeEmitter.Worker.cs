@@ -980,7 +980,7 @@ public partial class RuntimeEmitter
 
         // Arg is null - create with length 0 using emitted length constructor
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, lengthCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, lengthCtor);
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(argNotNullLabel);
@@ -997,7 +997,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, nullableIntLocal);
         il.Emit(OpCodes.Initobj, typeof(int?));
         il.Emit(OpCodes.Ldloc, nullableIntLocal);  // length = null
-        il.Emit(OpCodes.Newobj, bufferCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, bufferCtor);
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(isEmittedSharedArrayBufferLabel);
@@ -1015,7 +1015,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, nullableIntLocal);
         il.Emit(OpCodes.Initobj, typeof(int?));
         il.Emit(OpCodes.Ldloc, nullableIntLocal);  // length = null
-        il.Emit(OpCodes.Newobj, bufferCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, bufferCtor);
         il.Emit(OpCodes.Br, endLabel);
 
         // Check if arg is $Array (JS array literal like [1, 2, 3])
@@ -1041,7 +1041,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LengthGetter);
             il.Emit(OpCodes.Stloc, arrLengthLocal);
             il.Emit(OpCodes.Ldloc, arrLengthLocal);
-            il.Emit(OpCodes.Newobj, lengthCtor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, lengthCtor);
             il.Emit(OpCodes.Stloc, arrResultLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Stloc, arrILocal);
@@ -1091,7 +1091,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, arrays.LengthGetter);
             il.Emit(OpCodes.Stloc, taLengthLocal);
             il.Emit(OpCodes.Ldloc, taLengthLocal);
-            il.Emit(OpCodes.Newobj, lengthCtor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, lengthCtor);
             il.Emit(OpCodes.Stloc, taResultLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Stloc, taILocal);
@@ -1153,7 +1153,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Newobj, lengthCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, lengthCtor);
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(unsupportedTypeLabel);
@@ -1210,7 +1210,7 @@ public partial class RuntimeEmitter
         // Use emitted length constructor directly
         il.Emit(OpCodes.Ldarg_0);  // length (double)
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Newobj, lengthCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, lengthCtor);
         il.Emit(OpCodes.Ret);
 
         // Create from SharedArrayBuffer: CreateInt8ArrayFromSAB(object sab, double byteOffset, object length)
@@ -1257,7 +1257,7 @@ public partial class RuntimeEmitter
         ilSAB.Emit(OpCodes.Initobj, typeof(int?));
         ilSAB.Emit(OpCodes.Ldloc, nullableIntLocal);
         ilSAB.MarkLabel(afterLength1);
-        ilSAB.Emit(OpCodes.Newobj, bufferCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, ilSAB, bufferCtor);
         ilSAB.Emit(OpCodes.Br, endLabel);
 
         ilSAB.MarkLabel(isEmittedSharedArrayBufferLabel);
@@ -1286,7 +1286,7 @@ public partial class RuntimeEmitter
         ilSAB.Emit(OpCodes.Initobj, typeof(int?));
         ilSAB.Emit(OpCodes.Ldloc, nullableIntLocal);
         ilSAB.MarkLabel(afterLength2);
-        ilSAB.Emit(OpCodes.Newobj, bufferCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, ilSAB, bufferCtor);
         ilSAB.Emit(OpCodes.Br, endLabel);
 
         // Non-emitted buffers are not supported in standalone mode.

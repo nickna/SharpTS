@@ -134,7 +134,7 @@ public partial class RuntimeEmitter
         // newObj = new $Object(new Dictionary<string, object>())
         var dictCtor = _types.GetDefaultConstructor(_types.DictionaryStringObject);
         il.Emit(OpCodes.Newobj, dictCtor);
-        il.Emit(OpCodes.Newobj, inputs.ObjectStorage.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.ObjectStorage.Constructor);
         il.Emit(OpCodes.Stloc, newObjLocal);
 
         // Per JS spec, `new F()` links the freshly-created object to F.prototype:

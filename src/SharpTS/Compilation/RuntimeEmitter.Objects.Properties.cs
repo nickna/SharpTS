@@ -1234,7 +1234,7 @@ public partial class RuntimeEmitter
 
         // Has "Call" method → wrap in $MethodCallable
         il.Emit(OpCodes.Ldloc, getMemberResultLocal);
-        il.Emit(OpCodes.Newobj, inputs.MethodCallableCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.MethodCallableCtor);
         il.Emit(OpCodes.Ret);
 
         // Return $TSFunction/$BoundTSFunction as-is

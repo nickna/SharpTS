@@ -30,6 +30,7 @@ public partial class ILCompiler
             Type.EmptyTypes
         );
         EmitEnsureFieldsBody(ensureFields, fieldsField);
+        _nativePrototypeFields?.RecordStore(typeBuilder, ensureFields);
 
         // get_Fields: Dictionary<string, object?> Fields { get; }
         var fieldsGetter = typeBuilder.DefineMethod(

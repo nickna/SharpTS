@@ -12,6 +12,9 @@ internal sealed class NativeConstructorActivationLookup
     private readonly List<NativeConstructorValueProducer> _producers = [];
     private readonly HashSet<Type> _intrinsics = new(ReferenceEqualityComparer.Instance);
     private NativeConstructorValueProducerSnapshot? _completed;
+    private readonly List<Type> _literalActivationOwners = [];
+    internal IReadOnlyList<Type> LiteralActivationOwners => IsComplete ? _literalActivationOwners.AsReadOnly() :
+        throw new InvalidOperationException("Literal activation producers have not completed.");
 
     internal NativeConstructorActivationLookup(ModuleBuilder module, TypeProvider types)
     {
@@ -198,6 +201,7 @@ internal sealed class NativeConstructorActivationLookup
             // would change overload selection, exceptions and initialization order.
             EmitType(il, owner.ExactTokenOwner); il.Emit(OpCodes.Ldarg_1);
             EmitActivator(il); il.Emit(OpCodes.Ret);
+            _literalActivationOwners.Add(owner.ExactTokenOwner);
             il.MarkLabel(next);
         }
         Refuse(il, errors);

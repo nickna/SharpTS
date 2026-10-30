@@ -135,9 +135,13 @@ public partial class RuntimeEmitter
         var ordinaryPrototype = il.DefineLabel();
         var nextPrototype = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, prototype); il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldstr, "$EnsureFields");
-        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        if (_nativePrototypeFields is not null) il.Emit(OpCodes.Call, _nativePrototypeFields.Find);
+        else
+        {
+            il.Emit(OpCodes.Ldstr, "$EnsureFields");
+            il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        }
         il.Emit(OpCodes.Stloc, dynamicStore);
         il.Emit(OpCodes.Ldloc, dynamicStore); il.Emit(OpCodes.Brfalse, ordinaryPrototype);
         il.Emit(OpCodes.Ldloc, dynamicStore); il.Emit(OpCodes.Ldloc, prototype);

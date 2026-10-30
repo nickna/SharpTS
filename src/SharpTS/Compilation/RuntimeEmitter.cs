@@ -21,6 +21,7 @@ public partial class RuntimeEmitter
     private readonly NativeConstructorActivationLookup? _nativeConstructorActivation;
     private readonly NativeReceiverInitializerLookup? _nativeReceiverInitializers;
     private readonly NativeOwnerClosure? _nativeOwnerClosure;
+    private readonly NativePrototypeFieldsLookup? _nativePrototypeFields;
 
     private void EmitRuntimeConstructorValue(ILGenerator il, Type type) =>
         NativeConstructorActivationLookup.EmitValue(_nativeConstructorActivation, _types, il, type,
@@ -50,7 +51,7 @@ public partial class RuntimeEmitter
         NativeConstructorFactoryLookup? nativeConstructorFactories = null,
         NativeConstructorActivationLookup? nativeConstructorActivation = null,
         NativeReceiverInitializerLookup? nativeReceiverInitializers = null,
-        NativeOwnerClosure? nativeOwnerClosure = null)
+        NativeOwnerClosure? nativeOwnerClosure = null, NativePrototypeFieldsLookup? nativePrototypeFields = null)
     {
         _types = types;
         _emitHosted = emitHosted;
@@ -64,6 +65,7 @@ public partial class RuntimeEmitter
         _nativeConstructorActivation = nativeConstructorActivation;
         _nativeReceiverInitializers = nativeReceiverInitializers;
         _nativeOwnerClosure = nativeOwnerClosure;
+        _nativePrototypeFields = nativePrototypeFields;
     }
 
     /// <summary>
@@ -88,6 +90,7 @@ public partial class RuntimeEmitter
         _nativeConstructorActivation?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         _nativeReceiverInitializers?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         _nativeOwnerClosure?.ValidateForEmitter(moduleBuilder, _emitNativeCallables, features.UsesUserClasses);
+        _nativePrototypeFields?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         functionPolicy.NativeConstructedBodies?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         if (_nativeStaticFieldLookup is { } fields &&
             (!_emitNativeCallables || !ReferenceEquals(fields.Module, moduleBuilder) || !fields.IsStatic || fields.IsGenericMethod ||
@@ -110,7 +113,8 @@ public partial class RuntimeEmitter
         var runtime = new EmittedRuntime
         {
             NativeConstructorActivation = _nativeConstructorActivation,
-            NativeReceiverInitializers = _nativeReceiverInitializers
+            NativeReceiverInitializers = _nativeReceiverInitializers,
+            NativePrototypeFields = _nativePrototypeFields
         };
         if (nativeConstructorMetadata is not null)
         {

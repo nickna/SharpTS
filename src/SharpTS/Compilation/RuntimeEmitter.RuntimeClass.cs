@@ -561,7 +561,7 @@ public partial class RuntimeEmitter
 
         // Object.prototype starts empty; populated lazily by
         // EmitObjectPrototypePopulate-emitted helper on first read.
-        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, cctorIL, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         cctorIL.Emit(OpCodes.Stsfld, objectPrototypeField);
 
         // Error.prototype starts empty; populated by EmitErrorPrototypePopulate
@@ -582,7 +582,7 @@ public partial class RuntimeEmitter
 
         // Function.prototype starts empty; populated by
         // EmitFunctionPrototypePopulate (eagerly invoked from cctor tail).
-        cctorIL.Emit(OpCodes.Newobj, runtime.FunctionPrototypes.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, cctorIL, runtime.FunctionPrototypes.Constructor);
         cctorIL.Emit(OpCodes.Stsfld, functionPrototypeField);
 
         // RegExp.prototype starts empty; populated by
