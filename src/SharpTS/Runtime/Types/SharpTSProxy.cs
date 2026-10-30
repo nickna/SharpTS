@@ -2024,6 +2024,8 @@ public class SharpTSProxy : ISharpTSCallable
             return obj.DeletePropertyStrict(prop, false);
         if (_target is SharpTSInstance inst)
             return inst.DeleteFieldStrict(prop, false);
+        if (_target is SharpTSClassPrototype prototype)
+            return prototype.DeleteProperty(prop);
         if (_target is Dictionary<string, object?> dict)
             return dict.Remove(prop);
         if (_target is SharpTSFunction function)
