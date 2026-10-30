@@ -28,7 +28,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         Type UndefinedType,
         MethodInfo? NativeProxyRejection,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        Type? DateConstructor = null
     );
 
     private readonly record struct DeletePropertyCoreInputs(
@@ -51,7 +52,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         Type UndefinedType,
         MethodInfo? NativeProxyRejection,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        Type? DateConstructor = null
     );
 
     private readonly record struct DeletePropertyStrictInputs(
@@ -74,7 +76,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         Type UndefinedType,
         MethodInfo? NativeProxyRejection,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        Type? DateConstructor = null
     );
 
     /// <summary>
@@ -113,7 +116,8 @@ public partial class RuntimeEmitter
                 inputs.TSFunctionType,
                 inputs.UndefinedType,
                 NativeProxyRejection: inputs.NativeProxyRejection,
-                GuestOwnProperties: inputs.GuestOwnProperties
+                GuestOwnProperties: inputs.GuestOwnProperties,
+                DateConstructor: inputs.DateConstructor
             ),
             strict: false
         );
@@ -656,13 +660,15 @@ public partial class RuntimeEmitter
             EmitObjectMethodDelCheck("setPrototypeOf"); EmitObjectMethodDelCheck("values");
             il.MarkLabel(objTypeDelLabel);
 
-            foreach (var (constructor, names) in new (Type, string[])[]
+            foreach (var (constructor, names) in new (Type?, string[])[]
             {
                 (_types.IListOfObject, ["from", "fromAsync", "isArray", "of"]),
                 (_types.Double, ["isFinite", "isInteger", "isNaN", "isSafeInteger", "parseFloat", "parseInt"]),
-                (_types.String, ["fromCharCode", "fromCodePoint", "raw"])
+                (_types.String, ["fromCharCode", "fromCodePoint", "raw"]),
+                (inputs.DateConstructor, ["now", "UTC", "parse"])
             })
             {
+                if (constructor is null) continue;
                 var nextConstructor = il.DefineLabel();
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldtoken, constructor);
@@ -1287,7 +1293,8 @@ public partial class RuntimeEmitter
                 inputs.TSFunctionType,
                 inputs.UndefinedType,
                 NativeProxyRejection: inputs.NativeProxyRejection,
-                GuestOwnProperties: inputs.GuestOwnProperties
+                GuestOwnProperties: inputs.GuestOwnProperties,
+                DateConstructor: inputs.DateConstructor
             ),
             strict: true
         );

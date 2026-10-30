@@ -1508,7 +1508,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
-                GuestOwnProperties: runtime.GuestOwnProperties
+                GuestOwnProperties: runtime.GuestOwnProperties,
+                DateConstructor: runtime.Dates.Implementation?.Type
             )
         );
         EmitDeletePropertyStrict(
@@ -1534,7 +1535,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
-                GuestOwnProperties: runtime.GuestOwnProperties
+                GuestOwnProperties: runtime.GuestOwnProperties,
+                DateConstructor: runtime.Dates.Implementation?.Type
             )
         );
         EmitMergeIntoTSObject(
