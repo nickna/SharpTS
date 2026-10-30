@@ -51,7 +51,7 @@ internal sealed partial class RawCallStorageAnalysis
             _rawSlots.Add(slot.Declaration);
             if (map.GetValueBinding(slot.Name) is { } binding) _rawBindings.Add(binding);
         }
-        _ = SeedNumericUpdates();
+        _ = SeedNumericOperations();
     }
 
     internal static RawCallStorageAnalysis Capture(IEnumerable<Stmt> statements, TypeMap map,
@@ -102,7 +102,7 @@ internal sealed partial class RawCallStorageAnalysis
 
     internal bool Propagate(Func<Expr, Evidence, bool> passesRawValue)
     {
-        bool changed = SeedNumericUpdates();
+        bool changed = SeedNumericOperations();
         if (HasNumericProducer) changed |= PropagateCallableValues();
         foreach (var flow in _flows)
             changed |= MarkRawFlow(flow.Target, flow.Declaration,
@@ -244,11 +244,17 @@ internal sealed partial class RawCallStorageAnalysis
             if (collect && _emittedSourceBody) Analysis._argumentSites.Add(new(null, Array.AsReadOnly(tagged.Expressions.ToArray())));
             base.VisitTaggedTemplateLiteral(tagged);
         }
+        protected override void VisitUnary(Expr.Unary expression)
+        {
+            if (collect && _emittedSourceBody && expression.Operator.Type is TokenType.MINUS or TokenType.TILDE)
+                Analysis._numericOperations.Add((expression, expression.Right));
+            base.VisitUnary(expression);
+        }
         protected override void VisitPrefixIncrement(Expr.PrefixIncrement update)
         {
             if (collect && _emittedSourceBody)
             {
-                Analysis._numericUpdates.Add((update, update.Operand));
+                Analysis._numericOperations.Add((update, update.Operand));
                 if (update.Operand is Expr.Get or Expr.GetIndex or Expr.GetPrivate or Expr.Super)
                     Analysis._argumentSites.Add(new(null, Array.AsReadOnly<Expr>([update])));
             }
@@ -258,7 +264,7 @@ internal sealed partial class RawCallStorageAnalysis
         {
             if (collect && _emittedSourceBody)
             {
-                Analysis._numericUpdates.Add((update, update.Operand));
+                Analysis._numericOperations.Add((update, update.Operand));
                 if (update.Operand is Expr.Get or Expr.GetIndex or Expr.GetPrivate or Expr.Super)
                     Analysis._argumentSites.Add(new(null, Array.AsReadOnly<Expr>([update])));
             }

@@ -106,7 +106,7 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
                 && (PassesRawCall(binary.Left, RawCallStorageAnalysis.Evidence.Numeric)
                     | PassesRawCall(binary.Right, RawCallStorageAnalysis.Evidence.Numeric)),
             Expr.Unary unary when unary.Operator.Type is TokenType.MINUS or TokenType.TILDE => evidence != RawCallStorageAnalysis.Evidence.Call
-                && PassesRawCall(unary.Right, RawCallStorageAnalysis.Evidence.Numeric),
+                && (map.IsRawNumericResult(unary) || PassesRawCall(unary.Right, RawCallStorageAnalysis.Evidence.Numeric)),
             Expr.TaggedTemplateLiteral tagged => (evidence != RawCallStorageAnalysis.Evidence.Numeric || storage?.HasNumericProducer == true)
                 && (IsPrimitive(map.Get(tagged)) || map.Get(tagged) is TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Inferred
                     || tagged.Expressions.Any(argument => PassesRawCall(argument, evidence))),

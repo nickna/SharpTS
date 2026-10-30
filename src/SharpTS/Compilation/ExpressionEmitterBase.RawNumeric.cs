@@ -7,7 +7,7 @@ public abstract partial class ExpressionEmitterBase
 {
     protected bool TryEmitRawNumericUnary(Expr.Unary expression)
     {
-        if (!HasRawNumericValue(expression.Right) || expression.Operator.Type is not
+        if (!(Ctx.TypeMap?.IsRawNumericResult(expression) == true || HasRawNumericValue(expression.Right)) || expression.Operator.Type is not
                 (TokenType.PLUS or TokenType.MINUS or TokenType.TILDE)) return false;
         var operand = SpillBoxed(expression.Right);
         IL.Emit(OpCodes.Ldloc, operand);

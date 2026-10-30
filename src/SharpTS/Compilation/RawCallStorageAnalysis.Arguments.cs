@@ -24,7 +24,7 @@ internal sealed partial class RawCallStorageAnalysis
     private readonly HashSet<Stmt.Parameter> _sourceParameters = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<BindingSymbol, PossibleProducers> _possibleProducers = new(ReferenceEqualityComparer.Instance);
     private readonly List<ArgumentSite> _argumentSites = [];
-    private readonly List<(Expr Update, Expr Operand)> _numericUpdates = [];
+    private readonly List<(Expr Result, Expr Operand)> _numericOperations = [];
 
     private bool _hasNumericProducer;
     internal bool HasNumericProducer => _hasNumericProducer;
@@ -81,11 +81,16 @@ internal sealed partial class RawCallStorageAnalysis
         }
     }
 
-    private bool SeedNumericUpdates()
+    private bool SeedNumericOperations()
     {
         bool changed = false;
-        foreach (var (update, operand) in _numericUpdates)
-            if (MayContainBigInt(_map.Get(operand)) || operand switch
+        foreach (var (result, operand) in _numericOperations)
+        {
+            bool possibleBigInt = result is Expr.Unary
+                ? UnaryMayProduceBigInt(_map.Get(operand))
+                    || UnaryMayProduceBigInt(_map.Get(ExpressionUnwrapper.Unwrap(operand)))
+                : MayContainBigInt(_map.Get(operand));
+            if (possibleBigInt || operand switch
                 {
                     Expr.Variable variable => IsRawBinding(variable.Name, Evidence.Any)
                         || _map.IsAssertedAssignmentStorage(variable.Name),
@@ -93,8 +98,10 @@ internal sealed partial class RawCallStorageAnalysis
                     Expr.GetIndex { Object: Expr.Variable array } => IsRawBinding(array.Name, Evidence.Numeric),
                     _ => false
                 })
-                changed |= _map.MarkRawNumericResult(update);
-        if (!_hasNumericProducer && _numericUpdates.Any(update => _map.IsRawNumericResult(update.Update)))
+                foreach (var expression in EquivalentExpressions(result))
+                    changed |= _map.MarkRawNumericResult(expression);
+        }
+        if (!_hasNumericProducer && _numericOperations.Any(operation => _map.IsRawNumericResult(operation.Result)))
         {
             _hasNumericProducer = true;
             changed = true;
@@ -104,10 +111,23 @@ internal sealed partial class RawCallStorageAnalysis
 
     private static bool MayContainBigInt(TypeInfo? type) => type switch
     {
-        TypeInfo.Any or TypeInfo.Inferred or TypeInfo.BigInt or TypeInfo.BigIntLiteral => true,
+        TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Inferred or TypeInfo.BigInt or TypeInfo.BigIntLiteral => true,
         TypeInfo.Union union => union.FlattenedTypes.Any(MayContainBigInt),
         TypeInfo.TypeParameter { Constraint: { } constraint } => MayContainBigInt(constraint),
         _ => false
+    };
+
+    // Object operands can produce BigInt through ToPrimitive, including behind
+    // a numeric assertion. Only primitive kinds exclude that runtime result.
+    private static bool UnaryMayProduceBigInt(TypeInfo? type) => type switch
+    {
+        TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER or TokenType.TYPE_STRING or TokenType.TYPE_BOOLEAN }
+            or TypeInfo.NumberLiteral or TypeInfo.String or TypeInfo.StringLiteral or TypeInfo.TemplateLiteralType
+            or TypeInfo.BooleanLiteral or TypeInfo.Null or TypeInfo.Undefined or TypeInfo.Symbol
+            or TypeInfo.UniqueSymbol or TypeInfo.Never => false,
+        TypeInfo.Union union => union.FlattenedTypes.Any(UnaryMayProduceBigInt),
+        TypeInfo.TypeParameter { Constraint: { } constraint } => UnaryMayProduceBigInt(constraint),
+        _ => true
     };
 
     private bool PropagateArguments(Func<Expr, Evidence, bool> passesRawValue)
