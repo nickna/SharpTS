@@ -28,6 +28,7 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// </summary>
     private readonly SharpTSObject _properties = new([]);
     private readonly HashSet<string> _deletedProperties = new(StringComparer.Ordinal);
+    private HashSet<string>? _vmWrittenProperties;
     private readonly Func<string, object?>? _realmIntrinsicResolver;
 
     // internal (not private) so each Interpreter can construct its own realm
@@ -82,7 +83,9 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
                 descriptor.HasConfigurable = true;
             }
         }
-        return _properties.DefineProperty(name, descriptor);
+        bool applied = _properties.DefineProperty(name, descriptor);
+        if (applied) _vmWrittenProperties?.Add(name);
+        return applied;
     }
 
     internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
@@ -243,6 +246,7 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     {
         _deletedProperties.Remove(name);
         _properties.SetProperty(name, value);
+        _vmWrittenProperties?.Add(name);
     }
 
     internal bool DeleteProperty(string name)
@@ -255,6 +259,18 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
 
     internal IEnumerable<string> OwnEnumerableKeys()
         => _properties.OwnEnumerableKeys();
+
+    internal IEnumerable<KeyValuePair<string, object?>> UserOwnDataProperties()
+    {
+        foreach (var name in _properties.PropertyNames)
+            if ((_vmWrittenProperties is null || _vmWrittenProperties.Contains(name))
+                && _properties.GetOwnPropertyDescriptor(name) is { HasValue: true } descriptor)
+                yield return new(name, descriptor.Value);
+    }
+
+    // Uninitialized var bindings exist inside the VM global, but Node does
+    // not publish them onto the context object until a write actually occurs.
+    internal void BeginVmWriteTracking() => _vmWrittenProperties = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Checks if a property exists on globalThis.

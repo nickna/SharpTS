@@ -120,23 +120,29 @@ public static class VmContext
     /// <summary>
     /// Writes mutations back from a RuntimeEnvironment to the context object.
     /// </summary>
-    public static void WriteBack(object? contextObject, Dictionary<string, object?> originalProperties, RuntimeEnvironment env)
+    public static void WriteBack(object? contextObject, Dictionary<string, object?> originalProperties,
+        RuntimeEnvironment env, SharpTSGlobalThis? globalObject = null)
     {
+        var properties = new Dictionary<string, object?>();
+        foreach (var name in originalProperties.Keys)
+            if (env.TryGet(name, out var value))
+                properties[name] = value.ToObject();
+        // The actual global object owns classic var storage. Its user data
+        // records include newly declared globals without reading accessors or
+        // exposing lexical bindings and the intrinsic inventory.
+        if (globalObject is not null)
+            foreach (var (name, value) in globalObject.UserOwnDataProperties())
+                properties[name] = value;
+
         if (contextObject is SharpTSObject tsObj)
         {
-            foreach (var name in originalProperties.Keys)
-            {
-                if (env.TryGet(name, out var value))
-                    tsObj.SetProperty(name, value.ToObject());
-            }
+            foreach (var (name, value) in properties)
+                tsObj.SetProperty(name, value);
         }
         else if (contextObject is Dictionary<string, object?> dict)
         {
-            foreach (var name in originalProperties.Keys)
-            {
-                if (env.TryGet(name, out var value))
-                    dict[name] = value.ToObject();
-            }
+            foreach (var (name, value) in properties)
+                dict[name] = value;
         }
         else if (contextObject != null)
         {
@@ -152,11 +158,8 @@ public static class VmContext
                     type, "SetProperty", [typeof(string), typeof(object)]);
             if (setMethod != null)
             {
-                foreach (var name in originalProperties.Keys)
-                {
-                    if (env.TryGet(name, out var value))
-                        setMethod.Invoke(contextObject, [name, value.ToObject()]);
-                }
+                foreach (var (name, value) in properties)
+                    setMethod.Invoke(contextObject, [name, value]);
             }
         }
     }

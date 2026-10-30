@@ -227,13 +227,14 @@ public static class VmModuleInterpreter
             var resolver = new VariableResolver(subInterpreter);
             resolver.Resolve(statements);
 
+            subInterpreter.PrepareVmGlobalVarBindings(statements);
             var result = subInterpreter.InterpretRepl(statements);
 
             // Drain queued microtasks when microtaskMode:'afterEvaluate'.
             DrainContextMicrotasks(subInterpreter, contextOptions);
 
             // Write mutations back to context object
-            VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment);
+            VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment, subInterpreter.GlobalThis);
 
             return result;
         }
@@ -309,11 +310,12 @@ public static class VmModuleInterpreter
             var resolver = new VariableResolver(subInterpreter);
             resolver.Resolve(statements);
 
+            subInterpreter.PrepareVmGlobalVarBindings(statements);
             var result = subInterpreter.InterpretRepl(statements);
 
             DrainContextMicrotasks(subInterpreter, contextOptions);
 
-            VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment);
+            VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment, subInterpreter.GlobalThis);
 
             return result;
         }
