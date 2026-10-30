@@ -1187,7 +1187,7 @@ public partial class RuntimeEmitter
         var tcsField = typeBuilder.DefineField("_tcs", typeof(TaskCompletionSource<object?>), FieldAttributes.Private);
         var lockField = typeBuilder.DefineField("_lock", _types.Object, FieldAttributes.Private);
         var settledField = typeBuilder.DefineField("_settled", typeof(bool), FieldAttributes.Private);
-        var rootField = typeBuilder.DefineField("_root", _types.TaskOfObject, FieldAttributes.Private);
+        var rootField = typeBuilder.DefineField("_root", _types.Object, FieldAttributes.Private);
         var sharedSettledType = typeof(System.Runtime.CompilerServices.StrongBox<bool>);
         var sharedSettledValue = sharedSettledType.GetField("Value")!;
 
@@ -1277,7 +1277,7 @@ public partial class RuntimeEmitter
         var rootedCtor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_types.TaskCompletionSourceOfObject, _types.Object, _types.TaskOfObject]);
+            [_types.TaskCompletionSourceOfObject, _types.Object, _types.Object]);
         {
             var il = rootedCtor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -1365,9 +1365,29 @@ public partial class RuntimeEmitter
             // Check the original public task before any observable `then` Get.
             // Only exact task identity counts: a distinct wrapper or foreign
             // promise retains its own resolving functions and ownership.
-            il.Emit(OpCodes.Ldloc, valueLocal);
+            var rootCellType = _types.MakeGenericType(_types.StrongBoxOpen, _types.TaskOfObject);
+            var rootCell = il.DeclareLocal(rootCellType);
+            var rootTask = il.DeclareLocal(_types.TaskOfObject);
+            var rawRoot = il.DefineLabel();
+            var compareRoot = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, rootField);
+            il.Emit(OpCodes.Isinst, rootCellType);
+            il.Emit(OpCodes.Stloc, rootCell);
+            il.Emit(OpCodes.Ldloc, rootCell);
+            il.Emit(OpCodes.Brfalse, rawRoot);
+            il.Emit(OpCodes.Ldloc, rootCell);
+            il.Emit(OpCodes.Ldfld, _types.GetField(rootCellType, "Value"));
+            il.Emit(OpCodes.Stloc, rootTask);
+            il.Emit(OpCodes.Br, compareRoot);
+            il.MarkLabel(rawRoot);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, rootField);
+            il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+            il.Emit(OpCodes.Stloc, rootTask);
+            il.MarkLabel(compareRoot);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Ldloc, rootTask);
             il.Emit(OpCodes.Beq, selfResolutionLabel);
 
             // ECMAScript Promise Resolve Functions only perform thenable

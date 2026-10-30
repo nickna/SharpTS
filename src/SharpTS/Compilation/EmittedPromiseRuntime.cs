@@ -367,7 +367,7 @@ public sealed class EmittedPromiseRuntime
     }
 
     private MethodBuilder? _resolveValueWithRootMethod;
-    /// <summary>Recursive thenable resolution retaining the original public capability's task identity.</summary>
+    /// <summary>Recursive thenable resolution retaining a public Task or the async return's exact Task cell.</summary>
     public MethodBuilder ResolveValueWithRootMethod
     {
         get => Require(_resolveValueWithRootMethod);

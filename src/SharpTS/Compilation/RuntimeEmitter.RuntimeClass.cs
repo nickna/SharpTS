@@ -810,7 +810,7 @@ public partial class RuntimeEmitter
                 "PromiseResolveValueWithRoot",
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.TaskOfObject,
-                [_types.Object, _types.TaskOfObject]);
+                [_types.Object, _types.Object]);
             runtime.RequirePromise().ResolvePreparedPromiseCapabilityMethod = typeBuilder.DefineMethod(
                 "ResolvePreparedPromiseCapability",
                 MethodAttributes.Public | MethodAttributes.Static,
