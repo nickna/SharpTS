@@ -63,6 +63,7 @@ public static partial class VmModuleInterpreter
         {
             RecordVmErrorValue(exception.Value, receipt.Owner);
             RetainVmErrorValue(exception.Value);
+            exception.Data["__tsValue"] = VmExecutionHost.Current is { } host ? host.FromVm(exception.Value) : exception.Value;
             throw;
         }
         finally { receipt.RetainedLease?.Publish(); }

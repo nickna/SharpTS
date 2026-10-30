@@ -732,6 +732,14 @@ public static partial class VmModuleInterpreter
             // Guest-created Error instances record their actual syntax origin at
             // creation. This separate path retains the existing host timeout error.
             PrependOriginFrame(err, origin);
+            te.Data["__tsValue"] = VmExecutionHost.Current is { } host ? host.FromVm(te.Value) : te.Value;
+            throw;
+        }
+        catch (Runtime.Exceptions.ThrowException te)
+        {
+            // The generated managed catch boundary already consumes this payload.
+            // Keep the actual guest value rather than reconstructing from Message.
+            te.Data["__tsValue"] = VmExecutionHost.Current is { } host ? host.FromVm(te.Value) : te.Value;
             throw;
         }
         finally

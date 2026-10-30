@@ -85,6 +85,7 @@ public static partial class VmModuleInterpreter
         catch (Exceptions.ThrowException exception)
         {
             RecordVmBoundaryValue(exception.Value, receipt.Owner);
+            exception.Data["__tsValue"] = VmExecutionHost.Current is { } host ? host.FromVm(exception.Value) : exception.Value;
             throw;
         }
         finally { receipt.Lease?.Publish(); }
