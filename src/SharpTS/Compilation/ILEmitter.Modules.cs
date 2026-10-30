@@ -531,6 +531,9 @@ public partial class ILEmitter
 
                 if (exportFields.TryGetValue(exportedName, out var field))
                 {
+                    if (_ctx.TopLevelStaticVars?.TryGetValue(localName, out var liveField) == true &&
+                        ReferenceEquals(liveField, field))
+                        continue;
                     var local = _ctx.Locals.GetLocal(localName);
                     if (local != null)
                     {
@@ -672,6 +675,17 @@ public partial class ILEmitter
     /// Emits a TSFunction reference for a method (used for function exports).
     /// Creates: new TSFunction(null, methodInfo)
     /// </summary>
+    internal void EmitHoistedModuleFunction(Stmt.Function declaration, FieldBuilder field)
+    {
+        // The caller supplies an actual top-level declaration from this module;
+        // resolve only that module's predeclared method, without the legacy
+        // unqualified export lookup fallback.
+        if (!_ctx.Functions.TryGetValue(_ctx.GetQualifiedFunctionName(declaration.Name.Lexeme), out var method))
+            throw new InvalidOperationException("An exported function has no declared module method.");
+        EmitFunctionReference(declaration.Name.Lexeme, method);
+        IL.Emit(OpCodes.Stsfld, field);
+    }
+
     private void EmitFunctionReference(string name, MethodBuilder method)
     {
         // Create TSFunction(null, methodInfo) - same pattern as arrow functions

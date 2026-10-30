@@ -1345,6 +1345,49 @@ public sealed class HostedInterpreterRuntimeTests
         Assert.Equal([(13, dispatcher.OwnerThreadId)], lifetime.Exits);
     }
 
+    [Fact]
+    public void CompiledHostedTopLevelAwait_HoistsFunctionIdentityBeforeSuspension()
+    {
+        SharpTSProgram program = CreateProgram(
+            new Dictionary<string, string>
+            {
+                ["dependency.ts"] = """
+                    export const original = increment;
+                    export default increment(11) + await Promise.resolve(1);
+                    export function increment(value: number): number { return value + 1; }
+                    """,
+                ["main.ts"] = """
+                    import answer, { original, increment } from './dependency';
+                    function main(): number { return original === increment ? answer : 1; }
+                    export {};
+                    """,
+            },
+            "main.ts");
+        var compiler = new ILCompiler($"hosted_tla_default_export_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(
+            program.RuntimeModules.ToList(),
+            program.Resolver,
+            program.TypeMap);
+
+        byte[] bytes = compiler.SaveToBytes();
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        using var assemblyStream = new MemoryStream(bytes);
+        Assert.Empty(verifier.Verify(assemblyStream));
+        var dispatcher = new DeterministicHostDispatcher();
+        var lifetime = new RecordingLifetime();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(bytes),
+            dispatcher,
+            lifetime,
+            new RecordingErrorSink());
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => runtime.State == SharpTSHostedRuntimeState.Stopped);
+        initialization.GetAwaiter().GetResult();
+
+        Assert.Equal([(13, dispatcher.OwnerThreadId)], lifetime.Exits);
+    }
+
     [Theory]
     [InlineData("13", true)]
     [InlineData("null", false)]

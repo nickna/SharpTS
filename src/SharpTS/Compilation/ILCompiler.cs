@@ -1538,6 +1538,9 @@ public partial class ILCompiler
                 DefineModuleType(module);
             }
         }
+        PrepareLiveModuleBindings(modules);
+        foreach (var module in modules.Where(module => !module.IsCommonJs && _modules.Types.ContainsKey(module.Path)))
+            EmitModuleGetNamespace(module, _modules.Types[module.Path], _modules.ExportFields[module.Path]);
     }
 
     /// <summary>
@@ -2363,6 +2366,8 @@ public partial class ILCompiler
                 return;
             }
 
+            if (path != null && _liveModuleDeclarations.Contains(stmt)) return;
+
             string? varName = stmt switch
             {
                 Stmt.Var { IsDeclare: false } v => v.Name.Lexeme,
@@ -2725,6 +2730,7 @@ public partial class ILCompiler
     /// </remarks>
     private void DefineModuleScopedTopLevelStaticField(Stmt stmt, string? modulePath, Dictionary<string, FieldBuilder>? moduleDict)
     {
+        if (modulePath != null && _liveModuleDeclarations.Contains(stmt)) return;
         if (stmt is Stmt.Sequence seq)
         {
             foreach (var inner in seq.Statements)

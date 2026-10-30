@@ -246,7 +246,7 @@ public partial class ILCompiler
             // write after this function was created. Preserve the actual value
             // unless whole-program analysis proves its numeric representation.
             if ((returnType == _types.Double || returnType == _types.Boolean)
-                && captures.Any(name => _typeMap?.IsStableNumericCaptureField(arrow, name) != true))
+                && OriginalModuleCaptures(arrow, captures).Any(name => _typeMap?.IsStableNumericCaptureField(arrow, name) != true))
                 returnType = _types.Object;
             if (arrow.IsGenerator)
                 returnType = arrow.IsAsync ? _types.IAsyncEnumerableOfObject : _types.IEnumerableOfObject;
@@ -832,7 +832,7 @@ public partial class ILCompiler
                 CollectArrowsFromExpr(da.ResultValue);
                 break;
             case Expr.ArrowFunction af:
-                var captures = _closures.Analyzer.GetCaptures(af);
+                var captures = new HashSet<string>(_closures.Analyzer.GetCaptures(af));
                 if (!af.HasOwnThis && captures.Contains("this") && ClassNeedsConstructorReceiver(_currentCollectClassName)
                     && (_collectingInstanceFieldInitializer || IsConstructorThisArrowParent(_currentEnclosingCallable)))
                 {
@@ -849,6 +849,7 @@ public partial class ILCompiler
                     && ((_currentCollectStaticClassContext && captures.Contains("this"))
                         || ArrowUsesClassDefinition(af)))
                     captures.Add(CompilationContext.SuperOwnerCaptureName);
+                RemoveLiveModuleCaptures(af, captures, _modules.CurrentPath);
                 _collectedArrows.Add((af, captures));
                 if (_currentCollectClassName != null || _currentCollectStrict)
                     _strictArrows.Add(af);

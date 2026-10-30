@@ -208,8 +208,7 @@ public partial class ILCompiler
         // Track which exports are classes (for direct constructor calls in importing modules)
         TrackClassExports(module);
 
-        // Create $GetNamespace method that returns all exports as SharpTSObject
-        EmitModuleGetNamespace(module, moduleType, exportFields);
+        // Namespace bodies are emitted after live export aliases are resolved.
     }
 
     /// <summary>
@@ -698,6 +697,7 @@ public partial class ILCompiler
         // BuildTopLevelStaticVarsForModule in CreateModuleTopLevelContext.
 
         var emitter = new ILEmitter(ctx);
+        EmitLiveModuleFunctionInitialization(module, emitter);
         bool hasHostedTopLevelAwait = _hosted && TopLevelAwaitDetector.Contains(module.Statements);
         if (hasHostedTopLevelAwait)
         {
@@ -923,7 +923,7 @@ public partial class ILCompiler
             {
                 MethodBuilder asyncStep = EmitHostedAsyncModuleStep(
                     _functions.Builders[runnerKey],
-                    module.Path,
+                    module,
                     _moduleInitializedFields.GetValueOrDefault(module.Path),
                     wrapperIndex++);
                 Stmt[] importPrelude = module.Statements
@@ -1031,7 +1031,7 @@ public partial class ILCompiler
 
     private MethodBuilder EmitHostedAsyncModuleStep(
         MethodBuilder runner,
-        string modulePath,
+        ParsedModule module,
         FieldBuilder? initializedField,
         int index)
     {
@@ -1052,8 +1052,10 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Stsfld, initializedField);
         }
+        var emitter = new ILEmitter(CreateHostedModuleStepContext(module, il, method));
+        EmitLiveModuleFunctionInitialization(module, emitter);
         il.Emit(OpCodes.Call, runner);
-        il.Emit(OpCodes.Ldstr, modulePath);
+        il.Emit(OpCodes.Ldstr, module.Path);
         il.Emit(OpCodes.Call, typeof(SharpTSHostedRuntimeBase).GetMethod(
             nameof(SharpTSHostedRuntimeBase.AttributeModuleInitialization))!);
         il.Emit(OpCodes.Ret);
