@@ -287,9 +287,10 @@ public class LocalVariableResolver : IVariableResolver
         return false;
     }
 
-    internal StackType? TryLoadParameter(string name)
+    internal StackType? TryLoadParameter(string name, LocalBuilder? fallbackLocal = null)
     {
-        if (!_ctx.TryGetParameter(name, out var argIndex)) return null;
+        bool hasArgument = _ctx.TryGetParameter(name, out var argIndex);
+        if (!hasArgument && fallbackLocal is null) return null;
 
         // Once seeded, this callable's own shared storage is authoritative.
         // A parent display-class reference never supplies an owned parameter.
@@ -320,6 +321,11 @@ public class LocalVariableResolver : IVariableResolver
             // fits the original argument slot. The shared field is the value's
             // authoritative representation after parameter initialization.
             return MapTypeToStackType(field.FieldType);
+        }
+        else if (!hasArgument && fallbackLocal is not null)
+        {
+            _il.Emit(OpCodes.Ldloc, fallbackLocal);
+            return MapTypeToStackType(fallbackLocal.LocalType);
         }
         else
             _il.Emit(OpCodes.Ldarg, argIndex);

@@ -38,12 +38,14 @@ public partial class ILEmitter
         }
     }
 
-    internal void EmitConstructorParameterProperty(Stmt statement)
+    internal void EmitConstructorParameterProperty(Stmt statement, LocalBuilder? parameterLocal = null)
     {
         var value = ((Expr.Set)((Stmt.Expression)statement).Expr).Value as Expr.Variable
             ?? throw new InvalidOperationException("Expected a synthetic constructor parameter property.");
         var previous = _constructorParameterPropertyValue;
+        var previousLocal = _constructorParameterPropertyLocal;
         _constructorParameterPropertyValue = value;
+        _constructorParameterPropertyLocal = parameterLocal;
         try
         {
             EmitStatement(statement);
@@ -51,6 +53,7 @@ public partial class ILEmitter
         finally
         {
             _constructorParameterPropertyValue = previous;
+            _constructorParameterPropertyLocal = previousLocal;
         }
     }
 
@@ -62,7 +65,7 @@ public partial class ILEmitter
         // the lexical environment containing that super() call.
         if (ReferenceEquals(v, _constructorParameterPropertyValue))
         {
-            SetStackType(_resolver.TryLoadParameter(name)
+            SetStackType(_resolver.TryLoadParameter(name, _constructorParameterPropertyLocal)
                 ?? throw new InvalidOperationException("Constructor parameter property has no parameter binding."));
             return;
         }

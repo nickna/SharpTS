@@ -747,6 +747,11 @@ public partial class ILEmitter
         var local = _ctx.Locals.GetLocal(ca.Name.Lexeme);
         FieldBuilder? topLevelField = null;
         _ctx.TopLevelStaticVars?.TryGetValue(ca.Name.Lexeme, out topLevelField);
+        if (HasOwnedReceiverParameterCapture(ca.Name.Lexeme))
+        {
+            local = null;
+            topLevelField = null;
+        }
 
         // Special case: string concatenation with +=
         if (ca.Operator.Type == TokenType.PLUS_EQUAL && IsStringExpression(ca.Value))
@@ -971,6 +976,11 @@ public partial class ILEmitter
         var local = _ctx.Locals.GetLocal(la.Name.Lexeme);
         FieldBuilder? topLevelField = null;
         _ctx.TopLevelStaticVars?.TryGetValue(la.Name.Lexeme, out topLevelField);
+        if (HasOwnedReceiverParameterCapture(la.Name.Lexeme))
+        {
+            local = null;
+            topLevelField = null;
+        }
 
         // Load current value
         EmitVariable(new Expr.Variable(la.Name));
@@ -1030,6 +1040,20 @@ public partial class ILEmitter
 
         builder.MarkLabel(endLabel);
         SetStackUnknown();
+    }
+
+    private bool HasOwnedReceiverParameterCapture(string name)
+    {
+        string storage = _ctx.ResolveFunctionDCFieldName(name);
+        // Receiver initializers keep argument locals while binding defaults, then
+        // seed captured parameters. Body writes must use the same field as arrows.
+        return _ctx.IsRuntimeReceiverInitializer && _ctx.UseOwnedCapturedParameterStorage &&
+            (_ctx.InitializedParameterNames?.Contains(name) == true ||
+             _ctx.PublishedCapturedParameterNames?.Contains(name) == true) &&
+            _ctx.Locals.GetNestedScopeLocal(name) is null &&
+            _ctx.FunctionDisplayClassLocal is not null &&
+            _ctx.CapturedFunctionLocals?.Contains(storage) == true &&
+            _ctx.FunctionDisplayClassFields?.ContainsKey(storage) == true;
     }
 
     protected override void EmitLogicalSet(Expr.LogicalSet ls)

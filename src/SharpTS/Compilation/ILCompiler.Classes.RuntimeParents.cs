@@ -198,8 +198,7 @@ public partial class ILCompiler
             || declaration.AutoAccessors is { Count: > 0 }
             || declaration.Fields.Any(field => field.IsPrivate || field.ComputedKey != null)
             || declaration.Methods.Any(method => method.IsPrivate || method.IsAsync
-                || method.TypeParams is { Count: > 0 } || method.ComputedKey != null
-                || method.Parameters.Any(parameter => parameter.IsParameterProperty))) return false;
+                || method.TypeParams is { Count: > 0 } || method.ComputedKey != null)) return false;
         return true;
     }
 
@@ -405,8 +404,20 @@ public partial class ILCompiler
         ConfigureClassConstructorReturns(ctx, constructor, declaration.SuperclassExpr != null, forceReceiver: true);
         if (declaration.SuperclassExpr == null)
             EmitConstructedClassPrototype(ctx);
-        EmitOnceOnlyConstructorElements(ctx, () => EmitEffectiveClassElements(ctx, declaration.Fields, null, null,
-            _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields.")));
+        var parameterLocals = new Dictionary<string, LocalBuilder>(StringComparer.Ordinal);
+        var parameterProperties = declaration.SuperclassExpr != null
+            ? constructor?.Body?.Where(statement => IsConstructorParameterProperty(statement, constructor)).ToList() ?? [] : [];
+        EmitOnceOnlyConstructorElements(ctx, () =>
+        {
+            EmitEffectiveClassElements(ctx, declaration.Fields, null, null,
+                _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields."));
+            var parameterEmitter = new ILEmitter(ctx);
+            foreach (var assignment in parameterProperties)
+            {
+                var value = (Expr.Variable)((Expr.Set)((Stmt.Expression)assignment).Expr).Value;
+                parameterEmitter.EmitConstructorParameterProperty(assignment, parameterLocals[value.Name.Lexeme]);
+            }
+        });
         if (constructor?.Body != null && ReferencesArgumentsIdentifier(constructor.Body)
             && !constructor.Parameters.Any(parameter => parameter.Name.Lexeme == "arguments"))
         {
@@ -419,6 +430,7 @@ public partial class ILCompiler
         foreach (var (parameter, index) in (constructor?.Parameters ?? []).Select((parameter, index) => (parameter, index)))
         {
             var local = ctx.Locals.DeclareLocal(parameter.Name.Lexeme, _types.Object);
+            parameterLocals[parameter.Name.Lexeme] = local;
             il.Emit(OpCodes.Ldarg_1);
             if (parameter.IsRest)
             {
@@ -453,9 +465,8 @@ public partial class ILCompiler
             }
             emitter.EmitParameterBindingInitializer(parameter, parameterInitializers,
                 ILEmitter.ParameterTdzNames(constructor!.Parameters.Skip(index + 1), parameterInitializers));
+            SeedCapturedLocal(parameter.Name.Lexeme, parameterLocals[parameter.Name.Lexeme], publishParameter: true);
         }
-        foreach (var parameter in constructor?.Parameters ?? [])
-            SeedCapturedLocal(parameter.Name.Lexeme, ctx.Locals.GetLocal(parameter.Name.Lexeme)!);
         ctx.UseOwnedCapturedParameterStorage = true;
         ctx.InitializedParameterNames = constructor?.Parameters.Select(parameter => parameter.Name.Lexeme)
             .Concat((parameterInitializers?.Values.AsEnumerable() ?? [])
@@ -491,12 +502,12 @@ public partial class ILCompiler
         }
         if (implicitSuper || declaration.SuperclassExpr == null) ctx.EmitConstructorOwnElements!();
         foreach (var statement in constructor?.Body ?? [])
-            emitter.EmitStatement(statement);
+            if (!parameterProperties.Contains(statement)) emitter.EmitStatement(statement);
         emitter.EmitClassConstructorFallthrough();
         il.Emit(OpCodes.Ret);
         emitter.FinalizeReturns();
 
-        void SeedCapturedLocal(string name, LocalBuilder local)
+        void SeedCapturedLocal(string name, LocalBuilder local, bool publishParameter = false)
         {
             if (ctx.FunctionDisplayClassLocal == null
                 || ctx.CapturedFunctionLocals?.Contains(name) != true
@@ -506,6 +517,13 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldloc, local);
             EmitBoxedFieldConversion(il, field.FieldType);
             il.Emit(OpCodes.Stfld, field);
+            if (publishParameter)
+            {
+                // A later default can invoke or mutate this parameter through an
+                // arrow. Publish once now; the original local may become stale.
+                (ctx.PublishedCapturedParameterNames ??= new(StringComparer.Ordinal)).Add(name);
+                ctx.UseOwnedCapturedParameterStorage = true;
+            }
         }
 
         void SetReceiverCell()
