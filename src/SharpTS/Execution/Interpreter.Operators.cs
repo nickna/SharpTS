@@ -323,7 +323,7 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, index?.ToString() ?? "");
         }
 
-        if (obj is ISharpTSOwnPropertyObject or BuiltInMethod)
+        if (obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace)
         {
             object key = ToPropertyKey(index);
             RuntimeValue currentRV = RuntimeValue.FromBoxed(GetOwnPropertyObjectValue(obj, key));
@@ -1231,6 +1231,7 @@ public partial class Interpreter
         return target switch
         {
             SharpTSObject obj => obj.DeleteBySymbolStrict(symbol, strictMode),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSInstance instance => instance.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSClass klass => klass.DeleteStaticSymbolProperty(symbol, strictMode),
             SharpTSClassPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),

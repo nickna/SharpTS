@@ -437,6 +437,16 @@ public static partial class ObjectBuiltIns
                 continue;
             }
 
+            if (args[i] is SharpTSObjectNamespace namespaceSource)
+            {
+                foreach (var entry in EnumerateObjectNamespaceOwnEnumerable(interpreter, namespaceSource))
+                    if (entry.Key is SharpTSSymbol symbol)
+                        SetAssignedSymbol(interpreter, target, symbol, entry.Value);
+                    else
+                        SetAssignedProperty(interpreter, target, (string)entry.Key, entry.Value);
+                continue;
+            }
+
             if (args[i] is ISharpTSOwnPropertyObject ownSource)
             {
                 var keys = ownSource.OwnProperties.OwnVisibleStringKeys().Cast<object>()
@@ -544,6 +554,7 @@ public static partial class ObjectBuiltIns
     {
         switch (target)
         {
+            case SharpTSObjectNamespace:
             case ISharpTSOwnPropertyObject:
                 if (!SharpTSProxy.OrdinarySet(interpreter, target, symbol, value, target))
                     throw new ThrowException(new SharpTSTypeError($"Cannot assign to symbol property '{symbol}'"));
@@ -829,6 +840,10 @@ public static partial class ObjectBuiltIns
                             "Cannot redefine symbol property"));
                     }
                     return target;
+                case SharpTSObjectNamespace objectNamespace:
+                    if (!objectNamespace.DefineProperty(symKey, descriptor))
+                        throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
+                    return target;
                 case SharpTSArray symArray:
                     if (!symArray.DefineProperty(symKey, descriptor))
                     {
@@ -1061,8 +1076,13 @@ public static partial class ObjectBuiltIns
     {
         // OrdinarySet consumes a boolean refusal. The public Object entry point
         // below translates the same refusal into TypeError for its own callers.
-        if (target is SharpTSObjectNamespace objectNamespace && propertyKey is string name)
-            return objectNamespace.DefineProperty(name, ToPropertyDescriptor(interpreter, descriptor));
+        if (target is SharpTSObjectNamespace objectNamespace)
+        {
+            if (propertyKey is string name)
+                return objectNamespace.DefineProperty(name, ToPropertyDescriptor(interpreter, descriptor));
+            if (propertyKey is SharpTSSymbol namespaceSymbol)
+                return objectNamespace.DefineProperty(namespaceSymbol, ToPropertyDescriptor(interpreter, descriptor));
+        }
         if (target is ISharpTSOwnPropertyObject carrier)
         {
             var key = interpreter.ToPropertyKey(propertyKey);
@@ -1318,6 +1338,24 @@ public static partial class ObjectBuiltIns
     internal static List<object> GetClassPrototypeOwnKeys(SharpTSClassPrototype prototype)
         => prototype.OwnStringKeys().Cast<object>().Concat(prototype.GetSymbolPropertyNames()).ToList();
 
+    internal static IEnumerable<KeyValuePair<object, object?>> EnumerateObjectNamespaceOwnEnumerable(
+        Interpreter interpreter, SharpTSObjectNamespace source, IReadOnlySet<object>? excluded = null)
+    {
+        // One complete key snapshot precedes getter calls. Native string members
+        // retain their virtual descriptors; only Symbols use the namespace bag.
+        foreach (var key in source.OwnPropertyKeys().ToList())
+        {
+            if (excluded?.Contains(key) == true) continue;
+            var descriptor = key is SharpTSSymbol symbolKey
+                ? source.GetOwnPropertyDescriptor(symbolKey)
+                : OwnPropertyDescriptorOf(interpreter, source, (string)key);
+            if (descriptor?.Enumerable != true) continue;
+            yield return new(key, key is SharpTSSymbol symbol
+                ? interpreter.GetSymbolPropertyValue(source, symbol)
+                : interpreter.GetPropertyValue(source, (string)key));
+        }
+    }
+
     internal static List<object> GetClassConstructorOwnKeys(SharpTSClass klass)
         => klass.OwnStaticStringKeys().Cast<object>().Concat(klass.OwnStaticSymbolKeys()).ToList();
 
@@ -1466,6 +1504,8 @@ public static partial class ObjectBuiltIns
                 ? ownDescriptor.ToObject() : SharpTSUndefined.Instance;
         switch (target)
         {
+            case SharpTSObjectNamespace objectNamespace when objectNamespace.GetOwnPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
             case ISharpTSOwnPropertyObject carrier when carrier.OwnProperties.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
             case SharpTSClass klass when klass.GetOwnStaticSymbolPropertyDescriptor(key) is { } descriptor:
@@ -1589,6 +1629,16 @@ public static partial class ObjectBuiltIns
                 proxyEntries.Add(new(key, ConvertDefinePropertiesDescriptor(interpreter, value)));
             }
             foreach (var entry in proxyEntries)
+                DefineProperty(interpreter, [target, entry.Key, entry.Value]);
+            return target;
+        }
+
+        if (props is SharpTSObjectNamespace namespaceSource)
+        {
+            var namespaceEntries = EnumerateObjectNamespaceOwnEnumerable(interpreter, namespaceSource)
+                .Select(entry => new KeyValuePair<object, object?>(entry.Key,
+                    ConvertDefinePropertiesDescriptor(interpreter, entry.Value))).ToList();
+            foreach (var entry in namespaceEntries)
                 DefineProperty(interpreter, [target, entry.Key, entry.Value]);
             return target;
         }
@@ -1764,6 +1814,7 @@ public static partial class ObjectBuiltIns
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.OwnVisibleStringKeys().Cast<object?>()
                 .Concat(carrier.OwnProperties.GetSymbolPropertyNames().Cast<object?>()).ToList(),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.OwnPropertyKeys().Cast<object?>().ToList(),
             SharpTSObject obj => GetAllOwnPropertyNames(obj).Cast<object?>()
                 .Concat(obj.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.OwnStringKeys().Cast<object?>().ToList(),
@@ -1894,6 +1945,17 @@ public static partial class ObjectBuiltIns
     internal static SharpTSObject ObjectRest(
         Interpreter interpreter, object? source, IEnumerable<object?> excludeKeys)
     {
+        if (source is SharpTSObjectNamespace objectNamespace)
+        {
+            var excludedNamespaceKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();
+            var namespaceRest = new SharpTSObject([]);
+            foreach (var entry in EnumerateObjectNamespaceOwnEnumerable(interpreter, objectNamespace, excludedNamespaceKeys))
+                if (entry.Key is SharpTSSymbol symbol)
+                    namespaceRest.SetBySymbol(symbol, entry.Value);
+                else
+                    namespaceRest.SetProperty((string)entry.Key, entry.Value);
+            return namespaceRest;
+        }
         if (source is SharpTSClass klass)
         {
             var excludedClassKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();
@@ -2337,6 +2399,7 @@ public static partial class ObjectBuiltIns
             : args[0] switch
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.GetSymbolPropertyNames().Cast<object?>().ToList(),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSObject obj => obj.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSProxy proxy => proxy.TrapOwnPropertyKeys(interpreter)

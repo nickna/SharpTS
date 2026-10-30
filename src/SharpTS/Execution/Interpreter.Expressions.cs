@@ -862,7 +862,15 @@ public partial class Interpreter
             or SharpTSSymbol or SharpTSBigInt or System.Numerics.BigInteger)
             return symbolFields;
 
-        if (spreadValue is ISharpTSOwnPropertyObject ownPropertyObject)
+        if (spreadValue is SharpTSObjectNamespace objectNamespace)
+        {
+            foreach (var entry in ObjectBuiltIns.EnumerateObjectNamespaceOwnEnumerable(this, objectNamespace))
+                if (entry.Key is SharpTSSymbol symbol)
+                    (symbolFields ??= [])[symbol] = entry.Value;
+                else
+                    stringFields[(string)entry.Key] = entry.Value;
+        }
+        else if (spreadValue is ISharpTSOwnPropertyObject ownPropertyObject)
         {
             var properties = ownPropertyObject.OwnProperties;
             var stringKeys = properties.OwnVisibleStringKeys().ToList();
@@ -1287,6 +1295,9 @@ public partial class Interpreter
 
         if (obj is SharpTSDate date && index is SharpTSSymbol dateSymbol)
             return RuntimeValue.FromBoxed(GetSymbolPropertyValue(date, dateSymbol));
+
+        if (obj is SharpTSObjectNamespace objectNamespace && index is SharpTSSymbol namespaceSymbol)
+            return RuntimeValue.FromBoxed(GetSymbolPropertyValue(objectNamespace, namespaceSymbol));
 
         if (obj is ISharpTSSymbolPropertyBag symbolBag
             && index is SharpTSSymbol bagSymbol)
@@ -1722,7 +1733,7 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(value);
         }
 
-        if (obj is SharpTSDate && index is SharpTSSymbol dateSymbol)
+        if (obj is SharpTSDate or SharpTSObjectNamespace && index is SharpTSSymbol dateSymbol)
         {
             if (!SharpTSProxy.OrdinarySet(this, obj, dateSymbol, value, obj) && strictMode)
                 throw StrictModeErrors.TypeError($"Cannot assign to symbol property '{dateSymbol}'");

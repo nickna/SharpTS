@@ -1703,6 +1703,9 @@ public class SharpTSProxy : ISharpTSCallable
         }
         switch (_target)
         {
+            case SharpTSObjectNamespace objectNamespace:
+                keys.AddRange(objectNamespace.OwnPropertyKeys());
+                break;
             case SharpTSProxy proxy:
                 keys.AddRange(proxy.TrapOwnPropertyKeys(interpreter));
                 break;

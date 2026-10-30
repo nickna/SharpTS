@@ -144,10 +144,9 @@ public static class ReflectBuiltIns
                 }
                 if (target is SharpTSObjectNamespace objectNamespace)
                 {
-                    // This namespace has no Symbol storage. Absent Symbols must
-                    // remain distinct from same-spelled string properties.
-                    return RuntimeValue.FromBoolean(key is SharpTSSymbol
-                        || objectNamespace.DeleteProperty((string)key));
+                    return RuntimeValue.FromBoolean(key is SharpTSSymbol namespaceSymbol
+                        ? objectNamespace.DeleteBySymbolStrict(namespaceSymbol, false)
+                        : objectNamespace.DeleteProperty((string)key));
                 }
                 if (key is SharpTSSymbol symbol)
                     return RuntimeValue.FromBoolean(interpreter.DeleteSymbolProperty(target, symbol, strictMode: false));
@@ -462,10 +461,11 @@ public static class ReflectBuiltIns
                     return primitiveDescriptor is null ? RuntimeValue.Undefined
                         : RuntimeValue.FromBoxed(primitiveDescriptor.ToObject());
                 }
-                if (target is SharpTSObjectNamespace)
+                if (target is SharpTSObjectNamespace objectNamespace)
                 {
-                    var ownDescriptor = propertyKey is string name
-                        ? ObjectBuiltIns.OwnPropertyDescriptorOf(interpreter, target, name) : null;
+                    var ownDescriptor = propertyKey is SharpTSSymbol namespaceSymbol
+                        ? objectNamespace.GetOwnPropertyDescriptor(namespaceSymbol)
+                        : ObjectBuiltIns.OwnPropertyDescriptorOf(interpreter, target, (string)propertyKey);
                     return ownDescriptor is null ? RuntimeValue.Undefined
                         : RuntimeValue.FromBoxed(ownDescriptor.ToObject());
                 }
@@ -587,6 +587,9 @@ public static class ReflectBuiltIns
                 }
                 switch (target)
                 {
+                    case SharpTSObjectNamespace objectNamespace:
+                        keys.AddRange(objectNamespace.OwnPropertyKeys());
+                        break;
                     case ISharpTSOwnPropertyObject carrier:
                         keys.AddRange(carrier.OwnProperties.OwnVisibleStringKeys().Cast<object?>());
                         keys.AddRange(carrier.OwnProperties.GetSymbolPropertyNames().Cast<object?>());

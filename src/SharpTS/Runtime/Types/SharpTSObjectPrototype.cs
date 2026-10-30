@@ -460,6 +460,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
                         && SharpTSPropertyDescriptor.FromAnyObject(descriptor).Enumerable,
                 SharpTSObject obj
                     => obj.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },
+                SharpTSObjectNamespace objectNamespace
+                    => objectNamespace.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },
                 SharpTSInstance instance => instance.HasSymbolProperty(symbol),
                 SharpTSMath math
                     => math.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },

@@ -892,6 +892,13 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is SharpTSObjectNamespace objectNamespace)
+            {
+                if (TryReadDescriptor(objectNamespace.GetOwnPropertyDescriptor(symbol), receiver, out var value))
+                    return value;
+                current = ObjectBuiltIns.PrototypeOf(this, objectNamespace);
+                continue;
+            }
             if (current is ISharpTSSymbolPropertyBag symbolBag)
             {
                 if (symbolBag.TryGetSymbolAccessor(symbol, out var getter, out _))
@@ -1168,6 +1175,12 @@ public partial class Interpreter
             if (current is SharpTSArrayGlobal arrayGlobal)
             {
                 current = ObjectBuiltIns.PrototypeOf(this, arrayGlobal);
+                continue;
+            }
+            if (current is SharpTSObjectNamespace objectNamespace)
+            {
+                if (objectNamespace.GetOwnPropertyDescriptor(symbol) is not null) return true;
+                current = ObjectBuiltIns.PrototypeOf(this, objectNamespace);
                 continue;
             }
             if (current is ISharpTSSymbolPropertyBag symbolBag

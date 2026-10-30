@@ -10,7 +10,7 @@ namespace SharpTS.Runtime.Types;
 /// lodash uses this idiom heavily (`Object(object)` to guarantee object-ness before
 /// key iteration).
 /// </summary>
-public class SharpTSObjectNamespace : ISharpTSCallable
+public class SharpTSObjectNamespace : ISharpTSCallable, ISharpTSSymbolPropertyBag
 {
     public static readonly SharpTSObjectNamespace Instance = new();
     private readonly SharpTSObject _extras = FunctionObjectProperties.Create("Object", 1);
@@ -87,6 +87,28 @@ public class SharpTSObjectNamespace : ISharpTSCallable
 
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
+
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
+        => _extras.GetOwnPropertyDescriptor(symbol);
+
+    internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(symbol, descriptor);
+
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+        => _extras.DeleteBySymbolStrict(symbol, strictMode);
+
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames() => _extras.GetSymbolPropertyNames();
+
+    internal IEnumerable<object> OwnPropertyKeys()
+        => OwnStringKeys().Cast<object>().Concat(GetSymbolPropertyNames());
+
+    bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol) => _extras.HasSymbolProperty(symbol);
+    object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol) => _extras.GetBySymbol(symbol);
+    bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(SharpTSSymbol symbol,
+        out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+    void ISharpTSSymbolPropertyBag.SetBySymbolStrict(SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
 
     public bool DeleteProperty(string name)
     {
