@@ -1244,6 +1244,7 @@ public static partial class ObjectBuiltIns
                     enumerable: false,
                     configurable: false),
             SharpTSBuiltInConstructor constructor when propertyKey == "name"
+                || propertyKey == "length" && interpreter.HasBuiltInConstructorInitialInventory(constructor)
                 => interpreter.GetBuiltInConstructorOverlayDescriptor(constructor, propertyKey),
             SharpTSSymbol => null,
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
@@ -1889,6 +1890,10 @@ public static partial class ObjectBuiltIns
         if (target is null or SharpTSUndefined)
             throw new ThrowException(new SharpTSTypeError(
                 "Object.getOwnPropertyNames called on null or undefined"));
+
+        if (target is SharpTSBuiltInConstructor constructor
+            && interpreter.TryGetBuiltInConstructorOwnStringKeys(constructor, out var constructorNames))
+            return new SharpTSArray(constructorNames.Cast<object?>().ToList());
 
         List<object?> names = FunctionObjectProperties.TryGetStorage(target, interpreter, out var properties)
             ? properties.OwnVisibleStringKeys().Cast<object?>().ToList()

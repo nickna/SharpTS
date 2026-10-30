@@ -614,6 +614,10 @@ public static class ReflectBuiltIns
                         keys.AddRange(primitiveConstructor.OwnStringKeys().Cast<object?>());
                         keys.AddRange(primitiveConstructor.GetSymbolPropertyNames().Cast<object?>());
                         break;
+                    case SharpTSBuiltInConstructor constructor when
+                        interpreter.TryGetBuiltInConstructorOwnStringKeys(constructor, out var constructorNames):
+                        keys.AddRange(constructorNames.Cast<object?>());
+                        break;
                     case SharpTSFunctionPrototype functionPrototype:
                         keys.AddRange((SharpTSArray)ObjectBuiltIns.GetOwnPropertyNames(interpreter, [target])!);
                         keys.AddRange(functionPrototype.GetSymbolPropertyNames().Cast<object?>());

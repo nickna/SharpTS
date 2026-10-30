@@ -273,15 +273,17 @@ public partial class Interpreter
         var propertiesByConstructor = GetConstructorPropertyTable(constructor);
         var deletedByConstructor = GetConstructorDeletedTable(constructor);
         bool hadOwnProperty = HasBuiltInConstructorOwnProperty(constructor, name);
-        if (name == "name"
+        bool metadataName = name == "name"
+            || name == "length" && HasBuiltInConstructorInitialInventory(constructor);
+        if (metadataName
             && GetBuiltInConstructorOverlayDescriptor(constructor, name) is { Writable: false, HasGet: false, HasSet: false })
         {
             if (strictMode)
                 throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
-                    "Cannot assign to read only property 'name' of function"));
+                    $"Cannot assign to read only property '{name}' of function"));
             return;
         }
-        if (name == "name" && !hadOwnProperty)
+        if (metadataName && !hadOwnProperty)
         {
             object? prototype = GetPromiseConstructorState(constructor)?.FunctionPrototype ?? GetFunctionPrototype();
             for (int depth = 0; depth < 64 && prototype is not (null or SharpTSUndefined); depth++)
@@ -307,7 +309,8 @@ public partial class Interpreter
             return;
         }
 
-        if (deletedByConstructor != null
+        if (!HasBuiltInConstructorInitialInventory(constructor)
+            && deletedByConstructor != null
             && deletedByConstructor.TryGetValue(constructor, out var deleted))
         {
             deleted.Remove(name);
@@ -355,7 +358,8 @@ public partial class Interpreter
             if (!storage.DefineProperty(name, descriptor)) return false;
             descriptor = storage.GetOwnPropertyDescriptor(name)!;
         }
-        if (deletedByConstructor != null
+        if (!HasBuiltInConstructorInitialInventory(constructor)
+            && deletedByConstructor != null
             && deletedByConstructor.TryGetValue(constructor, out var deleted))
         {
             deleted.Remove(name);
@@ -391,10 +395,16 @@ public partial class Interpreter
         if (propertiesByConstructor == null
             || !propertiesByConstructor.TryGetValue(constructor, out var properties)
             || !properties.TryGetValue(name, out var descriptor))
-            return name == "name" && !IsBuiltInConstructorPropertyDeleted(constructor, name)
-                ? new SharpTSPropertyDescriptor(constructor.Name,
-                    writable: false, enumerable: false, configurable: true)
-                : null;
+        {
+            if (IsBuiltInConstructorPropertyDeleted(constructor, name)) return null;
+            if (name == "name")
+                return new SharpTSPropertyDescriptor(constructor.Name,
+                    writable: false, enumerable: false, configurable: true);
+            if (name == "length" && GetBuiltInConstructorInitialLength(constructor) is { } length)
+                return new SharpTSPropertyDescriptor(length,
+                    writable: false, enumerable: false, configurable: true);
+            return null;
+        }
         return descriptor;
     }
 
@@ -425,7 +435,7 @@ public partial class Interpreter
                 return false;
             properties.Remove(name);
         }
-        if (constructor.GetMember(name) is null)
+        if (constructor.GetMember(name) is null && !IsBuiltInConstructorInitialProperty(constructor, name))
             return true;
         deletedByConstructor ??= GetConstructorDeletedTable(constructor, create: true)!;
         if (!deletedByConstructor.TryGetValue(constructor, out var deleted))
