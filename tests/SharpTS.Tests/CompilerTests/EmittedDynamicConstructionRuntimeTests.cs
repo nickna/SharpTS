@@ -179,9 +179,11 @@ public sealed class EmittedDynamicConstructionRuntimeTests
                 ("Operators", typeof(EmittedOperatorRuntime)),
                 ("Promise", typeof(EmittedPromiseRuntime)),
                 ("RegExps", typeof(EmittedRegExpRuntime)),
+                ("SourceOwners", typeof(NativeSourceOwnerCatalog)),
                 ("StringCoercion", typeof(EmittedStringCoercionRuntime)),
                 ("UndefinedInstance", typeof(FieldInfo)),
-                ("UndefinedType", typeof(Type))
+                ("UndefinedType", typeof(Type)),
+                ("UserClassInterface", typeof(Type))
             ],
             ["EmitClassConstructorReturns"] =
             [
