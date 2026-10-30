@@ -34,4 +34,12 @@ public sealed class ModuleDefaultExportBindingTests
         Assert.Empty(TestHarness.CompileModulesAndVerifyOnly(files, "main.ts"));
         Assert.Equal(expected, TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled));
     }
+
+    [Theory, MemberData(nameof(Cases))]
+    public void InterpreterUsesTheSameDefaultBindingContract(string name, string producer, string barrel, string consumer, string expected)
+    {
+        Assert.NotEmpty(name);
+        var files = new Dictionary<string, string> { ["producer.ts"] = producer, ["barrel.ts"] = barrel, ["main.ts"] = consumer };
+        Assert.Equal(expected, TestHarness.RunModules(files, "main.ts", ExecutionMode.Interpreted));
+    }
 }
