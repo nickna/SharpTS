@@ -814,6 +814,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private MethodBuilder EmitTSRegExpRewriteShorthands(TypeBuilder typeBuilder, MethodBuilder expandShorthandMethod)
     {
+        var expandSoleClassMethod = EmitTSRegExpExpandSoleNegatedClass(typeBuilder, expandShorthandMethod);
         var method = typeBuilder.DefineMethod(
             "RewriteEcmaScriptShorthands", MethodAttributes.Private | MethodAttributes.Static,
             _types.String, [_types.String]);
@@ -834,6 +835,7 @@ public partial class RuntimeEmitter
         var cLocal = il.DeclareLocal(_types.Char);
         var nextLocal = il.DeclareLocal(_types.Char);
         var replLocal = il.DeclareLocal(_types.String);
+        var advanceLocal = il.DeclareLocal(_types.Int32);
 
         var loopCond = il.DefineLabel();
         var normalChar = il.DefineLabel();
@@ -845,6 +847,8 @@ public partial class RuntimeEmitter
         var incr = il.DefineLabel();
         var endLabel = il.DefineLabel();
         var retSb = il.DefineLabel();
+        var escapeBranch = il.DefineLabel();
+        var appendReplacement = il.DefineLabel();
 
         // sb = null; inClass = false; n = pattern.Length; i = 0
         il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Stloc, sbLocal);
@@ -857,6 +861,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iLocal); il.Emit(OpCodes.Ldloc, nLocal); il.Emit(OpCodes.Bge, endLabel);
         // c = pattern[i]
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, iLocal); il.Emit(OpCodes.Callvirt, getChars); il.Emit(OpCodes.Stloc, cLocal);
+        // A sole negated shorthand is already a complete class. Rewrite it before
+        // entering the class, without consuming or changing larger class unions.
+        il.Emit(OpCodes.Ldloc, inClassLocal); il.Emit(OpCodes.Brtrue, escapeBranch);
+        il.Emit(OpCodes.Ldloc, cLocal); il.Emit(OpCodes.Ldc_I4, (int)'['); il.Emit(OpCodes.Bne_Un, escapeBranch);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, iLocal); il.Emit(OpCodes.Call, expandSoleClassMethod); il.Emit(OpCodes.Stloc, replLocal);
+        il.Emit(OpCodes.Ldloc, replLocal); il.Emit(OpCodes.Brfalse, escapeBranch);
+        il.Emit(OpCodes.Ldc_I4_4); il.Emit(OpCodes.Stloc, advanceLocal);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, iLocal); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Callvirt, getChars);
+        il.Emit(OpCodes.Ldc_I4, (int)'^'); il.Emit(OpCodes.Bne_Un, appendReplacement);
+        il.Emit(OpCodes.Ldc_I4_5); il.Emit(OpCodes.Stloc, advanceLocal);
+        il.Emit(OpCodes.Br, appendReplacement);
+        il.MarkLabel(escapeBranch);
         // if (c != '\\') goto normalChar
         il.Emit(OpCodes.Ldloc, cLocal); il.Emit(OpCodes.Ldc_I4, (int)'\\'); il.Emit(OpCodes.Bne_Un, normalChar);
         // if (i + 1 >= n) goto normalChar   (lone trailing backslash → literal)
@@ -869,6 +885,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nextLocal); il.Emit(OpCodes.Ldloc, inClassLocal); il.Emit(OpCodes.Call, expandShorthandMethod); il.Emit(OpCodes.Stloc, replLocal);
         // if (repl == null) goto replNull
         il.Emit(OpCodes.Ldloc, replLocal); il.Emit(OpCodes.Brfalse, replNull);
+        il.Emit(OpCodes.Ldc_I4_2); il.Emit(OpCodes.Stloc, advanceLocal);
+        il.MarkLabel(appendReplacement);
         //   if (sb != null) goto haveSb
         il.Emit(OpCodes.Ldloc, sbLocal); il.Emit(OpCodes.Brtrue, haveSb);
         //     sb = new StringBuilder(n + 16); sb.Append(pattern, 0, i)
@@ -877,8 +895,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(haveSb);
         //   sb.Append(repl)
         il.Emit(OpCodes.Ldloc, sbLocal); il.Emit(OpCodes.Ldloc, replLocal); il.Emit(OpCodes.Callvirt, sbAppendStr); il.Emit(OpCodes.Pop);
-        //   i += 2; goto loopCond
-        il.Emit(OpCodes.Ldloc, iLocal); il.Emit(OpCodes.Ldc_I4_2); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, iLocal);
+        //   i += advance; goto loopCond
+        il.Emit(OpCodes.Ldloc, iLocal); il.Emit(OpCodes.Ldloc, advanceLocal); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, iLocal);
         il.Emit(OpCodes.Br, loopCond);
 
         il.MarkLabel(replNull);
@@ -914,6 +932,52 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ret);
         il.MarkLabel(retSb);
         il.Emit(OpCodes.Ldloc, sbLocal); il.Emit(OpCodes.Callvirt, sbToString); il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    // BCL-only mirror of SharpTSRegExp.ExpandSoleNegatedClass. The caller has
+    // already established that index names an unescaped '[' outside a class.
+    private MethodBuilder EmitTSRegExpExpandSoleNegatedClass(TypeBuilder typeBuilder, MethodBuilder expandShorthandMethod)
+    {
+        var method = typeBuilder.DefineMethod("ExpandSoleNegatedClass",
+            MethodAttributes.Private | MethodAttributes.Static, _types.String, [_types.String, _types.Int32]);
+        var il = method.GetILGenerator();
+        var getLength = _types.GetProperty(_types.String, "Length").GetGetMethod()!;
+        var getChars = _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!;
+        var escapeIndex = il.DeclareLocal(_types.Int32);
+        var negated = il.DeclareLocal(_types.Boolean);
+        var escape = il.DeclareLocal(_types.Char);
+        var notNegated = il.DefineLabel();
+        var recognized = il.DefineLabel();
+        var emitReplacement = il.DefineLabel();
+        var missing = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, escapeIndex);
+        il.Emit(OpCodes.Ldloc, escapeIndex); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Callvirt, getLength); il.Emit(OpCodes.Bge, missing);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, escapeIndex); il.Emit(OpCodes.Callvirt, getChars);
+        il.Emit(OpCodes.Ldc_I4, (int)'^'); il.Emit(OpCodes.Ceq); il.Emit(OpCodes.Stloc, negated);
+        il.Emit(OpCodes.Ldloc, negated); il.Emit(OpCodes.Brfalse, notNegated);
+        il.Emit(OpCodes.Ldloc, escapeIndex); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, escapeIndex);
+        il.MarkLabel(notNegated);
+        il.Emit(OpCodes.Ldloc, escapeIndex); il.Emit(OpCodes.Ldc_I4_2); il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Callvirt, getLength); il.Emit(OpCodes.Bge, missing);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, escapeIndex); il.Emit(OpCodes.Callvirt, getChars);
+        il.Emit(OpCodes.Ldc_I4, (int)'\\'); il.Emit(OpCodes.Bne_Un, missing);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, escapeIndex); il.Emit(OpCodes.Ldc_I4_2); il.Emit(OpCodes.Add); il.Emit(OpCodes.Callvirt, getChars);
+        il.Emit(OpCodes.Ldc_I4, (int)']'); il.Emit(OpCodes.Bne_Un, missing);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, escapeIndex); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Callvirt, getChars); il.Emit(OpCodes.Stloc, escape);
+        foreach (char shorthand in new[] { 'D', 'W', 'S' })
+        {
+            il.Emit(OpCodes.Ldloc, escape); il.Emit(OpCodes.Ldc_I4, (int)shorthand); il.Emit(OpCodes.Beq, recognized);
+        }
+        il.Emit(OpCodes.Br, missing);
+        il.MarkLabel(recognized);
+        il.Emit(OpCodes.Ldloc, negated); il.Emit(OpCodes.Brfalse, emitReplacement);
+        il.Emit(OpCodes.Ldloc, escape); il.Emit(OpCodes.Ldc_I4, 0x20); il.Emit(OpCodes.Or); il.Emit(OpCodes.Conv_U2); il.Emit(OpCodes.Stloc, escape);
+        il.MarkLabel(emitReplacement);
+        il.Emit(OpCodes.Ldloc, escape); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Call, expandShorthandMethod); il.Emit(OpCodes.Ret);
+        il.MarkLabel(missing);
+        il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ret);
         return method;
     }
 
