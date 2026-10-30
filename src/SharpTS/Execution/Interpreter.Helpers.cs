@@ -219,6 +219,9 @@ public partial class Interpreter
             case Expr.Variable variable:
                 return IncrementVariable(variable, delta, returnOld);
 
+            case Expr.GetPrivate field:
+                return IncrementPrivateField(Evaluate(field.Object), field.Name.Lexeme, delta, returnOld);
+
             case Expr.Get get:
                 return IncrementProperty(Evaluate(get.Object), get.Name, delta, returnOld);
 
@@ -247,6 +250,9 @@ public partial class Interpreter
         {
             case Expr.Variable variable:
                 return IncrementVariable(variable, delta, returnOld);
+
+            case Expr.GetPrivate field:
+                return IncrementPrivateField((await EvaluateAsync(field.Object)).ToObject(), field.Name.Lexeme, delta, returnOld);
 
             case Expr.Get get:
                 return IncrementProperty((await EvaluateAsync(get.Object)).ToObject(), get.Name, delta, returnOld);

@@ -537,7 +537,7 @@ public partial class Parser
             Token op = Previous();
             Expr operand = Unary();
             ValidateOptionalAssignmentTarget(operand);
-            if (operand is not (Expr.Variable or Expr.Get or Expr.GetIndex))
+            if (operand is not (Expr.Variable or Expr.Get or Expr.GetIndex or Expr.GetPrivate))
             {
                 throw new Exception("Invalid operand for prefix increment/decrement.");
             }
@@ -720,7 +720,7 @@ public partial class Parser
             else if (!HasLineTerminatorBeforeCurrent() && Match(TokenType.PLUS_PLUS, TokenType.MINUS_MINUS))
             {
                 Token op = Previous();
-                if (expr is not (Expr.Variable or Expr.Get or Expr.GetIndex))
+                if (expr is not (Expr.Variable or Expr.Get or Expr.GetIndex or Expr.GetPrivate))
                     throw new Exception("Invalid operand for postfix increment/decrement.");
                 ValidateOptionalAssignmentTarget(expr);
                 expr = CompleteExpression(new Expr.PostfixIncrement(expr, op), start);

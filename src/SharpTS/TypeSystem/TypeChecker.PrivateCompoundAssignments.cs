@@ -9,6 +9,33 @@ public partial class TypeChecker
     private Dictionary<Expr, object?> _privateCompoundConstructors =
         new(ReferenceEqualityComparer.Instance);
 
+    private TypeInfo CheckPrivateIncrement(Expr update, Expr.GetPrivate field, Token operation)
+    {
+        using var memberLookup = BeginSourceMemberLookup(field, field.Name, MemberOperation.Read | MemberOperation.Write);
+        var (receiver, owner, isStatic, fieldType) = CheckWritablePrivateField(update, field.Object, field.Name);
+        if (ExtractNarrowingPath(field) is { } path && GetNarrowing(path) is { } narrowed)
+            fieldType = narrowed;
+        if (!IsTypeOfKind(fieldType, type => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+                or TypeInfo.NumberLiteral or TypeInfo.BigInt or TypeInfo.BigIntLiteral or TypeInfo.Enum { Kind: EnumKind.Numeric }))
+            throw new TypeCheckException("An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.", operation.Line, tsCode: "TS2356");
+        _typeMap.Set(field, fieldType);
+        _typeMap.MarkRawNumericResult(update);
+        ObservePrivateSourceMemberSelection(field.Name, receiver, owner,
+            isStatic ? MemberFacet.PrivateStatic : MemberFacet.PrivateInstance);
+        InvalidatePrivateNarrowing(field.Object, field.Name);
+        memberLookup?.Succeed();
+        return PrivateIncrementResult(fieldType);
+    }
+
+    private static TypeInfo PrivateIncrementResult(TypeInfo type) => type switch
+    {
+        TypeInfo.BigInt or TypeInfo.BigIntLiteral => TypeInfo.BigInt.Shared,
+        TypeInfo.Enum { Kind: EnumKind.Numeric } => type,
+        TypeInfo.TypeParameter { Constraint: { } constraint } => PrivateIncrementResult(constraint),
+        TypeInfo.Union union => new TypeInfo.Union(union.FlattenedTypes.Select(PrivateIncrementResult).Distinct().ToList()),
+        _ => TypeInfo.Primitive.Number
+    };
+
     private TypeInfo CheckCompoundSetPrivate(Expr.CompoundSetPrivate compound)
     {
         using var memberLookup = BeginSourceMemberLookup(compound, compound.Name, MemberOperation.Read | MemberOperation.Write);

@@ -227,6 +227,12 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitPrefixIncrement(Expr.PrefixIncrement pi)
     {
+        if (pi.Operand is Expr.GetPrivate privateField)
+        {
+            EmitPrivateIncrement(privateField, pi.Operator.Type, isPrefix: true);
+            return;
+        }
+
         if (pi.Operand is Expr.Variable v)
         {
             string name = v.Name.Lexeme;
@@ -293,6 +299,12 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitPostfixIncrement(Expr.PostfixIncrement poi)
     {
+        if (poi.Operand is Expr.GetPrivate privateField)
+        {
+            EmitPrivateIncrement(privateField, poi.Operator.Type, isPrefix: false);
+            return;
+        }
+
         if (poi.Operand is Expr.Variable v)
         {
             string name = v.Name.Lexeme;

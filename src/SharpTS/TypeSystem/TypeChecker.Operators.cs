@@ -1201,6 +1201,8 @@ public partial class TypeChecker
 
     private TypeInfo CheckPrefixIncrement(Expr.PrefixIncrement prefix)
     {
+        if (prefix.Operand is Expr.GetPrivate privateField)
+            return CheckPrivateIncrement(prefix, privateField, prefix.Operator);
         TypeInfo operandType = CheckExpr(prefix.Operand);
         CheckReadonlyRecordUpdate(prefix.Operand, prefix.Operator.Line);
         EnsureWritableClassIndexUpdate(prefix.Operand);
@@ -1216,6 +1218,8 @@ public partial class TypeChecker
 
     private TypeInfo CheckPostfixIncrement(Expr.PostfixIncrement postfix)
     {
+        if (postfix.Operand is Expr.GetPrivate privateField)
+            return CheckPrivateIncrement(postfix, privateField, postfix.Operator);
         TypeInfo operandType = CheckExpr(postfix.Operand);
         CheckReadonlyRecordUpdate(postfix.Operand, postfix.Operator.Line);
         EnsureWritableClassIndexUpdate(postfix.Operand);

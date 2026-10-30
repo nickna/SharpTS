@@ -2161,6 +2161,12 @@ public partial class ILEmitter
 
     protected override void EmitPrefixIncrement(Expr.PrefixIncrement pi)
     {
+        if (pi.Operand is Expr.GetPrivate privateField)
+        {
+            EmitPrivateIncrement(privateField, pi.Operator.Type, isPrefix: true);
+            return;
+        }
+
         if (TryEmitExternalIncrement(
                 pi.Operand, pi.Operator.Type, isPrefix: true))
             return;
@@ -2364,6 +2370,12 @@ public partial class ILEmitter
 
     protected override void EmitPostfixIncrement(Expr.PostfixIncrement pi)
     {
+        if (pi.Operand is Expr.GetPrivate privateField)
+        {
+            EmitPrivateIncrement(privateField, pi.Operator.Type, isPrefix: false);
+            return;
+        }
+
         if (TryEmitExternalIncrement(
                 pi.Operand, pi.Operator.Type, isPrefix: false))
             return;
