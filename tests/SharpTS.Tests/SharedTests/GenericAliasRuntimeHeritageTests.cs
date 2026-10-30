@@ -51,7 +51,7 @@ public sealed class GenericAliasRuntimeHeritageTests
         var validate = saved.GetType("$ClassDefinition")!.GetMethod("ValidateParent")!;
         foreach (var foreign in new[] { typeof(object), typeof(List<>), typeof(List<string>) })
             Assert.Throws<TargetInvocationException>(() => validate.Invoke(null, [foreign]));
-        var delegating = new LookupProbe(saved.GetType("Box")!);
+        var delegating = new LookupProbe(SourceBox(saved, native));
         Assert.Throws<TargetInvocationException>(() => validate.Invoke(null, [delegating]));
         Assert.Equal(0, delegating.ModuleReads);
         Assert.Equal(0, delegating.GenericReads);
@@ -75,7 +75,7 @@ public sealed class GenericAliasRuntimeHeritageTests
     {
         var saved = Build(OriginalSource, native);
         var construct = saved.GetType("$Runtime")!.GetMethod("ConstructWithNewTarget")!;
-        var delegating = new ConstructorProbe(saved.GetType("Box")!);
+        var delegating = new ConstructorProbe(SourceBox(saved, native));
         Assert.Throws<TargetInvocationException>(() => construct.Invoke(null, [delegating, Array.Empty<object>(), delegating]));
         Assert.Equal(0, delegating.ModuleReads);
         Assert.Equal(0, delegating.GenericReads);
@@ -93,6 +93,10 @@ public sealed class GenericAliasRuntimeHeritageTests
             throw new InvalidOperationException("original attribute query");
         }
     }
+
+    private static Type SourceBox(Assembly saved, bool native) => native
+        ? Assert.Single(saved.GetTypes(), type => type.Name == "Box" && type.IsGenericTypeDefinition)
+        : Assert.IsAssignableFrom<Type>(saved.GetType("Box"));
 
     private static Assembly Build(string source, bool native)
     {
