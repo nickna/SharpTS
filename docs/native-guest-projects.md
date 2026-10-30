@@ -199,6 +199,13 @@ stepping/sequence-point support contract.
 
 ## Callable catalog foundation
 
+Native crypto hashing and random-byte generation are covered by the native guest
+corpus. `X509Certificate.verify` accepts the program's own public `KeyObject`
+values, such as results of `crypto.createPublicKey` or a certificate's `publicKey`.
+Other CLR key carriers receive a TypeError before their export members are
+inspected or called. Use managed DLL or bundled EXE output for those carriers.
+The native verification controls include valid and wrong RSA/ECDSA public keys.
+
 The implementation sections below retain historical diagnostic checkpoints.
 Counts such as 81, 30 or 8 describe their individual integration stages; they are
 not the current basic-console inventory, which is zero at the checkpoint above.
