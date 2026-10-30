@@ -9,6 +9,7 @@ on:
       - 'src/SharpTS.Sdk.Tasks/**'
       - 'src/SharpTS.Hosting.Abstractions/**'
       - 'scripts/test-native-guest.ps1'
+      - 'scripts/test-packaged-sdk.ps1'
       - 'tests/native-guest/**'
       - 'global.json'
       - 'Directory.*'
@@ -21,6 +22,7 @@ on:
       - 'src/SharpTS.Sdk.Tasks/**'
       - 'src/SharpTS.Hosting.Abstractions/**'
       - 'scripts/test-native-guest.ps1'
+      - 'scripts/test-packaged-sdk.ps1'
       - 'tests/native-guest/**'
       - 'global.json'
       - 'Directory.*'
@@ -66,6 +68,25 @@ jobs:
         run: >-
           ./scripts/test-native-guest.ps1 -RuntimeIdentifier '${{ matrix.rid }}'
           -Cases @('language', 'arguments', 'modules', 'collections', 'generators', 'async', 'exceptions', 'bcl')
+      - name: Pack the candidate SDK
+        shell: pwsh
+        run: |
+          dotnet build src/SharpTS.Sdk.Tasks/SharpTS.Sdk.Tasks.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'SDK task build failed.' }
+          dotnet publish src/SharpTS/SharpTS.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'SDK compiler payload publication failed.' }
+          dotnet pack src/SharpTS.Sdk/SharpTS.Sdk.csproj --configuration Release -p:MinVerVersionOverride=0.0.0-native-ci --output artifacts/native-sdk-feed
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate SDK packaging failed.' }
+      - name: Publish and execute a native program with the packaged SDK
+        shell: pwsh
+        env:
+          DOTNET_PROCESSOR_COUNT: 2
+          DOTNET_CLI_UI_LANGUAGE: en
+        run: >-
+          ./scripts/test-packaged-sdk.ps1
+          -PackagePath artifacts/native-sdk-feed/SharpTS.Sdk.0.0.0-native-ci.nupkg
+          -PackageVersion 0.0.0-native-ci
+          -NativeRuntimeIdentifier '${{ matrix.rid }}'
       - name: Upload guest diagnostics and execution evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -74,5 +95,7 @@ jobs:
           path: |
             artifacts/native-guest/**/*.json
             artifacts/native-guest/**/*.txt
+            artifacts/sdk-native/**/*.json
+            artifacts/sdk-native/**/*.txt
           if-no-files-found: error
           retention-days: 7

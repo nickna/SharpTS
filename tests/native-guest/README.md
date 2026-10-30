@@ -39,8 +39,14 @@ reflection findings reached zero and both executed as native Windows programs.
 CI verifies the same strict contract on all six RIDs. The CLI preserves original
 SDK diagnostics and promotes no failed output. This cohort does not complete
 [#1351](https://github.com/nickna/SharpTS/issues/1351)'s class, third-party closure,
-networking, crypto, P/Invoke, SDK platform, benchmark or native debugger acceptance
+networking, crypto, P/Invoke, benchmark or native debugger acceptance
 work.
+
+Each matching runner also packs the candidate `SharpTS.Sdk`, verifies its managed
+build/rebuild/clean/publish behavior, and publishes a native consumer through
+`dotnet publish`. That consumer must preserve its guest portable PDB, pass saved
+IL verification, produce a matching native executable, and preserve spaced
+arguments and exit code 7 with no `dotnet` on PATH.
 
 The recorded elapsed times are test timings, including process/log overhead.
 They do not replace the release performance benchmark. Native symbol files and
