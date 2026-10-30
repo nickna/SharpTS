@@ -117,7 +117,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         if (TryEmitBuiltInClassType(il, ctx, propertyName))
             return true;
 
-        if (propertyName is "Math" or "Reflect")
+        if (propertyName is "Math" or "Reflect" or "ArrayBuffer")
         {
             il.Emit(OpCodes.Ldstr, propertyName);
             il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);

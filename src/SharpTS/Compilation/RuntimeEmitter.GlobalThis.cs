@@ -47,6 +47,7 @@ public partial class RuntimeEmitter
             runtime.Reflect.Namespace is not null ? runtime.Reflect.RequireNamespace().SingletonField : null,
             runtime.Reflect.Namespace is not null ? runtime.Reflect.RequireNamespace().SingletonPopulateMethod : null,
             _features.UsesBuffer ? runtime.RequireBuffer().Type : null,
+            runtime.ArrayBuffer?.Type,
             _features.UsesTextEncoding ? runtime.RequireTextEncoding().EncoderType : null,
             _features.UsesTextEncoding ? runtime.RequireTextEncoding().DecoderType : null,
             _features.UsesCrypto ? runtime.WebCrypto.GetObject : null,
@@ -72,7 +73,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct GlobalPropertyOptionalInputs(
         Type? DateType, Type? RegExpType, FieldBuilder? ReflectSingleton, MethodBuilder? PopulateReflectSingleton,
-        Type? BufferType, Type? EncoderType, Type? DecoderType,
+        Type? BufferType, Type? ArrayBufferType, Type? EncoderType, Type? DecoderType,
         MethodBuilder? GetCryptoObject, MethodBuilder? FetchInvoke,
         MethodBuilder? GetAbortControllerConstructor);
 
@@ -400,6 +401,8 @@ public partial class RuntimeEmitter
         EmitTypeBranch("Promise", _types.TaskOfObject);
         if (inputs.Optional.BufferType is not null)
             EmitTypeBranch("Buffer", inputs.Optional.BufferType!);
+        if (inputs.Optional.ArrayBufferType is not null)
+            EmitTypeBranch("ArrayBuffer", inputs.Optional.ArrayBufferType);
         EmitTypeBranch("Function", inputs.FunctionType);
         if (inputs.Optional.EncoderType is not null)
         {

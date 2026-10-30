@@ -270,7 +270,7 @@ public partial class RuntimeEmitter
         EmitGlobalDescriptorCheck("globalThis", writableGlobalLabel);
         foreach (var globalName in new[]
         {
-            "Array", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
+            "Array", "ArrayBuffer", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
             "Promise", "Function", "Object", "Number", "String", "Boolean",
             "Symbol", "Error", "TypeError", "RangeError", "ReferenceError",
             "SyntaxError", "URIError", "EvalError", "AggregateError", "Math", "JSON"
