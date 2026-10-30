@@ -1791,7 +1791,7 @@ public partial class Interpreter : IDisposable
         }
 
         // Create module instance to track exports (TryAdd returns false if already executed)
-        var moduleInstance = new ModuleInstance();
+        var moduleInstance = CreateModuleInstance(module);
         if (!_loadedModules.TryAdd(module.Path, moduleInstance))
         {
             return;

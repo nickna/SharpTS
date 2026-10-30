@@ -154,7 +154,7 @@ public partial class Interpreter
                 continue;
             newModules.Add(module);
             if (!module.IsScript && !module.IsCommonJs)
-                _loadedModules.TryAdd(module.Path, new ModuleInstance());
+                _loadedModules.TryAdd(module.Path, CreateModuleInstance(module));
         }
 
         var variableResolver = new VariableResolver(this);

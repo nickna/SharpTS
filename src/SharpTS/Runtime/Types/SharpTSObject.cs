@@ -17,6 +17,10 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropertyAccessor, ITypeCategorized
 {
     private readonly Dictionary<string, object?> _fields = fields;
+    // Only actual ES module namespace producers install this hidden data read.
+    // Guest descriptors remain data descriptors, with no visible getter.
+    internal Func<string, object?, object?>? NamespaceDataReader { get; init; }
+    private IReadOnlyDictionary<string, object?>? _namespaceFields;
     // Dictionary preserves insertion order for the untouched, descriptor-free
     // object-literal shape. Keep the permanent side table lazy so the common
     // JSON record never pays for a second collection per object. Mutations that
@@ -204,7 +208,32 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// <summary>
     /// Expose fields for Object.keys() and object rest patterns
     /// </summary>
-    public IReadOnlyDictionary<string, object?> Fields => _fields;
+    public IReadOnlyDictionary<string, object?> Fields => NamespaceDataReader is null
+        ? _fields
+        : _namespaceFields ??= new NamespaceFieldView(this);
+
+    private object? ReadDataProperty(string name, object? value)
+        => NamespaceDataReader is { } read ? read(name, value) : value;
+
+    private sealed class NamespaceFieldView(SharpTSObject owner) : IReadOnlyDictionary<string, object?>
+    {
+        public object? this[string key] => owner.ReadDataProperty(key, owner._fields[key]);
+        public IEnumerable<string> Keys => owner._fields.Keys;
+        public IEnumerable<object?> Values => Keys.Select(key => this[key]);
+        public int Count => owner._fields.Count;
+        public bool ContainsKey(string key) => owner._fields.ContainsKey(key);
+        public bool TryGetValue(string key, out object? value)
+        {
+            if (!owner._fields.TryGetValue(key, out value)) return false;
+            value = owner.ReadDataProperty(key, value);
+            return true;
+        }
+        public IEnumerator<KeyValuePair<string, object?>> GetEnumerator()
+        {
+            foreach (string key in Keys) yield return new(key, this[key]);
+        }
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 
     /// <inheritdoc />
     public IEnumerable<string> PropertyNames => _fields.Keys;
@@ -224,7 +253,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     {
         if (_fields.TryGetValue(name, out object? value))
         {
-            return value;
+            return ReadDataProperty(name, value);
         }
         // Map the implicit `__proto__` slot to the Prototype property so the
         // interpreter's prototype-chain walk (Interpreter.Properties.cs) reaches
@@ -251,7 +280,11 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         out object? value)
     {
         if (_accessorProperties is null)
-            return _fields.TryGetValue(name, out value);
+        {
+            if (!_fields.TryGetValue(name, out value)) return false;
+            value = ReadDataProperty(name, value);
+            return true;
+        }
 
         value = null;
         return false;
@@ -269,7 +302,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public object? GetMember(string name)
     {
-        return _fields.TryGetValue(name, out var value) ? value : SharpTSUndefined.Instance;
+        return _fields.TryGetValue(name, out var value) ? ReadDataProperty(name, value) : SharpTSUndefined.Instance;
     }
 
     /// <inheritdoc />
@@ -942,7 +975,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             // Data property
             return new SharpTSPropertyDescriptor
             {
-                Value = fieldValue,
+                Value = ReadDataProperty(name, fieldValue),
                 HasValue = true,
                 Writable = flags.Writable,
                 HasWritable = true,
@@ -1097,6 +1130,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         out IReadOnlyDictionary<string, object?> fields)
     {
         if (!IsPrimitiveWrapper
+            && NamespaceDataReader is null
             && _descriptors is null
             && _accessorProperties is null
             && _stringPropertyOrder is null)
@@ -1127,6 +1161,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     internal bool TryCopyPlainSpreadFields(Dictionary<string, object?> destination)
     {
         if (GetType() != typeof(SharpTSObject) || IsPrimitiveWrapper
+            || NamespaceDataReader is not null
             || _descriptors is not null || _accessorProperties is not null
             || _stringPropertyOrder is not null || _symbolFields is not null
             || _symbolAccessors is not null || _symbolDescriptors is not null)
