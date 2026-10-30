@@ -4,7 +4,8 @@ Snapshot: 2026-10-30, combined source `3b61153b6576629b8b41b0db8c48b7db9add6660`
 This handoff covers [#1324](https://github.com/nickna/SharpTS/issues/1324),
 [#1356](https://github.com/nickna/SharpTS/issues/1356) and
 [#1357](https://github.com/nickna/SharpTS/issues/1357). It chooses no release version and
-publishes no tag, package, catalog entry or tap. Secret inspection used names only.
+publishes no tag, package, catalog entry or installable cask. The public tap has been initialized;
+secret inspection used names only.
 
 ## Current evidence
 
@@ -27,7 +28,7 @@ No current public release can supply the initial WinGet/cask installers.
 | --- | --- | --- |
 | #1324 | Matching-runner managed/native publishing and final-archive smokes; successful five-RID dry run | Explicit stable version and frozen commit, pre-tag NuGet onboarding, fresh final-ref dry run, successful tagged workflow and ten attached CLI archives |
 | #1356 | Both manifest identities, deterministic release-asset/hash/architecture checks, schema fixtures, gated update workflow and token name configured | Four actual stable Windows ZIPs, generated real manifests, x64/ARM64 install/PATH/uninstall/switching/sandbox evidence, two initial upstream PRs and CLA/review, catalog availability, second-version upgrade |
-| #1357 | Apple Silicon matching runners and extracted-archive smokes; signing/notary helper; ARM-only conflicting cask templates, cask CI and gated update workflow | Apple signing configuration, signed/notarized stable archives and Gatekeeper evidence, public tap, real cask audit/install/uninstall/conflict/Intel rejection/switching, second-version upgrade and restricted update token |
+| #1357 | Public tap initialized; Apple Silicon matching runners and extracted-archive smokes; signing/notary helper; ARM-only conflicting cask templates, cask CI and gated update workflow | Apple signing configuration, signed/notarized stable archives and Gatekeeper evidence, real cask publication/audit/install/uninstall/conflict/Intel rejection/switching, second-version upgrade and restricted update token |
 
 ## Inputs still absent or not established
 
@@ -48,9 +49,10 @@ No current public release can supply the initial WinGet/cask installers.
   [Apple distribution guide](homebrew-distribution.md#configure-macos-signing); the audited
   environment currently has no protection rules or branch restriction. Existing unsigned dry-run
   success establishes no Developer ID, notarization or Gatekeeper acceptance.
-- **Homebrew publication:** a public `nickna/homebrew-tap` was not resolvable; the
-  `homebrew-release` environment, `HOMEBREW_TAP_TOKEN` secret and `HOMEBREW_TAP_READY` flag
-  were absent. Initial tap publication needs the real signed stable archives. Later automation
+- **Homebrew publication:** the public [nickna/homebrew-tap](https://github.com/nickna/homebrew-tap)
+  now exists with its `Casks/` directory and an availability README. Real casks await signed
+  stable archives. The `homebrew-release` environment, `HOMEBREW_TAP_TOKEN` secret and
+  `HOMEBREW_TAP_READY` flag were absent at inspection. Later automation
   needs the restricted token, both required Apple Silicon checks and repository auto-merge.
 - **WinGet:** no initial public `SharpTS.SharpTS` manifests were found. The `winget-release`
   environment contains the `WINGET_CREATE_GITHUB_TOKEN` name and the automation flag is
@@ -75,7 +77,7 @@ certified from the first package version.
    Reuse the [two initial PR drafts](../distribution/winget/README.md), fill the chosen version
    and actual validation evidence, complete the hardware/sandbox/CLA checks, and submit each identity.
    Enable updates only after both identities are accepted.
-4. Create the tap with `brew tap-new nickna/tap`, retaining its generated maintenance workflows.
+4. Populate the initialized public tap, retaining Homebrew's generated maintenance workflows.
    Reuse [cask CI](../distribution/homebrew/.github/workflows/cask-ci.yml),
    [global.json](../distribution/homebrew/global.json), the
    [user-facing README draft](../distribution/homebrew/TAP-README.md.in) and the existing
