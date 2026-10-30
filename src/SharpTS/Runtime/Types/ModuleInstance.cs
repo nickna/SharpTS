@@ -13,6 +13,7 @@ public class ModuleInstance
     /// Named exports from this module (name -> runtime value).
     /// </summary>
     public Dictionary<string, object?> Exports { get; } = [];
+    private Dictionary<string, Func<object?>>? _liveExports;
 
     /// <summary>
     /// Default export value, if any.
@@ -44,7 +45,7 @@ public class ModuleInstance
     /// </summary>
     public SharpTSObject ExportsAsObject()
     {
-        return NamespaceObject ?? new SharpTSObject(new Dictionary<string, object?>(Exports));
+        return NamespaceObject ?? new SharpTSObject(Exports.Keys.ToDictionary(name => name, GetExport));
     }
 
     /// <summary>
@@ -52,7 +53,15 @@ public class ModuleInstance
     /// </summary>
     public object? GetExport(string name)
     {
+        if (_liveExports?.TryGetValue(name, out var read) == true)
+            return read();
         return Exports.TryGetValue(name, out var value) ? value : null;
+    }
+
+    internal void SetLiveExport(string name, Func<object?> read)
+    {
+        Exports.TryAdd(name, SharpTSUndefined.Instance);
+        (_liveExports ??= new(StringComparer.Ordinal))[name] = read;
     }
 
     /// <summary>

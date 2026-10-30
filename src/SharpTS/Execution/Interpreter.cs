@@ -2003,7 +2003,11 @@ public partial class Interpreter : IDisposable
                         }
                         else
                         {
-                            value = importedModuleInstance.GetExport(importedName);
+                            var source = importedModuleInstance;
+                            env.DefineObjectBinding(localName,
+                                () => RuntimeValue.FromBoxed(source.GetExport(importedName)),
+                                (_, _) => throw StrictModeErrors.TypeError($"Cannot assign to import '{localName}'"));
+                            continue;
                         }
                         env.Define(localName, value);
                     }
@@ -2065,7 +2069,10 @@ public partial class Interpreter : IDisposable
                 {
                     if (IsTypeOnlyDeclaration(declaration)) continue;
                     string name = GetDeclaredName(declaration);
-                    _currentModuleInstance.SetExport(name, GetDeclaredValue(declaration));
+                    RuntimeEnvironment bindingEnvironment = _environment;
+                    _currentModuleInstance.SetExport(name, GetDeclaredValue(declaration, bindingEnvironment));
+                    _currentModuleInstance.SetLiveExport(name,
+                        () => GetDeclaredValue(declaration, bindingEnvironment));
                 }
             }
         }
@@ -2078,10 +2085,11 @@ public partial class Interpreter : IDisposable
                     continue;
                 string localName = spec.LocalName.Lexeme;
                 string exportedName = spec.ExportedName?.Lexeme ?? localName;
-                var value = _environment.Get(spec.LocalName).ToObject();
                 if (_currentModuleInstance != null)
                 {
-                    _currentModuleInstance.SetExport(exportedName, value);
+                    RuntimeEnvironment bindingEnvironment = _environment;
+                    _currentModuleInstance.SetLiveExport(exportedName,
+                        () => bindingEnvironment.Get(spec.LocalName).ToObject());
                 }
             }
         }
@@ -2108,7 +2116,7 @@ public partial class Interpreter : IDisposable
             {
                 // For CJS sources, read from the live module.exports object via the full
                 // property-access path so accessor-defined named exports work (matching the
-                // import-side fix). ESM sources use the static Exports dictionary as before.
+                // import-side fix). ESM re-exports retain the source binding.
                 SharpTSObject? cjsExports = sourceModuleInstance.CommonJsModuleObject != null
                     ? sourceModuleInstance.CommonJsModuleObject.GetProperty("exports") as SharpTSObject
                     : null;
@@ -2122,10 +2130,13 @@ public partial class Interpreter : IDisposable
                             continue;
                         string importedName = spec.LocalName.Lexeme;
                         string exportedName = spec.ExportedName?.Lexeme ?? importedName;
-                        object? value = cjsExports != null
-                            ? EvaluateGetOnRecord(cjsExports, importedName)
-                            : sourceModuleInstance.GetExport(importedName);
-                        _currentModuleInstance.SetExport(exportedName, value);
+                        if (cjsExports != null)
+                            _currentModuleInstance.SetExport(exportedName, EvaluateGetOnRecord(cjsExports, importedName));
+                        else
+                        {
+                            var source = sourceModuleInstance;
+                            _currentModuleInstance.SetLiveExport(exportedName, () => source.GetExport(importedName));
+                        }
                     }
                 }
                 else if (cjsExports != null)
@@ -2149,9 +2160,10 @@ public partial class Interpreter : IDisposable
                 else
                 {
                     // Re-export all: export * from './module'
-                    foreach (var (name, value) in sourceModuleInstance.Exports)
+                    foreach (var name in sourceModuleInstance.Exports.Keys)
                     {
-                        _currentModuleInstance.SetExport(name, value);
+                        var source = sourceModuleInstance;
+                        _currentModuleInstance.SetLiveExport(name, () => source.GetExport(name));
                     }
                 }
             }
@@ -2348,7 +2360,7 @@ public partial class Interpreter : IDisposable
     /// <summary>
     /// Gets the name of a declaration.
     /// </summary>
-    private string GetDeclaredName(Stmt decl)
+    private static string GetDeclaredName(Stmt decl)
     {
         return decl switch
         {
@@ -2366,7 +2378,9 @@ public partial class Interpreter : IDisposable
     /// <summary>
     /// Gets the value of a declaration from the environment.
     /// </summary>
-    private object? GetDeclaredValue(Stmt decl)
+    private object? GetDeclaredValue(Stmt decl) => GetDeclaredValue(decl, _environment);
+
+    private static object? GetDeclaredValue(Stmt decl, RuntimeEnvironment bindingEnvironment)
     {
         string name = GetDeclaredName(decl);
         var token = decl switch
@@ -2380,7 +2394,7 @@ public partial class Interpreter : IDisposable
             Stmt.Namespace n => n.Name,
             _ => throw new InterpreterException($"Cannot get value of declaration type {decl.GetType().Name}")
         };
-        return _environment.Get(token).ToObject();
+        return bindingEnvironment.Get(token).ToObject();
     }
 
 }

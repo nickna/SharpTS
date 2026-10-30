@@ -378,7 +378,10 @@ public partial class Interpreter
                 {
                     if (IsTypeOnlyDeclaration(declaration)) continue;
                     string name = GetDeclaredName(declaration);
-                    _currentModuleInstance!.SetExport(name, GetDeclaredValue(declaration));
+                    RuntimeEnvironment bindingEnvironment = _environment;
+                    _currentModuleInstance!.SetExport(name, GetDeclaredValue(declaration, bindingEnvironment));
+                    _currentModuleInstance!.SetLiveExport(name,
+                        () => GetDeclaredValue(declaration, bindingEnvironment));
                 }
             }
             return ExecutionResult.Success();
