@@ -401,6 +401,7 @@ public partial class ILCompiler
         var emitter = new ILEmitter(ctx);
         ctx.CurrentMethodReturnType = _types.Void;
         ctx.IsRuntimeReceiverInitializer = true;
+        emitter.PrepareParameterCaptureCells(constructor?.Parameters ?? []);
         ConfigureClassConstructorReturns(ctx, constructor, declaration.SuperclassExpr != null, forceReceiver: true);
         if (declaration.SuperclassExpr == null)
             EmitConstructedClassPrototype(ctx);
@@ -465,6 +466,11 @@ public partial class ILCompiler
             }
             emitter.EmitParameterBindingInitializer(parameter, parameterInitializers,
                 ILEmitter.ParameterTdzNames(constructor!.Parameters.Skip(index + 1), parameterInitializers));
+            if (emitter.HasParameterCaptureCell(parameter.Name))
+            {
+                il.Emit(OpCodes.Ldloc, parameterLocals[parameter.Name.Lexeme]);
+                emitter.PublishParameterCaptureCell(parameter.Name);
+            }
             SeedCapturedLocal(parameter.Name.Lexeme, parameterLocals[parameter.Name.Lexeme], publishParameter: true);
         }
         ctx.UseOwnedCapturedParameterStorage = true;

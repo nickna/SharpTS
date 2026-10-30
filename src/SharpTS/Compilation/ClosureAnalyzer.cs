@@ -1224,9 +1224,9 @@ public class ClosureAnalyzer : AstVisitorBase
         foreach (var initializer in parameterInitializers?.Values.AsEnumerable() ?? [])
             foreach (var name in LexicalDeclarationBindings.Collect(initializer.Statements))
                 DeclareVariable(name.Lexeme);
+        foreach (var param in parameters) DeclareVariable(param.Name.Lexeme);
         foreach (var param in parameters)
         {
-            DeclareVariable(param.Name.Lexeme);
             if (param.DefaultValue != null)
                 Visit(param.DefaultValue);
             if (parameterInitializers?.TryGetValue(param.Name.Lexeme, out var initializer) == true)
@@ -1308,10 +1308,11 @@ public class ClosureAnalyzer : AstVisitorBase
             foreach (var name in LexicalDeclarationBindings.Collect(initializer.Statements))
                 DeclareVariable(name.Lexeme);
 
-        // Declare parameters (may shadow function name if same identifier)
+        // Every parameter binding exists while defaults run, including in
+        // deferred closures created before a later parameter initializes.
+        foreach (var param in af.Parameters) DeclareVariable(param.Name.Lexeme);
         foreach (var param in af.Parameters)
         {
-            DeclareVariable(param.Name.Lexeme);
             if (param.DefaultValue != null)
                 Visit(param.DefaultValue);
             if (parameterInitializers?.TryGetValue(param.Name.Lexeme, out var initializer) == true)

@@ -21,6 +21,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
         public bool CanOwnGeneratorCells { get; } = canOwnGeneratorCells;
         public bool CanRelayClassSelf { get; } = canRelayClassSelf;
         public Expr.ClassExpr? ClassCaptureOwner { get; } = classCaptureOwner;
+        public bool InParameterDefaults { get; set; }
     }
 
     private sealed class Binding(Token name, Owner owner, bool candidate, Binding? shadowOf, bool lexical,
@@ -42,6 +43,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
         public bool BodyVarDeclared { get; set; }
         public bool NeedsUndefinedCell { get; set; }
         public bool ParameterPattern { get; set; }
+        public bool FormalParameter { get; set; }
         public bool ClassStaticBlockVar { get; set; }
     }
 
@@ -347,6 +349,9 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
     {
         var binding = VisibleBinding(name);
         if (binding is null) return;
+        if (binding.FormalParameter && binding.Owner.InParameterDefaults &&
+            !ReferenceEquals(binding.Owner, _owners[^1]))
+            binding.ParameterPattern = true;
         if (binding.ParameterPattern)
         {
             if (ReferenceEquals(binding.Owner, _owners[^1])) return;
@@ -607,7 +612,11 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             if (self is not null) Declare(self);
             if (node is Stmt.Function or Expr.ArrowFunction { HasOwnThis: true })
                 Declare(new Token(TokenType.IDENTIFIER, "arguments", null, 0));
-            foreach (var parameter in parameters) Declare(parameter.Name);
+            foreach (var parameter in parameters)
+            {
+                Declare(parameter.Name);
+                _declarations[parameter.Name].FormalParameter = synchronous && !directSuspension;
+            }
             var initializers = Runtime.ParameterBinder.ParameterInitializers(body);
             foreach (var initializer in initializers?.Values.AsEnumerable() ?? [])
                 foreach (var name in LexicalDeclarationBindings.Collect(initializer.Statements))
@@ -615,12 +624,14 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
                     Declare(name);
                     _declarations[name].ParameterPattern = synchronous && !directSuspension;
                 }
+            _owners[^1].InParameterDefaults = true;
             foreach (var parameter in parameters)
             {
                 if (parameter.DefaultValue is { } value) Visit(value);
                 if (initializers?.TryGetValue(parameter.Name.Lexeme, out var initializer) == true)
                     Visit(initializer);
             }
+            _owners[^1].InParameterDefaults = false;
             var statements = Runtime.ParameterBinder.BodyStatements(body);
             EnterScope(statements, allowCandidates: false, hoistVars: true);
             try

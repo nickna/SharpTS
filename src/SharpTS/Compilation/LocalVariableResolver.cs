@@ -291,6 +291,13 @@ public class LocalVariableResolver : IVariableResolver
     {
         bool hasArgument = _ctx.TryGetParameter(name, out var argIndex);
         if (!hasArgument && fallbackLocal is null) return null;
+        if (_ctx.ParameterCaptureCells.TryGetValue(name, out var binding))
+        {
+            _il.Emit(OpCodes.Ldloc, binding.Cell);
+            _il.Emit(OpCodes.Ldfld, LexicalCellStorage.ForDeclaration(_ctx, binding.Declaration).ValueField);
+            _ctx.EmitLexicalTdzValueCheck(_il, name, provenCell: true);
+            return StackType.Unknown;
+        }
 
         // Once seeded, this callable's own shared storage is authoritative.
         // A parent display-class reference never supplies an owned parameter.

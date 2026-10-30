@@ -190,9 +190,9 @@ public partial class CompilationContext
     /// Checks a value already on the IL stack for the captured-lexical TDZ
     /// sentinel. The original value remains on the stack when initialized.
     /// </summary>
-    internal bool EmitLexicalTdzValueCheck(ILGenerator il, string name)
+    internal bool EmitLexicalTdzValueCheck(ILGenerator il, string name, bool provenCell = false)
     {
-        if (LexicalTdzNames?.Contains(name) != true || Runtime == null)
+        if ((!provenCell && LexicalTdzNames?.Contains(name) != true) || Runtime == null)
             return false;
 
         var initialized = il.DefineLabel();
@@ -301,6 +301,8 @@ public partial class CompilationContext
     internal bool UseOwnedCapturedParameterStorage { get; set; }
 
     internal HashSet<string>? PublishedCapturedParameterNames { get; set; }
+
+    internal Dictionary<string, (Token Declaration, LocalBuilder Cell)> ParameterCaptureCells { get; } = new(StringComparer.Ordinal);
 
     // Initialized parameter bindings survive initializer-free var redeclarations,
     // including receiver adapters whose parameters live in locals rather than args.

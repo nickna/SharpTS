@@ -69,6 +69,7 @@ public partial class ILEmitter
         bool publishCapturedParameters = false)
     {
         var builder = _ctx.ILBuilder;
+        PrepareParameterCaptureCells(parameters);
         var initializers = PrepareParameterBindingInitializers(body);
 
         for (int i = 0; i < parameters.Count; i++)
@@ -118,6 +119,14 @@ public partial class ILEmitter
     private void PublishCapturedParameter(Stmt.Parameter parameter)
     {
         string name = parameter.Name.Lexeme;
+        if (_ctx.ParameterCaptureCells.TryGetValue(name, out var binding) &&
+            ReferenceEquals(binding.Declaration, parameter.Name) && _ctx.TryGetParameter(name, out int sourceArgument))
+        {
+            IL.Emit(OpCodes.Ldarg, sourceArgument);
+            if (_ctx.TryGetParameterType(name, out var sourceType) && sourceType?.IsValueType == true)
+                IL.Emit(OpCodes.Box, sourceType);
+            PublishParameterCaptureCell(parameter.Name);
+        }
         LocalBuilder? displayClass = null;
         FieldBuilder? field = null;
         if (_ctx.FunctionDisplayClassLocal is { } functionDisplayClass
@@ -156,6 +165,34 @@ public partial class ILEmitter
 
     internal void EmitDefaultParameterExpression(Expr expression, IEnumerable<string> tdzNames)
         => EmitInParameterEnvironment(tdzNames, () => EmitExpression(expression));
+
+    internal void PrepareParameterCaptureCells(IEnumerable<Stmt.Parameter> parameters)
+    {
+        foreach (var parameter in parameters)
+        {
+            if (_ctx.ClosureAnalyzer?.IsLoopBodyCellDeclaration(parameter.Name) != true ||
+                _ctx.ParameterCaptureCells.ContainsKey(parameter.Name.Lexeme)) continue;
+            EnterLexicalCellBinding(parameter, parameter.Name, []);
+            _ctx.ParameterCaptureCells.Add(parameter.Name.Lexeme,
+                (parameter.Name, _ctx.CellBindingLocals[parameter.Name.Lexeme]));
+        }
+    }
+
+    internal bool HasParameterCaptureCell(Token parameter) =>
+        _ctx.ParameterCaptureCells.TryGetValue(parameter.Lexeme, out var binding) &&
+        ReferenceEquals(binding.Declaration, parameter);
+
+    internal void PublishParameterCaptureCell(Token parameter)
+    {
+        if (!HasParameterCaptureCell(parameter))
+            throw new InvalidOperationException("Missing owned parameter capture cell.");
+        var binding = _ctx.ParameterCaptureCells[parameter.Lexeme];
+        var value = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, value);
+        IL.Emit(OpCodes.Ldloc, binding.Cell);
+        IL.Emit(OpCodes.Ldloc, value);
+        IL.Emit(OpCodes.Stfld, LexicalCellStorage.ForDeclaration(_ctx, parameter).ValueField);
+    }
 
     internal Dictionary<Token, Stmt.Sequence>? PrepareParameterBindingInitializers(List<Stmt>? body)
     {
