@@ -58,11 +58,6 @@ public sealed class PromiseConstructorPrototypeMutationTests
         {
             yield return [row[0], row[1], row[2], ExecutionMode.Interpreted];
 
-            // #2652: compiled native species lookup and inherited static presence are incomplete.
-            // #2653: reaction species still selects P after its constructor parent is detached.
-            if ((string)row[0] == "live-native-static-presence-and-species")
-                continue;
-
             yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
         }
     }
