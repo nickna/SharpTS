@@ -41,6 +41,58 @@ public partial class RuntimeEmitter
 
     private readonly record struct GetOwnDescriptorProxyReceiverInputs(ProxyDescriptorCallInputs ProxyDescriptor, FieldInfo UndefinedInstance);
 
+    private void EmitGetOwnDescriptorPrimitiveStringIndex(ILGenerator il,
+        LocalBuilder propertyName, LocalBuilder result, Label end)
+    {
+        var next = il.DefineLabel();
+        var text = il.DeclareLocal(_types.String);
+        var index = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, text);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Brfalse, next);
+        il.Emit(OpCodes.Ldloc, propertyName);
+        il.Emit(OpCodes.Ldloca, index);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, next);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, next);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, next);
+        // Parsing alone accepts named properties such as "01", "+1" and "-0".
+        // A string's virtual indices require the canonical decimal spelling.
+        il.Emit(OpCodes.Ldloca, index);
+        il.Emit(OpCodes.Call, _types.GetProperty(typeof(System.Globalization.CultureInfo), "InvariantCulture").GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", typeof(IFormatProvider)));
+        il.Emit(OpCodes.Ldloc, propertyName);
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, next);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        foreach (string flag in new[] { "writable", "enumerable", "configurable" })
+        {
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldstr, flag);
+            il.Emit(flag == "enumerable" ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        }
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Br, end);
+        il.MarkLabel(next);
+    }
+
     private readonly record struct GetOwnDescriptorGlobalReceiverInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder GlobalThisGetProperty,

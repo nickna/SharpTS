@@ -1390,6 +1390,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, propNameLocal);
 
         EmitGetOwnDescriptorPrimitiveStringLength(il, propNameLocal, resultDictLocal, endLabel);
+        EmitGetOwnDescriptorPrimitiveStringIndex(il, propNameLocal, resultDictLocal, endLabel);
 
         EmitGetOwnDescriptorGlobalReceiver(
             il,
