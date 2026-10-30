@@ -353,7 +353,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, inputs.DynamicConstruction.FactoryAttributeType);
         il.Emit(OpCodes.Ldfld, inputs.DynamicConstruction.FactoryAttributeName);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        if (_nativeConstructorFactories is { } factories) il.Emit(OpCodes.Call, factories.FindFactory);
+        else il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
         il.Emit(OpCodes.Call, _types.GetMethod(typeof(Delegate), "CreateDelegate", _types.Type, typeof(MethodInfo)));
         il.Emit(OpCodes.Castclass, typeof(Func<object[], object, object>));
         il.Emit(OpCodes.Ldarg_1);

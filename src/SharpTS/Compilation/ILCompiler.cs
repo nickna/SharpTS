@@ -753,6 +753,7 @@ public partial class ILCompiler
             _nativeSourceOwners = new(_moduleBuilder, _types);
             _nativeGenericMethodNormalization = new(_moduleBuilder, _types);
             _nativeConstructedBodies = new(_moduleBuilder, _types);
+            _nativeConstructorFactories = new(_moduleBuilder, _types);
             _nativeUnionArgumentConversion = new(_moduleBuilder, _types);
             _nativeRuntimeClassInitialization = new(_moduleBuilder, _types);
             _nativeStaticMemberPresence = new(_moduleBuilder, _types);
@@ -784,7 +785,8 @@ public partial class ILCompiler
         _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput,
             _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true),
             _nativeStaticFieldLookup?.FindField, _nativeConstructorMembers?.GetMembers,
-            nativeDeletionLookup: _nativeDeletionLookup, nativeHasInMemberLookup: _nativeHasInMembers?.HasMember) { EntryModulePath = _entryModulePath }
+            nativeDeletionLookup: _nativeDeletionLookup, nativeHasInMemberLookup: _nativeHasInMembers?.HasMember,
+            nativeConstructorFactories: _nativeConstructorFactories) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy,
                 _nativeSourceOwners, nativeClassInitializer: _nativeRuntimeClassInitialization?.Initialize,
                 nativeStaticMemberPresence: _nativeStaticMemberPresence?.HasMember,
@@ -1271,6 +1273,7 @@ public partial class ILCompiler
         }
         _nativeSourceOwners?.CompleteEmission(_classes.GenericParameters, _classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
+        _nativeConstructorFactories?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeClassInitialization?.CompleteEmission();
         _nativeNumericRest4Binding?.CompleteEmission();
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
@@ -1943,6 +1946,7 @@ public partial class ILCompiler
         }
         _nativeSourceOwners?.CompleteEmission(_classes.GenericParameters, _classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
+        _nativeConstructorFactories?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeClassInitialization?.CompleteEmission();
         _nativeNumericRest4Binding?.CompleteEmission();
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);

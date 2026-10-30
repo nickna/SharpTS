@@ -918,3 +918,23 @@ constructor control removes exactly the InvokeConstructed IL2075 finding with
 none added. Other new-target and symbol-owner reflection findings remain
 visible in broader feature controls under #1351; this slice does not establish
 warning-free acceptance for that full corpus.
+
+### Exact source constructor factories
+
+Native construction records the actual private static factory immediately after
+the source class's factory marker is emitted. Completion validates its output
+module, completed source owner, emitted body and (object[], object) -> object
+ABI. Nongeneric inventories return the literal factory MethodInfo for the
+recorded owner/name/declared-private-static flag protocol. Delegate creation,
+caller arguments, defaults/rest and new.target ordering keep the existing path.
+
+Unproved owned generic families retain the whole original binder operation.
+Their ownership check uses real runtime Type identity and the actual recorded
+generic definition; a foreign marker or hostile TypeDelegator cannot authorize
+lookup. This slice does not manufacture closed factory tokens from raw generic
+arguments. Ordinary managed output retains its original instructions.
+
+The strict Map/Set/RegExp control changes from two findings to one, removing
+only ConstructWithNewTarget's factory GetMethod IL2070 and adding none.
+Activator's separate IL2067 remains visible under #1351. The independent
+native Array.from(arguments) limitation is tracked in #3094.

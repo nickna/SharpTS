@@ -25,6 +25,7 @@ public partial class ILCompiler
             _types.Object, [_types.ObjectArray, _types.Object]);
         owner.SetCustomAttribute(_runtime.DynamicConstruction.FactoryAttributeConstructor,
             CustomAttributeEncoder.Encode(_runtime.DynamicConstruction.FactoryAttributeConstructor, name));
+        _nativeConstructorFactories?.Record(owner, factory);
 
         var parameters = constructor.GetParameters();
         var sourceParameters = ResolveConstructorFactorySourceParameters(owner, declaration);
