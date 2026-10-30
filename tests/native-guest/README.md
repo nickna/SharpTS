@@ -7,6 +7,7 @@ NativeAOT compilation of the SharpTS compiler host.
 The CI cohort runs on matching Windows, Linux and macOS x64/ARM64 runners:
 
 - `language`: loops, numeric functions, callbacks, arrays and JSON.
+- `classes`: a source class, prototype allocation and field access.
 - `arguments`: spaced arguments and a nonzero exit code.
 - `modules`: an imported function and module initialization.
 - `collections`: Map, Set and regular expressions.
@@ -16,6 +17,7 @@ The CI cohort runs on matching Windows, Linux and macOS x64/ARM64 runners:
   parameters in TDZ even when an initialized outer binding has the same name.
 - `exceptions`: guest object identity/properties across a catch.
 - `crypto`: Node-compatible SHA256 hashing and random-byte length.
+- `networking`: a loopback-only TCP request/response and bounded socket cleanup.
 - `bcl`: direct immutable CLR constructor, member and property access, plus
   `RuntimeFeature.IsDynamicCodeSupported == false` in the executed guest.
 
@@ -41,9 +43,8 @@ The collection and Promise fixtures joined the CI cohort after their constructor
 reflection findings reached zero and both executed as native Windows programs.
 CI verifies the same strict contract on all six RIDs. The CLI preserves original
 SDK diagnostics and promotes no failed output. This cohort does not complete
-[#1351](https://github.com/nickna/SharpTS/issues/1351)'s class, third-party closure,
-networking, crypto, P/Invoke, benchmark or native debugger acceptance
-work.
+[#1351](https://github.com/nickna/SharpTS/issues/1351)'s broader generic-class,
+dependency-closure, networking, P/Invoke, benchmark and release acceptance work.
 
 Each matching runner also packs the candidate `SharpTS.Sdk`, verifies its managed
 build/rebuild/clean/publish behavior, and publishes a native consumer through

@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)][string]$RuntimeIdentifier,
     [string]$CompilerPath = 'src/SharpTS/bin/Release/net10.0/SharpTS.dll',
     [string]$ResultsDirectory = 'artifacts/native-guest',
-    [string[]]$Cases = @('language', 'arguments', 'modules', 'collections', 'generators', 'async', 'parameter-defaults', 'exceptions', 'crypto', 'bcl')
+    [string[]]$Cases = @('language', 'classes', 'arguments', 'modules', 'collections', 'generators', 'async', 'parameter-defaults', 'exceptions', 'crypto', 'networking', 'bcl')
 )
 
 Set-StrictMode -Version Latest
@@ -88,6 +88,7 @@ function Assert-NativeImage([string]$Path) {
 
 $cohort = @{
     language = @{ source = 'language.ts'; expected = "6`n2,4,6`n{`"answer`":42,`"ok`":true}`n42`n"; arguments = @(); exitCode = 0 }
+    classes = @{ source = 'classes.ts'; expected = "7`n"; arguments = @(); exitCode = 0 }
     arguments = @{ source = 'arguments.ts'; expected = "one|two words`n"; arguments = @('one', 'two words'); exitCode = 7 }
     modules = @{ source = 'modules/main.ts'; expected = "42`n"; arguments = @(); exitCode = 0 }
     collections = @{ source = 'collections.ts'; expected = "42`n2`ntrue`n"; arguments = @(); exitCode = 0 }
@@ -96,6 +97,7 @@ $cohort = @{
     'parameter-defaults' = @{ source = 'parameter-defaults.ts'; expected = "ReferenceError`nReferenceError`n"; arguments = @(); exitCode = 0 }
     exceptions = @{ source = 'exceptions.ts'; expected = "guest error 42`n"; arguments = @(); exitCode = 0 }
     crypto = @{ source = 'crypto.ts'; expected = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad`n8`n"; arguments = @(); exitCode = 0 }
+    networking = @{ source = 'networking.ts'; expected = "loopback=pong`nclosed`n"; arguments = @(); exitCode = 0 }
     bcl = @{ source = 'bcl.ts'; expected = "native 6`nfalse`n"; arguments = @(); exitCode = 0 }
 }
 try {
