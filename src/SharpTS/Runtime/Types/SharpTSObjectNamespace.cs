@@ -48,6 +48,13 @@ public class SharpTSObjectNamespace : ISharpTSCallable
 
     internal void SetPropertyStrict(string name, object? value, bool strictMode)
     {
+        // A virtual native method is already an own, nonenumerable property.
+        // Preserve its attributes when assignment first materializes its value;
+        // a deleted method is a new property and keeps ordinary creation rules.
+        if (_extras.GetOwnPropertyDescriptor(name) is null
+            && !_deletedBuiltIns.Contains(name) && IsBuiltIn(name))
+            _extras.DefineProperty(name, new SharpTSPropertyDescriptor(
+                GetMember(name), writable: true, enumerable: false, configurable: true));
         _extras.SetPropertyStrict(name, value, strictMode);
         if (_extras.GetOwnPropertyDescriptor(name) is not null)
             _deletedBuiltIns.Remove(name);
