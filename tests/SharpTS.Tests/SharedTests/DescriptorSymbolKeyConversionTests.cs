@@ -18,11 +18,7 @@ public sealed class DescriptorSymbolKeyConversionTests
     }
 
     public static IEnumerable<object[]> Modes() => Cases().SelectMany(row =>
-        // The Object API's interpreter conversion is independently tracked;
-        // this repair covers the emitted Object/Reflect shared helper.
-        ((string)row[0] is "object-and-reflect-once" or "abrupt-and-nonprimitive"
-            ? new[] { ExecutionMode.Compiled }
-            : new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled })
+        new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }
         .Select(mode => new object[] { row[0], row[1], row[2], mode }));
 
     [Theory, MemberData(nameof(Modes))]

@@ -1061,21 +1061,18 @@ public static partial class ObjectBuiltIns
             throw new ThrowException(new SharpTSTypeError(
                 "Object.getOwnPropertyDescriptor called on null or undefined"));
 
+        var keyArg = interpreter.ToPropertyKey(args.Count > 1 ? args[1] : SharpTSUndefined.Instance);
         if (target is ISharpTSOwnPropertyObject carrier)
         {
-            var key = interpreter.ToPropertyKey(args.Count > 1 ? args[1] : SharpTSUndefined.Instance);
-            var ownDescriptor = key is SharpTSSymbol symbol
+            var ownDescriptor = keyArg is SharpTSSymbol symbol
                 ? carrier.OwnProperties.GetOwnPropertyDescriptor(symbol)
-                : carrier.OwnProperties.GetOwnPropertyDescriptor((string)key);
+                : carrier.OwnProperties.GetOwnPropertyDescriptor((string)keyArg);
             return ownDescriptor?.ToObject() ?? (object)SharpTSUndefined.Instance;
         }
 
         // Symbol-keyed lookup goes through the symbol-dict path; the spec keeps
         // symbols distinct from string keys, and SharpTSObject/Instance store
         // them in a separate map.
-        object? keyArg = args.Count > 1
-            ? args[1]
-            : SharpTSUndefined.Instance;
         if (keyArg is SharpTSSymbol symKey)
         {
             if (target is SharpTSProxy symbolProxy)
@@ -1083,8 +1080,7 @@ public static partial class ObjectBuiltIns
             return GetOwnPropertyDescriptorBySymbol(target, symKey, interpreter);
         }
 
-        // ECMA-262 §7.1.19: ToPropertyKey on the name argument.
-        var propertyKey = interpreter.ToPropertyKeyString(keyArg);
+        var propertyKey = (string)keyArg;
 
         if (target is SharpTSProxy proxy)
         {
