@@ -53,6 +53,12 @@ public abstract partial class ExpressionEmitterBase
             }).ToArray();
         else arguments = expression.TypeArgs?.Select(ResolveTypeArg).ToArray() ?? [];
 
+        if (Ctx.Runtime?.DynamicConstruction.NativeMetadata is { } native)
+        {
+            EmitNativeConstructorClosure(constructor, expression, checkedArguments, arguments, native);
+            return;
+        }
+
         var done = IL.DefineLabel();
         var type = IL.DeclareLocal(Types.Type);
         IL.Emit(OpCodes.Ldloc, constructor);

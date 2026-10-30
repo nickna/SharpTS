@@ -9,6 +9,8 @@ public partial class ILCompiler
     private NativePropertyLookupCatalog? _nativePropertyLookup;
     private NativeMethodLookupCatalog? _nativeMethodLookup;
     private NativeHasInMemberLookup? _nativeHasInMembers;
+    private NativeEvaluatedConstructorMetadata? _nativeEvaluatedConstructors;
+    internal NativeEvaluatedConstructorMetadata? NativeEvaluatedConstructors => _nativeEvaluatedConstructors;
     private NativeConstructorActivationLookup? _nativeConstructorActivation;
     internal NativeConstructorActivationLookup? NativeConstructorActivation => _nativeConstructorActivation;
     internal NativeHasInMemberLookup? NativeHasInMembers => _nativeHasInMembers;
@@ -67,6 +69,8 @@ public partial class ILCompiler
             throw new InvalidOperationException("Native property metadata has not completed source emission.");
         if (_nativeHasInMembers?.IsComplete != true)
             throw new InvalidOperationException("Native in-operator member metadata has not completed source emission.");
+        if (_nativeEvaluatedConstructors?.IsComplete != true)
+            throw new InvalidOperationException("Native evaluated constructor metadata has not completed source emission.");
         if (_nativeConstructorActivation?.IsComplete != true)
             throw new InvalidOperationException("Native constructor-value metadata has not completed source emission.");
         if (_nativeStaticFieldLookup?.IsComplete != true)

@@ -74,7 +74,8 @@ public partial class RuntimeEmitter
     internal EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, RuntimeFeatureSet features, FunctionEmissionPolicy functionPolicy,
         NativeSourceOwnerCatalog? sourceOwners = null, MethodInfo? nativeClassInitializer = null,
         MethodInfo? nativeStaticMemberPresence = null, MethodBuilder? nativePropertyGetter = null,
-        EmittedNativeMethodLookupRuntime? nativeMethodLookup = null)
+        EmittedNativeMethodLookupRuntime? nativeMethodLookup = null,
+        EmittedNativeConstructorMetadataRuntime? nativeConstructorMetadata = null)
     {
         _nativeDeletionLookup?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         _nativeConstructorFactories?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
@@ -99,6 +100,12 @@ public partial class RuntimeEmitter
         if (_emitHosted)
             _features.UsesPromise = true;
         var runtime = new EmittedRuntime { NativeConstructorActivation = _nativeConstructorActivation };
+        if (nativeConstructorMetadata is not null)
+        {
+            if (!_emitNativeCallables)
+                throw new InvalidOperationException("Native constructor metadata requires native output mode.");
+            runtime.DynamicConstruction.DeclareNativeMetadata(moduleBuilder, nativeConstructorMetadata);
+        }
         if (nativePropertyGetter is not null) runtime.ReflectedMethods.DeclareNativePropertyGetter(moduleBuilder, nativePropertyGetter);
         if (nativeMethodLookup is not null) runtime.ReflectedMethods.DeclareNativeMethodLookup(moduleBuilder, nativeMethodLookup);
         if (sourceOwners != null) runtime.ClassInitialization.DeclareSourceOwners(sourceOwners);

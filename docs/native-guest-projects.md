@@ -970,3 +970,33 @@ diagnostic with no findings added. Their separate factory GetMethod diagnostic
 requires the constructor-factory slice; generic legacy paths retain their actual
 diagnostics rather than suppressing them. Default managed emission retains its
 original constructor instructions.
+
+### Late evaluated constructor metadata
+
+Native frontend construction consumes the activation catalog's immutable completed
+constructor-value snapshot after runtime and source producer bodies finish in both
+compiler pipelines. Admission comes from actual token/value emission, with closed
+owner and base contexts validated independently for the late operation. Checked
+type annotations remain inputs to the existing legacy argument selection.
+
+For proved exact closed values, CloseEvaluated returns the original evaluated Type
+object. FirstPublicConstructor executes the full literal GetConstructors()[0]
+operation, preserving loaded constructor order and the zero-constructor exception.
+Callee evaluation, argument evaluation, parameter padding/conversion and Invoke
+remain at their existing caller locations. No raw generic arguments manufacture new
+closed tokens.
+
+Unproved owned source generic families keep the complete previous closure and
+constructor-selection operations behind exact real RuntimeType and owned generic
+definition guards. The generic definition is the only portable family token;
+an unbound self TypeSpec is never transplanted into a nongeneric helper. Foreign
+and custom Type objects receive the named guest TypeError before their virtual
+metadata can authorize a query. Blockers and legacy diagnostics remain visible.
+
+The ordinary held-function construction control changes from five strict
+diagnostics to zero, with exactly five removed and none added. Its saved initializer
+previously contained one MakeGenericType and one GetConstructors instruction;
+the finite replacement contains neither raw operation in that caller. Actual
+native execution and the independent initializer/hostile-Type query probe pass.
+Ordinary managed output retains identical method bodies and PE sizes. This
+checkpoint does not establish strict support for unproved source generic families.

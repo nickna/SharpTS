@@ -767,9 +767,14 @@ public partial class ILEmitter
             "GetConstructors",
             Type.EmptyTypes);
         IL.Emit(OpCodes.Ldloc, typeLocal);
-        IL.Emit(OpCodes.Callvirt, getConstructorsMethod);
-        IL.Emit(OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Ldelem_Ref);
+        if (_ctx.Runtime.DynamicConstruction.NativeMetadata is { } native)
+            IL.Emit(OpCodes.Call, native.FirstPublicConstructor);
+        else
+        {
+            IL.Emit(OpCodes.Callvirt, getConstructorsMethod);
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Ldelem_Ref);
+        }
         var ctorLocal = IL.DeclareLocal(typeof(ConstructorInfo));
         IL.Emit(OpCodes.Stloc, ctorLocal);
 

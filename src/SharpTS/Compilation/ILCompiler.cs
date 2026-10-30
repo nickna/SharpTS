@@ -766,6 +766,7 @@ public partial class ILCompiler
             _nativeMethodLookup = new(_moduleBuilder, _types);
             _nativeHasInMembers = new(_moduleBuilder, _types);
             _nativeConstructorActivation = new(_moduleBuilder, _types);
+            _nativeEvaluatedConstructors = new(_moduleBuilder, _types);
             _functionEmissionPolicy = _functionEmissionPolicy with
             {
                 NativeGenericNormalizer = _nativeGenericMethodNormalization.Normalize,
@@ -793,7 +794,8 @@ public partial class ILCompiler
                 _nativeSourceOwners, nativeClassInitializer: _nativeRuntimeClassInitialization?.Initialize,
                 nativeStaticMemberPresence: _nativeStaticMemberPresence?.HasMember,
                 nativePropertyGetter: _nativePropertyLookup?.FindGetter,
-                nativeMethodLookup: _nativeMethodLookup?.Handles);
+                nativeMethodLookup: _nativeMethodLookup?.Handles,
+                nativeConstructorMetadata: _nativeEvaluatedConstructors?.Handles);
         if (_runtime.GuestOwnProperties is { } own) GetClassRegistry().BeginNativeOwnProperties(own);
         _typeMapper.SetRuntime(_runtime);
     }
@@ -1293,6 +1295,8 @@ public partial class ILCompiler
         _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime);
         _nativeHasInMembers?.CompleteEmission(_nativeMethodLookup!, _nativeSourceOwners!, _runtime);
         _nativeConstructorActivation?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        if (_nativeEvaluatedConstructors is not null)
+            _nativeEvaluatedConstructors.CompleteEmission(_nativeConstructorActivation!.CompletedSnapshot, _runtime);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
@@ -1967,6 +1971,8 @@ public partial class ILCompiler
         _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime);
         _nativeHasInMembers?.CompleteEmission(_nativeMethodLookup!, _nativeSourceOwners!, _runtime);
         _nativeConstructorActivation?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        if (_nativeEvaluatedConstructors is not null)
+            _nativeEvaluatedConstructors.CompleteEmission(_nativeConstructorActivation!.CompletedSnapshot, _runtime);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
