@@ -6,8 +6,8 @@ Measured against the fixed TypeScript v6.0.3 revision
 All twelve have the type outcome `Mismatch`; the pilot measures existing gaps
 and does not claim inferred-type parity.
 
-The upstream references contain **584 observations**: **180 exact matches**,
-**58 type-text differences**, **159 missing source observations**, and
+The upstream references contain **584 observations**: **205 exact matches**,
+**33 type-text differences**, **159 missing source observations**, and
 **187 unsupported displays**. There are **zero extra observations**, harness
 errors or missing baselines. SharpTS produces 425 corresponding source facts;
 unsupported facts are included in that count and never count as matches.
@@ -19,24 +19,23 @@ unsupported facts are included in that count and never count as matches.
 | `es2020/constructBigint.ts` | 13 | 0 | 11 | 4 |
 | `es2021/logicalAssignment/logicalAssignment9.ts` | 11 | 0 | 1 | 0 |
 | `es6/Symbols/symbolDeclarationEmit1.ts` | 4 | 0 | 1 | 0 |
-| `types/conditional/inferTypes1.ts` | 36 | 17 | 79 | 89 |
+| `types/conditional/inferTypes1.ts` | 43 | 10 | 79 | 89 |
 | `types/conditional/inferTypesWithExtends2.ts` | 0 | 0 | 4 | 2 |
 | `types/keyof/keyofIntersection.ts` | 0 | 0 | 2 | 18 |
-| `types/literal/literalTypes1.ts` | 36 | 25 | 2 | 0 |
+| `types/literal/literalTypes1.ts` | 54 | 7 | 2 | 0 |
 | `types/typeRelationships/assignmentCompatibility/intersectionIncludingPropFromGlobalAugmentation.ts` | 3 | 6 | 2 | 4 |
 | `types/typeRelationships/subtypesAndSuperTypes/stringLiteralTypeIsSubtypeOfString.ts` | 60 | 9 | 3 | 70 |
 | `types/typeRelationships/subtypesAndSuperTypes/subtypesOfUnion.ts` | 13 | 1 | 51 | 0 |
 
 ## Triage of every text difference
 
-The first fix for **25 differences** belongs in checking/inference. Two scoped
-follow-ups preserve the pinned source evidence instead of expanding this pilot
-into a general checker campaign:
+Two checking/inference fixes resolve **25 former differences** without changing
+the selected source observations or comparison policy:
 
 | Cluster | Observations | Follow-up |
 |---|---:|---|
-| Switch case/default bodies retain the original literal union | 18 | [#3027](https://github.com/nickna/SharpTS/issues/3027) |
-| Higher-order indexed/conditional inference retains `infer R` or loses constraints | 7 | [#3029](https://github.com/nickna/SharpTS/issues/3029) |
+| Switch case/default bodies now retain the narrowed literal type | 18 | [#3027](https://github.com/nickna/SharpTS/issues/3027) |
+| Higher-order indexed/conditional inference now resolves the matched return type | 7 | [#3029](https://github.com/nickna/SharpTS/issues/3029) |
 
 The indexed global-object mismatch from [#3024](https://github.com/nickna/SharpTS/issues/3024)
 is now an exact match. Its missing type-query name observation remains visible;
