@@ -51,6 +51,9 @@ public class CliNativeGuestProjectTests
     [InlineData("new Proxy({}, {});", "Proxy")]
     [InlineData("new Intl.NumberFormat();", "Intl")]
     [InlineData("import * as vm from 'vm'; new vm.Script('1');", "vm")]
+    [InlineData("import { Worker } from 'node:worker_threads'; new Worker('child.ts');", "Worker")]
+    [InlineData("import * as cluster from 'node:cluster'; cluster.fork();", "cluster")]
+    [InlineData("import { fork } from 'node:child_process'; fork('child.ts');", "child_process.fork")]
     public void RuntimeDependentFeaturesRefuseBeforeWritingProject(string source, string feature)
     {
         using var directory = CliTestHelper.CreateTempDirectory();
@@ -59,6 +62,27 @@ public class CliNativeGuestProjectTests
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("SHARPTS401", result.StandardOutput + result.StandardError);
         Assert.Contains(feature, result.StandardOutput + result.StandardError, StringComparison.OrdinalIgnoreCase);
+        Assert.False(Directory.Exists(directory.GetPath("native")));
+    }
+
+    [Fact]
+    public void ClrEventCallbackRefusesBeforeWritingProject()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile("main.ts", """
+            @DotNetType("System.AppDomain")
+            declare class AppDomain {
+                static readonly CurrentDomain: AppDomain;
+                addEventListener(name: string, handler: (sender: any, args: any) => void): void;
+            }
+            AppDomain.CurrentDomain.addEventListener("ProcessExit", (sender, args) => {});
+            """);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --compile main.ts --emit-native-project native --runtime {HostRid} --msbuild-errors", directory.Path);
+        string output = result.StandardOutput + result.StandardError;
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("SHARPTS405", output);
+        Assert.Contains("System.EventHandler", output);
+        Assert.Contains("Use managed output", output);
         Assert.False(Directory.Exists(directory.GetPath("native")));
     }
 
