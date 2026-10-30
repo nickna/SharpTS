@@ -180,6 +180,10 @@ public static class ReflectBuiltIns
                         return RuntimeValue.FromBoolean(inst.DeleteField(propertyKey) || inst.GetOwnPropertyDescriptor(propertyKey) is null);
                     case SharpTSPromise promise:
                         return RuntimeValue.FromBoolean(promise.DeletePropertyStrict(propertyKey, false));
+                    case SharpTSDate date:
+                        return RuntimeValue.FromBoolean(
+                            ObjectBuiltIns.OwnPropertyDescriptorOf(interpreter, date, propertyKey) is null
+                                || date.DeleteExtra(propertyKey));
                     case SharpTSClassPrototype prototype:
                         return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
                     case SharpTSClass klass:
