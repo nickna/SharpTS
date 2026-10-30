@@ -217,6 +217,7 @@ public sealed record VmContextOptions(
 /// </summary>
 internal sealed class CompiledCallableAdapter(object target, MethodInfo invokeMethod) : ISharpTSCallable
 {
+    internal object Original => target;
     private readonly BuiltIns.Modules.Interpreter.VmExecutionHost? _host = BuiltIns.Modules.Interpreter.VmExecutionHost.Current;
     public int Arity() => 0; // Unknown arity for compiled functions
 

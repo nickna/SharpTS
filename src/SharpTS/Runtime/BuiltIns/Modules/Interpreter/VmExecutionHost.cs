@@ -88,6 +88,7 @@ internal sealed class VmExecutionHost : IDisposable
 
     internal object? FromVm(object? value)
     {
+        if (value is Types.CompiledCallableAdapter callback) value = callback.Original;
         return _fromVm is { } adapt ? adapt(value) : value;
     }
     internal object? ToVm(object? value) => _toVm is { } adapt ? adapt(value) : value;
