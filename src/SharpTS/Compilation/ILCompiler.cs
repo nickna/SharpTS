@@ -2889,7 +2889,7 @@ public partial class ILCompiler
 
         foreach (var (name, field) in exports)
         {
-            if (name == "$default" || name == "$exportAssignment") continue;
+            if (name == "default" || name == "$exportAssignment") continue;
             result ??= new Dictionary<string, FieldBuilder>();
             // Don't overwrite a same-named module-scoped static or import — those
             // take precedence. ESM `export const X` without an accompanying

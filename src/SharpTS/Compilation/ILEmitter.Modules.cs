@@ -87,7 +87,7 @@ public partial class ILEmitter
         if (import.DefaultImport != null)
         {
             string localName = import.DefaultImport.Lexeme;
-            if (exportFields.TryGetValue("$default", out var defaultField))
+            if (exportFields.TryGetValue("default", out var defaultField))
             {
                 IL.Emit(OpCodes.Ldsfld, defaultField);
 
@@ -168,8 +168,6 @@ public partial class ILEmitter
             // Add each export to the dictionary
             foreach (var (exportName, field) in exportFields)
             {
-                if (exportName == "$default") continue; // Skip default export in namespace import
-
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Ldstr, exportName);
                 IL.Emit(OpCodes.Ldsfld, field);
@@ -284,8 +282,6 @@ public partial class ILEmitter
             // Add each export to the dictionary
             foreach (var (exportName, field) in exportFields)
             {
-                if (exportName == "$default") continue; // Skip default in namespace import
-
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Ldstr, exportName);
                 IL.Emit(OpCodes.Ldsfld, field);
@@ -429,7 +425,7 @@ public partial class ILEmitter
                 EmitStatement(export.Declaration);
 
                 string? name = GetDeclarationName(export.Declaration);
-                if (name != null && exportFields.TryGetValue("$default", out var defaultField))
+                if (name != null && exportFields.TryGetValue("default", out var defaultField))
                 {
                     // Load the declared value and store in export field
                     var local = _ctx.Locals.GetLocal(name);
@@ -466,7 +462,7 @@ public partial class ILEmitter
             else if (export.DefaultExpr != null)
             {
                 // export default <expression>
-                if (exportFields.TryGetValue("$default", out var defaultField))
+                if (exportFields.TryGetValue("default", out var defaultField))
                 {
                     EmitExpression(export.DefaultExpr);
                     EnsureBoxed();
@@ -606,7 +602,7 @@ public partial class ILEmitter
                     // Re-export all: export * from './module'
                     foreach (var (name, sourceField) in sourceFields)
                     {
-                        if (name == "$default") continue; // Don't re-export default
+                        if (name == "default") continue; // Don't re-export default
                         if (exportFields.TryGetValue(name, out var targetField))
                         {
                             IL.Emit(OpCodes.Ldsfld, sourceField);

@@ -37,7 +37,7 @@ public partial class ILCompiler
                     TryLiveSource(import.ModulePath, module.Path, out var importedSource))
                 {
                     if (import.DefaultImport is { } defaultImport)
-                        _liveModuleImportAliases[(module.Path, defaultImport.Lexeme)] = (importedSource, "$default");
+                        _liveModuleImportAliases[(module.Path, defaultImport.Lexeme)] = (importedSource, "default");
                     foreach (var spec in import.NamedImports ?? [])
                         if (!spec.IsTypeOnly)
                             _liveModuleImportAliases[(module.Path, spec.LocalName?.Lexeme ?? spec.Imported.Lexeme)] = (importedSource, spec.Imported.Lexeme);
@@ -51,7 +51,7 @@ public partial class ILCompiler
                 {
                     foreach (var declaration in ExportDeclarationSequence.Declarations(exportedDeclaration))
                         if (GetExportDeclarationName(declaration) is { } local)
-                            Own(module.Path, local, export.IsDefaultExport ? "$default" : local);
+                            Own(module.Path, local, export.IsDefaultExport ? "default" : local);
                 }
                 else if (export.FromModulePath is { } from && TryLiveSource(from, module.Path, out var reexportSource))
                 {
@@ -63,7 +63,7 @@ public partial class ILCompiler
                     }
                     else if (_modules.ExportFields.TryGetValue(reexportSource, out var fields))
                         foreach (var name in fields.Keys)
-                            if (name != "$default" && !ownedExports.Contains((module.Path, name)))
+                            if (name != "default" && !ownedExports.Contains((module.Path, name)))
                                 _liveModuleExportAliases.TryAdd((module.Path, name), (reexportSource, name));
                 }
                 else if (export.NamedExports is { } localExports)
