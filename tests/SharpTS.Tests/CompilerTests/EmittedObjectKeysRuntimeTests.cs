@@ -167,6 +167,7 @@ public sealed class EmittedObjectKeysRuntimeTests
                 "HasOwnProperty" => runtime.ObjectOwnProperties.HasOwnProperty,
                 "IsBuiltinDeleted" => runtime.ObjectState.IsBuiltinDeleted,
                 "GeneratorKind" => runtime.GeneratorPrototypes.Kind,
+                "DateConstructor" => runtime.Dates.Implementation?.Type,
                 _ => (name switch { "TSFunctionType" => runtime.FunctionValues.Type, _ => (name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, _ => (name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => (name switch { "IHasFieldsInterface" => runtime.ObjectFields.Interface, "IHasFieldsFieldsGetter" => runtime.ObjectFields.FieldsGetter, "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(name)!.GetValue(runtime) }) }) }) })
             };
         }
