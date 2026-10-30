@@ -10,7 +10,10 @@ trim/AOT diagnostics, passes saved-IL verification and executes `42` as a native
 PE with no CLR header and no `dotnet` on PATH. Automatic CLI publication also
 verifies native arguments and exit status, plus repeated unsigned-cache reuse.
 The full epic remains open: a warning-free feature corpus, third-party interop,
-native debugging and the complete platform/release matrix require separate evidence.
+broader native debugging and the complete platform/release matrix require separate evidence.
+A [Windows x64 Debug native debugger check](debugging-typescript.md#nativeaot-guest-debugging-windows-x64)
+now verifies original TypeScript breakpoints, caller frames and source-line Step Over; native
+runtime frames remain visible during Step In.
 
 The [native compiler distribution](native-aot.md) is separate. It NativeAOT-compiles
 the SharpTS host; its ordinary DLL output is managed IL. The existing DLL and
@@ -194,8 +197,13 @@ not automatically call it. Invoke it from top-level code when using this first
 stream. `process.exitCode` remains the program exit code.
 
 NativeAOT produces platform native symbols separately by default. Guest portable
-PDBs are retained when requested, but do not establish a TypeScript native
-stepping/sequence-point support contract.
+PDBs are retained when requested. The [Windows x64 Debug acceptance](debugging-typescript.md#nativeaot-guest-debugging-windows-x64)
+verifies original entry/imported TypeScript breakpoints, caller frames and source-line
+Step Over using the native executable and matching native PDB. Step In can enter
+NativeAOT runtime helpers; runtime/reflection/wrapper frames remain visible. This
+does not certify managed Just My Code, hoisted-local projection, Release optimization
+or other platform debuggers. Retaining a portable PDB alone establishes none of
+those behaviors.
 
 ## Callable catalog foundation
 
@@ -832,7 +840,7 @@ acceptance.
 
 Tracked acceptance work in #1351 includes the generated-output warning ratchet
 and broader AOT-safe feature dispatch, static third-party dependency closure,
-SharpTS.Sdk platform acceptance, native debugging validation, a warning-free feature
+SharpTS.Sdk platform acceptance, broader native debugging validation, a warning-free feature
 corpus and cross-platform release evidence. Automatic CLI publication, structured
 tool diagnostics and unsigned caching/owned output promotion are implemented
 above. The profile can graduate only with the remaining evidence.

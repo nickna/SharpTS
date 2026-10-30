@@ -136,8 +136,11 @@ Trim/AOT diagnostics stay visible and fatal through `IlcTreatWarningsAsErrors=tr
 `ILLinkTreatWarningsAsErrors=true`; the SDK adds no warning suppressions or broad assembly roots.
 `DebugSymbols`/`DebugType` control guest portable PDB generation and the base SDK's wrapper/native
 symbol behavior. With symbols enabled, native PDBs, `.dbg`, or `.dSYM` artifacts follow platform
-publish conventions; the guest portable PDB is retained for inspection. These artifacts do not
-promise TypeScript source stepping in the native executable.
+publish conventions; the guest portable PDB is retained for inspection. The separate
+[Windows x64 Debug native debugger acceptance](debugging-typescript.md#nativeaot-guest-debugging-windows-x64)
+verifies TypeScript breakpoints, caller frames and source-line Step Over through `cppvsdbg`.
+It uses inspect export plus Debug SDK publication; symbol retention alone does not certify
+other debugger/platform/optimization combinations or managed hoisted-local projection.
 
 ### GC deployment policy
 
