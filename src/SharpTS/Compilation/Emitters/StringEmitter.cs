@@ -747,6 +747,9 @@ public sealed class StringEmitter : ITypeEmitterStrategy
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
+        // Use the state-machine spill store so the receiver and earlier
+        // arguments survive a later argument suspending MoveNext.
+        var receiver = emitter.SpillStackToObjectLocal();
 
         // searchString (always supplied; default to "" if missing).
         if (arguments.Count > 0)
@@ -758,6 +761,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldstr, "");
         }
+        var search = emitter.SpillStackToObjectLocal();
 
         // position (optional; helper treats null/undefined as default).
         if (arguments.Count > 1)
@@ -769,7 +773,12 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldnull);
         }
+        var position = emitter.SpillStackToObjectLocal();
 
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Castclass, ctx.Types.String);
+        il.Emit(OpCodes.Ldloc, search);
+        il.Emit(OpCodes.Ldloc, position);
         il.Emit(OpCodes.Call, helper);
         il.Emit(OpCodes.Box, ctx.Types.Boolean);
     }
