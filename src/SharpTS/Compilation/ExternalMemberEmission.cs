@@ -9,23 +9,17 @@ namespace SharpTS.Compilation;
 internal sealed class ExternalMemberEmission
 {
     private readonly MetadataLoadContext _context;
-    private readonly Dictionary<Type, Type> _atoms = new(ReferenceEqualityComparer.Instance);
+    private readonly ExternalMetadataTypes _identities;
     private readonly Dictionary<Type, Type> _types = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<MemberInfo, MemberInfo> _members = new(ReferenceEqualityComparer.Instance);
 
-    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Only the actual MetadataLoadContext core assembly is inspected; no executable library is loaded or rooted.")]
-    internal ExternalMemberEmission(MetadataLoadContext context)
+    internal ExternalMemberEmission(MetadataLoadContext context, ExternalMetadataTypes identities)
     {
         _context = context;
-        var core = context.CoreAssembly ?? throw new InvalidOperationException("External signature metadata requires its actual core assembly.");
-        foreach (var runtime in new[] { typeof(void), typeof(object), typeof(bool), typeof(char), typeof(sbyte), typeof(byte),
-                     typeof(short), typeof(ushort), typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(float),
-                     typeof(double), typeof(string), typeof(nint), typeof(nuint), typeof(TypedReference), typeof(ValueType) })
-            if (core.GetType(runtime.FullName!, throwOnError: false) is { } metadata)
-                _atoms.Add(metadata, runtime);
+        _identities = identities;
     }
 
-    internal Type CoreAtom(Type value) => _atoms.GetValueOrDefault(value.UnderlyingSystemType) ?? value;
+    internal Type CoreAtom(Type value) => _identities.RuntimeAtom(value);
     internal MethodInfo Method(MethodInfo value) => (MethodInfo)Member(value);
     internal ConstructorInfo Constructor(ConstructorInfo value) => (ConstructorInfo)Member(value);
     internal FieldInfo Field(FieldInfo value) => (FieldInfo)Member(value);
@@ -47,7 +41,7 @@ internal sealed class ExternalMemberEmission
 
     internal Type Type(Type value)
     {
-        if (_atoms.TryGetValue(value, out var atom)) return atom;
+        if (_identities.TryRuntimeAtom(value, out var atom)) return atom;
         if (!value.IsFunctionPointer && !value.Assembly.ReflectionOnly) return value;
         if (value.IsGenericParameter && value.GetRequiredCustomModifiers().Length == 0 && value.GetOptionalCustomModifiers().Length == 0) return value;
         if (_types.TryGetValue(value, out var cached)) return cached;
@@ -67,7 +61,7 @@ internal sealed class ExternalMemberEmission
 
     private sealed class TypeView(ExternalMemberEmission owner, Type source) : TypeDelegator(source)
     {
-        public override Type UnderlyingSystemType => owner._atoms.GetValueOrDefault(typeImpl.UnderlyingSystemType) ??
+        public override Type UnderlyingSystemType => owner._identities.TryRuntimeAtom(typeImpl.UnderlyingSystemType, out var atom) ? atom :
             (typeImpl.HasElementType || typeImpl.IsConstructedGenericType || typeImpl.IsFunctionPointer ? this : typeImpl.UnderlyingSystemType);
         public override bool IsGenericType => typeImpl.IsGenericType;
         public override bool IsGenericTypeDefinition => typeImpl.IsGenericTypeDefinition;

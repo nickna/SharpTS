@@ -25,6 +25,20 @@ public sealed class Api
     public static string RefString(ref string value) { value += "!"; return value; }
     public static ref readonly int ReadOnlyRef() => ref _number;
     public static T Identity<T>(T value) => value;
+    public static T First<T>(T[] values) => values[0];
+    public static T Many<T>(params T[] values) => values[0];
+    public static T Create<T>() => default!;
+    public static T WithNumber<T>(T value, int number) => value;
+    public static T FromFactory<T>(Func<T> factory) => factory();
+    public static Func<string> StringFactory() => () => "factory";
+    public static T ArrayDependent<T, U>(T value) where T : IEnumerable<U[]> => value;
+    public static T ClassOnly<T>(T value) where T : class => value;
+    public static T StructOnly<T>(T value) where T : struct => value;
+    public static T NewOnly<T>(T value) where T : new() => value;
+    public static T Comparable<T>(T value) where T : IComparable<T> => value;
+    public static T BaseOnly<T>(T value) where T : ConstraintBase => value;
+    public static T Dependent<T, U>(T value) where T : IComparable<U> => value;
+    public static int? NullableValue() => 1;
     public static List<string> List(List<string> value) => value;
 }
 
@@ -34,6 +48,12 @@ public sealed class Box<T>
     public T Property { get; set; }
     public Box(T value) { Value = value; Property = value; }
     public T Echo(T value) => value;
+    public U Constrained<U>(U value) where U : T => value;
 }
 
 public interface IReadOnlyInput { int Read(in int value); }
+
+public class ConstraintBase { }
+public sealed class ConstraintDerived : ConstraintBase { }
+public sealed class PrivateConstructor { private PrivateConstructor() { } }
+public abstract class AbstractConstructor { public AbstractConstructor() { } }

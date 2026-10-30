@@ -358,7 +358,7 @@ public partial class ILEmitter
             ? explicitTypeArguments.Select(ResolveTypeArg).ToArray()
             : null;
         Type? expectedReturnType = TryGetExternalClrType(contextualResultType);
-        var closed = DotNetGenericMethodInference.CloseCandidates(
+        var closed = _ctx.TypeMapper.CloseExternalGenericCandidates(
             methods, argumentTypes,
             explicitTypes, expectedReturnType);
         if (closed.Length == 0)

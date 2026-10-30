@@ -22,11 +22,17 @@ public sealed class AssemblyReferenceLoader : IDisposable
     private readonly ConcurrentDictionary<string, string> _metadataFailures = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
     private ExternalMemberEmission? _emission;
-    internal MethodInfo ForEmission(MethodInfo member) => (_emission ??= new(_mlc)).Method(member);
-    internal ConstructorInfo ForEmission(ConstructorInfo member) => (_emission ??= new(_mlc)).Constructor(member);
-    internal FieldInfo ForEmission(FieldInfo member) => (_emission ??= new(_mlc)).Field(member);
-    internal Type CoreAtomForEmission(Type type) => (_emission ??= new(_mlc)).CoreAtom(type);
-    internal Type ForEmission(Type type) => (_emission ??= new(_mlc)).Type(type);
+    private ExternalMetadataTypes? _metadataTypes;
+    private ExternalMetadataTypes MetadataTypes => _metadataTypes ??= new(_mlc);
+    internal bool TryGenericSelectionType(Type type, out Type selected) => MetadataTypes.TrySelectionType(type, out selected);
+    internal MethodInfo[] CloseGenericCandidates(IEnumerable<MethodInfo> methods, IReadOnlyList<Type?> arguments,
+        IReadOnlyList<Type>? explicitArguments, Type? expectedReturn) =>
+        new ExternalGenericMethodSelection(MetadataTypes).CloseCandidates(methods, arguments, explicitArguments, expectedReturn);
+    internal MethodInfo ForEmission(MethodInfo member) => (_emission ??= new(_mlc, MetadataTypes)).Method(member);
+    internal ConstructorInfo ForEmission(ConstructorInfo member) => (_emission ??= new(_mlc, MetadataTypes)).Constructor(member);
+    internal FieldInfo ForEmission(FieldInfo member) => (_emission ??= new(_mlc, MetadataTypes)).Field(member);
+    internal Type CoreAtomForEmission(Type type) => (_emission ??= new(_mlc, MetadataTypes)).CoreAtom(type);
+    internal Type ForEmission(Type type) => (_emission ??= new(_mlc, MetadataTypes)).Type(type);
 
     /// <summary>
     /// Creates a new loader with the specified assembly paths.

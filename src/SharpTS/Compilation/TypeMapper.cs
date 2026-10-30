@@ -24,6 +24,10 @@ public class TypeMapper
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeProvider _types;
     internal AssemblyReferenceLoader? ExternalMetadata { get; set; }
+    internal MethodInfo[] CloseExternalGenericCandidates(IEnumerable<MethodInfo> methods, IReadOnlyList<Type?> arguments,
+        IReadOnlyList<Type>? explicitArguments, Type? expectedReturn) =>
+        ExternalMetadata?.CloseGenericCandidates(methods, arguments, explicitArguments, expectedReturn) ??
+        SharpTS.Runtime.DotNet.DotNetGenericMethodInference.CloseCandidates(methods, arguments, explicitArguments, expectedReturn);
     internal MethodInfo ForEmission(MethodInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
     internal ConstructorInfo ForEmission(ConstructorInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
     internal FieldInfo ForEmission(FieldInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
