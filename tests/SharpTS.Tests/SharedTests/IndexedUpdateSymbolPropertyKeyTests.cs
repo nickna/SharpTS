@@ -49,4 +49,3 @@ public sealed class IndexedUpdateSymbolPropertyKeyTests
         Assert.Equal(expected, actual);
     }
 }
-

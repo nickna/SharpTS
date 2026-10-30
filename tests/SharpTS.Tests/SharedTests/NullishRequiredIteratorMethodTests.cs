@@ -47,4 +47,3 @@ public sealed class NullishRequiredIteratorMethodTests
         Assert.Equal(expected, actual);
     }
 }
-

@@ -50,4 +50,3 @@ public sealed class DeleteSymbolPropertyKeyTests
         Assert.Equal(expected, actual);
     }
 }
-

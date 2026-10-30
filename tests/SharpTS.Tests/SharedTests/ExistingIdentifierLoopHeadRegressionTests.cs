@@ -60,4 +60,3 @@ public sealed class ExistingIdentifierLoopHeadRegressionTests
         Assert.Equal(expected, actual);
     }
 }
-
