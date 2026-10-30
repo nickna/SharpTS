@@ -15,6 +15,27 @@ public sealed class ExternalSignatureEmissionTests
     private static string Fixture => Path.Combine(AppContext.BaseDirectory, "ExternalSignatureFixture.dll");
 
     [Fact]
+    public void CompilerOwnedOperandsPassThroughWithoutAssemblyMetadataQueries()
+    {
+        using var loader = new AssemblyReferenceLoader([Fixture]);
+        var assembly = new PersistedAssemblyBuilder(new AssemblyName("CompilerOwnedSignature"), typeof(object).Assembly);
+        var module = assembly.DefineDynamicModule("M");
+        var owner = module.DefineType("Owner", TypeAttributes.Public);
+        var constructor = owner.DefineDefaultConstructor(MethodAttributes.Public);
+        var field = owner.DefineField("Value", typeof(string), FieldAttributes.Public);
+        var method = owner.DefineMethod("Run", MethodAttributes.Public | MethodAttributes.Static, typeof(void), Type.EmptyTypes);
+        method.GetILGenerator().Emit(OpCodes.Ret);
+
+        Assert.Same(owner, loader.ForEmission(owner));
+        Assert.Same(constructor, loader.ForEmission(constructor));
+        Assert.Same(field, loader.ForEmission(field));
+        Assert.Same(method, loader.ForEmission(method));
+        Assert.Same(typeof(string), loader.ForEmission(typeof(string)));
+        var runtimeMethod = typeof(string).GetMethod(nameof(string.ToString), Type.EmptyTypes)!;
+        Assert.Same(runtimeMethod, loader.ForEmission(runtimeMethod));
+    }
+
+    [Fact]
     public void ActualCoreAtomsNormalizeAllReturnViewsAndOtherContextsCannotBorrowThem()
     {
         using var loader = new AssemblyReferenceLoader([Fixture]);

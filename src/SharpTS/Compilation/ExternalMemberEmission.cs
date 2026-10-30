@@ -25,8 +25,7 @@ internal sealed class ExternalMemberEmission
     internal FieldInfo Field(FieldInfo value) => (FieldInfo)Member(value);
     private MemberInfo Member(MemberInfo value)
     {
-        if (!value.Module.Assembly.ReflectionOnly ||
-            !_context.GetAssemblies().Any(assembly => ReferenceEquals(assembly, value.Module.Assembly))) return value;
+        if (!_context.GetAssemblies().Any(assembly => ReferenceEquals(assembly, value.Module.Assembly))) return value;
         if (_members.TryGetValue(value, out var cached)) return cached;
         MemberInfo view = value switch
         {
@@ -42,7 +41,7 @@ internal sealed class ExternalMemberEmission
     internal Type Type(Type value)
     {
         if (_identities.TryRuntimeAtom(value, out var atom)) return atom;
-        if (!value.IsFunctionPointer && !value.Assembly.ReflectionOnly) return value;
+        if (!value.IsFunctionPointer && !_identities.Owns(value.Assembly)) return value;
         if (value.IsGenericParameter && value.GetRequiredCustomModifiers().Length == 0 && value.GetOptionalCustomModifiers().Length == 0) return value;
         if (_types.TryGetValue(value, out var cached)) return cached;
         var view = new TypeView(this, value);

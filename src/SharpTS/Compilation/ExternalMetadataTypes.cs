@@ -28,8 +28,9 @@ internal sealed class ExternalMetadataTypes
             }
     }
 
-    internal bool Owns(Assembly assembly) => assembly.ReflectionOnly &&
-        _context.GetAssemblies().Any(candidate => ReferenceEquals(candidate, assembly));
+    // Context membership proves metadata ownership without probing AssemblyBuilder's
+    // unsupported ReflectionOnly property or inspecting a foreign assembly.
+    internal bool Owns(Assembly assembly) => _context.GetAssemblies().Any(candidate => ReferenceEquals(candidate, assembly));
     private bool Owns(Type value) => value.GetType().Assembly == typeof(MetadataLoadContext).Assembly && Owns(value.Assembly);
     internal bool IsNullable(Type value) => value.IsGenericType && ReferenceEquals(value.GetGenericTypeDefinition(), _nullableDefinition);
     internal Type RuntimeAtom(Type value) => _runtime.GetValueOrDefault(value.UnderlyingSystemType) ?? value;
