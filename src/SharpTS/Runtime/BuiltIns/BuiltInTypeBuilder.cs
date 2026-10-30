@@ -57,6 +57,18 @@ public sealed class BuiltInTypeBuilder<TReceiver>
         return MethodV2(name, arity, arity, implementation);
     }
 
+    internal BuiltInTypeBuilder<TReceiver> MethodV2(
+        string name,
+        int arity,
+        Func<Interpreter, TReceiver, ReadOnlySpan<RuntimeValue>, RuntimeValue> implementation,
+        Func<RuntimeValue, TReceiver> selectReceiver)
+    {
+        _methods[name] = BuiltInMethod.CreateV2(name, arity, arity,
+            (interpreter, receiver, arguments) => implementation(interpreter, selectReceiver(receiver), arguments))
+            .WithExpectedReceiverType(typeof(TReceiver));
+        return this;
+    }
+
     /// <summary>
     /// Registers a V2 method with variable arity using RuntimeValue (no boxing).
     /// </summary>
