@@ -18,6 +18,7 @@ public partial class ILCompiler
     private readonly Dictionary<string, List<Expr.Call>> _staticIndirectEvalCallsByAlias =
         new(StringComparer.Ordinal);
     private readonly HashSet<Expr.ArrowFunction> _strictArrows = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Stmt.Function> _strictFunctions = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.ArrowFunction> _arrowsInAnonymousEmptyDerivedClass = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.ArrowFunction> _arrowsInStaticClassContext = new(ReferenceEqualityComparer.Instance);
     // Maps each collected arrow to the module path that owns it (null = script/single-file
@@ -578,6 +579,10 @@ public partial class ILCompiler
                 // Skip overload signatures (no body)
                 if (f.Body != null)
                 {
+                    // Preserve lexical strictness before module emission folds
+                    // script owners into the shared global-storage bucket.
+                    if (_currentCollectStrict || _currentCollectClassName != null)
+                        _strictFunctions.Add(f);
                     // Sync arrows are emitted before the guest method adapter. Its
                     // async body shares these arrows, so mark their lexical receiver
                     // now rather than compiling this.property as a nominal CLR cast.
@@ -1715,6 +1720,9 @@ public partial class ILCompiler
     /// </summary>
     private static bool BodyDeclaresUseStrict(List<Stmt>? body)
         => Parsing.DirectivePrologue.HasUseStrict(body);
+
+    private bool IsStrictFunction(Stmt.Function function)
+        => _strictFunctions.Contains(function) || _isStrictMode || BodyDeclaresUseStrict(function.Body);
 
     private void EmitArrowBody(Expr.ArrowFunction arrow, MethodBuilder method, TypeBuilder? displayClass)
     {

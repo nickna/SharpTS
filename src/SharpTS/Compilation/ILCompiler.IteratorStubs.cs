@@ -200,7 +200,7 @@ public partial class ILCompiler
                 var useGlobalThis = il.DefineLabel();
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Brfalse, useGlobalThis);
-                if (!(_isStrictMode || BodyDeclaresUseStrict(funcStmt.Body)))
+                if (!IsStrictFunction(funcStmt))
                 {
                     il.Emit(OpCodes.Dup);
                     il.Emit(OpCodes.Isinst, _runtime.Sentinels.UndefinedType);
@@ -390,7 +390,7 @@ public partial class ILCompiler
         var ctx = CreateModuleMemberContext(methodBuilder.GetILGenerator(), methodBuilder);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
-        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(function.Body);
+        ctx.IsStrictMode = IsStrictFunction(function);
         ctx.CurrentClassName = currentClassName;
         ctx.CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder;
         ctx.EmittingTypeBuilder = methodBuilder.DeclaringType as TypeBuilder;

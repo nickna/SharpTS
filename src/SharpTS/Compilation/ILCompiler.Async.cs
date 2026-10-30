@@ -1073,7 +1073,7 @@ public partial class ILCompiler
                 stubMethod,
                 smBuilder,
                 func,
-                coerceSloppyDynamicThis: !(_isStrictMode || BodyDeclaresUseStrict(func.Body)));
+                coerceSloppyDynamicThis: !IsStrictFunction(func));
 
             // Create context for MoveNext emission
             var il = smBuilder.MoveNextMethod.GetILGenerator();
@@ -1088,7 +1088,7 @@ public partial class ILCompiler
             ctx.CommonJsExportFields = _modules.CommonJsExportFields;
             ctx.CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods;
             // Check for function-level "use strict" directive
-            ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(func.Body);
+            ctx.IsStrictMode = IsStrictFunction(func);
             // Entry-point display class for captured top-level variables
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
@@ -1251,7 +1251,7 @@ public partial class ILCompiler
         ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0
             ? _async.ArrowBuilders : null;
         ctx.UnionGenerator = _unionGenerator;
-        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(function.Body);
+        ctx.IsStrictMode = IsStrictFunction(function);
         ApplyCommonJsModuleAccess(ctx);
         ApplyCapturedTopLevelVariableAccess(ctx);
         ctx.TopLevelStaticVars =

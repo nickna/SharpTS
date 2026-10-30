@@ -566,7 +566,7 @@ public partial class ILCompiler
         ApplyCommonJsModuleAccess(ctx);
         ctx.UnionGenerator = _unionGenerator;
         // Check for function-level "use strict" directive
-        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(funcStmt.Body);
+        ctx.IsStrictMode = IsStrictFunction(funcStmt);
         // Entry-point display class for captured top-level variables. TopLevelStaticVars uses
         // the pre-computed per-function map rather than the module-wide default.
         ApplyCapturedTopLevelVariableAccess(ctx);
@@ -747,7 +747,7 @@ public partial class ILCompiler
             ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
             ApplyCommonJsModuleAccess(ctx);
             ctx.UnionGenerator = _unionGenerator;
-            ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(function.Body);
+            ctx.IsStrictMode = IsStrictFunction(function);
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.TopLevelStaticVars = topLevelVars;
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0
@@ -1799,7 +1799,7 @@ public partial class ILCompiler
             var il = overload.GetILGenerator();
 
             // Create a minimal context just for emitting default value expressions
-            var ctx = CreateOverloadDefaultsContext(il, _isStrictMode || BodyDeclaresUseStrict(funcStmt.Body));
+            var ctx = CreateOverloadDefaultsContext(il, IsStrictFunction(funcStmt));
             var emitter = new ILEmitter(ctx);
 
             // Make the provided parameters resolvable so a default value that references an

@@ -18,7 +18,6 @@ public partial class ILCompiler
     private readonly Dictionary<Stmt.Function, TypeBuilder> _innerFunctionDisplayClasses = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, Dictionary<string, FieldBuilder>> _innerFunctionDCFields = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, ConstructorBuilder> _innerFunctionDCCtors = new(ReferenceEqualityComparer.Instance);
-    private readonly HashSet<Stmt.Function> _strictInnerFunctions = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, string> _innerFunctionEnclosingClassNames = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, FieldBuilder> _innerFunctionEntryPointDCFields = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, FieldBuilder> _innerFunctionFunctionDCFields = new(ReferenceEqualityComparer.Instance);
@@ -73,11 +72,6 @@ public partial class ILCompiler
     /// </summary>
     private void CollectInnerFunction(Stmt.Function funcStmt)
     {
-        // All code in a class body is strict, including ordinary functions nested
-        // inside methods. Record that lexical fact while the class collection cursor
-        // is available; body emission happens later, after the cursor is gone.
-        if (_currentCollectStrict || _currentCollectClassName != null)
-            _strictInnerFunctions.Add(funcStmt);
         if (_currentCollectClassName != null)
             _innerFunctionEnclosingClassNames[funcStmt] = _currentCollectClassName;
 
@@ -579,9 +573,7 @@ public partial class ILCompiler
                 }
             }
             ConfigureNewTargetBody(ctx, (MethodBuilder)method);
-            ctx.IsStrictMode = _strictInnerFunctions.Contains(func)
-                || _isStrictMode
-                || BodyDeclaresUseStrict(func.Body);
+            ctx.IsStrictMode = IsStrictFunction(func);
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
             ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;

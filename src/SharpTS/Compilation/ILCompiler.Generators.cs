@@ -569,7 +569,7 @@ public partial class ILCompiler
         var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
         ApplyIteratorParameterCaptureCells(ctx, smBuilder);
         // Check for function-level "use strict" directive
-        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(funcStmt.Body);
+        ctx.IsStrictMode = IsStrictFunction(funcStmt);
         // Captured outer variables are read live (by reference) rather than snapshotted (#541).
         // These mirror the async-generator MoveNext context so reads/writes of top-level
         // variables go straight to their backing storage instead of a stale state-machine field.
