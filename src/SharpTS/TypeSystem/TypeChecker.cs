@@ -2761,28 +2761,34 @@ public partial class TypeChecker
                             {
                                 string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
                                 bool isTypeOnly = export.IsTypeOnly || spec.IsTypeOnly;
-                                if (sourceModule.ExportedTypes.TryGetValue(spec.LocalName.Lexeme, out var type))
+                                string importedName = spec.LocalName.Lexeme;
+                                var type = importedName == "default"
+                                    ? sourceModule.DefaultExportType
+                                    : sourceModule.ExportedTypes.GetValueOrDefault(importedName);
+                                if (type is null && sourceModule.IsCommonJs)
+                                    type = TypeInfo.Any.Shared;
+                                if (type is not null)
                                 {
-                                    module.ExportedTypes[exportedName] = type;
-                                }
-                                else if (sourceModule.IsCommonJs)
-                                {
-                                    module.ExportedTypes[exportedName] = TypeInfo.Any.Shared;
+                                    if (exportedName == "default") module.DefaultExportType = type;
+                                    else module.ExportedTypes[exportedName] = type;
                                 }
 
-                                if (!isTypeOnly &&
-                                    sourceModule.ExportedValueBindings.TryGetValue(
-                                        spec.LocalName.Lexeme,
-                                        out var valueBinding))
+                                var valueBinding = importedName == "default"
+                                    ? sourceModule.DefaultValueBinding
+                                    : sourceModule.ExportedValueBindings.GetValueOrDefault(importedName);
+                                if (!isTypeOnly && valueBinding is not null)
                                 {
-                                    module.ExportedValueBindings[exportedName] = valueBinding;
+                                    if (exportedName == "default") module.DefaultValueBinding = valueBinding;
+                                    else module.ExportedValueBindings[exportedName] = valueBinding;
                                     BindExportSpecifier(spec, valueBinding);
                                 }
-                                if (sourceModule.ExportedTypeBindings.TryGetValue(
-                                        spec.LocalName.Lexeme,
-                                        out var typeBinding))
+                                var typeBinding = importedName == "default"
+                                    ? sourceModule.DefaultTypeBinding
+                                    : sourceModule.ExportedTypeBindings.GetValueOrDefault(importedName);
+                                if (typeBinding is not null)
                                 {
-                                    module.ExportedTypeBindings[exportedName] = typeBinding;
+                                    if (exportedName == "default") module.DefaultTypeBinding = typeBinding;
+                                    else module.ExportedTypeBindings[exportedName] = typeBinding;
                                     BindExportSpecifier(spec, typeBinding);
                                 }
                             }
