@@ -393,6 +393,12 @@ public partial class TypeChecker
         {
             switch (stmt)
             {
+                case Stmt.Sequence sequence:
+                    HoistLexicalDeclarations(sequence.Statements);
+                    break;
+                case Stmt.Export { Declaration: Stmt.Sequence sequence }:
+                    HoistLexicalDeclarations(sequence.Statements);
+                    break;
                 // `let` is Stmt.Var with IsVar == false; `var` is handled by HoistVarDeclarations.
                 case Stmt.Var v when !v.IsVar:
                     BindingSymbol lexicalSymbol = RegisterValueDeclaration(v.Name);
