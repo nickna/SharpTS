@@ -735,7 +735,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, typeDelLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)typeDelStaticPub);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
+            if (_nativeDeletionLookup is { } staticLookup) il.Emit(OpCodes.Call, staticLookup.FindStaticProperty);
+            else il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
             il.Emit(OpCodes.Brtrue, typeBuiltinNameTrueLabel);
             // Not a built-in own property — return true (delete-missing = success).
             il.Emit(OpCodes.Ldc_I4_1);
@@ -828,7 +829,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "$EnsureFields");
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        if (_nativeDeletionLookup is { } dynamicLookup) il.Emit(OpCodes.Call, dynamicLookup.FindDynamicFields);
+        else il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
         il.Emit(OpCodes.Stloc, dynamicStore);
         il.Emit(OpCodes.Ldloc, dynamicStore);
         il.Emit(OpCodes.Brfalse, trueLabel);

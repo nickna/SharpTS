@@ -15,6 +15,7 @@ public partial class RuntimeEmitter
     private readonly bool _emitNativeOwnProperties;
     private readonly MethodInfo? _nativeStaticFieldLookup;
     private readonly MethodInfo? _nativeConstructorMembers;
+    private readonly NativeDeletionLookup? _nativeDeletionLookup;
 
     /// <summary>
     /// Feature gating set — populated by <see cref="EmitAll(ModuleBuilder, RuntimeFeatureSet)"/>
@@ -35,7 +36,8 @@ public partial class RuntimeEmitter
     }
 
     internal RuntimeEmitter(TypeProvider types, bool emitHosted, bool emitNativeCallables, bool emitNativeOwnProperties,
-        MethodInfo? nativeStaticFieldLookup = null, MethodInfo? nativeConstructorMembers = null)
+        MethodInfo? nativeStaticFieldLookup = null, MethodInfo? nativeConstructorMembers = null,
+        NativeDeletionLookup? nativeDeletionLookup = null)
     {
         _types = types;
         _emitHosted = emitHosted;
@@ -43,6 +45,7 @@ public partial class RuntimeEmitter
         _emitNativeOwnProperties = emitNativeOwnProperties;
         _nativeStaticFieldLookup = nativeStaticFieldLookup;
         _nativeConstructorMembers = nativeConstructorMembers;
+        _nativeDeletionLookup = nativeDeletionLookup;
     }
 
     /// <summary>
@@ -61,6 +64,7 @@ public partial class RuntimeEmitter
         MethodInfo? nativeStaticMemberPresence = null, MethodBuilder? nativePropertyGetter = null,
         EmittedNativeMethodLookupRuntime? nativeMethodLookup = null)
     {
+        _nativeDeletionLookup?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         if (_nativeStaticFieldLookup is { } fields &&
             (!_emitNativeCallables || !ReferenceEquals(fields.Module, moduleBuilder) || !fields.IsStatic || fields.IsGenericMethod ||
              (fields.CallingConvention & CallingConventions.VarArgs) != 0 || fields.ReturnType != _types.FieldInfo ||

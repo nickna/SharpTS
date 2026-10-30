@@ -796,3 +796,21 @@ finding from the console control, reducing 9 diagnostics to 8 with none added.
 Native own-key order, enumerability, deletion and redefinition controls pass.
 The accompanying repeated-signature fix (#3082) prevents an older bodyless
 accessor declaration from becoming reachable through metadata enumeration.
+
+### Bounded deletion metadata
+
+Native deletion uses a late lookup bundle for the two remaining reflective
+operations in the strict and ordinary deletion paths. Static property queries
+select exact completed initializer owners and retain the actual public-static
+binder query. Dynamic field deletion selects exact source/runtime role owners
+and queries only the existing private `$EnsureFields` method with its original
+instance, nonpublic, declared-only flags. Invocation, descriptor checks,
+initializer timing and dictionary removal remain at their existing positions.
+
+Unknown owners, dynamic-store names or flags receive a guest TypeError at the
+lookup boundary. Unproved generic owner inventories retain the complete legacy
+operations and their diagnostics. Default managed output retains its original
+lookup instructions. Against the eight-diagnostic console checkpoint before
+the separate method/presence catalogs, this removes exactly four deletion
+IL2070/IL2075 findings with none added. Native console and class deletion controls
+pass saved-IL verification and execute with the remaining diagnostics retained.

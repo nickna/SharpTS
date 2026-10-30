@@ -29,6 +29,8 @@ public partial class ILCompiler
     internal NativeStaticFieldLookup? NativeStaticFields => _nativeStaticFieldLookup;
     private NativeConstructorMemberLookup? _nativeConstructorMembers;
     internal NativeConstructorMemberLookup? NativeConstructorMembers => _nativeConstructorMembers;
+    private NativeDeletionLookup? _nativeDeletionLookup;
+    internal NativeDeletionLookup? NativeDeletion => _nativeDeletionLookup;
 
     private NativeReceiverBinding? _nativeReceiverBinding;
 
@@ -57,6 +59,8 @@ public partial class ILCompiler
             throw new InvalidOperationException("Native constructor member metadata has not completed source emission.");
         if (_nativeMethodLookup?.IsComplete != true)
             throw new InvalidOperationException("Native method metadata has not completed source emission.");
+        if (_nativeDeletionLookup?.IsComplete != true)
+            throw new InvalidOperationException("Native deletion metadata has not completed source emission.");
     }
 
     private void RecordSourceRewrite(object source, object target)
