@@ -55,8 +55,7 @@ public partial class RuntimeEmitter
         // resolves to the emitted $TSDate type, matching GlobalThisStaticEmitter.
         EmitInstallConstructorDescriptor(il, descriptors, dates.Prototype, descLocal, setItem, () =>
         {
-            il.Emit(OpCodes.Ldtoken, date.Type);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, date.Type);
         });
 
         foreach (var (jsName, helper, jsLength) in DatePrototypeEmitCatalog.Methods)

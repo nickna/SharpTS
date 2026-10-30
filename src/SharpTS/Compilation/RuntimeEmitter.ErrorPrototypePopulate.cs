@@ -72,8 +72,7 @@ public partial class RuntimeEmitter
         // bare `Error` resolves to typeof($Error).
         il.Emit(OpCodes.Ldsfld, errors.Prototype);
         il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, errors.Type);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, errors.Type);
         il.Emit(OpCodes.Callvirt, setItem);
 
         // ECMA-262 20.5.3 Error.prototype.name === "Error" and message === "".
@@ -111,8 +110,7 @@ public partial class RuntimeEmitter
             => EmitInstallNonEnumerableDescriptor(il, descriptors, errors.Prototype, errDescLocal, jsName, emitValue);
         InstallNonEnumerableErr("constructor", () =>
         {
-            il.Emit(OpCodes.Ldtoken, errors.Type);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, errors.Type);
         });
         InstallNonEnumerableErr("name", () => il.Emit(OpCodes.Ldstr, "Error"));
         InstallNonEnumerableErr("message", () => il.Emit(OpCodes.Ldstr, ""));
@@ -382,8 +380,7 @@ public partial class RuntimeEmitter
         // constructor = typeof(<ctorType>)
         il.Emit(OpCodes.Ldsfld, protoField);
         il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, ctorType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, ctorType);
         il.Emit(OpCodes.Callvirt, setItem);
 
         // name = "<errorName>" and message = "".
@@ -403,8 +400,7 @@ public partial class RuntimeEmitter
             => EmitInstallNonEnumerableDescriptor(il, descriptors, protoField, descLocal, jsName, emitValue);
         InstallNonEnum("constructor", () =>
         {
-            il.Emit(OpCodes.Ldtoken, ctorType);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, ctorType);
         });
         InstallNonEnum("name", () => il.Emit(OpCodes.Ldstr, errorName));
         InstallNonEnum("message", () => il.Emit(OpCodes.Ldstr, ""));

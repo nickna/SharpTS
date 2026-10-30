@@ -47,8 +47,7 @@ public partial class RuntimeEmitter
         var protoDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         EmitInstallConstructorDescriptor(il, inputs.PrototypeDescriptors, objectPrototypes.Prototype, protoDescLocal, setItem, () =>
         {
-            il.Emit(OpCodes.Ldtoken, _types.Object);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, _types.Object);
         });
 
         // Wire methods backed by $Runtime helpers. Each wrapper has the

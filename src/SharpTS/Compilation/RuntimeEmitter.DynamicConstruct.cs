@@ -137,6 +137,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, array);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArrayTypeLabel);
+        _nativeConstructorActivation?.RecordIntrinsicReturn(_types.IListOfObject, il);
+        _nativeConstructorActivation?.RecordIntrinsicReturn(inputs.ArrayStorage.Type, il);
 
         // Promise constructor values carry Task<object>, whose CLR callback
         // constructors do not implement the guest executor protocol.
@@ -177,6 +179,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, promiseValue);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notPromiseType);
+            _nativeConstructorActivation?.RecordIntrinsicReturn(_types.TaskOfObject, il);
         }
 
         // An aliased RegExp constructor is represented by the emitted $RegExp
@@ -222,6 +225,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, inputs.RegExps.RequireImplementation().FromArguments);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notRegExpTypeLabel);
+            _nativeConstructorActivation?.RecordIntrinsicReturn(inputs.RegExps.RequireImplementation().Type, il);
         }
 
         // An aliased String constructor is represented by System.String, but
@@ -254,6 +258,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.BoxedPrimitives.New);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStringTypeLabel);
+        _nativeConstructorActivation?.RecordIntrinsicReturn(_types.String, il);
 
         // Number values use the CLR Double Type token, but construction creates
         // a guest Number wrapper. Omission produces zero; present undefined
@@ -283,6 +288,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.BoxedPrimitives.New);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notNumberTypeLabel);
+        _nativeConstructorActivation?.RecordIntrinsicReturn(_types.Double, il);
 
         // Boolean construction uses truthiness without invoking primitive
         // conversion hooks, and omission initializes the wrapper to false.
@@ -310,6 +316,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.BoxedPrimitives.New);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBooleanTypeLabel);
+        _nativeConstructorActivation?.RecordIntrinsicReturn(_types.Boolean, il);
 
         var notFunctionType = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -320,6 +327,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.FunctionConstruction.Construct);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notFunctionType);
+        _nativeConstructorActivation?.RecordIntrinsicReturn(inputs.FunctionValues.Type, il);
 
         // System.Type → marked guest factory or native/CLR overload binding.
         var notTypeLabel = il.DefineLabel();
@@ -330,6 +338,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.Type);
         var constructorType = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Stloc, constructorType);
+        if (_nativeConstructorActivation is { } admission)
+        {
+            il.Emit(OpCodes.Ldloc, constructorType);
+            il.Emit(OpCodes.Call, admission.AdmitType);
+        }
 
         // Only emitted guest classes carry this factory. Its source-aware adapter
         // supplies defaults/rest slots without changing CLR/native overload binding.
@@ -365,7 +378,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(useClrConstructor);
         il.Emit(OpCodes.Ldloc, constructorType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.GetMethod(typeof(Activator), "CreateInstance", _types.Type, _types.ObjectArray));
+        if (_nativeConstructorActivation is { } activation) il.Emit(OpCodes.Call, activation.Activate);
+        else il.Emit(OpCodes.Call, _types.GetMethod(typeof(Activator), "CreateInstance", _types.Type, _types.ObjectArray));
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTypeLabel);
 

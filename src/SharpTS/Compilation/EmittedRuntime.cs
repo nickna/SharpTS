@@ -17,6 +17,8 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    internal NativeConstructorActivationLookup? NativeConstructorActivation { get; set; }
+
     /// <summary>Opt-in source own-property infrastructure; does not admit or reroute existing carriers.</summary>
     public EmittedGuestOwnPropertyRuntime? GuestOwnProperties { get; private set; }
 

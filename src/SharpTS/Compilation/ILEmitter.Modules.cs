@@ -452,8 +452,7 @@ public partial class ILEmitter
                     else if (_ctx.Classes.TryGetValue(_ctx.GetQualifiedClassName(name), out var classBuilder))
                     {
                         // Store class type token
-                        IL.Emit(OpCodes.Ldtoken, classBuilder);
-                        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
+                        EmitConstructorTypeValue(classBuilder, NativeConstructorValueProducerKind.SourceClass);
                         IL.Emit(OpCodes.Stsfld, defaultField);
                     }
                     else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(name), out var enumMembers) == true)
@@ -501,8 +500,7 @@ public partial class ILEmitter
                 }
                 else if (_ctx.Classes.TryGetValue(_ctx.GetQualifiedClassName(name), out var classBuilder))
                 {
-                    IL.Emit(OpCodes.Ldtoken, classBuilder);
-                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
+                    EmitConstructorTypeValue(classBuilder, NativeConstructorValueProducerKind.SourceClass);
                     IL.Emit(OpCodes.Stsfld, field);
                 }
                 else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(name), out var enumMembers) == true)
@@ -548,8 +546,7 @@ public partial class ILEmitter
                     }
                     else if (_ctx.Classes.TryGetValue(_ctx.GetQualifiedClassName(localName), out var classBuilder))
                     {
-                        IL.Emit(OpCodes.Ldtoken, classBuilder);
-                        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
+                        EmitConstructorTypeValue(classBuilder, NativeConstructorValueProducerKind.SourceClass);
                         IL.Emit(OpCodes.Stsfld, field);
                     }
                     else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(localName), out var enumMembers) == true)

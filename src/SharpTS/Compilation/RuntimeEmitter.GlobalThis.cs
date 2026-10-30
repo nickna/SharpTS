@@ -382,8 +382,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Call, strEquals);
             il.Emit(OpCodes.Brfalse, notThisName);
-            il.Emit(OpCodes.Ldtoken, t);
-            il.Emit(OpCodes.Call, getTypeFromHandle);
+            NativeConstructorActivationLookup.EmitValue(_nativeConstructorActivation, _types, il, t,
+                NativeConstructorValueProducerKind.GlobalConstructorProperty);
             il.Emit(OpCodes.Br, returnLabel);
             il.MarkLabel(notThisName);
         }

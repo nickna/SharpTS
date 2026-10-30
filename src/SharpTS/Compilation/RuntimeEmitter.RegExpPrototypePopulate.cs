@@ -67,8 +67,7 @@ public partial class RuntimeEmitter
             inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!, inputs.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
             inputs.DescriptorStorage.DefineProperty), regExps.Prototype, ctorDescLocal, setItem, () =>
         {
-            il.Emit(OpCodes.Ldtoken, regExp.Type);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, regExp.Type);
         });
 
         // Populate the symbol-keyed slots. The dispatch path

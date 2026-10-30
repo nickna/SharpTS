@@ -94,8 +94,7 @@ public partial class RuntimeEmitter
         // bare `Function` resolves to typeof($TSFunction).
         il.Emit(OpCodes.Ldsfld, functionPrototypes.Prototype);
         il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, inputs.FunctionValues.Type);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Callvirt, setItem);
         // "constructor" is non-enumerable per ECMA-262 §17. Installed below
         // after the method wires.
@@ -178,8 +177,7 @@ public partial class RuntimeEmitter
         // constructor: non-enumerable per ECMA-262 §17.
         EmitInstallNonEnumerableDescriptor(il, new PrototypeDescriptorInputs(inputs.DescriptorStorage.DescriptorConstructor, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!, inputs.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!, inputs.DescriptorStorage.DefineProperty), functionPrototypes.Prototype, fnDescLocal, "constructor", () =>
         {
-            il.Emit(OpCodes.Ldtoken, inputs.FunctionValues.Type);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, inputs.FunctionValues.Type);
         });
 
         // Function.prototype's [[Prototype]] is %Object.prototype% per

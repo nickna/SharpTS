@@ -426,8 +426,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var notTSArrayCtorLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notTSArrayCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, _types.IListOfObject);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSArrayCtorLabel);
         // For other properties on $Array (method names like push/pop/sort/etc.),
@@ -551,8 +550,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var notListCtorLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notListCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, _types.IListOfObject);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notListCtorLabel);
         // Numeric-string index — `GetProperty(list, "0")` must return list[0] so
@@ -756,8 +754,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var notStrCtorLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notStrCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.String);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, _types.String);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStrCtorLabel);
 
@@ -1089,8 +1086,7 @@ public partial class RuntimeEmitter
             // still wins.
             NameMatchBranch("constructor", () =>
             {
-                il.Emit(OpCodes.Ldtoken, inputs.RegExps.RequireImplementation().Type);
-                il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+                EmitRuntimeConstructorValue(il, inputs.RegExps.RequireImplementation().Type);
             });
             // "source" / "flags" — string fields.
             NameMatchBranch("source", () =>
@@ -1550,8 +1546,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "constructor");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notDictCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.Object);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, _types.Object);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDictCtorLabel);
         // ECMA-262 19.1.3: every plain object inherits from Object.prototype.

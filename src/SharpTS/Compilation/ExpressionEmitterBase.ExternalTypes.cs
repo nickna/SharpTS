@@ -41,8 +41,7 @@ public abstract partial class ExpressionEmitterBase
             return false;
 
         Ctx.NativeClrAdmission?.RecordTypeValue(reference, clrType);
-        IL.Emit(OpCodes.Ldtoken, clrType);
-        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        EmitConstructorTypeValue(clrType, NativeConstructorValueProducerKind.ClrConstructor);
         SetStackUnknown();
         return true;
     }

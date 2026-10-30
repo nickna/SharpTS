@@ -978,8 +978,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, inputs.NativeArrayType);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Bne_Un, ordinaryUserParent);
-        il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        EmitRuntimeConstructorValue(il, _types.IListOfObject);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryUserParent);
         if (inputs.NativePromiseType != null)
@@ -989,8 +988,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldtoken, inputs.NativePromiseType);
             il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
             il.Emit(OpCodes.Bne_Un, ordinaryPromiseParent);
-            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
-            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            EmitRuntimeConstructorValue(il, _types.TaskOfObject);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(ordinaryPromiseParent);
         }

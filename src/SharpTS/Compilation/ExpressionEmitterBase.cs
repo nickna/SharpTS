@@ -100,6 +100,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected abstract ILGenerator IL { get; }
     protected abstract CompilationContext Ctx { get; }
     protected abstract TypeProvider Types { get; }
+
+    private protected void EmitConstructorTypeValue(Type owner, NativeConstructorValueProducerKind kind) =>
+        NativeConstructorActivationLookup.EmitValue(Ctx.Runtime?.NativeConstructorActivation, Types, IL,
+            owner, kind, Ctx.CurrentMethod, Ctx.CurrentClassBuilder);
     protected abstract IVariableResolver Resolver { get; }
 
     bool IEmitterContext.HasVariable(string name) => Resolver.HasVariable(name);
@@ -2303,8 +2307,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // the built-in arms so a user class shadowing a built-in name wins.
         if (Ctx.Classes.TryGetValue(Ctx.ResolveClassName(name), out var userClassType))
         {
-            IL.Emit(OpCodes.Ldtoken, userClassType);
-            IL.Emit(OpCodes.Call, Types.GetMethod(Types.Type, "GetTypeFromHandle", Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(userClassType, NativeConstructorValueProducerKind.SourceClass);
             SetStackUnknown();
             return true;
         }
@@ -2499,8 +2502,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             "AggregateError" => Ctx.Runtime!.Errors.AggregateErrorType,
             _ => Ctx.Runtime!.Errors.Type
         };
-        IL.Emit(OpCodes.Ldtoken, errorType);
-        IL.Emit(OpCodes.Call, Types.GetMethod(Types.Type, "GetTypeFromHandle", Types.RuntimeTypeHandle));
+        EmitConstructorTypeValue(errorType, NativeConstructorValueProducerKind.BuiltInConstructor);
         SetStackUnknown();
         return true;
     }
@@ -2570,8 +2572,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             _ => null
         };
         if (t == null) return false;
-        IL.Emit(OpCodes.Ldtoken, t);
-        IL.Emit(OpCodes.Call, Types.GetMethod(Types.Type, "GetTypeFromHandle", Types.RuntimeTypeHandle));
+        EmitConstructorTypeValue(t, NativeConstructorValueProducerKind.BuiltInConstructor);
         SetStackUnknown();
         return true;
     }

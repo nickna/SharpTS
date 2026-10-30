@@ -57,8 +57,7 @@ public partial class RuntimeEmitter
         // bare `String` resolves to typeof(string).
         EmitInstallConstructorDescriptor(il, peers.Descriptors, strings.PrototypeField, strDescLocal, setItem, () =>
         {
-            il.Emit(OpCodes.Ldtoken, _types.String);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, _types.String);
         });
 
         // Wire with explicit JS-spec name + length via TSFunctionCtorWithCache.

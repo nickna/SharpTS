@@ -56,7 +56,8 @@ internal sealed class NativeConstructorActivationLookup
 
     internal void ValidateForEmitter(ModuleBuilder module, bool native)
     {
-        if (!native || IsComplete || !ReferenceEquals(module, _owner.Module))
+        if (!native || IsComplete || !ReferenceEquals(module, _owner.Module) ||
+            !Valid(AdmitType, _types.Void, [_types.Type]) || !Valid(Activate, _types.Object, [_types.Type, _types.ObjectArray]))
             throw new InvalidOperationException("Native constructor activation requires this native output's declaration.");
     }
 
@@ -71,6 +72,8 @@ internal sealed class NativeConstructorActivationLookup
         {
             var type = group.Key;
             var producers = group.ToArray();
+            if (type is TypeBuilder owned && (!ReferenceEquals(owned.Module, _owner.Module) || !owned.IsCreated()))
+                throw new InvalidOperationException("Constructor value builders must be finalized in this exact output.");
             if (producers.Any(p => p.ValueOffset <= 0 || p.Body.ILOffset < p.ValueOffset ||
                 p.Method is not null && !ReferenceEquals(p.Method.Module, _owner.Module)))
                 throw new InvalidOperationException("Constructor values require actual completed output bodies.");
@@ -111,7 +114,8 @@ internal sealed class NativeConstructorActivationLookup
     private bool TryProveConstructors(Type type, out ConstructorInfo[] constructors)
     {
         constructors = [];
-        if (type.ContainsGenericParameters || type is TypeBuilder builder && !builder.IsCreated()) return false;
+        if (type.IsGenericTypeDefinition || FunctionGenericParameterRegistry.ContainsUnboundType(type) ||
+            type is TypeBuilder builder && !builder.IsCreated()) return false;
         try
         {
             constructors = type.GetConstructors();
@@ -201,6 +205,9 @@ internal sealed class NativeConstructorActivationLookup
         owner.ClosureKind == NativeConstructorValueClosureKind.UnprovedSourceGenericFamily ||
         owner.ClosureKind != NativeConstructorValueClosureKind.UnprovedValue &&
         (owner.IntrinsicHandled || owner.PublicConstructorsProved);
+    private static bool Valid(MethodInfo method, Type result, Type[] parameters) => method.IsStatic &&
+        !method.IsGenericMethod && (method.CallingConvention & CallingConventions.VarArgs) == 0 &&
+        method.ReturnType == result && method.GetParameters().Select(p => p.ParameterType).SequenceEqual(parameters);
     private void EmitActivator(ILGenerator il) => il.Emit(OpCodes.Call,
         _types.GetMethod(typeof(Activator), "CreateInstance", _types.Type, _types.ObjectArray));
     private void EmitType(ILGenerator il, Type type)

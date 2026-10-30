@@ -64,8 +64,7 @@ public partial class RuntimeEmitter
         // `Array.prototype.constructor === Array` both hold.
         EmitInstallConstructor(il, runtime, runtime.ArrayOperations.PrototypeField, arrDescLocal, setItem, () =>
         {
-            il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, _types.IListOfObject);
         });
 
         // For each named method: dict[jsName] = new $TSFunction(null, methodInfo)

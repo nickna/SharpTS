@@ -57,8 +57,7 @@ public partial class RuntimeEmitter
 
         EmitInstallConstructorDescriptor(il, descriptors, symbols.Prototype, descLocal, setItem, () =>
         {
-            il.Emit(OpCodes.Ldtoken, symbols.Type);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, symbols.Type);
         });
         EmitWirePrototypeMethodDescriptor(il, descriptors, inputs.TSFunctionGetOrCreate, symbols.Prototype, descLocal,
             setItem, "toString", toString, 0);

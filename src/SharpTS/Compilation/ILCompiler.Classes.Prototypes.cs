@@ -8,12 +8,10 @@ public partial class ILCompiler
 {
     private void EmitCanonicalClassConstructorValue(ILGenerator il, Type classType)
     {
-        il.Emit(OpCodes.Ldtoken, classType);
-        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         // CLR generic context can close an owner token even though TypeScript
         // type arguments do not create a different guest constructor value.
-        if (classType.IsGenericType)
-            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+        NativeConstructorActivationLookup.EmitValue(_nativeConstructorActivation, _types, il, classType,
+            NativeConstructorValueProducerKind.SourceClass, lookupOwner: classType, normalizeSourceGeneric: true);
     }
 
     private void DefineClassPrototypeConstructor(TypeBuilder typeBuilder)

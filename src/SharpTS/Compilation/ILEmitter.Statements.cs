@@ -3480,9 +3480,7 @@ public partial class ILEmitter
             else
                 goto skipCapturedClassStore;
 
-            IL.Emit(OpCodes.Ldtoken, builder!);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
-                _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(builder!, NativeConstructorValueProducerKind.SourceClass);
             IL.Emit(OpCodes.Stfld, displayField);
         }
     skipCapturedClassStore:
@@ -3495,8 +3493,7 @@ public partial class ILEmitter
             return;
 
         var local = _ctx.Locals.GetLocal(classStmt.Name.Lexeme)!;
-        IL.Emit(OpCodes.Ldtoken, builder!);
-        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+        EmitConstructorTypeValue(builder!, NativeConstructorValueProducerKind.SourceClass);
         IL.Emit(OpCodes.Stloc, local);
     }
 

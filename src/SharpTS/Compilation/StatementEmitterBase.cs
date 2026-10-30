@@ -2053,16 +2053,14 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         if (field != null)
         {
             IL.Emit(OpCodes.Ldarg_0);
-            IL.Emit(OpCodes.Ldtoken, builder);
-            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+            EmitConstructorTypeValue(builder, NativeConstructorValueProducerKind.SourceClass);
             IL.Emit(OpCodes.Stfld, field);
             return;
         }
 
         var local = Ctx.Locals.GetLocal(storageName)
             ?? Ctx.Locals.DeclareLocal(storageName, Types.Object, classStmt);
-        IL.Emit(OpCodes.Ldtoken, builder);
-        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        EmitConstructorTypeValue(builder, NativeConstructorValueProducerKind.SourceClass);
         IL.Emit(OpCodes.Stloc, local);
     }
 

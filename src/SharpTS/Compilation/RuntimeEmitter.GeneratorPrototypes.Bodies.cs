@@ -140,7 +140,7 @@ public partial class RuntimeEmitter
             Parent(kind.FunctionPrototype, () => il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypes.Prototype));
             Parent(kind.GeneratorPrototype, () => il.Emit(OpCodes.Ldsfld, kind.IteratorPrototype));
             Parent(kind.IteratorPrototype, () => il.Emit(OpCodes.Ldsfld, inputs.ObjectPrototypes.Prototype));
-            Parent(kind.Constructor, () => { il.Emit(OpCodes.Ldtoken, inputs.Functions.Type); il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle); });
+            Parent(kind.Constructor, () => EmitRuntimeConstructorValue(il, inputs.Functions.Type));
             Named(kind.FunctionPrototype, "prototype", () => il.Emit(OpCodes.Ldsfld, kind.GeneratorPrototype), false, true);
             Named(kind.FunctionPrototype, "constructor", () => il.Emit(OpCodes.Ldsfld, kind.Constructor), false, true);
             Named(kind.GeneratorPrototype, "constructor", () => il.Emit(OpCodes.Ldsfld, kind.FunctionPrototype), false, true);

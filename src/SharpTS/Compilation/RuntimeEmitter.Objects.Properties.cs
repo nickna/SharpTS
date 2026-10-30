@@ -640,8 +640,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, notDoubleCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.Double);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, _types.Double);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDoubleCtorLabel);
         // bool?
@@ -649,8 +648,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brfalse, notBoolCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.Boolean);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoolCtorLabel);
         il.MarkLabel(afterPrimCtorLabel);
@@ -2912,8 +2910,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "constructor");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notTypeConstructorLabel);
-            il.Emit(OpCodes.Ldtoken, inputs.TSFunctionType);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, inputs.TSFunctionType);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notTypeConstructorLabel);
 
@@ -3432,8 +3429,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, ctorTypeLocal);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(defaultPromiseCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, _types.TaskOfObject);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notPromiseCtorLabel);
 

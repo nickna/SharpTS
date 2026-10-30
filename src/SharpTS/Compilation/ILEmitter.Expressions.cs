@@ -118,9 +118,7 @@ public partial class ILEmitter
             && (name == _ctx.CurrentClassName || name == _ctx.CurrentClassShortName)
             && !HasClassDefinitionCaptureShadow(name))
         {
-            IL.Emit(OpCodes.Ldtoken, _ctx.CurrentClassBuilder);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
-                _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(_ctx.CurrentClassBuilder, NativeConstructorValueProducerKind.SourceClass);
             SetStackUnknown();
             return;
         }
@@ -203,8 +201,7 @@ public partial class ILEmitter
             // dispatches via InvokeValue's Type-callee branch. Direct
             // `Symbol.iterator` / `Symbol(...)` sites still compile through
             // SymbolStaticEmitter / BuiltInConstructorHandler first.
-            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.Symbols.Type);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(_ctx.Runtime!.Symbols.Type, NativeConstructorValueProducerKind.BuiltInConstructor);
             SetStackUnknown();
             return;
         }
@@ -214,8 +211,7 @@ public partial class ILEmitter
             // BigInt is callable but not constructible. Its value-form Type
             // token gives aliases normal function identity/property lookup;
             // direct BigInt(x) calls still use BuiltInConstructorHandler.
-            IL.Emit(OpCodes.Ldtoken, _ctx.Types.BigInteger);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(_ctx.Types.BigInteger, NativeConstructorValueProducerKind.BuiltInConstructor);
             SetStackUnknown();
             return;
         }
@@ -288,8 +284,7 @@ public partial class ILEmitter
         // Check if it's a class - load the Type object
         if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(_ctx.TypeMap?.Get(v), name), out var classType))
         {
-            IL.Emit(OpCodes.Ldtoken, classType);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(classType, NativeConstructorValueProducerKind.SourceClass);
             SetStackUnknown();
             return;
         }

@@ -545,8 +545,7 @@ public partial class RuntimeEmitter
         // Promise.prototype.constructor === Promise (= typeof(Task<object>)).
         EmitInstallConstructor(il, runtime, runtime.RequirePromise().PrototypeField, descLocal, setItem, () =>
         {
-            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, _types.TaskOfObject);
         });
 
         // Wire then/catch/finally with their helper MethodInfos. The helpers

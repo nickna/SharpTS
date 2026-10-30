@@ -147,8 +147,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldsfld, nsField);
                     IL.Emit(OpCodes.Ldstr, classStmt.Name.Lexeme);
-                    IL.Emit(OpCodes.Ldtoken, classType);
-                    IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+                    EmitConstructorTypeValue(classType, NativeConstructorValueProducerKind.SourceClass);
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
                 }
                 break;

@@ -18,6 +18,11 @@ public partial class RuntimeEmitter
     private readonly NativeDeletionLookup? _nativeDeletionLookup;
     private readonly MethodInfo? _nativeHasInMemberLookup;
     private readonly NativeConstructorFactoryLookup? _nativeConstructorFactories;
+    private readonly NativeConstructorActivationLookup? _nativeConstructorActivation;
+
+    private void EmitRuntimeConstructorValue(ILGenerator il, Type type) =>
+        NativeConstructorActivationLookup.EmitValue(_nativeConstructorActivation, _types, il, type,
+            NativeConstructorValueProducerKind.RuntimeConstructorValue);
 
     /// <summary>
     /// Feature gating set — populated by <see cref="EmitAll(ModuleBuilder, RuntimeFeatureSet)"/>
@@ -40,7 +45,8 @@ public partial class RuntimeEmitter
     internal RuntimeEmitter(TypeProvider types, bool emitHosted, bool emitNativeCallables, bool emitNativeOwnProperties,
         MethodInfo? nativeStaticFieldLookup = null, MethodInfo? nativeConstructorMembers = null,
         NativeDeletionLookup? nativeDeletionLookup = null, MethodInfo? nativeHasInMemberLookup = null,
-        NativeConstructorFactoryLookup? nativeConstructorFactories = null)
+        NativeConstructorFactoryLookup? nativeConstructorFactories = null,
+        NativeConstructorActivationLookup? nativeConstructorActivation = null)
     {
         _types = types;
         _emitHosted = emitHosted;
@@ -51,6 +57,7 @@ public partial class RuntimeEmitter
         _nativeDeletionLookup = nativeDeletionLookup;
         _nativeHasInMemberLookup = nativeHasInMemberLookup;
         _nativeConstructorFactories = nativeConstructorFactories;
+        _nativeConstructorActivation = nativeConstructorActivation;
     }
 
     /// <summary>
@@ -71,6 +78,7 @@ public partial class RuntimeEmitter
     {
         _nativeDeletionLookup?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         _nativeConstructorFactories?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
+        _nativeConstructorActivation?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         functionPolicy.NativeConstructedBodies?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         if (_nativeStaticFieldLookup is { } fields &&
             (!_emitNativeCallables || !ReferenceEquals(fields.Module, moduleBuilder) || !fields.IsStatic || fields.IsGenericMethod ||
@@ -90,7 +98,7 @@ public partial class RuntimeEmitter
         _features = features;
         if (_emitHosted)
             _features.UsesPromise = true;
-        var runtime = new EmittedRuntime();
+        var runtime = new EmittedRuntime { NativeConstructorActivation = _nativeConstructorActivation };
         if (nativePropertyGetter is not null) runtime.ReflectedMethods.DeclareNativePropertyGetter(moduleBuilder, nativePropertyGetter);
         if (nativeMethodLookup is not null) runtime.ReflectedMethods.DeclareNativeMethodLookup(moduleBuilder, nativeMethodLookup);
         if (sourceOwners != null) runtime.ClassInitialization.DeclareSourceOwners(sourceOwners);
