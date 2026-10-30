@@ -6,9 +6,16 @@ public sealed class Api
     public string Value;
     public volatile int Volatile;
     public string Property { get; set; }
-    public Api(string value) { Value = value; Property = value; }
+    public Api(string value = "constructor-default") { Value = value; Property = value; }
     public string InstanceEcho(string value) => value;
     public string this[int index] { get => Value + index; set => Value = value; }
+    public static string OptionalString(string value = "fallback") => value;
+    public static bool OptionalBoolean(bool value = true) => value;
+    public static int OptionalInteger(int value = 7) => value;
+    public static double OptionalNumber(double value = 3.5) => value;
+    public static int OptionalEnum(OptionalChoice value = OptionalChoice.Second) => (int)value;
+    public static string OptionalNull(object? value = null) => value is null ? "null" : "value";
+    public static string OptionalMissing([System.Runtime.InteropServices.Optional] object value) => value is null ? "null" : "value";
     public static string Echo(string value) => value;
     public static string Params(params string[] values) => string.Join("|", values);
     public static bool Boolean(bool value) => value;
@@ -57,3 +64,4 @@ public class ConstraintBase { }
 public sealed class ConstraintDerived : ConstraintBase { }
 public sealed class PrivateConstructor { private PrivateConstructor() { } }
 public abstract class AbstractConstructor { public AbstractConstructor() { } }
+public enum OptionalChoice { First = 4, Second = 9 }

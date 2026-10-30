@@ -564,7 +564,7 @@ public partial class ILEmitter
 
     private void EmitExternalDefaultValue(ParameterInfo parameter)
     {
-        object? value = parameter.HasDefaultValue ? parameter.DefaultValue : null;
+        object? value = parameter.HasDefaultValue ? _ctx.TypeMapper.DefaultForEmission(parameter) : null;
         Type targetType = parameter.ParameterType;
         if (value == null || value == DBNull.Value || value == Missing.Value)
         {

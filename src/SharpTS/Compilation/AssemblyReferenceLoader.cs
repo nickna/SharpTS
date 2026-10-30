@@ -24,6 +24,9 @@ public sealed class AssemblyReferenceLoader : IDisposable
     private ExternalMemberEmission? _emission;
     private ExternalMetadataTypes? _metadataTypes;
     private ExternalMetadataTypes MetadataTypes => _metadataTypes ??= new(_mlc);
+    internal object? DefaultForEmission(ParameterInfo parameter) =>
+        parameter.GetType().Assembly == typeof(MetadataLoadContext).Assembly && MetadataTypes.Owns(parameter.Member.Module.Assembly)
+            ? parameter.RawDefaultValue : parameter.DefaultValue;
     internal bool TryGenericSelectionType(Type type, out Type selected) => MetadataTypes.TrySelectionType(type, out selected);
     internal MethodInfo[] CloseGenericCandidates(IEnumerable<MethodInfo> methods, IReadOnlyList<Type?> arguments,
         IReadOnlyList<Type>? explicitArguments, Type? expectedReturn) =>

@@ -2,6 +2,7 @@ using System.Reflection.Emit;
 using MethodInfo = System.Reflection.MethodInfo;
 using ConstructorInfo = System.Reflection.ConstructorInfo;
 using FieldInfo = System.Reflection.FieldInfo;
+using ParameterInfo = System.Reflection.ParameterInfo;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -28,6 +29,8 @@ public class TypeMapper
         IReadOnlyList<Type>? explicitArguments, Type? expectedReturn) =>
         ExternalMetadata?.CloseGenericCandidates(methods, arguments, explicitArguments, expectedReturn) ??
         SharpTS.Runtime.DotNet.DotNetGenericMethodInference.CloseCandidates(methods, arguments, explicitArguments, expectedReturn);
+    internal object? DefaultForEmission(ParameterInfo parameter) =>
+        ExternalMetadata is { } loader ? loader.DefaultForEmission(parameter) : parameter.DefaultValue;
     internal MethodInfo ForEmission(MethodInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
     internal ConstructorInfo ForEmission(ConstructorInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
     internal FieldInfo ForEmission(FieldInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
