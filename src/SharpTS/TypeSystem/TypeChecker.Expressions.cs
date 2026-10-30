@@ -786,28 +786,39 @@ public partial class TypeChecker
         Dictionary<string, TypeInfo> fields,
         HashSet<string>? optionalFields = null)
     {
+        void MergeField(string name, TypeInfo value, bool sourceOptional)
+        {
+            if (sourceOptional && fields.TryGetValue(name, out TypeInfo? previous))
+            {
+                // A missing right-hand property leaves the earlier value in
+                // place. Its optionality therefore cannot erase prior presence.
+                if (!_exactOptionalPropertyTypes)
+                    value = value switch
+                    {
+                        TypeInfo.Undefined => TypeInfo.Never.Shared,
+                        TypeInfo.Union values => values.FlattenedTypes
+                            .Where(part => part is not TypeInfo.Undefined)
+                            .Aggregate((TypeInfo)TypeInfo.Never.Shared, CreateUnion),
+                        _ => value,
+                    };
+                fields[name] = CreateUnion(previous, value);
+                return;
+            }
+            fields[name] = value;
+            if (sourceOptional) optionalFields?.Add(name);
+            else optionalFields?.Remove(name);
+        }
+
         switch (spreadType)
         {
             case TypeInfo.Record record:
                 foreach (var kv in record.Fields)
-                {
-                    fields[kv.Key] = kv.Value;
-                    if (record.OptionalFields?.Contains(kv.Key) == true)
-                        optionalFields?.Add(kv.Key);
-                    else
-                        optionalFields?.Remove(kv.Key);
-                }
+                    MergeField(kv.Key, kv.Value, record.OptionalFields?.Contains(kv.Key) == true);
                 return true;
 
             case TypeInfo.Interface iface:
                 foreach (var kv in iface.GetAllMembers())
-                {
-                    fields[kv.Key] = kv.Value;
-                    if (iface.GetAllOptionalMembers().Contains(kv.Key))
-                        optionalFields?.Add(kv.Key);
-                    else
-                        optionalFields?.Remove(kv.Key);
-                }
+                    MergeField(kv.Key, kv.Value, iface.GetAllOptionalMembers().Contains(kv.Key));
                 return true;
 
             case TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface } instantiated
@@ -824,15 +835,21 @@ public partial class TypeChecker
             case TypeInfo.Intersection intersection:
                 // Spread of an intersection contributes the fields of every object-like constituent.
                 // Reject only if no constituent is object-like (e.g. `string & number`).
-                bool anyObjectLike = false;
+                var intersectionParts = new List<(Dictionary<string, TypeInfo> Fields, HashSet<string> Optional)>();
                 foreach (var part in intersection.Types)
                 {
-                    if (TryMergeSpreadFields(part, fields, optionalFields))
-                    {
-                        anyObjectLike = true;
-                    }
+                    var partFields = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
+                    var partOptional = new HashSet<string>(StringComparer.Ordinal);
+                    if (TryMergeSpreadFields(part, partFields, partOptional))
+                        intersectionParts.Add((partFields, partOptional));
                 }
-                return anyObjectLike;
+                foreach (string name in intersectionParts.SelectMany(part => part.Fields.Keys).Distinct(StringComparer.Ordinal))
+                {
+                    var members = intersectionParts.Where(part => part.Fields.ContainsKey(name)).ToList();
+                    MergeField(name, SimplifyIntersection(members.Select(part => part.Fields[name]).ToList()),
+                        members.All(part => part.Optional.Contains(name)));
+                }
+                return intersectionParts.Count != 0;
 
             case TypeInfo.SpreadType spread:
                 return TryMergeSpreadFields(spread.Inner, fields, optionalFields);
@@ -862,22 +879,9 @@ public partial class TypeChecker
                         .Select(alternative => alternative.Fields[name])
                         .ToList();
                     TypeInfo valueType = CollapseOrCreateUnion(valueTypes);
-                    bool sourceOptional = alternatives.Any(alternative =>
+                    bool sourceOptional = union.FlattenedTypes.Any(part => part is TypeInfo.Null or TypeInfo.Undefined) || alternatives.Any(alternative =>
                         !alternative.Fields.ContainsKey(name) || alternative.Optional.Contains(name));
-
-                    if (sourceOptional && fields.TryGetValue(name, out TypeInfo? previous))
-                    {
-                        fields[name] = CreateUnion(previous, valueType);
-                        optionalFields?.Remove(name);
-                    }
-                    else
-                    {
-                        fields[name] = valueType;
-                        if (sourceOptional)
-                            optionalFields?.Add(name);
-                        else
-                            optionalFields?.Remove(name);
-                    }
+                    MergeField(name, valueType, sourceOptional);
                 }
                 return true;
             }
