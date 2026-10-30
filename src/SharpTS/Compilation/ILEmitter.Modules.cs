@@ -479,40 +479,43 @@ public partial class ILEmitter
             // export const/let/function/class - execute declaration and store in named field
             EmitStatement(export.Declaration);
 
-            string? name = GetDeclarationName(export.Declaration);
-            if (name != null && exportFields.TryGetValue(name, out var field))
+            foreach (var declaration in ExportDeclarationSequence.Declarations(export.Declaration))
             {
-                var local = _ctx.Locals.GetLocal(name);
-                if (local != null)
+                string? name = GetDeclarationName(declaration);
+                if (name != null && exportFields.TryGetValue(name, out var field))
                 {
-                    EmitStoreLocalToExportField(local, field);
-                }
-                else if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var staticField) == true)
-                {
-                    // Top-level variable stored as static field
-                    IL.Emit(OpCodes.Ldsfld, staticField);
-                    IL.Emit(OpCodes.Stsfld, field);
-                }
-                else if (TryResolveExportableFunction(name, out var funcBuilder))
-                {
-                    EmitFunctionReference(name, funcBuilder);
-                    IL.Emit(OpCodes.Stsfld, field);
-                }
-                else if (_ctx.Classes.TryGetValue(_ctx.GetQualifiedClassName(name), out var classBuilder))
-                {
-                    EmitConstructorTypeValue(classBuilder, NativeConstructorValueProducerKind.SourceClass);
-                    IL.Emit(OpCodes.Stsfld, field);
-                }
-                else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(name), out var enumMembers) == true)
-                {
-                    // Create SharpTSObject with enum members
-                    EmitEnumAsObject(enumMembers, _ctx.GetQualifiedEnumName(name));
-                    IL.Emit(OpCodes.Stsfld, field);
-                }
-                else if (_ctx.ResolveNamespaceField(name) is { } namespaceField)
-                {
-                    IL.Emit(OpCodes.Ldsfld, namespaceField);
-                    IL.Emit(OpCodes.Stsfld, field);
+                    var local = _ctx.Locals.GetLocal(name);
+                    if (local != null)
+                    {
+                        EmitStoreLocalToExportField(local, field);
+                    }
+                    else if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var staticField) == true)
+                    {
+                        // Top-level variable stored as static field
+                        IL.Emit(OpCodes.Ldsfld, staticField);
+                        IL.Emit(OpCodes.Stsfld, field);
+                    }
+                    else if (TryResolveExportableFunction(name, out var funcBuilder))
+                    {
+                        EmitFunctionReference(name, funcBuilder);
+                        IL.Emit(OpCodes.Stsfld, field);
+                    }
+                    else if (_ctx.Classes.TryGetValue(_ctx.GetQualifiedClassName(name), out var classBuilder))
+                    {
+                        EmitConstructorTypeValue(classBuilder, NativeConstructorValueProducerKind.SourceClass);
+                        IL.Emit(OpCodes.Stsfld, field);
+                    }
+                    else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(name), out var enumMembers) == true)
+                    {
+                        // Create SharpTSObject with enum members
+                        EmitEnumAsObject(enumMembers, _ctx.GetQualifiedEnumName(name));
+                        IL.Emit(OpCodes.Stsfld, field);
+                    }
+                    else if (_ctx.ResolveNamespaceField(name) is { } namespaceField)
+                    {
+                        IL.Emit(OpCodes.Ldsfld, namespaceField);
+                        IL.Emit(OpCodes.Stsfld, field);
+                    }
                 }
             }
         }

@@ -2647,19 +2647,22 @@ public partial class TypeChecker
                 }
                 else if (export.Declaration != null)
                 {
-                    string name = GetDeclarationName(export.Declaration);
-                    var type = GetDeclaredType(export.Declaration);
-                    // Function/namespace declaration merging carries the namespace as the type
-                    // facet and the function through its value binding. Retain the namespace so
-                    // factory-local qualified types such as `predom.JSX.Element` survive import.
-                    if (!module.ExportedTypes.TryGetValue(name, out TypeInfo? prior) ||
-                        prior is not TypeInfo.Namespace || type is TypeInfo.Namespace)
-                        module.ExportedTypes[name] = type;
-                    RecordExportedDeclarationBindings(
-                        module,
-                        export.Declaration,
-                        exportedName: name,
-                        isDefault: false);
+                    foreach (var declaration in ExportDeclarationSequence.Declarations(export.Declaration))
+                    {
+                        string name = GetDeclarationName(declaration);
+                        var type = GetDeclaredType(declaration);
+                        // Function/namespace declaration merging carries the namespace as the type
+                        // facet and the function through its value binding. Retain the namespace so
+                        // factory-local qualified types such as `predom.JSX.Element` survive import.
+                        if (!module.ExportedTypes.TryGetValue(name, out TypeInfo? prior) ||
+                            prior is not TypeInfo.Namespace || type is TypeInfo.Namespace)
+                            module.ExportedTypes[name] = type;
+                        RecordExportedDeclarationBindings(
+                            module,
+                            declaration,
+                            exportedName: name,
+                            isDefault: false);
+                    }
                 }
                 else if (export.NamedExports != null && export.FromModulePath == null)
                 {

@@ -2061,8 +2061,12 @@ public partial class Interpreter : IDisposable
             // Skip type-only declarations (interface, type alias) - they have no runtime value
             if (_currentModuleInstance != null && !IsTypeOnlyDeclaration(export.Declaration))
             {
-                string name = GetDeclaredName(export.Declaration);
-                _currentModuleInstance.SetExport(name, GetDeclaredValue(export.Declaration));
+                foreach (var declaration in ExportDeclarationSequence.Declarations(export.Declaration))
+                {
+                    if (IsTypeOnlyDeclaration(declaration)) continue;
+                    string name = GetDeclaredName(declaration);
+                    _currentModuleInstance.SetExport(name, GetDeclaredValue(declaration));
+                }
             }
         }
         else if (export.NamedExports != null && export.FromModulePath == null)

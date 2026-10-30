@@ -374,8 +374,12 @@ public partial class Interpreter
                 return result;
             if (!IsTypeOnlyDeclaration(export.Declaration))
             {
-                string name = GetDeclaredName(export.Declaration);
-                _currentModuleInstance!.SetExport(name, GetDeclaredValue(export.Declaration));
+                foreach (var declaration in ExportDeclarationSequence.Declarations(export.Declaration))
+                {
+                    if (IsTypeOnlyDeclaration(declaration)) continue;
+                    string name = GetDeclaredName(declaration);
+                    _currentModuleInstance!.SetExport(name, GetDeclaredValue(declaration));
+                }
             }
             return ExecutionResult.Success();
         }

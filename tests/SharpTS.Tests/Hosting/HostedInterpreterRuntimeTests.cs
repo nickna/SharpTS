@@ -15,6 +15,31 @@ namespace SharpTS.Tests.Hosting;
 [Collection("ProcessLifecycleTests")]
 public sealed class HostedInterpreterRuntimeTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void HostedTopLevelAwait_ExportsEveryCommaDeclaration(bool compiled)
+    {
+        var sources = new Dictionary<string, string>
+        {
+            ["producer.ts"] = "export const first=await Promise.resolve(3),second=4;",
+            ["main.ts"] = "import {first,second} from './producer';console.log(first,second);",
+        };
+        if (compiled)
+        {
+            AssertCompiledHostedEnumOutput(sources, "3 4\n");
+            return;
+        }
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = new StringWriter();
+        var errors = new RecordingErrorSink();
+        using var runtime = new HostedInterpreterRuntime(dispatcher, new RecordingLifetime(), errors,
+            CreateProgram(sources, "main.ts"), output, output);
+        RunInitialization(runtime, dispatcher);
+        Assert.Equal("3 4\n", output.ToString().Replace("\r\n", "\n"));
+        Assert.Empty(errors.Errors);
+    }
+
     [Fact]
     public void CompiledHostedTopLevelAwait_InitializesEnumObjectsInDeclarationOrder()
     {

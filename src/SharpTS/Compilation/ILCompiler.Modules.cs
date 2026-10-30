@@ -116,15 +116,18 @@ public partial class ILCompiler
                 else if (export.Declaration != null)
                 {
                     // Named export from declaration
-                    string? exportName = GetExportDeclarationName(export.Declaration);
-                    if (exportName != null && !exportFields.ContainsKey(exportName))
+                    foreach (var declaration in ExportDeclarationSequence.Declarations(export.Declaration))
                     {
-                        var field = moduleType.DefineField(
-                            exportName,
-                            typeof(object),
-                            FieldAttributes.Public | FieldAttributes.Static
-                        );
-                        exportFields[exportName] = field;
+                        string? exportName = GetExportDeclarationName(declaration);
+                        if (exportName != null && !exportFields.ContainsKey(exportName))
+                        {
+                            var field = moduleType.DefineField(
+                                exportName,
+                                typeof(object),
+                                FieldAttributes.Public | FieldAttributes.Static
+                            );
+                            exportFields[exportName] = field;
+                        }
                     }
                 }
                 else if (export.NamedExports != null && export.FromModulePath == null)
