@@ -118,7 +118,7 @@ internal sealed class NativeConstructorActivationLookup
             type is TypeBuilder builder && !builder.IsCreated()) return false;
         try
         {
-            constructors = type.GetConstructors();
+            constructors = _types.GetConstructors(type);
             foreach (var constructor in constructors)
             {
                 if (!constructor.IsPublic || constructor.IsStatic || constructor.DeclaringType != type ||
@@ -146,9 +146,13 @@ internal sealed class NativeConstructorActivationLookup
 
     private void EmitKnownOwners(ILGenerator il, NativeConstructorValueProducerSnapshot snapshot, Label admitted)
     {
-        foreach (var owner in snapshot.Owners.Where(IsAdmissible))
+        foreach (var type in snapshot.Owners.Where(IsAdmissible)
+            .Select(owner => owner.SourceGenericDefinition ?? owner.ExactTokenOwner).Distinct())
         {
-            EmitType(il, owner.ExactTokenOwner); il.Emit(OpCodes.Ldarg_0);
+            // A source token can carry its enclosing generic context. Its final
+            // constructor value is the normalized definition; never transplant
+            // an open TypeSpec into this nongeneric helper's body.
+            EmitType(il, type); il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "Equals", _types.Object));
             il.Emit(OpCodes.Brtrue, admitted);
         }

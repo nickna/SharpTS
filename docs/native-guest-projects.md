@@ -938,3 +938,35 @@ The strict Map/Set/RegExp control changes from two findings to one, removing
 only ConstructWithNewTarget's factory GetMethod IL2070 and adding none.
 Activator's separate IL2067 remains visible under #1351. The independent
 native Array.from(arguments) limitation is tracked in #3094.
+
+### Constructor Type admission and Activator binding
+
+The native constructor-value inventory records actual token emissions in source
+class bindings, imported CLR constructor values, global constructor getters and
+runtime constructor descriptors. The token helper emits the value and records
+its body offset in one operation. Completion follows runtime and source type
+creation in both compiler pipelines and publishes an immutable snapshot for
+independent consumers. A property owner or a checked type annotation alone does
+not admit a constructor Type.
+
+The dynamic construction Type arm checks admission before reading custom
+attributes. Exact values compare against trusted literal Type objects. Source
+generic families retain the original operation after an exact runtime-Type kind
+check and a recorded generic-definition identity check. Foreign Types, including
+TypeDelegator instances with hostile metadata methods, receive a guest TypeError
+before those methods run.
+
+For completed literal owners, public constructor metadata and emitted constructor
+bodies must be proved. Already-emitted closed BCL tokens remain exact values;
+source generic constructor normalization remains an unproved family. Existing
+intrinsic equality/return arms certify their own handling. The remaining exact
+owners use the same `Activator.CreateInstance(Type, object[])` overload with a
+literal Type and the original argument array. The binder, overload failures and
+initialization order remain observable. This does not synthesize generic closures
+or replace overload binding with a direct constructor call.
+
+The collection/RegExp and Promise checkpoints each remove the Activator IL2067
+diagnostic with no findings added. Their separate factory GetMethod diagnostic
+requires the constructor-factory slice; generic legacy paths retain their actual
+diagnostics rather than suppressing them. Default managed emission retains its
+original constructor instructions.
