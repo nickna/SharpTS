@@ -1028,9 +1028,9 @@ public static partial class ObjectBuiltIns
     internal static SharpTSPropertyDescriptor ToPropertyDescriptor(
         Interpreter interpreter, object descriptorObject)
     {
-        var descriptor = SharpTSPropertyDescriptor.FromAnyObject(descriptorObject);
-        ApplyBooleanAttributes(descriptor, descriptorObject, interpreter);
-        ApplyValueAndAccessors(descriptor, descriptorObject, interpreter);
+        var descriptor = new SharpTSPropertyDescriptor();
+        ApplyEnumerableAndConfigurable(descriptor, descriptorObject, interpreter);
+        ApplyDataAndAccessorFields(descriptor, descriptorObject, interpreter);
         ValidatePropertyDescriptor(descriptor);
         return descriptor;
     }
@@ -2001,22 +2001,12 @@ public static partial class ObjectBuiltIns
     }
 
     /// <summary>
-    /// ECMA-262 §6.2.5.5 ToPropertyDescriptor boolean-attribute coercion done
-    /// with interpreter access: each of writable/enumerable/configurable, when
-    /// resolvable via <c>Get</c> (own or inherited, data or accessor), is
-    /// ToBoolean-coerced. A non-undefined result means the attribute is present
-    /// (for these three, "absent" and "present-but-undefined" both yield the
-    /// false default, so this matches spec). Overrides the own-only <c>is bool</c>
-    /// values from <see cref="SharpTSPropertyDescriptor.FromAnyObject"/>.
+    /// Reads enumerable/configurable first, using HasProperty/Get and ToBoolean
+    /// for each present field. Presence is recorded independently of its value.
     /// </summary>
-    private static void ApplyBooleanAttributes(SharpTSPropertyDescriptor descriptor, object? descObj, Interpreter interpreter)
+    private static void ApplyEnumerableAndConfigurable(SharpTSPropertyDescriptor descriptor, object? descObj, Interpreter interpreter)
     {
         if (descObj is null) return;
-        if (interpreter.TryGetDescriptorField(descObj, "writable", out var w))
-        {
-            descriptor.HasWritable = true;
-            descriptor.Writable = Compilation.RuntimeTypes.IsTruthy(w);
-        }
         if (interpreter.TryGetDescriptorField(descObj, "enumerable", out var e))
         {
             descriptor.HasEnumerable = true;
@@ -2030,16 +2020,13 @@ public static partial class ObjectBuiltIns
     }
 
     /// <summary>
-    /// ECMA-262 §6.2.5.5 ToPropertyDescriptor reads <c>value</c>/<c>get</c>/<c>set</c>
-    /// with HasProperty/Get semantics — walking the descriptor object's prototype
-    /// chain and honoring accessors. <see cref="SharpTSPropertyDescriptor.FromAnyObject"/>
-    /// only sees own fields, so re-derive these prototype-aware with interpreter access
-    /// and record presence on the descriptor (#801). An inherited setter-only
+    /// Reads value/writable/get/set next, in that order, using HasProperty/Get
+    /// and immediate accessor-callability validation. An inherited setter-only
     /// <c>value</c> counts as a data descriptor whose value reads <c>undefined</c>,
     /// which <see cref="Interpreter.HasProperty"/> detects even though Get yields
     /// undefined for it.
     /// </summary>
-    private static void ApplyValueAndAccessors(SharpTSPropertyDescriptor descriptor, object? descObj, Interpreter interpreter)
+    private static void ApplyDataAndAccessorFields(SharpTSPropertyDescriptor descriptor, object? descObj, Interpreter interpreter)
     {
         if (descObj is null) return;
         // TryGetDescriptorField applies Get semantics with correct presence AND
@@ -2049,6 +2036,11 @@ public static partial class ObjectBuiltIns
         {
             descriptor.Value = v;
             descriptor.HasValue = true;
+        }
+        if (interpreter.TryGetDescriptorField(descObj, "writable", out var w))
+        {
+            descriptor.HasWritable = true;
+            descriptor.Writable = Compilation.RuntimeTypes.IsTruthy(w);
         }
         if (interpreter.TryGetDescriptorField(descObj, "get", out var g))
         {
@@ -2109,7 +2101,7 @@ public static partial class ObjectBuiltIns
     /// ECMA-262 §10.1.6.3 ValidateAndApplyPropertyDescriptor: when redefining an
     /// EXISTING own property, attributes the descriptor omits are preserved from
     /// the current property rather than reset to false (<see cref="SharpTSPropertyDescriptor"/>
-    /// defaults absent booleans to false, and <see cref="ApplyBooleanAttributes"/> only
+    /// defaults absent booleans to false, and <see cref="ApplyEnumerableAndConfigurable"/> and <see cref="ApplyDataAndAccessorFields"/> only
     /// sets the ones actually present). Without this,
     /// <c>Object.defineProperty(o, "a", { writable:false })</c> on an enumerable data
     /// property <c>a</c> wrongly clears its enumerable flag, dropping it from
