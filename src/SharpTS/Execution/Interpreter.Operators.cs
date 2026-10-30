@@ -570,7 +570,7 @@ public partial class Interpreter
             case TokenType.VOID:
                 return RuntimeValue.Undefined;
             case TokenType.TILDE when rv.IsNumber:
-                return RuntimeValue.FromNumber(~(int)rv.AsNumber());
+                return RuntimeValue.FromNumber(~JsToInt32(rv.AsNumber()));
             case TokenType.TILDE when rv.IsBigInt:
                 return RuntimeValue.FromBigInt(new SharpTSBigInt(~rv.AsBigInt().Value));
             default:
