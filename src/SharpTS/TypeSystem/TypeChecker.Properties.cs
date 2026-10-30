@@ -251,6 +251,11 @@ public partial class TypeChecker
         TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(get.Object));
         ExpectSourceMemberReceiver(objType);
 
+        if (objType is TypeInfo.Any && get.Name.Lexeme == "prototype"
+            && get.Object is Expr.Variable { Name.Lexeme: "Date" }
+            && _environment.Get("Date") is null)
+            return TypeInfo.Date.Shared;
+
         if (_hasDefaultLibraries &&
             get.Object is Expr.Variable { Name.Lexeme: "top" } &&
             objType is TypeInfo.Union topUnion && topUnion.ContainsNull &&

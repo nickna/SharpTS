@@ -1780,7 +1780,6 @@ public partial class TypeChecker
 
     private TypeInfo? TryReadKnownIndexedInstanceMember(TypeInfo receiver, TypeInfo index, Expr.GetIndex syntax)
     {
-        if (receiver is not TypeInfo.Instance instance) return null;
         string? name = index switch
         {
             TypeInfo.StringLiteral text => text.Value,
@@ -1788,6 +1787,9 @@ public partial class TypeChecker
             _ => null
         };
         if (name is null) return null;
+        if (receiver is TypeInfo.Date)
+            return ResolveBuiltInMemberType(TypeCategory.Date, receiver, name);
+        if (receiver is not TypeInfo.Instance instance) return null;
         HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);
         for (TypeInfo? owner = instance.ResolvedClassType; owner is not null && visited.Add(owner); owner = GetSuperclass(owner))
         {
