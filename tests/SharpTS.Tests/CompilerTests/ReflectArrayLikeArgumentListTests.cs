@@ -37,8 +37,9 @@ public sealed class ReflectArrayLikeArgumentListTests
             Object.defineProperty(inherited, "2", { value: "hidden", enumerable: false });
             for (const args of [[1, 2], ["x", "y"], [1, , 3], new Uint8Array([4, 5]),
                 new String("ab"), getArguments("first", "last"), inherited]) {
-                console.log(Reflect.apply(format, null, args),
-                    (Reflect.construct(Value as any, args) as any).value);
+                // #3113 tracks the ambient checker rejecting this valid ArrayLike union.
+                console.log(Reflect.apply(format, null, args as any),
+                    (Reflect.construct(Value as any, args as any) as any).value);
             }
             """, "1|2:2 1|2:2\nx|y:2 x|y:2\n1|U|3:3 1|U|3:3\n4|5:2 4|5:2\na|b:2 a|b:2\nfirst|last:2 first|last:2\nown|inherited|hidden:3 own|inherited|hidden:3\n"];
         yield return ["length-snapshot-index-order-and-iterator-ignored", """
@@ -83,7 +84,8 @@ public sealed class ReflectArrayLikeArgumentListTests
             check(() => Reflect.apply({} as any, null, args));
             check(() => Reflect.construct({} as any, args));
             check(() => Reflect.construct(Target, args, (() => 0) as any));
-            check(() => Reflect.construct(Target, args, undefined));
+            // #3114 tracks ambient optional-parameter checking; validate the present value at runtime.
+            check(() => Reflect.construct(Target, args, undefined as any));
             """, "true 0\ntrue 0\ntrue 0\ntrue 0\n"];
         yield return ["strict-reflect-lists-and-apply-nullish-controls", """
             const state = { calls: 0 };
