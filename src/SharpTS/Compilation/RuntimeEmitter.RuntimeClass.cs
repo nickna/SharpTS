@@ -483,6 +483,11 @@ public partial class RuntimeEmitter
         // hot calls do not allocate a delegate alongside every result string.
         DefineNumberFixedFormattingInfrastructure(typeBuilder, runtime.Numbers);
 
+        var promiseSpeciesInitializer = _features.UsesPromise
+            ? typeBuilder.DefineMethod("InitializePromiseSpecies", MethodAttributes.Private | MethodAttributes.Static,
+                _types.Void, Type.EmptyTypes)
+            : null;
+
         // Static constructor to initialize Random and symbol storage
         var cctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -719,6 +724,9 @@ public partial class RuntimeEmitter
         if (runtime.Reflect.Namespace is not null)
             cctorIL.Emit(OpCodes.Call, runtime.Reflect.RequireNamespace().SingletonPopulateMethod);
 
+        if (promiseSpeciesInitializer is not null)
+            cctorIL.Emit(OpCodes.Call, promiseSpeciesInitializer);
+
         cctorIL.Emit(OpCodes.Ret);
 
         // Emit all methods - these are now in partial class files
@@ -870,6 +878,13 @@ public partial class RuntimeEmitter
         // (Object.prototype.hasOwnProperty must honor Symbol keys per
         // ECMA-262 §20.1.3.2 step 1's ToPropertyKey).
         EmitGetSymbolDict(typeBuilder, runtime.Symbols, symbolStorageField);
+        if (promiseSpeciesInitializer is not null)
+        {
+            var initializer = promiseSpeciesInitializer.GetILGenerator();
+            EmitIntrinsicPromiseSpeciesDescriptor(typeBuilder, initializer, runtime.Symbols,
+                runtime.DescriptorStorage, runtime.FunctionConstruction, runtime.Sentinels.UndefinedInstance);
+            initializer.Emit(OpCodes.Ret);
+        }
         EmitIsSymbol(typeBuilder, runtime.Symbols);
         EmitSymbolMethodName(typeBuilder, runtime.Symbols);
         // The shared built-in static inventory is consumed by HasOwnProperty

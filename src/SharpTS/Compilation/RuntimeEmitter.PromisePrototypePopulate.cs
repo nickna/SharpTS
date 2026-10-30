@@ -14,6 +14,47 @@ public partial class RuntimeEmitter
             Type.EmptyTypes);
     }
 
+    private void EmitIntrinsicPromiseSpeciesDescriptor(TypeBuilder owner, ILGenerator initializer,
+        EmittedSymbolRuntime symbols, EmittedDescriptorStorageRuntime descriptors,
+        EmittedFunctionConstructionRuntime functions, FieldInfo undefinedInstance)
+    {
+        // Install a real configurable accessor on the intrinsic constructor.
+        // Ordinary symbol lookup then follows the selected guest chain and
+        // supplies its original receiver, including Reflect.get's receiver.
+        var getter = owner.DefineMethod("PromiseSpeciesGetter",
+            MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
+        getter.DefineParameter(1, ParameterAttributes.None, "__this");
+        var body = getter.GetILGenerator();
+        body.Emit(OpCodes.Ldarg_0);
+        body.Emit(OpCodes.Ret);
+
+        var descriptor = initializer.DeclareLocal(descriptors.DescriptorType);
+        initializer.Emit(OpCodes.Newobj, descriptors.DescriptorConstructor);
+        initializer.Emit(OpCodes.Stloc, descriptor);
+        initializer.Emit(OpCodes.Ldloc, descriptor);
+        var parameters = EmitReflectedMethodLiteral(initializer, getter);
+        initializer.Emit(OpCodes.Ldstr, "get [Symbol.species]");
+        initializer.Emit(OpCodes.Ldc_I4_0);
+        EmitReflectedFunctionFactory(initializer, functions.GetOrCreate, parameters);
+        initializer.Emit(OpCodes.Callvirt, descriptors.DescriptorGetter.GetSetMethod()!);
+        initializer.Emit(OpCodes.Ldloc, descriptor);
+        initializer.Emit(OpCodes.Ldsfld, undefinedInstance);
+        initializer.Emit(OpCodes.Callvirt, descriptors.DescriptorSetter.GetSetMethod()!);
+        initializer.Emit(OpCodes.Ldloc, descriptor);
+        initializer.Emit(OpCodes.Ldc_I4_0);
+        initializer.Emit(OpCodes.Callvirt, descriptors.DescriptorEnumerable.GetSetMethod()!);
+        initializer.Emit(OpCodes.Ldloc, descriptor);
+        initializer.Emit(OpCodes.Ldc_I4_1);
+        initializer.Emit(OpCodes.Callvirt, descriptors.DescriptorConfigurable.GetSetMethod()!);
+        initializer.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+        initializer.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        initializer.Emit(OpCodes.Call, symbols.GetStorage);
+        initializer.Emit(OpCodes.Ldsfld, symbols.Species);
+        initializer.Emit(OpCodes.Ldloc, descriptor);
+        initializer.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject,
+            "set_Item", _types.Object, _types.Object));
+    }
+
     /// <summary>
     /// Emits <c>PromiseThenHelper(object __this, params object[] args)</c>,
     /// <c>PromiseCatchHelper</c>, <c>PromiseFinallyHelper</c>. Each unwraps the
