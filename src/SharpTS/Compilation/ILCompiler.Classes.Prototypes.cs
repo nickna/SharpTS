@@ -14,6 +14,19 @@ public partial class ILCompiler
             NativeConstructorValueProducerKind.SourceClass, lookupOwner: classType, normalizeSourceGeneric: true);
     }
 
+    private void EmitCanonicalClassMemberRegistrationGuard(ILGenerator il, TypeBuilder owner,
+        Type? descriptorOwner, Label done)
+    {
+        if (!owner.IsGenericTypeDefinition || descriptorOwner != null) return;
+        // A source class has one constructor and prototype. Other CLR storage
+        // instantiations must not restore a guest-deleted or replaced member.
+        il.Emit(OpCodes.Ldtoken, EmitGenerics.MakeGenericType(owner, owner.GetGenericArguments()));
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldtoken, CanonicalGenericClassOwner(owner));
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Bne_Un, done);
+    }
+
     private void DefineClassPrototypeConstructor(TypeBuilder typeBuilder)
     {
         if (_classes.PrototypeConstructors.ContainsKey(typeBuilder))
@@ -225,10 +238,13 @@ public partial class ILCompiler
             il.Emit(OpCodes.Pop);
         }
 
+        var constructorDescriptorDone = il.DefineLabel();
+        EmitCanonicalClassMemberRegistrationGuard(il, typeBuilder, null, constructorDescriptorDone);
         EmitPrototypeDataDescriptor("constructor", () =>
         {
             EmitCanonicalClassConstructorValue(il, selfType);
         });
+        il.MarkLabel(constructorDescriptorDone);
 
         // Function `length` is an own, non-writable/non-enumerable,
         // configurable data property whose value is the number of formal

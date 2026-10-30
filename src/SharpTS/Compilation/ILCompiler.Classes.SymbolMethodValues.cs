@@ -100,16 +100,7 @@ public partial class ILCompiler
         bool sourceOrdered = false)
     {
         var registrationDone = il.DefineLabel();
-        if (source.IsStatic && owner.IsGenericTypeDefinition && descriptorOwner == null)
-        {
-            // A source generic class has one constructor object. Initializing
-            // another CLR instantiation must not restore a deleted/replaced slot.
-            il.Emit(OpCodes.Ldtoken, EmitGenerics.MakeGenericType(owner, owner.GetGenericArguments()));
-            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-            il.Emit(OpCodes.Ldtoken, CanonicalGenericClassOwner(owner));
-            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-            il.Emit(OpCodes.Bne_Un, registrationDone);
-        }
+        EmitCanonicalClassMemberRegistrationGuard(il, owner, descriptorOwner, registrationDone);
 
         // Static plain members are installed before computed names. Preserve
         // their later-source collision wins; ordered instance installation lets

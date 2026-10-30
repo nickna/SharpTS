@@ -58,17 +58,7 @@ public partial class ILCompiler
         // Evaluated class expressions install descriptors on their owned definition/prototype.
         if (_classExprs.Builders.Values.Any(builder => ReferenceEquals(builder, owner)) || accessor.IsAbstract) return;
         var registrationDone = il.DefineLabel();
-        if (accessor.IsStatic && owner.IsGenericTypeDefinition && descriptorOwner == null)
-        {
-            // Constructor reflection uses the open owner token. Only its canonical
-            // erased initializer installs those slots; typed instance initialization
-            // must not resurrect deleted or redefined JavaScript properties.
-            il.Emit(OpCodes.Ldtoken, EmitGenerics.MakeGenericType(owner, owner.GetGenericArguments()));
-            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-            il.Emit(OpCodes.Ldtoken, CanonicalGenericClassOwner(owner));
-            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-            il.Emit(OpCodes.Bne_Un, registrationDone);
-        }
+        EmitCanonicalClassMemberRegistrationGuard(il, owner, descriptorOwner, registrationDone);
         var storage = _runtime.DescriptorStorage;
         var receiver = il.DeclareLocal(_types.Object);
         Type self = accessor.IsStatic ? owner : descriptorOwner ?? (owner.IsGenericTypeDefinition

@@ -33,6 +33,40 @@ public partial class RuntimeEmitter
         var setItem = _types.GetMethod(
             cacheType, "set_Item", [_types.Type, _types.Object])!;
 
+        LocalBuilder EmitPrototypeLookupOwner(ILGenerator il, LocalBuilder owner)
+        {
+            // Preserve the existing native owner fence before any metadata query.
+            var result = EmitStaticMemberLookupOwner(il, owner, userClassInterface, sourceOwners);
+            if (!_features.UsesUserClasses) return result;
+
+            var ready = il.DefineLabel();
+            // A foreign Type subclass keeps the original lookup protocol.
+            NativeTypeIdentityEmitter.EmitRuntimeTypeFence(il, _types, () => il.Emit(OpCodes.Ldloc, result), ready);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "IsGenericType"));
+            il.Emit(OpCodes.Brfalse, ready);
+            // Only this output's source families share an erased JavaScript
+            // prototype. Foreign generic CLR carriers keep their own identity.
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "Module"));
+            il.Emit(OpCodes.Ldtoken, userClassInterface);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "Module"));
+            il.Emit(OpCodes.Bne_Un, ready);
+            il.Emit(OpCodes.Ldtoken, userClassInterface);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+            il.Emit(OpCodes.Brfalse, ready);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+            il.Emit(OpCodes.Stloc, result);
+            var canonical = EmitStaticMemberLookupOwner(il, result, userClassInterface, sourceOwners);
+            il.Emit(OpCodes.Ldloc, canonical); il.Emit(OpCodes.Stloc, result);
+            il.MarkLabel(ready);
+            return result;
+        }
+
         void EmitNominalParent(ILGenerator il, LocalBuilder parentType, LocalBuilder parent)
         {
             var nativeParent = il.DefineLabel();
@@ -40,6 +74,8 @@ public partial class RuntimeEmitter
             var ready = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, parentType);
             il.Emit(OpCodes.Brfalse, objectParent);
+            var lookupParent = EmitPrototypeLookupOwner(il, parentType);
+            il.Emit(OpCodes.Ldloc, lookupParent); il.Emit(OpCodes.Stloc, parentType);
             // Explicit registrations are authoritative even for native carrier
             // types that do not implement the generated user-class interface.
             il.Emit(OpCodes.Ldsfld, cacheField);
@@ -149,13 +185,12 @@ public partial class RuntimeEmitter
             var prototypeLocal = il.DeclareLocal(_types.Object);
             var useObjectPrototype = il.DefineLabel();
 
-            // A bare generic constructor is represented by its open Type token.
-            // Its JavaScript prototype belongs to the existing erased instantiation,
-            // while closed CLR instance types retain their own registered identities.
+            // Open and closed CLR owners share one source-level JavaScript
+            // prototype, while their instance storage remains separately typed.
             var constructorOwner = il.DeclareLocal(_types.Type);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Stloc, constructorOwner);
-            var prototypeOwner = EmitStaticMemberLookupOwner(il, constructorOwner, userClassInterface, sourceOwners);
+            var prototypeOwner = EmitPrototypeLookupOwner(il, constructorOwner);
             il.Emit(OpCodes.Ldloc, prototypeOwner);
             il.Emit(OpCodes.Starg_S, (byte)0);
 
@@ -436,7 +471,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Brfalse, unchanged);
             il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Stloc, owner);
-            var lookupOwner = EmitStaticMemberLookupOwner(il, owner, userClassInterface, sourceOwners);
+            var lookupOwner = EmitPrototypeLookupOwner(il, owner);
             il.Emit(OpCodes.Ldloc, lookupOwner); il.Emit(OpCodes.Starg_S, (byte)0);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, getMethod);

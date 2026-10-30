@@ -174,6 +174,8 @@ public partial class ILCompiler
     private void EmitReceiverAutoAccessorDescriptors(ILGenerator il, TypeBuilder owner,
         Stmt.AutoAccessor? selected = null, Type? descriptorOwner = null)
     {
+        var registrationDone = il.DefineLabel();
+        EmitCanonicalClassMemberRegistrationGuard(il, owner, descriptorOwner, registrationDone);
         foreach (var (source, metadata) in _receiverAutoAccessors.Where(entry => ReferenceEquals(entry.Value.Owner, owner)
             && (selected == null || ReferenceEquals(entry.Key, selected))))
         {
@@ -192,5 +194,6 @@ public partial class ILCompiler
             il.Emit(OpCodes.Callvirt, _runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
             il.Emit(OpCodes.Call, _runtime.DescriptorStorage.DefineProperty); il.Emit(OpCodes.Pop);
         }
+        il.MarkLabel(registrationDone);
     }
 }
