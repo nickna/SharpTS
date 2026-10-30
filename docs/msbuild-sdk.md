@@ -59,9 +59,10 @@ consumer properties; underscore-prefixed values and tool/task paths are implemen
 | Property | Default | Effect |
 | --- | --- | --- |
 | `SharpTSEntryPoint` | Empty; then `tsconfig` `files[0]` | Runtime entry TypeScript/TSX file. Required after configuration is read. |
+| `SharpTSTarget` | `dll`; `native-aot` when `PublishAot=true` | Select direct managed IL output or the experimental native guest SDK publish graph. |
 | `SharpTSTsConfigPath` | `$(MSBuildProjectDirectory)\tsconfig.json` | Configuration passed to the compiler when the file exists. A missing path causes the SDK to pass `--no-tsconfig`. |
-| `SharpTSOutputPath` | `$(OutputPath)` | Directory for compiler output. Evaluated after the base SDK finalizes `OutputPath`. |
-| `SharpTSOutputFileName` | `$(AssemblyName).dll` | Output assembly name. The runtimeconfig name is derived from it. |
+| `SharpTSOutputPath` | `$(OutputPath)` | Managed compiler output directory. Native output uses standard `OutputPath` and `PublishDir`. |
+| `SharpTSOutputFileName` | `$(AssemblyName).dll` | Managed output assembly name. Native wrapper/executable names use standard `AssemblyName`. |
 | `SharpTSPreserveConstEnums` | `false` | Pass `--preserveConstEnums` when true. |
 | `SharpTSExperimentalDecorators` | `false` | Pass `--experimentalDecorators` for legacy decorators when true. |
 | `SharpTSDecorators` | `false` | Pass `--decorators` to select TC39 Stage 3 decorators when true. |
@@ -79,6 +80,62 @@ corresponding `tsconfig` settings.
 The SDK also defines `UsingSharpTSSdk=true` as an identification marker and resolves
 `SharpTSToolPath`, `SharpTSCompilerExe`, and `SharpTSTasksAssembly` from its own package. Consumers
 should not pin or override those internal locations.
+
+### NativeAOT guest publish
+
+The experimental native target publishes the generated TypeScript program itself through the
+standard .NET NativeAOT SDK pipeline. The SDK package and bundled compiler remain managed and
+RID-neutral. Set the native target and keep `PublishAot` enabled in the consumer project:
+
+```xml
+<Project Sdk="SharpTS.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>MyProgram</AssemblyName>
+    <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
+    <SharpTSTarget>native-aot</SharpTSTarget>
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+</Project>
+```
+
+```bash
+dotnet publish -c Release -r win-x64
+```
+
+Supply an explicit matching host RID: `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`,
+`osx-x64`, or `osx-arm64`. Install the .NET 10 SDK and the target platform's NativeAOT compiler/linker
+prerequisites. Native compilation happens during `publish`; `build` produces the managed wrapper
+and generated guest assembly. Without native settings, the ordinary direct managed build and
+publish behavior is unchanged. `SharpTSTarget=native-aot` enables `PublishAot` when it is unset;
+`PublishAot=true` selects the native target when `SharpTSTarget` is unset.
+
+Before reference resolution, the SDK exports a real inspectable native project under
+`$(IntermediateOutputPath)/sharpts-native/<attempt>/`. Roslyn compiles its actual `Program.cs`
+wrapper and references `guest/Guest.dll`; the base SDK then owns the single NativeAOT publish.
+Each invocation uses a fresh attempt directory. Prior exports are retained for diagnosis and
+inspection, including after `dotnet clean`; no existing export directory is emptied. Standard
+clean targets remove the consumer's managed build products and copied dependencies.
+
+Use `AssemblyName` for the wrapper/native executable name, `OutputPath` for build products, and
+`PublishDir` or `dotnet publish -o <directory>` for native publication. The default native publish
+directory is the base SDK's configuration/TFM/RID publish directory. `SharpTSOutputPath` and
+`SharpTSOutputFileName` remain managed-only settings. `AssemblyName=Guest` is reserved because it
+would shadow the generated guest assembly.
+
+The first profile requires workstation GC and reference-assembly emission. User `Reference`,
+`ProjectReference`, and `PackageReference` items fail with `SHARPTS402` naming the item; this
+profile cannot yet include their external runtime/native closure. Framework references use the
+compiler's reference-assembly provider. Runtime-dependent source features fail with their native
+compatibility diagnostics before linking; see [the native guest contract](native-guest-projects.md).
+`emitDeclarationOnly`, including inherited `tsconfig` settings, cannot produce a native program.
+
+Trim/AOT diagnostics stay visible and fatal through `IlcTreatWarningsAsErrors=true` and
+`ILLinkTreatWarningsAsErrors=true`; the SDK adds no warning suppressions or broad assembly roots.
+`DebugSymbols`/`DebugType` control guest portable PDB generation and the base SDK's wrapper/native
+symbol behavior. With symbols enabled, native PDBs, `.dbg`, or `.dSYM` artifacts follow platform
+publish conventions; the guest portable PDB is retained for inspection. These artifacts do not
+promise TypeScript source stepping in the native executable.
 
 ### GC deployment policy
 

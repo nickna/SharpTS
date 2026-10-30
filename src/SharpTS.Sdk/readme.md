@@ -33,6 +33,13 @@ Key properties are `SharpTSEntryPoint`, `SharpTSTsConfigPath`, `SharpTSOutputPat
 `SharpTSUseReferenceAssemblies`. `SharpTSGcProfile` selects `workstation` (default), `adaptive`, or
 `throughput` deployment GC policy; use `adaptive` for measured allocation-heavy services.
 
+For experimental native program output, set `SharpTSTarget=native-aot` and `PublishAot=true`,
+then run `dotnet publish -c Release -r <matching-host-rid>`. Native output uses the standard .NET
+SDK publish graph, requires the platform's NativeAOT toolchain, and keeps strict trim/AOT warnings.
+The initial native profile requires workstation GC and refuses external reference closures.
+The SDK package and compiler tool remain managed and RID-neutral. See the
+[native guest SDK publish contract](../../docs/msbuild-sdk.md#nativeaot-guest-publish).
+
 The canonical [MSBuild SDK guide](../../docs/msbuild-sdk.md) documents exact defaults, `tsconfig`
 mapping and precedence, output behavior, extension points, and troubleshooting.
 
