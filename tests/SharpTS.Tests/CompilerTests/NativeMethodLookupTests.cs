@@ -63,12 +63,22 @@ public sealed class NativeMethodLookupTests
     }
 
     [Fact]
-    public void UnprovedGenericInheritanceRetainsTheWholeLegacyQueryOperation()
+    public void ClosedGenericInheritanceUsesCompletedSourceMetadata()
     {
         var saved = Compile("class Base<T> {} class Owner<T> extends Base<T> { static item = 7; } console.log((Owner as any).item);", true, out var compiler);
         Assert.Equal("7\n", Run(saved));
-        Assert.True(compiler.NativeMethods!.UsesLegacy);
-        Assert.NotEmpty(compiler.NativeSourceOwners!.Blockers);
+        Assert.False(compiler.NativeMethods!.UsesLegacy);
+        Assert.Empty(compiler.NativeSourceOwners!.Blockers);
+        AssertGuestTypeError(saved, () => Find(saved).Invoke(null,
+            [typeof(Foreign), "Read", BindingFlags.Public | BindingFlags.Instance]), NativeMethodLookupCatalog.ForeignOwnerMessage);
+    }
+
+    [Fact]
+    public void UnprovedSourceMetadataRetainsTheWholeLegacyQueryOperation()
+    {
+        var (saved, methods, _, sources) = NativeUnprovedSourceMetadataFixture.Build();
+        Assert.True(methods.UsesLegacy);
+        Assert.NotEmpty(sources.Blockers);
         foreach (string query in new[] { "Select", "Enumerate" })
             Assert.Single(Instructions(Query(saved, query)), instruction => instruction.Member is MethodInfo
                 { DeclaringType: { } owner, Name: "GetMethod" or "GetMethods" } && owner == typeof(Type));

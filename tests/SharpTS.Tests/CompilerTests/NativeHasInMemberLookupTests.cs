@@ -78,18 +78,24 @@ public sealed class NativeHasInMemberLookupTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void UnprovedGenericMetadataRetainsTheWholeLegacyOperation(bool generic)
+    public void ClosedGenericMetadataUsesCompletedSourceInventory(bool generic)
     {
         var saved=Compile(generic?"class Base<T>{} class Child<T> extends Base<T>{}":"console.log(42);",true,out var compiler);
-        Assert.Equal(generic,compiler.NativeHasInMembers!.UsesLegacy);
-        if(generic)Assert.Equal(true,Helper(saved).Invoke(null,[typeof(Foreign),"Value"]));
-        else
-        {
-            var failure=Assert.Throws<TargetInvocationException>(()=>Helper(saved).Invoke(null,[typeof(Foreign),"Value"]));
-            Assert.Contains(NativeHasInMemberLookup.ForeignOwnerMessage,failure.InnerException!.Message);
-            var unknownSubclass=Assert.Throws<TargetInvocationException>(()=>Helper(saved).Invoke(null,[typeof(ForeignList),"Count"]));
-            Assert.Contains(NativeHasInMemberLookup.ForeignOwnerMessage,unknownSubclass.InnerException!.Message);
-        }
+        Assert.False(compiler.NativeHasInMembers!.UsesLegacy);
+        Assert.Empty(compiler.NativeSourceOwners!.Blockers);
+        var failure=Assert.Throws<TargetInvocationException>(()=>Helper(saved).Invoke(null,[typeof(Foreign),"Value"]));
+        Assert.Contains(NativeHasInMemberLookup.ForeignOwnerMessage,failure.InnerException!.Message);
+        var unknownSubclass=Assert.Throws<TargetInvocationException>(()=>Helper(saved).Invoke(null,[typeof(ForeignList),"Count"]));
+        Assert.Contains(NativeHasInMemberLookup.ForeignOwnerMessage,unknownSubclass.InnerException!.Message);
+    }
+
+    [Fact]
+    public void UnprovedSourceMetadataRetainsTheWholeLegacyOperation()
+    {
+        var (saved, _, members, sources) = NativeUnprovedSourceMetadataFixture.Build();
+        Assert.True(members.UsesLegacy);
+        Assert.NotEmpty(sources.Blockers);
+        Assert.Equal(true, Helper(saved).Invoke(null, [typeof(Foreign), "Value"]));
     }
 
     [Fact]
