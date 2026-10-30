@@ -15,6 +15,7 @@ internal sealed class NativeGenericMethodNormalization
     private readonly Dictionary<MethodBuilder, SourceMarker> _markers = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<MethodBuilder, MethodBuilder> _constructs = new(ReferenceEqualityComparer.Instance);
     private readonly List<string> _blockers = [];
+    private IReadOnlyDictionary<MethodBuilder, MethodInfo> _canonicalTargets = new Dictionary<MethodBuilder, MethodInfo>();
 
     internal NativeGenericMethodNormalization(ModuleBuilder module, TypeProvider types)
     {
@@ -36,6 +37,12 @@ internal sealed class NativeGenericMethodNormalization
     internal int ConstructedPairCount { get; private set; }
     internal IReadOnlyCollection<MethodBuilder> Definitions => _definitions.Keys;
     internal IReadOnlyList<string> Blockers => _blockers.AsReadOnly();
+
+    internal bool TryGetCanonicalTarget(MethodBuilder definition, out MethodInfo target)
+    {
+        if (!IsComplete) throw new InvalidOperationException("Native generic-method targets are incomplete.");
+        return _canonicalTargets.TryGetValue(definition, out target!);
+    }
 
     internal void RecordDefinition(MethodBuilder method, GenericTypeParameterBuilder[] parameters)
     {
@@ -100,6 +107,7 @@ internal sealed class NativeGenericMethodNormalization
             }
             targets.Add(definition, target);
         }
+        _canonicalTargets = new System.Collections.ObjectModel.ReadOnlyDictionary<MethodBuilder, MethodInfo>(targets);
         EmitNormalize(targets, cores, attributes, errors);
         EmitConstructed(targets, errors);
         _owner.CreateType();

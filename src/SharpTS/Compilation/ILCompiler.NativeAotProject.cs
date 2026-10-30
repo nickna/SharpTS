@@ -20,6 +20,8 @@ public partial class ILCompiler
     internal NativeSourceOwnerCatalog? NativeSourceOwners => _nativeSourceOwners;
     private NativeNumericRest4Binding? _nativeNumericRest4Binding;
     private NativeGenericMethodNormalization? _nativeGenericMethodNormalization;
+    private NativeConstructedBodyLookup? _nativeConstructedBodies;
+    internal NativeConstructedBodyLookup? NativeConstructedBodies => _nativeConstructedBodies;
     internal NativeGenericMethodNormalization? NativeGenericMethods => _nativeGenericMethodNormalization;
     private NativeUnionArgumentConversion? _nativeUnionArgumentConversion;
     internal NativeUnionArgumentConversion? NativeUnionArguments => _nativeUnionArgumentConversion;
@@ -53,6 +55,8 @@ public partial class ILCompiler
         if (!_nativeAotProjectOutput) return;
         (_nativeClrAdmission ?? throw new InvalidOperationException("Native CLR admission has not started source emission."))
             .ThrowIfIncompatible();
+        if (_nativeConstructedBodies?.IsComplete != true)
+            throw new InvalidOperationException("Native constructor-body metadata has not completed source emission.");
         if (_nativePropertyLookup?.IsComplete != true)
             throw new InvalidOperationException("Native property metadata has not completed source emission.");
         if (_nativeHasInMembers?.IsComplete != true)

@@ -58,6 +58,7 @@ public partial class ILCompiler
                 _functions.GenericParameters.DeclareErasedValueInvocationTarget(body, erased.GetGenericArguments());
             _nativeGenericMethodNormalization.RecordConstructedBody(entry, body);
         }
+        _nativeConstructedBodies?.RecordSourcePair(entry, body);
         _newTargetBodies.Add(entry, body);
         var il = entry.GetILGenerator();
         int first = entry.IsStatic ? 0 : 1;

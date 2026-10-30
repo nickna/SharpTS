@@ -10,6 +10,7 @@ internal readonly record struct FunctionEmissionPolicy(bool BindNumericRest4)
     internal MethodInfo? NativeNumericRest4Binder { get; init; }
     internal MethodInfo? NativeGenericNormalizer { get; init; }
     internal MethodInfo? NativeConstructedGenericResolver { get; init; }
+    internal NativeConstructedBodyLookup? NativeConstructedBodies { get; init; }
     internal MethodInfo? NativeUnionConverter { get; init; }
     internal bool RejectReflectiveCallableFallback { get; init; }
 

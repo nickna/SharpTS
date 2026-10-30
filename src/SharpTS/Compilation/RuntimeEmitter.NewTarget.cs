@@ -9,7 +9,7 @@ public partial class RuntimeEmitter
         EmittedFunctionAttributesRuntime attributes, FieldInfo? currentArguments, FieldBuilder methodField,
         FieldBuilder targetField, FieldBuilder expectsThisField, FieldBuilder currentThisField,
         MethodBuilder adjustArguments, Action<ILGenerator, LocalBuilder> convertArguments,
-        MethodInfo? nativeGenericResolver)
+        MethodInfo? nativeGenericResolver, MethodInfo? nativeCoreLookup)
     {
         var method = owner.DefineMethod("InvokeConstructed", MethodAttributes.Public, _types.Object,
             [_types.Object, _types.ObjectArray, _types.Object]);
@@ -25,11 +25,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, markers);
         il.Emit(OpCodes.Ldloc, markers); il.Emit(OpCodes.Ldlen); il.Emit(OpCodes.Brfalse, ordinary);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, methodField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(MemberInfo), "DeclaringType")!.GetGetMethod()!);
+        if (nativeCoreLookup is null)
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(MemberInfo), "DeclaringType")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, markers); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Castclass, attributes.NewTargetCoreType); il.Emit(OpCodes.Ldfld, attributes.NewTargetCoreName);
-        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        if (nativeCoreLookup is null)
+        {
+            il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        }
+        else il.Emit(OpCodes.Call, nativeCoreLookup);
         il.Emit(OpCodes.Stloc, core);
         var notGeneric = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, core);

@@ -752,6 +752,7 @@ public partial class ILCompiler
         {
             _nativeSourceOwners = new(_moduleBuilder, _types);
             _nativeGenericMethodNormalization = new(_moduleBuilder, _types);
+            _nativeConstructedBodies = new(_moduleBuilder, _types);
             _nativeUnionArgumentConversion = new(_moduleBuilder, _types);
             _nativeRuntimeClassInitialization = new(_moduleBuilder, _types);
             _nativeStaticMemberPresence = new(_moduleBuilder, _types);
@@ -767,6 +768,7 @@ public partial class ILCompiler
             {
                 NativeGenericNormalizer = _nativeGenericMethodNormalization.Normalize,
                 NativeConstructedGenericResolver = _nativeGenericMethodNormalization.ResolveConstructed,
+                NativeConstructedBodies = _nativeConstructedBodies,
                 NativeUnionConverter = _nativeUnionArgumentConversion.Convert,
                 NativeReceiverBinder = _nativeReceiverBinding.Bind
             };
@@ -1272,6 +1274,8 @@ public partial class ILCompiler
         _nativeClassInitialization?.CompleteEmission();
         _nativeNumericRest4Binding?.CompleteEmission();
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
+        _nativeConstructedBodies?.CompleteEmission(_functions.GenericParameters, _nativeGenericMethodNormalization!, _newTargetBodies,
+            _runtime.FunctionAttributes, _runtime.Errors);
         _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
         _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
@@ -1942,6 +1946,8 @@ public partial class ILCompiler
         _nativeClassInitialization?.CompleteEmission();
         _nativeNumericRest4Binding?.CompleteEmission();
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
+        _nativeConstructedBodies?.CompleteEmission(_functions.GenericParameters, _nativeGenericMethodNormalization!, _newTargetBodies,
+            _runtime.FunctionAttributes, _runtime.Errors);
         _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
         _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);

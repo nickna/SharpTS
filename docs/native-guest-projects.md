@@ -836,3 +836,28 @@ invoking getters. Three managed controls retain every method body and PE size.
 The combined console checkpoint changes from six strict diagnostics to four,
 removing exactly the two `HasIn` IL2075 findings and adding none. The remaining
 four deletion diagnostics still fail strict publication.
+
+### Constructor entry and new-target body selection
+
+Native function construction records each actual source entry/body marker pair,
+including nested functions and the AbortController value constructor. Completion
+checks the exact output module, declaring owner, static shape, generic arity,
+parameter/return ABI, completed source inventory and emitted body lifecycle.
+Selection compares a trusted literal MethodInfo against the original entry or
+its already-proved canonical method instantiation. It returns the literal body
+definition and leaves generic resolution, argument shaping, defaults, rest,
+new.target propagation and the original function-cache key unchanged.
+
+No type/member-name scan establishes ownership. A foreign marker or hostile
+MethodInfo cannot select an owned body through its Equals implementation.
+Unproved owned metadata retains the whole original declaring-type/name/flags
+lookup and exposes blockers and diagnostics. Ordinary managed emission keeps
+its existing instruction sequence.
+
+Saved-IL and native execution cover ordinary and generic constructors, bound
+construction, Reflect.construct, defaults/rest, nested captures, module aliases,
+AbortController and foreign-marker refusal before a body executes. The strict
+constructor control removes exactly the InvokeConstructed IL2075 finding with
+none added. Other new-target and symbol-owner reflection findings remain
+visible in broader feature controls under #1351; this slice does not establish
+warning-free acceptance for that full corpus.

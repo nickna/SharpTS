@@ -67,6 +67,7 @@ public partial class RuntimeEmitter
         EmittedNativeMethodLookupRuntime? nativeMethodLookup = null)
     {
         _nativeDeletionLookup?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
+        functionPolicy.NativeConstructedBodies?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         if (_nativeStaticFieldLookup is { } fields &&
             (!_emitNativeCallables || !ReferenceEquals(fields.Module, moduleBuilder) || !fields.IsStatic || fields.IsGenericMethod ||
              (fields.CallingConvention & CallingConventions.VarArgs) != 0 || fields.ReturnType != _types.FieldInfo ||
@@ -936,7 +937,7 @@ public partial class RuntimeEmitter
             EmitAbortControllerConstructor(runtime.RuntimeClass.Type, runtime.Abort,
                 new AbortControllerConstructorInputs(runtime.DescriptorStorage, runtime.Errors,
                     runtime.FunctionAttributes, runtime.FunctionValues,
-                    runtime.FunctionConstruction.GetOrCreate, runtime.ObjectPrototypes));
+                    runtime.FunctionConstruction.GetOrCreate, runtime.ObjectPrototypes, functionPolicy.NativeConstructedBodies));
 
         // Emit $BroadcastChannel — extends $EventEmitter, dispatches via $EventLoop,
         // and clones messages via $Runtime.StructuredClone (populated during EmitRuntimeClass
