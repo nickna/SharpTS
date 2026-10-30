@@ -1113,6 +1113,12 @@ public static partial class ObjectBuiltIns
     {
         return target switch
         {
+            string text when propertyKey == "length" =>
+                DataDescriptor((double)text.Length, writable: false, enumerable: false, configurable: false),
+            string text when PropertySemantics.TryGetArrayIndex(propertyKey, out var stringIndex)
+                && stringIndex < text.Length =>
+                DataDescriptor(text[(int)stringIndex].ToString(), writable: false, enumerable: true, configurable: false),
+            string => null,
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.GetOwnPropertyDescriptor(propertyKey),
             ISharpTSFunctionObject function => FunctionObjectProperties.GetProperties(function, interpreter).GetOwnPropertyDescriptor(propertyKey),
             SharpTSObject obj => obj.GetOwnPropertyDescriptor(propertyKey),
