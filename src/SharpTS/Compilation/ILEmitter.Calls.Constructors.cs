@@ -194,6 +194,16 @@ public partial class ILEmitter
         var genericParams = _ctx.ClassRegistry!.GetGenericParams(resolvedClassName);
         bool isGeneric = genericParams != null && genericParams.Count > 0;
 
+        // A spread has runtime positions, so one CLR slot per source expression
+        // cannot represent it. Capture the genuine source constructor value and
+        // use its existing source-aware factory after closing the evaluated type.
+        if (isGeneric && n.Arguments.Any(argument => argument is Expr.Spread))
+        {
+            EmitCalleeExprConstruction(n, normalizeSourceGeneric: true);
+            SetStackUnknown();
+            return;
+        }
+
         // Generic class with inferred type arguments (e.g. `new Box(5)` for `class Box<T>`).
         // Emitting Newobj against the open generic TypeDef throws TypeLoadException at load
         // time (ECMA-335 II.9.4 — the open definition is not a loadable type). Infer the
@@ -519,7 +529,7 @@ public partial class ILEmitter
     /// the unresolved-variable Ldnull branch above (that idiom always names the
     /// constructor as a bare variable), so routing here is safe.
     /// </summary>
-    private void EmitCalleeExprConstruction(Expr.New n)
+    private void EmitCalleeExprConstruction(Expr.New n, bool normalizeSourceGeneric = false)
     {
         EmitExpression(n.Callee);
         // Box value-typed callees (e.g. `new true;`, `new 1;`) before storing to an
@@ -539,6 +549,13 @@ public partial class ILEmitter
         // It's a Type — construct via reflection.
         IL.Emit(OpCodes.Ldloc, objTemp);
         IL.Emit(OpCodes.Castclass, _ctx.Types.Type);
+        if (normalizeSourceGeneric)
+        {
+            // As in the source constructor-value producer, a generic source
+            // owner denotes its definition even inside a closed CLR context.
+            // The existing evaluated-type closer applies this call's type args.
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethodNoParams(_ctx.Types.Type, "GetGenericTypeDefinition"));
+        }
         EmitReflectionConstructFromType(n);
         IL.Emit(OpCodes.Br, doneLabel);
 

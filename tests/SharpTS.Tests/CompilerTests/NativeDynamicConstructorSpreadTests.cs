@@ -10,7 +10,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class NativeDynamicConstructorSpreadTests
 {
-    public static IEnumerable<object[]> Cases() => DynamicClassConstructorSpreadTests.Cases();
+    public static IEnumerable<object[]> Cases() => DynamicClassConstructorSpreadTests.Cases().Concat(GenericConstructorSpreadTests.Cases());
 
     [Theory, MemberData(nameof(Cases))]
     public void NativeGuestKeepsExpandedConstructorArgumentsAndEffects(string name, string source, string expected)
