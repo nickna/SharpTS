@@ -96,6 +96,45 @@ public sealed class NativeManagedReferenceClosureTests
         Assert.Throws<InvalidDataException>(() => NativeReferenceManifest.ReadAndVerify(directory.Path));
     }
 
+    public static IEnumerable<object[]> DeviceNames() => new[]
+    {
+        "NUL", "nUl", "NUL.extra", "CON", "CON.foo", "PRN", "AUX", "com1", "LPT9", "COM\u00b9", "LPT\u00b2", "LPT\u00b3", "NUL .extra"
+    }.Select(name => new object[] { name });
+
+    [Theory, MemberData(nameof(DeviceNames))]
+    public void DeviceAssemblyNamesRefuseAtCaptureWithoutExportOrDeviceAccess(string name)
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        string input = directory.GetPath("ordinary-renamed-input.dll");
+        File.WriteAllBytes(input, Image(name));
+        var error = Assert.Throws<CompileException>(() => NativeManagedReferenceClosure.Capture(directory.Path, [input], null));
+        Assert.Equal(DiagnosticCode.NativeGuestExternalReferences, error.Diagnostic.Code);
+        Assert.Contains("file name", error.Message);
+        Assert.False(Directory.Exists(directory.GetPath("references")));
+    }
+
+    [Theory, MemberData(nameof(DeviceNames))]
+    public void DeviceManifestNamesRefuseBeforeResolvingOrReadingReferencePaths(string name)
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        File.WriteAllText(directory.GetPath("native-project.json"), JsonSerializer.Serialize(new
+        {
+            managedReferences = new[] { new { name, path = "references/" + name + ".dll", sha256 = new string('0', 64),
+                sourcePath = "unused.dll", identity = name, dependencies = Array.Empty<string>() } }
+        }));
+        var error = Assert.Throws<InvalidDataException>(() => NativeReferenceManifest.ReadAndVerify(directory.Path));
+        Assert.Contains("unsupported assembly file name", error.Message);
+        Assert.False(Directory.Exists(directory.GetPath("references")));
+    }
+
+    [Theory]
+    [InlineData("CONSOLE")]
+    [InlineData("NULibrary")]
+    [InlineData("COM10")]
+    [InlineData("Vendor.CON")]
+    [InlineData("Vendor.LPT1")]
+    public void OrdinaryAssemblyNamesRemainSupported(string name) => Assert.True(NativeReferenceFileName.IsSupported(name));
+
     private static byte[] Image(string name, string? dependency = null, bool referenceOnly = false,
         string target = ".NETCoreApp,Version=v10.0", CorFlags flags = CorFlags.ILOnly,
         bool module = false, bool resource = false, Version? version = null, bool fakeTargetAttribute = false, bool internalCall = false)

@@ -22,11 +22,12 @@ internal static class NativeReferenceManifest
         foreach (var item in references.EnumerateArray())
         {
             string name = item.GetProperty("name").GetString()!;
+            if (!NativeReferenceFileName.IsSupported(name))
+                throw new InvalidDataException($"Native managed reference '{name}' has an unsupported assembly file name.");
             string relative = item.GetProperty("path").GetString()!;
             string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(directory, relative));
             string hash = item.GetProperty("sha256").GetString()!;
-            if (string.IsNullOrEmpty(name) || !names.Add(name) || name.IndexOfAny(['/', '\\', ':']) >= 0 ||
-                name.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0 || relative != "references/" + name + ".dll" ||
+            if (!names.Add(name) || relative != "references/" + name + ".dll" ||
                 !path.StartsWith(prefix, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) ||
                 Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) != hash)
                 throw new InvalidDataException($"Native managed reference '{name}' no longer matches its captured bytes.");

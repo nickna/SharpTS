@@ -46,7 +46,7 @@ internal sealed class NativeManagedReferenceClosure
                 if (!metadata.IsAssembly) throw Refuse(reference.Path, "is not an assembly");
                 var identity = NativeAssemblyIdentity.Definition(metadata);
                 if (!names.Add(identity.Name)) throw Refuse(reference.Path, $"duplicates assembly name '{identity.Name}'");
-                if (identity.Culture != "" || identity.Flags != 0 || !IsPlainName(identity.Name))
+                if (identity.Culture != "" || identity.Flags != 0 || !NativeReferenceFileName.IsSupported(identity.Name))
                     throw Refuse(reference.Path, "has an unsupported culture, content type, or file name");
                 if (identity.Name.Equals("Guest", StringComparison.OrdinalIgnoreCase) ||
                     identity.Name.Equals("SharpTS", StringComparison.OrdinalIgnoreCase) ||
@@ -141,9 +141,6 @@ internal sealed class NativeManagedReferenceClosure
         return entries.AsReadOnly();
     }
 
-    private static bool IsPlainName(string name) => name.Length != 0 && name is not "." and not ".." &&
-        name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 &&
-        name.IndexOfAny(['/', '\\', ':', ';', '%', '$', '\r', '\n']) < 0 && !name.Any(char.IsControl);
     private static string? AttributeName(MetadataReader metadata, EntityHandle constructor)
     {
         EntityHandle type = constructor.Kind switch
