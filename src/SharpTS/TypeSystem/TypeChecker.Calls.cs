@@ -257,7 +257,7 @@ public partial class TypeChecker
             // untyped functions also count (the `.All` on an empty list is true
             // but the old `Count > 0` guard excluded them; lodash `function
             // shortOut() { return func.apply(undefined, arguments); }` falls here).
-            bool allParamsAny = funcType.WrittenCallSignature is null && tupleCallableOriginals?.ContainsKey(funcType) != true &&
+            bool allParamsAny = !funcType.HasExplicitArity && funcType.WrittenCallSignature is null && tupleCallableOriginals?.ContainsKey(funcType) != true &&
                 (funcType.ParamTypes.Count == 0 || funcType.ParamTypes.All(p => p is TypeInfo.Any));
             if (funcType.ParamTypes.Count == 0 && call.Callee is Expr.GetIndex)
                 allParamsAny = false;

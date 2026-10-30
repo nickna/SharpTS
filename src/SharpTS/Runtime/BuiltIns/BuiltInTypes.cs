@@ -360,7 +360,7 @@ public static class BuiltInTypes
     /// </summary>
     public static TypeInfo? GetDateInstanceMemberType(string name)
     {
-        return name switch
+        TypeInfo? member = name switch
         {
             // Getters - all return number
             "getTime" => new TypeInfo.Function([], NumberType),
@@ -416,7 +416,7 @@ public static class BuiltInTypes
             "toLocaleString" => new TypeInfo.Function([AnyType, AnyType], StringType, RequiredParams: 0),
             // lib.es5: `toJSON(key?: any): string` (used by JSON.stringify and matched by
             // `T extends { toJSON(): infer R }`, see #491). Runtime impl in DateBuiltIns.
-            "toJSON" => new TypeInfo.Function([], StringType),
+            "toJSON" => new TypeInfo.Function([AnyType], StringType, RequiredParams: 0),
             "valueOf" => new TypeInfo.Function([], NumberType),
 
             // Legacy methods (ECMA-262 Annex B), declared on Date in lib.es5.
@@ -425,6 +425,7 @@ public static class BuiltInTypes
 
             _ => null
         };
+        return member is TypeInfo.Function method ? method with { HasExplicitArity = true } : member;
     }
 
     /// <summary>

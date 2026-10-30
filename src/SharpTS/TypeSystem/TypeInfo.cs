@@ -177,6 +177,8 @@ public abstract record TypeInfo
         // A pure object call signature shares the function representation, but its written
         // protocol retains strict call arity even when every parameter is any.
         public CallSignature? WrittenCallSignature { get; init; }
+        // Builtin method metadata declares an arity even without a source AST signature.
+        internal bool HasExplicitArity { get; init; }
         // RequiredParams defaults to -1 meaning all params are required (for backwards compat)
         public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;
         public override string ToString() =>
