@@ -58,29 +58,68 @@ public partial class RuntimeEmitter
             Type.EmptyTypes);
     }
 
-    private void EmitMathSingletonPopulate(EmittedMathRuntime math, BuiltinSingletonInputs inputs) =>
+    private void EmitMathSingletonPopulate(EmittedMathRuntime math, BuiltinSingletonInputs inputs, MethodBuilder installDataProperty) =>
         EmitBuiltinSingletonPopulate(
             math.SingletonPopulateMethod,
             math.SingletonField,
             inputs,
+            installDataProperty,
             MathStaticEmitter.EnumerateValueFormMethods(math),
             "Math", MathStaticEmitter.EnumerateConstantValues());
 
-    private void EmitJsonSingletonPopulate(EmittedJsonRuntime json, BuiltinSingletonInputs inputs) =>
+    private void EmitJsonSingletonPopulate(EmittedJsonRuntime json, BuiltinSingletonInputs inputs, MethodBuilder installDataProperty) =>
         EmitBuiltinSingletonPopulate(
             json.SingletonPopulateMethod,
             json.SingletonField,
             inputs,
+            installDataProperty,
             JSONStaticEmitter.EnumerateValueFormMethods(json.Implementation),
             "JSON");
 
-    private void EmitReflectSingletonPopulate(EmittedReflectNamespace reflectNamespace, BuiltinSingletonInputs inputs) =>
+    private void EmitReflectSingletonPopulate(EmittedReflectNamespace reflectNamespace, BuiltinSingletonInputs inputs, MethodBuilder installDataProperty) =>
         EmitBuiltinSingletonPopulate(
             reflectNamespace.SingletonPopulateMethod,
             reflectNamespace.SingletonField,
             inputs,
+            installDataProperty,
             ReflectStaticEmitter.EnumerateValueFormMethods(reflectNamespace),
             "Reflect");
+
+    // Keep the descriptor installation body once in the generated image. Each
+    // namespace still supplies its actual dictionary, key, and cached value.
+    private MethodBuilder EmitBuiltinSingletonDataPropertyInstaller(TypeBuilder typeBuilder, BuiltinSingletonInputs inputs)
+    {
+        var method = typeBuilder.DefineMethod("InstallBuiltinSingletonDataProperty",
+            MethodAttributes.Private | MethodAttributes.Static, _types.Void,
+            [_types.DictionaryStringObject, _types.String, _types.Object, _types.Boolean]);
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+        var descriptor = il.DeclareLocal(inputs.DescriptorType);
+        il.Emit(OpCodes.Newobj, inputs.Descriptors.Ctor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, inputs.Descriptors.ValueSetter);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, inputs.Descriptors.EnumerableSetter);
+        foreach (var setter in new[] { inputs.WritableSetter, inputs.ConfigurableSetter })
+        {
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Callvirt, setter);
+        }
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Call, inputs.Descriptors.DefineProperty);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
 
     /// <summary>
     /// Fills a built-in singleton dictionary with identity-cached $TSFunction
@@ -94,14 +133,12 @@ public partial class RuntimeEmitter
         MethodBuilder method,
         FieldBuilder singletonField,
         BuiltinSingletonInputs inputs,
+        MethodBuilder installDataProperty,
         IEnumerable<(string Name, MethodInfo? Backing, int Length)> methods,
         string toStringTag,
         IEnumerable<(string Name, double Value)>? constants = null)
     {
         var il = method.GetILGenerator();
-        var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
-            _types.String, _types.Object);
-
         EmitPrototypePopulateGuard(il, singletonField);
 
         var descLocal = il.DeclareLocal(inputs.DescriptorType);
@@ -114,24 +151,8 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldstr, name);
                 il.Emit(OpCodes.Ldc_R8, value);
                 il.Emit(OpCodes.Box, _types.Double);
-                il.Emit(OpCodes.Callvirt, setItem);
-                il.Emit(OpCodes.Newobj, inputs.Descriptors.Ctor);
-                il.Emit(OpCodes.Stloc, descLocal);
-                il.Emit(OpCodes.Ldloc, descLocal);
-                il.Emit(OpCodes.Ldc_R8, value);
-                il.Emit(OpCodes.Box, _types.Double);
-                il.Emit(OpCodes.Callvirt, inputs.Descriptors.ValueSetter);
-                foreach (var setter in new[] { inputs.WritableSetter, inputs.Descriptors.EnumerableSetter, inputs.ConfigurableSetter })
-                {
-                    il.Emit(OpCodes.Ldloc, descLocal);
-                    il.Emit(OpCodes.Ldc_I4_0);
-                    il.Emit(OpCodes.Callvirt, setter);
-                }
-                il.Emit(OpCodes.Ldsfld, singletonField);
-                il.Emit(OpCodes.Ldstr, name);
-                il.Emit(OpCodes.Ldloc, descLocal);
-                il.Emit(OpCodes.Call, inputs.Descriptors.DefineProperty);
-                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Call, installDataProperty);
             }
         }
 
@@ -152,9 +173,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldsfld, singletonField);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Callvirt, setItem);
-            EmitInstallNonEnumerableDescriptor(il, inputs.Descriptors, singletonField, descLocal, jsName,
-                () => il.Emit(OpCodes.Ldloc, fnLocal));
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Call, installDataProperty);
         }
 
         // Install the intrinsic @@toStringTag as a real symbol-keyed data

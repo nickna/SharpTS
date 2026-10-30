@@ -2095,14 +2095,18 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType
             )
         );
+        var materializeConstructorDescriptor = EmitConstructorDescriptorMaterializer(typeBuilder,
+            runtime.DescriptorStorage, runtime.ObjectDescriptors.GetOwnPropertyDescriptor);
+        var builtinSingletonInputs = GetBuiltinSingletonInputs(runtime);
+        var installBuiltinSingletonDataProperty = EmitBuiltinSingletonDataPropertyInstaller(typeBuilder, builtinSingletonInputs);
         EmitObjectFreeze(typeBuilder, runtime.ObjectState,
             new ObjectIntegrityInputs(runtime.ArrayStorage, runtime.DescriptorStorage, runtime.ObjectStorage,
-                runtime.ObjectDescriptors.GetOwnPropertyDescriptor, runtime.ObjectKeys.Names, runtime.ObjectFields.Interface),
+                materializeConstructorDescriptor, runtime.ObjectKeys.Names, runtime.ObjectFields.Interface),
             new GeneratorIntegrityInputs(runtime.FunctionValues.Type, runtime.FunctionValues.GetMethodInfo,
                 runtime.GeneratorPrototypes.Kind, runtime.GeneratorPrototypes.EnsureOwnPrototype));
         EmitObjectSeal(typeBuilder, runtime.ObjectState,
             new ObjectIntegrityInputs(runtime.ArrayStorage, runtime.DescriptorStorage, runtime.ObjectStorage,
-                runtime.ObjectDescriptors.GetOwnPropertyDescriptor, runtime.ObjectKeys.Names, runtime.ObjectFields.Interface));
+                materializeConstructorDescriptor, runtime.ObjectKeys.Names, runtime.ObjectFields.Interface));
         EmitObjectIsFrozen(typeBuilder, runtime.ObjectState);
         EmitObjectIsSealed(typeBuilder, runtime.ObjectState);
         EmitObjectDefineProperty(
@@ -2571,7 +2575,7 @@ public partial class RuntimeEmitter
                     runtime.Errors.TypeErrorConstructor
                 )
             );
-            EmitReflectSingletonPopulate(runtime.Reflect.RequireNamespace(), GetBuiltinSingletonInputs(runtime));
+            EmitReflectSingletonPopulate(runtime.Reflect.RequireNamespace(), builtinSingletonInputs, installBuiltinSingletonDataProperty);
         }
         EmitIsArray(typeBuilder, runtime);
         EmitConcatArrays(typeBuilder, runtime);
@@ -3028,8 +3032,8 @@ public partial class RuntimeEmitter
         // EmitMathAdapters (Math.*Adapter) and the JSON methods above — so their
         // backing MethodBuilders are resolved. JSON helpers are null when JSON is
         // unused; EmitBuiltinSingletonPopulate skips null backings. (#276)
-        EmitMathSingletonPopulate(runtime.Math, GetBuiltinSingletonInputs(runtime));
-        EmitJsonSingletonPopulate(runtime.Json, GetBuiltinSingletonInputs(runtime));
+        EmitMathSingletonPopulate(runtime.Math, builtinSingletonInputs, installBuiltinSingletonDataProperty);
+        EmitJsonSingletonPopulate(runtime.Json, builtinSingletonInputs, installBuiltinSingletonDataProperty);
         // BigInt methods — gated on UsesBigInt. Detector flips it on for any
         // `123n` literal, bare `BigInt` identifier, or BigInt64Array/BigUint64Array
         // typed-array reference. EmitBigIntBinary in ILEmitter.Operators.cs only

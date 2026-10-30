@@ -7,7 +7,7 @@ public partial class RuntimeEmitter
 {
     private readonly record struct ObjectIntegrityInputs(EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage, EmittedObjectStorageRuntime ObjectStorage,
-        MethodBuilder GetOwnPropertyDescriptor, MethodBuilder GetOwnPropertyNames, Type IHasFieldsInterface);
+        MethodBuilder MaterializeOwnDescriptor, MethodBuilder GetOwnPropertyNames, Type IHasFieldsInterface);
 
     private readonly record struct GeneratorIntegrityInputs(Type FunctionType, MethodInfo GetMethodInfo,
         MethodInfo Kind, MethodInfo EnsureOwnPrototype);
@@ -290,36 +290,51 @@ public partial class RuntimeEmitter
     private void EmitConstructorIntegrityDescriptor(ILGenerator il, ObjectIntegrityInputs inputs,
         bool freeze, Action emitKey)
     {
+        il.Emit(OpCodes.Ldarg_0);
+        emitKey();
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(freeze ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, inputs.MaterializeOwnDescriptor);
+    }
+
+    private MethodBuilder EmitConstructorDescriptorMaterializer(TypeBuilder typeBuilder,
+        EmittedDescriptorStorageRuntime descriptors, MethodBuilder getOwnPropertyDescriptor)
+    {
+        var method = typeBuilder.DefineMethod("MaterializeConstructorOwnDescriptor",
+            MethodAttributes.Private | MethodAttributes.Static, _types.Void,
+            [_types.Object, _types.String, _types.Boolean, _types.Boolean]);
+        var il = method.GetILGenerator();
         var next = il.DefineLabel();
         var snapshot = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_0);
-        emitKey();
-        il.Emit(OpCodes.Call, inputs.GetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, getOwnPropertyDescriptor);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, snapshot);
         il.Emit(OpCodes.Ldloc, snapshot);
         il.Emit(OpCodes.Brfalse, next);
 
-        var descriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        var descriptor = il.DeclareLocal(descriptors.DescriptorType);
         var hasValue = il.DeclareLocal(_types.Boolean);
         var value = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, hasValue);
-        il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
+        il.Emit(OpCodes.Newobj, descriptors.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descriptor);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, descriptors.DescriptorWritable.GetSetMethod()!);
 
         // Copy only present fields. In particular, undefined get/set values
         // retain accessor classification rather than becoming a data slot.
         foreach (var (name, property, isBoolean) in new[]
         {
-            ("value", inputs.DescriptorStorage.DescriptorValue, false),
-            ("get", inputs.DescriptorStorage.DescriptorGetter, false),
-            ("set", inputs.DescriptorStorage.DescriptorSetter, false),
-            ("writable", inputs.DescriptorStorage.DescriptorWritable, true),
-            ("enumerable", inputs.DescriptorStorage.DescriptorEnumerable, true)
+            ("value", descriptors.DescriptorValue, false),
+            ("get", descriptors.DescriptorGetter, false),
+            ("set", descriptors.DescriptorSetter, false),
+            ("writable", descriptors.DescriptorWritable, true),
+            ("enumerable", descriptors.DescriptorEnumerable, true),
+            ("configurable", descriptors.DescriptorConfigurable, true)
         })
         {
             var missing = il.DefineLabel();
@@ -340,25 +355,30 @@ public partial class RuntimeEmitter
             il.MarkLabel(missing);
         }
 
+        var preserveConfigurable = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, preserveConfigurable);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
-        if (freeze)
-        {
-            var accessor = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, hasValue);
-            il.Emit(OpCodes.Brfalse, accessor);
-            il.Emit(OpCodes.Ldloc, descriptor);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorWritable.GetSetMethod()!);
-            il.MarkLabel(accessor);
-        }
-        il.Emit(OpCodes.Ldarg_0);
-        emitKey();
+        il.Emit(OpCodes.Callvirt, descriptors.DescriptorConfigurable.GetSetMethod()!);
+        il.MarkLabel(preserveConfigurable);
+        var preserveWritable = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, preserveWritable);
+        il.Emit(OpCodes.Ldloc, hasValue);
+        il.Emit(OpCodes.Brfalse, preserveWritable);
         il.Emit(OpCodes.Ldloc, descriptor);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DefineProperty);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, descriptors.DescriptorWritable.GetSetMethod()!);
+        il.MarkLabel(preserveWritable);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Call, descriptors.DefineProperty);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(next);
+        il.Emit(OpCodes.Ret);
+        return method;
     }
 
     /// <summary>
