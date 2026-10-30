@@ -2133,7 +2133,7 @@ public partial class RuntimeEmitter
                 runtime.Operators,
                 runtime.Records,
                 runtime.RegExps,
-                runtime.StringCoercion,
+                runtime.Reflect.ToPropertyKey,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedInstance,

@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
         EmittedOperatorRuntime Operators,
         EmittedRecordStorageRuntime Records,
         EmittedRegExpRuntime RegExps,
-        EmittedStringCoercionRuntime StringCoercion,
+        MethodInfo ToPropertyKey,
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         FieldInfo UndefinedInstance,
@@ -600,28 +600,21 @@ public partial class RuntimeEmitter
             new DefinePropertyReceiverValidationInputs(inputs.Errors, inputs.Operators.TypeOf)
         );
 
-        // Normalize the key once, preserving Symbols for Proxy dispatch before
-        // an ordinary receiver's Symbol storage path can handle the definition.
-        var symbolKeyLabel = il.DefineLabel();
+        // ToPropertyKey can produce a Symbol after invoking a key object's
+        // string-hint conversion. Retain that identity for every dispatch path.
         var propertyKeyReadyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
-        il.Emit(OpCodes.Brtrue, symbolKeyLabel);
-        // propName = $Runtime.ToJsString(prop) — ECMA-262 §7.1.19 ToPropertyKey
-        // string path via the spec-shaped ToString. Avoids the prop.ToString()
-        // Callvirt-on-null NRE for `Object.defineProperty(obj, null, ...)`,
-        // and unlike inputs.StringCoercion.Stringify (which produces debug "[1, 2]" form for
-        // arrays) honors `Array.prototype.toString` join semantics so
-        // `defineProperty(obj, [1], ...)` lands at key "1" (matches V8/SM).
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+        il.Emit(OpCodes.Call, inputs.ToPropertyKey);
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Stloc, propNameLocal);
-        il.Emit(OpCodes.Br, propertyKeyReadyLabel);
-        il.MarkLabel(symbolKeyLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.MarkLabel(propertyKeyReadyLabel);
+        il.Emit(OpCodes.Starg_S, (byte)1);
+        il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stloc, propertyKeyLocal);
+        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
+        il.Emit(OpCodes.Brtrue, propertyKeyReadyLabel);
+        il.Emit(OpCodes.Ldloc, propertyKeyLocal);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Stloc, propNameLocal);
+        il.MarkLabel(propertyKeyReadyLabel);
 
         // ToPropertyDescriptor observes HasProperty/Get and validates each
         // accessor before any target operation. Replay only this null-prototype
