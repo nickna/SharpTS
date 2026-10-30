@@ -76,6 +76,21 @@ public class CliNativeGuestProjectTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void ImplicitZlibDependencyRefusesBeforeWritingAProjectWithOrWithoutVerification(bool verify)
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile("main.ts", "import { createGzip } from 'node:zlib'; const zipper:any=createGzip(); console.log(zipper.bytesWritten); zipper.close();");
+        string verification = verify ? " --verify" : "";
+        var result = CliTestHelper.RunCli($"--no-tsconfig --compile main.ts --emit-native-project native --runtime {HostRid} --msbuild-errors{verification}", directory.Path);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("SHARPTS402", result.StandardOutput + result.StandardError);
+        Assert.Contains("ZstdSharp", result.StandardOutput + result.StandardError);
+        Assert.False(Directory.Exists(directory.GetPath("native")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void InheritedDeclarationOnlyConfigRefusesBeforeWritingAnyOutput(bool explicitConfig)
     {
         using var directory = CliTestHelper.CreateTempDirectory();

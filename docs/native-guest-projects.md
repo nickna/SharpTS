@@ -84,6 +84,16 @@ member at compile time does not make dynamic assembly loading or code generation
 valid after native publication. The native compiler SKU retains its existing
 closed interop universe.
 
+The serialized guest's assembly references are checked before the project directory
+is claimed. Framework names, versions, cultures and public-key tokens must match
+the framework index or the emitted runtime's literal CoreLib/Uri implementation
+identities; full public keys are compared through their canonical CLR tokens.
+Implicit runtime-library dependencies are subject to the same boundary as explicit
+references. For example, the current Zlib emission references `ZstdSharp`, so this
+profile refuses it with `SHARPTS402` until its static dependency closure is supplied
+and verified (#3083). The check runs with or without `--verify` and also protects
+direct compiler serialization. Ordinary managed output retains its dependencies.
+
 | Code | Meaning |
 |---|---|
 | `SHARPTS401` | Emitted guest requires the SharpTS runtime/managed compiler bridge. |

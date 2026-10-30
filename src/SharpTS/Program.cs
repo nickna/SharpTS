@@ -1094,9 +1094,15 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         {
             var compatibility = NativeAotCompatibilityReport.Analyze(compiler.RequiredSharpTSRuntimeRequirements,
                 compiler.RequiredSharpTSRuntimeReasons, !externalRefs.IsEmpty);
+            compatibility.ThrowIfIncompatible();
+            // Serialize and validate the actual guest dependency closure before
+            // claiming a project directory. Reuse these exact bytes for export.
+            var nativeArtifacts = compiler.SaveArtifacts("Guest.pdb");
             NativeAotProjectExporter.Export(nativeProject, compatibility, guest =>
             {
-                compiler.Save(guest);
+                File.WriteAllBytes(guest, nativeArtifacts.Assembly);
+                if (nativeArtifacts.Pdb is not null)
+                    File.WriteAllBytes(Path.ChangeExtension(guest, ".pdb"), nativeArtifacts.Pdb);
                 if (verifyIL) VerifyCompiledAssembly(guest, sdkPath, externalRefs);
             });
             if (!outputOptions.QuietMode)
