@@ -196,8 +196,8 @@ public sealed class EmittedObjectDescriptorRuntimeTests
             "EmitDefinePropertyProxyReceiver",
             "EmitObjectDefineProperty",
             "EmitDefinePropertyArrayLengthCoercion",
-            "EmitDefinePropertyDescriptorTypeValidation",
-            "EmitDefinePropertyDescriptorNormalization",
+            "EmitConvertPropertyDescriptor",
+            "EmitDescriptorPropertyPresence",
             "EmitDefinePropertyDescriptorFields",
             "EmitDefinePropertyRedefinitionValidation",
             "DeclareObjectGetOwnPropertyDescriptor",
@@ -242,7 +242,8 @@ public sealed class EmittedObjectDescriptorRuntimeTests
             "EmitGetOwnDescriptorFieldsReceiver"
         })
         {
-            var method = typeof(RuntimeEmitter).GetMethod(name, Members)!;
+            var method = typeof(RuntimeEmitter).GetMethod(name, Members);
+            Assert.NotNull(method);
             Assert.DoesNotContain(method.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime) || p.ParameterType == typeof(RuntimeFeatureSet));
             foreach (var parameter in method.GetParameters().Where(p => p.ParameterType.IsNestedPrivate))
                 Assert.DoesNotContain(parameter.ParameterType.GetFields(Members), f => f.FieldType == typeof(EmittedRuntime) || f.FieldType == typeof(RuntimeFeatureSet));
