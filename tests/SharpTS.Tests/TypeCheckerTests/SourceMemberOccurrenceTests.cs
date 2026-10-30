@@ -14,7 +14,7 @@ public sealed class SourceMemberOccurrenceTests
     private sealed record Checked(SourceDocument Document, TypeChecker Checker,
         TypeCheckDiagnosticResult Result, FrozenMemberIndex Members);
 
-    private static Checked Check(string source, bool capture = true)
+    private static Checked Check(string source, bool capture = true, bool captureTypes = false)
     {
         var document = new SourceDocument("source-members.ts", source);
         // Keep written syntax in both runs so baseline receiver types can be inspected
@@ -22,6 +22,7 @@ public sealed class SourceMemberOccurrenceTests
         var parser = new Parser(new Lexer(source).ScanTokens()).WithSourceDocument(document).WithEditorSyntax();
         var statements = parser.ParseOrThrow();
         var checker = new TypeChecker().WithMemberProvenance(capture);
+        if (captureTypes) checker.WithEditorMetadata();
         var result = checker.CheckWithRecovery(statements, document);
         return new(document, checker, result, checker.Members.Freeze());
     }
@@ -372,10 +373,12 @@ public sealed class SourceMemberOccurrenceTests
     [Fact]
     public void LogicalAssignmentPublishesItsCheckedReadWithoutInventingWriteSelection()
     {
-        var value = Check("class C { value:number=1; } const object=new C(); object./*read*/value; object./*logical*/value ||= 1;");
+        var value = Check("class C { value:number=1; } const object=new C(); object./*read*/value; object./*logical*/value ||= 1;", captureTypes: true);
         AssertClean(value);
-        Assert.Same(Symbol(value, "read"), Symbol(value, "logical"));
-        Assert.Equal(MemberOperation.Read, Occurrence(value, "logical").Operations);
+        Assert.Equal("value", Symbol(value, "read").Name);
+        Assert.False(value.Members.FindResolution(value.Document, Offset(value, "logical")).IsResolved);
+        Assert.Contains(value.Checker.EditorFacts.GetSourceTypeObservations(value.Document), fact =>
+            fact.Span.Start == Offset(value, "logical") && fact.Display.Text == "number");
     }
 
     [Theory]

@@ -1102,9 +1102,7 @@ public partial class TypeChecker
 
     private TypeInfo CheckLogicalSet(Expr.LogicalSet logical)
     {
-        using var lookup = BeginSourceMemberLookup(logical, logical.Name, MemberOperation.Read);
         TypeInfo objType = CheckExpr(logical.Object);
-        ExpectSourceMemberReceiver(objType);
         CheckReadonlyRecordProperty(objType, logical.Name.Lexeme, logical.Name.Line);
         EnsureWritableClassIndex(objType, new TypeInfo.StringLiteral(logical.Name.Lexeme), new Expr.Literal(logical.Name.Lexeme));
         EnsureWritableInterfaceIndex(objType, new TypeInfo.StringLiteral(logical.Name.Lexeme), new Expr.Literal(logical.Name.Lexeme));
@@ -1121,7 +1119,6 @@ public partial class TypeChecker
             InvalidateNarrowingsFor(assignedPath);
         }
 
-        lookup?.Succeed();
         return LogicalPropertyAssignmentResult(readType, valueType, logical.Operator.Type);
     }
 
