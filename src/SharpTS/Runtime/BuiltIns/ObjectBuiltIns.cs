@@ -1170,8 +1170,9 @@ public static partial class ObjectBuiltIns
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSError error => error.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
-            SharpTSGlobalThis globalThis => globalThis.GetOwnPropertyDescriptor(propertyKey)
-                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSGlobalThis globalThis => globalThis.IsDeletedProperty(propertyKey) ? null
+                : globalThis.GetOwnPropertyDescriptor(propertyKey)
+                    ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSClass klass => klass.GetOwnStaticPropertyDescriptor(propertyKey),
             SharpTSFunctionGlobal when propertyKey == "prototype" => DataDescriptor(
                 interpreter.GetFunctionPrototype(),

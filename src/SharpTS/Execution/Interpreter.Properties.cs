@@ -2674,6 +2674,7 @@ public partial class Interpreter
         }
         if (obj is SharpTSGlobalThis gtAccessor
             && !gtAccessor.HasUserProperty(memberName)
+            && !gtAccessor.IsDeletedProperty(memberName)
             && TryGetRealmIntrinsic(memberName, out var gtIntrinsic))
         {
             return gtIntrinsic;
