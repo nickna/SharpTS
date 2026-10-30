@@ -2116,11 +2116,12 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 break;
 
             case Expr.GetIndex getIndex:
-                // delete obj[key] - use DeleteIndex with strict mode
-                EmitExpression(getIndex.Object);
-                EnsureBoxed();
-                EmitExpression(getIndex.Index);
-                EnsureBoxed();
+                // Preserve the receiver across an awaited or yielded key, and leave
+                // key conversion to the delete helper after both expressions finish.
+                var receiver = SpillBoxed(getIndex.Object);
+                var key = SpillBoxed(getIndex.Index);
+                IL.Emit(OpCodes.Ldloc, receiver);
+                IL.Emit(OpCodes.Ldloc, key);
                 if (Ctx.IsStrictMode)
                 {
                     IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
