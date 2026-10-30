@@ -1055,7 +1055,7 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? GetOwnPropertyDescriptor(Interpreter interpreter, List<object?> args)
     {
-        var target = args[0];
+        var target = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
 
         if (target is null or SharpTSUndefined)
             throw new ThrowException(new SharpTSTypeError(
