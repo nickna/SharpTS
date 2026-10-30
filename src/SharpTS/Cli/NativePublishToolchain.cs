@@ -62,7 +62,7 @@ internal sealed record NativePublishToolchain(string DotnetPath, string SdkVersi
         DirectoryInputs(Path.Combine(SdkDirectory, "Roslyn", "bincore"));
         // These values can change SDK and native tool selection. Hash values, never persist them.
         foreach (string key in new[] { "PATH", "DOTNET_ROOT", "DOTNET_ROOT_X64", "DOTNET_ROOT_ARM64", "MSBuildSDKsPath", "MSBUILD_EXE_PATH", "DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR",
-            "LIB", "LIBPATH", "INCLUDE", "VSINSTALLDIR", "VCINSTALLDIR", "VCToolsInstallDir", "VCToolsVersion", "WindowsSdkDir", "WindowsSDKVersion", "UniversalCRTSdkDir", "UCRTVersion", "CC", "CXX", "LD", "AR", "SDKROOT", "DEVELOPER_DIR" })
+            "LIB", "LIBPATH", "INCLUDE", "LINK", "_LINK_", "VSINSTALLDIR", "VCINSTALLDIR", "VCToolsInstallDir", "VCToolsVersion", "WindowsSdkDir", "WindowsSDKVersion", "UniversalCRTSdkDir", "UCRTVersion", "CC", "CXX", "LD", "AR", "SDKROOT", "DEVELOPER_DIR" })
         { Text(key); Text(Environment.GetEnvironmentVariable(key) ?? ""); }
         if (System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
             Text(typeof(NativePublishToolchain).Module.ModuleVersionId.ToString("D"));
