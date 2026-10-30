@@ -214,13 +214,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, basePrototype);
         il.Emit(OpCodes.Call, storage.SetPrototype);
         EmitDataDescriptor(prototype, "constructor", () => il.Emit(OpCodes.Ldloc, definition), true);
-        EmitDataDescriptor(definition, "prototype", () => il.Emit(OpCodes.Ldloc, prototype), false, false);
-        EmitDataDescriptor(definition, "name", () => il.Emit(OpCodes.Ldarg_2), false);
         EmitDataDescriptor(definition, "length", () =>
         {
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Box, _types.Double);
         }, false);
+        EmitDataDescriptor(definition, "name", () => il.Emit(OpCodes.Ldarg_2), false);
+        EmitDataDescriptor(definition, "prototype", () => il.Emit(OpCodes.Ldloc, prototype), false, false);
         il.Emit(OpCodes.Ldloc, definition);
         il.Emit(OpCodes.Ldarg_S, (byte)4);
         var parentPresent = il.DefineLabel();
