@@ -8,7 +8,7 @@ public partial class RuntimeEmitter
 {
     // Immutable inputs shared by singleton installation; no peer metadata is retained by Math.
     private readonly record struct BuiltinSingletonInputs(
-        Type DescriptorType, PrototypeDescriptorInputs Descriptors, MethodInfo WritableSetter,
+        Type DescriptorType, PrototypeDescriptorInputs Descriptors, MethodInfo WritableSetter, MethodInfo ConfigurableSetter,
         MethodInfo FunctionGetOrCreate, MethodInfo GetSymbolDict, FieldInfo ToStringTag);
 
     private static BuiltinSingletonInputs GetBuiltinSingletonInputs(EmittedRuntime runtime) => new(
@@ -16,7 +16,8 @@ public partial class RuntimeEmitter
         new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
             runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
             runtime.DescriptorStorage.DefineProperty),
-        runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.FunctionConstruction.GetOrCreate,
+        runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!,
+        runtime.FunctionConstruction.GetOrCreate,
         runtime.Symbols.GetStorage, runtime.Symbols.ToStringTag);
 
     // Math.* / JSON.* are normally intercepted at compile time by the dedicated
@@ -63,7 +64,7 @@ public partial class RuntimeEmitter
             math.SingletonField,
             inputs,
             MathStaticEmitter.EnumerateValueFormMethods(math),
-            "Math");
+            "Math", MathStaticEmitter.EnumerateConstantValues());
 
     private void EmitJsonSingletonPopulate(EmittedJsonRuntime json, BuiltinSingletonInputs inputs) =>
         EmitBuiltinSingletonPopulate(
@@ -94,7 +95,8 @@ public partial class RuntimeEmitter
         FieldBuilder singletonField,
         BuiltinSingletonInputs inputs,
         IEnumerable<(string Name, MethodInfo? Backing, int Length)> methods,
-        string toStringTag)
+        string toStringTag,
+        IEnumerable<(string Name, double Value)>? constants = null)
     {
         var il = method.GetILGenerator();
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
@@ -103,6 +105,35 @@ public partial class RuntimeEmitter
         EmitPrototypePopulateGuard(il, singletonField);
 
         var descLocal = il.DeclareLocal(inputs.DescriptorType);
+
+        if (constants is not null)
+        {
+            foreach (var (name, value) in constants)
+            {
+                il.Emit(OpCodes.Ldsfld, singletonField);
+                il.Emit(OpCodes.Ldstr, name);
+                il.Emit(OpCodes.Ldc_R8, value);
+                il.Emit(OpCodes.Box, _types.Double);
+                il.Emit(OpCodes.Callvirt, setItem);
+                il.Emit(OpCodes.Newobj, inputs.Descriptors.Ctor);
+                il.Emit(OpCodes.Stloc, descLocal);
+                il.Emit(OpCodes.Ldloc, descLocal);
+                il.Emit(OpCodes.Ldc_R8, value);
+                il.Emit(OpCodes.Box, _types.Double);
+                il.Emit(OpCodes.Callvirt, inputs.Descriptors.ValueSetter);
+                foreach (var setter in new[] { inputs.WritableSetter, inputs.Descriptors.EnumerableSetter, inputs.ConfigurableSetter })
+                {
+                    il.Emit(OpCodes.Ldloc, descLocal);
+                    il.Emit(OpCodes.Ldc_I4_0);
+                    il.Emit(OpCodes.Callvirt, setter);
+                }
+                il.Emit(OpCodes.Ldsfld, singletonField);
+                il.Emit(OpCodes.Ldstr, name);
+                il.Emit(OpCodes.Ldloc, descLocal);
+                il.Emit(OpCodes.Call, inputs.Descriptors.DefineProperty);
+                il.Emit(OpCodes.Pop);
+            }
+        }
 
         var fnLocal = il.DeclareLocal(_types.Object);
         foreach (var (jsName, backing, jsLength) in methods)

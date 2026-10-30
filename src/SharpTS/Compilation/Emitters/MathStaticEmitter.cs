@@ -513,40 +513,12 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
             return false;
 
         // ECMA-262 21.3.1: numeric constants on the Math object.
-        switch (propertyName)
+        foreach (var (name, value) in EnumerateConstantValues())
         {
-            case "PI":
-                il.Emit(OpCodes.Ldc_R8, Math.PI);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-            case "E":
-                il.Emit(OpCodes.Ldc_R8, Math.E);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-            case "LN10":
-                il.Emit(OpCodes.Ldc_R8, Math.Log(10.0));
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-            case "LN2":
-                il.Emit(OpCodes.Ldc_R8, Math.Log(2.0));
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-            case "LOG10E":
-                il.Emit(OpCodes.Ldc_R8, 1.0 / Math.Log(10.0));
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-            case "LOG2E":
-                il.Emit(OpCodes.Ldc_R8, 1.0 / Math.Log(2.0));
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-            case "SQRT2":
-                il.Emit(OpCodes.Ldc_R8, Math.Sqrt(2.0));
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-            case "SQRT1_2":
-                il.Emit(OpCodes.Ldc_R8, Math.Sqrt(0.5));
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
+            if (propertyName != name) continue;
+            il.Emit(OpCodes.Ldc_R8, value);
+            il.Emit(OpCodes.Box, ctx.Types.Double);
+            return true;
         }
 
         var runtime = ctx.Runtime!;
@@ -567,14 +539,22 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
     }
 
     /// <summary>
-    /// Canonical source of the Math static methods exposed in value form, with
-    /// the matching <c>$Runtime</c> adapter and ECMA-262 21.3.2 spec length.
-    /// Consumed both by <see cref="TryEmitStaticPropertyGet"/> (syntactic
-    /// <c>var f = Math.floor</c>) and by the Math singleton populate step that
-    /// fills <c>_mathSingleton</c> for value-form receivers
-    /// (<c>const m = Math; m.floor(x)</c>, issue #276). Single source of truth so
-    /// the two paths can never drift on names/lengths.
+    /// Numeric constants shared by direct reads and ordinary Math singleton
+    /// population, in their intrinsic property order.
     /// </summary>
+    internal static IEnumerable<(string Name, double Value)> EnumerateConstantValues()
+    {
+        yield return ("E", Math.E);
+        yield return ("LN10", Math.Log(10));
+        yield return ("LN2", Math.Log(2));
+        yield return ("LOG10E", 1.0 / Math.Log(10));
+        yield return ("LOG2E", 1.0 / Math.Log(2));
+        yield return ("PI", Math.PI);
+        yield return ("SQRT1_2", Math.Sqrt(0.5));
+        yield return ("SQRT2", Math.Sqrt(2));
+    }
+
+    /// <summary>Math methods shared by direct reads and singleton population, with their spec lengths.</summary>
     internal static IEnumerable<(string Name, MethodInfo? Adapter, int Length)> EnumerateValueFormMethods(EmittedMathRuntime math)
     {
         yield return ("floor",  math.FloorAdapter, 1);
