@@ -588,7 +588,10 @@ public partial class ILCompiler
             privateStaticMethods.Add(methodName, methodBuilder);
         }
 
-        var instanceBridge = typeBuilder.IsGenericTypeDefinition && privateStorage is not null
+        // Expression templates use their actual per-evaluation ClassDefinition
+        // private table. A canonical declared-class bridge would both address
+        // the wrong owner inventory and share brands across evaluations.
+        var instanceBridge = expression is null && typeBuilder.IsGenericTypeDefinition && privateStorage is not null
             ? DefinePrivateInstanceBridge(typeBuilder, privateStorage, privateMethods) : null;
         _classes.PrivateElements.Declare(className, typeBuilder, privateStorage,
             privateFieldNames, privateStaticFields, privateMethods, privateStaticMethods, instanceBridge);
