@@ -1875,9 +1875,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (typeArg == "string") return Types.String;
         if (typeArg == "boolean") return Types.Boolean;
         string qualified = Ctx.ResolveClassName(typeArg);
+        if (Ctx.GenericTypeParameters.TryGetValue(typeArg, out var owned)) return owned;
         if (Ctx.TypeMapper.ExternalTypes.TryGetValue(typeArg, out var external)
             || Ctx.TypeMapper.ExternalTypes.TryGetValue(qualified, out external)) return external;
-        if (Ctx.GenericTypeParameters.TryGetValue(typeArg, out var owned)) return owned;
         if (Ctx.Classes.TryGetValue(qualified, out var builder))
             return Ctx.TypeMapper.IsDynamicClassInstance(Ctx.TypeMap?.GetClassType(qualified)) ? Types.Object : builder;
         // Friendly CLR spellings may use this compilation's references and framework
@@ -1889,6 +1889,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     private Type? ResolveExternalTypeArgument(string name)
     {
+        // Composite source arguments keep their existing erasure; an outer CLR
+        // alias cannot replace a parameter owned by the current generic context.
+        if (Ctx.GenericTypeParameters.ContainsKey(name)) return null;
         if (Ctx.TypeMapper.ExternalTypes.TryGetValue(name, out var declared)) return declared;
         if (Ctx.TypeMapper.ExternalMetadata?.TryResolve(name) is { } referenced)
             return Ctx.TypeMapper.ForEmission(referenced);

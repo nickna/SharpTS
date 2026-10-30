@@ -12,6 +12,22 @@ public sealed class GenericTypeArgumentIsolationTests
     private const string Original = "class Box<T>{next(){return new Box<T[]>();}} console.log(new Box<number>());";
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void OwnedClassParameterShadowsOuterClrAlias(bool native, bool composite)
+    {
+        string source = "@DotNetType(\"System.Text.StringBuilder\") declare class T{} " +
+            "class Box<T>{next(){return new Box<" + (composite ? "T[]" : "T") + ">();}}";
+        var saved = Build(source, native);
+        var definition = Assert.Single(saved.GetTypes(), type => type.Name == "Box" && type.IsGenericTypeDefinition);
+        var owner = definition.MakeGenericType(typeof(double));
+        var next = owner.GetMethod("next")!.Invoke(Activator.CreateInstance(owner), null)!;
+        Assert.Equal(composite ? typeof(object) : typeof(double), Assert.Single(next.GetType().GetGenericArguments()));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void EarlierGuestTypesCannotSupplyCompositeSourceTypeArguments(bool native)
