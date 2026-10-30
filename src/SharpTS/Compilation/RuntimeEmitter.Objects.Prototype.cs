@@ -78,7 +78,7 @@ public partial class RuntimeEmitter
         MethodInfo? NativeProxyRejection
     );
 
-    private readonly record struct ObjectPreventExtensionsInputs(EmittedArrayStorageRuntime ArrayStorage, MethodBuilder CreateException, EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, EmittedObjectStorageRuntime ObjectStorage, ConstructorBuilder TSTypeErrorCtor, MethodInfo? NativeProxyRejection);
+    private readonly record struct ObjectPreventExtensionsInputs(EmittedArrayStorageRuntime ArrayStorage, MethodBuilder CreateException, EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, EmittedObjectStorageRuntime ObjectStorage, ConstructorBuilder TSTypeErrorCtor, MethodInfo? NativeProxyRejection, MethodBuilder GetOwnPropertyNames, MethodBuilder MaterializeOwnDescriptor);
     private readonly record struct ObjectIsExtensibleInputs(EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, MethodInfo? NativeProxyRejection);
 
     /// <summary>
@@ -292,6 +292,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyForPreventExtensionsLabel);
+
+        var afterNativeObject = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, _types.Object);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Bne_Un, afterNativeObject);
+        EmitNativeObjectOwnDescriptors(il, inputs.GetOwnPropertyNames,
+            inputs.MaterializeOwnDescriptor, seal: false, freeze: false);
+        il.MarkLabel(afterNativeObject);
 
         // If obj is a $Object, set its instance _isNonExtensible flag so the
         // instance-method SetProperty path honors non-extensibility for new

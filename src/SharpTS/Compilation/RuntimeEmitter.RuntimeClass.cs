@@ -2266,7 +2266,7 @@ public partial class RuntimeEmitter
         // but their implementation needs all of the object-model helpers above.
         if (_features.UsesPromise)
             EmitPromiseKeyedMethodBodies(runtime);
-        EmitObjectPreventExtensions(typeBuilder, runtime.ObjectState, new ObjectPreventExtensionsInputs(runtime.ArrayStorage, runtime.Errors.CreateException, runtime.DescriptorStorage, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped, runtime.ObjectStorage, runtime.Errors.TypeErrorConstructor, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection));
+        EmitObjectPreventExtensions(typeBuilder, runtime.ObjectState, new ObjectPreventExtensionsInputs(runtime.ArrayStorage, runtime.Errors.CreateException, runtime.DescriptorStorage, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped, runtime.ObjectStorage, runtime.Errors.TypeErrorConstructor, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection, GetOwnPropertyNames: runtime.ObjectKeys.Names, MaterializeOwnDescriptor: materializeConstructorDescriptor));
         EmitObjectGetPrototypeOf(
             runtime.ClassPrototypes,
             runtime.ObjectPrototypes,

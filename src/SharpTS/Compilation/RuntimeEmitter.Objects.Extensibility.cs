@@ -244,33 +244,8 @@ public partial class RuntimeEmitter
 
         // Object's virtual native methods are real own properties. Snapshot their
         // current descriptors together with expandos; deleted slots stay absent.
-        var names = il.DeclareLocal(_types.ListOfObject);
-        var index = il.DeclareLocal(_types.Int32);
-        var nextName = il.DefineLabel();
-        var checkNames = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.GetOwnPropertyNames);
-        il.Emit(OpCodes.Stloc, names);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, index);
-        il.Emit(OpCodes.Br, checkNames);
-        il.MarkLabel(nextName);
-        EmitConstructorIntegrityDescriptor(il, inputs, freeze, () =>
-        {
-            il.Emit(OpCodes.Ldloc, names);
-            il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-            il.Emit(OpCodes.Castclass, _types.String);
-        });
-        il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, index);
-        il.MarkLabel(checkNames);
-        il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Ldloc, names);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Blt, nextName);
+        EmitNativeObjectOwnDescriptors(il, inputs.GetOwnPropertyNames,
+            inputs.MaterializeOwnDescriptor, seal: true, freeze);
         il.Emit(OpCodes.Br, done);
 
         il.MarkLabel(sourceConstructor);
@@ -285,6 +260,41 @@ public partial class RuntimeEmitter
                 EmitConstructorIntegrityDescriptor(il, inputs, freeze, () => il.Emit(OpCodes.Ldstr, key));
         }
         il.MarkLabel(done);
+    }
+
+    // Callers establish the exact Object constructor owner before entering this
+    // loop. Read descriptor records without invoking user accessors.
+    private void EmitNativeObjectOwnDescriptors(ILGenerator il, MethodBuilder getOwnPropertyNames,
+        MethodBuilder materializeOwnDescriptor, bool seal, bool freeze)
+    {
+        var names = il.DeclareLocal(_types.ListOfObject);
+        var index = il.DeclareLocal(_types.Int32);
+        var nextName = il.DefineLabel();
+        var checkNames = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, getOwnPropertyNames);
+        il.Emit(OpCodes.Stloc, names);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, checkNames);
+        il.MarkLabel(nextName);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, names);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(seal ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        il.Emit(freeze ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, materializeOwnDescriptor);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(checkNames);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, names);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Blt, nextName);
     }
 
     private void EmitConstructorIntegrityDescriptor(ILGenerator il, ObjectIntegrityInputs inputs,
