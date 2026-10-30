@@ -134,7 +134,7 @@ public sealed class NativePrototypeFieldsTests
     {
         var (compiler, saved) = Build($"class C{{}} class Holder{{static value:any={expression};}}", true);
         Assert.False(compiler.NativePrototypeFields!.UsesLegacy, string.Join("; ", compiler.NativePrototypeFields.Blockers));
-        object value = saved.GetType("Holder")!.GetField("value", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        object value = NativeSourceTypeLookup.Find(saved, "Holder")!.GetField("value", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
         var query = saved.GetType("$NativePrototypeFieldsLookup")!.GetMethod("Find", BindingFlags.NonPublic | BindingFlags.Static)!;
         Assert.Equal(value.GetType().GetMethod("$EnsureFields", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
             query.Invoke(null, [value.GetType()]));
@@ -145,7 +145,7 @@ public sealed class NativePrototypeFieldsTests
     {
         var (_, saved) = Build("class C{}", true);
         var query = saved.GetType("$NativePrototypeFieldsLookup")!.GetMethod("Find", BindingFlags.NonPublic | BindingFlags.Static)!;
-        var owner = saved.GetType("C")!;
+        var owner = NativeSourceTypeLookup.Find(saved, "C")!;
         Assert.Equal(owner.GetMethod("$EnsureFields", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
             query.Invoke(null, [owner]));
         var hostile = new HostileType();

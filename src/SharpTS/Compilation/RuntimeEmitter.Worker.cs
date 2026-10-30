@@ -1123,6 +1123,16 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(isNumberLabel);
 
+        if (_emitNativeCallables)
+        {
+            // An exact same-output guest object is ordinary array-like input,
+            // regardless of its source class name. Foreign realm/buffer bridges
+            // retain their existing checks below.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.ObjectFields.Interface);
+            il.Emit(OpCodes.Brtrue, objectSourceLabel);
+        }
+
         // Check if it's a number (Double, Int32, etc.) - create with that length
         // First check if it's not an array buffer type by checking type name
         var argTypeLocal = il.DeclareLocal(_types.Type);

@@ -69,7 +69,7 @@ public sealed class NativeConstructorFactoryLookupTests
     {
         var saved = Compile("class Owner { static $ConstructFromArguments(){return 1;} constructor(public value:number=7){} }", true, out var compiler);
         Assert.False(compiler.NativeConstructorFactories!.UsesLegacy);
-        var owner = saved.GetType("Owner")!;
+        var owner = NativeSourceTypeLookup.Find(saved, "Owner")!;
         var marker = Assert.Single(owner.GetCustomAttributes(saved.GetType("$GuestConstructorFactory")!, false));
         string name = (string)marker.GetType().GetField("Name")!.GetValue(marker)!;
         Assert.Equal("$ConstructFromArguments_", name);
@@ -90,7 +90,7 @@ public sealed class NativeConstructorFactoryLookupTests
         string name = (string)marker.GetType().GetField("Name")!.GetValue(marker)!;
         foreach (var owner in new[] { definition, definition.MakeGenericType(typeof(object)), definition.MakeGenericType(typeof(double)) })
             Assert.Equal(owner.GetMethod(name, Flags), Lookup(saved).Invoke(null, [owner, name, Flags]));
-        var plain = saved.GetType("Plain")!;
+        var plain = NativeSourceTypeLookup.Find(saved, "Plain")!;
         Assert.Null(Lookup(saved).Invoke(null, [plain, "<missing>", Flags]));
         Assert.Equal(definition.GetMethod("visible", BindingFlags.Public | BindingFlags.Static),
             Lookup(saved).Invoke(null, [definition, "visible", BindingFlags.Public | BindingFlags.Static]));
@@ -207,7 +207,7 @@ public sealed class NativeConstructorFactoryLookupTests
         Assert.Equal(11d, savedProbe.GetMethod("Count")!.Invoke(null, null));
         Assert.Equal(true, savedProbe.GetMethod("Foreign")!.Invoke(null, null));
         Assert.Equal(11d, savedProbe.GetMethod("Count")!.Invoke(null, null));
-        var hostile = new HostileType(saved.GetType("Owner")!);
+        var hostile = new HostileType(NativeSourceTypeLookup.Find(saved, "Owner")!);
         Assert.Equal(true, savedProbe.GetMethod("Refuse")!.Invoke(null, [hostile])); Assert.Equal(0, hostile.EqualsCalls); Assert.Equal(0, hostile.MetadataCalls);
         if (Environment.GetEnvironmentVariable("SHARPTS_FACTORY_NATIVE_FIXTURE_PATH") is { Length: > 0 } path)
         {

@@ -34,6 +34,8 @@ namespace SharpTS.Compilation;
 /// <seealso cref="Interpreter"/>
 public partial class ILCompiler
 {
+    private NativeSourceTypeNames? _nativeSourceTypeNames;
+
     /// <summary>
     /// The assembly builder. Concrete type is either <see cref="PersistedAssemblyBuilder"/>
     /// (default; supports <see cref="SaveToBytes"/> for shipping a standalone DLL) or the
@@ -570,7 +572,8 @@ public partial class ILCompiler
             classToModule: _modules.ClassToModule,
             getCurrentModulePath: () => _modules.CurrentPath,
             getDotNetNamespace: () => _modules.CurrentDotNetNamespace,
-            getModuleName: path => GetDefinitionContext().GetSanitizedModuleName(path)
+            getModuleName: path => GetDefinitionContext().GetSanitizedModuleName(path),
+            qualifySourceClassName: name => _nativeSourceTypeNames?.ResolveClassCandidate(name) ?? name
         );
     }
 
@@ -750,6 +753,7 @@ public partial class ILCompiler
     {
         if (_nativeAotProjectOutput)
         {
+            _nativeSourceTypeNames = new();
             _nativeOwnedTypeDeclarations = NativeOwnedTypeDeclarations.Begin(_moduleBuilder);
             _nativeSourceOwners = new(_moduleBuilder, _types);
             _nativeGenericMethodNormalization = new(_moduleBuilder, _types);
@@ -1592,7 +1596,7 @@ public partial class ILCompiler
                 if (blockScoped && !_classes.BlockScopedNames.ContainsKey(classStmt))
                 {
                     string generated = $"$BlockClass_{_classes.BlockScopedNames.Count}_{classStmt.Name.Lexeme}";
-                    _classes.BlockScopedNames[classStmt] = GetDefinitionContext().GetQualifiedClassName(generated);
+                    _classes.BlockScopedNames[classStmt] = GetDefinitionContext().GetRawQualifiedName(generated);
                 }
                 DefineClass(classStmt);
                 break;
@@ -1624,7 +1628,7 @@ public partial class ILCompiler
         var ctx = GetDefinitionContext();
         return resolve
             ? ctx.ResolveClassName(classStmt.Name.Lexeme)
-            : ctx.GetQualifiedClassName(classStmt.Name.Lexeme);
+            : ctx.GetRawQualifiedName(classStmt.Name.Lexeme);
     }
 
     private void DefineRemainingClassDeclarations(IEnumerable<Stmt> statements)

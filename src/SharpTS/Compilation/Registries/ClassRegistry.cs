@@ -50,6 +50,7 @@ public sealed partial class ClassRegistry
     private readonly Func<string?>? _getCurrentModulePath;
     private readonly Func<string?>? _getDotNetNamespace;
     private readonly Func<string, string>? _getModuleName;
+    private readonly Func<string, string>? _qualifySourceClassName;
 
     /// <summary>
     /// Creates a new ClassRegistry wrapping the given state dictionaries.
@@ -70,7 +71,8 @@ public sealed partial class ClassRegistry
         Dictionary<string, string>? classToModule = null,
         Func<string?>? getCurrentModulePath = null,
         Func<string?>? getDotNetNamespace = null,
-        Func<string, string>? getModuleName = null)
+        Func<string, string>? getModuleName = null,
+        Func<string, string>? qualifySourceClassName = null)
     {
         _builders = builders;
         _superclass = superclass;
@@ -88,6 +90,7 @@ public sealed partial class ClassRegistry
         _getCurrentModulePath = getCurrentModulePath;
         _getDotNetNamespace = getDotNetNamespace;
         _getModuleName = getModuleName;
+        _qualifySourceClassName = qualifySourceClassName;
     }
 
     #region Name Resolution
@@ -114,12 +117,8 @@ public sealed partial class ClassRegistry
 
         // Apply .NET namespace if set
         var dotNetNamespace = _getDotNetNamespace?.Invoke();
-        if (dotNetNamespace != null)
-        {
-            return $"{dotNetNamespace}.{baseName}";
-        }
-
-        return baseName;
+        string qualified = dotNetNamespace != null ? $"{dotNetNamespace}.{baseName}" : baseName;
+        return _qualifySourceClassName?.Invoke(qualified) ?? qualified;
     }
 
     /// <summary>
@@ -143,12 +142,8 @@ public sealed partial class ClassRegistry
 
         // Apply .NET namespace if set
         var dotNetNamespace = _getDotNetNamespace?.Invoke();
-        if (dotNetNamespace != null)
-        {
-            return $"{dotNetNamespace}.{baseName}";
-        }
-
-        return baseName;
+        string qualified = dotNetNamespace != null ? $"{dotNetNamespace}.{baseName}" : baseName;
+        return _qualifySourceClassName?.Invoke(qualified) ?? qualified;
     }
 
     private string GetModuleName(string path) => _getModuleName?.Invoke(path)

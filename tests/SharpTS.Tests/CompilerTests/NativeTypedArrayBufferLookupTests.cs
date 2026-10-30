@@ -18,9 +18,9 @@ public sealed class NativeTypedArrayBufferLookupTests
             yield return new object[] { "array", "const v=new Uint8Array([1,2]); console.log(v.length,v[0],v[1]);", "2 1 2\n", native };
             yield return new object[] { "array-buffer", "const b=new ArrayBuffer(4); const a=new Uint8Array(b); a[1]=7; const c=new Uint8Array(b,1,2); console.log(c.length,c[0],c[1]);", "2 7 0\n", native };
             yield return new object[] { "shared-buffer", "const b=new SharedArrayBuffer(4); const a=new Uint8Array(b); a[1]=7; const c=new Uint8Array(b,1,2); c[1]=9; console.log(c.length,c[0],a[2]);", "2 7 9\n", native };
-            // This intentionally exercises the existing managed foreign-name bridge,
-            // whose behavior differs from ECMAScript array-like construction (#3128).
-            yield return new object[] { "source-name", "class $SharedArrayBuffer { GetBuffer(){console.log('fake-getter');throw new Error('fake');} } try{new Uint8Array(new $SharedArrayBuffer() as any);}catch(e){console.log((e as any).message);}", "fake-getter\nfake\n", native };
+            // The managed foreign-name bridge is retained explicitly. Native source
+            // names have a separate CLR namespace (#3132), so ordinary object rules apply.
+            yield return new object[] { "source-name", "class $SharedArrayBuffer { GetBuffer(){console.log('fake-getter');throw new Error('fake');} } try{new Uint8Array(new $SharedArrayBuffer() as any);}catch(e){console.log((e as any).message);}", native ? "" : "fake-getter\nfake\n", native };
         }
     }
     [Theory, MemberData(nameof(SourceCases))]

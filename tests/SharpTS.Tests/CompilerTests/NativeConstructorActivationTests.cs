@@ -149,14 +149,14 @@ public sealed class NativeConstructorActivationTests
         var saved = Compile("class Effects{static count=0;} class Owner{static stamp=++Effects.count;constructor(){Effects.count+=10;}}", true, out _);
         var runtime = saved.GetType("$Runtime")!;
         var construct = runtime.GetMethod("ConstructWithNewTarget")!;
-        var owner = saved.GetType("Owner")!;
+        var owner = NativeSourceTypeLookup.Find(saved, "Owner")!;
         var hostile = new HostileType(owner);
         AssertGuestTypeError(saved, () => construct.Invoke(null, [hostile, Array.Empty<object>(), hostile]));
         Assert.Equal(0, hostile.Callbacks);
         AssertGuestTypeError(saved, () => construct.Invoke(null, [typeof(Foreign), Array.Empty<object>(), typeof(Foreign)]));
         Assert.Equal(0, ForeignEffects.Count);
         Assert.NotNull(construct.Invoke(null, [owner, Array.Empty<object>(), owner]));
-        Assert.Equal(11d, saved.GetType("Effects")!.GetField("count")!.GetValue(null));
+        Assert.Equal(11d, NativeSourceTypeLookup.Find(saved, "Effects")!.GetField("count")!.GetValue(null));
     }
 
     private static class ForeignEffects { internal static int Count; }

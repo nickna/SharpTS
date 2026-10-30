@@ -46,9 +46,9 @@ public sealed class NativeStaticMemberPresenceTests
     {
         var saved = Compile("class State { static count=0; } class Owner { static field=++State.count; static method() {} }", true, out var compiler);
         var has = Helper(saved);
-        var count = saved.GetType("State")!.GetField("count")!;
+        var count = NativeSourceTypeLookup.Find(saved, "State")!.GetField("count")!;
         Assert.Equal(0d, count.GetValue(null));
-        Assert.Equal(true, has.Invoke(null, [saved.GetType("Owner"), "field"]));
+        Assert.Equal(true, has.Invoke(null, [NativeSourceTypeLookup.Find(saved, "Owner"), "field"]));
         Assert.Equal(0d, count.GetValue(null));
         Type contract = saved.GetType("$IHasFields")!;
         foreach (var original in compiler.NativeRuntimeInitializers!.Owners.Where(type => type.Assembly == compiler.NativeRuntimeInitializers.Initialize.DeclaringType!.Assembly))

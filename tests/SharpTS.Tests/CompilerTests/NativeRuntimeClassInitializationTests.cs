@@ -20,11 +20,11 @@ public sealed class NativeRuntimeClassInitializationTests
         var saved = Compile("class State { static count = 0; } class Owner { static item = ++State.count; }", true, out var compiler);
         Assert.False(compiler.NativeRuntimeInitializers!.UsesLegacy);
         var initialize = Initializer(saved);
-        var count = saved.GetType("State")!.GetField("count")!;
+        var count = NativeSourceTypeLookup.Find(saved, "State")!.GetField("count")!;
         Assert.Equal(0d, count.GetValue(null));
-        initialize.Invoke(null, [saved.GetType("Owner")]);
+        initialize.Invoke(null, [NativeSourceTypeLookup.Find(saved, "Owner")]);
         Assert.Equal(1d, count.GetValue(null));
-        initialize.Invoke(null, [saved.GetType("Owner")]);
+        initialize.Invoke(null, [NativeSourceTypeLookup.Find(saved, "Owner")]);
         Assert.Equal(1d, count.GetValue(null));
         Assert.Contains(Instructions(initialize), instruction => instruction.Member?.Name == "RunClassConstructor");
         Assert.DoesNotContain(Instructions(initialize), instruction => instruction.Member?.Name == "get_TypeHandle");

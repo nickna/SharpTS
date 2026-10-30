@@ -143,7 +143,8 @@ public partial class ILCompiler
             _runtimeClassDeclarations.Add(declaration, expression = CreateRuntimeClassExpression(declaration));
         if (_typeMap.GetClassType(declaration) is { } checkedType) _typeMap.SetClassExprType(expression, checkedType);
         CollectClassExpression(expression);
-        _classExprs.Names[expression] = GetDefinitionContext().GetQualifiedClassName(_classExprs.Names[expression]);
+        if (_nativeSourceTypeNames is null)
+            _classExprs.Names[expression] = GetDefinitionContext().GetQualifiedClassName(_classExprs.Names[expression]);
         if (_classes.DeclarationLexicalOwners.TryGetValue(declaration, out var lexicalOwner))
         {
             string ownerName;

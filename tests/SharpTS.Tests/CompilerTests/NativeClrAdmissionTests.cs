@@ -665,9 +665,25 @@ public class NativeClrAdmissionTests
     }
 
     [Fact]
+    public void RawSourceClrNameLookupRemainsAnExactAssemblyLookup()
+    {
+        // Preserve the complete original source, including its subsequent field
+        // read. Native CLR identities are generated; the raw old lookup is null.
+        const string source = ReflectionMetadata + "console.log(owner.name, field.name, value.toString());";
+        var bytes = Compile(source, true).SaveToBytes();
+        var assembly = Assembly.Load(bytes);
+        Assert.Null(assembly.GetType("Guest"));
+        Assert.StartsWith(NativeSourceTypeNames.DeclarationDomain, NativeSourceTypeLookup.Find(assembly, "Guest").FullName);
+        Assert.Throws<NullReferenceException>(() => Execute(bytes));
+    }
+
+    [Fact]
     public void PureReflectedMetadataReadsAndDirectTypedCallsRemainSupported()
     {
-        Assert.Equal("Guest leaked opaque\n", Execute(Compile(ReflectionMetadata + "console.log(owner.name, field.name, value.toString());", true).SaveToBytes()));
+        var metadata = Assembly.Load(Compile(ReflectionMetadata, true).SaveToBytes());
+        string physicalName = NativeSourceTypeLookup.Find(metadata, "Guest").FullName!;
+        string source = ReflectionMetadata.Replace("assembly.getType('Guest')", "assembly.getType('" + physicalName + "')", StringComparison.Ordinal);
+        Assert.Equal("Guest leaked opaque\n", Execute(Compile(source + "console.log(owner.name, field.name, value.toString());", true).SaveToBytes()));
     }
 
     [Theory]

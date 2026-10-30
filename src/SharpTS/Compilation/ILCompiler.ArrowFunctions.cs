@@ -1434,7 +1434,7 @@ public partial class ILCompiler
         // in a generated namespace so their CLR short name remains the source name.
         string identity = $"$ClassExpr_{++_classExprs.Counter}";
         string className = classExpr.Name is { } name ? $"{identity}.{name.Lexeme}" : identity;
-        _classExprs.Names[classExpr] = className;
+        _classExprs.Names[classExpr] = _nativeSourceTypeNames?.DeclareExpression(classExpr, className) ?? className;
         _classExprs.ToDefine.Add(classExpr);
     }
 

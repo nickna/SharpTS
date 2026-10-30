@@ -151,8 +151,8 @@ public sealed class NativeGuestOwnSourceTests
             """;
         var assembly = Compile(source, true); var contract = assembly.GetType("$IGuestOwnProperties")!;
         var predicate = contract.GetMethod("IsOwnPropertyReceiver")!;
-        Assert.True((bool)predicate.Invoke(Activator.CreateInstance(assembly.GetType("Base")!), null)!);
-        var derivedInstance = Activator.CreateInstance(assembly.GetType("Derived")!)!;
+        Assert.True((bool)predicate.Invoke(Activator.CreateInstance(NativeSourceTypeLookup.Find(assembly, "Base")!), null)!);
+        var derivedInstance = Activator.CreateInstance(NativeSourceTypeLookup.Find(assembly, "Derived")!)!;
         Assert.False((bool)predicate.Invoke(derivedInstance, null)!);
         assembly.GetType("$Runtime")!.GetMethod("ObjectDefineProperty")!.Invoke(null,
             [derivedInstance, "extra", new Dictionary<string, object> { ["value"] = 9d, ["enumerable"] = true, ["configurable"] = true, ["writable"] = true }]);
@@ -164,7 +164,7 @@ public sealed class NativeGuestOwnSourceTests
         var derived = assembly.GetTypes().Single(type => type.Name == "GenericDerived" && type.IsGenericTypeDefinition).MakeGenericType(typeof(double));
         Assert.True((bool)predicate.Invoke(Activator.CreateInstance(generic), null)!);
         Assert.False((bool)predicate.Invoke(Activator.CreateInstance(derived), null)!);
-        Assert.False(contract.IsAssignableFrom(assembly.GetType("Collision")));
+        Assert.False(contract.IsAssignableFrom(NativeSourceTypeLookup.Find(assembly, "Collision")));
         var localTemplates = assembly.GetTypes().Where(type => type.Name.Contains("Local", StringComparison.Ordinal)).ToArray();
         Assert.NotEmpty(localTemplates);
         Assert.All(localTemplates, type => Assert.False(contract.IsAssignableFrom(type)));
@@ -202,7 +202,7 @@ public sealed class NativeGuestOwnSourceTests
             class Uninitialized { static value: any = fail(); }
             """, true);
         var lookup = uninitialized.GetType("$Runtime")!.GetMethod("LookupRegisteredClassPrototype", BindingFlags.NonPublic | BindingFlags.Static)!;
-        Assert.NotNull(lookup.Invoke(null, [uninitialized.GetType("Uninitialized")]));
+        Assert.NotNull(lookup.Invoke(null, [NativeSourceTypeLookup.Find(uninitialized, "Uninitialized")]));
     }
 
     [Fact]

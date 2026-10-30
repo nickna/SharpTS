@@ -57,17 +57,21 @@ public partial class ILCompiler
 
         var checkedClass = _typeMap.GetClassType(classStmt);
         if (_currentNamespacePath is not null)
-            qualifiedClassName = ctx.GetQualifiedClassName(
+            qualifiedClassName = ctx.GetRawQualifiedName(
                 $"$nsclass_{_currentNamespacePath.Replace('.', '_')}_{checkedClass?.Core.DeclarationId}_{classStmt.Name.Lexeme}");
-        _classes.DeclarationNames[classStmt] = qualifiedClassName;
-        _classes.DeclarationNamespaces[classStmt] = _currentNamespacePath;
-        _classes.ScopedNames[(_modules.CurrentPath, _currentNamespacePath, classStmt.Name.Lexeme)] = qualifiedClassName;
-        if (checkedClass is not null)
+        void RecordClassIdentity()
         {
-            _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = qualifiedClassName;
-            _typeMapper.RegisterCheckedClassName(checkedClass.Core.DeclarationId, qualifiedClassName);
-            _typeMap.SetClassType(qualifiedClassName, checkedClass);
+            _classes.DeclarationNames[classStmt] = qualifiedClassName;
+            _classes.DeclarationNamespaces[classStmt] = _currentNamespacePath;
+            _classes.ScopedNames[(_modules.CurrentPath, _currentNamespacePath, classStmt.Name.Lexeme)] = qualifiedClassName;
+            if (checkedClass is not null)
+            {
+                _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = qualifiedClassName;
+                _typeMapper.RegisterCheckedClassName(checkedClass.Core.DeclarationId, qualifiedClassName);
+                _typeMap.SetClassType(qualifiedClassName, checkedClass);
+            }
         }
+        RecordClassIdentity();
 
         // Track simple name -> module mapping for later lookups
         if (_modules.CurrentPath != null && _currentNamespacePath is null && !_classes.BlockScopedNames.ContainsKey(classStmt))
@@ -111,6 +115,13 @@ public partial class ILCompiler
         // Decorated external mappings above still participate in type resolution.
         if (!EmitsSourceClassBody(classStmt))
             return;
+
+        if (_nativeSourceTypeNames is not null)
+        {
+            qualifiedClassName = _nativeSourceTypeNames.Declare(classStmt, qualifiedClassName,
+                !_classes.BlockScopedNames.ContainsKey(classStmt) && _currentNamespacePath is null);
+            RecordClassIdentity();
+        }
 
         // Plain methods need the same shared function environment as free functions when a nested
         // closure captures a method-local binding.

@@ -16,7 +16,7 @@ public partial class ILCompiler
     private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _namespaceVarFields = [];
     private readonly Dictionary<(string? Module, string Path), FieldBuilder> _namespaceFieldOwners = [];
 
-    private string NamespaceStorageKey(string path) => GetDefinitionContext().GetQualifiedClassName(path);
+    private string NamespaceStorageKey(string path) => GetDefinitionContext().GetRawQualifiedName(path);
 
     private Dictionary<string, FieldBuilder> NamespaceFieldsForModule(string? module)
     {

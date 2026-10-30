@@ -55,6 +55,10 @@ can hard-reference them. Deploy the copied dependency closure with the TypeScrip
 
 ## Public assembly shape
 
+This section describes ordinary managed DLL/EXE output. Experimental
+[native guest output](native-guest-projects.md) uses generated source CLR
+FullNames; its JavaScript names and TypeScript source mappings remain intact.
+
 - TypeScript classes become .NET classes in the root namespace by default.
 - `@Namespace("Acme.TypeScript")` applies a .NET namespace to the file's emitted classes.
 - Top-level functions are public static methods on `$Program`.

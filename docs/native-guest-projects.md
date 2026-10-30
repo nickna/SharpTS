@@ -31,6 +31,17 @@ acceptance streams.
 The [SDK NativeAOT guide](msbuild-sdk.md#nativeaot-guest-publish) describes the
 separate MSBuild publish graph and its output ownership.
 
+Native source classes use generated CLR FullNames in separate declaration and
+class-expression namespaces. Their CLR short names, JavaScript constructor
+`name`, prototypes and original TypeScript PDB documents/spans are preserved.
+`@Namespace` contributes to the logical source identity inside the generated
+namespace; it does not select a stable native public CLR FullName. Inspect the
+actual guest metadata when using CLR reflection: `Assembly.GetType("Guest")`
+is still an exact CLR lookup and returns null when that raw name is absent.
+The generated entry facade remains the native wrapper boundary. Use ordinary
+DLL output for the public C# library-name contract described in
+[.NET integration](dotnet-integration.md).
+
 Choose a zero-argument, integer-returning guest facade because the existing DLL
 entry reads arguments from the process command line. This gives the SDK project
 a direct callable entry without inventing an argument-injection hosting ABI.

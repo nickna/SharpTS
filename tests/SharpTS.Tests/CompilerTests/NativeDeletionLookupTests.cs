@@ -65,7 +65,7 @@ public sealed class NativeDeletionLookupTests
             Assert.Equal(type.GetMethod("$EnsureFields", DynamicFlags),
                 dynamicFields.Invoke(null, [type, "$EnsureFields", DynamicFlags]));
         }
-        Assert.NotNull(dynamicFields.Invoke(null, [saved.GetType("Owner"), "$EnsureFields", DynamicFlags]));
+        Assert.NotNull(dynamicFields.Invoke(null, [NativeSourceTypeLookup.Find(saved, "Owner"), "$EnsureFields", DynamicFlags]));
         var error = Assert.Throws<TargetInvocationException>(() => property.Invoke(null, [typeof(double), null, StaticFlags]));
         Assert.Equal("name", Assert.IsType<ArgumentNullException>(error.InnerException).ParamName);
     }
@@ -88,7 +88,7 @@ public sealed class NativeDeletionLookupTests
             Refused(() => property.Invoke(null, [typeof(Foreign), nameof(Foreign.Value), StaticFlags]));
             Refused(() => property.Invoke(null, [typeof(double), "x", BindingFlags.Public | BindingFlags.Instance]));
             Refused(() => dynamicFields.Invoke(null, [typeof(Foreign), "$EnsureFields", DynamicFlags]));
-            Refused(() => dynamicFields.Invoke(null, [saved.GetType("Owner"), "Other", DynamicFlags]));
+            Refused(() => dynamicFields.Invoke(null, [NativeSourceTypeLookup.Find(saved, "Owner"), "Other", DynamicFlags]));
         }
     }
 
