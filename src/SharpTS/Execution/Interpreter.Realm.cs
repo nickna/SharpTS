@@ -690,7 +690,7 @@ public partial class Interpreter
                 ? intrinsic
                 : _globalConstants.TryGetValue(name, out var global)
                     && (global is SharpTSBuiltInConstructor or IBuiltInTypeConstructor || name is
-                        BuiltInNames.ParseInt or BuiltInNames.ParseFloat or BuiltInNames.Eval
+                        BuiltInNames.ParseInt or BuiltInNames.ParseFloat or BuiltInNames.Eval or BuiltInNames.IsNaN
                         or BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity)
                         ? global
                         : null);
