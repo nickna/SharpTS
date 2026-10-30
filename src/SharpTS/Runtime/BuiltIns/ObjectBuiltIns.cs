@@ -2390,7 +2390,8 @@ public static partial class ObjectBuiltIns
         SharpTSArguments => interp?.GetObjectPrototype(),
         SharpTSArray => interp?.GetArrayPrototype(),
         SharpTSPromiseSubclassInstance promiseSub => promiseSub.Klass.Prototype,
-        SharpTSPromise => interp?.GetPromisePrototype(),
+        SharpTSPromise promise => promise.IntrinsicConstructor?.PromiseRealm?.Prototype
+            ?? interp?.GetPromisePrototype(),
         // ECMA-262 §22.2.6: a RegExp instance's [[Prototype]] is the
         // per-realm RegExp.prototype object, so `Object.getPrototypeOf(/x/)
         // === RegExp.prototype` (the from-regexp-like tests assert this).
@@ -2410,16 +2411,19 @@ public static partial class ObjectBuiltIns
         // initially inherits Object.prototype, but has an ordinary mutable link.
         SharpTSFunctionPrototype { HasExplicitPrototype: true } functionPrototype
             => functionPrototype.ExplicitPrototype,
-        SharpTSFunctionPrototype => interp?.GetObjectPrototype(),
+        SharpTSFunctionPrototype functionPrototype => functionPrototype.RealmObjectPrototype ?? interp?.GetObjectPrototype(),
         SharpTSArrayPrototype => interp?.GetObjectPrototype(),
-        SharpTSPromisePrototype => interp?.GetObjectPrototype(),
+        SharpTSPromisePrototype promisePrototype
+            => (promisePrototype.RealmConstructor as SharpTSBuiltInConstructor)?.PromiseRealm?.ObjectPrototype
+                ?? interp?.GetObjectPrototype(),
         SharpTSStringPrototype => interp?.GetObjectPrototype(),
         SharpTSClassPrototype { HasExplicitPrototype: true } classPrototype
             => classPrototype.ExplicitPrototype,
         SharpTSClassPrototype classPrototype when ReferenceEquals(classPrototype.Class.Superclass, SharpTSArrayClass.ArrayBase)
             => interp?.GetArrayPrototype(),
         SharpTSClassPrototype classPrototype when ReferenceEquals(classPrototype.Class.Superclass, SharpTSPromiseClass.PromiseBase)
-            => interp?.GetPromisePrototype(),
+            => (classPrototype.Class as SharpTSPromiseClass)?.IntrinsicParentConstructor?.PromiseRealm?.Prototype
+                ?? interp?.GetPromisePrototype(),
         SharpTSClassPrototype classPrototype
             => (object?)classPrototype.Class.Superclass?.Prototype ?? interp?.GetObjectPrototype(),
         // The Number prototype object is ordinary and inherits from this realm's
@@ -2459,13 +2463,17 @@ public static partial class ObjectBuiltIns
         SharpTSClass klass when ReferenceEquals(klass.Superclass, SharpTSArrayClass.ArrayBase)
             => interp?.GetArrayGlobal(),
         SharpTSClass klass when ReferenceEquals(klass.Superclass, SharpTSPromiseClass.PromiseBase)
-            => Interpreter.PromiseGlobalValue,
+            => (klass as SharpTSPromiseClass)?.IntrinsicParentConstructor ?? interp?.PromiseGlobalValue,
         SharpTSClass klass => (object?)klass.Superclass ?? interp?.GetFunctionPrototype(),
         SharpTSArrayGlobal { HasExplicitPrototype: true } arrayGlobal => arrayGlobal.ExplicitPrototype,
+        SharpTSBuiltInConstructor constructor when Interpreter.GetPromiseConstructorState(constructor) is { } promiseRealm
+            => promiseRealm.FunctionPrototype,
         ISharpTSCallable function when FunctionObjectProperties.TryGetExplicitPrototype(function, interp, out var prototype)
             => prototype,
         ISharpTSGeneratorFunctionValue generator when interp is not null
             => generator.FunctionProperties.GetFunctionPrototype(interp),
+        BuiltInAsyncMethod { DefaultPromiseConstructor.PromiseRealm: { } promiseRealm }
+            => promiseRealm.FunctionPrototype,
         ISharpTSCallable => interp?.GetFunctionPrototype(),
         _ => null
     };

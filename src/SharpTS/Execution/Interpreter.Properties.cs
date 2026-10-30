@@ -174,8 +174,8 @@ public partial class Interpreter
             return BuiltInConstructorFactory.TryCreate(BuiltInNames.Blob, [.. args], this);
         if (callable is SharpTSFileConstructor)
             return BuiltInConstructorFactory.TryCreate(BuiltInNames.File, [.. args], this);
-        if (callable is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise })
-            return CreatePromiseFromExecutor(args.Count > 0 ? args[0] : SharpTSUndefined.Instance);
+        if (callable is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise } promiseConstructor)
+            return CreatePromiseFromExecutor(args.Count > 0 ? args[0] : SharpTSUndefined.Instance, promiseConstructor);
         if (callable is SharpTSArrayGlobal or SharpTSBuiltInConstructor { Name: BuiltInNames.Array })
         {
             var prototype = GetPropertyValue(newTarget, "prototype");
@@ -409,7 +409,9 @@ public partial class Interpreter
     {
         // Match value-position namespace reads before selecting the canonical
         // guest function (notably process.hrtime and its native child methods).
-        if (member is BuiltInMethod && _globalConstants.TryGetValue(namespaceName, out var owner))
+        if (member is BuiltInMethod promiseMethod && namespaceName == BuiltInNames.Promise)
+            return PromiseRealmState.LocalizeMethod(promiseMethod);
+        else if (member is BuiltInMethod && _globalConstants.TryGetValue(namespaceName, out var owner))
             member = BindBuiltInMember(member, owner);
         return LocalizeBuiltInValue(member);
     }
@@ -704,7 +706,9 @@ public partial class Interpreter
                     && nativeConstructor.GetMember(name) is { } nativeStatic)
                     return nativeStatic is BuiltInMethod { IsConstant: true } constant
                         ? constant.ConstantValue
-                        : nativeStatic;
+                        : nativeStatic is BuiltInMethod intrinsicMethod
+                            && GetPromiseConstructorState(nativeConstructor) is { } realm
+                            ? realm.LocalizeMethod(intrinsicMethod) : nativeStatic;
             }
 
             if (current is ISharpTSCallable callable)
@@ -718,7 +722,7 @@ public partial class Interpreter
 
                 // Continue ordinary Get through the live intrinsic chain with
                 // the original Receiver, including an explicit null parent.
-                current = GetFunctionPrototype();
+                current = GetPromiseConstructorState(callable)?.FunctionPrototype ?? GetFunctionPrototype();
                 continue;
             }
 
@@ -1652,10 +1656,12 @@ public partial class Interpreter
                 if (promiseMethod != null)
                     return RuntimeValue.FromObject(SharpTSClass.BindMethodToReceiver(promiseMethod, promiseSub));
             }
+            if (memberName == "constructor")
+                return RuntimeValue.FromObject(promise.IntrinsicConstructor ?? PromiseGlobalValue);
             if (memberName is "then" or "catch" or "finally")
             {
                 return RuntimeValue.FromBoxed(
-                    GetPromisePrototype().GetMember(memberName)
+                    GetPromiseMethodPrototype(promise).GetMember(memberName)
                     ?? SharpTSUndefined.Instance);
             }
         }
@@ -2642,19 +2648,21 @@ public partial class Interpreter
             // ECMA-262 §27.2.3.1: %Promise%.prototype. Without this, `Promise.prototype`
             // read as undefined and every Promise/prototype/* access died on it.
             if (memberName == "prototype" && ctor.Name == BuiltInNames.Promise)
-                return GetPromisePrototype();
+                return GetPromiseConstructorState(ctor)?.Prototype ?? GetPromisePrototype();
             if (memberName == "prototype" && ctor.Name == BuiltInNames.Symbol)
                 return GetSymbolPrototype();
             if (memberName == "prototype" && ctor.Name == BuiltInNames.Date)
                 return GetDatePrototype();
             var ctorMember = ctor.GetMember(memberName);
+            if (ctorMember is BuiltInMethod intrinsicMethod && GetPromiseConstructorState(ctor) is { } promiseRealm)
+                ctorMember = promiseRealm.LocalizeMethod(intrinsicMethod);
             // Materialize constant-wrapping members (e.g. Symbol.species via an
             // alias: `const S = Symbol; S.species`) the same way the syntactic
             // path in EvaluateGet does — otherwise the alias path returns the
             // BuiltInMethod wrapper and identity with the direct form breaks.
             if (ctorMember is BuiltInMethod { IsConstant: true } ctorConstant)
                 return ctorConstant.CallBoxed(this, []);
-            var functionPrototype = GetFunctionPrototype();
+            var functionPrototype = GetPromiseConstructorState(ctor)?.FunctionPrototype ?? GetFunctionPrototype();
             if (functionPrototype.GetExtraGetter(memberName) is { } inheritedGetter)
                 return BindAccessorToObject(inheritedGetter, ctor).CallBoxed(this, []);
             if (functionPrototype.HasExtra(memberName))
@@ -2739,6 +2747,11 @@ public partial class Interpreter
                 if (promiseMethod != null)
                     return SharpTSClass.BindMethodToReceiver(promiseMethod, promiseSub);
             }
+            if (memberName == "constructor")
+                return promise.IntrinsicConstructor ?? PromiseGlobalValue;
+            if (memberName is "then" or "catch" or "finally")
+                return GetPromiseMethodPrototype(promise).GetMember(memberName)
+                    ?? SharpTSUndefined.Instance;
         }
 
         // Callable objects inherit guest-defined fields from this realm's

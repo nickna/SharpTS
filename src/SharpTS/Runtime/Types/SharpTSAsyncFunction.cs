@@ -118,7 +118,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ISharpTSFunctionObjec
         // a thenable resolving with the current async result rejects itself.
         // Inline settlement keeps continuations visible to the event loop.
         var completion = new TaskCompletionSource<object?>();
-        var promise = new SharpTSPromise(completion.Task);
+        var promise = new SharpTSPromise(completion.Task) { IntrinsicConstructor = interpreter.PromiseGlobalValue };
 
         // An async function runs synchronously until its first suspension, but calling it
         // still returns to the caller's lexical environment immediately. ExecuteBlockAsync

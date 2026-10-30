@@ -2291,6 +2291,7 @@ public partial class Interpreter
 
         // Resolve superclass if present
         object? superclass = null;
+        SharpTSBuiltInConstructor? intrinsicPromiseParent = null;
         if (classExpr.SuperclassExpr != null)
         {
             superclass = (await ctx.EvaluateExprAsync(classExpr.SuperclassExpr)).ToObject();
@@ -2301,8 +2302,9 @@ public partial class Interpreter
                 superclass = SharpTSArrayClass.ArrayBase;
             }
             // `extends Promise` (#242): same substitution, mirroring VisitClass.
-            if (superclass is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise })
+            if (superclass is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise } promiseParent)
             {
+                intrinsicPromiseParent = promiseParent;
                 superclass = SharpTSPromiseClass.PromiseBase;
             }
             if (superclass is not SharpTSClass)
@@ -2570,6 +2572,8 @@ public partial class Interpreter
             klass.SetInferredName(inferredName);
             klass.BindPrivateMemberOwners();
             klass.InitializerEnvironment = classEnv;
+            if (klass is SharpTSPromiseClass promiseClass)
+                promiseClass.IntrinsicParentConstructor = intrinsicPromiseParent;
             klass.OrderedInstanceFields = classExpr.Fields.Where(field => !field.IsStatic && !field.IsDeclare)
                 .SelectMany(field => (field.IsPrivate ? instancePrivateFields : instanceFields)
                     .Where(captured => captured.Name == field.Name)).ToList();

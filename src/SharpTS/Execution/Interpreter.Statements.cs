@@ -2167,6 +2167,7 @@ public partial class Interpreter
         }
 
         object? superclass = null;
+        SharpTSBuiltInConstructor? intrinsicPromiseParent = null;
         if (classStmt.SuperclassExpr != null)
         {
             superclass = (await ctx.EvaluateExprAsync(classStmt.SuperclassExpr)).ToObject();
@@ -2182,8 +2183,9 @@ public partial class Interpreter
 
             // `extends Promise` (#242): same substitution for the Promise
             // constructor sentinel.
-            if (superclass is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise })
+            if (superclass is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise } promiseParent)
             {
+                intrinsicPromiseParent = promiseParent;
                 superclass = SharpTSPromiseClass.PromiseBase;
             }
 
@@ -2513,6 +2515,8 @@ public partial class Interpreter
 
         klass.BindPrivateMemberOwners();
         klass.InitializerEnvironment = _environment;
+        if (klass is SharpTSPromiseClass promiseClass)
+            promiseClass.IntrinsicParentConstructor = intrinsicPromiseParent;
         if (classStmt.Name.Lexeme == BuiltInNames.EventEmitter
             && Modules.Stdlib.Providers.EmbeddedStdlibProvider.TryExtractSpecifier(_currentModule?.Path ?? "") == "events")
             klass.NativeConstructionTarget = SharpTSEventEmitterConstructor.Instance;

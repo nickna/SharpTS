@@ -5,28 +5,43 @@ namespace SharpTS.Execution;
 
 public partial class Interpreter
 {
-    private SharpTSObject? _promiseConstructorSymbolProperties;
-
     // The internal superclass view and the public intrinsic are two views of
     // the same Promise constructor. Never recognize a guest name as that owner.
     internal bool TryGetPromiseConstructorSymbolProperties(object? owner, out SharpTSObject properties)
     {
-        bool isPublic = owner is SharpTSBuiltInConstructor && ReferenceEquals(owner, PromiseGlobalValue);
+        var realm = GetPromiseConstructorState(owner);
         bool isInternal = owner is SharpTSPromiseClass && ReferenceEquals(owner, SharpTSPromiseClass.PromiseBase);
-        if (!isPublic && !isInternal)
+        if (realm is null && !isInternal)
         {
             properties = null!;
             return false;
         }
 
-        properties = _promiseConstructorSymbolProperties ??= CreatePromiseConstructorSymbolProperties();
+        properties = (realm ?? PromiseRealmState).SymbolProperties;
         return true;
     }
 
-    private static SharpTSObject CreatePromiseConstructorSymbolProperties()
+    private SharpTSPromisePrototype GetPromiseMethodPrototype(SharpTSPromise promise)
+    {
+        if (GetPromiseConstructorState(promise.IntrinsicConstructor) is { } realm)
+            return realm.Prototype;
+        if (promise is SharpTSPromiseSubclassInstance subclass)
+        {
+            for (SharpTSClass? owner = subclass.Klass; owner is not null; owner = owner.Superclass)
+            {
+                if (owner is SharpTSPromiseClass { IntrinsicParentConstructor: { } parent }
+                    && GetPromiseConstructorState(parent) is { } parentRealm)
+                    return parentRealm.Prototype;
+            }
+        }
+        return GetPromisePrototype();
+    }
+
+    internal static SharpTSObject CreatePromiseConstructorSymbolProperties(SharpTSFunctionPrototype functionPrototype)
     {
         var properties = new SharpTSObject([]);
         var getter = new PromiseSpeciesGetter();
+        FunctionObjectProperties.SetExplicitPrototype(getter.OwnPropertyStorage, functionPrototype);
         properties.DefineProperty(SharpTSSymbol.Species, new SharpTSPropertyDescriptor
         {
             Get = getter,

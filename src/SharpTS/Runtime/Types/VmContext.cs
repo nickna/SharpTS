@@ -161,9 +161,18 @@ public static class VmContext
         }
     }
 
+    internal static void ApplyPromiseIntrinsicState(object? contextObject, Interpreter interpreter)
+    {
+        if (contextObject is null) return;
+        var marker = _contexts.GetOrCreateValue(contextObject);
+        marker.PromiseRealm ??= interpreter.PromiseRealmState;
+        interpreter.UsePromiseIntrinsicState(marker.PromiseRealm);
+    }
+
     private sealed class VmContextMarker
     {
         public VmContextOptions? Options { get; set; }
+        internal PromiseIntrinsicState? PromiseRealm { get; set; }
     }
 }
 

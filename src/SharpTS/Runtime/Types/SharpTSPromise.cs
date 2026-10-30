@@ -23,6 +23,8 @@ public class SharpTSPromise : ITypeCategorized
 
     private readonly Task<object?> _task;
 
+    internal SharpTSBuiltInConstructor? IntrinsicConstructor { get; init; }
+
     /// <summary>
     /// Suppresses SharpTS's legacy implicit wait for a promise-valued top-level
     /// expression. ECMAScript never performs that wait; this flag is needed for

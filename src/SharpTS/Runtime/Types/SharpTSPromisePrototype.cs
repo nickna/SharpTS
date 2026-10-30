@@ -23,6 +23,8 @@ public sealed class SharpTSPromisePrototype : ISharpTSMutableBuiltIn
 
     internal SharpTSPromisePrototype() { }
 
+    internal ISharpTSCallable? RealmConstructor { get; init; }
+
     private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn);
     private readonly Dictionary<string, ISharpTSCallable> _builtIns = [];
 
@@ -47,10 +49,15 @@ public sealed class SharpTSPromisePrototype : ISharpTSMutableBuiltIn
     public object? GetMember(string name)
     {
         if (_overlay.TryGetOverride(name, out var value)) return value;
+        if (name == "constructor" && RealmConstructor is not null) return RealmConstructor;
         // The unbound form: PromiseBuiltIns.GetMember binds each method to a concrete
         // promise, which is wrong for a read off the prototype itself.
         if (_builtIns.TryGetValue(name, out var cached)) return cached;
         var member = PromiseBuiltIns.GetPrototypeMethod(name);
+        if (member is BuiltInMethod method && RealmConstructor is SharpTSBuiltInConstructor { PromiseRealm: { } realm })
+            member = realm.LocalizeMethod(method);
+        if (member is BuiltInAsyncMethod asyncMethod)
+            asyncMethod.DefaultPromiseConstructor = RealmConstructor as SharpTSBuiltInConstructor;
         if (member != null) _builtIns[name] = member;
         return member;
     }

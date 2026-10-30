@@ -543,7 +543,7 @@ public partial class Interpreter
     /// </summary>
     /// <param name="executor">The executor function that receives resolve and reject callbacks.</param>
     /// <returns>A SharpTSPromise that will be resolved or rejected based on the executor's behavior.</returns>
-    private SharpTSPromise CreatePromiseFromExecutor(object? executor)
+    private SharpTSPromise CreatePromiseFromExecutor(object? executor, SharpTSBuiltInConstructor? constructor = null)
     {
         if (executor is not ISharpTSCallable callable)
         {
@@ -555,7 +555,7 @@ public partial class Interpreter
         // subclass bridge's super(executor) path (#242).
         var tcs = new TaskCompletionSource<object?>();
         SharpTSPromiseClass.RunExecutor(this, callable, tcs);
-        return new SharpTSPromise(tcs.Task);
+        return new SharpTSPromise(tcs.Task) { IntrinsicConstructor = constructor ?? PromiseGlobalValue };
     }
 
     #endregion

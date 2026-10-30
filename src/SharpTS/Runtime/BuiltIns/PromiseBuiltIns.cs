@@ -52,7 +52,7 @@ public static class PromiseBuiltIns
             // (Subclass instances report their own class — see
             // Interpreter.Properties.cs. then/catch/finally now consult
             // SpeciesConstructor via the SpeciesResolver pre-step, #221/#350.)
-            "constructor" => Interpreter.PromiseGlobalValue,
+            "constructor" => receiver.IntrinsicConstructor ?? Interpreter.PromiseConstructorSentinel,
 
             _ => null
         };
@@ -75,7 +75,7 @@ public static class PromiseBuiltIns
         "finally" => BuiltInMethod.CreateV2("finally", 0, int.MaxValue, FinallyInvoke)
             .WithSpecLength(1)
             .AsNonConstructor(),
-        "constructor" => Interpreter.PromiseGlobalValue as ISharpTSCallable,
+        "constructor" => Interpreter.PromiseConstructorSentinel,
         _ => null,
     };
 
@@ -224,7 +224,8 @@ public static class PromiseBuiltIns
             (interp, receiver) =>
             {
                 RequireConstructorReceiver(receiver);
-                if (ReferenceEquals(receiver, Interpreter.PromiseGlobalValue)
+                if ((Interpreter.GetPromiseConstructorState(receiver) is not null
+                    || ReferenceEquals(receiver, Interpreter.PromiseConstructorSentinel))
                     || receiver is SharpTSPromiseClass promiseClass
                         && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase))
                 {
@@ -367,9 +368,18 @@ public static class PromiseBuiltIns
 
         // The receiver's own class drives species: a subclass reads its static
         // @@species (#221); a plain promise stays %Promise% (null factory).
-        return receiver is SharpTSPromiseSubclassInstance sub
-            ? SpeciesMaterializer(ResolveSpeciesConstructor(sub.Klass, interp), interp)
-            : null;
+        if (receiver is SharpTSPromiseSubclassInstance sub)
+            return SpeciesMaterializer(ResolveSpeciesConstructor(sub.Klass, interp), interp);
+        if (!receiver.HasOwnProperty("constructor") && receiver.IntrinsicConstructor is { } intrinsic
+            && Interpreter.GetPromiseConstructorState(intrinsic) is not null)
+        {
+            object? species = interp.GetSymbolPropertyValue(intrinsic, SharpTSSymbol.Species);
+            if (species is null or SharpTSUndefined) return null;
+            if (Interpreter.GetPromiseConstructorState(species) is { } realm)
+                return (_, task) => new SharpTSPromise(task) { IntrinsicConstructor = realm.Constructor };
+            return SpeciesMaterializer(species, interp);
+        }
+        return null;
     }
 
     /// <summary>
@@ -397,6 +407,8 @@ public static class PromiseBuiltIns
         => species switch
         {
             null => null,
+            SharpTSBuiltInConstructor intrinsic when Interpreter.GetPromiseConstructorState(intrinsic) is not null
+                => (_, task) => new SharpTSPromise(task) { IntrinsicConstructor = intrinsic },
             _ when IsConstructorSpecies(species) =>
                 PreparePromiseCapability(interp, species),
             _ => throw new Exceptions.ThrowException(new SharpTSTypeError(
@@ -589,7 +601,8 @@ public static class PromiseBuiltIns
         return species switch
         {
             null or SharpTSUndefined => null,                                  // → %Promise%
-            SharpTSBuiltInConstructor { Name: BuiltInNames.Promise } => null,  // `return Promise`
+            SharpTSBuiltInConstructor intrinsic when Interpreter.GetPromiseConstructorState(intrinsic) is not null => intrinsic,
+            SharpTSBuiltInConstructor { Name: BuiltInNames.Promise } => null,  // legacy host template
             SharpTSPromiseClass sc when ReferenceEquals(sc, SharpTSPromiseClass.PromiseBase) => null,
             // A Promise subclass or a general non-Promise class flows to
             // SpeciesMaterializer, which prepares NewPromiseCapability before
@@ -1049,7 +1062,8 @@ public static class PromiseBuiltIns
     private static PromiseCapability CreateCombinatorCapability(
         Interpreter interpreter, object? constructor)
     {
-        bool isBaseConstructor = ReferenceEquals(constructor, Interpreter.PromiseGlobalValue)
+        bool isBaseConstructor = (Interpreter.GetPromiseConstructorState(constructor) is not null
+            || ReferenceEquals(constructor, Interpreter.PromiseConstructorSentinel))
             || constructor is SharpTSPromiseClass promiseClass
                 && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase);
         if (!isBaseConstructor)
@@ -1065,7 +1079,10 @@ public static class PromiseBuiltIns
         // event-loop work; deferring this hop to the ThreadPool leaves a brief
         // interval in which WaitForPromise can incorrectly see a quiescent loop.
         var completion = new TaskCompletionSource<object?>();
-        var promiseObject = new SharpTSPromise(completion.Task);
+        var promiseObject = new SharpTSPromise(completion.Task)
+        {
+            IntrinsicConstructor = constructor as SharpTSBuiltInConstructor ?? interpreter.PromiseGlobalValue,
+        };
         bool alreadyResolved = false;
         var resolveCallback = new PromiseResolveCallback(value =>
         {
@@ -1560,14 +1577,18 @@ public static class PromiseBuiltIns
             return promise;
         }
 
-        bool isBaseConstructor = ReferenceEquals(receiver, Interpreter.PromiseGlobalValue)
+        bool isBaseConstructor = (Interpreter.GetPromiseConstructorState(receiver) is not null
+                    || ReferenceEquals(receiver, Interpreter.PromiseConstructorSentinel))
             || receiver is SharpTSPromiseClass promiseClass
                 && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase);
         if (isBaseConstructor)
         {
             var completion = new TaskCompletionSource<object?>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
-            var result = new SharpTSPromise(completion.Task);
+            var result = new SharpTSPromise(completion.Task)
+            {
+                IntrinsicConstructor = receiver as SharpTSBuiltInConstructor ?? interpreter.PromiseGlobalValue,
+            };
             ResolveThenableIntoCapability(interpreter, completion, value);
             return result;
         }
@@ -1587,11 +1608,15 @@ public static class PromiseBuiltIns
     {
         RequireConstructorReceiver(receiver);
         var reason = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
-        bool isBaseConstructor = ReferenceEquals(receiver, Interpreter.PromiseGlobalValue)
+        bool isBaseConstructor = (Interpreter.GetPromiseConstructorState(receiver) is not null
+                    || ReferenceEquals(receiver, Interpreter.PromiseConstructorSentinel))
             || receiver is SharpTSPromiseClass promiseClass
                 && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase);
         if (isBaseConstructor)
-            return SharpTSPromise.Reject(reason);
+            return new SharpTSPromise(Task.FromException<object?>(new SharpTSPromiseRejectedException(reason)))
+            {
+                IntrinsicConstructor = receiver as SharpTSBuiltInConstructor ?? interpreter.PromiseGlobalValue,
+            };
 
         var (promiseObject, _, rejectFn) = CreatePromiseCapability(interpreter, receiver);
         FunctionBuiltIns.CallWithThis(

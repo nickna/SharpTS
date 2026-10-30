@@ -201,6 +201,7 @@ public static class VmModuleInterpreter
         var subInterpreter = parentInterpreter != null
             ? new Interp(parentInterpreter.Out, parentInterpreter.Error)
             : new Interp();
+        VmContext.ApplyPromiseIntrinsicState(contextObject, subInterpreter);
         var env = subInterpreter.Environment;
 
         foreach (var (key, value) in contextProps)
@@ -285,6 +286,7 @@ public static class VmModuleInterpreter
         var subInterpreter = parentInterpreter != null
             ? new Interp(parentInterpreter.Out, parentInterpreter.Error)
             : new Interp();
+        VmContext.ApplyPromiseIntrinsicState(contextObject, subInterpreter);
         var env = subInterpreter.Environment;
 
         foreach (var (key, value) in contextProps)
@@ -458,6 +460,10 @@ public static class VmModuleInterpreter
         var subInterpreter = parentInterpreter != null
             ? new Interp(parentInterpreter.Out, parentInterpreter.Error)
             : new Interp();
+        if (parsingContext is not null)
+            VmContext.ApplyPromiseIntrinsicState(parsingContext, subInterpreter);
+        else if (parentInterpreter is not null)
+            subInterpreter.UsePromiseIntrinsicState(parentInterpreter.PromiseRealmState);
         var env = subInterpreter.Environment;
         if (dynamicImportHook != null)
             subInterpreter.SetVmDynamicImportHook(dynamicImportHook);

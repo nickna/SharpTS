@@ -64,6 +64,8 @@ public class SharpTSPromiseClass : SharpTSClass
     /// </summary>
     public static readonly SharpTSPromiseClass PromiseBase = new();
 
+    internal SharpTSBuiltInConstructor? IntrinsicParentConstructor { get; set; }
+
     private SharpTSPromiseClass()
         : base(
             "Promise",
