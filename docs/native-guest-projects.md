@@ -1131,3 +1131,32 @@ lookup refusal is tracked by #3121, and the ordinary compiled generic superclass
 prototype identity defect is tracked by #3122. Verification preserves those
 separate baseline observations rather than changing their expected JavaScript
 behavior.
+
+## Closed source generic contexts
+
+Native output can bound a source generic family when all actual emitted
+construction contexts are closed. The certificate retains the actual allocation
+operands and completed caller bodies, constructor-value normalization operations,
+literal initializer operands, canonical mappings, and source invocation selections.
+Equivalent type operands are compared by definition and argument identity,
+including the distinction between vector and rank-one arrays. Source annotations
+do not supply construction authority.
+
+The initializer, static field/presence, constructor member, receiver initializer,
+prototype store, and deletion operations each retain their own member/body
+evidence and original loaded binder queries. A complete family supplies literal
+closed owners to those queries; it does not supply member existence or replace
+their flags. Closed instantiations keep their independent CLR static state and
+initializer behavior. The direct `Box<number>` control passes strict native
+publication with zero findings, removing the previous ten findings.
+
+Unknown dynamic construction, Reflect/bound/newTarget paths, unclassified source
+calls, and selected foreign CLR operations retain the whole corresponding legacy
+operation. A foreign scalar return signature does not prove the foreign body's
+reflection effects. Unused ambient declarations add no selected-operation proof
+or blocker. Missing source interface/base metadata also remains explicitly legacy;
+the persisted inherited-generic metadata limitation is not bypassed here.
+
+Source catalog/type creation phases and ordinary managed emission stay unchanged.
+This certificate is a bounded direct-construction profile, not general dynamic
+generic closure support.

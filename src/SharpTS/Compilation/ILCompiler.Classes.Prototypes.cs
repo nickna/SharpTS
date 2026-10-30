@@ -148,7 +148,7 @@ public partial class ILCompiler
     private void EmitClassPrototypeRegistration(
         ILGenerator il,
         TypeBuilder typeBuilder,
-        int constructorLength)
+        int constructorLength, MethodBase? caller = null)
     {
         DefineClassPrototypeConstructor(typeBuilder);
 
@@ -178,12 +178,12 @@ public partial class ILCompiler
             // The guest prototype exists independently of its abstract CLR
             // owner. Concrete descendants still chain the bookkeeping constructor.
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-            NativePrototypeFieldsLookup.EmitPrototypeCreate(_nativePrototypeFields, il, prototypeEmission, _runtime.ObjectStorage.Constructor);
+            NativePrototypeFieldsLookup.EmitPrototypeCreate(_nativePrototypeFields, il, prototypeEmission, _runtime.ObjectStorage.Constructor, _nativeClosedFamilies, caller);
         }
         else
         {
             il.Emit(OpCodes.Ldnull);
-            NativePrototypeFieldsLookup.EmitPrototypeCreate(_nativePrototypeFields, il, prototypeEmission, constructor);
+            NativePrototypeFieldsLookup.EmitPrototypeCreate(_nativePrototypeFields, il, prototypeEmission, constructor, _nativeClosedFamilies, caller);
         }
 
         Type? basePrototypeType = null;

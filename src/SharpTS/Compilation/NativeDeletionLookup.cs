@@ -46,16 +46,18 @@ internal sealed class NativeDeletionLookup
     }
 
     internal void CompleteEmission(NativeRuntimeClassInitialization initializers, NativePropertyLookupCatalog properties,
-        NativeSourceOwnerCatalog sources, EmittedRuntime runtime)
+        NativeSourceOwnerCatalog sources, EmittedRuntime runtime, NativeClosedSourceFamilySnapshot? families = null)
     {
         if (IsComplete || !initializers.IsComplete || !properties.IsComplete || !sources.IsComplete ||
             !ReferenceEquals(initializers.Initialize.Module, _owner.Module) || !ReferenceEquals(properties.FindGetter.Module, _owner.Module) ||
             !ReferenceEquals(sources.Module, _owner.Module) || !ReferenceEquals(sources.Contract, runtime.ObjectFields.Interface) ||
             !ReferenceEquals(runtime.Errors.Type.Module, _owner.Module))
             throw new InvalidOperationException("Native deletion lookup requires completed metadata from this exact output.");
+        if (families is not null && !ReferenceEquals(families.Module, _owner.Module))
+            throw new InvalidOperationException("Closed deletion contexts must belong to this output.");
         UsesLegacy = initializers.UsesLegacy;
         _staticOwners = Array.AsReadOnly(initializers.Owners.OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray());
-        _dynamicOwners = Array.AsReadOnly(properties.Inventory.Select(entry => entry.Owner).Append(runtime.ObjectStorage.Type)
+        _dynamicOwners = Array.AsReadOnly(properties.Inventory.SelectMany(entry => families?.Expand(entry.Owner) ?? [entry.Owner]).Append(runtime.ObjectStorage.Type)
             .Distinct().OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray());
         EmitQuery(FindStaticProperty, _staticOwners, StaticFlags, "GetProperty", null, runtime.Errors);
         EmitQuery(FindDynamicFields, _dynamicOwners, DynamicFlags, "GetMethod", "$EnsureFields", runtime.Errors);

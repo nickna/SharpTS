@@ -71,14 +71,15 @@ public sealed class NativeDeletionLookupTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void UnprovedGenericInventoriesKeepTheCompleteOriginalOperations(bool generic)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void UnprovedGenericInventoriesKeepTheCompleteOriginalOperations(bool generic, bool unproved)
     {
-        var saved = Compile(generic ? "class Owner<T> { field:T; }" : "class Owner { field=1; }", true, out var compiler);
-        Assert.Equal(generic, compiler.NativeDeletion!.UsesLegacy);
+        var saved = Compile((generic ? "class Owner<T> { field:T; }" : "class Owner { field=1; }") + (unproved ? " const C:any=Owner; new C();" : ""), true, out var compiler);
+        Assert.Equal(unproved, compiler.NativeDeletion!.UsesLegacy);
         var property = Helper(saved, "FindStaticProperty"); var dynamicFields = Helper(saved, "FindDynamicFields");
-        if (generic)
+        if (unproved)
         {
             Assert.Equal(typeof(Foreign).GetProperty(nameof(Foreign.Value), StaticFlags), property.Invoke(null, [typeof(Foreign), nameof(Foreign.Value), StaticFlags]));
             Assert.Equal(typeof(Foreign).GetMethod("Other", DynamicFlags), dynamicFields.Invoke(null, [typeof(Foreign), "Other", DynamicFlags]));

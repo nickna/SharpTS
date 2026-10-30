@@ -717,7 +717,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(privateStorage.FieldType));
             il.Emit(OpCodes.Stsfld, EmitterTypeHelpers.SelfFieldReference(privateStorage));
         }
-        EmitClassPrototypeRegistration(il, typeBuilder, GetClassConstructorLength(classExpr.Methods));
+        EmitClassPrototypeRegistration(il, typeBuilder, GetClassConstructorLength(classExpr.Methods), cctor);
         il.Emit(OpCodes.Ret);
         EmitClassDefinitionInitializer(classExpr, typeBuilder);
     }

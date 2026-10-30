@@ -27,6 +27,8 @@ public partial class ILCompiler
     internal NativeMethodLookupCatalog? NativeMethods => _nativeMethodLookup;
     internal NativePropertyLookupCatalog? NativeProperties => _nativePropertyLookup;
     private NativeClrAdmission? _nativeClrAdmission;
+    private NativeClosedSourceFamilies? _nativeClosedFamilies;
+    internal NativeClosedSourceFamilies? NativeClosedFamilies => _nativeClosedFamilies;
     private TypeBuilder? _nativeAotEntryFacade;
     private NativeClassInitializationEmission? _nativeClassInitialization;
     private FunctionEmissionPolicy _functionEmissionPolicy = FunctionEmissionPolicy.Full;
@@ -56,7 +58,7 @@ public partial class ILCompiler
 
     private NativeClassInitializationEmission? GetNativeClassInitialization() =>
         !_nativeAotProjectOutput || _programType is null ? null :
-            _nativeClassInitialization ??= new(_programType, _types, _classes.GenericParameters);
+            _nativeClassInitialization ??= new(_programType, _types, _classes.GenericParameters, _nativeClosedFamilies);
 
     /// <summary>Enables the direct, C#-nameable guest entry used by native publish projects.</summary>
     internal void EnableNativeAotProjectOutput(NativeManagedReferenceClosure? references = null, AssemblyReferenceLoader? loader = null)

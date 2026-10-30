@@ -5,7 +5,8 @@ namespace SharpTS.Compilation;
 
 /// <summary>Emits declaration-site calls whose native class-initializer targets are literal closed types.</summary>
 internal sealed class NativeClassInitializationEmission(
-    TypeBuilder program, TypeProvider types, ClassGenericParameterRegistry parameters)
+    TypeBuilder program, TypeProvider types, ClassGenericParameterRegistry parameters,
+    NativeClosedSourceFamilies? families = null)
 {
     private int _nextStub;
     internal int LegacyFallbackCount { get; private set; }
@@ -38,6 +39,7 @@ internal sealed class NativeClassInitializationEmission(
         var done = il.DefineLabel();
         var throwInner = il.DefineLabel();
         il.BeginExceptionBlock();
+        int ownerOffset = il.ILOffset;
         il.Emit(OpCodes.Ldtoken, owner);
         il.Emit(OpCodes.Call, types.RuntimeHelpersRunClassConstructor);
         il.Emit(OpCodes.Leave, done);
@@ -54,11 +56,13 @@ internal sealed class NativeClassInitializationEmission(
         il.EndExceptionBlock();
         il.MarkLabel(done);
         il.Emit(OpCodes.Ret);
+        families?.RecordInitializerOperand(owner, stub, ownerOffset);
         destination.Emit(OpCodes.Call, stub);
         return true;
 
         bool UseLegacy()
         {
+            families?.RecordUnprovedInitializer(requestedOwner);
             LegacyFallbackCount++;
             return false;
         }

@@ -219,6 +219,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     public virtual void EmitExpression(Expr expr)
     {
+        using var familyInvocation = Ctx.NativeClosedFamilies?.Enter(expr, IL, Ctx.CurrentMethod);
         if (Ctx.NativeClrAdmission is null) { EmitExpressionCore(expr); return; }
         var previousExpression = CurrentSourceExpression;
         CurrentSourceExpression = expr;
@@ -1848,7 +1849,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 EmitOmittedArgument(ctorParams[i].ParameterType);
             }
 
-            IL.Emit(OpCodes.Newobj, targetCtor);
+            NativeClosedSourceFamilies.EmitAllocation(Ctx.NativeClosedFamilies, IL, targetCtor, Ctx.CurrentMethod);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
             SetStackUnknown();
         }
@@ -1950,7 +1951,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         for (int i = n.Arguments.Count; i < expectedParamCount; i++)
             EmitOmittedArgument(ctorParams[i].ParameterType);
 
-        IL.Emit(OpCodes.Newobj, classExprCtor);
+        NativeClosedSourceFamilies.EmitAllocation(Ctx.NativeClosedFamilies, IL, classExprCtor, Ctx.CurrentMethod);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
         SetStackUnknown();
     }

@@ -99,7 +99,7 @@ public partial class ILCompiler
         // ECMAScript creates Constructor.prototype as part of class evaluation.
         // Register it before user static fields/blocks so they can observe it.
         EmitClassPrototypeRegistration(
-            il, typeBuilder, GetClassConstructorLength(classStmt.Methods));
+            il, typeBuilder, GetClassConstructorLength(classStmt.Methods), cctor);
 
         var pendingFields = classStmt.Fields.Where(field => field.IsStatic && !field.IsPrivate && !field.IsDeclare
             && field.ComputedKey is null && field.Name.Lexeme is not ("name" or "length" or "prototype")

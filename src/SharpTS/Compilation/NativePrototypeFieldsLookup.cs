@@ -65,10 +65,10 @@ internal sealed class NativePrototypeFieldsLookup
     }
 
     internal static void EmitPrototypeCreate(NativePrototypeFieldsLookup? lookup, ILGenerator il,
-        PrototypeEmission? emission, ConstructorInfo constructor)
+        PrototypeEmission? emission, ConstructorInfo constructor, NativeClosedSourceFamilies? families = null, MethodBase? caller = null)
     {
         int offset = il.ILOffset;
-        EmitCarrierCreate(lookup, il, constructor);
+        EmitCarrierCreate(lookup, il, constructor, families, caller);
         if (lookup is null) return;
         if (emission is null || !lookup._prototypes.Contains(emission) || emission.Constructor is not null ||
             !ReferenceEquals(emission.Body, il) || offset <= emission.TokenOffset)
@@ -90,11 +90,12 @@ internal sealed class NativePrototypeFieldsLookup
         emission.Register = register; emission.RegisterOffset = offset;
     }
 
-    internal static void EmitCarrierCreate(NativePrototypeFieldsLookup? lookup, ILGenerator il, ConstructorInfo constructor)
+    internal static void EmitCarrierCreate(NativePrototypeFieldsLookup? lookup, ILGenerator il, ConstructorInfo constructor,
+        NativeClosedSourceFamilies? families = null, MethodBase? caller = null)
     {
         lookup?.EnsureMutable();
         int offset = il.ILOffset;
-        il.Emit(OpCodes.Newobj, constructor);
+        NativeClosedSourceFamilies.EmitAllocation(families, il, constructor, caller);
         lookup?._carriers.Add((constructor, il, offset));
     }
 
@@ -114,13 +115,15 @@ internal sealed class NativePrototypeFieldsLookup
     }
 
     internal void CompleteEmission(NativeSourceOwnerCatalog sources, NativeClrAdmission.CompletedIngressProof? ingress,
-        EmittedRuntime runtime, Type runtimeType)
+        EmittedRuntime runtime, Type runtimeType, NativeClosedSourceFamilySnapshot? families = null)
     {
         EnsureMutable();
         if (!sources.IsComplete || !ReferenceEquals(sources.Module, _owner.Module) ||
             !ReferenceEquals(runtime.NativePrototypeFields, this) ||
             ingress is not null && !ReferenceEquals(ingress.Module, _owner.Module))
             throw new InvalidOperationException("Prototype lookup requires completed metadata from this exact output.");
+        if (families is not null && !ReferenceEquals(families.Module, _owner.Module))
+            throw new InvalidOperationException("Closed prototype contexts must belong to this output.");
         if (ingress is null) _blockers.Add("CLR ingress admission has not completed");
         foreach (var result in _unprovedResults)
         {
@@ -150,7 +153,7 @@ internal sealed class NativePrototypeFieldsLookup
             Type allocated = prototype.Constructor.DeclaringType!;
             if ((builder.Attributes & TypeAttributes.Abstract) != 0 ? allocated != runtime.ObjectStorage.Type : allocated != prototype.Owner)
                 throw new InvalidOperationException("Prototype allocation must construct its actual source owner or abstract ordinary carrier.");
-            if (definition.IsGenericTypeDefinition)
+            if (definition.IsGenericTypeDefinition && families?.ContextsFor(definition) is null)
                 _blockers.Add($"Unproved owned generic prototype family: {definition.FullName}");
         }
         foreach (var store in _stores)
@@ -161,7 +164,12 @@ internal sealed class NativePrototypeFieldsLookup
             if (carrier.Body.ILOffset <= carrier.Offset || carrier.Constructor.DeclaringType is not { } type)
                 throw new InvalidOperationException("Prototype carriers require their actual completed allocation operation.");
             if (FunctionGenericParameterRegistry.ContainsUnboundType(type))
-                _blockers.Add($"Unproved owned prototype carrier: {type.FullName}");
+            {
+                Type definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
+                if (families?.ContextsFor(definition) is { } contexts)
+                    foreach (var context in contexts) owners.Add(context);
+                else _blockers.Add($"Unproved owned prototype carrier: {type.FullName}");
+            }
             else if (type is TypeBuilder builder && !builder.IsCreated())
                 throw new InvalidOperationException("Prototype carriers must be finalized before query emission.");
             else owners.Add(type);
@@ -178,7 +186,7 @@ internal sealed class NativePrototypeFieldsLookup
         if (runtime.NativeCallables is { IsComplete: true } callables)
         {
             foreach (var carrier in callables.Carriers)
-                if (!owners.Contains(carrier))
+                if (!(families?.ContextsFor(carrier) is { } contexts ? contexts.All(owners.Contains) : owners.Contains(carrier)))
                     _blockers.Add($"No completed allocation producer for admitted callable carrier: {carrier.FullName}");
         }
         else if (runtime.NativeCallables is not null)

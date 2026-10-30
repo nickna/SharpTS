@@ -49,13 +49,14 @@ public sealed class NativeConstructorMemberLookupTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void UnprovedGenericInventoriesRetainTheOriginalEnumeration(bool generic)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void UnprovedGenericInventoriesRetainTheOriginalEnumeration(bool generic, bool unproved)
     {
-        var saved = Compile(generic ? "class Owner<T> { static field=7; }" : "class Owner { static field=7; }", true, out var compiler);
-        Assert.Equal(generic, compiler.NativeConstructorMembers!.UsesLegacy);
-        if (generic) Assert.Equal(typeof(Foreign).GetMembers(Flags), Assert.IsType<MemberInfo[]>(Helper(saved).Invoke(null, [typeof(Foreign), Flags])));
+        var saved = Compile((generic ? "class Owner<T> { static field=7; }" : "class Owner { static field=7; }") + (unproved ? " const C:any=Owner; new C();" : ""), true, out var compiler);
+        Assert.Equal(unproved, compiler.NativeConstructorMembers!.UsesLegacy);
+        if (unproved) Assert.Equal(typeof(Foreign).GetMembers(Flags), Assert.IsType<MemberInfo[]>(Helper(saved).Invoke(null, [typeof(Foreign), Flags])));
         else
         {
             var error = Assert.Throws<TargetInvocationException>(() => Helper(saved).Invoke(null, [saved.GetType("Owner"), BindingFlags.Public | BindingFlags.Instance]));

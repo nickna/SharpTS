@@ -45,7 +45,8 @@ internal sealed class NativeConstructorActivationLookup
         il.Emit(OpCodes.Call, types.TypeGetTypeFromHandle);
         if (normalizeSourceGeneric && owner.IsGenericType)
             il.Emit(OpCodes.Callvirt, types.GetMethodNoParams(types.Type, "GetGenericTypeDefinition"));
-        catalog?._producers.Add(new(owner, kind, il, il.ILOffset, method, lookupOwner));
+        catalog?._producers.Add(new(owner, kind, il, il.ILOffset, method, lookupOwner)
+        { NormalizesSourceDefinition = normalizeSourceGeneric && owner.IsGenericType });
     }
 
     // Called only while emitting an existing exact-Type intrinsic arm, after its

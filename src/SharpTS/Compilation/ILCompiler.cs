@@ -756,6 +756,7 @@ public partial class ILCompiler
             _nativeSourceTypeNames = new();
             _nativeOwnedTypeDeclarations = NativeOwnedTypeDeclarations.Begin(_moduleBuilder);
             _nativeSourceOwners = new(_moduleBuilder, _types);
+            _nativeClosedFamilies = new(_moduleBuilder, _types);
             _nativeGenericMethodNormalization = new(_moduleBuilder, _types);
             _nativeConstructedBodies = new(_moduleBuilder, _types);
             _nativeConstructorFactories = new(_moduleBuilder, _types);
@@ -1288,14 +1289,21 @@ public partial class ILCompiler
         }
         _nativeSourceOwners?.CompleteEmission(_classes.GenericParameters, _classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
-        _nativeConstructorFactories?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        // Source expression, constructor-value and CLR conversion recorders are
+        // finished here. Late native completions emit metadata dispatch only.
+        // Keep the source catalog's creation phase unchanged while sealing the
+        // actual producer inventories before consumers finalize their tables.
+        _nativeClrAdmission?.Complete(_moduleBuilder);
         _nativeClassInitialization?.CompleteEmission();
+        _nativeConstructorActivation?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeClosedFamilies?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _nativeClrAdmission!);
+        _nativeConstructorFactories?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeNumericRest4Binding?.CompleteEmission();
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
         _nativeConstructedBodies?.CompleteEmission(_functions.GenericParameters, _nativeGenericMethodNormalization!, _newTargetBodies,
             _runtime.FunctionAttributes, _runtime.Errors);
         _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
-        _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime, _nativeClosedFamilies?.Completed);
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
         _nativeStaticFieldLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
         _nativeConstructorMembers?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
@@ -1303,10 +1311,9 @@ public partial class ILCompiler
         _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
         _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeMethodLookup?.CompleteEmission(_nativePropertyLookup!, _nativeSourceOwners!, _runtime.Errors, _runtime.FunctionValues.Type);
-        _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime);
+        _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime, _nativeClosedFamilies?.Completed);
         _nativeHasInMembers?.CompleteEmission(_nativeMethodLookup!, _nativeSourceOwners!, _runtime);
-        _nativeConstructorActivation?.CompleteEmission(_nativeSourceOwners!, _runtime);
-        _nativeReceiverInitializerLookup?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _runtime, _receiverInitializers);
+        _nativeReceiverInitializerLookup?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _runtime, _receiverInitializers, _nativeClosedFamilies?.Completed);
         if (_nativeEvaluatedConstructors is not null)
             _nativeEvaluatedConstructors.CompleteEmission(_nativeConstructorActivation!.CompletedSnapshot, _runtime);
         _programType.CreateType();
@@ -1316,11 +1323,10 @@ public partial class ILCompiler
         _runtime.JsonShapes.CompleteEmission();
         GetClassRegistry().NativeOwnProperties?.CompleteEmission();
         _runtime.Deployment.CompleteEmission();
-        _nativeClrAdmission?.Complete(_moduleBuilder);
         if (_nativeOwnerClosure is not null)
             _nativeOwnerClosure.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot,
                 _nativeClrAdmission?.CompletedIngress, _runtime);
-        _nativePrototypeFields?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeReceiverBinding!.RuntimeType);
+        _nativePrototypeFields?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeReceiverBinding!.RuntimeType, _nativeClosedFamilies?.Completed);
         _nativeTypedArrayBuffers?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeOwnedTypeDeclarations);
     }
 
@@ -1970,14 +1976,21 @@ public partial class ILCompiler
         }
         _nativeSourceOwners?.CompleteEmission(_classes.GenericParameters, _classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
-        _nativeConstructorFactories?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        // Source expression, constructor-value and CLR conversion recorders are
+        // finished here. Late native completions emit metadata dispatch only.
+        // Keep the source catalog's creation phase unchanged while sealing the
+        // actual producer inventories before consumers finalize their tables.
+        _nativeClrAdmission?.Complete(_moduleBuilder);
         _nativeClassInitialization?.CompleteEmission();
+        _nativeConstructorActivation?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeClosedFamilies?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _nativeClrAdmission!);
+        _nativeConstructorFactories?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeNumericRest4Binding?.CompleteEmission();
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
         _nativeConstructedBodies?.CompleteEmission(_functions.GenericParameters, _nativeGenericMethodNormalization!, _newTargetBodies,
             _runtime.FunctionAttributes, _runtime.Errors);
         _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
-        _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime, _nativeClosedFamilies?.Completed);
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
         _nativeStaticFieldLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
         _nativeConstructorMembers?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
@@ -1985,10 +1998,9 @@ public partial class ILCompiler
         _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
         _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeMethodLookup?.CompleteEmission(_nativePropertyLookup!, _nativeSourceOwners!, _runtime.Errors, _runtime.FunctionValues.Type);
-        _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime);
+        _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime, _nativeClosedFamilies?.Completed);
         _nativeHasInMembers?.CompleteEmission(_nativeMethodLookup!, _nativeSourceOwners!, _runtime);
-        _nativeConstructorActivation?.CompleteEmission(_nativeSourceOwners!, _runtime);
-        _nativeReceiverInitializerLookup?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _runtime, _receiverInitializers);
+        _nativeReceiverInitializerLookup?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _runtime, _receiverInitializers, _nativeClosedFamilies?.Completed);
         if (_nativeEvaluatedConstructors is not null)
             _nativeEvaluatedConstructors.CompleteEmission(_nativeConstructorActivation!.CompletedSnapshot, _runtime);
         _programType.CreateType();
@@ -1998,11 +2010,10 @@ public partial class ILCompiler
         _runtime.JsonShapes.CompleteEmission();
         GetClassRegistry().NativeOwnProperties?.CompleteEmission();
         _runtime.Deployment.CompleteEmission();
-        _nativeClrAdmission?.Complete(_moduleBuilder);
         if (_nativeOwnerClosure is not null)
             _nativeOwnerClosure.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot,
                 _nativeClrAdmission?.CompletedIngress, _runtime);
-        _nativePrototypeFields?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeReceiverBinding!.RuntimeType);
+        _nativePrototypeFields?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeReceiverBinding!.RuntimeType, _nativeClosedFamilies?.Completed);
         _nativeTypedArrayBuffers?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeOwnedTypeDeclarations);
     }
 

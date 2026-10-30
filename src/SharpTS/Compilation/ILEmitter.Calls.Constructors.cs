@@ -239,7 +239,7 @@ public partial class ILEmitter
             // observable through `arguments`, spreads expand once, and omitted
             // parameter slots receive the undefined sentinel before defaults run.
             EmitStaticCallArguments(n.Arguments, ctorBuilder);
-            IL.Emit(OpCodes.Newobj, targetCtor);
+            NativeClosedSourceFamilies.EmitAllocation(_ctx.NativeClosedFamilies, IL, targetCtor, _ctx.CurrentMethod);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
             SetStackUnknown();
             return;
@@ -260,7 +260,7 @@ public partial class ILEmitter
         for (int i = n.Arguments.Count; i < expectedParamCount; i++)
             EmitOmittedArgument(ctorParams[i].ParameterType);
 
-        IL.Emit(OpCodes.Newobj, targetCtor);
+        NativeClosedSourceFamilies.EmitAllocation(_ctx.NativeClosedFamilies, IL, targetCtor, _ctx.CurrentMethod);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
         SetStackUnknown();
     }
@@ -350,7 +350,7 @@ public partial class ILEmitter
             }
         }
 
-        IL.Emit(OpCodes.Newobj, targetCtor);
+        NativeClosedSourceFamilies.EmitAllocation(_ctx.NativeClosedFamilies, IL, targetCtor, _ctx.CurrentMethod);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
         SetStackUnknown();
     }
@@ -395,7 +395,7 @@ public partial class ILEmitter
     private void EmitClassExprCtorCall(ConstructorInfo ctor, Expr.New n)
     {
         EmitStaticCallArguments(n.Arguments, ctor);
-        IL.Emit(OpCodes.Newobj, ctor);
+        NativeClosedSourceFamilies.EmitAllocation(_ctx.NativeClosedFamilies, IL, ctor, _ctx.CurrentMethod);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
         SetStackUnknown();
     }

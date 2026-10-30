@@ -94,7 +94,8 @@ internal sealed class NativeReceiverInitializerLookup
     }
 
     internal void CompleteEmission(NativeSourceOwnerCatalog sources, NativeConstructorValueProducerSnapshot constructors,
-        EmittedRuntime runtime, IReadOnlyDictionary<TypeBuilder, MethodBuilder> expectedAdapters)
+        EmittedRuntime runtime, IReadOnlyDictionary<TypeBuilder, MethodBuilder> expectedAdapters,
+        NativeClosedSourceFamilySnapshot? certificate = null)
     {
         EnsureMutable();
         if (!sources.IsComplete || !ReferenceEquals(sources.Module, _owner.Module) ||
@@ -106,6 +107,8 @@ internal sealed class NativeReceiverInitializerLookup
         if (expectedAdapters.Count != _adapters.Count || expectedAdapters.Any(entry =>
             !_adapters.TryGetValue(entry.Key, out var adapter) || !ReferenceEquals(adapter.Method, entry.Value)))
             throw new InvalidOperationException("Receiver-adapter records must equal the actual initializer inventory.");
+        if (certificate is not null && !ReferenceEquals(certificate.Module, _owner.Module))
+            throw new InvalidOperationException("Closed receiver contexts must belong to this output.");
         foreach (var adapter in _adapters.Values)
         {
             if (!adapter.Owner.IsCreated() || !sources.Implementers.Contains(adapter.Owner) ||
@@ -154,6 +157,14 @@ internal sealed class NativeReceiverInitializerLookup
             if (!definition.IsGenericTypeDefinition || !ReferenceEquals(definition.Module, _owner.Module) ||
                 definition is not TypeBuilder builder || !sources.Implementers.Contains(builder))
                 throw new InvalidOperationException("Legacy receiver lookup requires an actual owned source generic family.");
+            if (certificate?.ContextsFor(definition) is { } contexts)
+            {
+                // The adapter declaration/body was independently validated above.
+                // Keep the complete loaded binder query for each actual context,
+                // including inherited or absent adapters.
+                foreach (var context in contexts) closed.Add(context);
+                return;
+            }
             families.Add(definition);
             _blockers.Add($"Receiver lookup retains the whole query for an unproved source generic family: {definition.FullName}");
         }

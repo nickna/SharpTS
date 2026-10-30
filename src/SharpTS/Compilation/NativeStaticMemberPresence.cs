@@ -100,6 +100,18 @@ internal sealed class NativeStaticMemberPresence
                 // The exact literal owner keeps the real framework query and its
                 // exception behavior, with statically bounded metadata retention.
                 EmitFieldAndPropertyQueries(il, () => { il.Emit(OpCodes.Ldtoken, type); il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle); }, out var present);
+                Type definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
+                if (catalog.Implementers.Contains(definition))
+                {
+                    // Closed source rows keep the full loaded member binder;
+                    // the family certificate bounds contexts, not member names.
+                    il.Emit(OpCodes.Ldtoken, type); il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+                    il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldc_I4, (int)MemberTypes.Method); il.Emit(OpCodes.Ldc_I4, (int)Flags);
+                    il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMember", _types.String, typeof(MemberTypes), typeof(BindingFlags)));
+                    il.Emit(OpCodes.Ldlen); il.Emit(OpCodes.Conv_I4); il.Emit(OpCodes.Brtrue, present);
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1);
+                    il.Emit(OpCodes.Call, runtime.SymbolAccessors.FindOwnMethod); il.Emit(OpCodes.Brtrue, present);
+                }
                 il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ret);
                 il.MarkLabel(present); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Ret);
                 il.MarkLabel(next);

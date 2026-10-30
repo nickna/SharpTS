@@ -26,13 +26,16 @@ internal sealed class NativeRuntimeClassInitialization
     internal IReadOnlyList<Type> Owners => IsComplete ? _owners :
         throw new InvalidOperationException("Native initializer inventory is incomplete.");
 
-    internal void CompleteEmission(NativeSourceOwnerCatalog catalog, EmittedRuntime runtime)
+    internal void CompleteEmission(NativeSourceOwnerCatalog catalog, EmittedRuntime runtime,
+        NativeClosedSourceFamilySnapshot? families = null)
     {
         if (IsComplete || !catalog.IsComplete)
             throw new InvalidOperationException("Native initialization requires a completed source-owner catalog.");
         if (!ReferenceEquals(catalog.Module, _owner.Module) || !ReferenceEquals(runtime.Errors.Type.Module, _owner.Module))
             throw new InvalidOperationException("Native initialization metadata must belong to this exact output module.");
         var owners = new HashSet<Type>();
+        if (families is not null && !ReferenceEquals(families.Module, _owner.Module))
+            throw new InvalidOperationException("Closed initializer contexts must belong to this output.");
         UsesLegacy = catalog.Blockers.Count != 0;
         foreach (var intrinsic in IntrinsicOwners(runtime)) AddChain(intrinsic);
         foreach (var declaration in catalog.Implementers)
@@ -41,7 +44,15 @@ internal sealed class NativeRuntimeClassInitialization
                 throw new InvalidOperationException("Native initializer declarations must belong to this completed output.");
             // A different closed generic instantiation can have independent static state.
             // Keep the complete legacy operation until that domain has its own proof.
-            AddChain(declaration);
+            if (families?.ContextsFor(declaration) is { } contexts)
+            {
+                foreach (var context in contexts) owners.Add(context);
+                // These base chains were independently closed from the actual
+                // operands at family completion, including persisted TypeSpecs
+                // whose live BaseType API is unavailable.
+                foreach (var context in families.Owners) owners.Add(context);
+            }
+            else AddChain(declaration);
         }
         var il = Initialize.GetILGenerator();
         if (UsesLegacy)

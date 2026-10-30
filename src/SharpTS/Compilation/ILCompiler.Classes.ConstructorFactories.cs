@@ -157,7 +157,8 @@ public partial class ILCompiler
             ? EmitGenerics.MakeGenericType(owner, owner.GetGenericArguments()) : owner;
         var bodyConstructor = NewTargetConstructor(constructor);
         if (bodyConstructor != constructor) il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, self == owner ? bodyConstructor : EmitterTypeHelpers.ResolveConstructor(self, bodyConstructor));
+        NativeClosedSourceFamilies.EmitAllocation(_nativeClosedFamilies, il,
+            self == owner ? bodyConstructor : EmitterTypeHelpers.ResolveConstructor(self, bodyConstructor), factory);
         il.Emit(OpCodes.Call, _runtime.DynamicConstruction.ResolveClassReturn);
         if (!publishesArguments)
         {

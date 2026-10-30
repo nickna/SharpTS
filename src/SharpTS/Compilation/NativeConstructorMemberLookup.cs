@@ -10,7 +10,7 @@ internal sealed class NativeConstructorMemberLookup
     private const BindingFlags Flags = BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;
     private readonly TypeProvider _types;
     private readonly TypeBuilder _owner;
-    private IReadOnlyList<TypeBuilder> _owners = [];
+    private IReadOnlyList<Type> _owners = [];
 
     internal NativeConstructorMemberLookup(ModuleBuilder module, TypeProvider types)
     {
@@ -24,7 +24,7 @@ internal sealed class NativeConstructorMemberLookup
     internal MethodBuilder GetMembers { get; }
     internal bool IsComplete { get; private set; }
     internal bool UsesLegacy { get; private set; }
-    internal IReadOnlyList<TypeBuilder> Owners => IsComplete ? _owners :
+    internal IReadOnlyList<Type> Owners => IsComplete ? _owners :
         throw new InvalidOperationException("Native constructor member metadata is incomplete.");
 
     internal void CompleteEmission(NativeRuntimeClassInitialization initializers, NativeSourceOwnerCatalog sources, EmittedRuntime runtime)
@@ -34,7 +34,8 @@ internal sealed class NativeConstructorMemberLookup
             !ReferenceEquals(sources.Contract, runtime.ObjectFields.Interface) || !ReferenceEquals(runtime.Errors.Type.Module, _owner.Module))
             throw new InvalidOperationException("Native constructor member lookup requires completed source metadata from this exact output.");
         UsesLegacy = initializers.UsesLegacy;
-        _owners = Array.AsReadOnly(sources.Implementers.OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray());
+        _owners = Array.AsReadOnly((UsesLegacy ? sources.Implementers.Cast<Type>() : initializers.Owners.Where(type => sources.Implementers.Contains(
+            type.IsGenericType ? type.GetGenericTypeDefinition() : type))).OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray());
         var il = GetMembers.GetILGenerator();
         if (UsesLegacy)
         {
@@ -49,7 +50,7 @@ internal sealed class NativeConstructorMemberLookup
             Refuse(il, runtime.Errors); il.MarkLabel(correctFlags);
             foreach (var type in _owners)
             {
-                if (!type.IsCreated() || FunctionGenericParameterRegistry.ContainsUnboundType(type) ||
+                if (type is TypeBuilder builder && !builder.IsCreated() || FunctionGenericParameterRegistry.ContainsUnboundType(type) ||
                     type.Module.ModuleVersionId != _owner.Module.ModuleVersionId)
                     throw new InvalidOperationException("Native constructor members require a finalized closed source declaration.");
                 var next = il.DefineLabel();

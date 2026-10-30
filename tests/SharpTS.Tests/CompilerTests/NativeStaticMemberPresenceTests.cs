@@ -65,14 +65,15 @@ public sealed class NativeStaticMemberPresenceTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void OnlyTheNongenericNativeProfileRejectsAnUnprovedForeignOwner(bool generic)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void OnlyTheNongenericNativeProfileRejectsAnUnprovedForeignOwner(bool generic, bool unproved)
     {
-        var saved = Compile(generic ? "class Owner<T> { static field=7; }" : "console.log(42);", true, out var compiler);
-        Assert.Equal(generic, compiler.NativeStaticMembers!.UsesLegacy);
+        var saved = Compile((generic ? "class Owner<T> { static field=7; }" : "console.log(42);") + (unproved ? " const C:any=Owner; new C();" : ""), true, out var compiler);
+        Assert.Equal(unproved, compiler.NativeStaticMembers!.UsesLegacy);
         var has = Helper(saved);
-        if (generic) Assert.Equal(true, has.Invoke(null, [typeof(Foreign), nameof(Foreign.Field)]));
+        if (unproved) Assert.Equal(true, has.Invoke(null, [typeof(Foreign), nameof(Foreign.Field)]));
         else
         {
             var exception = Assert.Throws<TargetInvocationException>(() => has.Invoke(null, [typeof(Foreign), nameof(Foreign.Field)]));

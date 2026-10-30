@@ -61,13 +61,14 @@ public sealed class NativeStaticFieldLookupTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void UnprovedGenericInventoriesRetainTheWholeLegacyOperation(bool generic)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void UnprovedGenericInventoriesRetainTheWholeLegacyOperation(bool generic, bool unproved)
     {
-        var saved = Compile(generic ? "class Owner<T> { static field=7; }" : "console.log(42);", true, out var compiler);
-        Assert.Equal(generic, compiler.NativeStaticFields!.UsesLegacy);
-        if (generic)
+        var saved = Compile((generic ? "class Owner<T> { static field=7; }" : "console.log(42);") + (unproved ? " const C:any=Owner; new C();" : ""), true, out var compiler);
+        Assert.Equal(unproved, compiler.NativeStaticFields!.UsesLegacy);
+        if (unproved)
             Assert.Equal(typeof(Foreign).GetField(nameof(Foreign.Field)), Helper(saved).Invoke(null, [typeof(Foreign), nameof(Foreign.Field), Flags[0]]));
         else
         {

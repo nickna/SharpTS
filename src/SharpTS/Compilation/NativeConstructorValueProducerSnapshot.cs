@@ -28,7 +28,10 @@ internal sealed record NativeConstructorValueProducer(
     ILGenerator Body,
     int ValueOffset,
     MethodBase? Method,
-    Type? LookupOwnerContext);
+    Type? LookupOwnerContext)
+{
+    internal bool NormalizesSourceDefinition { get; init; }
+}
 
 internal sealed record NativeConstructorValueOwnerSnapshot(
     Type ExactTokenOwner,
