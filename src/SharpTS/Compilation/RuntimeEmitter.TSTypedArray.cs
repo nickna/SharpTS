@@ -673,35 +673,36 @@ public partial class RuntimeEmitter
             setIl.Emit(OpCodes.Ldloc, setIndexLocal);
             setIl.Emit(OpCodes.Ldarg_2);
             setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
-            setIl.Emit(OpCodes.Conv_I4);
             if (clamped)
             {
-                // Clamp to 0-255
-                var inRangeLabel = setIl.DefineLabel();
-                var endClampLabel = setIl.DefineLabel();
-                var valueLocal = setIl.DeclareLocal(_types.Int32);
-                setIl.Emit(OpCodes.Stloc, valueLocal);
-
-                // Check < 0
-                setIl.Emit(OpCodes.Ldloc, valueLocal);
+                // ToUint8Clamp compares the original double before narrowing.
+                // Math.Round(double) uses the required midpoint-to-even rule.
+                var positive = setIl.DefineLabel();
+                var round = setIl.DefineLabel();
+                var endClamp = setIl.DefineLabel();
+                var value = setIl.DeclareLocal(_types.Double);
+                setIl.Emit(OpCodes.Stloc, value);
+                setIl.Emit(OpCodes.Ldloc, value);
+                setIl.Emit(OpCodes.Ldc_R8, 0.0);
+                setIl.Emit(OpCodes.Bgt, positive);
+                // NaN, negative values and either zero become +0.
                 setIl.Emit(OpCodes.Ldc_I4_0);
-                setIl.Emit(OpCodes.Bge_S, inRangeLabel);
-                setIl.Emit(OpCodes.Ldc_I4_0);
-                setIl.Emit(OpCodes.Br_S, endClampLabel);
-
-                setIl.MarkLabel(inRangeLabel);
-                // Check > 255
-                var notOverLabel = setIl.DefineLabel();
-                setIl.Emit(OpCodes.Ldloc, valueLocal);
+                setIl.Emit(OpCodes.Br, endClamp);
+                setIl.MarkLabel(positive);
+                setIl.Emit(OpCodes.Ldloc, value);
+                setIl.Emit(OpCodes.Ldc_R8, 255.0);
+                setIl.Emit(OpCodes.Blt, round);
                 setIl.Emit(OpCodes.Ldc_I4, 255);
-                setIl.Emit(OpCodes.Ble_S, notOverLabel);
-                setIl.Emit(OpCodes.Ldc_I4, 255);
-                setIl.Emit(OpCodes.Br_S, endClampLabel);
-
-                setIl.MarkLabel(notOverLabel);
-                setIl.Emit(OpCodes.Ldloc, valueLocal);
-
-                setIl.MarkLabel(endClampLabel);
+                setIl.Emit(OpCodes.Br, endClamp);
+                setIl.MarkLabel(round);
+                setIl.Emit(OpCodes.Ldloc, value);
+                setIl.Emit(OpCodes.Call, typeof(Math).GetMethod("Round", [typeof(double)])!);
+                setIl.Emit(OpCodes.Conv_I4);
+                setIl.MarkLabel(endClamp);
+            }
+            else
+            {
+                setIl.Emit(OpCodes.Conv_I4);
             }
             setIl.Emit(OpCodes.Conv_U1);
             setIl.Emit(OpCodes.Stelem_I1);
