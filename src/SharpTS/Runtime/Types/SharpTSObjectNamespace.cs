@@ -123,7 +123,8 @@ public class SharpTSObjectNamespace : ISharpTSCallable, ISharpTSSymbolPropertyBa
 
     internal IEnumerable<string> OwnStringKeys()
         => new[] { "length", "name", "prototype" }.Concat(ObjectBuiltIns.StaticMemberNames)
-            .Where(HasOwnProperty).Concat(_extras.OwnVisibleStringKeys()).Distinct();
+            .Where(HasOwnProperty).Concat(_extras.OwnVisibleStringKeys()).Distinct()
+            .OrderBy(key => PropertySemantics.TryGetArrayIndex(key, out uint index) ? index : uint.MaxValue);
 
     /// <summary>
     /// ECMA-262 §19.1.1 Object(value): if value is null/undefined, return a new empty object;
