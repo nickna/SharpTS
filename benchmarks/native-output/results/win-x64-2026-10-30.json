@@ -1,0 +1,376 @@
+{
+  "completed": true,
+  "runtimeIdentifier": "win-x64",
+  "recordedAt": "2026-10-30T02:21:24.9657968-07:00",
+  "compilerSha256": "FE2A59C3F4A3D0446ADE584D069A51B6B0D3D67E0E5BDBD19A3F1EAE7CC8B548",
+  "sourceSha256": "0F667593E7733A6D8D95C64186AD5EB622FD70A2126914DA48595898F68FE5CA",
+  "dotnet": "10.0.403",
+  "os": "Microsoft Windows 10.0.29639",
+  "processorCount": 2,
+  "launches": 15,
+  "runtimeEnvironment": {
+    "COMPlus_ReadyToRun": null,
+    "COMPlus_TieredCompilation": null,
+    "DOTNET_TieredCompilation": null,
+    "DOTNET_PROCESSOR_COUNT": "2",
+    "DOTNET_ReadyToRun": null
+  },
+  "methodology": "Warm fresh-process wall time includes loading and minimal output; steady samples are measured inside one warmed process. Memory is observed process peak working set, null when unavailable. Native publication retains strict warning enforcement.",
+  "variants": [
+    {
+      "target": "dll",
+      "publicationMilliseconds": 1215.1725,
+      "executableBytes": 347136,
+      "outputDirectoryBytes": 347390,
+      "deploymentBytes": 347390,
+      "symbolBytes": 0,
+      "outputSha256": "8788F408D34E31926962574752FA066B4C3D80200DE2C4697E072A63D199C517",
+      "startupMedianMilliseconds": 101.8343,
+      "startupSamples": [
+        {
+          "milliseconds": 100.3233,
+          "peakWorkingSetBytes": 25403392
+        },
+        {
+          "milliseconds": 101.8343,
+          "peakWorkingSetBytes": 28020736
+        },
+        {
+          "milliseconds": 112.8961,
+          "peakWorkingSetBytes": 29016064
+        },
+        {
+          "milliseconds": 106.9722,
+          "peakWorkingSetBytes": 31023104
+        },
+        {
+          "milliseconds": 105.2319,
+          "peakWorkingSetBytes": 28983296
+        },
+        {
+          "milliseconds": 101.6817,
+          "peakWorkingSetBytes": 28286976
+        },
+        {
+          "milliseconds": 103.4836,
+          "peakWorkingSetBytes": 28262400
+        },
+        {
+          "milliseconds": 103.0226,
+          "peakWorkingSetBytes": 31064064
+        },
+        {
+          "milliseconds": 103.9247,
+          "peakWorkingSetBytes": 31424512
+        },
+        {
+          "milliseconds": 100.4289,
+          "peakWorkingSetBytes": 28217344
+        },
+        {
+          "milliseconds": 104.9612,
+          "peakWorkingSetBytes": 30543872
+        },
+        {
+          "milliseconds": 101.1534,
+          "peakWorkingSetBytes": 31014912
+        },
+        {
+          "milliseconds": 100.1056,
+          "peakWorkingSetBytes": 31248384
+        },
+        {
+          "milliseconds": 100.5708,
+          "peakWorkingSetBytes": 31354880
+        },
+        {
+          "milliseconds": 100.1609,
+          "peakWorkingSetBytes": 31342592
+        }
+      ],
+      "steadyStateMedianMilliseconds": 13.0,
+      "steadyStateSamples": [
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 14,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        }
+      ],
+      "steadyProcessPeakWorkingSetBytes": 31272960,
+      "dotnetAbsentFromPath": false,
+      "nativeImageVerified": false
+    },
+    {
+      "target": "exe",
+      "publicationMilliseconds": 1197.4824,
+      "executableBytes": 511421,
+      "outputDirectoryBytes": 511421,
+      "deploymentBytes": 511421,
+      "symbolBytes": 0,
+      "outputSha256": "4F265521976F77E3EAE7BA0FFA592B6CE96B947106CB410B50578E1CB2F09051",
+      "startupMedianMilliseconds": 104.4403,
+      "startupSamples": [
+        {
+          "milliseconds": 103.7441,
+          "peakWorkingSetBytes": 32608256
+        },
+        {
+          "milliseconds": 103.228,
+          "peakWorkingSetBytes": 32538624
+        },
+        {
+          "milliseconds": 110.818,
+          "peakWorkingSetBytes": 29368320
+        },
+        {
+          "milliseconds": 104.1225,
+          "peakWorkingSetBytes": 32624640
+        },
+        {
+          "milliseconds": 104.1931,
+          "peakWorkingSetBytes": 32428032
+        },
+        {
+          "milliseconds": 104.4403,
+          "peakWorkingSetBytes": 32210944
+        },
+        {
+          "milliseconds": 104.8452,
+          "peakWorkingSetBytes": 30375936
+        },
+        {
+          "milliseconds": 104.3974,
+          "peakWorkingSetBytes": 29188096
+        },
+        {
+          "milliseconds": 107.7244,
+          "peakWorkingSetBytes": 31973376
+        },
+        {
+          "milliseconds": 103.7807,
+          "peakWorkingSetBytes": 31621120
+        },
+        {
+          "milliseconds": 116.7,
+          "peakWorkingSetBytes": 28590080
+        },
+        {
+          "milliseconds": 116.0281,
+          "peakWorkingSetBytes": 28024832
+        },
+        {
+          "milliseconds": 108.0375,
+          "peakWorkingSetBytes": 23990272
+        },
+        {
+          "milliseconds": 103.9924,
+          "peakWorkingSetBytes": 26681344
+        },
+        {
+          "milliseconds": 105.818,
+          "peakWorkingSetBytes": 32108544
+        }
+      ],
+      "steadyStateMedianMilliseconds": 13.0,
+      "steadyStateSamples": [
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 14,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 14,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 14,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        }
+      ],
+      "steadyProcessPeakWorkingSetBytes": 32100352,
+      "dotnetAbsentFromPath": true,
+      "nativeImageVerified": false
+    },
+    {
+      "target": "native-aot",
+      "publicationMilliseconds": 18097.3636,
+      "executableBytes": 6743040,
+      "outputDirectoryBytes": 37074205,
+      "deploymentBytes": 6743040,
+      "symbolBytes": 30330880,
+      "outputSha256": "C8D0157384FCCFAC4825C5178E8762D7B98185D5E7253B80961830CBC0374597",
+      "startupMedianMilliseconds": 55.868,
+      "startupSamples": [
+        {
+          "milliseconds": 63.1426,
+          "peakWorkingSetBytes": 13639680
+        },
+        {
+          "milliseconds": 56.5347,
+          "peakWorkingSetBytes": 5386240
+        },
+        {
+          "milliseconds": 61.2202,
+          "peakWorkingSetBytes": 12578816
+        },
+        {
+          "milliseconds": 53.4873,
+          "peakWorkingSetBytes": 11243520
+        },
+        {
+          "milliseconds": 60.1945,
+          "peakWorkingSetBytes": 6664192
+        },
+        {
+          "milliseconds": 63.1963,
+          "peakWorkingSetBytes": 13520896
+        },
+        {
+          "milliseconds": 55.868,
+          "peakWorkingSetBytes": 9277440
+        },
+        {
+          "milliseconds": 55.3301,
+          "peakWorkingSetBytes": 6725632
+        },
+        {
+          "milliseconds": 55.1921,
+          "peakWorkingSetBytes": 6287360
+        },
+        {
+          "milliseconds": 53.6841,
+          "peakWorkingSetBytes": 5545984
+        },
+        {
+          "milliseconds": 50.316,
+          "peakWorkingSetBytes": 7196672
+        },
+        {
+          "milliseconds": 54.2017,
+          "peakWorkingSetBytes": 7979008
+        },
+        {
+          "milliseconds": 58.0095,
+          "peakWorkingSetBytes": 13639680
+        },
+        {
+          "milliseconds": 56.5797,
+          "peakWorkingSetBytes": 13565952
+        },
+        {
+          "milliseconds": 54.8314,
+          "peakWorkingSetBytes": 13565952
+        }
+      ],
+      "steadyStateMedianMilliseconds": 13.0,
+      "steadyStateSamples": [
+        {
+          "milliseconds": 15,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 15,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 14,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 14,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        },
+        {
+          "milliseconds": 13,
+          "checksum": 21
+        }
+      ],
+      "steadyProcessPeakWorkingSetBytes": 14438400,
+      "dotnetAbsentFromPath": true,
+      "nativeImageVerified": true
+    }
+  ],
+  "compilerSource": {
+    "clockFixCommit": "6c36b772c",
+    "baseCommit": "c1f56e665214ec5f86a903e7b5ca24fedb625d00",
+    "note": "Compiler built from the matching clock fix before its commit; exact compiler/source/output hashes and raw samples are retained."
+  },
+  "controlledRun": {
+    "preRunProcessesOverPointTwoCpuSeconds": [],
+    "clockResultsCheckedIntegral": true,
+    "allSteadyChecksums": 21,
+    "firstClockDefectRunExcluded": true,
+    "ownedCompilerAndTestJobsPaused": true,
+    "preRunCpuSampleSeconds": 2
+  }
+}
