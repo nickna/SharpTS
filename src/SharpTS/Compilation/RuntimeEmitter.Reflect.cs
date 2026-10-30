@@ -1825,8 +1825,13 @@ public partial class RuntimeEmitter
         });
         Define("getOwnPropertyDescriptor", il =>
         {
+            var target = il.DeclareLocal(_types.Object);
             EmitArgument(il, 0);
-            EmitArgument(il, 1);
+            il.Emit(OpCodes.Stloc, target);
+            EmitRequireReflectObjectTarget(il, () => il.Emit(OpCodes.Ldloc, target),
+                inputs.TypeOf, inputs.CreateException, inputs.TypeErrorConstructor, "getOwnPropertyDescriptor");
+            il.Emit(OpCodes.Ldloc, target);
+            EmitArgument(il, 1, undefinedForMissing: true);
             il.Emit(OpCodes.Call, inputs.ObjectGetOwnPropertyDescriptor);
             il.Emit(OpCodes.Ret);
         });

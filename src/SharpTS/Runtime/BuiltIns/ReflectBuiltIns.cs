@@ -421,7 +421,9 @@ public static class ReflectBuiltIns
 
             "getOwnPropertyDescriptor" => BuiltInMethod.CreateV2("getOwnPropertyDescriptor", 2, static (interpreter, _, args) =>
             {
-                var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.getOwnPropertyDescriptor requires a target object.");
+                if (!args[0].IsObject)
+                    throw new ThrowException(new SharpTSTypeError("Reflect.getOwnPropertyDescriptor requires an object target"));
+                var target = args[0].ToObject()!;
                 var propertyKey = interpreter.ToPropertyKey(args[1].ToObject());
                 if (target is ISharpTSOwnPropertyObject carrier)
                 {

@@ -77,6 +77,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
 
             case "get":
             case "set":
+            case "getOwnPropertyDescriptor":
             {
                 // Use the same public boundary as retained Reflect functions.
                 // Argument expressions finish before target/key validation.
@@ -153,29 +154,6 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
 
                 il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireNamespace().PreventExtensions);
                 il.Emit(OpCodes.Box, typeof(bool));
-                return true;
-            }
-
-            case "getOwnPropertyDescriptor":
-            {
-                // Reflect.getOwnPropertyDescriptor(target, propertyKey) → descriptor | undefined
-                if (arguments.Count > 0)
-                {
-                    emitter.EmitExpression(arguments[0]);
-                    emitter.EmitBoxIfNeeded(arguments[0]);
-                }
-                else
-                    il.Emit(OpCodes.Ldnull);
-
-                if (arguments.Count > 1)
-                {
-                    emitter.EmitExpression(arguments[1]);
-                    emitter.EmitBoxIfNeeded(arguments[1]);
-                }
-                else
-                    il.Emit(OpCodes.Ldnull);
-
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDescriptors.GetOwnPropertyDescriptor);
                 return true;
             }
 
