@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)][string]$RuntimeIdentifier,
     [string]$CompilerPath = 'src/SharpTS/bin/Release/net10.0/SharpTS.dll',
     [string]$ResultsDirectory = 'artifacts/native-guest',
-    [string[]]$Cases = @('language', 'arguments', 'modules', 'collections', 'generators', 'async', 'exceptions', 'bcl')
+    [string[]]$Cases = @('language', 'arguments', 'modules', 'collections', 'generators', 'async', 'parameter-defaults', 'exceptions', 'bcl')
 )
 
 Set-StrictMode -Version Latest
@@ -93,6 +93,7 @@ $cohort = @{
     collections = @{ source = 'collections.ts'; expected = "42`n2`ntrue`n"; arguments = @(); exitCode = 0 }
     generators = @{ source = 'generators.ts'; expected = "6`n"; arguments = @(); exitCode = 0 }
     async = @{ source = 'async.ts'; expected = "42`n"; arguments = @(); exitCode = 0 }
+    'parameter-defaults' = @{ source = 'parameter-defaults.ts'; expected = "ReferenceError`nReferenceError`n"; arguments = @(); exitCode = 0 }
     exceptions = @{ source = 'exceptions.ts'; expected = "guest error 42`n"; arguments = @(); exitCode = 0 }
     bcl = @{ source = 'bcl.ts'; expected = "native 6`nfalse`n"; arguments = @(); exitCode = 0 }
 }

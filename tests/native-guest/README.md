@@ -12,6 +12,8 @@ The CI cohort runs on matching Windows, Linux and macOS x64/ARM64 runners:
 - `collections`: Map, Set and regular expressions.
 - `generators`: generator creation and iteration.
 - `async`: Promise construction and continuation callbacks.
+- `parameter-defaults`: eager generator defaults and async rejection keep later
+  parameters in TDZ even when an initialized outer binding has the same name.
 - `exceptions`: guest object identity/properties across a catch.
 - `bcl`: direct immutable CLR constructor, member and property access, plus
   `RuntimeFeature.IsDynamicCodeSupported == false` in the executed guest.
