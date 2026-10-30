@@ -74,7 +74,9 @@ async function runOwned(command, args, options = {}) {
   const { timeout = 300_000, ...childOptions } = options;
   const child = spawn(command, args, { cwd: workspace, env: toolEnv, windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"], ...childOptions });
-  let stdout = "", stderr = "", error, timedOut = false, cleanupError;
+  let stdout = "", stderr = "", error, timedOut = false, cleanupError, cleanupTimer;
+  let finishTimeout;
+  const timeoutCompletion = new Promise(resolve => { finishTimeout = resolve; });
   child.stdout.on("data", chunk => { stdout += chunk; });
   child.stderr.on("data", chunk => { stderr += chunk; });
   child.once("error", value => { error = value; });
@@ -85,16 +87,24 @@ async function runOwned(command, args, options = {}) {
         ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, timeout: 10_000 });
       if (cleanup.status !== 0) cleanupError = `${cleanup.stderr ?? ""} ${cleanup.error ?? ""}`;
     }
+    cleanupTimer = setTimeout(() => {
+      cleanupError = `${cleanupError ?? ""} Owned PID ${child.pid} did not close after tree cleanup.`.trim();
+      try { child.kill(); } catch (error) { cleanupError += ` Direct-child termination failed: ${error}`; }
+      child.stdout.destroy();
+      child.stderr.destroy();
+      child.unref();
+      finishTimeout(null);
+    }, 2_000);
   }, timeout);
-  const status = await new Promise(resolve => child.once("close", resolve))
-    .finally(() => clearTimeout(timer));
+  const status = await Promise.race([new Promise(resolve => child.once("close", resolve)), timeoutCompletion])
+    .finally(() => { clearTimeout(timer); clearTimeout(cleanupTimer); });
   return { status, stdout, stderr, error, timedOut, cleanupError };
 }
 async function execute(command, args, logName, options = {}) {
   const result = await runOwned(command, args, options);
   const output = `${result.stdout}\n${result.stderr}\n${result.error ?? ""}\n${result.cleanupError ?? ""}`;
   if (logName) writeFileSync(path.join(artifacts, logName), output);
-  assert.equal(result.timedOut, false, `${command} exceeded deadline; owned process tree stopped; see ${artifacts}`);
+  assert.equal(result.timedOut, false, `${command} exceeded deadline; see owned-tree cleanup log in ${artifacts}`);
   assert.equal(result.status, 0, `${command} failed; see ${logName ? path.join(artifacts, logName) : artifacts}: ${result.error ?? ""}`);
   return result.stdout;
 }

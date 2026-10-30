@@ -58,6 +58,8 @@ Each unique `artifacts/native-guest-debugger/run-*` retains export/publish/stand
 `result.json`, the full `transcript.json`, extension-host logs, native symbols and isolated
 profile. Failed attempts retain their logs too. Tool phases have a 300-second deadline and the
 editor has a 180-second deadline; timeout cleanup targets only that launched process tree.
+Tree cleanup has a 10-second command bound plus a 2-second close grace period. Failure to
+close is recorded with the owned PID, and the runner fails without waiting indefinitely.
 Compiler, harness, original fixture and compiled/debugged workspace source hashes must remain
 unchanged throughout an accepted run.
 

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "status": "passed",
-  "verifiedUtc": "2026-10-30T05:46:37.493Z",
+  "verifiedUtc": "2026-10-30T05:53:03.025Z",
   "source": {
-    "baseCommit": "f5a8ec9f6a0cbe678ce479da90d9eb74f7ce7481",
+    "baseCommit": "12c98291477d810685cdd751e275cd19a117e58b",
     "workingTreeChangesIncluded": true,
     "compilerSha256": "88414026305a4f753e8aa433b6211268f87ca9a9c8891a07b5370fda88517bc8",
     "fixtureSha256": {
@@ -11,7 +11,7 @@
       "helper.ts": "e51d3d72e89e6722ac54e8d3f8d3fda75abc49bac787930cdd5fea0366a3a6e5"
     },
     "harnessSha256": {
-      "run.mjs": "4c62bf1bc5e16c7c785e733aec0a1206975ea85c979c1a3f10436d4ee209f035",
+      "run.mjs": "72e21aeb5b4fbfb93ec9e2677afa6fb08f73afd934d0972e0694c51106cd412a",
       "test.cjs": "980a595414ef3d64e35c5780b8dc4083c6b7b54c736f8778d13496ae0bb627fb",
       "extension.cjs": "64dd3256d8d176c73288996263534967d21228f1c00ac064d3468ece126ac97d",
       "package.json": "a4fab57d80a36a2cf6efe650a68203a2730554114522774ce4580ce30e037f09"
@@ -40,10 +40,10 @@
     "standaloneExitCode": 0
   },
   "binaries": {
-    "guestSha256": "2858b159cc924882efd5cd23f4b975481f7eebd40a80e19e6b55a050741b254c",
-    "guestPdbSha256": "52fadd4787e98536faa12f282d8c4fe89f93d28852d1610a05828a773c07c072",
-    "nativeSha256": "ef3bb6f05bc459d792ab108982290ebdcae916070dd2a2d7b3594c6670f8731c",
-    "nativePdbSha256": "848d36e79f223f5e02a11915cf561479df4d7c0fd87655ccace26479a509a8c5"
+    "guestSha256": "bf331747703d730a56a757858781f80b5ec633e9a954460e02455fdb2bfd6057",
+    "guestPdbSha256": "0c74841a18551a45fb73fb7c5dfde1b504796af7b53de984f6913c29b1246c20",
+    "nativeSha256": "bdfea33a7bd3bfb16134e1fa4b81bc46e51bce7f4085dd42fe7163325facb399",
+    "nativePdbSha256": "43727e0c527cab41678e4376214dcd20a6d367967f50392f47cdf40d89ec6e17"
   },
   "debugger": {
     "type": "cppvsdbg",
@@ -128,15 +128,15 @@
     "This fixture certifies Windows x64 Debug inspect-export/SDK publication only; Release optimization, other platforms and suspending source domains require separate evidence.",
     "The SharpTS editor debug command still launches managed coreclr output."
   ],
-  "evidence": "artifacts/p2-work/native-guest-debugger/runs/run-4Zw788/result.json",
-  "transcript": "artifacts/p2-work/native-guest-debugger/runs/run-4Zw788/transcript.json",
+  "evidence": "artifacts/p2-work/native-guest-debugger/runs/run-MSbfbN/result.json",
+  "transcript": "artifacts/p2-work/native-guest-debugger/runs/run-MSbfbN/transcript.json",
   "logSha256": {
-    "export.log": "a2a397aa9b321e2efc2a3d9c68a50be4f902af35c74838e337d3f37dc53f0916",
-    "publish.log": "a1a238aa04944eb306967be52c9ee88246c5acc1a4ed50398e734ef0f81edb92",
+    "export.log": "2c2efdfb1972eb4778dab1e3e141282ef16dd0c25f12a543b3881557365a6528",
+    "publish.log": "fc6bccb11d297e3c5c07e4ed0330712dd4491eeaf076e14595d9be28d5f81507",
     "standalone.log": "efcaaed5f19a82646ecf1730a58dd81eb534b0da2c10271294c9e0c6050bfe23",
-    "extension-host.log": "1f3b866571a18984ba13a8f0da998bd513964858c87ef3a4ba0309e3014a0197",
-    "transcript.json": "6045349853cfe61e0908ecb85d2d227ae0afecebb91777b726141278276effd9",
-    "result.json": "222e0c5c3cf82a49ff23d407d78cfc47df8ac964384fb8e7bf136ff29f14b603"
+    "extension-host.log": "8cca67e38da54c4fa11dc1d83ff12ce29209590c8c69cbffd17f22e258f0c889",
+    "transcript.json": "3bea9f2359b4519594dc1854472961347f7672402d1cbc7180eee2dfcfb7f5a6",
+    "result.json": "c753609f44e7410d1dc197e46013b93749dadbf1e744442ee6585778bd5e9890"
   },
   "preservedEarlierAttempts": [
     {
@@ -154,13 +154,20 @@
     {
       "path": "artifacts/p2-work/native-guest-debugger/runs/run-pEaJgn",
       "observation": "Full acceptance with exact stop-reason and original-source assertions passed before adding workspace-copy hashes and shared owned-tree timeouts."
+    },
+    {
+      "path": "artifacts/p2-work/native-guest-debugger/runs/run-4Zw788",
+      "observation": "Full hardened native acceptance passed before adding a bounded taskkill-failure/pipe-close fallback."
     }
   ],
   "ownedTreeTimeoutVerification": {
-    "evidence": "artifacts/p2-work/native-guest-debugger/timeout-proof-ICuS8h/proof.json",
-    "sha256": "616fe1a9f34fceb919ce7ae65b96f92ad0003118397590f81827c30dce8f837f",
-    "helperSourceSha256": "f7b2016ba0509b534950d2669b54fea978f9534329e3f0c5a878726df72112f6",
-    "parentAndDescendantExited": true,
-    "delayedMarkerAbsent": true
+    "evidence": "artifacts/p2-work/native-guest-debugger/timeout-bounded-proof-yXJFu6/proof.json",
+    "sha256": "f196c83ebc83d935a023c5429b17e81ee40fe21a76faa1516becbd2f0dfb3afe",
+    "helperSourceSha256": "2e829a41d74b2f4c019b0853ddda3bd460d0a0d2f7da5c18317f4f495b5fbfc1",
+    "normalCleanupElapsedMs": 1166,
+    "injectedCleanupFailureElapsedMs": 3028,
+    "failedCleanupReturnedWithOwnedPidAndError": true,
+    "allOwnedProbePidsExited": true,
+    "allDelayedMarkersAbsent": true
   }
 }
