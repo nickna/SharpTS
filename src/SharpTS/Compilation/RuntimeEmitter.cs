@@ -16,6 +16,7 @@ public partial class RuntimeEmitter
     private readonly MethodInfo? _nativeStaticFieldLookup;
     private readonly MethodInfo? _nativeConstructorMembers;
     private readonly NativeDeletionLookup? _nativeDeletionLookup;
+    private readonly MethodInfo? _nativeHasInMemberLookup;
 
     /// <summary>
     /// Feature gating set — populated by <see cref="EmitAll(ModuleBuilder, RuntimeFeatureSet)"/>
@@ -37,7 +38,7 @@ public partial class RuntimeEmitter
 
     internal RuntimeEmitter(TypeProvider types, bool emitHosted, bool emitNativeCallables, bool emitNativeOwnProperties,
         MethodInfo? nativeStaticFieldLookup = null, MethodInfo? nativeConstructorMembers = null,
-        NativeDeletionLookup? nativeDeletionLookup = null)
+        NativeDeletionLookup? nativeDeletionLookup = null, MethodInfo? nativeHasInMemberLookup = null)
     {
         _types = types;
         _emitHosted = emitHosted;
@@ -46,6 +47,7 @@ public partial class RuntimeEmitter
         _nativeStaticFieldLookup = nativeStaticFieldLookup;
         _nativeConstructorMembers = nativeConstructorMembers;
         _nativeDeletionLookup = nativeDeletionLookup;
+        _nativeHasInMemberLookup = nativeHasInMemberLookup;
     }
 
     /// <summary>
@@ -75,6 +77,11 @@ public partial class RuntimeEmitter
              (members.CallingConvention & CallingConventions.VarArgs) != 0 || members.ReturnType != typeof(MemberInfo[]) ||
              !members.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual([_types.Type, typeof(BindingFlags)])))
             throw new InvalidOperationException("Native constructor members must have the exact native output module and signature.");
+        if (_nativeHasInMemberLookup is { } inMembers &&
+            (!_emitNativeCallables || !ReferenceEquals(inMembers.Module, moduleBuilder) || !inMembers.IsStatic || inMembers.IsGenericMethod ||
+             (inMembers.CallingConvention & CallingConventions.VarArgs) != 0 || inMembers.ReturnType != _types.Boolean ||
+             !inMembers.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual([_types.Type, _types.String])))
+            throw new InvalidOperationException("Native in-operator member lookup must have the exact native output module and signature.");
         _features = features;
         if (_emitHosted)
             _features.UsesPromise = true;

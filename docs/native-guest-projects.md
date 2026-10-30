@@ -814,3 +814,25 @@ lookup instructions. Against the eight-diagnostic console checkpoint before
 the separate method/presence catalogs, this removes exactly four deletion
 IL2070/IL2075 findings with none added. Native console and class deletion controls
 pass saved-IL verification and execute with the remaining diagnostics retained.
+
+### Exact in-operator member presence
+
+The native `in` operator keeps its ordinary descriptor and prototype walk for
+source instances, constructor values, functions and arrays. Only its CLR
+fallback selects a completed, exact owner inventory and runs the loaded public
+instance property query before the loaded method query. Direct method-binder
+ambiguity remains observable; this path does not use `SafeGetMethod`'s overload
+fallback. Unknown CLR owners throw a guest TypeError. Unproved generic metadata
+retains the whole original reflective operation and its diagnostics.
+
+The exact object-array carrier has a finite framework method-name inventory.
+Each ignore-case name group must have one canonical spelling before emission.
+A case-insensitive name comparison then selects that literal method name with
+public-instance flags, preserving binder overload selection without rooting
+unrelated static Array factories. Saved-IL and actual-native controls cover
+ambiguity, foreign-owner refusal, initialization timing, typed/inherited source
+members, computed symbols, static symbols and prototype replacement without
+invoking getters. Three managed controls retain every method body and PE size.
+The combined console checkpoint changes from six strict diagnostics to four,
+removing exactly the two `HasIn` IL2075 findings and adding none. The remaining
+four deletion diagnostics still fail strict publication.

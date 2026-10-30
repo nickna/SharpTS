@@ -1424,21 +1424,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.ToPascalCase);
         il.Emit(OpCodes.Stloc, classPascalNameLocal);
 
-        // obj.GetType().GetProperty(pascalName, Instance | Public | IgnoreCase)
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldloc, classPascalNameLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
-        il.Emit(OpCodes.Brtrue, classTrueLabel);
+        if (_nativeHasInMemberLookup is { } nativeMembers)
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldloc, classPascalNameLocal);
+            il.Emit(OpCodes.Call, nativeMembers);
+            il.Emit(OpCodes.Brtrue, classTrueLabel);
+        }
+        else
+        {
+            // obj.GetType().GetProperty(pascalName, Instance | Public | IgnoreCase)
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldloc, classPascalNameLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
+            il.Emit(OpCodes.Brtrue, classTrueLabel);
 
-        // obj.GetType().GetMethod(pascalName, Instance | Public | IgnoreCase)
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldloc, classPascalNameLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(System.Reflection.BindingFlags)));
-        il.Emit(OpCodes.Brtrue, classTrueLabel);
+            // obj.GetType().GetMethod(pascalName, Instance | Public | IgnoreCase)
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldloc, classPascalNameLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(System.Reflection.BindingFlags)));
+            il.Emit(OpCodes.Brtrue, classTrueLabel);
+
+        }
 
         il.Emit(OpCodes.Br, falseLabel);
 

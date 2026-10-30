@@ -8,6 +8,8 @@ public partial class ILCompiler
     private bool _nativeAotProjectOutput;
     private NativePropertyLookupCatalog? _nativePropertyLookup;
     private NativeMethodLookupCatalog? _nativeMethodLookup;
+    private NativeHasInMemberLookup? _nativeHasInMembers;
+    internal NativeHasInMemberLookup? NativeHasInMembers => _nativeHasInMembers;
     internal NativeMethodLookupCatalog? NativeMethods => _nativeMethodLookup;
     internal NativePropertyLookupCatalog? NativeProperties => _nativePropertyLookup;
     private NativeClrAdmission? _nativeClrAdmission;
@@ -53,6 +55,8 @@ public partial class ILCompiler
             .ThrowIfIncompatible();
         if (_nativePropertyLookup?.IsComplete != true)
             throw new InvalidOperationException("Native property metadata has not completed source emission.");
+        if (_nativeHasInMembers?.IsComplete != true)
+            throw new InvalidOperationException("Native in-operator member metadata has not completed source emission.");
         if (_nativeStaticFieldLookup?.IsComplete != true)
             throw new InvalidOperationException("Native static field metadata has not completed source emission.");
         if (_nativeConstructorMembers?.IsComplete != true)

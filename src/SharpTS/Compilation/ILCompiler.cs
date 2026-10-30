@@ -762,6 +762,7 @@ public partial class ILCompiler
             _nativeReceiverBinding = new(_moduleBuilder, _types);
             _nativePropertyLookup = new(_moduleBuilder, _types);
             _nativeMethodLookup = new(_moduleBuilder, _types);
+            _nativeHasInMembers = new(_moduleBuilder, _types);
             _functionEmissionPolicy = _functionEmissionPolicy with
             {
                 NativeGenericNormalizer = _nativeGenericMethodNormalization.Normalize,
@@ -780,7 +781,8 @@ public partial class ILCompiler
         }
         _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput,
             _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true),
-            _nativeStaticFieldLookup?.FindField, _nativeConstructorMembers?.GetMembers, _nativeDeletionLookup) { EntryModulePath = _entryModulePath }
+            _nativeStaticFieldLookup?.FindField, _nativeConstructorMembers?.GetMembers,
+            nativeDeletionLookup: _nativeDeletionLookup, nativeHasInMemberLookup: _nativeHasInMembers?.HasMember) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy,
                 _nativeSourceOwners, nativeClassInitializer: _nativeRuntimeClassInitialization?.Initialize,
                 nativeStaticMemberPresence: _nativeStaticMemberPresence?.HasMember,
@@ -1280,6 +1282,7 @@ public partial class ILCompiler
         _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeMethodLookup?.CompleteEmission(_nativePropertyLookup!, _nativeSourceOwners!, _runtime.Errors, _runtime.FunctionValues.Type);
         _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime);
+        _nativeHasInMembers?.CompleteEmission(_nativeMethodLookup!, _nativeSourceOwners!, _runtime);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
@@ -1949,6 +1952,7 @@ public partial class ILCompiler
         _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);
         _nativeMethodLookup?.CompleteEmission(_nativePropertyLookup!, _nativeSourceOwners!, _runtime.Errors, _runtime.FunctionValues.Type);
         _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime);
+        _nativeHasInMembers?.CompleteEmission(_nativeMethodLookup!, _nativeSourceOwners!, _runtime);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
