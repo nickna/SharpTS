@@ -78,6 +78,7 @@ public partial class ILEmitter
             if (param.DefaultValue == null || paramTypes != null && paramTypes[i].IsValueType)
             {
                 EmitParameterBindingInitializer(param, initializers, ParameterTdzNames(parameters.Skip(i + 1), initializers));
+                PublishCapturedParameterCell(param);
                 if (publishCapturedParameters) PublishCapturedParameter(param);
                 continue;
             }
@@ -112,11 +113,12 @@ public partial class ILEmitter
 
             builder.MarkLabel(skipDefault);
             EmitParameterBindingInitializer(param, initializers, ParameterTdzNames(parameters.Skip(i + 1), initializers));
+            PublishCapturedParameterCell(param);
             if (publishCapturedParameters) PublishCapturedParameter(param);
         }
     }
 
-    private void PublishCapturedParameter(Stmt.Parameter parameter)
+    private void PublishCapturedParameterCell(Stmt.Parameter parameter)
     {
         string name = parameter.Name.Lexeme;
         if (_ctx.ParameterCaptureCells.TryGetValue(name, out var binding) &&
@@ -127,6 +129,11 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Box, sourceType);
             PublishParameterCaptureCell(parameter.Name);
         }
+    }
+
+    private void PublishCapturedParameter(Stmt.Parameter parameter)
+    {
+        string name = parameter.Name.Lexeme;
         LocalBuilder? displayClass = null;
         FieldBuilder? field = null;
         if (_ctx.FunctionDisplayClassLocal is { } functionDisplayClass

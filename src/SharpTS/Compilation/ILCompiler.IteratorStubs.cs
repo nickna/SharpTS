@@ -348,6 +348,7 @@ public partial class ILCompiler
         List<Stmt>? body, CompilationContext? context)
     {
         if (context is null) return;
+        EmitIteratorParameterCaptureCellStores(il, builder, context);
         var resolver = new LocalVariableResolver(il, context, _types);
         foreach (var (declaration, name) in ParameterPatternBindings.Declarations(body))
         {

@@ -232,6 +232,7 @@ public partial class ILCompiler
     private CompilationContext CreateGeneratorExpressionBodyContext(GeneratorExpressionCompilation info, MethodBuilder method)
     {
         var context = CreateModuleMemberContext(method.GetILGenerator(), method);
+        ApplyIteratorParameterCaptureCells(context, (IIteratorStateMachineBuilder)info.StateMachine);
         context.CurrentGeneratorExpression = info;
         context.IsStrictMode = _strictArrows.Contains(info.Source) || _isStrictMode
             || BodyDeclaresUseStrict(info.Source.BlockBody);

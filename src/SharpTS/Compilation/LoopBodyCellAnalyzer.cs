@@ -615,7 +615,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             foreach (var parameter in parameters)
             {
                 Declare(parameter.Name);
-                _declarations[parameter.Name].FormalParameter = synchronous && !directSuspension;
+                _declarations[parameter.Name].FormalParameter = true;
             }
             var initializers = Runtime.ParameterBinder.ParameterInitializers(body);
             foreach (var initializer in initializers?.Values.AsEnumerable() ?? [])
@@ -623,6 +623,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
                 {
                     Declare(name);
                     _declarations[name].ParameterPattern = synchronous && !directSuspension;
+                    _declarations[name].FormalParameter = true;
                 }
             _owners[^1].InParameterDefaults = true;
             foreach (var parameter in parameters)
