@@ -37,6 +37,7 @@ public sealed class DeferredParameterDefaultScopeTests
     [InlineData("class Example{constructor(public read:()=>number=()=>later,{later}:{later?:number}={}){}}", "TS2322")]
     [InlineData("class Example{constructor(public read:number=later,{later}:{later:number}={later:2}){}}", "TS2373")]
     [InlineData("function run(first=later,[later]:number[]=[1]){}", "TS2373")]
+    [InlineData("let second:any='outer';class C{*tdz(first:any=second,second?:any){yield first;}}", "TS2373")]
     public void ImmediateAndIncorrectDeferredReadsAreRejected(string source, string code) =>
         Assert.Contains(Check(source).Diagnostics, diagnostic => diagnostic.TsCode == code);
 
