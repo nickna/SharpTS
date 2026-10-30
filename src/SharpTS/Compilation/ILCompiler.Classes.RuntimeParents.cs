@@ -420,6 +420,15 @@ public partial class ILCompiler
                 parameterEmitter.EmitConstructorParameterProperty(assignment, parameterLocals[value.Name.Lexeme]);
             }
         });
+        if (declaration.SuperclassExpr == null)
+        {
+            // Base fields run with their bound receiver before parameter defaults.
+            // Derived elements remain attached to the successful super operation.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver!);
+            SetReceiverCell();
+            ctx.EmitConstructorOwnElements!();
+        }
         if (constructor?.Body != null && ReferencesArgumentsIdentifier(constructor.Body)
             && !constructor.Parameters.Any(parameter => parameter.Name.Lexeme == "arguments"))
         {
@@ -501,13 +510,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver!);
             SetReceiverCell();
         }
-        else if (declaration.SuperclassExpr == null)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver!);
-            SetReceiverCell();
-        }
-        if (implicitSuper || declaration.SuperclassExpr == null) ctx.EmitConstructorOwnElements!();
+        if (implicitSuper) ctx.EmitConstructorOwnElements!();
         foreach (var statement in constructor?.Body ?? [])
             if (!parameterProperties.Contains(statement)) emitter.EmitStatement(statement);
         emitter.EmitClassConstructorFallthrough();
