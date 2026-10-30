@@ -347,10 +347,10 @@ public partial class Interpreter
             if (!storage.DefineProperty(name, descriptor)) return false;
             descriptor = storage.GetOwnPropertyDescriptor(name)!;
         }
-        else if (name == "name")
+        else
         {
             var storage = new SharpTSObject([]);
-            if (GetBuiltInConstructorOverlayDescriptor(constructor, name) is { } current)
+            if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, constructor, name) is { } current)
                 storage.DefineProperty(name, current);
             if (!storage.DefineProperty(name, descriptor)) return false;
             descriptor = storage.GetOwnPropertyDescriptor(name)!;
