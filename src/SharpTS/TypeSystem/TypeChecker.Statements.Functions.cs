@@ -114,23 +114,49 @@ public partial class TypeChecker
     {
         // Materialized once: the two passes below each iterate the statements.
         var stmtList = statements as IReadOnlyList<Stmt> ?? statements.ToList();
+        List<Stmt.Function> functions = [];
+        Dictionary<string, TypeInfo> newlyHoisted = new(StringComparer.Ordinal);
 
         // Pass 1: register each declaration's signature (un-annotated return types as `any`).
         foreach (var stmt in stmtList)
         {
             // Handle top-level functions. Body-less declarations (ambient `declare function`,
             // overload signatures) hoist too — tsc resolves calls that precede the declaration.
-            // For an overload group only the first signature lands here; the visit pass installs
-            // the full OverloadedFunction when it reaches the group.
+            // Seed sibling names first; their types may appear in another group's annotations.
             if (stmt is Stmt.Function funcStmt)
             {
-                HoistSingleFunction(funcStmt);
+                functions.Add(funcStmt);
+                if (HoistSingleFunction(funcStmt) is { } signature)
+                    newlyHoisted[funcStmt.Name.Lexeme] = signature;
             }
             // Handle exported functions
             else if (stmt is Stmt.Export export && export.Declaration is Stmt.Function exportedFunc)
             {
-                HoistSingleFunction(exportedFunc);
+                functions.Add(exportedFunc);
+                if (HoistSingleFunction(exportedFunc) is { } signature)
+                    newlyHoisted[exportedFunc.Name.Lexeme] = signature;
             }
+        }
+
+        // Calls before an overload group see its declaration-owned public signatures,
+        // never the implementation. Preserve independently scoped generic declarations.
+        foreach (var group in functions.GroupBy(function => function.Name.Lexeme, StringComparer.Ordinal))
+        {
+            if (!newlyHoisted.TryGetValue(group.Key, out var seed) ||
+                !ReferenceEquals(_environment.Get(group.Key), seed) || group.Count() < 2)
+                continue;
+            var declarations = group.Where(function => function.Body is null).ToList();
+            if (declarations.Count == 0) continue;
+            List<TypeInfo> signatures = [];
+            foreach (var declaration in declarations)
+            {
+                if (HoistSingleFunction(declaration, signatureOnly: true) is not { } signature) break;
+                signatures.Add(signature);
+            }
+            if (signatures.Count != declarations.Count) continue;
+            var overload = new TypeInfo.OverloadSet(signatures);
+            _environment.Define(group.Key, overload);
+            RegisterEditorPublicSignatures(overload, signatures);
         }
 
         // Hoist const/let/var declarations with function expressions
@@ -564,18 +590,18 @@ public partial class TypeChecker
     /// If type resolution fails (e.g., references undefined types), the function will be
     /// defined later during normal statement processing.
     /// </summary>
-    private void HoistSingleFunction(Stmt.Function funcStmt)
+    private TypeInfo? HoistSingleFunction(Stmt.Function funcStmt, bool signatureOnly = false)
     {
         string funcName = funcStmt.Name.Lexeme;
         RegisterValueDeclaration(funcStmt.Name, mergeWithLocal: true);
 
         // Skip if already defined (e.g., from overload processing)
         // But allow overwriting built-in Any types (like process, console) with user definitions
-        if (_environment.IsDefinedLocally(funcName))
+        if (!signatureOnly && _environment.IsDefinedLocally(funcName))
         {
             var existingType = _environment.Get(funcName);
             if (existingType is not TypeInfo.Any)
-                return;
+                return null;
         }
 
         try
@@ -639,7 +665,8 @@ public partial class TypeChecker
 
                 // Register the function type (hoisting)
                 RegisterEditorSignature(funcType, funcStmt, funcStmt.Name);
-                _environment.Define(funcName, funcType);
+                if (!signatureOnly) _environment.Define(funcName, funcType);
+                return funcType;
             }
             catch
             {
@@ -653,6 +680,7 @@ public partial class TypeChecker
             // If type resolution fails during hoisting (e.g., references undefined interface),
             // skip hoisting - the function will be defined normally during statement processing
         }
+        return null;
     }
 
     /// <summary>
