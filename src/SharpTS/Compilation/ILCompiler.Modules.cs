@@ -107,6 +107,12 @@ public partial class ILCompiler
         if (!hasExportAssignment)
         foreach (var stmt in module.Statements)
         {
+            if (stmt is Stmt.ImportRequire { IsExported: true } importRequire)
+            {
+                string name = importRequire.AliasName.Lexeme;
+                if (!exportFields.ContainsKey(name))
+                    exportFields[name] = DefineExportField(name);
+            }
             if (stmt is Stmt.Export export)
             {
                 if (export.IsTypeOnly)

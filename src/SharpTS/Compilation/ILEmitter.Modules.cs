@@ -257,8 +257,13 @@ public partial class ILEmitter
             aliasLocal = _ctx.Locals.GetLocal(aliasName) ?? _ctx.Locals.DeclareLocal(aliasName, _ctx.Types.Object);
         }
 
-        // Check if module uses export = syntax
-        if (exportFields.TryGetValue("$exportAssignment", out var exportAssignField))
+        // A CommonJS target exposes its actual module.exports value, just as
+        // require() and the default CJS import do.
+        if (_ctx.CommonJsGetExportsMethods?.TryGetValue(importedPath, out var cjsGetExports) == true)
+        {
+            IL.Emit(OpCodes.Call, cjsGetExports);
+        }
+        else if (exportFields.TryGetValue("$exportAssignment", out var exportAssignField))
         {
             // Module uses export = - load the assignment value directly
             IL.Emit(OpCodes.Ldsfld, exportAssignField);
