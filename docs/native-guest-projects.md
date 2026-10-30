@@ -1154,8 +1154,21 @@ Unknown dynamic construction, Reflect/bound/newTarget paths, unclassified source
 calls, and selected foreign CLR operations retain the whole corresponding legacy
 operation. A foreign scalar return signature does not prove the foreign body's
 reflection effects. Unused ambient declarations add no selected-operation proof
-or blocker. Missing source interface/base metadata also remains explicitly legacy;
-the persisted inherited-generic metadata limitation is not bypassed here.
+or blocker. Missing source interface/base evidence also remains explicitly legacy.
+An exact recorded `AddInterfaceImplementation` operation, followed by completion
+of that same output owner, can prove its own interface relationship when persisted
+`GetInterfaces` is unavailable. Completed physical base contexts can then supply
+literal owners to the existing initializer and receiver queries; source annotations
+do not substitute for those contexts. A generic-definition value is already a
+definition, while a constructed source token still requires its actual normalization.
+
+Every emitted runtime `ClassDefinition.Create` call records its real operation and
+keeps the family on the whole legacy path because per-evaluation parent selection
+is unproved. Class expressions and runtime declarations share this emission seam.
+The direct `Child extends Box<number>` control now passes strict native publication
+with zero findings. Generic-constructor alias heritage has a separate ordinary
+compiler execution defect tracked by #3139; the conservative receipt control does
+not claim to repair that JavaScript behavior.
 
 Source catalog/type creation phases and ordinary managed emission stay unchanged.
 This certificate is a bounded direct-construction profile, not general dynamic

@@ -23,6 +23,7 @@ public sealed class NativeClosedSourceFamilyTests
     [Theory]
     [InlineData("class Box<T>{constructor(public value:T){}} console.log(new Box<number>(7).value);", "7\n", 2)]
     [InlineData("class Box<T>{constructor(public value:T){}} console.log(new Box<number>(7).value,new Box<string>('s').value);", "7 s\n", 3)]
+    [InlineData("class Box<T>{constructor(public value:T){}} class Child extends Box<number>{} console.log(new Child(7).value);", "7\n", 2)]
     public void DirectOperandsCloseTheWholeSourceFamily(string source, string expected, int contexts)
     {
         var (compiler, saved) = Build(source);
@@ -66,12 +67,41 @@ public sealed class NativeClosedSourceFamilyTests
     [Theory]
     [InlineData("class Box<T>{constructor(public value:T){}} const C:any=Box; console.log(new C(7).value);")]
     [InlineData("class Box<T>{constructor(public value:T){}} console.log(Reflect.construct(Box,[7]).value);")]
+    [InlineData("class Box<T>{constructor(public value:T){}} class Target{} console.log(Reflect.construct(Box,[7],Target).value);")]
     [InlineData("class Box<T>{constructor(public value:T){}} const C:any=Box.bind(null); console.log(new C(7).value);")]
-    [InlineData("class Box<T>{constructor(public value:T){}} class Child extends Box<number>{} console.log(new Child(7).value);")]
+    [InlineData("class Other<U>{} class Box<T>{next(){return new Other<T>();}} console.log(new Box<number>());")]
     public void UnknownOrExpandingIngressKeepsTheFamilyUnproved(string source)
     {
         var (compiler, _) = Build(source);
         Assert.True(compiler.NativeClosedFamilies!.Completed.UsesLegacy);
+    }
+
+    [Fact]
+    public void RuntimeClassCreationRetainsItsUnprovedParentContext()
+    {
+        var (compiler, _) = Build("class Box<T>{constructor(public value:T){}} const Parent:any=Box; class Child extends Parent{constructor(value:number){super(value);}} console.log((new Child(7) as any).value);");
+        var proof = compiler.NativeClosedFamilies!.Completed;
+        Assert.True(proof.UsesLegacy);
+        Assert.NotEmpty(proof.RuntimeClasses);
+        Assert.All(proof.RuntimeClasses, operation =>
+        {
+            Assert.Same(proof.Module, operation.Create.Module);
+            Assert.True(operation.CompletedBodyLength > operation.Offset);
+        });
+    }
+
+    [Fact]
+    public void ActualClosedGenericBaseOperandsRetainSeparateInstanceValues()
+    {
+        var (compiler, saved) = Build("class Box<T>{constructor(public value:T){}} class Derived<U> extends Box<U>{} console.log(new Derived<number>(7).value,new Derived<string>('s').value);");
+        Assert.Equal("7 s\n", TestHarness.RunCompiledWithTimeout(() => saved, TimeSpan.FromSeconds(20)));
+        var proof = compiler.NativeClosedFamilies!.Completed;
+        Assert.False(proof.UsesLegacy, string.Join("; ", proof.Blockers));
+        Assert.Equal(2, proof.Families.Count);
+        Assert.All(proof.Families, family => Assert.All(family.Contexts, context => Assert.False(context.ContainsGenericParameters)));
+        Assert.False(compiler.NativeRuntimeInitializers!.UsesLegacy);
+        Assert.False(compiler.NativeReceiverInitializers!.UsesLegacy);
+        Assert.False(compiler.NativePrototypeFields!.UsesLegacy);
     }
 
     [Theory]

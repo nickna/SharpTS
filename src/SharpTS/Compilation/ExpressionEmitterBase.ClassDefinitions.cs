@@ -603,7 +603,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, keys);
         IL.Emit(OpCodes.Ldloc, captures);
         NativeReceiverInitializerLookup.EmitTemplateCreate(nativeReceiverInitializers, IL,
-            templateEmission, Ctx.Runtime!.ClassDefinitions.Create);
+            templateEmission, Ctx.Runtime!.ClassDefinitions.Create, Ctx.NativeClosedFamilies);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Call, factory.Initializer);
         SetStackUnknown();

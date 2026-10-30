@@ -11,6 +11,7 @@ internal sealed class NativeClosedSourceFamilies(ModuleBuilder module, TypeProvi
     private readonly List<Invocation> _active = [];
     private readonly List<Allocation> _allocations = [];
     private readonly List<(Type Owner, MethodBuilder Stub, int Offset)> _initializers = [];
+    private readonly List<(MethodBuilder Create, ILGenerator Body, int Offset, MethodBase? Caller)> _runtimeClasses = [];
     private readonly List<string> _unknown = [];
     private NativeClosedSourceFamilySnapshot? _completed;
     private sealed record Allocation(ConstructorInfo Constructor, ILGenerator Body, int Offset, MethodBase? Caller);
@@ -79,6 +80,14 @@ internal sealed class NativeClosedSourceFamilies(ModuleBuilder module, TypeProvi
         _unknown.Add($"Unproved actual initializer context: {owner}");
     }
 
+    internal void RecordRuntimeClassCreate(MethodBuilder create, ILGenerator body, int offset, MethodBase? caller)
+    {
+        EnsureMutable();
+        if (!ReferenceEquals(create.Module, module) || offset < 0 || body.ILOffset <= offset)
+            throw new InvalidOperationException("Runtime class contexts require their actual output Create operation.");
+        _runtimeClasses.Add((create, body, offset, caller));
+    }
+
     internal void CompleteEmission(NativeSourceOwnerCatalog sources, NativeConstructorValueProducerSnapshot values,
         NativeClrAdmission admission)
     {
@@ -89,6 +98,8 @@ internal sealed class NativeClosedSourceFamilies(ModuleBuilder module, TypeProvi
             throw new InvalidOperationException("Closed source families require completed actual operands and CLR ingress from this output.");
         var blockers = new List<string>(_unknown);
         blockers.AddRange(sources.Blockers);
+        if (_runtimeClasses.Count != 0)
+            blockers.Add("Actual runtime class definition can choose an unproved parent or family context");
         foreach (var invocation in _invocations.Where(invocation => !invocation.Selected))
             blockers.Add($"Unclassified actual invocation: {invocation.Source.GetType().Name}");
         // A scalar signature does not certify an arbitrary foreign body's
@@ -108,6 +119,7 @@ internal sealed class NativeClosedSourceFamilies(ModuleBuilder module, TypeProvi
                 if (producer.Body.ILOffset <= producer.ValueOffset || producer.Method is { } method && !ReferenceEquals(method.Module, module))
                     throw new InvalidOperationException("Family constructor values require their actual completed output operand.");
                 if (producer.Kind == NativeConstructorValueProducerKind.SourceClass && producer.ExactTokenOwner.IsGenericType &&
+                    !producer.ExactTokenOwner.IsGenericTypeDefinition &&
                     !producer.NormalizesSourceDefinition)
                     blockers.Add($"Unproved source constructor-value normalization: {producer.ExactTokenOwner}");
             }
@@ -141,7 +153,9 @@ internal sealed class NativeClosedSourceFamilies(ModuleBuilder module, TypeProvi
             _initializers.Select(initializer => new NativeFamilyInitializer(initializer.Owner,
                 initializer.Stub, initializer.Offset, initializer.Stub.GetILGenerator().ILOffset)),
             _invocations.Select(invocation => new NativeFamilyInvocation(invocation.Source, invocation.Caller,
-                invocation.Selected, invocation.Body.ILOffset)), values);
+                invocation.Selected, invocation.Body.ILOffset)), values,
+            _runtimeClasses.Select(runtimeClass => new NativeFamilyRuntimeClass(runtimeClass.Create, runtimeClass.Caller,
+                runtimeClass.Offset, runtimeClass.Body.ILOffset)));
 
         void AddClosed(Type owner, string role)
         {
@@ -193,6 +207,8 @@ internal sealed class NativeClosedSourceFamilies(ModuleBuilder module, TypeProvi
     private static ILGenerator? Body(MethodBase method) => method switch
     { MethodBuilder builder => builder.GetILGenerator(), ConstructorBuilder constructor => constructor.GetILGenerator(), _ => null };
 
+    internal static bool SameOperand(Type left, Type right) => OperandTypeComparer.Instance.Equals(left, right);
+
     // Persisted emit can create distinct TypeSpec objects for the same operand.
     // Compare the real definition and recursively paired argument identities;
     // names cannot establish ownership or generic context.
@@ -225,13 +241,14 @@ internal sealed record NativeClosedSourceFamily(Type Definition, IReadOnlyList<T
 internal sealed record NativeFamilyAllocation(ConstructorInfo Constructor, MethodBase? Caller, int Offset, int CompletedBodyLength);
 internal sealed record NativeFamilyInitializer(Type Owner, MethodBuilder Stub, int Offset, int CompletedBodyLength);
 internal sealed record NativeFamilyInvocation(Expr Source, MethodBase? Caller, bool Selected, int CompletedBodyLength);
+internal sealed record NativeFamilyRuntimeClass(MethodBuilder Create, MethodBase? Caller, int Offset, int CompletedBodyLength);
 
 internal sealed class NativeClosedSourceFamilySnapshot
 {
     internal NativeClosedSourceFamilySnapshot(Module module, IEnumerable<NativeClosedSourceFamily> families,
         IEnumerable<Type> owners, IEnumerable<string> blockers, IEnumerable<NativeFamilyAllocation> allocations,
         IEnumerable<NativeFamilyInitializer> initializers, IEnumerable<NativeFamilyInvocation> invocations,
-        NativeConstructorValueProducerSnapshot constructorValues)
+        NativeConstructorValueProducerSnapshot constructorValues, IEnumerable<NativeFamilyRuntimeClass> runtimeClasses)
     {
         Module = module;
         Families = Array.AsReadOnly(families.ToArray());
@@ -241,6 +258,7 @@ internal sealed class NativeClosedSourceFamilySnapshot
         Initializers = Array.AsReadOnly(initializers.ToArray());
         Invocations = Array.AsReadOnly(invocations.ToArray());
         ConstructorValues = constructorValues;
+        RuntimeClasses = Array.AsReadOnly(runtimeClasses.ToArray());
     }
     internal Module Module { get; }
     internal IReadOnlyList<NativeClosedSourceFamily> Families { get; }
@@ -250,9 +268,12 @@ internal sealed class NativeClosedSourceFamilySnapshot
     internal IReadOnlyList<NativeFamilyInitializer> Initializers { get; }
     internal IReadOnlyList<NativeFamilyInvocation> Invocations { get; }
     internal NativeConstructorValueProducerSnapshot ConstructorValues { get; }
+    internal IReadOnlyList<NativeFamilyRuntimeClass> RuntimeClasses { get; }
     internal bool UsesLegacy => Blockers.Count != 0;
     internal IReadOnlyList<Type>? ContextsFor(Type definition) => UsesLegacy ? null :
         Families.FirstOrDefault(family => family.Definition == definition)?.Contexts;
+    internal bool ProvesClosedOwner(Type owner) => !UsesLegacy &&
+        Owners.Any(context => NativeClosedSourceFamilies.SameOperand(context, owner));
 
     internal IEnumerable<Type> Expand(Type owner)
     {

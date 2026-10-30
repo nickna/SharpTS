@@ -52,6 +52,8 @@ internal sealed class NativeRuntimeClassInitialization
                 // whose live BaseType API is unavailable.
                 foreach (var context in families.Owners) owners.Add(context);
             }
+            else if (families?.ProvesClosedOwner(declaration) == true)
+                foreach (var context in families.Owners) owners.Add(context);
             else AddChain(declaration);
         }
         var il = Initialize.GetILGenerator();

@@ -71,11 +71,12 @@ internal sealed class NativeReceiverInitializerLookup
     }
 
     internal static void EmitTemplateCreate(NativeReceiverInitializerLookup? lookup, ILGenerator il,
-        TemplateEmission? emission, MethodBuilder create)
+        TemplateEmission? emission, MethodBuilder create, NativeClosedSourceFamilies? families = null)
     {
         lookup?.EnsureMutable();
         int offset = il.ILOffset;
         il.Emit(OpCodes.Call, create);
+        families?.RecordRuntimeClassCreate(create, il, offset, emission?.Method);
         if (lookup is null) return;
         if (emission is null || !lookup._templates.Contains(emission) || emission.Create is not null ||
             !ReferenceEquals(emission.Body, il) || !ReferenceEquals(create.Module, lookup._owner.Module) ||
@@ -128,7 +129,7 @@ internal sealed class NativeReceiverInitializerLookup
                 producer.Method is { } method && !ReferenceEquals(method.Module, _owner.Module)))
                 throw new InvalidOperationException("Receiver lookup requires actual completed constructor-value bodies.");
             if (value.ClosureKind is NativeConstructorValueClosureKind.NongenericLiteral or NativeConstructorValueClosureKind.ExactClosedBclToken
-                && ProveClosed(value.ExactTokenOwner)) closed.Add(value.ExactTokenOwner);
+                && (ProveClosed(value.ExactTokenOwner) || certificate?.ProvesClosedOwner(value.ExactTokenOwner) == true)) closed.Add(value.ExactTokenOwner);
             else if (value.ClosureKind == NativeConstructorValueClosureKind.UnprovedSourceGenericFamily &&
                 value.SourceGenericDefinition is { } definition) AddFamily(definition);
             else _blockers.Add($"Unproved constructor-value owner for receiver lookup: {value.ExactTokenOwner.FullName}");
@@ -143,7 +144,7 @@ internal sealed class NativeReceiverInitializerLookup
             if (definition is not TypeBuilder builder || !sources.Implementers.Contains(builder) || !builder.IsCreated())
                 throw new InvalidOperationException("Class-template tokens must belong to actual completed source definitions.");
             if (definition.IsGenericTypeDefinition) AddFamily(definition);
-            else if (ProveClosed(template.Owner)) closed.Add(template.Owner);
+            else if (ProveClosed(template.Owner) || certificate?.ProvesClosedOwner(template.Owner) == true) closed.Add(template.Owner);
             else _blockers.Add($"Unproved class-template owner for receiver lookup: {template.Owner.FullName}");
         }
         ClosedOwners = Array.AsReadOnly(closed.OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray());

@@ -64,17 +64,19 @@ public sealed class NativeRuntimeClassInitializationTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void GenericProducerRetainsTheFullLegacyInitializationOperation(bool generic)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void OnlyUnprovedGenericProducersRetainTheFullLegacyInitializationOperation(bool generic, bool unproved)
     {
         string source = generic ? "class Owner<T> { static item = 7; } console.log((Owner as any).item);" : "console.log(42);";
+        source += unproved ? " const C:any=Owner; new C();" : "";
         var saved = Compile(source, true, out var compiler);
         Assert.Equal(generic ? "7\n" : "42\n", Run(saved));
-        Assert.Equal(generic, compiler.NativeRuntimeInitializers!.UsesLegacy);
+        Assert.Equal(unproved, compiler.NativeRuntimeInitializers!.UsesLegacy);
         var initialize = Initializer(saved);
-        Assert.Equal(generic, Instructions(initialize).Any(instruction => instruction.Member?.Name == "get_TypeHandle"));
-        if (generic) initialize.Invoke(null, [typeof(ForeignOwner)]);
+        Assert.Equal(unproved, Instructions(initialize).Any(instruction => instruction.Member?.Name == "get_TypeHandle"));
+        if (unproved) initialize.Invoke(null, [typeof(ForeignOwner)]);
         else
         {
             var exception = Assert.Throws<TargetInvocationException>(() => initialize.Invoke(null, [typeof(ForeignOwner)]));
