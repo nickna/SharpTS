@@ -143,6 +143,7 @@ public partial class RuntimeEmitter
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedPromiseRuntime? Promise,
         ProxyDescriptorCallInputs ProxyDescriptor,
+        MethodInfo ToPropertyKey,
         EmittedRegExpRuntime RegExps,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
@@ -1647,6 +1648,12 @@ public partial class RuntimeEmitter
         // built-ins we haven't installed descriptors for). Fail→RuntimeError
         // cascade was net -114 in a regen attempt; revert until built-in
         // descriptors are complete.
+
+        // Capture the actual property key before receiver dispatch. In
+        // particular, an object's string-hint conversion may return a Symbol.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ToPropertyKey);
+        il.Emit(OpCodes.Starg_S, (byte)1);
 
         var propNameLocal = il.DeclareLocal(_types.String);
         var descriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);

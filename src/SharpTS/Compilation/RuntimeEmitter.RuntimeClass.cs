@@ -2169,6 +2169,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectRead.Property,
                     NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
+                runtime.Reflect.ToPropertyKey,
                 runtime.RegExps,
                 runtime.StringCoercion,
                 runtime.Symbols,

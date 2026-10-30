@@ -162,7 +162,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, endLabel);
     }
 
-    // Proxy dispatch precedes symbol/string coercion. Returns from the emitted method on a match;
+    // Proxy dispatch receives the normalized key before ordinary symbol/string lookup. Returns on a match;
     // otherwise falls through empty. Owns its normalization locals and labels.
     private void EmitGetOwnDescriptorProxyReceiver(ILGenerator il, GetOwnDescriptorProxyReceiverInputs inputs)
     {
