@@ -10,6 +10,7 @@ internal enum NativeConstructorValueProducerKind
     BuiltInConstructor,
     GlobalConstructorProperty,
     ClrConstructor,
+    RuntimeConstructorValue,
 }
 
 internal enum NativeConstructorValueClosureKind
