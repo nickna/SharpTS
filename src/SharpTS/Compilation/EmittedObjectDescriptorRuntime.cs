@@ -9,6 +9,7 @@ public sealed class EmittedObjectDescriptorRuntime
     internal EmittedObjectDescriptorRuntime() { }
     public bool IsComplete { get; private set; }
     private bool _getOwnPropertyDescriptorBodyEmitted;
+    private bool _getOwnPropertyDescriptorValueFormBodyEmitted;
 
     private MethodBuilder? _defineProperty;
     public MethodBuilder DefineProperty
@@ -22,6 +23,13 @@ public sealed class EmittedObjectDescriptorRuntime
     {
         get => Require(_getOwnPropertyDescriptor);
         internal set => SetHandle(ref _getOwnPropertyDescriptor, value);
+    }
+
+    private MethodBuilder? _getOwnPropertyDescriptorValueForm;
+    public MethodBuilder GetOwnPropertyDescriptorValueForm
+    {
+        get => Require(_getOwnPropertyDescriptorValueForm);
+        internal set => SetHandle(ref _getOwnPropertyDescriptorValueForm, value);
     }
 
     private MethodBuilder? _defineProperties;
@@ -44,6 +52,14 @@ public sealed class EmittedObjectDescriptorRuntime
         if (_getOwnPropertyDescriptorBodyEmitted)
             throw new InvalidOperationException("Object descriptor lookup body emission is already complete.");
         _getOwnPropertyDescriptorBodyEmitted = true;
+    }
+
+    internal void MarkGetOwnPropertyDescriptorValueFormBodyEmitted()
+    {
+        EnsureMutable();
+        if (_getOwnPropertyDescriptorValueFormBodyEmitted)
+            throw new InvalidOperationException("Object descriptor value-form body emission is already complete.");
+        _getOwnPropertyDescriptorValueFormBodyEmitted = true;
     }
 
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
@@ -69,10 +85,13 @@ public sealed class EmittedObjectDescriptorRuntime
         EnsureMutable();
         _ = DefineProperty;
         _ = GetOwnPropertyDescriptor;
+        _ = GetOwnPropertyDescriptorValueForm;
         _ = DefineProperties;
         _ = GetOwnPropertyDescriptors;
         if (!_getOwnPropertyDescriptorBodyEmitted)
             throw new InvalidOperationException("Object descriptor lookup body has not been emitted.");
+        if (!_getOwnPropertyDescriptorValueFormBodyEmitted)
+            throw new InvalidOperationException("Object descriptor value-form body has not been emitted.");
         IsComplete = true;
     }
 }

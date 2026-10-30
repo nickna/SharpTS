@@ -2169,6 +2169,9 @@ public partial class RuntimeEmitter
                     NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 ),
                 runtime.Reflect.ToPropertyKey,
+                runtime.Errors.CreateException,
+                runtime.Errors.TypeErrorConstructor,
+                runtime.FunctionAttributes.PadUndefinedCtor,
                 runtime.RegExps,
                 runtime.StringCoercion,
                 runtime.Symbols,

@@ -123,6 +123,9 @@ public partial class RuntimeEmitter
         EmittedPromiseRuntime? Promise,
         ProxyDescriptorCallInputs ProxyDescriptor,
         MethodInfo ToPropertyKey,
+        MethodInfo CreateException,
+        ConstructorInfo TypeErrorConstructor,
+        ConstructorInfo PadUndefinedConstructor,
         EmittedRegExpRuntime RegExps,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
@@ -1313,6 +1316,10 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
+        descriptors.GetOwnPropertyDescriptorValueForm = typeBuilder.DefineMethod(
+            "ObjectGetOwnPropertyDescriptorValueForm",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.Object]);
     }
 
     private void EmitObjectGetOwnPropertyDescriptor(
@@ -1322,14 +1329,15 @@ public partial class RuntimeEmitter
     {
         var method = descriptors.GetOwnPropertyDescriptor;
 
+        EmitObjectGetOwnDescriptorValueForm(descriptors,
+            new ObjectDescriptorValueFormInputs(method, inputs.CreateException,
+                inputs.TypeErrorConstructor, inputs.UndefinedType, inputs.PadUndefinedConstructor));
+
         var il = method.GetILGenerator();
 
-        // NOTE: Spec ToObject step throws on null/undefined; we deliberately
-        // skip that guard because too many test262 tests indirectly call this
-        // function on `desc.get` where desc is undefined (e.g., when probing
-        // built-ins we haven't installed descriptors for). Fail→RuntimeError
-        // cascade was net -114 in a regen attempt; revert until built-in
-        // descriptors are complete.
+        // Public Object ToObject validation lives in the value-form entry.
+        // Internal descriptor callbacks use this lookup directly and retain
+        // their existing receiver handling.
 
         // Capture the actual property key before receiver dispatch. In
         // particular, an object's string-hint conversion may return a Symbol.

@@ -134,6 +134,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             Check(typeof(object), "keys", runtime.ObjectKeys.Keys, 1);
             Check(typeof(object), "assign", runtime.ObjectOperations.Assign, 2);
             Check(typeof(object), "defineProperty", runtime.ObjectDescriptors.DefineProperty, 3);
+            Check(typeof(object), "getOwnPropertyDescriptor", runtime.ObjectDescriptors.GetOwnPropertyDescriptorValueForm, 2);
             Check(typeof(object), "create", runtime.ObjectPrototypes.CreateValueForm, 2);
             Check(runtime.Symbols.Type, "for", runtime.Symbols.For, 1);
             Check(runtime.Symbols.Type, "keyFor", runtime.Symbols.KeyFor, 1);
@@ -192,7 +193,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
         var operations = Owner(typeof(EmittedObjectOperationsRuntime), "Values", "Entries", "FromEntries", "Assign", "Is", "GroupBy");
         var state = Owner(typeof(EmittedObjectStateRuntime), "Freeze", "Seal", "PreventExtensions", "IsExtensible", "IsFrozen", "IsSealed");
         var prototypes = Owner(typeof(EmittedObjectPrototypeRuntime), "GetPrototypeOf", "SetPrototypeOf", "CreateValueForm");
-        var descriptors = Owner(typeof(EmittedObjectDescriptorRuntime), "DefineProperty", "DefineProperties", "GetOwnPropertyDescriptor", "GetOwnPropertyDescriptors");
+        var descriptors = Owner(typeof(EmittedObjectDescriptorRuntime), "DefineProperty", "DefineProperties", "GetOwnPropertyDescriptor", "GetOwnPropertyDescriptorValueForm", "GetOwnPropertyDescriptors");
         object? bigInt = null, promise = null, date = null, map = null;
         if (optional)
         {
