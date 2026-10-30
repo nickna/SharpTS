@@ -497,6 +497,13 @@ public partial class TypeChecker
             // Module uses export = value - import the assignment value directly
             importedType = exportAssignment;
         }
+        else if (importedModule.IsCommonJs)
+        {
+            // Runtime module.exports can replace the entire CJS value. Match
+            // the dynamic default/named CJS import profile, keeping typed
+            // export= assignments in the precise branch above.
+            importedType = TypeInfo.Any.Shared;
+        }
         else
         {
             // ES6-style module - create a namespace type with all exports
