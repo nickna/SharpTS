@@ -459,7 +459,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, typeof(object).GetMethod(nameof(GetType))!);
         il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty(nameof(Type.Name))!.GetMethod!);
-        il.Emit(OpCodes.Ldstr, "$SharedArrayBuffer");
+        il.Emit(OpCodes.Ldstr, NativeTypedArrayBufferLookup.BufferOwnerName);
         il.Emit(OpCodes.Call, typeof(string).GetMethod(
             "op_Equality", BindingFlags.Public | BindingFlags.Static,
             binder: null, [typeof(string), typeof(string)], modifiers: null)!);
@@ -467,10 +467,14 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, typeof(object).GetMethod(nameof(GetType))!);
-        il.Emit(OpCodes.Ldstr, "GetBuffer");
-        il.Emit(OpCodes.Ldsfld, typeof(Type).GetField(nameof(Type.EmptyTypes))!);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod(
-            nameof(Type.GetMethod), [typeof(string), typeof(Type[])])!);
+        if (_nativeTypedArrayBuffers is not null) _nativeTypedArrayBuffers.EmitQuery(ctor, il);
+        else
+        {
+            il.Emit(OpCodes.Ldstr, "GetBuffer");
+            il.Emit(OpCodes.Ldsfld, typeof(Type).GetField(nameof(Type.EmptyTypes))!);
+            il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod(
+                nameof(Type.GetMethod), [typeof(string), typeof(Type[])])!);
+        }
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, foreignSharedArrayBufferMethodFoundLabel);
         il.Emit(OpCodes.Pop);

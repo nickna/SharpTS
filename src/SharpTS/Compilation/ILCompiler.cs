@@ -750,6 +750,7 @@ public partial class ILCompiler
     {
         if (_nativeAotProjectOutput)
         {
+            _nativeOwnedTypeDeclarations = NativeOwnedTypeDeclarations.Begin(_moduleBuilder);
             _nativeSourceOwners = new(_moduleBuilder, _types);
             _nativeGenericMethodNormalization = new(_moduleBuilder, _types);
             _nativeConstructedBodies = new(_moduleBuilder, _types);
@@ -769,6 +770,7 @@ public partial class ILCompiler
             _nativeReceiverInitializerLookup = new(_moduleBuilder, _types);
             _nativeOwnerClosure = new(_moduleBuilder, _types);
             _nativePrototypeFields = new(_moduleBuilder, _types);
+            _nativeTypedArrayBuffers = new(_moduleBuilder, _types);
             _nativeEvaluatedConstructors = new(_moduleBuilder, _types);
             _functionEmissionPolicy = _functionEmissionPolicy with
             {
@@ -794,7 +796,7 @@ public partial class ILCompiler
             nativeConstructorFactories: _nativeConstructorFactories,
             nativeConstructorActivation: _nativeConstructorActivation,
             nativeReceiverInitializers: _nativeReceiverInitializerLookup,
-            nativeOwnerClosure: _nativeOwnerClosure, nativePrototypeFields: _nativePrototypeFields) { EntryModulePath = _entryModulePath }
+            nativeOwnerClosure: _nativeOwnerClosure, nativePrototypeFields: _nativePrototypeFields, nativeTypedArrayBuffers: _nativeTypedArrayBuffers) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy,
                 _nativeSourceOwners, nativeClassInitializer: _nativeRuntimeClassInitialization?.Initialize,
                 nativeStaticMemberPresence: _nativeStaticMemberPresence?.HasMember,
@@ -1315,6 +1317,7 @@ public partial class ILCompiler
             _nativeOwnerClosure.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot,
                 _nativeClrAdmission?.CompletedIngress, _runtime);
         _nativePrototypeFields?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeReceiverBinding!.RuntimeType);
+        _nativeTypedArrayBuffers?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeOwnedTypeDeclarations);
     }
 
     /// <summary>
@@ -1996,6 +1999,7 @@ public partial class ILCompiler
             _nativeOwnerClosure.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot,
                 _nativeClrAdmission?.CompletedIngress, _runtime);
         _nativePrototypeFields?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeReceiverBinding!.RuntimeType);
+        _nativeTypedArrayBuffers?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeOwnedTypeDeclarations);
     }
 
     #endregion

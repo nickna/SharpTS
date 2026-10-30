@@ -101,6 +101,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, buffer.BufferField);
         il.Emit(OpCodes.Ret);
+        _nativeTypedArrayBuffers?.RecordDeclaration(buffer);
     }
 
     private void EmitSharedArrayBufferSliceMethod(TypeBuilder typeBuilder, EmittedSharedArrayBufferRuntime buffer)

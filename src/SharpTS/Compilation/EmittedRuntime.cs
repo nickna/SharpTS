@@ -18,6 +18,7 @@ namespace SharpTS.Compilation;
 public class EmittedRuntime
 {
     internal NativePrototypeFieldsLookup? NativePrototypeFields { get; set; }
+    internal NativeTypedArrayBufferLookup? NativeTypedArrayBuffers { get; set; }
     internal NativeConstructorActivationLookup? NativeConstructorActivation { get; set; }
     internal NativeReceiverInitializerLookup? NativeReceiverInitializers { get; set; }
 

@@ -75,10 +75,12 @@ public partial class RuntimeEmitter
         // return new $SharedArrayBuffer((int)byteLength)
         il.Emit(OpCodes.Ldarg_0);  // byteLength (double)
         il.Emit(OpCodes.Conv_I4);  // convert to int
+        int creationOffset = il.ILOffset;
         il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
 
         buffer.Create = method;
+        _nativeTypedArrayBuffers?.RecordFactory(buffer, method, il, creationOffset);
 
         // Also emit slice and byteLength helpers
         EmitSharedArrayBufferSlice(runtimeType, buffer);

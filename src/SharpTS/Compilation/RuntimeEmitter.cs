@@ -22,6 +22,7 @@ public partial class RuntimeEmitter
     private readonly NativeReceiverInitializerLookup? _nativeReceiverInitializers;
     private readonly NativeOwnerClosure? _nativeOwnerClosure;
     private readonly NativePrototypeFieldsLookup? _nativePrototypeFields;
+    private readonly NativeTypedArrayBufferLookup? _nativeTypedArrayBuffers;
 
     private void EmitRuntimeConstructorValue(ILGenerator il, Type type) =>
         NativeConstructorActivationLookup.EmitValue(_nativeConstructorActivation, _types, il, type,
@@ -51,7 +52,7 @@ public partial class RuntimeEmitter
         NativeConstructorFactoryLookup? nativeConstructorFactories = null,
         NativeConstructorActivationLookup? nativeConstructorActivation = null,
         NativeReceiverInitializerLookup? nativeReceiverInitializers = null,
-        NativeOwnerClosure? nativeOwnerClosure = null, NativePrototypeFieldsLookup? nativePrototypeFields = null)
+        NativeOwnerClosure? nativeOwnerClosure = null, NativePrototypeFieldsLookup? nativePrototypeFields = null, NativeTypedArrayBufferLookup? nativeTypedArrayBuffers = null)
     {
         _types = types;
         _emitHosted = emitHosted;
@@ -66,6 +67,7 @@ public partial class RuntimeEmitter
         _nativeReceiverInitializers = nativeReceiverInitializers;
         _nativeOwnerClosure = nativeOwnerClosure;
         _nativePrototypeFields = nativePrototypeFields;
+        _nativeTypedArrayBuffers = nativeTypedArrayBuffers;
     }
 
     /// <summary>
@@ -91,6 +93,7 @@ public partial class RuntimeEmitter
         _nativeReceiverInitializers?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         _nativeOwnerClosure?.ValidateForEmitter(moduleBuilder, _emitNativeCallables, features.UsesUserClasses);
         _nativePrototypeFields?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
+        _nativeTypedArrayBuffers?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         functionPolicy.NativeConstructedBodies?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         if (_nativeStaticFieldLookup is { } fields &&
             (!_emitNativeCallables || !ReferenceEquals(fields.Module, moduleBuilder) || !fields.IsStatic || fields.IsGenericMethod ||
@@ -114,7 +117,8 @@ public partial class RuntimeEmitter
         {
             NativeConstructorActivation = _nativeConstructorActivation,
             NativeReceiverInitializers = _nativeReceiverInitializers,
-            NativePrototypeFields = _nativePrototypeFields
+            NativePrototypeFields = _nativePrototypeFields,
+            NativeTypedArrayBuffers = _nativeTypedArrayBuffers
         };
         if (nativeConstructorMetadata is not null)
         {
