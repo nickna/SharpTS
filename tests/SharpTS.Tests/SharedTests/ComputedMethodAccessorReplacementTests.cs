@@ -96,9 +96,10 @@ public sealed class ComputedMethodAccessorReplacementTests
         Assert.Equal(expected, TestHarness.Run(source, mode));
     }
 
-    // Compiled accessor pairs retain a getter across an intervening method (#2559).
-    [Fact]
-    public void InterpreterAccessorPairsResetAfterAnInterveningMethod()
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted)]
+    [InlineData(ExecutionMode.Compiled)]
+    public void AccessorPairsResetAfterAnInterveningMethod(ExecutionMode mode)
     {
         const string source = """
             const key: any = "value";
@@ -107,6 +108,6 @@ public sealed class ComputedMethodAccessorReplacementTests
             const descriptor: any = Object.getOwnPropertyDescriptor(C.prototype, "value");
             console.log(instance.value === undefined, descriptor.get === undefined, typeof descriptor.set);
             """;
-        Assert.Equal("true true function\n", TestHarness.RunInterpreted(source));
+        Assert.Equal("true true function\n", TestHarness.Run(source, mode));
     }
 }
