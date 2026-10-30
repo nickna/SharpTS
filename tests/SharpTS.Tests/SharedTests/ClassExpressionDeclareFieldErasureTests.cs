@@ -103,10 +103,9 @@ public sealed class ClassExpressionDeclareFieldErasureTests
             """, "false false\n17 false true\n17 true true true\n"];
     }
 
-    // Compiler gaps: inherited field presence (#2374) and erased static reads (#2711).
+    // Compiler gap: inherited field presence (#2374).
     public static IEnumerable<object[]> ModeCases() => Cases().SelectMany(row =>
         ((string)row[0] is "inherited-data-and-accessors-remain-visible"
-            or "static-declarations-erase-before-live-writes"
             ? new[] { ExecutionMode.Interpreted }
             : new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled })
             .Select(mode => new object[] { row[0], row[1], row[2], mode }));
