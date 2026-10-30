@@ -13,7 +13,7 @@ public static class PromiseBuiltIns
     // Stable templates use the interpreter's existing realm-local built-in
     // function cache. Result constructors still come from the actual receiver.
     private static readonly Dictionary<string, ISharpTSCallable> StaticMethods =
-        new[] { "all", "race", "resolve", "reject", "allSettled", "any", "withResolvers" }
+        new[] { "all", "allSettled", "any", "race", "resolve", "reject", "withResolvers" }
             .ToDictionary(name => name, name => CreateStaticMethod(name, null)!);
 
     internal static IEnumerable<string> StaticMemberNames

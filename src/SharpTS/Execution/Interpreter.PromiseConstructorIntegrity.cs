@@ -11,7 +11,7 @@ public partial class Interpreter
             || GetPromiseConstructorState(constructor) is not { } realm)
             return;
 
-        var keys = new List<string> { "name", "prototype" };
+        var keys = new List<string> { "length", "name", "prototype" };
         keys.AddRange(PromiseBuiltIns.StaticMemberNames);
         if (realm.StringProperties.TryGetValue(constructor, out var existing))
             keys.AddRange(existing.Keys);
