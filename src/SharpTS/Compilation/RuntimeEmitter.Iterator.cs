@@ -1189,6 +1189,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
 
+        // A proxy's symbol Get is observable even without own symbol storage.
+        // The ordinary index path preserves its trap, receiver and revocation.
+        var proxyIterator = il.DefineLabel();
+        var ordinaryIterator = il.DefineLabel();
+        EmitProxyTypeCheck(il, () => il.Emit(OpCodes.Ldarg_0), proxyIterator, ordinaryIterator);
+        il.MarkLabel(proxyIterator);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Index);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinaryIterator);
+
         // #1024: node:stream $Readable exposes [Symbol.asyncIterator] via GetAsyncIterator().
         // It carries no per-object symbol dict and isn't a user class, so hook it here:
         //   if (symbol == SymbolAsyncIterator && obj is $Readable) return new $TSFunction(obj, GetAsyncIterator);
