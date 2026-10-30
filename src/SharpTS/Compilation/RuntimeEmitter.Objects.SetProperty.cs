@@ -1478,6 +1478,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Stloc, newTypeEnumerableLocal);
             var ordinaryTypeAssignmentLabel = il.DefineLabel();
+            // A deleted virtual builtin has no attributes left to preserve.
+            // Assignment recreates ordinary enumerable data instead.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
+            il.Emit(OpCodes.Brtrue, ordinaryTypeAssignmentLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, _types.Type);
             il.Emit(OpCodes.Ldarg_1);
