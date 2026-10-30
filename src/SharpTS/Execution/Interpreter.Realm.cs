@@ -674,7 +674,16 @@ public partial class Interpreter
     internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype()
         => _objectPrototype ??= new() { RealmConstructor = GetObjectNamespace() };
     internal Runtime.Types.SharpTSDate GetDatePrototype()
-        => _datePrototype ??= new(double.NaN) { IsPrototype = true };
+    {
+        if (_datePrototype is null)
+        {
+            _datePrototype = new(double.NaN) { IsPrototype = true };
+            _datePrototype.DefineExtraProperty("constructor", new Runtime.Types.SharpTSPropertyDescriptor(
+                _globalConstants[BuiltInNames.Date],
+                writable: true, enumerable: false, configurable: true));
+        }
+        return _datePrototype;
+    }
     internal Runtime.Types.SharpTSObjectNamespace GetObjectNamespace() => _objectNamespace ??= new();
     internal Runtime.Types.SharpTSStringNamespace GetStringNamespace()
         => _stringNamespace ??= new() { RealmPrototypeFactory = GetStringPrototype };
