@@ -44,8 +44,8 @@ public sealed class PrimitiveFixedArgumentTransportTests
             Assert.Same(typeof(string), runtime.GetMethod(name)!.GetParameters()[0].ParameterType);
     }
 
-    [Fact]
-    public void LiveWatchFactoriesRetainPathOrderAndRawValues()
+    [Theory, ModeData]
+    public void LiveWatchFactoriesRetainPathOrderAndRawValues(ExecutionMode mode)
     {
         string path = Path.Combine(Path.GetTempPath(), "sharpts_fixed_abi_" + Guid.NewGuid().ToString("N") + ".txt");
         File.WriteAllText(path, "owned watcher input");
@@ -57,7 +57,9 @@ public sealed class PrimitiveFixedArgumentTransportTests
                 + "const watcher=fs.watch(filename(),options(),listener());console.log(typeof watcher.close);watcher.close();console.log(trace.join(','));"
                 + "fs.watchFile(path,{interval:100000},()=>{});fs.unwatchFile(path);fs.watchFile(path,()=>{});fs.unwatchFile(path);"
                 + "async function finish(){const iterator=fs.promises.watch(path);const end=await iterator.return();console.log(end.done);}finish();";
-            string actual = TestHarness.RunCompiledWithTimeout(() => Assembly.Load(CompileAndVerify(source)), TimeSpan.FromSeconds(30));
+            string actual = mode == ExecutionMode.Interpreted
+                ? TestHarness.RunModules(new() { ["main.ts"] = source }, "main.ts", mode, TimeSpan.FromSeconds(30))
+                : TestHarness.RunCompiledWithTimeout(() => Assembly.Load(CompileAndVerify(source)), TimeSpan.FromSeconds(30));
             Assert.Equal("9 bigint\nfunction\npath,options,listener\ntrue\n", actual);
         }
         finally { File.Delete(path); }
