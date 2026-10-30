@@ -252,6 +252,12 @@ public partial class TypeChecker
     private void CheckGenericTupleRestCall(Expr.Call call, TypeInfo.Function signature, List<GenericTupleCallSlot> arguments,
         bool validate = true, bool contextualizeCallbacks = true, bool subtypeMatch = false,
         bool reportCallbackProperties = true, bool preferArgumentTypes = false)
+        => CheckTupleCallArguments(call.Paren.Line, signature, arguments, validate, contextualizeCallbacks,
+            subtypeMatch, reportCallbackProperties, preferArgumentTypes);
+
+    private void CheckTupleCallArguments(int? line, TypeInfo.Function signature, List<GenericTupleCallSlot> arguments,
+        bool validate = true, bool contextualizeCallbacks = true, bool subtypeMatch = false,
+        bool reportCallbackProperties = true, bool preferArgumentTypes = false)
     {
         var tuple = (TypeInfo.Tuple)FlattenTupleSpreads(signature.ParamTypes[^1]);
         List<GenericTupleCallSlot> parameters = signature.ParamTypes.Take(signature.ParamTypes.Count - 1)
@@ -264,7 +270,7 @@ public partial class TypeChecker
         if (!arguments.Any(argument => argument.Spread) &&
             (arguments.Count < required || !parameters.Any(parameter => parameter.Spread) && arguments.Count > parameters.Count))
             throw new TypeCheckException($"Expected {(parameters.Any(parameter => parameter.Spread) ? "at least " : "")}{required} arguments but got {arguments.Count}.",
-                call.Paren.Line, tsCode: "TS2554");
+                line, tsCode: "TS2554");
 
         if (!Match(contextualizeCallbacks, out var contexts))
         {
@@ -283,12 +289,12 @@ public partial class TypeChecker
                     {
                         try
                         {
-                            CheckGenericTupleRestCall(call, new TypeInfo.Function([expectedTuple], TypeInfo.Void.Shared,
+                            CheckTupleCallArguments(line, new TypeInfo.Function([expectedTuple], TypeInfo.Void.Shared,
                                 HasRestParam: true), GenericTupleLiteralSlots(literal), reportCallbackProperties: reportCallbackProperties);
                         }
                         catch (TypeCheckException error) when (error.Diagnostic.TsCode is "TS2554" or "TS2556")
                         {
-                            throw new TypeCheckException(error.Message, call.Paren.Line, tsCode: "TS2345");
+                            throw new TypeCheckException(error.Message, line, tsCode: "TS2345");
                         }
                     }
                 }
@@ -377,7 +383,7 @@ public partial class TypeChecker
 
         void Fail() => throw new TypeCheckException(
             $"Arguments '{GenericTupleCallType(arguments)}' are not assignable to tuple parameters '{tuple}'.",
-            call.Paren.Line, tsCode: arguments.FindIndex(argument => argument.Spread) is var open && open >= 0 &&
+            line, tsCode: arguments.FindIndex(argument => argument.Spread) is var open && open >= 0 &&
                 (open < parameters.TakeWhile(parameter => !parameter.Spread).Count(parameter => !parameter.Optional) ||
                  !parameters.Any(parameter => parameter.Spread) && open >= parameters.Count)
                     ? "TS2556" : "TS2345");

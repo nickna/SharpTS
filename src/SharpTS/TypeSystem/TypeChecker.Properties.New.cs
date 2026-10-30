@@ -776,7 +776,7 @@ public partial class TypeChecker
             if (newExpr.TypeArgs == null || newExpr.TypeArgs.Count == 0)
             {
                 // Try to infer type arguments from constructor parameters
-                List<TypeInfo> argTypes = newExpr.Arguments.Select(CheckExpr).ToList();
+                List<TypeInfo> argTypes = CheckConstructorInferenceArguments(newExpr.Arguments);
                 var inferredArgs = InferConstructorTypeArguments(genericClass, argTypes);
 
                 if (inferredArgs == null)
@@ -851,6 +851,12 @@ public partial class TypeChecker
         Dictionary<string, TypeInfo>? subs = null,
         bool contextualArguments = false)
     {
+        if (newExpr.Arguments.Any(argument => argument is Expr.Spread) &&
+            ctorTypeInfo is null or TypeInfo.Function or TypeInfo.OverloadedFunction)
+        {
+            ValidateSpreadConstructorCall(ctorTypeInfo, newExpr, qualifiedName, subs);
+            return;
+        }
         if (ctorTypeInfo == null)
         {
             if (newExpr.Arguments.Count > 0)
@@ -1216,7 +1222,7 @@ public partial class TypeChecker
             throw new TypeCheckException($" Interface '{qualifiedName}' is not constructable.", tsCode: "TS2351");
         }
 
-        List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
+        List<TypeInfo> argTypes = CheckConstructorInferenceArguments(arguments);
 
         // Try each constructor signature
         foreach (var ctorSig in signatures)
@@ -1234,7 +1240,7 @@ public partial class TypeChecker
                 if (TryMatchConstructorArgs(argTypes, ctorSig.ParamTypes, ctorSig.MinArity, ctorSig.HasRestParam))
                 {
                     // Validate each argument
-                    for (int i = 0; i < arguments.Count && i < ctorSig.ParamTypes.Count; i++)
+                    for (int i = 0; i < argTypes.Count && i < ctorSig.ParamTypes.Count; i++)
                     {
                         if (!IsCompatible(ctorSig.ParamTypes[i], argTypes[i]))
                         {
@@ -1279,13 +1285,13 @@ public partial class TypeChecker
             }
 
             // Substitute in constructor signatures and check
-            List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
+            List<TypeInfo> argTypes = CheckConstructorInferenceArguments(arguments);
             foreach (var ctorSig in gi.ConstructorSignatures)
             {
                 var substitutedParamTypes = ctorSig.ParamTypes.Select(p => Substitute(p, subs)).ToList();
                 if (TryMatchConstructorArgs(argTypes, substitutedParamTypes, ctorSig.MinArity, ctorSig.HasRestParam))
                 {
-                    for (int i = 0; i < arguments.Count && i < substitutedParamTypes.Count; i++)
+                    for (int i = 0; i < argTypes.Count && i < substitutedParamTypes.Count; i++)
                     {
                         if (!IsCompatible(substitutedParamTypes[i], argTypes[i]))
                             goto NextSignature;
