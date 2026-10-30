@@ -356,10 +356,11 @@ public partial class TypeChecker
             EditorFacts.RecordSignatureProof(signature, beforeResolution == _editorUnprovenTypeVersion);
     }
 
-    // Only carries metadata between the exact old/new signatures at an existing checker
-    // substitution. Public families are deliberately not copied onto instantiated signatures.
+    // Carries declaration priority and optional editor metadata between exact
+    // old/new signature views. Public families remain attached to their originals.
     private T CopyEditorSignatureMetadata<T>(TypeInfo original, T replacement) where T : TypeInfo
     {
+        CopyOverloadPriority(original, replacement);
         if (!EditorFacts.IsEnabled || ReferenceEquals(original, replacement)) return replacement;
         EditorFacts.CopySignatureProof(original, replacement);
         if (GetEditorSignatureSource(original) is { } source)
@@ -369,6 +370,7 @@ public partial class TypeChecker
 
     private void RegisterEditorAnonymousSignature(TypeInfo signature, Expr.ArrowFunction owner)
     {
+        RegisterSpecializedOverload(signature, owner.Parameters.Select(parameter => parameter.TypeAnnotationNode));
         if (!EditorFacts.IsEnabled || CurrentSourceDocument is not { EditorSyntax: { } syntax } document ||
             !syntax.GetRecords(owner).Any(record => record.IsAuthoritative && record.Kind == EditorSyntaxKind.Expression)) return;
         (_editorSignatureSources ??= new(ReferenceEqualityComparer.Instance))[signature] = new(document, owner);
@@ -482,6 +484,10 @@ public partial class TypeChecker
 
     private void RegisterEditorSignature(TypeInfo signature, object owner, Token name, int? ordinal = null)
     {
+        if (owner is Stmt.Function function)
+            RegisterSpecializedOverload(signature, function.Parameters.Select(parameter => parameter.TypeAnnotationNode));
+        else if (owner is Expr.ArrowFunction arrow)
+            RegisterSpecializedOverload(signature, arrow.Parameters.Select(parameter => parameter.TypeAnnotationNode));
         if (GetEditorDeclaration(name) is not { } source) return;
         (_editorSignatureSources ??= new(ReferenceEqualityComparer.Instance))[signature] =
             new(CurrentSourceDocument, owner, source.Name, ordinal);

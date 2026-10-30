@@ -11,7 +11,12 @@ namespace SharpTS.Parsing;
 /// a construct without node support yields no node and consumers fall back to the string path,
 /// which remains authoritative until the migration completes.
 /// </remarks>
-public abstract record TypeNode(int Line);
+public abstract record TypeNode(int Line)
+{
+    // A literal's parentheses are transparent to resolution but distinguish
+    // its written annotation from direct LiteralType syntax.
+    public bool IsParenthesizedLiteral { get; init; }
+}
 
 /// <summary>A type reference by name: <c>Foo</c>, <c>Box&lt;string&gt;</c>. Type arguments are
 /// null for a bare reference. Also covers primitive/keyword names (<c>string</c>, <c>void</c>,

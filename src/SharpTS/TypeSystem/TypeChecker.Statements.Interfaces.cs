@@ -1066,6 +1066,7 @@ public partial class TypeChecker
                     bool hasRestParam = sig.Parameters.Any(p => p.IsRest);
                     var paramNames = sig.Parameters.Select(p => p.Name.Lexeme).ToList();
                     var signature = new TypeInfo.CallSignature(sigTypeParams, paramTypes, returnType, requiredParams, hasRestParam, paramNames);
+                    RegisterSpecializedOverload(signature, sig.Parameters.Select(parameter => parameter.TypeAnnotationNode));
                     RecordEditorResolvedSignature(signature, signatureVersion);
                     callSignatures.Add(signature);
                 }

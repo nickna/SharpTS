@@ -1406,7 +1406,7 @@ public partial class TypeChecker
         List<TypeInfo.Function> rejectedSignatures = [];
 
         // Try each call signature
-        foreach (var callSig in callSignatures)
+        foreach (var callSig in PrioritizeSpecializedOverloads(callSignatures))
         {
             if (callSig.IsGeneric)
             {
@@ -1473,7 +1473,7 @@ public partial class TypeChecker
             }
 
             List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
-            foreach (var callSig in gi.CallSignatures)
+            foreach (var callSig in PrioritizeSpecializedOverloads(gi.CallSignatures))
             {
                 var substitutedParamTypes = callSig.ParamTypes.Select(p => Substitute(p, subs)).ToList();
                 var candidateTypes = ContextualFreshCallArguments(arguments, argTypes, substitutedParamTypes, callSig.HasRestParam);
@@ -1653,7 +1653,7 @@ public partial class TypeChecker
         List<TypeInfo.Function> matchingSignatures = [];
 
 
-        foreach (var signature in overloadedFunc.Signatures)
+        foreach (var signature in PrioritizeSpecializedOverloads(overloadedFunc.Signatures))
         {
             var candidateTypes = ContextualFreshCallArguments(call.Arguments, argTypes, signature.ParamTypes, signature.HasRestParam);
             if (MatchFixedOverloadSpread(call, signature, candidateTypes) ?? TryMatchSignature(signature, candidateTypes))
@@ -1713,7 +1713,7 @@ public partial class TypeChecker
         int arityCandidates = tupleArityArguments is null ? 0 : genericOverloadedFunc.Signatures.Count(signature =>
             GenericTupleCallArityCouldMatch(signature, tupleArityArguments));
 
-        foreach (var signature in genericOverloadedFunc.Signatures)
+        foreach (var signature in PrioritizeSpecializedOverloads(genericOverloadedFunc.Signatures))
         {
             TypeInfo.Function instantiatedSig;
             bool validatingTuple = false;
@@ -1726,6 +1726,7 @@ public partial class TypeChecker
                     signature.RequiredParams,
                     signature.HasRestParam,
                     signature.ThisType);
+                CopyOverloadPriority(signature, candidate);
                 var candidateTypes = call.TypeArgs is { Count: > 0 } ? argTypes :
                     ContextualFreshCallArguments(call.Arguments, argTypes, candidate.ParamTypes, candidate.HasRestParam);
                 var tupleArguments = candidate.HasRestParam && candidate.ParamTypes.LastOrDefault() is TypeInfo.Tuple
@@ -1885,7 +1886,7 @@ public partial class TypeChecker
                 if (signature is not null && GenericTupleCallArityCouldMatch(signature, tupleArityArguments)) arityCandidates++;
             }
 
-        foreach (TypeInfo candidate in overloadSet.Signatures)
+        foreach (TypeInfo candidate in PrioritizeSpecializedOverloads(overloadSet.Signatures))
         {
             TypeInfo.Function? signature;
             bool validatingTuple = false;
