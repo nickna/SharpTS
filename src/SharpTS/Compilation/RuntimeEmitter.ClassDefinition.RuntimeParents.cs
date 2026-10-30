@@ -23,8 +23,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, parentType); il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
             il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle); il.Emit(OpCodes.Beq, supported);
         }
-        il.Emit(OpCodes.Ldloc, parentType); il.Emit(OpCodes.Ldstr, "$InitializeReceiver");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        il.Emit(OpCodes.Ldloc, parentType);
+        if (_nativeReceiverInitializers is { } parentLookup) il.Emit(OpCodes.Call, parentLookup.Find);
+        else
+        {
+            il.Emit(OpCodes.Ldstr, "$InitializeReceiver");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        }
         il.Emit(OpCodes.Brtrue, supported);
         il.MarkLabel(unsupported);
         GuestErrorEmitter.ThrowError(il, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor,
@@ -66,8 +71,14 @@ public partial class RuntimeEmitter
             il.MarkLabel(ordinaryParent);
         }
         var adapter = il.DeclareLocal(_types.MethodInfo);
-        il.Emit(OpCodes.Ldloc, template); il.Emit(OpCodes.Ldstr, "$InitializeReceiver");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String)); il.Emit(OpCodes.Stloc, adapter);
+        il.Emit(OpCodes.Ldloc, template);
+        if (_nativeReceiverInitializers is { } receiverLookup) il.Emit(OpCodes.Call, receiverLookup.Find);
+        else
+        {
+            il.Emit(OpCodes.Ldstr, "$InitializeReceiver");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        }
+        il.Emit(OpCodes.Stloc, adapter);
         var haveAdapter = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, adapter); il.Emit(OpCodes.Brtrue, haveAdapter);
         il.Emit(OpCodes.Ldloc, template); il.Emit(OpCodes.Ldtoken, _types.Object); il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);

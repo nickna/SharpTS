@@ -766,6 +766,7 @@ public partial class ILCompiler
             _nativeMethodLookup = new(_moduleBuilder, _types);
             _nativeHasInMembers = new(_moduleBuilder, _types);
             _nativeConstructorActivation = new(_moduleBuilder, _types);
+            _nativeReceiverInitializerLookup = new(_moduleBuilder, _types);
             _nativeEvaluatedConstructors = new(_moduleBuilder, _types);
             _functionEmissionPolicy = _functionEmissionPolicy with
             {
@@ -789,7 +790,8 @@ public partial class ILCompiler
             _nativeStaticFieldLookup?.FindField, _nativeConstructorMembers?.GetMembers,
             nativeDeletionLookup: _nativeDeletionLookup, nativeHasInMemberLookup: _nativeHasInMembers?.HasMember,
             nativeConstructorFactories: _nativeConstructorFactories,
-            nativeConstructorActivation: _nativeConstructorActivation) { EntryModulePath = _entryModulePath }
+            nativeConstructorActivation: _nativeConstructorActivation,
+            nativeReceiverInitializers: _nativeReceiverInitializerLookup) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy,
                 _nativeSourceOwners, nativeClassInitializer: _nativeRuntimeClassInitialization?.Initialize,
                 nativeStaticMemberPresence: _nativeStaticMemberPresence?.HasMember,
@@ -1295,6 +1297,7 @@ public partial class ILCompiler
         _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime);
         _nativeHasInMembers?.CompleteEmission(_nativeMethodLookup!, _nativeSourceOwners!, _runtime);
         _nativeConstructorActivation?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeReceiverInitializerLookup?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _runtime, _receiverInitializers);
         if (_nativeEvaluatedConstructors is not null)
             _nativeEvaluatedConstructors.CompleteEmission(_nativeConstructorActivation!.CompletedSnapshot, _runtime);
         _programType.CreateType();
@@ -1971,6 +1974,7 @@ public partial class ILCompiler
         _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime);
         _nativeHasInMembers?.CompleteEmission(_nativeMethodLookup!, _nativeSourceOwners!, _runtime);
         _nativeConstructorActivation?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeReceiverInitializerLookup?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _runtime, _receiverInitializers);
         if (_nativeEvaluatedConstructors is not null)
             _nativeEvaluatedConstructors.CompleteEmission(_nativeConstructorActivation!.CompletedSnapshot, _runtime);
         _programType.CreateType();

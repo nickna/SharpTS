@@ -591,8 +591,9 @@ public abstract partial class ExpressionEmitterBase
         var captures = IL.DeclareLocal(Types.ObjectArray);
         EmitDefinitionCaptureArray(expression, Ctx.ClassExprCaptureSlots!.GetValueOrDefault(expression)?.Keys.ToArray() ?? []);
         IL.Emit(OpCodes.Stloc, captures);
-        IL.Emit(OpCodes.Ldtoken, factory.Template);
-        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        var nativeReceiverInitializers = Ctx.Runtime?.NativeReceiverInitializers;
+        var templateEmission = NativeReceiverInitializerLookup.EmitTemplateValue(nativeReceiverInitializers,
+            Types, IL, factory.Template, Ctx.CurrentMethod, Ctx.CurrentClassBuilder);
         IL.Emit(OpCodes.Ldnull);
         IL.Emit(OpCodes.Ldftn, factory.Method);
         IL.Emit(OpCodes.Newobj, Types.GetConstructor(typeof(Func<object[], object, object, object>), Types.Object, Types.IntPtr));
@@ -601,7 +602,8 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, parent);
         IL.Emit(OpCodes.Ldloc, keys);
         IL.Emit(OpCodes.Ldloc, captures);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassDefinitions.Create);
+        NativeReceiverInitializerLookup.EmitTemplateCreate(nativeReceiverInitializers, IL,
+            templateEmission, Ctx.Runtime!.ClassDefinitions.Create);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Call, factory.Initializer);
         SetStackUnknown();

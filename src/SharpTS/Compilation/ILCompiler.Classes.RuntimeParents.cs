@@ -373,6 +373,7 @@ public partial class ILCompiler
         var method = owner.DefineMethod("$InitializeReceiver", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.ObjectArray, _types.Object, _types.Object]);
         _receiverInitializers.Add(owner, method);
+        _nativeReceiverInitializerLookup?.Record(owner, method);
         return method;
     }
 

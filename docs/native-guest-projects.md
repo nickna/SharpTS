@@ -1005,3 +1005,27 @@ the finite replacement contains neither raw operation in that caller. Actual
 native execution and the independent initializer/hostile-Type query probe pass.
 Ordinary managed output retains identical method bodies and PE sizes. This
 checkpoint does not establish strict support for unproved source generic families.
+
+### Runtime receiver-initializer lookup
+
+Native runtime-parent validation and initialization use a late finite lookup for
+the existing public $InitializeReceiver convention. Its owner domain comes from
+completed actual constructor-value producers and separately recorded class-template
+token/Create pairs. A standalone token cannot complete template evidence. Actual
+adapter declarations must match the compiler's initializer registry and finish with
+the exact public static object(object, object[], object, object) ABI and body.
+
+Each admitted closed owner executes the complete literal GetMethod(string) query.
+Inherited matches, ambiguous names and missing methods retain the loaded runtime's
+behavior. Promise handling, receiver/argument order, MethodInfo.Invoke and the
+TargetInvocationException.InnerException path stay in their original positions.
+Only real owned source generic families can enter the whole legacy query; their
+blockers remain visible. Foreign and custom Type metadata cannot authorize a query.
+
+The ordinary source-class control changes from twelve strict findings to eight,
+removing exactly four and adding none. The two runtime sites contain no raw
+GetMethod after this change. Actual native controls preserve class-template parents,
+default/rest/bound/Reflect construction and constructor exception unwrapping.
+A separate strict native probe preserves ambiguity, inheritance, named misses and
+hostile-Type refusal. Source-owner/Symbol closure and prototype $EnsureFields
+findings remain visible; this checkpoint is not strict source-class acceptance.
