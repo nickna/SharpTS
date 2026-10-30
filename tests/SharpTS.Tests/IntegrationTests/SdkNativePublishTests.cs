@@ -169,6 +169,22 @@ public sealed class SdkNativePublishTests
         Assert.Empty(Directory.GetFiles(consumer.Path, "native-project.json", SearchOption.AllDirectories));
     }
 
+    [Theory]
+    [InlineData("System.Console", "build")]
+    [InlineData("sYsTeM.cOnSoLe", "publish")]
+    public void FrameworkAssemblyNamesRefuseBeforeWrapperCompilationAndNativeLinking(string name, string command)
+    {
+        using var consumer = CreateConsumer("console.log(42);");
+        var result = Dotnet(consumer.Path, command, "Smoke.csproj", "-c", "Release", $"-p:AssemblyName={name}");
+        Assert.NotEqual(0, result.ExitCode);
+        string diagnostics = result.StandardOutput + result.StandardError;
+        Assert.Contains("SHARPTSSDK001", diagnostics);
+        Assert.Contains("shadows a resolved native guest reference", diagnostics);
+        Assert.Contains(name, diagnostics, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Generating native code", diagnostics);
+        Assert.False(File.Exists(consumer.GetPath($"bin/Release/net10.0/{HostRid}/{name}.dll")));
+    }
+
     private static TempTestDirectory CreateConsumer(string source, bool native = true, XElement? item = null)
     {
         var consumer = CliTestHelper.CreateTempDirectory();

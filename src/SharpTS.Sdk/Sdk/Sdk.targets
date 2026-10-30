@@ -219,6 +219,20 @@
     </ItemGroup>
   </Target>
 
+  <!-- A wrapper must not shadow a framework assembly used by its guest. Use
+       the SDK's resolved references, and refuse before Roslyn/ILC can produce
+       an executable whose guest calls bind back to the wrapper itself. -->
+  <Target Name="_SharpTSValidateNativeWrapperIdentity"
+          AfterTargets="ResolveReferences" BeforeTargets="CoreCompile"
+          Condition="'$(SharpTSTarget)' == 'native-aot' and '$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_SharpTSNativeConflictingReference Include="@(ReferencePath)"
+          Condition="'%(ReferencePath.Filename)' == '$(AssemblyName)'" />
+    </ItemGroup>
+    <Error Code="SHARPTSSDK001" Condition="'@(_SharpTSNativeConflictingReference)' != ''"
+           Text="AssemblyName '$(AssemblyName)' shadows a resolved native guest reference: @(_SharpTSNativeConflictingReference->'%(Filename)', ', '). Choose a different wrapper/output AssemblyName." />
+  </Target>
+
   <!-- Clean target integration -->
   <Target Name="SharpTSClean" BeforeTargets="Clean" Condition="'$(SharpTSTarget)' != 'native-aot'">
     <Delete Files="$(SharpTSOutputPath)$(SharpTSOutputFileName)"

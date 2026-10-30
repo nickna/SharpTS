@@ -121,7 +121,9 @@ Use `AssemblyName` for the wrapper/native executable name, `OutputPath` for buil
 `PublishDir` or `dotnet publish -o <directory>` for native publication. The default native publish
 directory is the base SDK's configuration/TFM/RID publish directory. `SharpTSOutputPath` and
 `SharpTSOutputFileName` remain managed-only settings. `AssemblyName=Guest` is reserved because it
-would shadow the generated guest assembly.
+would shadow the generated guest assembly. Names matching a resolved framework reference, such as
+`System.Console`, are also refused with `SHARPTSSDK001` before wrapper compilation and native
+linking. These identity checks are case-insensitive.
 
 The first profile requires workstation GC and reference-assembly emission. User `Reference`,
 `ProjectReference`, and `PackageReference` items fail with `SHARPTS402` naming the item; this
