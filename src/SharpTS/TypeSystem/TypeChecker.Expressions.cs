@@ -1594,7 +1594,7 @@ public partial class TypeChecker
             }
             else
             {
-                TypeInfo elemType = CheckExpr(element);
+                TypeInfo elemType = CheckExprWithContext(element, expectedType);
                 if (!IsCompatible(expectedType, elemType))
                 {
                     throw new TypeCheckException($" Element at index {i} has type '{elemType}' but expected '{expectedType}' for variable '{varName}'.", tsCode: "TS2322");

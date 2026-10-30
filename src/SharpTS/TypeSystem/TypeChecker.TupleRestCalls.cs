@@ -16,7 +16,7 @@ public partial class TypeChecker
         try
         {
             CheckGenericTupleRestCall(call, signature, GenericTupleCallArguments(call, argumentTypes),
-                contextualizeCallbacks: false, subtypeMatch: true);
+                contextualizeCallbacks: false, subtypeMatch: true, preferArgumentTypes: true);
             return true;
         }
         catch (TypeCheckException)
@@ -172,6 +172,8 @@ public partial class TypeChecker
             }
         }
         CheckGenericTupleRestCall(call, signature, slots, reportCallbackProperties: call.TypeArgs is { Count: > 0 });
+        ContextualFreshCallArguments(call.Arguments,
+            RefreshContextualizedGenericArguments(call.Arguments, argumentTypes), signature.ParamTypes, signature.HasRestParam, publish: true);
         return signature;
     }
 
@@ -224,6 +226,7 @@ public partial class TypeChecker
         var elements = slots.Select((slot, i) => new TypeInfo.TupleElement(
             slot.Spread ? new TypeInfo.Array(slot.Type) :
                 pattern is not null && i < pattern.Elements.Count && pattern.Elements[i].Type is TypeInfo.Tuple &&
+                slot.Type is not TypeInfo.Tuple &&
                 slot.Expression is { } expression && UngroupGenericTupleExpression(expression) is Expr.ArrayLiteral literal
                     ? GenericTupleLiteralType(literal) : slot.Type,
             slot.Spread ? TupleElementKind.Spread : slot.Optional ? TupleElementKind.Optional : TupleElementKind.Required)).ToList();
@@ -248,7 +251,7 @@ public partial class TypeChecker
 
     private void CheckGenericTupleRestCall(Expr.Call call, TypeInfo.Function signature, List<GenericTupleCallSlot> arguments,
         bool validate = true, bool contextualizeCallbacks = true, bool subtypeMatch = false,
-        bool reportCallbackProperties = true)
+        bool reportCallbackProperties = true, bool preferArgumentTypes = false)
     {
         var tuple = (TypeInfo.Tuple)FlattenTupleSpreads(signature.ParamTypes[^1]);
         List<GenericTupleCallSlot> parameters = signature.ParamTypes.Take(signature.ParamTypes.Count - 1)
@@ -359,8 +362,9 @@ public partial class TypeChecker
             if (contextualize && actual.Expression is { } expression && ContainsGenericTupleCallback(expression)) return true;
             if (contextualize && expected.Type is TypeInfo.Tuple && actual.Expression is { } literalExpression &&
                 UngroupGenericTupleExpression(literalExpression) is Expr.ArrayLiteral) return true;
-            TypeInfo type = actual.Expression is null ? actual.Type : ActualType(actual.Expression, actual.Type);
-            if (expected.Type is TypeInfo.Tuple && actual.Expression is { } arrayExpression &&
+            TypeInfo type = preferArgumentTypes || actual.Expression is null ? actual.Type : ActualType(actual.Expression, actual.Type);
+            if (!(preferArgumentTypes && type is TypeInfo.Tuple) &&
+                expected.Type is TypeInfo.Tuple && actual.Expression is { } arrayExpression &&
                 UngroupGenericTupleExpression(arrayExpression) is Expr.ArrayLiteral literal)
                 type = GenericTupleLiteralType(literal);
             if (actual.Optional) type = CreateUnion(type, TypeInfo.Undefined.Shared);
