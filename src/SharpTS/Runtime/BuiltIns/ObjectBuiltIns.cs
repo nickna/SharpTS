@@ -107,6 +107,13 @@ public static partial class ObjectBuiltIns
                         includeValues ? interpreter.GetPropertyValue(carrier, key) : null);
                 }
                 yield break;
+            case SharpTSObjectNamespace objectNamespace:
+                foreach (var key in objectNamespace.OwnStringKeys().ToList())
+                {
+                    if (OwnPropertyDescriptorOf(interpreter, objectNamespace, key)?.Enumerable != true) continue;
+                    yield return new(key, includeValues ? interpreter.GetPropertyValue(objectNamespace, key) : null);
+                }
+                yield break;
             case SharpTSClassPrototype prototype:
                 foreach (var key in prototype.OwnStringKeys().ToList())
                 {
