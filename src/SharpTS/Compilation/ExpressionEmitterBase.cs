@@ -2879,6 +2879,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitUnary(Expr.Unary u)
     {
+        if (TryEmitRawNumericUnary(u)) return;
         if (u.Operator.Type == TokenType.INTERNAL_TO_PROPERTY_KEY)
         {
             EmitExpression(u.Right);

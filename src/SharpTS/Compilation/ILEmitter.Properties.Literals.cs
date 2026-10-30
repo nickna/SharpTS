@@ -342,7 +342,8 @@ public partial class ILEmitter
 
     private bool TryEmitJsonScalarRecordLiteral(Expr.ObjectLiteral literal)
     {
-        if (_ctx.RuntimeFeatures?.UsesJSON != true || _ctx.ProgramType is null)
+        if (_ctx.RuntimeFeatures?.UsesJSON != true || _ctx.ProgramType is null ||
+            literal.Properties.Any(property => _ctx.TypeMap?.IsUndefinedReachableReturn(property.Value) == true))
             return false;
 
         JsonSerializationShape.Record? record = null;

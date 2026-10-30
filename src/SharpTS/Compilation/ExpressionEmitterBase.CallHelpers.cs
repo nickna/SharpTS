@@ -234,7 +234,8 @@ public abstract partial class ExpressionEmitterBase
                 // closures and methods outside exact alias-call analysis.
                 if (hasRestParam && !hasSpreadArguments
                     && c.Arguments.Count >= restInfo.RegularParamCount
-                    && c.Arguments.Skip(restInfo.RegularParamCount).All(arg => IsNumericType(Ctx.TypeMap?.Get(arg)))
+                    && c.Arguments.Skip(restInfo.RegularParamCount).All(arg => IsNumericType(Ctx.TypeMap?.Get(arg))
+                        && Ctx.TypeMap?.IsUndefinedReachableReturn(arg) != true)
                     && Ctx.LiteralNumericRestMethods?.TryGetValue(resolvedFuncName, out var literalMethods) == true
                     && literalMethods.TryGetValue(c.Arguments.Count - restInfo.RegularParamCount, out var literalCompanion))
                 {
@@ -924,6 +925,7 @@ public abstract partial class ExpressionEmitterBase
 
     private void EmitRestParameterCall(List<Expr> arguments, int regularCount, ParameterInfo[] targetParams, bool allowNumericStorage = false)
     {
+        allowNumericStorage &= !arguments.Any(argument => Ctx.TypeMap?.IsUndefinedReachableReturn(argument) == true);
         bool hasSpreads = arguments.Any(a => a is Expr.Spread);
         if (hasSpreads)
         {

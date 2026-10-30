@@ -162,7 +162,7 @@ public static class ParameterTypeResolver
     /// </summary>
     private static Type WidenIfUndefinedReachableParam(Type mapped, Stmt.Parameter param, TypeMap? typeMap)
     {
-        if (typeMap?.IsAssertedAssignmentStorage(param.Name) == true)
+        if (typeMap?.IsAssertedAssignmentStorage(param.Name) == true || typeMap?.IsRawNumericStorage(param.Name) == true)
             return typeof(object);
         if ((mapped == typeof(double) || mapped == typeof(bool)) &&
             typeMap != null && typeMap.IsUndefinedReachableNumericParam(param))

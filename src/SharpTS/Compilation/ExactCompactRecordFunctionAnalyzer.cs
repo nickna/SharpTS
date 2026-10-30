@@ -54,7 +54,8 @@ internal static class ExactCompactRecordFunctionAnalyzer
                 function.TypeParams is not { Count: > 0 } &&
                 function.Decorators is not { Count: > 0 } &&
                 function.Parameters.All(parameter =>
-                    !parameter.IsRest && !parameter.IsOptional && parameter.DefaultValue is null) &&
+                    !parameter.IsRest && !parameter.IsOptional && parameter.DefaultValue is null &&
+                    !typeMap.IsRawNumericStorage(parameter.Name)) &&
                 stableFunctions.Contains(function) &&
                 declarationCounts[function.Name.Lexeme] == 1 &&
                 !exportedNames.Contains(function.Name.Lexeme) &&

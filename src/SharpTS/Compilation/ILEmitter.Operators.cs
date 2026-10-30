@@ -36,6 +36,14 @@ public partial class ILEmitter
         if (TryEmitExternalBinaryOperator(b))
             return;
 
+        if (HasRawNumericValue(b.Left) || HasRawNumericValue(b.Right))
+        {
+            // Checked `number` does not exclude a retained BigInt. The existing
+            // boxed operator path preserves numeric-kind dispatch and errors.
+            base.EmitBinary(b);
+            return;
+        }
+
         if (TryEmitDirectInt32TypedArrayStencil(b))
             return;
 
@@ -576,6 +584,8 @@ public partial class ILEmitter
 
         if (TryEmitExternalUnaryOperator(u))
             return;
+
+        if (TryEmitRawNumericUnary(u)) return;
 
         switch (u.Operator.Type)
         {

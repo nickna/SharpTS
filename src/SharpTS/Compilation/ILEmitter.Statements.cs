@@ -823,7 +823,7 @@ public partial class ILEmitter
             return false;
         if (_ctx.TypeMap?.IsAssertedAssignmentStorage(v.Name) == true)
             return false;
-        if (_ctx.TypeMap?.IsRawCallStorage(v.Name) == true)
+        if (_ctx.TypeMap?.IsRawCallStorage(v.Name) == true || _ctx.TypeMap?.IsRawNumericStorage(v.Name) == true)
             return false;
 
         // Stable custom iteration proves its value binding is numeric. For the
