@@ -122,9 +122,7 @@ public sealed class UninitializedStaticFieldTests
         {
             yield return [row[0], row[1], row[2], ExecutionMode.Interpreted];
 
-            // #2656: emitted declaration/generic omitted static fields retain null.
-            if (((string)row[0]).StartsWith("expression-", StringComparison.Ordinal))
-                yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
+            yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
         }
     }
 

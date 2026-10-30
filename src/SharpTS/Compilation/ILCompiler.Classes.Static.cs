@@ -51,8 +51,8 @@ public partial class ILCompiler
 
         // Check if we need a static constructor
         // Note: Declare fields are excluded - they have no initialization
-        var staticFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && !f.IsPrivate && !f.IsDeclare && f.Initializer != null).ToList();
-        var staticPrivateFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && f.IsPrivate && f.Initializer != null).ToList();
+        var staticFieldsForInitialization = classStmt.Fields.Where(f => f.IsStatic && !f.IsPrivate && !f.IsDeclare
+            && (f.Initializer != null || f.ComputedKey is null)).ToList();
         var staticAutoAccessorsWithInit = classStmt.AutoAccessors?.Where(a => a.IsStatic && a.Initializer != null).ToList() ?? [];
         bool hasStaticLockFields = _locks.StaticSyncLockFields.ContainsKey(qualifiedClassName);
         var privateElements = _classes.PrivateElements.Require(qualifiedClassName);
@@ -189,37 +189,31 @@ public partial class ILCompiler
                             EmitComputedStaticFieldInitializer(emitter, il, typeBuilder, field, computedKey);
                             break;
                         }
-                        if (field.Initializer != null)
+                        EmitStaticFieldInitialValue(emitter, il, field);
+                        if (!field.IsPrivate && pendingFields.Contains(field.Name.Lexeme))
                         {
-                            emitter.EmitExpression(field.Initializer);
-                            emitter.EmitBoxIfNeeded(field.Initializer);
+                            var value = il.DeclareLocal(_types.Object);
+                            il.Emit(OpCodes.Stloc, value);
+                            EmitStaticFieldDefinitionGuard(il, typeBuilder, field.Name.Lexeme);
+                            il.Emit(OpCodes.Ldloc, value);
+                        }
 
-                            if (!field.IsPrivate && pendingFields.Contains(field.Name.Lexeme))
-                            {
-                                var value = il.DeclareLocal(_types.Object);
-                                il.Emit(OpCodes.Stloc, value);
-                                EmitStaticFieldDefinitionGuard(il, typeBuilder, field.Name.Lexeme);
-                                il.Emit(OpCodes.Ldloc, value);
-                            }
-
-                            if (field.IsPrivate)
-                            {
-                                string fieldName = field.Name.Lexeme;
-                                if (fieldName.StartsWith('#'))
-                                    fieldName = fieldName[1..];
-                                il.Emit(OpCodes.Stsfld, staticPrivateFieldBuilders[fieldName]);
-                            }
-                            else if (classStaticFields != null)
-                            {
-                                var staticField = classStaticFields[field.Name.Lexeme];
-                                il.Emit(OpCodes.Stsfld, staticField);
-                            }
+                        if (field.IsPrivate)
+                        {
+                            string fieldName = field.Name.Lexeme;
+                            if (fieldName.StartsWith('#'))
+                                fieldName = fieldName[1..];
+                            il.Emit(OpCodes.Stsfld, staticPrivateFieldBuilders[fieldName]);
+                        }
+                        else if (classStaticFields != null)
+                        {
+                            var staticField = classStaticFields[field.Name.Lexeme];
+                            il.Emit(OpCodes.Stsfld, staticField);
                         }
                         if (field.IsPrivate)
                             EmitStaticPrivatePresence(il, privateElements, field.Name.Lexeme.TrimStart('#'));
                         else if (pendingFields.Contains(field.Name.Lexeme))
                         {
-                            if (field.Initializer is null) EmitStaticFieldDefinitionGuard(il, typeBuilder, field.Name.Lexeme);
                             EmitRestoreStaticFieldPresence(il, typeBuilder, field.Name.Lexeme);
                         }
                         break;
@@ -234,32 +228,29 @@ public partial class ILCompiler
         }
         else
         {
-            // Old behavior: initialize static private fields with their initializers
+            // Legacy ASTs without an ordered initializer list still install every named field.
             if (privateElements.StaticFields.Count > 0)
             {
                 var staticPrivateFieldBuilders = privateElements.StaticFields;
-                foreach (var field in classStmt.Fields.Where(f => f.IsStatic && f.IsPrivate && f.Initializer != null))
+                foreach (var field in classStmt.Fields.Where(f => f.IsStatic && f.IsPrivate && !f.IsDeclare))
                 {
                     string fieldName = field.Name.Lexeme;
                     if (fieldName.StartsWith('#'))
                         fieldName = fieldName[1..];
 
                     var staticPrivateField = staticPrivateFieldBuilders[fieldName];
-                    emitter.EmitExpression(field.Initializer!);
-                    emitter.EmitBoxIfNeeded(field.Initializer!);
+                    EmitStaticFieldInitialValue(emitter, il, field);
                     il.Emit(OpCodes.Stsfld, staticPrivateField);
                     EmitStaticPrivatePresence(il, privateElements, fieldName);
                 }
             }
 
             // Initialize static field initializers
-            if (staticFieldsWithInit.Count > 0 && _classes.StaticFields.TryGetValue(qualifiedClassName, out var classStaticFields))
+            if (staticFieldsForInitialization.Count > 0 && _classes.StaticFields.TryGetValue(qualifiedClassName, out var classStaticFields))
             {
-                foreach (var field in staticFieldsWithInit)
+                foreach (var field in staticFieldsForInitialization)
                 {
-                    // Emit the initializer expression
-                    emitter.EmitExpression(field.Initializer!);
-                    emitter.EmitBoxIfNeeded(field.Initializer!);
+                    EmitStaticFieldInitialValue(emitter, il, field);
 
                     // Store in static field using the stored FieldBuilder
                     var staticField = classStaticFields[field.Name.Lexeme];
@@ -277,6 +268,16 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ret);
         if (deferredDefinition != null)
             _classes.DeferredDefinitions.MarkInitializerEmitted(deferredDefinition);
+    }
+
+    private void EmitStaticFieldInitialValue(ILEmitter emitter, ILGenerator il, Stmt.Field field)
+    {
+        if (field.Initializer is { } initializer)
+        {
+            emitter.EmitExpression(initializer);
+            emitter.EmitBoxIfNeeded(initializer);
+        }
+        else il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
     }
 
     private void EmitStaticPrivatePresence(ILGenerator il, PrivateClassElements elements, string name)
