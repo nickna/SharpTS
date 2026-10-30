@@ -792,26 +792,15 @@ public partial class TypeChecker
             {
                 typeArgs = newExpr.TypeArgs.Select((_, i) => ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, i)).ToList();
             }
-            var instantiated = InstantiateGenericClass(genericClass, typeArgs);
-            RecordEditorConstructedType(instantiated);
+            return CheckInstantiatedClassConstruction(
+                (TypeInfo.InstantiatedGeneric)InstantiateGenericClass(genericClass, typeArgs), newExpr, qualifiedName);
+        }
 
-            // Build substitution map for constructor parameter types
-            var subs = GenericClassSubs(genericClass,
-                ((TypeInfo.InstantiatedGeneric)instantiated).TypeArguments);
-
-            // Check constructor with substituted parameter types (walk inheritance chain). When the
-            // constructor is inherited from a generic-class instantiation, compose the substitutions.
-            if (TryGetDefaultLibraryPromiseConstructor(genericClass, subs, out var promiseConstructor))
-            {
-                ValidateConstructorCall(promiseConstructor, newExpr, qualifiedName, contextualArguments: true);
-            }
-            else
-            {
-                var (ctorTypeInfo, constructorSubs) = FindInheritedConstructor(genericClass, subs);
-                ValidateConstructorCall(ctorTypeInfo, newExpr, qualifiedName, constructorSubs);
-            }
-
-            return new TypeInfo.Instance(instantiated);
+        if (type is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } specializedClass)
+        {
+            if (newExpr.TypeArgs is { Count: > 0 })
+                throw new TypeCheckException($"Expected 0 type arguments, but got {newExpr.TypeArgs.Count}.", tsCode: "TS2558");
+            return CheckInstantiatedClassConstruction(specializedClass, newExpr, qualifiedName);
         }
 
         if (type is TypeInfo.Class classType)
@@ -840,6 +829,24 @@ public partial class TypeChecker
         foreach (var arg in newExpr.Arguments)
             CheckExpr(arg);
         return TypeInfo.Any.Shared;
+    }
+
+    private TypeInfo CheckInstantiatedClassConstruction(TypeInfo.InstantiatedGeneric instantiated,
+        Expr.New newExpr, string qualifiedName)
+    {
+        var genericClass = (TypeInfo.GenericClass)instantiated.GenericDefinition;
+        if (genericClass.IsAbstract)
+            throw new TypeCheckException($"Cannot create an instance of abstract class '{qualifiedName}'.", tsCode: "TS2511");
+        RecordEditorConstructedType(instantiated);
+        var substitutions = GenericClassSubs(genericClass, instantiated.TypeArguments);
+        if (TryGetDefaultLibraryPromiseConstructor(genericClass, substitutions, out var promiseConstructor))
+            ValidateConstructorCall(promiseConstructor, newExpr, qualifiedName, contextualArguments: true);
+        else
+        {
+            var (constructor, constructorSubstitutions) = FindInheritedConstructor(genericClass, substitutions);
+            ValidateConstructorCall(constructor, newExpr, qualifiedName, constructorSubstitutions);
+        }
+        return new TypeInfo.Instance(instantiated);
     }
 
     /// <summary>

@@ -1183,7 +1183,12 @@ public partial class TypeChecker
                 if (actual is TypeInfo.Class cls)
                     return ClassMatchesConstructorSignatures(cls, itf.ConstructorSignatures!);
 
-                if (GetConstructorSignatures(actual) is { } actualCtorSigs)
+                if (actual is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } specialized)
+                {
+                    if (!SpecializedClassMatchesConstructorSignatures(specialized, itf.ConstructorSignatures!)) return false;
+                    if (itf.Members.Count == 0) return true;
+                }
+                else if (GetConstructorSignatures(actual) is { } actualCtorSigs)
                 {
                     if (!ConstructorSignaturesSatisfiedBy(itf.ConstructorSignatures!, actualCtorSigs)) return false;
                     if (itf.Members.Count == 0) return true;
@@ -1308,6 +1313,10 @@ public partial class TypeChecker
                 if (actual is TypeInfo.Class constructableCls)
                 {
                     if (!ClassMatchesConstructorSignatures(constructableCls, exSigRec.ConstructorSignatures!)) return false;
+                }
+                else if (actual is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } specialized)
+                {
+                    if (!SpecializedClassMatchesConstructorSignatures(specialized, exSigRec.ConstructorSignatures!)) return false;
                 }
                 else if (GetConstructorSignatures(actual) is { } actualCtorSigs)
                 {
