@@ -461,5 +461,6 @@ if ($errors.Count -gt 0) {
     throw "GitHub workflow policy failed:`n - $($errors -join "`n - ")"
 }
 
+& (Join-Path $PSScriptRoot 'test-native-guest-corpus-contract.ps1')
 & (Join-Path $PSScriptRoot 'test-release-dispatch.ps1')
 Write-Host "Validated $($workflowFiles.Count) workflows: immutable actions, least-privilege declarations, fixed runners, and pinned toolchains."
