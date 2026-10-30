@@ -1644,6 +1644,11 @@ public partial class Interpreter
             ThrowCannotSetProperty(obj, index?.ToString() ?? "");
         }
 
+        // Namespace assignment uses the same guest key conversion as ordinary
+        // objects, after the already-evaluated RHS and before string dispatch.
+        if (obj is SharpTSObjectNamespace)
+            index = ToPropertyKey(index);
+
         if (TryGetPromiseConstructorSymbolProperties(obj, out _))
         {
             index = ToPropertyKey(index);
