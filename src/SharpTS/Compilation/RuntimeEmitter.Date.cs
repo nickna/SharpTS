@@ -9,7 +9,9 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private readonly record struct DateMethodsInputs(ConstructorBuilder NonConstructibleAttrCtor, EmittedTimerRuntime Timers);
+    private readonly record struct DateMethodsInputs(ConstructorBuilder NonConstructibleAttrCtor, EmittedTimerRuntime Timers, MethodBuilder CreateException, ConstructorBuilder TypeErrorConstructor);
+
+    private readonly record struct DateGetTimeInputs(MethodBuilder CreateException, ConstructorBuilder TypeErrorConstructor);
 
     private readonly record struct DateNowInputs(ConstructorBuilder NonConstructibleAttrCtor, EmittedTimerRuntime Timers);
 
@@ -20,7 +22,7 @@ public partial class RuntimeEmitter
         EmitCreateDateFromValue(typeBuilder, date);
         EmitCreateDateFromComponents(typeBuilder, date);
         EmitDateToString(typeBuilder, date);
-        EmitDateGetTime(typeBuilder, date);
+        EmitDateGetTime(typeBuilder, date, new DateGetTimeInputs(inputs.CreateException, inputs.TypeErrorConstructor));
         EmitDateGetFullYear(typeBuilder, date);
         EmitDateGetMonth(typeBuilder, date);
         EmitDateGetDate(typeBuilder, date);
@@ -445,7 +447,8 @@ public partial class RuntimeEmitter
         EmittedDateImplementation date,
         string helperName,
         string instanceMethodName,
-        MethodBuilder targetMethod
+        MethodBuilder targetMethod,
+        DateGetTimeInputs? receiverGuard = null
     )
     {
         var il = targetMethod.GetILGenerator();
@@ -463,11 +466,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(invalidLabel);
-        il.Emit(OpCodes.Ldc_R8, double.NaN);
-        il.Emit(OpCodes.Ret);
+        if (receiverGuard is { } guard)
+            GuestErrorEmitter.ThrowError(il, guard.CreateException, guard.TypeErrorConstructor, "this is not a Date object.");
+        else
+        {
+            il.Emit(OpCodes.Ldc_R8, double.NaN);
+            il.Emit(OpCodes.Ret);
+        }
     }
 
-    private void EmitDateGetTime(TypeBuilder typeBuilder, EmittedDateImplementation date)
+    private void EmitDateGetTime(TypeBuilder typeBuilder, EmittedDateImplementation date, DateGetTimeInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "DateGetTime",
@@ -476,7 +484,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         date.GetTime = method;
-        EmitDateInstanceMethodCall(typeBuilder, date, "DateGetTime", "GetTime", method);
+        EmitDateInstanceMethodCall(typeBuilder, date, "DateGetTime", "GetTime", method, inputs);
     }
 
     private void EmitDateGetFullYear(TypeBuilder typeBuilder, EmittedDateImplementation date)

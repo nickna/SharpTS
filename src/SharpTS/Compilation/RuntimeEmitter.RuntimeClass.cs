@@ -3123,7 +3123,7 @@ public partial class RuntimeEmitter
             EmitDateMethods(
                 typeBuilder,
                 runtime.Dates.RequireImplementation(),
-                new DateMethodsInputs(runtime.FunctionAttributes.NonConstructibleCtor, runtime.Timers)
+                new DateMethodsInputs(runtime.FunctionAttributes.NonConstructibleCtor, runtime.Timers, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor)
             );
         // Date.prototype populate — must come AFTER EmitDateMethods, which is what
         // assigns the runtime.Date* helper builders the wiring below references.
