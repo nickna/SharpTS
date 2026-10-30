@@ -18,7 +18,22 @@ public class ModuleInstance
     /// <summary>
     /// Default export value, if any.
     /// </summary>
-    public object? DefaultExport { get; set; }
+    private object? _defaultExport;
+    public object? DefaultExport
+    {
+        get
+        {
+            if (_liveExports?.TryGetValue("default", out var read) == true) return read();
+            return _defaultExport;
+        }
+        set => _defaultExport = value;
+    }
+
+    internal void SetDefaultExport(object? value)
+    {
+        _defaultExport = value;
+        Exports["default"] = value;
+    }
 
     /// <summary>
     /// Whether the module has been executed.

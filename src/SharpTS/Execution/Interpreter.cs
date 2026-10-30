@@ -1964,7 +1964,11 @@ public partial class Interpreter : IDisposable
                     }
                     else
                     {
-                        env.Define(import.DefaultImport.Lexeme, importedModuleInstance.DefaultExport);
+                        var source = importedModuleInstance;
+                        string localName = import.DefaultImport.Lexeme;
+                        env.DefineObjectBinding(localName,
+                            () => RuntimeValue.FromBoxed(source.DefaultExport),
+                            (_, _) => throw StrictModeErrors.TypeError($"Cannot assign to import '{localName}'"));
                     }
                 }
 
@@ -2045,7 +2049,10 @@ public partial class Interpreter : IDisposable
 
                 if (_currentModuleInstance != null)
                 {
-                    _currentModuleInstance.DefaultExport = GetDeclaredValue(export.Declaration);
+                    var declaration = export.Declaration;
+                    RuntimeEnvironment bindingEnvironment = _environment;
+                    _currentModuleInstance.SetDefaultExport(GetDeclaredValue(declaration, bindingEnvironment));
+                    _currentModuleInstance.SetLiveExport("default", () => GetDeclaredValue(declaration, bindingEnvironment));
                 }
             }
             else if (export.DefaultExpr != null)
@@ -2053,7 +2060,7 @@ public partial class Interpreter : IDisposable
                 var value = Evaluate(export.DefaultExpr);
                 if (_currentModuleInstance != null)
                 {
-                    _currentModuleInstance.DefaultExport = value;
+                    _currentModuleInstance.SetDefaultExport(value);
                 }
             }
         }
@@ -2162,6 +2169,7 @@ public partial class Interpreter : IDisposable
                     // Re-export all: export * from './module'
                     foreach (var name in sourceModuleInstance.Exports.Keys)
                     {
+                        if (name == "default") continue;
                         var source = sourceModuleInstance;
                         _currentModuleInstance.SetLiveExport(name, () => source.GetExport(name));
                     }

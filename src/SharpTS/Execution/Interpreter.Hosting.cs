@@ -358,11 +358,14 @@ public partial class Interpreter
                 ExecutionResult result = await ExecuteStatementAsync(export.Declaration);
                 if (result.IsAbrupt)
                     return result;
-                _currentModuleInstance!.DefaultExport = GetDeclaredValue(export.Declaration);
+                var declaration = export.Declaration;
+                RuntimeEnvironment bindingEnvironment = _environment;
+                _currentModuleInstance!.SetDefaultExport(GetDeclaredValue(declaration, bindingEnvironment));
+                _currentModuleInstance.SetLiveExport("default", () => GetDeclaredValue(declaration, bindingEnvironment));
             }
             else if (export.DefaultExpr != null)
             {
-                _currentModuleInstance!.DefaultExport = (await EvaluateAsync(export.DefaultExpr)).ToObject();
+                _currentModuleInstance!.SetDefaultExport((await EvaluateAsync(export.DefaultExpr)).ToObject());
             }
             return ExecutionResult.Success();
         }
