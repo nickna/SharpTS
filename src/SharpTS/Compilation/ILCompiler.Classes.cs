@@ -109,7 +109,7 @@ public partial class ILCompiler
 
         // Ambient declarations describe types but have no runtime class or emitted bodies.
         // Decorated external mappings above still participate in type resolution.
-        if (classStmt.IsDeclare)
+        if (!EmitsSourceClassBody(classStmt))
             return;
 
         // Plain methods need the same shared function environment as free functions when a nested
@@ -637,6 +637,9 @@ public partial class ILCompiler
     /// Extracts the .NET type name from a @DotNetType decorator if present.
     /// Returns null if the decorator is not present.
     /// </summary>
+    internal static bool EmitsSourceClassBody(Stmt.Class classStmt) =>
+        !classStmt.IsDeclare && GetDotNetTypeMapping(classStmt) is null;
+
     private static string? GetDotNetTypeMapping(Stmt.Class classStmt)
     {
         if (classStmt.Decorators == null) return null;

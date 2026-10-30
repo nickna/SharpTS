@@ -658,7 +658,7 @@ public partial class ILCompiler
         statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans, typeMap, RecordSourceRewrite);
         _functionEmissionPolicy = FunctionEmissionPolicy.ForPreparedSource(statements, _nativeAotProjectOutput);
         _lexicalBindingNames = LexicalBindingNameCollector.Collect(statements);
-        _features ??= new RuntimeFeatureDetector().Detect(statements, _typeMap);
+        _features ??= new RuntimeFeatureDetector(_nativeAotProjectOutput).Detect(statements, _typeMap);
         // The stable iterator result shape must be known before Phase 1 emits its
         // result carrier. Closure-based eligibility is rechecked later.
         StableCustomIteratorAnalyzer.Analyze(statements, _typeMap, null, _features);
@@ -1416,7 +1416,7 @@ public partial class ILCompiler
         // pulling in `crypto` makes the runtime emit crypto types).
         if (_features is null)
         {
-            var detector = new RuntimeFeatureDetector();
+            var detector = new RuntimeFeatureDetector(_nativeAotProjectOutput);
             _features = detector.Detect(allStatements, _typeMap);
             if (modules.Any(module => module.IsCommonJs))
                 _features.UsesCjsRequire = true;

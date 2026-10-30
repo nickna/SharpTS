@@ -25,6 +25,7 @@ namespace SharpTS.Compilation;
 public sealed partial class RuntimeFeatureDetector
 {
     private readonly RuntimeFeatureSet _set;
+    private readonly bool _nativeClassBodiesOnly;
     private readonly HashSet<string> _sourceFunctions = new(StringComparer.Ordinal);
     private readonly HashSet<string> _opaqueValueBindings = new(StringComparer.Ordinal);
     private readonly HashSet<string> _numberConstructorAliases = new(StringComparer.Ordinal)
@@ -61,8 +62,11 @@ public sealed partial class RuntimeFeatureDetector
     private readonly Dictionary<string, JsonSerializationShape.Record> _canonicalCompactRecordShapes = [];
     private TypeMap? _typeMap;
 
-    public RuntimeFeatureDetector()
+    public RuntimeFeatureDetector() : this(nativeClassBodiesOnly: false) { }
+
+    internal RuntimeFeatureDetector(bool nativeClassBodiesOnly)
     {
+        _nativeClassBodiesOnly = nativeClassBodiesOnly;
         // Start with everything off; the walk flips flags on as triggers are seen.
         _set = new RuntimeFeatureSet
         {
@@ -787,7 +791,11 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Stmt.Class cls:
-                _set.UsesUserClasses = true;
+                // Native output need not retain source-class machinery for a
+                // declaration that the class producer never emits. This is
+                // reachability selection, not a runtime owner certificate.
+                if (!_nativeClassBodiesOnly || ILCompiler.EmitsSourceClassBody(cls))
+                    _set.UsesUserClasses = true;
                 if (cls.Methods.Any(method => !method.IsStatic && method.ComputedKey is { } key && IsSymbolIterator(key)))
                     _set.UsesArrayPrototypeMutation = true;
                 foreach (var expression in ClassDefinitionExpressions.Enumerate(cls))
