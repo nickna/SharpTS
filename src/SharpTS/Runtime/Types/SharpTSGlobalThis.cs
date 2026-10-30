@@ -257,6 +257,9 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
         return true;
     }
 
+    internal IEnumerable<string> VmDeletedProperties =>
+        _vmWrittenProperties is null ? [] : _deletedProperties;
+
     internal IEnumerable<string> OwnEnumerableKeys()
         => _properties.OwnEnumerableKeys();
 

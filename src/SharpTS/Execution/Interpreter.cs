@@ -1298,6 +1298,9 @@ public partial class Interpreter : IDisposable
             return RuntimeValue.FromBoxed(GlobalThis);
         }
 
+        if (_vmOwnedEvaluation && GlobalThis.HasUserProperty(name.Lexeme))
+            return RuntimeValue.FromBoxed(GetPropertyValue(GlobalThis, name.Lexeme));
+
         // Mutable global bindings live on the global object. Lexical bindings
         // above this lookup and immutable constants retain their existing paths.
         if (IsMutableGlobalObjectBinding(name.Lexeme))
@@ -1346,7 +1349,8 @@ public partial class Interpreter : IDisposable
 
     private void AssignVariableValue(Token name, RuntimeValue value)
     {
-        if (!_environment.IsDefined(name.Lexeme) && IsMutableGlobalObjectBinding(name.Lexeme))
+        if (!_environment.IsDefined(name.Lexeme) && (IsMutableGlobalObjectBinding(name.Lexeme)
+                || (_vmOwnedEvaluation && GlobalThis.HasUserProperty(name.Lexeme))))
             WriteClassicGlobalVariable(name.Lexeme, value, _environment.IsStrictMode);
         else
             _environment.Assign(name, value);

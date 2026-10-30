@@ -238,10 +238,7 @@ public static partial class VmModuleInterpreter
             : new Interp();
         subInterpreter.MarkVmOwnedEvaluation();
         VmContext.ApplyPromiseIntrinsicState(contextObject, subInterpreter);
-        var env = subInterpreter.Environment;
-
-        foreach (var (key, value) in contextProps)
-            env.Define(key, VmExecutionHost.Current is { } host ? host.ToVm(value) : value);
+        subInterpreter.SeedVmGlobalObjectProperties(contextProps);
 
         // Honor the context's createContext options (codeGeneration / microtaskMode).
         var contextOptions = VmContext.GetOptions(contextObject);
@@ -340,10 +337,7 @@ public static partial class VmModuleInterpreter
             : new Interp();
         subInterpreter.MarkVmOwnedEvaluation();
         VmContext.ApplyPromiseIntrinsicState(contextObject, subInterpreter);
-        var env = subInterpreter.Environment;
-
-        foreach (var (key, value) in contextProps)
-            env.Define(key, VmExecutionHost.Current is { } host ? host.ToVm(value) : value);
+        subInterpreter.SeedVmGlobalObjectProperties(contextProps);
 
         var contextOptions = VmContext.GetOptions(contextObject);
         ApplyContextOptions(subInterpreter, contextOptions);

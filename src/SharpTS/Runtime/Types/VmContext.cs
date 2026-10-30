@@ -131,8 +131,18 @@ public static class VmContext
     {
         var properties = new Dictionary<string, object?>();
         foreach (var name in originalProperties.Keys)
+        {
+            if (globalObject?.HasUserProperty(name) == true)
+            {
+                if (globalObject.GetOwnPropertyDescriptor(name) is { HasValue: true } descriptor)
+                    properties[name] = descriptor.Value;
+                continue;
+            }
+            if (globalObject?.IsDeletedProperty(name) == true) continue;
             if (env.TryGet(name, out var value))
                 properties[name] = value.ToObject();
+        }
+        var deleted = globalObject?.VmDeletedProperties.ToArray() ?? [];
         // The actual global object owns classic var storage. Its user data
         // records include newly declared globals without reading accessors or
         // exposing lexical bindings and the intrinsic inventory.
@@ -150,11 +160,13 @@ public static class VmContext
 
         if (contextObject is SharpTSObject tsObj)
         {
+            foreach (var name in deleted) tsObj.DeleteProperty(name);
             foreach (var (name, value) in properties)
                 tsObj.SetProperty(name, value);
         }
         else if (contextObject is Dictionary<string, object?> dict)
         {
+            foreach (var name in deleted) dict.Remove(name);
             foreach (var (name, value) in properties)
                 dict[name] = value;
         }
@@ -163,6 +175,12 @@ public static class VmContext
             // Compiler-emitted $Object uses the managed-shape boundary. Preserve
             // custom CLR SetProperty shapes as the managed interop fallback.
             var type = contextObject.GetType();
+            if (deleted.Length != 0 && ManagedEmittedShapeReflection.IsShape(type, ManagedEmittedShape.HasFields))
+            {
+                var delete = ManagedEmittedShapeReflection.GetPublicMethod(type, ManagedEmittedShape.HasFields,
+                    "DeleteProperty", [typeof(string)]);
+                foreach (var name in deleted) delete?.Invoke(contextObject, [name]);
+            }
             var setMethod = ManagedEmittedShapeReflection.IsShape(
                     type, ManagedEmittedShape.HasFields)
                 ? ManagedEmittedShapeReflection.GetPublicMethod(
