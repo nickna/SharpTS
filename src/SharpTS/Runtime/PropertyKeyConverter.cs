@@ -57,6 +57,7 @@ public static class PropertyKeyConverter
             int i => i.ToString(CultureInfo.InvariantCulture),
             long l => l.ToString(CultureInfo.InvariantCulture),
             System.Numerics.BigInteger bi => bi.ToString(CultureInfo.InvariantCulture),
+            SharpTSBigInt bigInt => bigInt.Value.ToString(CultureInfo.InvariantCulture),
             // Symbol shouldn't reach here (caller separates them) but if it does,
             // stringify by description so we don't leak ToString boilerplate.
             SharpTSSymbol sym => sym.ToString(),
