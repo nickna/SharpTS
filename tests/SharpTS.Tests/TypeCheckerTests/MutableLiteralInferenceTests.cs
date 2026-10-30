@@ -90,6 +90,36 @@ public sealed class MutableLiteralInferenceTests
         Assert.Empty(new TypeChecker().CheckWithRecovery(statements).Diagnostics);
     }
 
+    [Fact]
+    public void DestructuringContextDoesNotFreezeFreshNestedArrays()
+    {
+        const string source = "const [first,second]=[[1,2],[3,4]]; first.push(9);";
+        var (checker, document, _, _) = Check(source);
+        Assert.Empty(checker.GetDiagnostics());
+        Assert.Contains(checker.EditorFacts.GetSourceTypeObservations(document), fact =>
+            source[fact.Span.Start..fact.Span.End] == "first" && fact.Display.Text == "number[]");
+    }
+
+    [Theory]
+    [InlineData("const [fixed]=[[1 as 1,2 as 2]]; fixed.push(9);", "TS2345")]
+    [InlineData("const [fixed]=[[1,2] as const]; fixed[0]=9;", "TS2542")]
+    [InlineData("const source:[(1|2)[]]=[[1,2]]; const [fixed]=source; fixed.push(9);", "TS2345")]
+    public void DestructuringPreservesExplicitAndRetainedLiteralDomains(string source, string code)
+    {
+        var error = Assert.ThrowsAny<TypeCheckException>(() => Check(source));
+        Assert.Equal(code, error.Diagnostic.TsCode);
+    }
+
+    [Theory]
+    [InlineData("[{x:1},{}]")]
+    [InlineData("[{},{x:1}]")]
+    public void ArrayInferenceDoesNotDiscardAnElementThatLacksRequiredProperties(string initializer)
+    {
+        string source = "const values=" + initializer + "; const required:{x:number}[]=values;";
+        var error = Assert.ThrowsAny<TypeCheckException>(() => Check(source));
+        Assert.Equal("TS2322", error.Diagnostic.TsCode);
+    }
+
     private static (TypeChecker Checker, SourceDocument Document, List<Stmt> Statements, TypeMap Map) Check(string source)
     {
         var document = new SourceDocument("mutable-inference.ts", source);

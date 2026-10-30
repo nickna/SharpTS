@@ -4,6 +4,22 @@ namespace SharpTS.TypeSystem;
 
 public partial class TypeChecker
 {
+    private TypeInfo WidenFreshArrayTuple(Expr.ArrayLiteral literal, TypeInfo.Tuple tuple)
+    {
+        if (tuple.IsReadonly || literal.Elements.Any(element => element is Expr.Spread) ||
+            literal.Elements.Count != tuple.Elements.Count) return tuple;
+        // A destructuring pattern supplies a positional context to its synthetic RHS.
+        // That outer tuple does not freeze fresh nested arrays or their element types.
+        return tuple with
+        {
+            Elements = tuple.Elements.Select((element, index) => element with
+            {
+                Type = WidenClassFieldInitializerType(literal.Elements[index],
+                    _typeMap.Get(literal.Elements[index]) ?? element.Type),
+            }).ToList(),
+        };
+    }
+
     private TypeInfo? ContextualArrayElement(TypeInfo context) => context switch
     {
         TypeInfo.Array array => array.ElementType,

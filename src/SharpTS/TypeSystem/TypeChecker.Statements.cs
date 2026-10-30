@@ -425,7 +425,14 @@ public partial class TypeChecker
                 else
                 {
                     if (!_annotatedParameterBindings.Contains(stmt))
-                        initializerType = WidenClassFieldInitializerType(initializer, initializerType);
+                    {
+                        // The parser's iterator-normalization wrapper preserves a fresh array's
+                        // syntax for widening, but retained iterables keep the normalized carrier.
+                        Expr wideningSource = stmt.DestructuringSource == DestructuringSourceKind.Array &&
+                            initializer is Expr.Call { Arguments: [var source] } &&
+                            UnwrapTransparentForWidening(source) is Expr.ArrayLiteral ? source : initializer;
+                        initializerType = WidenClassFieldInitializerType(wideningSource, initializerType);
+                    }
                     // JS: `let x = null` / `let x = undefined` leave x freely reassignable.
                     // Widen top-level null/undefined to any for untyped let/var.
                     if (initializerType is TypeInfo.Null or TypeInfo.Undefined)

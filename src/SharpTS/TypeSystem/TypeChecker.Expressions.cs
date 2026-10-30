@@ -1500,7 +1500,12 @@ public partial class TypeChecker
         bool allCompatible = true;
         for (int i = 1; i < elementTypes.Count; i++)
         {
-            if (!IsCompatible(commonType, elementTypes[i]) && !IsCompatible(elementTypes[i], commonType))
+            if (IsCompatible(commonType, elementTypes[i])) continue;
+            if (IsCompatible(elementTypes[i], commonType))
+            {
+                commonType = elementTypes[i];
+            }
+            else
             {
                 allCompatible = false;
                 break;
