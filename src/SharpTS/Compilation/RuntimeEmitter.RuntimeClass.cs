@@ -785,7 +785,6 @@ public partial class RuntimeEmitter
         EmitJsToInt32(typeBuilder, runtime.NumericCoercion);
         EmitJsLessThan(typeBuilder, runtime.Operators, runtime.NumericCoercion);
         EmitJsLessOrEqual(typeBuilder, runtime.Operators, runtime.NumericCoercion);
-        EmitUpdateNumeric(typeBuilder, runtime.Operators, runtime.NumericCoercion);
         EmitIsTruthy(typeBuilder, runtime.Booleans, runtime.Sentinels.UndefinedType);
         // Promise resolving callbacks need these adoption tokens before their
         // bodies are filled by the resolve-value and capability emitters.
@@ -1408,6 +1407,7 @@ public partial class RuntimeEmitter
         EmitToNumber(typeBuilder, runtime.NumericCoercion, numberInputs);
         EmitConvertToNumber(typeBuilder, runtime.NumericCoercion, numberInputs, runtime.BigInt.ToNumber);
         EmitToNumeric(typeBuilder, runtime.NumericCoercion, numberInputs);
+        EmitUpdateNumeric(typeBuilder, runtime.Operators, runtime.NumericCoercion);
         EmitNumericBinary(typeBuilder, runtime.Operators, runtime.NumericCoercion, runtime.Errors);
         // String.raw lives here so its body can read `template.raw` via
         // GetProperty and ToString-coerce substitutions via ToJsString.

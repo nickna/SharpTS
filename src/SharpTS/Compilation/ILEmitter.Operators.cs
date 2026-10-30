@@ -2260,12 +2260,13 @@ public partial class ILEmitter
             if (TryResolveStaticThisField(get, out _, out var staticFieldPre))
             {
                 IL.Emit(OpCodes.Ldsfld, staticFieldPre);
-                EmitUnboxToDouble();
-                IL.Emit(OpCodes.Ldc_R8, 1.0);
-                IL.Emit(pi.Operator.Type == TokenType.PLUS_PLUS ? OpCodes.Add : OpCodes.Sub);
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                IL.Emit(OpCodes.Dup);
+                var rawValue = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, rawValue);
+                EmitNumericUpdate(rawValue, pi.Operator.Type == TokenType.PLUS_PLUS,
+                    out _, out var newValue);
+                IL.Emit(OpCodes.Ldloc, newValue);
                 IL.Emit(OpCodes.Stsfld, staticFieldPre);
+                IL.Emit(OpCodes.Ldloc, newValue);
                 SetStackUnknown();
                 return;
             }
@@ -2335,37 +2336,6 @@ public partial class ILEmitter
         EmitPropertyWrite(indexed: true);
         IL.Emit(OpCodes.Ldloc, isPrefix ? newValue : oldValue);
         SetStackUnknown();
-    }
-
-    private void EmitNumericUpdate(
-        LocalBuilder rawValue,
-        bool isIncrement,
-        out LocalBuilder oldNumeric,
-        out LocalBuilder newNumeric)
-    {
-        oldNumeric = IL.DeclareLocal(_ctx.Types.Object);
-        newNumeric = IL.DeclareLocal(_ctx.Types.Object);
-        var numberPath = IL.DefineLabel();
-        var numericReady = IL.DefineLabel();
-
-        IL.Emit(OpCodes.Ldloc, rawValue);
-        IL.Emit(OpCodes.Isinst, _ctx.Types.BigInteger);
-        IL.Emit(OpCodes.Brfalse, numberPath);
-        IL.Emit(OpCodes.Ldloc, rawValue);
-        IL.Emit(OpCodes.Stloc, oldNumeric);
-        IL.Emit(OpCodes.Br, numericReady);
-
-        IL.MarkLabel(numberPath);
-        IL.Emit(OpCodes.Ldloc, rawValue);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ToNumber);
-        IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        IL.Emit(OpCodes.Stloc, oldNumeric);
-
-        IL.MarkLabel(numericReady);
-        IL.Emit(OpCodes.Ldloc, oldNumeric);
-        IL.Emit(isIncrement ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.Operators.UpdateNumeric);
-        IL.Emit(OpCodes.Stloc, newNumeric);
     }
 
     protected override void EmitPostfixIncrement(Expr.PostfixIncrement pi)
@@ -2463,20 +2433,14 @@ public partial class ILEmitter
             if (TryResolveStaticThisField(get, out _, out var staticFieldPost))
             {
                 IL.Emit(OpCodes.Ldsfld, staticFieldPost);
-                EmitUnboxToDouble();
-
-                var oldValueStatic = IL.DeclareLocal(_ctx.Types.Double);
-                IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Stloc, oldValueStatic);
-
-                IL.Emit(OpCodes.Ldc_R8, 1.0);
-                IL.Emit(pi.Operator.Type == TokenType.PLUS_PLUS ? OpCodes.Add : OpCodes.Sub);
-
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                var rawValue = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, rawValue);
+                EmitNumericUpdate(rawValue, pi.Operator.Type == TokenType.PLUS_PLUS,
+                    out var oldValueStatic, out var newValueStatic);
+                IL.Emit(OpCodes.Ldloc, newValueStatic);
                 IL.Emit(OpCodes.Stsfld, staticFieldPost);
 
                 IL.Emit(OpCodes.Ldloc, oldValueStatic);
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 SetStackUnknown();
                 return;
             }
@@ -2929,27 +2893,14 @@ public partial class ILEmitter
         if (!own && !_ctx.ClassRegistry!.TryGetCallableStaticField(resolvedClassName, get.Name.Lexeme, classBuilder, out inheritedField))
             return false;
 
-        // Load current value and coerce to double (ToNumber semantics).
+        // Convert the current value while retaining the actual static storage.
         if (own)
             IL.Emit(OpCodes.Ldsfld, ownField!);
         else
             EmitStaticFieldLoadWithShadow(resolvedClassName, classBuilder, get.Name.Lexeme, inheritedField!);
-        EmitUnboxToDouble();
-
-        // Postfix returns the original value — stash it before incrementing.
-        System.Reflection.Emit.LocalBuilder? oldValue = null;
-        if (!isPrefix)
-        {
-            oldValue = IL.DeclareLocal(_ctx.Types.Double);
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Stloc, oldValue);
-        }
-
-        IL.Emit(OpCodes.Ldc_R8, 1.0);
-        IL.Emit(isIncrement ? OpCodes.Add : OpCodes.Sub);
-        IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        var newValue = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Stloc, newValue);
+        var rawValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, rawValue);
+        EmitNumericUpdate(rawValue, isIncrement, out var oldValue, out var newValue);
 
         // Write back to the same storage the matching read consults.
         if (own)
@@ -2966,15 +2917,7 @@ public partial class ILEmitter
             EmitPropertyWrite(indexed: false);
         }
 
-        if (isPrefix)
-        {
-            IL.Emit(OpCodes.Ldloc, newValue);
-        }
-        else
-        {
-            IL.Emit(OpCodes.Ldloc, oldValue!);
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        }
+        IL.Emit(OpCodes.Ldloc, isPrefix ? newValue : oldValue);
         SetStackUnknown();
         return true;
     }

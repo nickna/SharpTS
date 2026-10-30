@@ -109,11 +109,15 @@ public partial class RuntimeEmitter
         var numberPath = il.DefineLabel();
         var subtractBigInt = il.DefineLabel();
         var subtractNumber = il.DefineLabel();
+        var numeric = il.DeclareLocal(_types.Object);
 
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, numericCoercion.ToNumeric);
+        il.Emit(OpCodes.Stloc, numeric);
+        il.Emit(OpCodes.Ldloc, numeric);
         il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brfalse, numberPath);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, numeric);
         il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.BigInteger, "One")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
@@ -129,8 +133,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(numberPath);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, numericCoercion.ToNumber);
+        il.Emit(OpCodes.Ldloc, numeric);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, subtractNumber);
