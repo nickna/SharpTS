@@ -31,9 +31,8 @@ public sealed class ObjectConstructorIntegrityTests
             TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
-    // Compiled Object integrity leaves native descriptors mutable (#2573).
-    [Fact]
-    public void SealAndFreezeUpdateNativeAndCustomDescriptors()
+    [Theory, ModeData]
+    public void SealAndFreezeUpdateNativeAndCustomDescriptors(ExecutionMode mode)
     {
         const string source = """
             const O: any = Object, read: any = Object.getOwnPropertyDescriptor, original = O.keys;
@@ -51,7 +50,7 @@ public sealed class ObjectConstructorIntegrityTests
                 O.extra, delete O.extra, Object.freeze(O) === O);
             """;
         Assert.Equal("true true false 1 true true false\n2 false true\ntrue false false 2 false true\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+            TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]
