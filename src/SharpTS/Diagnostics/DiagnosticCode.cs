@@ -66,6 +66,12 @@ public enum DiagnosticCode
     NativeGuestClrEscape = 405,
     /// <summary>The final native guest image does not prove receiver-field coverage.</summary>
     NativeGuestReceiverCertificate = 406,
+    /// <summary>The external NativeAOT SDK/toolchain is unavailable.</summary>
+    NativeGuestToolchain = 407,
+    /// <summary>The strict external native publish failed.</summary>
+    NativeGuestPublish = 408,
+    /// <summary>The native artifact could not be validated or promoted.</summary>
+    NativeGuestPublishOutput = 409,
 
     // Config errors (5XX)
     /// <summary>Configuration error.</summary>

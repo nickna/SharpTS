@@ -1,23 +1,32 @@
-# Experimental native guest projects
+# Experimental native guest output
 
-`--emit-native-project` exports an inspectable SDK project for NativeAOT-compiling
-the generated TypeScript program itself. It is the first implementation stream of
-[#1351](https://github.com/nickna/SharpTS/issues/1351). The full native guest output
-epic remains open: the current emitted runtime still has unreviewed trim/AOT
-diagnostics, and this exporter does not claim a supported warning-free native
-program target.
+`--target native-aot` publishes the generated TypeScript program through the
+supported SDK/ILC pipeline. `--emit-native-project` retains the inspectable project
+mode. Both are experimental streams of
+[#1351](https://github.com/nickna/SharpTS/issues/1351).
+
+The combined basic-console checkpoint `001ade061` publishes strictly with zero
+trim/AOT diagnostics, passes saved-IL verification and executes `42` as a native
+PE with no CLR header and no `dotnet` on PATH. Automatic CLI publication also
+verifies native arguments and exit status, plus repeated unsigned-cache reuse.
+The full epic remains open: a warning-free feature corpus, third-party interop,
+native debugging and the complete platform/release matrix require separate evidence.
 
 The [native compiler distribution](native-aot.md) is separate. It NativeAOT-compiles
 the SharpTS host; its ordinary DLL output is managed IL. The existing DLL and
 bundled EXE targets retain their behavior.
 
-## Decision record: experimental project export
+## Decision record: experimental native publication and project export
 
-Status: accepted for the first #1351 implementation stream. Export a project
-through `--emit-native-project` and an explicit `--runtime`, using the supported
-SDK publish pipeline. Keep the current `dll` and bundled `exe` targets unchanged;
-reserve automatic native publishing and SharpTS.Sdk property integration for
-later work after the generated-output warning contract is established.
+Status: implemented for experimental CLI publication. Use `--target native-aot`
+with an explicit matching `--runtime` and `-o` executable path. Keep inspectable
+`--emit-native-project` export alongside it, using the same supported SDK publish
+pipeline and feature boundary. The current `dll` and bundled `exe` targets retain
+their behavior. SDK integration and the complete release matrix remain separate
+acceptance streams.
+
+The [SDK NativeAOT guide](msbuild-sdk.md#nativeaot-guest-publish) describes the
+separate MSBuild publish graph and its output ownership.
 
 Choose a zero-argument, integer-returning guest facade because the existing DLL
 entry reads arguments from the process command line. This gives the SDK project
@@ -31,6 +40,46 @@ with an explicit experimental boundary while emitted-runtime compatibility is
 still being completed. Export success alone does not establish native support.
 
 ## Export and inspect
+
+Automatic publication uses the same experimental feature profile and entry facade:
+
+```sh
+sharpts --compile app.ts --target native-aot --runtime win-x64 -o out/app.exe --verify --debug
+```
+
+The RID and final executable path are explicit.
+The executable stem cannot be `Guest` or a framework assembly name, because the
+wrapper must not shadow its own dependencies.
+The driver selects the SDK under
+the source directory's `global.json` policy, pins it in an owned temporary project,
+and invokes supported `dotnet restore` and `dotnet publish`. It forwards original
+SDK/ILC diagnostic codes and text. Individual trim/AOT warnings remain errors;
+automatic publication never disables the exported project's warning policy.
+`SHARPTS407` identifies toolchain discovery/start failures, `SHARPTS408` identifies
+restore/publish failures, and `SHARPTS409` identifies invalid artifacts or output
+promotion failures. CTRL+C cancels the owned SDK process tree and returns 130.
+
+Only a completed publish replaces the requested executable. Platform native
+symbols (`.pdb`, `.dbg` or `.dSYM`) accompany it when produced by the SDK. An owned
+sidecar tracks those companions so regeneration removes only its own stale
+symbols. Output is staged beside the destination and prior artifacts are restored
+if promotion fails. Windows native output supports the existing `--sign` options;
+signing happens on a fresh staged copy on every run, including cache hits. Signing
+credentials never enter the native artifact cache. Other native platforms refuse
+Authenticode signing precisely.
+
+An unsigned artifact cache records the original coherent guest PE/PDB and native
+executable/symbol pairs. Its guest revision ignores only the serialized COFF
+timestamp and exact metadata module-MVID slot; IL, signatures, feature metadata,
+PDB bytes, project policy, RID, compiler revision, SDK/resolved package closure and
+identified native tool/library inputs all participate. Every cached file's hash
+is checked before reuse. The Windows toolchain inventory covers target-architecture
+VC and SDK search directories; an unidentified/incomplete native toolchain still
+publishes strictly but bypasses final-artifact reuse. This cache is not a source
+graph cache. Temporary attempt directories are owned and cleaned separately from
+user-exported projects. Guest portable PDBs do not promise TypeScript native stepping.
+
+`--emit-native-project` remains a separate inspect mode and never starts publication:
 
 ```sh
 sharpts --compile app.ts --emit-native-project out/native-app --runtime win-x64 --verify --debug
@@ -144,6 +193,11 @@ PDBs are retained when requested, but do not establish a TypeScript native
 stepping/sequence-point support contract.
 
 ## Callable catalog foundation
+
+The implementation sections below retain historical diagnostic checkpoints.
+Counts such as 81, 30 or 8 describe their individual integration stages; they are
+not the current basic-console inventory, which is zero at the checkpoint above.
+Feature-present probes can still expose findings that the basic program does not reach.
 
 Native-project emission adds a generated `$INativeCallable.Invoke(object[])`
 contract to all 24 generated runtime carriers with the `object Invoke(object[])`
@@ -717,17 +771,19 @@ incomplete.
 
 The exported project uses `PublishAot=true`, `SelfContained=true`, its explicit
 RID, individual trim/AOT diagnostics and warnings as errors. It adds no broad
-assembly roots or warning suppressions. Current emitted-runtime warnings therefore
+assembly roots or warning suppressions. Any emitted-runtime warnings therefore
 fail strict native publish instead of being hidden by successful project export.
 
-The last combined checkpoint before the residual-callable integration reports
+### Historical warning inventory
+
+A historical combined checkpoint before the residual-callable integration reported
 27 strict `console.log(42)` diagnostics: IL2070 (16), IL2075 (11).
 The two optional numeric-rest lookups, 39 Proxy bridge diagnostics, two
 generic-normalizer diagnostics, the union-converter lookup, six dynamic
 initializer diagnostics and three static-presence lookups are absent from the
 earlier 80-diagnostic checkpoint. The residual-callable slice separately removes
-three IL2075 records with no additions; combined measurement is in progress. Strict publication
-still fails. Separate diagnostic publishes retain all warnings and pass focused
+three IL2075 records with no additions. Strict publication still failed at that
+stage. Separate diagnostic publishes retained all warnings and passed focused
 native execution for own-property presence/order, generic storage/prototypes,
 suspended callbacks and rest-function binding; a managed-compiler export of the
 dynamic-code capability probe reports `false` as a native executable.
@@ -762,11 +818,12 @@ generic-symbol and core-language probes correctly; a statically resolved BCL
 native executable. Those measurements establish feasibility, not strict profile
 acceptance.
 
-Tracked remaining work in #1351 includes a generated-output warning ratchet and
-AOT-safe dispatch, automatic native publishing with structured diagnostics,
-static third-party dependency closure, caching/owned regeneration, SharpTS.Sdk
-integration, native debugging validation, a warning-free feature corpus and
-cross-platform release evidence. The profile can graduate only with that evidence.
+Tracked acceptance work in #1351 includes the generated-output warning ratchet
+and broader AOT-safe feature dispatch, static third-party dependency closure,
+SharpTS.Sdk platform acceptance, native debugging validation, a warning-free feature
+corpus and cross-platform release evidence. Automatic CLI publication, structured
+tool diagnostics and unsigned caching/owned output promotion are implemented
+above. The profile can graduate only with the remaining evidence.
 
 ### Exact static field selection
 

@@ -213,9 +213,9 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
                 propagateErrors: true));
         var (compileOptions, compileConfig) = resolved;
 
-        if (compile.CompileOptions.NativeProject is not null &&
+        if ((compile.CompileOptions.NativeProject is not null || compile.CompileOptions.NativePublish is not null) &&
             (compileOptions.NoEmit || compileOptions.EmitDeclarationOnly || compileOptions.ShowConfig))
-            throw new CompileException("--emit-native-project cannot be combined with effective noEmit, emitDeclarationOnly or showConfig settings after applying tsconfig.");
+            throw new CompileException("Native output cannot be combined with effective noEmit, emitDeclarationOnly or showConfig settings after applying tsconfig.");
 
         if (compile.CompileOptions.Signing is not null &&
             (compileOptions.NoEmit || compileOptions.EmitDeclarationOnly || compileOptions.ShowConfig))
@@ -229,6 +229,11 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
         }
         else
         {
+            if (compile.CompileOptions.NativePublish is not null)
+                NativeAotCompatibilityReport.Analyze(SharpTSRuntimeRequirements.None, [],
+                    compile.CompileOptions.References.Count > 0).ThrowIfIncompatible();
+            using var nativeWorkspace = compile.CompileOptions.NativePublish is { } nativePublish
+                ? new NativePublishWorkspace(nativePublish) : null;
             if (compile.CompileOptions.NativeProject is { } nativeProject)
             {
                 NativeAotProjectExporter.ValidateDestination(nativeProject);
@@ -237,14 +242,14 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
             }
             var outputOptions = new OutputOptions(
                 compile.CompileOptions.MsBuildErrors,
-                compile.CompileOptions.QuietMode || json,
+                compile.CompileOptions.QuietMode || json || nativeWorkspace is not null,
                 compile.CompileOptions.Standalone,
                 compile.CompileOptions.EmitDebugSymbols,
-                compile.CompileOptions.NativeProject,
-                compile.CompileOptions.Signing);
+                nativeWorkspace?.ProjectOptions ?? compile.CompileOptions.NativeProject,
+                nativeWorkspace is null ? compile.CompileOptions.Signing : null);
             exitCode = CompileFile(
                 compile.InputFile,
-                compile.OutputFile,
+                nativeWorkspace?.GuestPath ?? compile.OutputFile,
                 compile.CompileOptions.PreserveConstEnums ||
                     (compileConfig?.PreserveConstEnums ?? false),
                 compile.CompileOptions.UseReferenceAssemblies,
@@ -262,7 +267,25 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
                 compileOptions,
                 timings,
                 compileConfig);
+            if (exitCode == 0 && nativeWorkspace is not null)
+            {
+                using var cancellation = new CancellationTokenSource();
+                ConsoleCancelEventHandler cancel = (_, eventArgs) => { eventArgs.Cancel = true; cancellation.Cancel(); };
+                Console.CancelKeyPress += cancel;
+                try
+                {
+                    MeasurePhase(timings, "publish-native", () => NativeAotPublishDriver.PublishAsync(nativeWorkspace,
+                        Path.GetDirectoryName(Path.GetFullPath(compile.InputFile))!, Console.Out, Console.Error,
+                        compile.CompileOptions.QuietMode || json, compile.CompileOptions.Signing, cancellation.Token).GetAwaiter().GetResult());
+                }
+                finally { Console.CancelKeyPress -= cancel; }
+            }
         }
+    }
+    catch (OperationCanceledException)
+    {
+        Console.Error.WriteLine("Native publish cancelled; final output was preserved.");
+        exitCode = 130;
     }
     catch (SharpTSException ex)
     {
@@ -1760,7 +1783,7 @@ static void PrintHelp()
     Console.WriteLine("Compile Options:");
     Console.WriteLine("  -c, --compile <file.ts>       Compile TypeScript to .NET assembly");
     Console.WriteLine("  -o <path>                     Output file path (default: <input>.dll or .exe)");
-    Console.WriteLine("  -t, --target <type>           Output type: dll (default) or exe");
+    Console.WriteLine("  -t, --target <type>           Output type: dll (default), exe or native-aot");
     Console.WriteLine("  --bundler <mode>              Bundler selection: auto (default), sdk, or builtin");
     Console.WriteLine("  --sign <pfx|sha1:thumbprint>   Authenticode-sign final Windows EXE output");
     Console.WriteLine("  --sign-pass <password>        PFX password (or SHARPTS_SIGN_PASS environment variable)");
@@ -1810,7 +1833,7 @@ static void PrintCompileUsage()
     Console.WriteLine();
     Console.WriteLine("Options:");
     Console.WriteLine("  -o <path>              Output file path (default: <input>.dll or .exe)");
-    Console.WriteLine("  -t, --target <type>    Output type: dll (default) or exe");
+    Console.WriteLine("  -t, --target <type>    Output type: dll (default), exe or native-aot");
     Console.WriteLine("  --bundler <mode>       Bundler selection: auto (default), sdk, or builtin");
     Console.WriteLine("  --sign <pfx|sha1:hash>  Sign final Windows EXE output after bundling");
     Console.WriteLine("  --sign-pass <value>    PFX password (or SHARPTS_SIGN_PASS)");
@@ -1836,7 +1859,8 @@ static void PrintCompileUsage()
     Console.WriteLine("  --package-id <id>      Override package ID");
     Console.WriteLine("  --version <ver>        Override package version");
     Console.WriteLine("  --emit-native-project <dir>  Export an experimental generated-guest NativeAOT project");
-    Console.WriteLine("  --runtime <rid>        Explicit RID for --emit-native-project (for example win-x64)");
+    Console.WriteLine("  --target native-aot --runtime <rid> -o <path>  Publish the generated program as a native executable");
+    Console.WriteLine("  --runtime <rid>        Explicit matching RID for native output (for example win-x64)");
 }
 
 private sealed class CompilationAbortedException : Exception;

@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -14,6 +16,7 @@ public static class NativeAotProjectExporter
     public static void ValidateDestination(NativeAotProjectOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ValidateWrapperAssemblyName(options.AssemblyName);
         if (!NativeAotProjectOptions.SupportedRuntimeIdentifiers.Contains(options.RuntimeIdentifier))
             throw new ArgumentException($"Unsupported native guest RID '{options.RuntimeIdentifier}'.", nameof(options));
         if (options.RuntimeIdentifier != NativeAotProjectOptions.HostRuntimeIdentifier)
@@ -24,6 +27,19 @@ public static class NativeAotProjectExporter
         if (File.Exists(directory) || Directory.Exists(directory) && Directory.EnumerateFileSystemEntries(directory).Any())
             throw new CompileException(DiagnosticCode.NativeGuestOutputDirectory,
                 $"Native guest project destination '{directory}' is occupied. Choose a new or empty directory.");
+    }
+
+    internal static void ValidateWrapperAssemblyName(string? name)
+    {
+        if (name is null) return;
+        if (string.IsNullOrWhiteSpace(name) || name.IndexOfAny(['/', '\\', ';', '%', '$', '\r', '\n']) >= 0)
+            throw new CompileException(DiagnosticCode.NativeGuestPublishOutput, "Native output requires a plain wrapper assembly file name without MSBuild property syntax.");
+        if (name.Equals("Guest", StringComparison.OrdinalIgnoreCase) ||
+            PEPacker.EmbeddedReferenceAssemblyIndex.Default.TryGetIdentity(name, out _) ||
+            name.Equals(typeof(object).Assembly.GetName().Name, StringComparison.OrdinalIgnoreCase) ||
+            name.Equals(typeof(Uri).Assembly.GetName().Name, StringComparison.OrdinalIgnoreCase))
+            throw new CompileException(DiagnosticCode.NativeGuestPublishOutput,
+                $"Native wrapper assembly name '{name}' would shadow the generated Guest or a framework assembly. Choose a different native executable name.");
     }
 
     /// <summary>
@@ -47,6 +63,14 @@ public static class NativeAotProjectExporter
         string guest = Path.Combine(directory, "guest", "Guest.dll");
         Directory.CreateDirectory(Path.GetDirectoryName(guest)!);
         saveGuest(guest);
+        if (options.AssemblyName is { } wrapperName)
+        {
+            using var image = new PEReader(File.OpenRead(guest));
+            var metadata = image.GetMetadataReader();
+            if (metadata.AssemblyReferences.Any(handle => wrapperName.Equals(metadata.GetString(metadata.GetAssemblyReference(handle).Name), StringComparison.OrdinalIgnoreCase)))
+                throw new CompileException(DiagnosticCode.NativeGuestPublishOutput,
+                    $"Native wrapper assembly name '{wrapperName}' would shadow a generated guest dependency. Choose a different native executable name.");
+        }
 
         // Local empty build policy files isolate the inspectable project from
         // Directory.Build/Packages settings belonging to its parent repository.
@@ -61,6 +85,8 @@ public static class NativeAotProjectExporter
                 new XElement("TrimmerSingleWarn", "false")),
             new XElement("ItemGroup", new XElement("Reference", new XAttribute("Include", "Guest"),
                 new XElement("HintPath", NativeAotProjectOptions.GuestAssemblyPath), new XElement("Private", "true")))));
+        if (options.AssemblyName is not null)
+            project.Root!.Element("PropertyGroup")!.Add(new XElement("AssemblyName", options.AssemblyName));
         WriteNew(Path.Combine(directory, "NativeApp.csproj"), project.ToString() + "\n");
         WriteNew(Path.Combine(directory, "Program.cs"), "return global::SharpTS.Generated.EntryPoint.Run();\n");
         using (var manifest = new FileStream(Path.Combine(directory, "native-project.json"), FileMode.CreateNew, FileAccess.Write))

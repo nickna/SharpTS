@@ -6,6 +6,9 @@ namespace SharpTS.Compilation;
 /// <summary>Options for an inspectable experimental native guest publish project.</summary>
 public sealed record NativeAotProjectOptions(string OutputDirectory, string RuntimeIdentifier)
 {
+    /// <summary>Optional wrapper assembly name; inspect exports keep the SDK's NativeApp default.</summary>
+    public string? AssemblyName { get; init; }
+
     /// <summary>The initial explicit NativeAOT project RID selection.</summary>
     public static IReadOnlySet<string> SupportedRuntimeIdentifiers { get; } = new[]
     {
