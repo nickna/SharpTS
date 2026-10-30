@@ -12,6 +12,42 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class NativeSourceOwnerCatalogTests
 {
+    [Fact]
+    public void CompletedExplicitInterfaceEmissionProvesPersistedInheritedOwner()
+    {
+        var saved = Compile("class Box<T>{constructor(public value:T){}} class Child extends Box<number>{} console.log(new Child(7).value);", true, out var catalog);
+        Assert.Equal("7\n", Run(saved));
+        Assert.Empty(catalog!.Blockers);
+        var emission = Assert.Single(catalog.CompletedInterfaceEmissions, row => row.Owner.Name == "Child");
+        Assert.True(emission.Owner.IsCreated());
+        Assert.Throws<NotSupportedException>(() => emission.Owner.GetInterfaces());
+        Assert.Same(catalog.Module, emission.Owner.Module);
+        Assert.Same(catalog.Contract, emission.Contract);
+        Assert.Contains(saved.GetType(emission.Contract.FullName!)!, saved.GetType(emission.Owner.FullName!)!.GetInterfaces());
+    }
+
+    [Fact]
+    public void InterfaceEmissionEvidenceRequiresTheActualSameOutputOperationAndCompletion()
+    {
+        var module = NewAssembly().DefineDynamicModule("main");
+        var contract = module.DefineType("Contract", TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract).CreateType()!;
+        var catalog = new NativeSourceOwnerCatalog(module, TypeProvider.Runtime); catalog.DeclareContract(contract);
+        Assert.Throws<InvalidOperationException>(() => catalog.CompletedInterfaceEmissions);
+        var owner = module.DefineType("Owner", TypeAttributes.Public);
+        NativeSourceOwnerCatalog.Implement(owner, contract, catalog);
+        Assert.Throws<InvalidOperationException>(() => NativeSourceOwnerCatalog.Implement(owner, contract, catalog));
+        var foreign = NewAssembly().DefineDynamicModule("foreign");
+        var foreignOwner = foreign.DefineType("Foreign", TypeAttributes.Public);
+        var foreignContract = foreign.DefineType("Contract", TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract).CreateType()!;
+        Assert.Throws<InvalidOperationException>(() => NativeSourceOwnerCatalog.Implement(foreignOwner, contract, catalog));
+        Assert.Throws<InvalidOperationException>(() => NativeSourceOwnerCatalog.Implement(owner, foreignContract, catalog));
+        owner.CreateType(); var parameters = new ClassGenericParameterRegistry(); parameters.CompleteEmission([]);
+        catalog.CompleteEmission(parameters, [owner]);
+        var recorded = Assert.Single(catalog.CompletedInterfaceEmissions);
+        Assert.Same(owner, recorded.Owner); Assert.Same(contract, recorded.Contract);
+        Assert.Throws<NotSupportedException>(() => ((ICollection<NativeSourceInterfaceImplementation>)catalog.CompletedInterfaceEmissions).Clear());
+        Assert.Throws<InvalidOperationException>(() => NativeSourceOwnerCatalog.Implement(module.DefineType("Late", TypeAttributes.Public), contract, catalog));
+    }
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -147,6 +183,7 @@ public sealed class NativeSourceOwnerCatalogTests
         var parameters = new ClassGenericParameterRegistry(); parameters.Declare(owner, [parameter], [typeof(object)]);
         parameters.CompleteEmission([owner]); owner.CreateType(); catalog.CompleteEmission(parameters, [owner]);
         Assert.Single(catalog.Blockers); Assert.Equal(0, catalog.MappedOwnerCount);
+        Assert.Empty(catalog.CompletedInterfaceEmissions);
         Assembly saved = Load(assembly);
         var resolve = saved.GetType("<>NativeSourceOwnerCatalog")!.GetMethod("Resolve", BindingFlags.NonPublic | BindingFlags.Static)!;
         Type closed = (Type)resolve.Invoke(null, [saved.GetType("Missed")])!;

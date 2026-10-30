@@ -9,6 +9,8 @@ internal sealed class NativeSourceOwnerCatalog
     private readonly TypeProvider _types;
     private readonly TypeBuilder _catalog;
     private readonly HashSet<TypeBuilder> _implementers = new(ReferenceEqualityComparer.Instance);
+    private readonly List<NativeSourceInterfaceImplementation> _interfaceEmissions = [];
+    private IReadOnlyList<NativeSourceInterfaceImplementation> _completedInterfaceEmissions = [];
     private readonly List<string> _blockers = [];
     private readonly HashSet<TypeBuilder> _legacyOwners = new(ReferenceEqualityComparer.Instance);
     private Type? _contract;
@@ -30,6 +32,8 @@ internal sealed class NativeSourceOwnerCatalog
     internal int MappedOwnerCount { get; private set; }
     internal IReadOnlyList<string> Blockers => _blockers;
     internal IReadOnlyCollection<TypeBuilder> Implementers => _implementers;
+    internal IReadOnlyList<NativeSourceInterfaceImplementation> CompletedInterfaceEmissions => IsComplete ? _completedInterfaceEmissions :
+        throw new InvalidOperationException("Source interface emission records are incomplete.");
     internal IReadOnlyCollection<TypeBuilder> LegacyOwners => _legacyOwners;
     internal IReadOnlyList<Type> CanonicalOwners => IsComplete ? _canonicalOwners :
         throw new InvalidOperationException("Canonical source owners are incomplete.");
@@ -45,10 +49,17 @@ internal sealed class NativeSourceOwnerCatalog
 
     internal static void Implement(TypeBuilder owner, Type contract, NativeSourceOwnerCatalog? catalog)
     {
-        if (catalog != null && (catalog.IsComplete || catalog._contract != contract || owner.IsCreated()
-            || owner.Module.ModuleVersionId != catalog._catalog.Module.ModuleVersionId || !catalog._implementers.Add(owner)))
+        if (catalog != null && (catalog.IsComplete || !ReferenceEquals(catalog._contract, contract) || owner.IsCreated()
+            || !ReferenceEquals(owner.Module, catalog._catalog.Module) || catalog._implementers.Contains(owner)))
             throw new InvalidOperationException("The source-owner interface implementation is invalid or already declared.");
         EmitTypeDefinitions.AddInterfaceImplementation(owner, contract);
+        // Record only after the actual metadata operation succeeds. A completed
+        // type or an interface name alone cannot provide this relationship.
+        if (catalog is not null)
+        {
+            catalog._implementers.Add(owner);
+            catalog._interfaceEmissions.Add(new(owner, contract));
+        }
     }
 
     internal void CompleteEmission(ClassGenericParameterRegistry parameters, IEnumerable<TypeBuilder> sourceOwners)
@@ -66,8 +77,16 @@ internal sealed class NativeSourceOwnerCatalog
             try { implementsContract = _types.GetInterfaces(owner).Contains(_contract); }
             catch (NotSupportedException)
             {
-                Block(owner, "Created interface metadata is unavailable");
-                continue;
+                // Persisted builders with an inherited TypeSpec can refuse
+                // GetInterfaces even after CreateType. Their own exact emitted
+                // InterfaceImpl row remains independent relationship evidence.
+                implementsContract = _interfaceEmissions.Any(emission =>
+                    ReferenceEquals(emission.Owner, owner) && ReferenceEquals(emission.Contract, _contract));
+                if (!implementsContract)
+                {
+                    Block(owner, "Created interface metadata is unavailable");
+                    continue;
+                }
             }
             if (!implementsContract)
             {
@@ -108,6 +127,7 @@ internal sealed class NativeSourceOwnerCatalog
         MappedOwnerCount = mappings.Count;
         _canonicalOwners = Array.AsReadOnly(mappings.Select(mapping => mapping.Canonical).ToArray());
         _canonicalMappings = Array.AsReadOnly(mappings.ToArray());
+        _completedInterfaceEmissions = Array.AsReadOnly(_interfaceEmissions.ToArray());
         _catalog.CreateType();
         IsComplete = true;
     }
@@ -118,3 +138,5 @@ internal sealed class NativeSourceOwnerCatalog
         _blockers.Add($"{reason}: {owner.FullName}");
     }
 }
+
+internal sealed record NativeSourceInterfaceImplementation(TypeBuilder Owner, Type Contract);
