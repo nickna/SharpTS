@@ -1276,7 +1276,7 @@ public partial class Interpreter
             }
         }
 
-        if (obj is ISharpTSOwnPropertyObject)
+        if (obj is ISharpTSOwnPropertyObject or SharpTSObjectNamespace)
         {
             object key = ToPropertyKey(index);
             return RuntimeValue.FromBoxed(key is SharpTSSymbol symbol
@@ -1295,9 +1295,6 @@ public partial class Interpreter
 
         if (obj is SharpTSDate date && index is SharpTSSymbol dateSymbol)
             return RuntimeValue.FromBoxed(GetSymbolPropertyValue(date, dateSymbol));
-
-        if (obj is SharpTSObjectNamespace objectNamespace && index is SharpTSSymbol namespaceSymbol)
-            return RuntimeValue.FromBoxed(GetSymbolPropertyValue(objectNamespace, namespaceSymbol));
 
         if (obj is ISharpTSSymbolPropertyBag symbolBag
             && index is SharpTSSymbol bagSymbol)
