@@ -35,7 +35,8 @@ public partial class TypeChecker
                 BuiltInTypes.GetWeakRefMemberType(memberName, wr.TargetType),
             TypeCategory.FinalizationRegistry when objType is TypeInfo.FinalizationRegistry fr =>
                 BuiltInTypes.GetFinalizationRegistryMemberType(memberName, fr.TargetType),
-            TypeCategory.Date => BuiltInTypes.GetDateInstanceMemberType(memberName),
+            TypeCategory.Date => BuiltInTypes.GetDateInstanceMemberType(memberName)
+                ?? ResolveObjectPrototypeMember(memberName),
             TypeCategory.RegExp => ResolveRegExpMemberType(memberName),
             TypeCategory.Error when objType is TypeInfo.Error err =>
                 BuiltInTypes.GetErrorMemberType(memberName, err.Name)
