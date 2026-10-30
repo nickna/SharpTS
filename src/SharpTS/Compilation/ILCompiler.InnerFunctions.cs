@@ -73,7 +73,7 @@ public partial class ILCompiler
     /// </summary>
     private void CollectInnerFunction(Stmt.Function funcStmt)
     {
-        if (_modules.CurrentPath is { } path && _liveModuleBindings.ContainsKey(path))
+        if (_modules.CurrentPath is { } path && _modules.Types.ContainsKey(path))
             _innerFunctionModulePaths[funcStmt] = path;
         if (_currentCollectClassName != null)
             _innerFunctionEnclosingClassNames[funcStmt] = _currentCollectClassName;
