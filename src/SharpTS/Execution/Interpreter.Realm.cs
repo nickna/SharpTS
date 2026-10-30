@@ -413,6 +413,8 @@ public partial class Interpreter
     internal bool DeleteBuiltInConstructorProperty(
         SharpTSBuiltInConstructor constructor, string name)
     {
+        if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, constructor, name) is { Configurable: false })
+            return false;
         var propertiesByConstructor = GetConstructorPropertyTable(constructor);
         var deletedByConstructor = GetConstructorDeletedTable(constructor);
         if (propertiesByConstructor != null
