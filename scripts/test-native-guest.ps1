@@ -21,7 +21,7 @@ $rows = [Collections.Generic.List[object]]::new()
 $completed = $false
 $linkerEnvironment = $null
 
-function Invoke-OwnedTool([string]$Executable, [string[]]$Arguments, [string]$Log, [bool]$WithoutDotnet = $false, [hashtable]$EnvironmentOverrides = @{}) {
+function Invoke-OwnedTool([string]$Executable, [string[]]$Arguments, [string]$Log, [bool]$WithoutDotnet = $false, [hashtable]$EnvironmentOverrides = @{}, [int]$TimeoutMilliseconds = 600000) {
     $start = [Diagnostics.ProcessStartInfo]::new($Executable)
     $start.WorkingDirectory = $root
     $start.UseShellExecute = $false
@@ -38,21 +38,26 @@ function Invoke-OwnedTool([string]$Executable, [string[]]$Arguments, [string]$Lo
     $process.StartInfo = $start
     $timer = [Diagnostics.Stopwatch]::StartNew()
     $started = $false
+    $stdout = $null
+    $stderr = $null
     try {
         [void]$process.Start()
         $started = $true
         $stdout = $process.StandardOutput.ReadToEndAsync()
         $stderr = $process.StandardError.ReadToEndAsync()
-        if (-not $process.WaitForExit(600000)) { throw "Owned native-guest process timed out: $Executable" }
+        if (-not $process.WaitForExit($TimeoutMilliseconds)) { throw "Owned native-guest process timed out: $Executable" }
         if (-not [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdout, $stderr), 10000)) { throw "Owned native-guest process output did not drain: $Executable" }
         $out = $stdout.GetAwaiter().GetResult()
         $err = $stderr.GetAwaiter().GetResult()
-        [IO.File]::WriteAllText("$Log.stdout.txt", $out)
-        [IO.File]::WriteAllText("$Log.stderr.txt", $err)
         return @{ exitCode = $process.ExitCode; stdout = $out; stderr = $err; milliseconds = $timer.Elapsed.TotalMilliseconds; peakWorkingSetBytes = $process.PeakWorkingSet64 }
     }
     finally {
         if ($started -and -not $process.HasExited) { $process.Kill($true); [void]$process.WaitForExit(5000) }
+        if ($stdout -and $stderr) {
+            [void][Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdout, $stderr), 10000)
+            [IO.File]::WriteAllText("$Log.stdout.txt", $(if ($stdout.IsCompletedSuccessfully) { $stdout.GetAwaiter().GetResult() } else { '[stdout did not drain after process termination]' }))
+            [IO.File]::WriteAllText("$Log.stderr.txt", $(if ($stderr.IsCompletedSuccessfully) { $stderr.GetAwaiter().GetResult() } else { '[stderr did not drain after process termination]' }))
+        }
         $process.Dispose()
     }
 }
