@@ -1244,7 +1244,9 @@ public static partial class ObjectBuiltIns
                     enumerable: false,
                     configurable: false),
             SharpTSBuiltInConstructor constructor when propertyKey == "name"
-                || propertyKey == "length" && interpreter.HasBuiltInConstructorInitialInventory(constructor)
+                || propertyKey == "length"
+                    && (interpreter.HasBuiltInConstructorInitialInventory(constructor)
+                        || interpreter.GetBuiltInConstructorOverlayDescriptor(constructor, propertyKey) is not null)
                 => interpreter.GetBuiltInConstructorOverlayDescriptor(constructor, propertyKey),
             SharpTSSymbol => null,
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
