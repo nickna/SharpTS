@@ -1493,13 +1493,7 @@ public static partial class ObjectBuiltIns
     private static SharpTSPropertyDescriptor GetCallableMetaDescriptor(ISharpTSCallable callable, string propertyKey)
     {
         var value = FunctionBuiltIns.GetMember(callable, propertyKey);
-        return new SharpTSPropertyDescriptor
-        {
-            Value = value,
-            Writable = false,
-            Enumerable = false,
-            Configurable = true,
-        };
+        return DataDescriptor(value, writable: false, enumerable: false, configurable: true);
     }
 
     /// <summary>
