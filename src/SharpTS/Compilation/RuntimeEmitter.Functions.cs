@@ -1028,6 +1028,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ownGetterIsBound);
         il.Emit(OpCodes.Pop);
+        var ownGetterIsBoundAny = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, ownGetter);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, ownGetterIsBoundAny);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.BoundInvoke);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ownGetterIsBoundAny);
+        il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, ownGetter);
         il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldc_I4_0);

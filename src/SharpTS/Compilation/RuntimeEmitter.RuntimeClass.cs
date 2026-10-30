@@ -2103,6 +2103,7 @@ public partial class RuntimeEmitter
                 runtime.Arguments,
                 runtime.Booleans,
                 runtime.FunctionBindings.AnyType,
+                runtime.FunctionBindings.BoundType,
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.ObjectRead.Property,

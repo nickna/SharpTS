@@ -48,6 +48,7 @@ public partial class RuntimeEmitter
         EmittedArgumentsRuntime Arguments,
         EmittedBooleanRuntime Booleans,
         TypeBuilder BoundAnyFunctionType,
+        TypeBuilder BoundFunctionType,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
         MethodBuilder GetProperty,
@@ -103,6 +104,7 @@ public partial class RuntimeEmitter
     private readonly record struct DefinePropertyDescriptorFieldsInputs(
         EmittedBooleanRuntime Booleans,
         TypeBuilder BoundAnyFunctionType,
+        TypeBuilder BoundFunctionType,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
         TypeBuilder TSFunctionType,
@@ -737,6 +739,7 @@ public partial class RuntimeEmitter
             new DefinePropertyDescriptorFieldsInputs(
                 inputs.Booleans,
                 inputs.BoundAnyFunctionType,
+                inputs.BoundFunctionType,
                 inputs.DescriptorStorage,
                 inputs.Errors,
                 inputs.TSFunctionType,
@@ -1267,6 +1270,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Isinst, inputs.BoundAnyFunctionType);
         il.Emit(OpCodes.Brtrue, getterStoreLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, inputs.BoundFunctionType);
+        il.Emit(OpCodes.Brtrue, getterStoreLabel);
         GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Property descriptor 'get' is not callable");
         il.MarkLabel(getterIsUndefLabel);
         // Store $Undefined.Instance so the descriptor remains classified as
@@ -1302,6 +1308,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, setterStoreLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Isinst, inputs.BoundAnyFunctionType);
+        il.Emit(OpCodes.Brtrue, setterStoreLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, inputs.BoundFunctionType);
         il.Emit(OpCodes.Brtrue, setterStoreLabel);
         GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Property descriptor 'set' is not callable");
         il.MarkLabel(setterIsUndefLabel);
