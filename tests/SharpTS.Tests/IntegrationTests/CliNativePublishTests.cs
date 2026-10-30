@@ -8,11 +8,12 @@ public sealed class CliNativePublishTests
     private static string Options => $"--target native-aot --runtime {NativeAotProjectOptions.HostRuntimeIdentifier} -o output.bin --msbuild-errors";
 
     [Theory]
-    [InlineData("Guest.exe")]
-    [InlineData("guest.exe")]
-    [InlineData("System.Console.exe")]
-    public void ReservedWrapperOutputNamesRefuseBeforeOverwritingUserOutput(string name)
+    [InlineData("Guest")]
+    [InlineData("guest")]
+    [InlineData("System.Console")]
+    public void ReservedWrapperOutputNamesRefuseBeforeOverwritingUserOutput(string stem)
     {
+        string name = stem + (OperatingSystem.IsWindows() ? ".exe" : "");
         using var directory = CliTestHelper.CreateTempDirectory();
         directory.CreateFile("main.ts", "console.log(42);"); directory.CreateFile(name, "prior output");
         var result = CliTestHelper.RunCli($"--no-tsconfig --compile main.ts {Options.Replace("output.bin", name)}", directory.Path);
