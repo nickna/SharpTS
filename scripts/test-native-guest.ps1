@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $compiler = [IO.Path]::GetFullPath($CompilerPath, $root)
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) { throw "Compiler missing: $compiler" }
-$dotnet = (Get-Command dotnet -CommandType Application -ErrorAction Stop).Source
+$dotnet = (Get-Command dotnet -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 $hostOs = if ($IsWindows) { 'win' } elseif ($IsMacOS) { 'osx' } else { 'linux' }
 $hostArch = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
 if ($RuntimeIdentifier -cne "$hostOs-$hostArch") { throw 'Native guest tests require the matching OS and process architecture.' }
