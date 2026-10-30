@@ -150,6 +150,7 @@ public class VariableResolver : AstVisitorBase
 
     protected override void VisitVar(Stmt.Var stmt)
     {
+        if (stmt.IsDeclare) return;
         Dictionary<string, bool>? target = _scopes.TryPeek(out var current) ? current : null;
         if (stmt.IsVar && target is not null && _handlerVarTargets.TryGetValue(target, out var markedTarget))
             target = markedTarget;

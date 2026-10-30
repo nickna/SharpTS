@@ -134,7 +134,7 @@ public partial class ILCompiler
 
                     // A namespace-level variable needs a static backing field so functions
                     // declared in the namespace can resolve the bare name (#567).
-                    case Stmt.Var varStmt:
+                    case Stmt.Var varStmt when !varStmt.IsDeclare:
                         DefineNamespaceVarField(path, varStmt.Name.Lexeme);
                         break;
 

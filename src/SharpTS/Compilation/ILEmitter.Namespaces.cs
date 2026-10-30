@@ -132,7 +132,7 @@ public partial class ILEmitter
                 }
                 break;
 
-            case Stmt.Var varStmt:
+            case Stmt.Var varStmt when !varStmt.IsDeclare:
                 EmitNamespaceMemberVar(nsField, nsPath, memberName!, varStmt.Initializer, varStmt.TypeAnnotation, isExported);
                 break;
 

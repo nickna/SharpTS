@@ -284,7 +284,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 break;
 
             case Stmt.Var v:
-                EmitVarDeclaration(v);
+                if (!v.IsDeclare) EmitVarDeclaration(v);
                 break;
 
             case Stmt.Const c:

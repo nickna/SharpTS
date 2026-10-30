@@ -187,7 +187,7 @@ public abstract partial class StatementEmitterBase
         {
             switch (statement)
             {
-                case Stmt.Var { IsVar: false } variable: yield return (statement, variable.Name); break;
+                case Stmt.Var { IsVar: false, IsDeclare: false } variable: yield return (statement, variable.Name); break;
                 case Stmt.Const constant: yield return (statement, constant.Name); break;
                 case Stmt.Sequence sequence:
                     foreach (var item in DirectLexicalDeclarations(sequence.Statements)) yield return item;

@@ -369,6 +369,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
 
     private void EmitVariableDeclarationWithLexicalTdz(Stmt.Var declaration)
     {
+        if (declaration.IsDeclare) return;
         if (declaration.IsVar)
         {
             EmitVarDeclaration(declaration);

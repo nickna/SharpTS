@@ -3408,7 +3408,7 @@ public partial class ILEmitter
                 case Stmt.Const constant:
                     names.Add(constant.Name.Lexeme);
                     break;
-                case Stmt.Var { IsVar: false } lexical:
+                case Stmt.Var { IsVar: false, IsDeclare: false } lexical:
                     names.Add(lexical.Name.Lexeme);
                     break;
                 case Stmt.Class declaration when _ctx.RuntimeClassDeclarations?.ContainsKey(declaration) == true

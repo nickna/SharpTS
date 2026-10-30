@@ -2176,7 +2176,7 @@ public partial class Interpreter : IDisposable
     /// Checks if a declaration is type-only (interface or type alias) with no runtime value.
     /// </summary>
     private bool IsTypeOnlyDeclaration(Stmt decl) =>
-        decl is Stmt.Interface or Stmt.TypeAlias;
+        decl is Stmt.Interface or Stmt.TypeAlias or Stmt.Var { IsDeclare: true };
 
     /// <summary>
     /// Executes a CommonJS-style require import: import x = require('path')
@@ -2307,7 +2307,7 @@ public partial class Interpreter : IDisposable
                 HoistTopLevelVarDeclarations(sequence.Statements);
                 continue;
             }
-            if (stmt is not Stmt.Var { IsVar: true } variable) continue;
+            if (stmt is not Stmt.Var { IsVar: true, IsDeclare: false } variable) continue;
 
             RegisterClassicGlobalVar(variable.Name.Lexeme);
         }

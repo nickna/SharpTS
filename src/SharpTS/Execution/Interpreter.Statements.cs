@@ -2097,6 +2097,7 @@ public partial class Interpreter
 
     internal ExecutionResult VisitVar(Stmt.Var varStmt)
     {
+        if (varStmt.IsDeclare) return ExecutionResult.Success();
         object? value = SharpTSUndefined.Instance;
         if (varStmt.Initializer != null)
         {

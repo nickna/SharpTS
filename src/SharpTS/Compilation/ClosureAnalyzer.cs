@@ -389,7 +389,7 @@ public class ClosureAnalyzer : AstVisitorBase
             // pattern `function baseRest() { ... setToString(...) ... } ... var setToString
             // = shortOut(baseSetToString);` makes baseRest treat setToString as undeclared,
             // and the compiled inner function body emits a runtime ReferenceError fallback.
-            else if (stmt is Stmt.Var vr && vr.IsVar)
+            else if (stmt is Stmt.Var vr && vr.IsVar && !vr.IsDeclare)
                 DeclareVariable(vr.Name.Lexeme);
             // Pre-declare block-scoped let/const for the same reason (#533): an inner function
             // declared BEFORE a let/const in this scope must still capture it, because the function
@@ -397,7 +397,7 @@ public class ClosureAnalyzer : AstVisitorBase
             // block, function body, arrow body), so each binding is declared in its own scope.
             // Unlike var, no source-order initialization is implied — capture analysis only needs to
             // know which scope OWNS the name so the inner function shares the binding's slot.
-            else if (stmt is Stmt.Var lt && !lt.IsVar)
+            else if (stmt is Stmt.Var lt && !lt.IsVar && !lt.IsDeclare)
                 DeclareVariable(lt.Name.Lexeme, isPerIterationBinding: true);
             else if (stmt is Stmt.Const ct)
                 DeclareVariable(ct.Name.Lexeme, isPerIterationBinding: true);
@@ -789,6 +789,7 @@ public class ClosureAnalyzer : AstVisitorBase
 
     protected override void VisitVar(Stmt.Var stmt)
     {
+        if (stmt.IsDeclare) return;
         DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: !stmt.IsVar);
         base.VisitVar(stmt);
     }

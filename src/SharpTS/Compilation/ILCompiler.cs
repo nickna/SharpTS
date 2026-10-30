@@ -2365,7 +2365,7 @@ public partial class ILCompiler
 
             string? varName = stmt switch
             {
-                Stmt.Var v => v.Name.Lexeme,
+                Stmt.Var { IsDeclare: false } v => v.Name.Lexeme,
                 Stmt.Const c => c.Name.Lexeme,
                 _ => null
             };
@@ -2748,7 +2748,7 @@ public partial class ILCompiler
 
         string? varName = stmt switch
         {
-            Stmt.Var v => v.Name.Lexeme,
+            Stmt.Var { IsDeclare: false } v => v.Name.Lexeme,
             Stmt.Const c => c.Name.Lexeme,
             _ => null
         };

@@ -1513,7 +1513,7 @@ public partial class ILCompiler
         {
             switch (statement)
             {
-                case Stmt.Var { IsVar: true } variable:
+                case Stmt.Var { IsVar: true, IsDeclare: false } variable:
                     yield return variable;
                     break;
                 case Stmt.Sequence sequence:

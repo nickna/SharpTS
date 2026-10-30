@@ -648,7 +648,7 @@ public partial class ILEmitter
     {
         Stmt.Function f => f.Name.Lexeme,
         Stmt.Class c => c.Name.Lexeme,
-        Stmt.Var v => v.Name.Lexeme,
+        Stmt.Var { IsDeclare: false } v => v.Name.Lexeme,
         Stmt.Const ct => ct.Name.Lexeme,
         Stmt.Enum e => e.Name.Lexeme,
         Stmt.Namespace ns => ns.Name.Lexeme,
