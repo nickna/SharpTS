@@ -10,6 +10,15 @@ public sealed class EmittedReflectedMethodRuntime
     public bool IsComplete { get; private set; }
     private bool _callableFinalized;
     internal System.Reflection.MethodInfo? NativePropertyGetter { get; private set; }
+    internal EmittedNativeMethodLookupRuntime? NativeMethodLookup { get; private set; }
+
+    internal void DeclareNativeMethodLookup(ModuleBuilder module, EmittedNativeMethodLookupRuntime lookup)
+    {
+        EnsureMutable();
+        if (NativeMethodLookup is not null || !ReferenceEquals(module, lookup.Module))
+            throw new InvalidOperationException("Native method lookup requires one same-output query family.");
+        NativeMethodLookup = lookup;
+    }
 
     internal void DeclareNativePropertyGetter(ModuleBuilder module, MethodBuilder getter)
     {

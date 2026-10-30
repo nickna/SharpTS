@@ -760,6 +760,7 @@ public partial class ILCompiler
 
             _nativeReceiverBinding = new(_moduleBuilder, _types);
             _nativePropertyLookup = new(_moduleBuilder, _types);
+            _nativeMethodLookup = new(_moduleBuilder, _types);
             _functionEmissionPolicy = _functionEmissionPolicy with
             {
                 NativeGenericNormalizer = _nativeGenericMethodNormalization.Normalize,
@@ -782,7 +783,8 @@ public partial class ILCompiler
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy,
                 _nativeSourceOwners, nativeClassInitializer: _nativeRuntimeClassInitialization?.Initialize,
                 nativeStaticMemberPresence: _nativeStaticMemberPresence?.HasMember,
-                nativePropertyGetter: _nativePropertyLookup?.FindGetter);
+                nativePropertyGetter: _nativePropertyLookup?.FindGetter,
+                nativeMethodLookup: _nativeMethodLookup?.Handles);
         if (_runtime.GuestOwnProperties is { } own) GetClassRegistry().BeginNativeOwnProperties(own);
         _typeMapper.SetRuntime(_runtime);
     }
@@ -1275,6 +1277,7 @@ public partial class ILCompiler
 
         _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
         _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeMethodLookup?.CompleteEmission(_nativePropertyLookup!, _nativeSourceOwners!, _runtime.Errors, _runtime.FunctionValues.Type);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
@@ -1942,6 +1945,7 @@ public partial class ILCompiler
 
         _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
         _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeMethodLookup?.CompleteEmission(_nativePropertyLookup!, _nativeSourceOwners!, _runtime.Errors, _runtime.FunctionValues.Type);
         _programType.CreateType();
         _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();

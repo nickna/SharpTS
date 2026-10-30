@@ -457,7 +457,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        if (reflectedMethods.NativeMethodLookup is { } nativeSelect)
+            il.Emit(OpCodes.Call, nativeSelect.Select);
+        else
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, retLabel);
 
@@ -470,7 +473,10 @@ public partial class RuntimeEmitter
         // methods = t.GetMethods(flags)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethods", typeof(BindingFlags)));
+        if (reflectedMethods.NativeMethodLookup is { } nativeEnumerate)
+            il.Emit(OpCodes.Call, nativeEnumerate.Enumerate);
+        else
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethods", typeof(BindingFlags)));
         il.Emit(OpCodes.Stloc, methodsLocal);
 
         // Pass 1: prefer a zero-arg overload.

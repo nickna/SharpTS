@@ -323,7 +323,37 @@ the actual runtime binder and its exceptions remain authoritative.
 A complete owner miss continues to the existing method/prototype lookup; an
 unproved owner or a setter-only property produces an explicit native TypeError at
 this operation. Default managed output retains its original lookup body.
-`SafeGetMethod` and general runtime reflection fallbacks remain separate work.
+Native method queries use a separate late catalog of the same exact owners and
+the source catalog's proved canonical generic targets. SafeGetMethod retains
+its original runtime ambiguity handling: prefer a zero-argument overload, then
+the first case-insensitive name match in the loaded runtime's method order.
+Each admitted query uses a literal owner and one fixed flag profile. Output-owned
+types support public instance (with or without IgnoreCase), public static, and
+public declared-only static lookup. Framework guest carriers support public
+instance lookup only; native intrinsic constructor routes already provide their
+JavaScript static members. Unsupported native CLR static queries, other flags,
+foreign owners and foreign subclasses raise a guest TypeError at this operation.
+This avoids retaining unrelated framework static capabilities such as dynamic
+array creation. Raw object arrays and the exact runtime function carrier admit only three literal instance probes
+Call, GetMember and SetMember used by the manual callable/member bridges. These
+use the actual named binder query; other CLR-array method queries are refused.
+Ordinary JavaScript array and function properties, descriptors and prototypes
+keep their dedicated dispatch. Other CLR helper queries on the function carrier
+are explicitly refused; this prevents dormant constructor helpers from becoming
+reachable through unrelated metadata enumeration.
+A source-owner catalog with unproved generic inheritance keeps
+the entire legacy method query operation, including its visible diagnostics.
+No canonical owner is invented for that case. Default managed output retains
+the original query bodies; other general reflection fallbacks remain separate.
+The strict Windows console inventory falls from 29 to 27 diagnostics, removing
+exactly the two SafeGetMethod IL2070 findings with none added. Separate native
+controls pass loaded ambiguity/overload selection, guest error identity, raw
+rest-array reads, and function descriptors/prototypes/aliases. Their saved IL
+verifies, and ordinary console, rest-producer and class output retain every
+method body and PE size. Strict publication still fails on the other findings.
+Zlib's implicit ZstdSharp dependency remains a separate exporter limitation
+tracked in #3083; its managed member bridge is tested without claiming native
+project acceptance.
 
 A broader closed profile still needs producer-to-use provenance at these boundaries:
 

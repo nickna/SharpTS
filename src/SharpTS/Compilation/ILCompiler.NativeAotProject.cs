@@ -7,6 +7,8 @@ public partial class ILCompiler
 {
     private bool _nativeAotProjectOutput;
     private NativePropertyLookupCatalog? _nativePropertyLookup;
+    private NativeMethodLookupCatalog? _nativeMethodLookup;
+    internal NativeMethodLookupCatalog? NativeMethods => _nativeMethodLookup;
     internal NativePropertyLookupCatalog? NativeProperties => _nativePropertyLookup;
     private NativeClrAdmission? _nativeClrAdmission;
     private TypeBuilder? _nativeAotEntryFacade;
@@ -53,6 +55,8 @@ public partial class ILCompiler
             throw new InvalidOperationException("Native static field metadata has not completed source emission.");
         if (_nativeConstructorMembers?.IsComplete != true)
             throw new InvalidOperationException("Native constructor member metadata has not completed source emission.");
+        if (_nativeMethodLookup?.IsComplete != true)
+            throw new InvalidOperationException("Native method metadata has not completed source emission.");
     }
 
     private void RecordSourceRewrite(object source, object target)
