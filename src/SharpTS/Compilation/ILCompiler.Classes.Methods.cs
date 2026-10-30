@@ -629,8 +629,8 @@ public partial class ILCompiler
         // Emit constructor
         EmitConstructor(typeBuilder, classStmt, fieldsField);
         EmitDeclaredConstructorFactory(typeBuilder, classStmt, _classes.Constructors[qualifiedClassName]);
-        if (_usesRuntimeParents && !typeBuilder.IsGenericTypeDefinition && typeBuilder.BaseType is not { Name: "$Promise" }
-            && !_classes.ErrorSubclasses.Contains(qualifiedClassName) && SupportsReceiverInitialization(classStmt))
+        if (_usesRuntimeParents && typeBuilder.BaseType is not { Name: "$Promise" }
+            && !_classes.ErrorSubclasses.Contains(qualifiedClassName) && SupportsReceiverInitialization(classStmt, allowGenericOwner: true))
             EmitReceiverInitializer(typeBuilder, classStmt);
 
         // Emit the compiler-only constructor used to create Constructor.prototype

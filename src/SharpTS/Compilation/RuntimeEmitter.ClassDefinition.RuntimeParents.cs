@@ -23,6 +23,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, parentType); il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
             il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle); il.Emit(OpCodes.Beq, supported);
         }
+        EmitOwnedSourceConstructorLookupOwner(il, parentType, runtime.ObjectFields.Interface, runtime.ClassInitialization.SourceOwners);
         il.Emit(OpCodes.Ldloc, parentType);
         if (_nativeReceiverInitializers is { } parentLookup) il.Emit(OpCodes.Call, parentLookup.Find);
         else
@@ -70,6 +71,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, runtime.DynamicConstruction.ConstructWithNewTarget); il.Emit(OpCodes.Ret);
             il.MarkLabel(ordinaryParent);
         }
+        EmitOwnedSourceConstructorLookupOwner(il, template, runtime.ObjectFields.Interface, runtime.ClassInitialization.SourceOwners);
         var adapter = il.DeclareLocal(_types.MethodInfo);
         il.Emit(OpCodes.Ldloc, template);
         if (_nativeReceiverInitializers is { } receiverLookup) il.Emit(OpCodes.Call, receiverLookup.Find);
@@ -198,5 +200,30 @@ public partial class RuntimeEmitter
         il.MarkLabel(symbolSuper);
         il.Emit(OpCodes.Ldloc, superBase); il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Call, runtime.Reflect.Get); il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitOwnedSourceConstructorLookupOwner(ILGenerator body, LocalBuilder owner,
+        Type contract, NativeSourceOwnerCatalog? sourceOwners)
+    {
+        var ready = body.DefineLabel();
+        // Foreign/delegating Types keep their original lookup. Only this
+        // output's actual source contract can use canonical normalization.
+        NativeTypeIdentityEmitter.EmitRuntimeTypeFence(body, _types, () => body.Emit(OpCodes.Ldloc, owner), ready);
+        body.Emit(OpCodes.Ldloc, owner);
+        body.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "Module"));
+        body.Emit(OpCodes.Ldtoken, contract); body.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        body.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "Module"));
+        body.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "ReferenceEquals", _types.Object, _types.Object));
+        body.Emit(OpCodes.Brfalse, ready);
+        body.Emit(OpCodes.Ldtoken, contract); body.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        body.Emit(OpCodes.Ldloc, owner);
+        body.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+        body.Emit(OpCodes.Brfalse, ready);
+        body.Emit(OpCodes.Ldloc, owner);
+        body.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "ContainsGenericParameters"));
+        body.Emit(OpCodes.Brfalse, ready);
+        var normalized = EmitStaticMemberLookupOwner(body, owner, contract, sourceOwners);
+        body.Emit(OpCodes.Ldloc, normalized); body.Emit(OpCodes.Stloc, owner);
+        body.MarkLabel(ready);
     }
 }

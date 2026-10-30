@@ -590,9 +590,9 @@ public partial class ILCompiler
 
         string className = _classExprs.Names[classExpr];
         var fieldsField = _classes.InstanceFieldsField[className];
-        if (_usesRuntimeParents && !typeBuilder.IsGenericTypeDefinition && !_classes.ErrorSubclasses.Contains(className)
+        if (_usesRuntimeParents && !_classes.ErrorSubclasses.Contains(className)
             && !_classes.PromiseSubclasses.Contains(className)
-            && SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr)))
+            && SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr), allowGenericOwner: true))
             EmitReceiverInitializer(typeBuilder, ClassExpressionDeclaration(classExpr), classExpr);
 
         // Emit the constructor-free prototype path before the .cctor that uses it.

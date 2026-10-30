@@ -7,6 +7,8 @@ public partial class RuntimeEmitter
 {
     private readonly record struct ConstructDynamicValueInputs(
         EmittedClassDefinitionRuntime ClassDefinitions,
+        Type UserClassInterface,
+        NativeSourceOwnerCatalog? SourceOwners,
         EmittedDynamicConstructionRuntime DynamicConstruction,
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage,
@@ -343,6 +345,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, constructorType);
             il.Emit(OpCodes.Call, admission.AdmitType);
         }
+
+        EmitOwnedSourceConstructorLookupOwner(il, constructorType, inputs.UserClassInterface, inputs.SourceOwners);
 
         // Only emitted guest classes carry this factory. Its source-aware adapter
         // supplies defaults/rest slots without changing CLR/native overload binding.

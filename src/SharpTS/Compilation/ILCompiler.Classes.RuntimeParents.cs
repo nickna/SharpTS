@@ -190,12 +190,12 @@ public partial class ILCompiler
         return false;
     }
 
-    private static bool SupportsReceiverInitialization(Stmt.Class declaration)
+    private static bool SupportsReceiverInitialization(Stmt.Class declaration, bool allowGenericOwner = false)
     {
         // The finite runtime-parent path supports ordinary fields, synchronous
         // methods (including generators) and accessors through guest-receiver adapters.
         // Other templates keep their existing CLR construction path.
-        if (declaration.TypeParams is { Count: > 0 }
+        if ((!allowGenericOwner && declaration.TypeParams is { Count: > 0 })
             || declaration.AutoAccessors is { Count: > 0 }
             || declaration.Fields.Any(field => field.IsPrivate || field.ComputedKey != null)
             || declaration.Methods.Any(method => method.IsPrivate || method.IsAsync
@@ -394,6 +394,10 @@ public partial class ILCompiler
         ctx.GuestThisVariableName = CompilationContext.ThisParameterName;
         ctx.ClassDefinitionParameterIndex = 2;
         ctx.NewTargetParameterIndex = 3;
+        // The adapter stays inside its actual generic owner. Do not transplant
+        // these class parameters into a nongeneric method-value wrapper.
+        foreach (var parameter in _classes.GenericParameters.Require(owner))
+            ctx.GenericTypeParameters[parameter.Name] = parameter;
         ctx.DefineParameter(CompilationContext.ThisParameterName, 0, _types.Object);
         ApplyCapturedTopLevelVariableAccess(ctx);
         var constructor = declaration.Methods.FirstOrDefault(source => source.Body != null && source.Name.Lexeme == "constructor" && !source.IsStatic);
