@@ -1204,20 +1204,21 @@ public partial class TypeChecker
         int requiredParams = 0;
         bool seenDefault = false;
 
-        // A default value may reference any PRECEDING parameter (`(x: T, y: U = x)`), so defaults
-        // are checked in a scope where the earlier parameters are progressively defined. Each
-        // parameter is defined AFTER its own default is checked, so self-reference still resolves
-        // to an outer binding or errors. A preceding bare-optional parameter is visible here with
-        // its WIDENED (possibly-undefined) type, matching what the function body itself would see.
+        // All parameter bindings exist while defaults run. Deferred closures may read a
+        // later binding, but immediate reads still observe its initialization boundary.
         var paramScope = new TypeEnvironment(_environment);
         if (editorOwner is not null)
             RegisterEditorParameterScope(editorOwner, paramScope);
+        var annotations = parameters.Select(param => ResolveAnnotation(param.Type, param.TypeAnnotationNode, param)).ToList();
+        var defaultBindings = new ParameterDefaultBindings(this, editorOwner, parameters,
+            annotations.Select(type => type ?? TypeInfo.Any.Shared).ToList(), paramScope, validateDefaults);
         using var bindingScope = new ParameterBindingCheckScope(this, editorOwner, validateDefaults,
             deferClassContextDefaults);
 
-        foreach (var param in parameters)
+        for (int parameterIndex = 0; parameterIndex < parameters.Count; parameterIndex++)
         {
-            TypeInfo? resolvedParameter = ResolveAnnotation(param.Type, param.TypeAnnotationNode, param);
+            var param = parameters[parameterIndex];
+            TypeInfo? resolvedParameter = annotations[parameterIndex];
             if (resolvedParameter is null && param.DestructuredProperties is { Count: > 0 } properties)
             {
                 var fields = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
@@ -1260,6 +1261,7 @@ public partial class TypeChecker
             {
                 DeclareParameterValue(paramScope, param, paramType);
                 bindingScope.Initialize(param, paramScope, paramType);
+                defaultBindings.Initialize(param, parameterIndex);
                 continue;
             }
 
@@ -1275,6 +1277,7 @@ public partial class TypeChecker
                     {
                         defaultType = CheckDeferredClassDefault(param.DefaultValue, ParameterDefaultTupleContext(paramType));
                     }
+                    defaultBindings.Check(param.DefaultValue, parameterIndex);
                     if (!IsCompatible(paramType, defaultType))
                     {
                         throw new TypeMismatchException($"Default value type is not assignable to parameter type in {contextName}",
@@ -1303,6 +1306,7 @@ public partial class TypeChecker
                 param,
                 visibleType);
             bindingScope.Initialize(param, paramScope, visibleType);
+            defaultBindings.Initialize(param, parameterIndex);
         }
 
         bool hasRest = parameters.Any(p => p.IsRest);

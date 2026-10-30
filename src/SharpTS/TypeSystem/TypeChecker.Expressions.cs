@@ -1833,6 +1833,7 @@ public partial class TypeChecker
             // masks the private name even before initialization, including pattern bindings.
             var paramScope = new TypeEnvironment(defaultParent);
             RegisterEditorParameterScope(arrow, paramScope);
+            var defaultBindings = new ParameterDefaultBindings(this, arrow, arrow.Parameters, paramTypes, paramScope);
             var namedDefaults = arrow.Name is not null
                 ? new NamedExpressionParameterDefaults(this, arrow, paramScope, paramTypes) : null;
             using var bindingScope = new ParameterBindingCheckScope(this, arrow, validate: true);
@@ -1847,6 +1848,7 @@ public partial class TypeChecker
                 {
                     DeclareValue(paramScope, param.Name, paramType);
                     bindingScope.Initialize(param, paramScope, paramType);
+                    defaultBindings.Initialize(param, i);
                     namedDefaults?.Initialize(param, i);
                     continue;
                 }
@@ -1865,6 +1867,7 @@ public partial class TypeChecker
                             : CheckDeferredClassDefault(param.DefaultValue, defaultContext);
                     }
                     namedDefaults?.Check(param.DefaultValue, i);
+                    defaultBindings.Check(param.DefaultValue, i);
                     if (!IsCompatible(paramType, defaultType))
                     {
                         throw new TypeCheckException($" Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.",
@@ -1885,6 +1888,7 @@ public partial class TypeChecker
 
                 DeclareValue(paramScope, param.Name, paramType);
                 bindingScope.Initialize(param, paramScope, paramType);
+                defaultBindings.Initialize(param, i);
                 namedDefaults?.Initialize(param, i);
             }
 
