@@ -67,7 +67,7 @@ jobs:
           DOTNET_CLI_UI_LANGUAGE: en
         run: >-
           ./scripts/test-native-guest.ps1 -RuntimeIdentifier '${{ matrix.rid }}'
-          -Cases @('language', 'classes', 'arguments', 'modules', 'collections', 'generators', 'async', 'parameter-defaults', 'exceptions', 'crypto', 'networking', 'bcl')
+          -Cases @('language', 'classes', 'arguments', 'modules', 'collections', 'generators', 'async', 'parameter-defaults', 'exceptions', 'crypto', 'networking', 'bcl', 'typedarray-iterator', 'generic-inheritance', 'bigint-unary')
       - name: Pack the candidate SDK
         shell: pwsh
         run: |

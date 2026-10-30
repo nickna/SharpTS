@@ -20,6 +20,10 @@ The CI cohort runs on matching Windows, Linux and macOS x64/ARM64 runners:
 - `networking`: a loopback-only TCP request/response and bounded socket cleanup.
 - `bcl`: direct immutable CLR constructor, member and property access, plus
   `RuntimeFeature.IsDynamicCodeSupported == false` in the executed guest.
+- `typedarray-iterator`: the original #3134 iterable-constructor reproduction,
+  consuming the iterator before converting elements and avoiding the length getter.
+- `generic-inheritance`: a closed generic base context and inherited field storage.
+- `bigint-unary`: the original #3144 asserted negative-BigInt comparison.
 
 Run that cohort after building the managed compiler:
 
@@ -44,7 +48,7 @@ reflection findings reached zero and both executed as native Windows programs.
 CI verifies the same strict contract on all six RIDs. The CLI preserves original
 SDK diagnostics and promotes no failed output. This cohort does not complete
 [#1351](https://github.com/nickna/SharpTS/issues/1351)'s broader generic-class,
-dependency-closure, networking, P/Invoke, benchmark and release acceptance work.
+dependency-closure, networking, P/Invoke and release acceptance work.
 
 Each matching runner also packs the candidate `SharpTS.Sdk`, verifies its managed
 build/rebuild/clean/publish behavior, and publishes a native consumer through

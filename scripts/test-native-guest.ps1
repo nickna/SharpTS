@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)][string]$RuntimeIdentifier,
     [string]$CompilerPath = 'src/SharpTS/bin/Release/net10.0/SharpTS.dll',
     [string]$ResultsDirectory = 'artifacts/native-guest',
-    [string[]]$Cases = @('language', 'classes', 'arguments', 'modules', 'collections', 'generators', 'async', 'parameter-defaults', 'exceptions', 'crypto', 'networking', 'bcl')
+    [string[]]$Cases = @('language', 'classes', 'arguments', 'modules', 'collections', 'generators', 'async', 'parameter-defaults', 'exceptions', 'crypto', 'networking', 'bcl', 'typedarray-iterator', 'generic-inheritance', 'bigint-unary')
 )
 
 Set-StrictMode -Version Latest
@@ -99,6 +99,9 @@ $cohort = @{
     crypto = @{ source = 'crypto.ts'; expected = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad`n8`n"; arguments = @(); exitCode = 0 }
     networking = @{ source = 'networking.ts'; expected = "loopback=pong`nclosed`n"; arguments = @(); exitCode = 0 }
     bcl = @{ source = 'bcl.ts'; expected = "native 6`nfalse`n"; arguments = @(); exitCode = 0 }
+    'typedarray-iterator' = @{ source = 'typedarray-iterator.ts'; expected = "next 0`nnext 1`nnext 2`nconvert`nconvert`n2 7 7`n"; arguments = @(); exitCode = 0 }
+    'generic-inheritance' = @{ source = 'generic-inheritance.ts'; expected = "7`n"; arguments = @(); exitCode = 0 }
+    'bigint-unary' = @{ source = 'bigint-unary.ts'; expected = "bigint true bigint true`n"; arguments = @(); exitCode = 0 }
 }
 try {
     if ($Cases.Count -eq 0 -or @($Cases | Select-Object -Unique).Count -ne $Cases.Count) { throw 'A nonempty distinct case selection is required.' }

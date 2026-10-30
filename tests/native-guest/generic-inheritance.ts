@@ -1,0 +1,1 @@
+class Box<T>{constructor(public value:T){}} class Child extends Box<number>{} console.log(new Child(7).value);
