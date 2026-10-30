@@ -66,7 +66,8 @@ public partial class RuntimeEmitter
 
     private readonly record struct ReflectValueFormMethodsInputs(MethodInfo Get, MethodInfo Set,
         MethodInfo DefineProperty, MethodInfo ObjectGetOwnPropertyDescriptor,
-        MethodInfo ObjectGetPrototypeOf, MethodInfo ObjectIsExtensible, MethodInfo HasIn, FieldInfo UndefinedInstance);
+        MethodInfo ObjectGetPrototypeOf, MethodInfo ObjectIsExtensible, MethodInfo HasIn, FieldInfo UndefinedInstance,
+        MethodInfo TypeOf, MethodInfo CreateException, ConstructorInfo TypeErrorConstructor);
 
     /// <summary>ToPropertyKey preserves Symbol results of string-hint ToPrimitive.</summary>
     private void EmitReflectToPropertyKey(EmittedReflectRuntime reflect, ReflectToPropertyKeyInputs inputs)
@@ -331,39 +332,8 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         reflectNamespace.DeleteProperty = method;
         var il = method.GetILGenerator();
-        // Reflect requires an Object target before any observable key coercion.
-        // Keep this validation out of the shared delete-expression helpers.
-        var invalidTarget = il.DefineLabel();
-        var validTarget = il.DefineLabel();
-        var targetType = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, invalidTarget);
-        // Interop can retain CLR numeric carriers that TypeOf does not yet
-        // classify as JS numbers. Reject those specific primitives here,
-        // while preserving managed structs and enums as object targets.
-        foreach (var primitiveType in new[] { _types.Byte, _types.SByte,
-                     _types.Int16, _types.UInt16, _types.Int32, _types.UInt32,
-                     _types.Int64, _types.UInt64, _types.Single, _types.Double,
-                     _types.Decimal, _types.Char })
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, primitiveType);
-            il.Emit(OpCodes.Brtrue, invalidTarget);
-        }
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.TypeOf);
-        il.Emit(OpCodes.Stloc, targetType);
-        foreach (var kind in new[] { "object", "function" })
-        {
-            il.Emit(OpCodes.Ldloc, targetType);
-            il.Emit(OpCodes.Ldstr, kind);
-            il.Emit(OpCodes.Call, _types.StringOpEquality);
-            il.Emit(OpCodes.Brtrue, validTarget);
-        }
-        il.MarkLabel(invalidTarget);
-        GuestErrorEmitter.ThrowError(il, inputs.CreateException,
-            inputs.TypeErrorConstructor, "Reflect.deleteProperty requires an object target");
-        il.MarkLabel(validTarget);
+        EmitRequireReflectObjectTarget(il, () => il.Emit(OpCodes.Ldarg_0),
+            inputs.TypeOf, inputs.CreateException, inputs.TypeErrorConstructor, "deleteProperty");
         var keyLocal = il.DeclareLocal(_types.Object);
         var stringKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
@@ -1845,8 +1815,10 @@ public partial class RuntimeEmitter
             var target = il.DeclareLocal(_types.Object);
             EmitArgument(il, 0);
             il.Emit(OpCodes.Stloc, target);
+            EmitRequireReflectObjectTarget(il, () => il.Emit(OpCodes.Ldloc, target),
+                inputs.TypeOf, inputs.CreateException, inputs.TypeErrorConstructor, "get");
             il.Emit(OpCodes.Ldloc, target);
-            EmitArgument(il, 1);
+            EmitArgument(il, 1, undefinedForMissing: true);
             EmitArgumentOrLocal(il, 2, target);
             il.Emit(OpCodes.Call, inputs.Get);
             il.Emit(OpCodes.Ret);
@@ -1898,9 +1870,11 @@ public partial class RuntimeEmitter
             var target = il.DeclareLocal(_types.Object);
             EmitArgument(il, 0);
             il.Emit(OpCodes.Stloc, target);
+            EmitRequireReflectObjectTarget(il, () => il.Emit(OpCodes.Ldloc, target),
+                inputs.TypeOf, inputs.CreateException, inputs.TypeErrorConstructor, "set");
             il.Emit(OpCodes.Ldloc, target);
-            EmitArgument(il, 1);
-            EmitArgument(il, 2);
+            EmitArgument(il, 1, undefinedForMissing: true);
+            EmitArgument(il, 2, undefinedForMissing: true);
             EmitArgumentOrLocal(il, 3, target);
             il.Emit(OpCodes.Call, inputs.Set);
             BoxBoolean(il);
@@ -1914,5 +1888,42 @@ public partial class RuntimeEmitter
             BoxBoolean(il);
             il.Emit(OpCodes.Ret);
         });
+    }
+
+    // Public Reflect methods reject primitives before property-key conversion.
+    // Internal property/super operations retain their broader receiver contract.
+    private void EmitRequireReflectObjectTarget(ILGenerator il, Action emitTarget,
+        MethodInfo typeOf, MethodInfo createException, ConstructorInfo typeErrorConstructor, string operation)
+    {
+        var invalidTarget = il.DefineLabel();
+        var validTarget = il.DefineLabel();
+        var targetType = il.DeclareLocal(_types.String);
+        emitTarget();
+        il.Emit(OpCodes.Brfalse, invalidTarget);
+        // Retain the existing Reflect.deleteProperty primitive-carrier rules,
+        // including CLR numerics not classified by TypeOf as JS numbers.
+        foreach (var primitiveType in new[] { _types.Byte, _types.SByte,
+                     _types.Int16, _types.UInt16, _types.Int32, _types.UInt32,
+                     _types.Int64, _types.UInt64, _types.Single, _types.Double,
+                     _types.Decimal, _types.Char })
+        {
+            emitTarget();
+            il.Emit(OpCodes.Isinst, primitiveType);
+            il.Emit(OpCodes.Brtrue, invalidTarget);
+        }
+        emitTarget();
+        il.Emit(OpCodes.Call, typeOf);
+        il.Emit(OpCodes.Stloc, targetType);
+        foreach (var kind in new[] { "object", "function" })
+        {
+            il.Emit(OpCodes.Ldloc, targetType);
+            il.Emit(OpCodes.Ldstr, kind);
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, validTarget);
+        }
+        il.MarkLabel(invalidTarget);
+        GuestErrorEmitter.ThrowError(il, createException,
+            typeErrorConstructor, $"Reflect.{operation} requires an object target");
+        il.MarkLabel(validTarget);
     }
 }

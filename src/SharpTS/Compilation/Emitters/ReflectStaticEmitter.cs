@@ -76,86 +76,15 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
             }
 
             case "get":
-            {
-                // Reflect.get(target, propertyKey, receiver?) → value
-                if (arguments.Count > 0)
-                {
-                    emitter.EmitExpression(arguments[0]);
-                    emitter.EmitBoxIfNeeded(arguments[0]);
-                }
-                else
-                    il.Emit(OpCodes.Ldnull);
-                var targetLocal = emitter.SpillStackToObjectLocal();
-
-                if (arguments.Count > 1)
-                {
-                    emitter.EmitExpression(arguments[1]);
-                    emitter.EmitBoxIfNeeded(arguments[1]);
-                }
-                else
-                    il.Emit(OpCodes.Ldnull);
-
-                var keyLocal = emitter.SpillStackToObjectLocal();
-                if (arguments.Count > 2)
-                {
-                    emitter.EmitExpression(arguments[2]);
-                    emitter.EmitBoxIfNeeded(arguments[2]);
-                }
-                else
-                {
-                    il.Emit(OpCodes.Ldloc, targetLocal);
-                }
-                var receiverLocal = emitter.SpillStackToObjectLocal();
-                il.Emit(OpCodes.Ldloc, targetLocal);
-                il.Emit(OpCodes.Ldloc, keyLocal);
-                il.Emit(OpCodes.Ldloc, receiverLocal);
-                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.Get);
-                return true;
-            }
-
             case "set":
             {
-                // Reflect.set(target, propertyKey, value, receiver?) → bool
-                var targetLocal = il.DeclareLocal(ctx.Types.Object);
-                if (arguments.Count > 0)
-                {
-                    emitter.EmitExpression(arguments[0]);
-                    emitter.EmitBoxIfNeeded(arguments[0]);
-                }
-                else
-                    il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Stloc, targetLocal);
-
-                if (arguments.Count > 1)
-                {
-                    emitter.EmitExpression(arguments[1]);
-                    emitter.EmitBoxIfNeeded(arguments[1]);
-                }
-                else
-                    il.Emit(OpCodes.Ldnull);
-
-                if (arguments.Count > 2)
-                {
-                    emitter.EmitExpression(arguments[2]);
-                    emitter.EmitBoxIfNeeded(arguments[2]);
-                }
-                else
-                    il.Emit(OpCodes.Ldnull);
-
-                if (arguments.Count > 3)
-                {
-                    emitter.EmitExpression(arguments[3]);
-                    emitter.EmitBoxIfNeeded(arguments[3]);
-                }
-                else
-                    il.Emit(OpCodes.Ldloc, targetLocal);
-
-                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireAssignment().Set);
-                il.Emit(OpCodes.Box, typeof(bool));
+                // Use the same public boundary as retained Reflect functions.
+                // Argument expressions finish before target/key validation.
+                emitter.EmitArgsArrayWithSpread(arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.Reflect.RequireNamespace().ValueFormMethods[methodName]);
+                emitter.SetStackUnknown();
                 return true;
             }
-
             case "getPrototypeOf":
             {
                 // Reflect.getPrototypeOf(target) → object?
