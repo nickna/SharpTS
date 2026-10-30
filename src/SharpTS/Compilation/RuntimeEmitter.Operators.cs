@@ -93,11 +93,7 @@ public partial class RuntimeEmitter
     /// ToNumeric update helper used by ++/-- on object-typed storage. BigInt
     /// remains BigInt; all other values follow ToNumber and return a Number.
     /// </summary>
-    private void EmitUpdateNumeric(
-        TypeBuilder typeBuilder,
-        EmittedOperatorRuntime operators,
-        EmittedNumericCoercionRuntime numericCoercion
-    )
+    private void DeclareUpdateNumeric(TypeBuilder typeBuilder, EmittedOperatorRuntime operators)
     {
         var method = typeBuilder.DefineMethod(
             "UpdateNumeric",
@@ -105,7 +101,11 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Boolean]);
         operators.UpdateNumeric = method;
-        var il = method.GetILGenerator();
+    }
+
+    private void EmitUpdateNumeric(EmittedOperatorRuntime operators, EmittedNumericCoercionRuntime numericCoercion)
+    {
+        var il = operators.UpdateNumeric.GetILGenerator();
         var numberPath = il.DefineLabel();
         var subtractBigInt = il.DefineLabel();
         var subtractNumber = il.DefineLabel();
