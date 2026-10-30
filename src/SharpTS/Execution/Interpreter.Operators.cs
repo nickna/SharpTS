@@ -1114,6 +1114,11 @@ public partial class Interpreter
 
         return obj switch
         {
+            string text when name == "length"
+                || (PropertySemantics.TryGetArrayIndex(name, out uint index) && index < text.Length) =>
+                    strictMode
+                        ? throw StrictModeErrors.TypeError($"Cannot delete non-configurable string property '{name}'")
+                        : false,
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name) is null
                 || ownPropertyObject.OwnProperties.DeletePropertyStrict(name, strictMode),
             SharpTSArray array => array.DeletePropertyStrict(name, strictMode),
