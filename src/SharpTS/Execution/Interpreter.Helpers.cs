@@ -280,6 +280,7 @@ public partial class Interpreter
             AssignVariableValue(variable.Name, clrValue);
             return returnOld ? oldValue : clrValue;
         }
+        oldValue = ToNumericRV(oldValue);
         if (oldValue.IsBigInt)
         {
             var newBigInt = new SharpTSBigInt(
@@ -288,10 +289,7 @@ public partial class Interpreter
             return returnOld ? oldValue : RuntimeValue.FromBigInt(newBigInt);
         }
 
-        // ECMA-262 13.4 (postfix)/13.5.7 (prefix): apply ToNumber to the operand's current
-        // value before adding ±1. A widened (`any`) variable can hold a non-number — a numeric
-        // string ("5"→5), undefined (→NaN), etc. — so coerce rather than asserting a boxed double.
-        double current = CoerceToNumber(oldValue);
+        double current = oldValue.AsNumber();
         double newValue = current + delta;
         AssignVariableValue(variable.Name, RuntimeValue.FromNumber(newValue));
         return RuntimeValue.FromNumber(returnOld ? current : newValue);
@@ -346,6 +344,9 @@ public partial class Interpreter
             {
                 return returnOld ? oldValue : externalValue;
             }
+            // Conversion can run guest code or throw. Complete it once, before
+            // writing, and retain its Number/BigInt result for postfix return.
+            oldValue = ToNumericRV(oldValue);
             if (oldValue.IsBigInt)
             {
                 var newBigInt = new SharpTSBigInt(
@@ -354,10 +355,7 @@ public partial class Interpreter
                     return returnOld ? oldValue : RuntimeValue.FromBigInt(newBigInt);
             }
 
-            // ECMA-262 ToNumber on the member's current value (matches the variable path and
-            // compiled mode's ConvertToNumber): a non-numeric `any` member ("5"→5, undefined→NaN)
-            // follows JS semantics instead of throwing on a failed hard cast (#471).
-            double current = CoerceToNumber(currentObj);
+            double current = oldValue.AsNumber();
             double newValue = current + delta;
             if (TrySetProperty(obj, name, newValue))
             {
@@ -387,6 +385,7 @@ public partial class Interpreter
             {
                 return returnOld ? oldValue : externalValue;
             }
+            oldValue = ToNumericRV(oldValue);
             if (oldValue.IsBigInt)
             {
                 var newBigInt = new SharpTSBigInt(
@@ -395,10 +394,7 @@ public partial class Interpreter
                     return returnOld ? oldValue : RuntimeValue.FromBigInt(newBigInt);
             }
 
-            // ECMA-262 ToNumber on the element's current value (see IncrementProperty): a
-            // non-numeric element in an `any[]` ("7"→7, undefined→NaN) follows JS semantics
-            // instead of throwing on a failed hard cast (#471).
-            double current = CoerceToNumber(currentObj);
+            double current = oldValue.AsNumber();
             double newValue = current + delta;
             if (TrySetIndex(obj, index, newValue))
             {
