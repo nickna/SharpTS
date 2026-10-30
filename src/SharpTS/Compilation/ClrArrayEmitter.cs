@@ -6,9 +6,10 @@ namespace SharpTS.Compilation;
 internal static class ClrArrayEmitter
 {
     internal static void EmitToGuest(ILGenerator il, Type arrayType, TypeProvider types,
-        EmittedRuntime runtime, Action<Type> boxElement)
+        EmittedRuntime runtime, Action<Type> boxElement, Func<Type, Type>? coreAtom = null)
     {
         Type elementType = arrayType.GetElementType()!;
+        elementType = coreAtom?.Invoke(elementType) ?? elementType;
         var source = il.DeclareLocal(arrayType);
         var elements = il.DeclareLocal(types.ObjectArray);
         var index = il.DeclareLocal(types.Int32);
@@ -43,9 +44,10 @@ internal static class ClrArrayEmitter
         il.Emit(OpCodes.Ldloc, index);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Ldelem, elementType);
+        if (ReferenceEquals(elementType, typeof(bool))) il.Emit(OpCodes.Ldelem_U1);
+        else il.Emit(OpCodes.Ldelem, elementType);
         if (elementType.IsArray)
-            EmitToGuest(il, elementType, types, runtime, boxElement);
+            EmitToGuest(il, elementType, types, runtime, boxElement, coreAtom);
         else
             boxElement(elementType);
         il.Emit(OpCodes.Stelem_Ref);

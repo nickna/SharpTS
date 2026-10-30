@@ -607,6 +607,7 @@ public partial class ILEmitter
     /// </summary>
     private void EmitExternalTypeConversion(Type targetType)
     {
+        targetType = _ctx.TypeMapper.CoreAtomForEmission(targetType);
         var nullableUnderlying = Nullable.GetUnderlyingType(targetType);
         if (nullableUnderlying != null)
         {
@@ -863,7 +864,7 @@ public partial class ILEmitter
     /// </summary>
     private void EmitExternalArrayConversion(Type targetType)
     {
-        Type elementType = targetType.GetElementType()!;
+        Type elementType = _ctx.TypeMapper.CoreAtomForEmission(targetType.GetElementType()!);
         var source = IL.DeclareLocal(_ctx.Types.Object);
         var list = IL.DeclareLocal(typeof(System.Collections.IList));
         var result = IL.DeclareLocal(targetType);
@@ -923,7 +924,8 @@ public partial class ILEmitter
             typeof(System.Collections.IList).GetMethod("get_Item", [typeof(int)])!);
         SetStackUnknown();
         EmitExternalTypeConversion(elementType);
-        IL.Emit(OpCodes.Stelem, elementType);
+        if (ReferenceEquals(elementType, typeof(bool))) IL.Emit(OpCodes.Stelem_I1);
+        else IL.Emit(OpCodes.Stelem, elementType);
 
         IL.Emit(OpCodes.Ldloc, index);
         IL.Emit(OpCodes.Ldc_I4_1);
@@ -939,7 +941,7 @@ public partial class ILEmitter
     /// <summary>Materializes a CLR array on the stack as an emitted guest <c>$Array</c>.</summary>
     private void EmitExternalArrayReturn(Type arrayType)
     {
-        ClrArrayEmitter.EmitToGuest(IL, arrayType, _ctx.Types, _ctx.Runtime!, BoxResultIfValueType);
+        ClrArrayEmitter.EmitToGuest(IL, arrayType, _ctx.Types, _ctx.Runtime!, BoxResultIfValueType, _ctx.TypeMapper.CoreAtomForEmission);
         SetStackUnknown();
     }
 
