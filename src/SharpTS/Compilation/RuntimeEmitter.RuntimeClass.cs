@@ -1610,15 +1610,20 @@ public partial class RuntimeEmitter
         );
         // Apply wrappers were finalized earlier against the forward declaration;
         // ordinary indexed Get now exists, so fill their shared list reader body.
-        EmitPrepareApplyArguments(runtime.FunctionPrototypes,
-            new PrepareApplyArgumentsInputs(runtime.Operators.TypeOf, runtime.ObjectRead.Property,
-                runtime.ObjectRead.Index, runtime.NumericCoercion.ToNumber,
-                runtime.Sentinels.UndefinedType, runtime.ReflectedMethods.CallableType,
+        var callableValidation = new CallableValidationInputs(
+                runtime.Operators.TypeOf, runtime.ReflectedMethods.CallableType,
                 runtime.TypedArrays.Implementation?.BoundMethodType,
                 runtime.TextEncoding?.DecodeMethodType,
                 runtime.NodeStreams?.TransformDoneCallbackType,
                 runtime.NodeStreams?.WriteCallbackWrapperType, runtime.Errors.CreateException,
-                runtime.Errors.TypeErrorConstructor));
+                runtime.Errors.TypeErrorConstructor);
+        EmitArrayLikeArguments(runtime.CallArguments,
+            new ArrayLikeArgumentsInputs(runtime.Operators.TypeOf, runtime.ObjectRead.Property,
+                runtime.ObjectRead.Index, runtime.NumericCoercion.ToNumber,
+                runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
+        EmitPrepareApplyArguments(runtime.FunctionPrototypes,
+            new PrepareApplyArgumentsInputs(callableValidation,
+                runtime.Sentinels.UndefinedType, runtime.CallArguments.FromArrayLike));
         // InstanceOf needs ordinary Symbol lookup, receiver-aware invocation,
         // and function prototype lookup; all their tokens now exist.
         EmitInstanceOf(
@@ -2513,7 +2518,8 @@ public partial class RuntimeEmitter
             EmitReflectApply(
                 typeBuilder,
                 runtime.Reflect.RequireNamespace(),
-                new ReflectApplyInputs(runtime.Invocation.Method)
+                new ReflectApplyInputs(runtime.Invocation.Method, callableValidation,
+                    runtime.CallArguments.FromArrayLike)
             );
             EmitReflectConstruct(
                 typeBuilder,
@@ -2530,6 +2536,7 @@ public partial class RuntimeEmitter
                     runtime.ObjectRead.Property,
                     runtime.DataView,
                     runtime.Promise,
+                    runtime.CallArguments.FromArrayLike,
                     NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );

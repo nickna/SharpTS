@@ -28,6 +28,14 @@ public sealed class EmittedCallArgumentsRuntime
         internal set => SetHandle(ref _expand, value);
     }
 
+    private MethodBuilder? _fromArrayLike;
+    /// <summary>Copies an object argument list through ordinary length and indexed reads.</summary>
+    public MethodBuilder FromArrayLike
+    {
+        get => Require(_fromArrayLike);
+        internal set => SetHandle(ref _fromArrayLike, value);
+    }
+
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException("Call argument metadata '" + name + "' has not been declared.");
 
@@ -51,6 +59,7 @@ public sealed class EmittedCallArgumentsRuntime
         EnsureMutable();
         _ = PoolGet;
         _ = Expand;
+        _ = FromArrayLike;
         IsComplete = true;
     }
 }

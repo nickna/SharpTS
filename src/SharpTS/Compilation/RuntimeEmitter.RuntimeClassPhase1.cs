@@ -64,6 +64,9 @@ public partial class RuntimeEmitter
         // Both apply wrappers are emitted before ordinary object reads and numeric
         // coercion bodies. Reserve their shared CreateListFromArrayLike helper now.
         DefinePrepareApplyArguments(typeBuilder, runtime.FunctionPrototypes);
+        runtime.CallArguments.FromArrayLike = typeBuilder.DefineMethod(
+            "CreateListFromArrayLike", MethodAttributes.Public | MethodAttributes.Static,
+            _types.ObjectArray, [_types.Object]);
 
         // Preserve the leading runtime declarations while reserving the event-loop guard.
         DefineCancellationCheck(typeBuilder, runtime.Cancellation);

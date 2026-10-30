@@ -55,12 +55,14 @@ public partial class RuntimeEmitter
         MethodInfo GetOrdinaryOwnPropertyKeys, MethodInfo GetOwnPropertySymbols, MethodInfo GetOwnPropertyNames,
         Type UndefinedType, Type TSSymbolType);
 
-    private readonly record struct ReflectApplyInputs(MethodInfo InvokeMethodValue);
+    private readonly record struct ReflectApplyInputs(MethodInfo InvokeMethodValue,
+        CallableValidationInputs Callable, MethodInfo FromArrayLike);
 
     private readonly record struct ReflectConstructInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, MethodInfo InvokeMethodUnwrapped, MethodInfo CreateErrorFromTypeOrNull,
         MethodInfo ToNumber, MethodInfo IsConstructorMethod, MethodInfo ConstructDynamicValue, Type UndefinedType,
-        MethodInfo GetProperty, EmittedDataViewRuntime? DataView, EmittedPromiseRuntime? Promise, MethodInfo? NativeProxyRejection);
+        MethodInfo GetProperty, EmittedDataViewRuntime? DataView, EmittedPromiseRuntime? Promise,
+        MethodInfo FromArrayLike, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectValueFormMethodsInputs(MethodInfo Get, MethodInfo Set,
         MethodInfo DefineProperty, MethodInfo ObjectGetOwnPropertyDescriptor,
@@ -1241,31 +1243,11 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
 
-        // Convert argsList (arg2) to object[]
-        // Check if it's a List<object?>
-        var isListLabel = il.DefineLabel();
-        var gotArgsLabel = il.DefineLabel();
-
+        EmitRequireCallable(il, inputs.Callable, () => il.Emit(OpCodes.Ldarg_0),
+            "Reflect.apply: target is not callable");
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        var listLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Stloc, listLocal);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Brtrue, isListLabel);
-
-        // Not a list - use empty args
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, inputs.FromArrayLike);
         il.Emit(OpCodes.Stloc, argsLocal);
-        il.Emit(OpCodes.Br, gotArgsLabel);
-
-        // Is a list - call ToArray()
-        il.MarkLabel(isListLabel);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "ToArray")!);
-        il.Emit(OpCodes.Stloc, argsLocal);
-
-        il.MarkLabel(gotArgsLabel);
 
         il.Emit(OpCodes.Ldarg_1); // thisArg
         il.Emit(OpCodes.Ldarg_0);
@@ -1569,30 +1551,10 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TypeErrorConstructor, "Reflect.construct: newTarget is not a constructor");
         il.MarkLabel(newTargetOkLabel);
 
-        // Convert argsList (arg1) to object[]
-        var isListLabel = il.DefineLabel();
-        var gotArgsLabel = il.DefineLabel();
-
+        // Snapshot length, then read every index after both constructor checks.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        var listLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Stloc, listLocal);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Brtrue, isListLabel);
-
-        // Not a list - use empty args
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, inputs.FromArrayLike);
         il.Emit(OpCodes.Stloc, argsLocal);
-        il.Emit(OpCodes.Br, gotArgsLabel);
-
-        // Is a list - call ToArray()
-        il.MarkLabel(isListLabel);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "ToArray")!);
-        il.Emit(OpCodes.Stloc, argsLocal);
-
-        il.MarkLabel(gotArgsLabel);
 
         var proxyTargetLabel = il.DefineLabel();
         var notProxyTargetLabel = il.DefineLabel();
