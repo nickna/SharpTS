@@ -117,6 +117,8 @@ public sealed class NativeAotPublishTests
     [Theory]
     [InlineData("ILC : Trim analysis error IL2075: owner lookup is unproved [project.csproj]", "IL2075", "error")]
     [InlineData("source.cs(2,3): warning CS0168: unused local [project.csproj]", "CS0168", "warning")]
+    [InlineData("  ILC: Method '[Guest]$Program.Main()' will always throw because: Failed to load type 'System.Console' from assembly 'System.Console, Version=1.0.0.0, Culture=neutral, PublicKey=null'", "SHARPTS408", "error")]
+    [InlineData("ILC: Method '[Guest]$Program.Run()' will always throw because: Invalid IL or CLR metadata", "SHARPTS408", "error")]
     public void ToolDiagnosticsRetainOriginalCodesAndRawText(string line, string code, string severity)
     {
         var diagnostic = Assert.IsType<NativePublishDiagnostic>(NativePublishDiagnostic.Parse(line));
