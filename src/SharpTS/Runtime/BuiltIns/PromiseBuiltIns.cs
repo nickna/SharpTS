@@ -10,6 +10,12 @@ namespace SharpTS.Runtime.BuiltIns;
 /// </summary>
 public static class PromiseBuiltIns
 {
+    // Stable templates use the interpreter's existing realm-local built-in
+    // function cache. Result constructors still come from the actual receiver.
+    private static readonly Dictionary<string, ISharpTSCallable> StaticMethods =
+        new[] { "all", "race", "resolve", "reject", "allSettled", "any", "withResolvers" }
+            .ToDictionary(name => name, name => CreateStaticMethod(name, null)!);
+
     /// <summary>
     /// Gets an instance member of a Promise.
     /// The interpreter is passed at call time through BuiltInAsyncMethod.
@@ -209,6 +215,9 @@ public static class PromiseBuiltIns
     /// subclass-typed instances.
     /// </summary>
     public static ISharpTSCallable? GetStaticMethod(string name, SharpTSPromiseClass? subclass)
+        => StaticMethods.TryGetValue(name, out var method) ? method : CreateStaticMethod(name, subclass);
+
+    private static ISharpTSCallable? CreateStaticMethod(string name, SharpTSPromiseClass? subclass)
     {
         var factory = DerivedPromiseFactory(subclass);
         Func<Interpreter, object?, Func<Interpreter, Task<object?>, object?>?> receiverResolver =
