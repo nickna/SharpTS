@@ -598,6 +598,9 @@ public static class ReflectBuiltIns
                         keys.AddRange(obj.OwnVisibleStringKeys().Select(k => (object?)k));
                         keys.AddRange(obj.GetSymbolPropertyNames().Select(s => (object?)s));
                         break;
+                    case SharpTSArrayGlobal arrayGlobal:
+                        keys.AddRange(arrayGlobal.OwnStringKeys());
+                        break;
                     case ISharpTSPrimitiveConstructor primitiveConstructor:
                         keys.AddRange(primitiveConstructor.OwnStringKeys().Cast<object?>());
                         keys.AddRange(primitiveConstructor.GetSymbolPropertyNames().Cast<object?>());

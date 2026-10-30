@@ -1759,6 +1759,7 @@ public static partial class ObjectBuiltIns
                 .Concat(carrier.OwnProperties.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSObject obj => GetAllOwnPropertyNames(obj).Cast<object?>()
                 .Concat(obj.GetSymbolPropertyNames().Cast<object?>()).ToList(),
+            SharpTSArrayGlobal arrayGlobal => arrayGlobal.OwnStringKeys().Cast<object?>().ToList(),
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.OwnStringKeys().Cast<object?>()
                 .Concat(primitiveConstructor.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSFunctionPrototype functionPrototype => ((SharpTSArray)GetOwnPropertyNames(interpreter, [target])!)

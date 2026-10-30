@@ -63,8 +63,11 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
     internal IEnumerable<string> OwnStringKeys()
-        => new[] { "length", "name", "prototype" }.Concat(ArrayStaticBuiltIns.StaticMemberNames)
-            .Where(HasOwnProperty).Concat(_extras.OwnVisibleStringKeys()).Distinct();
+        => _extras.OwnVisibleStringKeys().Where(key => PropertySemantics.TryGetArrayIndex(key, out _))
+            .Concat(new[] { "length", "name", "prototype" }.Concat(ArrayStaticBuiltIns.StaticMemberNames)
+                .Where(HasOwnProperty))
+            .Concat(_extras.OwnVisibleStringKeys().Where(key => !PropertySemantics.TryGetArrayIndex(key, out _)))
+            .Distinct();
 
     public int Arity() => 0;
 
