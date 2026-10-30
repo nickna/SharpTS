@@ -82,7 +82,9 @@ public class SharpTSDate : ITypeCategorized, ISharpTSSymbolPropertyBag
     /// </summary>
     public SharpTSDate()
     {
-        _utcDateTime = DateTime.UtcNow;
+        long ticks = DateTime.UtcNow.Ticks;
+        _utcDateTime = new DateTime(ticks / TimeSpan.TicksPerMillisecond * TimeSpan.TicksPerMillisecond,
+            DateTimeKind.Utc);
         _isInvalid = false;
     }
 
@@ -942,7 +944,7 @@ public class SharpTSDate : ITypeCategorized, ISharpTSSymbolPropertyBag
     /// </summary>
     public static double Now()
     {
-        return (DateTime.UtcNow - UnixEpoch).TotalMilliseconds;
+        return Math.Floor((DateTime.UtcNow - UnixEpoch).TotalMilliseconds);
     }
 
     /// <summary>

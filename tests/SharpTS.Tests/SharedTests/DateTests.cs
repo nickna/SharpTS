@@ -96,6 +96,52 @@ public class DateTests
     }
 
     [Theory, ModeData]
+    public void Date_Now_UsesIntegerMilliseconds(ExecutionMode mode)
+    {
+        const string source = """
+            let integral = true;
+            for (let index = 0; index < 64; index++) {
+                const value = Date.now();
+                if (value % 1 !== 0) integral = false;
+            }
+            console.log(integral);
+            """;
+        Assert.Equal("true\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Date_ExtractedNow_UsesIntegerMilliseconds(ExecutionMode mode)
+    {
+        const string source = """
+            const now = Date.now;
+            let integral = true;
+            for (let index = 0; index < 64; index++) {
+                const direct = now();
+                const called = now.call(undefined);
+                if (direct % 1 !== 0 || called % 1 !== 0) integral = false;
+            }
+            console.log(integral);
+            """;
+        Assert.Equal("true\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Date_NoArgs_StoresIntegerMilliseconds(ExecutionMode mode)
+    {
+        const string source = """
+            let integral = true;
+            for (let index = 0; index < 64; index++) {
+                const date = new Date();
+                const value = date.getTime();
+                if (value % 1 !== 0 || date.valueOf() !== value || Date.parse(date.toISOString()) !== value)
+                    integral = false;
+            }
+            console.log(integral);
+            """;
+        Assert.Equal("true\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Date_FunctionCall_ReturnsString(ExecutionMode mode)
     {
         // Date() called without 'new' returns a string
