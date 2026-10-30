@@ -79,6 +79,30 @@ public sealed class DateStaticCallMutationTests
         yield return [ExecutionMode.Compiled, "raw-bigint-operator-kind", """
             const D:any=Date;D.now=()=>1n;const value=Date.now();console.log(typeof value,typeof -Date.now());try{console.log(value+1);}catch(error){console.log(error instanceof TypeError);}
             """, "bigint bigint\ntrue\n"];
+        yield return [ExecutionMode.Interpreted, "opaque-global-helper", """
+            function mutate(owner:any){owner.Date.now=()=>7;}mutate(globalThis);console.log(Date.now()===7);
+            """, "true\n"];
+        yield return [ExecutionMode.Compiled, "opaque-global-helper", """
+            function mutate(owner:any){owner.Date.now=()=>7;}mutate(globalThis);console.log(Date.now()===7);
+            """, "true\n"];
+        yield return [ExecutionMode.Interpreted, "computed-global-constructor", """
+            const G:any=globalThis,key:any='Date';G[key].now=()=>7;console.log(Date.now()===7);
+            """, "true\n"];
+        yield return [ExecutionMode.Compiled, "computed-global-constructor", """
+            const G:any=globalThis,key:any='Date';G[key].now=()=>7;console.log(Date.now()===7);
+            """, "true\n"];
+        yield return [ExecutionMode.Interpreted, "opaque-global-raw-result", """
+            function mutate(owner:any){owner.Date.now=()=> 'changed';}mutate(globalThis);const value=Date.now();console.log(value+1);
+            """, "changed1\n"];
+        yield return [ExecutionMode.Compiled, "opaque-global-raw-result", """
+            function mutate(owner:any){owner.Date.now=()=> 'changed';}mutate(globalThis);const value=Date.now();console.log(value+1);
+            """, "changed1\n"];
+        yield return [ExecutionMode.Interpreted, "global-named-source-alias", """
+            const global:any=globalThis;function mutate(owner:any){owner.Date.now=()=>7;}mutate(global);console.log(Date.now()===7);
+            """, "true\n"];
+        yield return [ExecutionMode.Compiled, "global-named-source-alias", """
+            const global:any=globalThis;function mutate(owner:any){owner.Date.now=()=>7;}mutate(global);console.log(Date.now()===7);
+            """, "true\n"];
     }
 
     [Theory, MemberData(nameof(Cases))]

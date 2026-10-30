@@ -601,6 +601,7 @@ public sealed partial class RuntimeFeatureDetector
             // valve; the fine-grained ones still get set by their own triggers.
             case "globalThis":
             case "global":
+                _set.UsesDateConstructorMutation = true;
                 _set.UsesObjectDefinitionRuntime = true;
                 _set.UsesArrayReceiverScopes = true;
                 _set.UsesObjectIntegrityMutation = true;
