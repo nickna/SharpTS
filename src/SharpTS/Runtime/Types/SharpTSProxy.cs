@@ -686,24 +686,28 @@ public class SharpTSProxy : ISharpTSCallable
                     return false;
             }
 
-            var valueDescriptor = new SharpTSObject([]);
-            valueDescriptor.SetProperty("value", value);
+            var valueDescriptor = new SharpTSPropertyDescriptor
+            {
+                Value = value,
+                HasValue = true,
+            };
             if (!receiverHasProperty)
             {
-                valueDescriptor.SetProperty("writable", true);
-                valueDescriptor.SetProperty("enumerable", true);
-                valueDescriptor.SetProperty("configurable", true);
+                valueDescriptor.Writable = true;
+                valueDescriptor.HasWritable = true;
+                valueDescriptor.Enumerable = true;
+                valueDescriptor.HasEnumerable = true;
+                valueDescriptor.Configurable = true;
+                valueDescriptor.HasConfigurable = true;
             }
 
             if (receiver is SharpTSProxy receiverProxyForDefine)
-                return prop is SharpTSSymbol symbol
-                    ? receiverProxyForDefine.TrapDefineProperty(symbol, valueDescriptor, interpreter)
-                    : receiverProxyForDefine.TrapDefineProperty((string)prop, valueDescriptor, interpreter);
+                return receiverProxyForDefine.TrapDefineConvertedProperty(prop, valueDescriptor, interpreter);
 
             try
             {
                 return ObjectBuiltIns.DefinePropertyOnProxyTarget(
-                    interpreter, receiver!, prop, valueDescriptor);
+                    interpreter, receiver!, prop, ObjectBuiltIns.ToPartialDescriptorObject(valueDescriptor));
             }
             catch (Exception ex) when (ex.Message.StartsWith(
                 "TypeError: Cannot define property '",
