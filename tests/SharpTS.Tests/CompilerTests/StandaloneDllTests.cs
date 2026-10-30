@@ -14027,7 +14027,8 @@ public partial class StandaloneDllTests
                     """,
             },
             "main.ts",
-            "3\n3\n"
+            // Named imports read the binding updated by bump.
+            "3\n4\n"
         },
         new object[]
         {
