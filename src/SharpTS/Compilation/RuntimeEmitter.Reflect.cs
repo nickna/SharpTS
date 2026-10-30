@@ -947,6 +947,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.ToPropertyKey);
         il.Emit(OpCodes.Stloc, reflectDefineKeyLocal);
+
+        // ToPropertyDescriptor precedes [[DefineOwnProperty]], including Proxy
+        // trap acquisition. Keep only the validated partial record so neither
+        // forwarding nor invariant checks can read the original getters again.
+        var originalDescriptor = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stloc, originalDescriptor);
+        var convertedDescriptor = EmitConvertPropertyDescriptor(
+            il, inputs.DescriptorConversion, originalDescriptor);
+
         var proxyDefineLabel = il.DefineLabel();
         var ordinaryDefineLabel = il.DefineLabel();
         EmitProxyTypeCheck(
@@ -955,7 +965,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(proxyDefineLabel);
         EmitProxyMethodCallUnwrapped(
             il, inputs.InvokeMethodUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
-            "TrapDefinePropertyCompiled", () =>
+            "TrapDefineConvertedPropertyCompiled", () =>
             {
                 il.Emit(OpCodes.Ldc_I4_7);
                 il.Emit(OpCodes.Newarr, _types.Object);
@@ -965,7 +975,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Stelem_Ref);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Ldloc, convertedDescriptor);
                 il.Emit(OpCodes.Stelem_Ref);
                 EmitDelegate(2, assignment.DefinePropertyObjectAdapter,
                     typeof(Func<object, object, object, object?>));
@@ -992,16 +1002,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryDefineLabel);
-
-        // ToPropertyDescriptor is observable and may throw a guest value or a
-        // validation TypeError. Complete it before the ordinary refusal catch.
-        // Replay only its null-prototype partial record, preserving omitted
-        // fields without reading any original descriptor getter a second time.
-        var originalDescriptor = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stloc, originalDescriptor);
-        var convertedDescriptor = EmitConvertPropertyDescriptor(
-            il, inputs.DescriptorConversion, originalDescriptor);
 
         // try { ObjectDefineProperty(target, key, convertedDescriptor); return true; }
         // catch { return false; }
