@@ -63,7 +63,9 @@ public static class VmModuleInterpreter
         var timeout = GetTimeoutOption(options);
         var origin = ScriptOrigin.From(options);
         return RuntimeValue.FromBoxed(WithScriptOrigin(origin,
-            () => ExecuteInCurrentContext(code, interpreter, timeout, origin.Filename)));
+            () => interpreter is null
+                ? ExecuteInNewContext(code, null, timeout: timeout, filename: origin.Filename)
+                : ExecuteInCurrentContext(code, interpreter, timeout, origin.Filename)));
     }
 
     /// <summary>
