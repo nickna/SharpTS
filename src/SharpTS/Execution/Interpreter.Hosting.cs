@@ -397,6 +397,11 @@ public partial class Interpreter
     internal bool TryExecuteOneHostedMacrotask(bool timerDeadlineElapsed, out bool ranTimer)
     {
         AssertHostedOwnerThread();
+        return TryExecuteOneOwnedMacrotask(timerDeadlineElapsed, out ranTimer);
+    }
+
+    private bool TryExecuteOneOwnedMacrotask(bool timerDeadlineElapsed, out bool ranTimer)
+    {
         ranTimer = false;
         if (!_hostedAcceptingWork)
             return false;
@@ -504,10 +509,8 @@ public partial class Interpreter
         // when it completes and ahead of previously posted continuations.
         var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         ExecutionContext? registrationContext = ExecutionContext.Capture();
-        lock (_microtaskQueueLock)
+        EnqueuePromiseJob(() =>
         {
-            _microtaskQueue.Enqueue(() =>
-            {
                 Task<object?> reactionTask;
                 try
                 {
@@ -546,10 +549,7 @@ public partial class Interpreter
                     CancellationToken.None,
                     TaskContinuationOptions.ExecuteSynchronously,
                     TaskScheduler.Default);
-            });
-            Volatile.Write(ref _hasMicrotasks, 1);
-        }
-        WakeEventLoop();
+        });
         return completion.Task;
     }
 

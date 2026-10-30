@@ -139,6 +139,7 @@ public class SharpTSPromise : ITypeCategorized
     public SharpTSPromise(Task<object?> task)
     {
         _task = task ?? throw new ArgumentNullException(nameof(task));
+        Execution.VmEvaluationLease.ObservePromise(task);
 
         // Debug assertion to catch double-wrapping bugs early.
         // If this fires, the caller is wrapping a Promise in another Promise,

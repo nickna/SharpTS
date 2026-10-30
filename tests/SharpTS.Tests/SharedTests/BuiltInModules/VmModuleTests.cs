@@ -889,26 +889,32 @@ public class VmModuleTests
     [Theory, ModeData]
     public void Vm_Script_ImportModuleDynamically_ResolvesViaHook(ExecutionMode mode)
     {
-        // The result of the in-vm dynamic import is written back to a context scalar to
-        // keep it observable cross-mode (a cross-boundary Promise is not unwrapped by
-        // compiled await; the await happens inside the hosted interpreter).
+        // Node requires a linked/evaluated module from the import hook. Script
+        // completion stays a Promise; its actual async barrier publishes the result.
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
                 import { Script, SourceTextModule, createContext } from 'vm';
-                const dep = new SourceTextModule('export const value = 123;');
-                const importModuleDynamically = (specifier: string) => dep;
+                async function main() {
                 const ctx: any = createContext({ result: 0 });
+                const dep = new SourceTextModule('export const value = 123;', { context: ctx });
+                await dep.link(() => dep);
+                await dep.evaluate();
+                const importModuleDynamically = (specifier: string) => dep;
                 const script = new Script(
                     '(async () => { const ns = await import("dep"); result = ns.value; })();',
                     { importModuleDynamically });
-                script.runInContext(ctx);
-                console.log(ctx.result);
+                const completion = script.runInContext(ctx);
+                console.log('sync', ctx.result);
+                await completion;
+                console.log('done', ctx.result);
+                }
+                main();
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("123\n", output);
+        Assert.Equal("sync 0\ndone 123\n", output);
     }
 
     [Theory, ModeData]

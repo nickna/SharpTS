@@ -34,6 +34,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     private SharpTSObject? _symbolProperties;
     private Dictionary<string, PropertyDescriptorFlags>? _descriptors;
     private Interpreter? _interpreter;
+    internal Interpreter? OwningInterpreter => _interpreter;
 
     // Property lookup caches to avoid expensive inheritance chain walks
     private readonly Dictionary<string, PropertyResolution> _lookupCache = [];

@@ -273,6 +273,7 @@ public partial class Interpreter : IDisposable
     {
         if (_workerTerminationToken.IsCancellationRequested)
             throw new Runtime.Exceptions.WorkerTerminatedException();
+        _vmEvaluation?.Host.CheckCancellation();
         if (_vmTimeoutToken.IsCancellationRequested)
         {
             throw new Runtime.Exceptions.ThrowException(
@@ -474,29 +475,21 @@ public partial class Interpreter : IDisposable
     /// <param name="callback">The callback function to execute as a microtask.</param>
     internal void QueueMicrotask(ISharpTSCallable callback)
     {
-        lock (_microtaskQueueLock)
+        EnqueuePromiseJob(() =>
         {
-            _microtaskQueue.Enqueue(() =>
+            if (!_isDisposed)
             {
-                if (!_isDisposed)
+                try
                 {
-                    try
-                    {
-                        callback.Call(this, []);
-                    }
-                    catch (Exception ex)
-                    {
-                        if (_hostedUnhandledError != null)
-                            _hostedUnhandledError(ex);
-                        else
-                            Error.WriteLine($"Uncaught exception in microtask: {ex.Message}");
-                    }
+                    callback.Call(this, []);
                 }
-            });
-            Volatile.Write(ref _hasMicrotasks, 1);
-        }
-        // Wake the event loop to process microtasks promptly
-        WakeEventLoop();
+                catch (Exception ex)
+                {
+                    if (_hostedUnhandledError != null) _hostedUnhandledError(ex);
+                    else Error.WriteLine($"Uncaught exception in microtask: {ex.Message}");
+                }
+            }
+        });
     }
 
     /// <summary>
@@ -552,6 +545,7 @@ public partial class Interpreter : IDisposable
 
     internal void EnqueueAfterPromiseCheckpoint(Action callback)
     {
+        if (_vmEvaluation is { } evaluation) { evaluation.Queue(callback, afterCheckpoint: true); return; }
         lock (_microtaskQueueLock)
         {
             if (_isDisposed || (_hostedWorkAvailable != null && !_hostedAcceptingWork)) return;
@@ -565,6 +559,7 @@ public partial class Interpreter : IDisposable
     // before timers and captured listener errors are dispatched.
     internal void EnqueuePromiseJob(Action continuation)
     {
+        if (_vmEvaluation is { } evaluation) { evaluation.Queue(continuation); return; }
         lock (_microtaskQueueLock)
         {
             if (_isDisposed || (_hostedWorkAvailable != null && !_hostedAcceptingWork)) return;
@@ -692,6 +687,7 @@ public partial class Interpreter : IDisposable
     internal void Ref()
     {
         Interlocked.Increment(ref _activeHandles);
+        _vmEvaluation?.AddRef();
     }
 
     /// <summary>
@@ -701,6 +697,7 @@ public partial class Interpreter : IDisposable
     internal void Unref()
     {
         int newValue = Interlocked.Decrement(ref _activeHandles);
+        _vmEvaluation?.RemoveRef();
 
         // Wake the event loop when count reaches zero so it can check exit conditions
         if (newValue == 0)
@@ -1111,7 +1108,7 @@ public partial class Interpreter : IDisposable
         if (_processingMicrotasks) return;
         // A hosted runtime owns event-loop turns. Pumping from an ordinary guest
         // loop reenters synchronous rendering (and other application code).
-        if (_hostedOwnerThreadId.HasValue) return;
+        if (_hostedOwnerThreadId.HasValue || _vmEvaluation is not null) return;
         // Legacy loop polling can deliver timers, but a synchronous loop is not a
         // Promise checkpoint. Pending jobs also prevent timers overtaking that checkpoint.
         if (!processMicrotasks && HasMicrotasks()) return;
@@ -1208,6 +1205,10 @@ public partial class Interpreter : IDisposable
         }
 
         _isDisposed = true;
+        Exception? vmCleanupFailure = null;
+        try { _vmExecutionHost?.Dispose(); }
+        catch (Exception exception) { vmCleanupFailure = exception; }
+        _vmHostShutdown.Dispose();
 
         // Signal the event loop to exit via cooperative cancellation
         try { _shutdownCts.Cancel(); }
@@ -1252,12 +1253,17 @@ public partial class Interpreter : IDisposable
 
         // Reset singletons to prevent listener/state leakage
         // across interpreter runs (e.g., in test suites or REPL restarts).
-        Runtime.Types.SharpTSStdin.Instance.ResetReadableState();
-        Runtime.Types.SharpTSStdout.Instance.ResetWritableState();
-        Runtime.Types.SharpTSStderr.Instance.ResetWritableState();
-        Runtime.Types.SharpTSAgent.ResetGlobalAgent();
+        if (!_vmOwnedEvaluation)
+        {
+            Runtime.Types.SharpTSStdin.Instance.ResetReadableState();
+            Runtime.Types.SharpTSStdout.Instance.ResetWritableState();
+            Runtime.Types.SharpTSStderr.Instance.ResetWritableState();
+            Runtime.Types.SharpTSAgent.ResetGlobalAgent();
+        }
 
         GC.SuppressFinalize(this);
+        if (vmCleanupFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(vmCleanupFailure).Throw();
     }
 
     public void Resolve(Expr expr, int depth)
@@ -1516,6 +1522,34 @@ public partial class Interpreter : IDisposable
     }
 
     /// <summary>
+    /// Executes an ordinary script statement list and returns its completion value.
+    /// Promise values remain actual values; hosts choose their microtask checkpoint.
+    /// </summary>
+    internal object? InterpretScriptCompletion(List<Stmt> statements)
+    {
+        HoistFunctionDeclarations(statements);
+        HoistLocalLoopVarDeclarations(statements);
+        var completion = ExecutionResult.Success();
+        foreach (var statement in statements)
+        {
+            ThrowIfExecutionCancelled();
+            completion = Execute(statement).UpdateEmpty(completion);
+            if (completion.Type == ExecutionResult.ResultType.Throw)
+            {
+                if (VmModuleInterpreter.IsExecutingVmScript)
+                {
+                    if (completion.FromGuestThrow) _vmEvaluation?.MarkGuestAbrupt();
+                    VmModuleInterpreter.RecordVmErrorValue(completion.Value.ToObject(), this);
+                    VmModuleInterpreter.RetainVmErrorValue(completion.Value.ToObject());
+                }
+                throw ThrowException.FromResult(completion.Value.ToObject(), completion.FromGuestThrow);
+            }
+            if (completion.IsAbrupt) return SharpTSUndefined.Instance;
+        }
+        return completion.HasValue ? completion.Value.ToObject() : SharpTSUndefined.Instance;
+    }
+
+    /// <summary>
     /// Implements the global <c>eval(source)</c> function. Lexes, parses, and interprets
     /// <paramref name="source"/> in the interpreter's current environment, returning the
     /// execution completion value, or <c>undefined</c> for an empty completion.
@@ -1547,18 +1581,7 @@ public partial class Interpreter : IDisposable
             throw new ThrowException(new SharpTSError($"SyntaxError: {detail}"));
         }
 
-        HoistFunctionDeclarations(parseResult.Statements);
-        HoistLocalLoopVarDeclarations(parseResult.Statements);
-        var completion = ExecutionResult.Success();
-        foreach (var statement in parseResult.Statements)
-        {
-            ThrowIfExecutionCancelled();
-            completion = Execute(statement).UpdateEmpty(completion);
-            if (completion.Type == ExecutionResult.ResultType.Throw)
-                throw ThrowException.FromResult(completion.Value.ToObject(), completion.FromGuestThrow);
-            if (completion.IsAbrupt) return SharpTSUndefined.Instance;
-        }
-        return completion.HasValue ? completion.Value.ToObject() : SharpTSUndefined.Instance;
+        return InterpretScriptCompletion(parseResult.Statements);
     }
 
     /// <summary>
