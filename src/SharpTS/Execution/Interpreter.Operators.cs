@@ -1170,9 +1170,15 @@ public partial class Interpreter
         object? obj = (await ctx.EvaluateExprAsync(getIndex.Object)).ToObject();
         object? key = (await ctx.EvaluateExprAsync(getIndex.Index)).ToObject();
 
+        // Keep the separately tracked nullish delete boundary (#3034) ahead of
+        // key coercion. Valid receivers share one actual ToPropertyKey result.
+        if (obj is null or SharpTSUndefined)
+            return true;
+        key = ToPropertyKey(key);
+
         if (obj is ISharpTSOwnPropertyObject carrier)
         {
-            var propertyKey = ToPropertyKey(key);
+            var propertyKey = key;
             return propertyKey is SharpTSSymbol ownSymbol
                 ? !carrier.OwnProperties.HasSymbolProperty(ownSymbol)
                     || carrier.OwnProperties.DeleteBySymbolStrict(ownSymbol, strictMode)
