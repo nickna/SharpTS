@@ -927,8 +927,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits helpers for creating TypedArrays from an object argument (number or SharedArrayBuffer).
-    /// Uses reflection-based late-binding to avoid compile-time dependency on SharpTS.dll.
+    /// Emits TypedArray construction from numeric lengths, buffers and object sources.
     /// </summary>
     private void EmitTypedArrayFromObjectHelpers(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
@@ -946,7 +945,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits a helper that creates a TypedArray from an object (either a number for length, SharedArrayBuffer, or ArrayBuffer).
+    /// Emits a helper that distinguishes buffer, iterable, array-like and primitive arguments.
     /// Uses emitted pure-IL types for standalone DLL support.
     /// </summary>
     private void EmitTypedArrayFromObjectHelper(TypeBuilder runtimeType, EmittedRuntime runtime, string name)
@@ -955,7 +954,7 @@ public partial class RuntimeEmitter
         // Get the emitted TypedArray constructors
         var (lengthCtor, bufferCtor) = GetEmittedTypedArrayCtors(arrays, name);
 
-        // Create{name}FromObject(object arg) - handles number, SharedArrayBuffer, or ArrayBuffer
+        // Create{name}FromObject(object arg) implements the constructor input dispatch.
         var method = runtimeType.DefineMethod(
             $"Create{name}FromObject",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -972,6 +971,7 @@ public partial class RuntimeEmitter
         var isTypedArrayLabel = il.DefineLabel();
         var isNumberLabel = il.DefineLabel();
         var unsupportedTypeLabel = il.DefineLabel();
+        var objectSourceLabel = il.DefineLabel();
         var argNotNullLabel = il.DefineLabel();
 
         // Check if arg is null - create with length 0
@@ -1149,12 +1149,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.String));
         il.Emit(OpCodes.Brtrue, unsupportedTypeLabel);
 
+        // Ordinary objects (including functions) are iterable or array-like,
+        // rather than arguments to numeric length conversion.
+        var kind = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.Operators.TypeOf);
+        il.Emit(OpCodes.Stloc, kind);
+        foreach (string objectKind in new[] { "object", "function" })
+        {
+            il.Emit(OpCodes.Ldloc, kind);
+            il.Emit(OpCodes.Ldstr, objectKind);
+            il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+            il.Emit(OpCodes.Brtrue, objectSourceLabel);
+        }
+
         // Not a buffer - treat as length, use emitted length constructor
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
         il.Emit(OpCodes.Conv_I4);
         NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, lengthCtor);
         il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(objectSourceLabel);
+        EmitTypedArrayObjectSource(il, runtime, arrays, name, lengthCtor, endLabel);
 
         il.MarkLabel(unsupportedTypeLabel);
         il.Emit(OpCodes.Ldstr, "TypedArray constructor requires emitted ArrayBuffer/SharedArrayBuffer.");
@@ -1166,6 +1183,104 @@ public partial class RuntimeEmitter
 
         // Store the helper for use by ILEmitter
         arrays.RegisterFromObject(name, method);
+    }
+
+    /// <summary>Preserves the distinct iterable-list and live array-like constructor algorithms.</summary>
+    private void EmitTypedArrayObjectSource(ILGenerator il, EmittedRuntime runtime,
+        EmittedTypedArrayImplementation arrays, string name, ConstructorBuilder lengthCtor, Label done)
+    {
+        int bytesPerElement = name switch
+        {
+            "Int8Array" or "Uint8Array" or "Uint8ClampedArray" => 1,
+            "Int16Array" or "Uint16Array" => 2,
+            "Int32Array" or "Uint32Array" or "Float32Array" => 4,
+            _ => 8
+        };
+        bool bigInt = name is "BigInt64Array" or "BigUint64Array";
+        var values = il.DeclareLocal(_types.ListOfObject);
+        var count = il.DeclareLocal(_types.Int32);
+        var index = il.DeclareLocal(_types.Int32);
+        var result = il.DeclareLocal(arrays.BaseType);
+        var arrayLike = il.DefineLabel();
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Stloc, values);
+        EmitCollectionConsumerLoop(il, GetCollectionConsumerInputs(runtime),
+            () => il.Emit(OpCodes.Ldarg_0), (value, _) =>
+            {
+                il.Emit(OpCodes.Ldloc, values);
+                il.Emit(OpCodes.Ldloc, value);
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            }, arrayLike);
+        il.Emit(OpCodes.Ldloc, values);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, count);
+        EmitCopy(() =>
+        {
+            il.Emit(OpCodes.Ldloc, values);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        });
+
+        il.MarkLabel(arrayLike);
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var fits = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_R8, (double)(Array.MaxLength / bytesPerElement));
+        il.Emit(OpCodes.Ble, fits);
+        GuestErrorEmitter.ThrowError(il, runtime.Errors.CreateException,
+            runtime.Errors.RangeErrorConstructor, "Invalid typed array length");
+        il.MarkLabel(fits);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, count);
+        EmitCopy(() =>
+        {
+            il.Emit(OpCodes.Ldloc, receiver);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
+        });
+
+        void EmitCopy(Action read)
+        {
+            var fits = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, count);
+            il.Emit(OpCodes.Ldc_I4, Array.MaxLength / bytesPerElement);
+            il.Emit(OpCodes.Ble, fits);
+            GuestErrorEmitter.ThrowError(il, runtime.Errors.CreateException,
+                runtime.Errors.RangeErrorConstructor, "Invalid typed array length");
+            il.MarkLabel(fits);
+            il.Emit(OpCodes.Ldloc, count);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, lengthCtor);
+            il.Emit(OpCodes.Stloc, result);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, index);
+            var loop = il.DefineLabel();
+            var end = il.DefineLabel();
+            il.MarkLabel(loop);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldloc, count);
+            il.Emit(OpCodes.Bge, end);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldloc, index);
+            read();
+            if (!bigInt)
+            {
+                il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+                il.Emit(OpCodes.Box, _types.Double);
+            }
+            // BigInt setters already own strict ToBigInt, including ToPrimitive.
+            il.Emit(OpCodes.Callvirt, arrays.ElementSet);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Br, loop);
+            il.MarkLabel(end);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Br, done);
+        }
     }
 
     /// <summary>
