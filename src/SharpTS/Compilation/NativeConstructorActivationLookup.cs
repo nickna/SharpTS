@@ -163,9 +163,7 @@ internal sealed class NativeConstructorActivationLookup
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Brfalse, foreign);
         // object.GetType is nonvirtual. The left-hand Type object is a trusted
         // literal; no caller-controlled Type metadata is read before this fence.
-        EmitType(il, _types.Object); il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Bne_Un, foreign);
+        NativeTypeIdentityEmitter.EmitRuntimeTypeFence(il, _types, () => il.Emit(OpCodes.Ldarg_0), foreign);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "IsGenericType"));
         il.Emit(OpCodes.Brfalse, foreign);
         var definition = il.DeclareLocal(_types.Type);

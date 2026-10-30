@@ -767,6 +767,7 @@ public partial class ILCompiler
             _nativeHasInMembers = new(_moduleBuilder, _types);
             _nativeConstructorActivation = new(_moduleBuilder, _types);
             _nativeReceiverInitializerLookup = new(_moduleBuilder, _types);
+            _nativeOwnerClosure = new(_moduleBuilder, _types);
             _nativeEvaluatedConstructors = new(_moduleBuilder, _types);
             _functionEmissionPolicy = _functionEmissionPolicy with
             {
@@ -791,7 +792,8 @@ public partial class ILCompiler
             nativeDeletionLookup: _nativeDeletionLookup, nativeHasInMemberLookup: _nativeHasInMembers?.HasMember,
             nativeConstructorFactories: _nativeConstructorFactories,
             nativeConstructorActivation: _nativeConstructorActivation,
-            nativeReceiverInitializers: _nativeReceiverInitializerLookup) { EntryModulePath = _entryModulePath }
+            nativeReceiverInitializers: _nativeReceiverInitializerLookup,
+            nativeOwnerClosure: _nativeOwnerClosure) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy,
                 _nativeSourceOwners, nativeClassInitializer: _nativeRuntimeClassInitialization?.Initialize,
                 nativeStaticMemberPresence: _nativeStaticMemberPresence?.HasMember,
@@ -1307,7 +1309,10 @@ public partial class ILCompiler
         _runtime.JsonShapes.CompleteEmission();
         GetClassRegistry().NativeOwnProperties?.CompleteEmission();
         _runtime.Deployment.CompleteEmission();
-        _nativeClrAdmission?.Complete();
+        _nativeClrAdmission?.Complete(_moduleBuilder);
+        if (_nativeOwnerClosure is not null)
+            _nativeOwnerClosure.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot,
+                _nativeClrAdmission?.CompletedIngress, _runtime);
     }
 
     /// <summary>
@@ -1984,7 +1989,10 @@ public partial class ILCompiler
         _runtime.JsonShapes.CompleteEmission();
         GetClassRegistry().NativeOwnProperties?.CompleteEmission();
         _runtime.Deployment.CompleteEmission();
-        _nativeClrAdmission?.Complete();
+        _nativeClrAdmission?.Complete(_moduleBuilder);
+        if (_nativeOwnerClosure is not null)
+            _nativeOwnerClosure.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot,
+                _nativeClrAdmission?.CompletedIngress, _runtime);
     }
 
     #endregion

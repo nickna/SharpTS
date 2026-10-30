@@ -1036,3 +1036,31 @@ default/rest/bound/Reflect construction and constructor exception unwrapping.
 A separate strict native probe preserves ambiguity, inheritance, named misses and
 hostile-Type refusal. Source-owner/Symbol closure and prototype $EnsureFields
 findings remain visible; this checkpoint is not strict source-class acceptance.
+
+### Native source and symbol owner closure
+
+Native static-member lookup, deferred static storage and symbol owner queries use
+a separate late helper after source metadata and CLR ingress admission finish.
+Its evidence comes from actual emitted constructor Type values, source interface
+implementations and canonical mappings, constructor-base and Promise constructor
+normalization, symbol owner token/registration pairs, and static-storage attribute
+emissions. Constructor invocation ABI and unrelated property or initializer roles
+do not establish this closure proof. Existing source-catalog finalization stays in
+its original phase.
+
+With complete evidence, the helper fences custom Type implementations before
+metadata, retains closed symbol/ordinary static owners, and reuses the exact
+canonical source tokens already emitted by the compiler. A native call outside
+that proved open-owner domain throws a named TypeError. Missing or unproved
+producer, CLR ingress, base or normalization evidence retains the whole original
+operation, including its foreign Type callbacks and analyzer findings. In
+particular, a non-generic source declaration does not prove that its generic base
+can be normalized safely. The general SourceOwner.Resolve and SymbolClosedOwner
+helpers retain their existing foreign/open/closed behavior.
+
+This checkpoint removes exactly seven findings from the ordinary source-class
+control: eight become one after the receiver lookup above, with no new findings.
+The remaining prototype $EnsureFields query is a separate acceptance item. Strict
+warnings remain enabled. Seven ordinary managed fixtures retain all 8,306 raw
+method bodies (8,474 method definitions) and PE sizes; PE bytes differ only in
+module MVID and COFF timestamp.

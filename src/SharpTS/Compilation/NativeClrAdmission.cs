@@ -35,6 +35,8 @@ internal sealed partial class NativeClrAdmission
     private readonly List<(string Reason, SourceLocation? Location)> _failures = [];
     private readonly HashSet<object> _sharedSourceUses = new(ReferenceEqualityComparer.Instance);
     private bool _complete;
+    internal sealed record CompletedIngressProof(Module Module);
+    internal CompletedIngressProof? CompletedIngress { get; private set; }
     private readonly Dictionary<BindingSymbol, object> _functions = new(ReferenceEqualityComparer.Instance);
     private readonly List<Stmt.TryCatch> _tries = [];
     private readonly List<(Expr? Source, string Reason)> _sourceProofBoundaries = [];
@@ -196,6 +198,13 @@ internal sealed partial class NativeClrAdmission
                 Fail(boundary.Reason, boundary.Source is null ? null : Source(boundary.Source));
         _complete = true;
         ThrowIfIncompatible();
+    }
+
+    internal void Complete(Module output)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        Complete();
+        CompletedIngress = new(output);
     }
 
     private void CheckUse(Expr expression, HashSet<object> seen)

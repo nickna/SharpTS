@@ -13,6 +13,7 @@ internal sealed class NativeSourceOwnerCatalog
     private readonly HashSet<TypeBuilder> _legacyOwners = new(ReferenceEqualityComparer.Instance);
     private Type? _contract;
     private IReadOnlyList<Type> _canonicalOwners = [];
+    private IReadOnlyList<(Type Definition, Type Canonical)> _canonicalMappings = [];
 
     internal NativeSourceOwnerCatalog(ModuleBuilder module, TypeProvider types)
     {
@@ -32,6 +33,8 @@ internal sealed class NativeSourceOwnerCatalog
     internal IReadOnlyCollection<TypeBuilder> LegacyOwners => _legacyOwners;
     internal IReadOnlyList<Type> CanonicalOwners => IsComplete ? _canonicalOwners :
         throw new InvalidOperationException("Canonical source owners are incomplete.");
+    internal IReadOnlyList<(Type Definition, Type Canonical)> CanonicalMappings => IsComplete ? _canonicalMappings :
+        throw new InvalidOperationException("Canonical source mappings are incomplete.");
 
     internal void DeclareContract(Type contract)
     {
@@ -104,6 +107,7 @@ internal sealed class NativeSourceOwnerCatalog
         il.MarkLabel(returnOwner); il.Emit(OpCodes.Ldloc, ownerLocal); il.Emit(OpCodes.Ret);
         MappedOwnerCount = mappings.Count;
         _canonicalOwners = Array.AsReadOnly(mappings.Select(mapping => mapping.Canonical).ToArray());
+        _canonicalMappings = Array.AsReadOnly(mappings.ToArray());
         _catalog.CreateType();
         IsComplete = true;
     }

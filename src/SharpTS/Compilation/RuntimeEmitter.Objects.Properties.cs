@@ -193,6 +193,12 @@ public partial class RuntimeEmitter
         // Only source classes can be generic implementers of this output's own
         // $IHasFields interface; its built-in carriers are non-generic.
         if (!_features.UsesUserClasses) return owner;
+        if (_nativeOwnerClosure is not null)
+        {
+            var nativeOwner = il.DeclareLocal(_types.Type);
+            il.Emit(OpCodes.Ldloc, owner); il.Emit(OpCodes.Call, _nativeOwnerClosure.StaticMemberOwner);
+            il.Emit(OpCodes.Stloc, nativeOwner); return nativeOwner;
+        }
         var methodOwnerLocal = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldloc, owner);
         il.Emit(OpCodes.Stloc, methodOwnerLocal);
@@ -232,6 +238,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, owner);
     }
 
+    internal static void EmitLegacyOwnerClosureOperation(ILGenerator il, TypeProvider types,
+        NativeSourceOwnerCatalog sources, EmittedRuntime runtime, bool storage)
+    {
+        // Use the original whole operation with its native bridge absent. This
+        // emitter only supplies IL; its default class policy enables the same
+        // predicates used by the original class-bearing caller.
+        var legacy = new RuntimeEmitter(types);
+        var owner = il.DeclareLocal(types.Type);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Stloc, owner);
+        var result = storage
+            ? legacy.EmitDeferredStaticFieldStorageOwner(il, owner, sources.Contract,
+                runtime.ClassInitialization.CanonicalStaticStorageAttributeConstructor, true, sources)
+            : legacy.EmitStaticMemberLookupOwner(il, owner, sources.Contract, sources);
+        il.Emit(OpCodes.Ldloc, result); il.Emit(OpCodes.Ret);
+    }
+
     private LocalBuilder EmitDeferredStaticFieldStorageOwner(ILGenerator il, LocalBuilder owner,
         Type userClassInterface, ConstructorBuilder policyAttribute, bool userClasses,
         NativeSourceOwnerCatalog? sourceOwners = null)
@@ -240,6 +262,12 @@ public partial class RuntimeEmitter
         // canonical storage. Ordinary closed generic parents keep their own .cctor storage.
         // Built-in carriers cannot need this closure when no source class exists.
         if (!userClasses) return owner;
+        if (_nativeOwnerClosure is not null)
+        {
+            var nativeOwner = il.DeclareLocal(_types.Type);
+            il.Emit(OpCodes.Ldloc, owner); il.Emit(OpCodes.Call, _nativeOwnerClosure.StaticStorageOwner);
+            il.Emit(OpCodes.Stloc, nativeOwner); return nativeOwner;
+        }
         var storageOwner = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldloc, owner);
         il.Emit(OpCodes.Stloc, storageOwner);
@@ -3423,7 +3451,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsGenericType")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, nonGenericCtorLabel);
         il.Emit(OpCodes.Ldloc, ctorTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+        NativeOwnerClosure.EmitNormalization(_nativeOwnerClosure, _types, il, method, NativeOwnerNormalization.PromiseConstructor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(nonGenericCtorLabel);
         il.Emit(OpCodes.Ldloc, ctorTypeLocal);

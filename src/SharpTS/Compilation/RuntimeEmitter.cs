@@ -20,6 +20,7 @@ public partial class RuntimeEmitter
     private readonly NativeConstructorFactoryLookup? _nativeConstructorFactories;
     private readonly NativeConstructorActivationLookup? _nativeConstructorActivation;
     private readonly NativeReceiverInitializerLookup? _nativeReceiverInitializers;
+    private readonly NativeOwnerClosure? _nativeOwnerClosure;
 
     private void EmitRuntimeConstructorValue(ILGenerator il, Type type) =>
         NativeConstructorActivationLookup.EmitValue(_nativeConstructorActivation, _types, il, type,
@@ -48,7 +49,8 @@ public partial class RuntimeEmitter
         NativeDeletionLookup? nativeDeletionLookup = null, MethodInfo? nativeHasInMemberLookup = null,
         NativeConstructorFactoryLookup? nativeConstructorFactories = null,
         NativeConstructorActivationLookup? nativeConstructorActivation = null,
-        NativeReceiverInitializerLookup? nativeReceiverInitializers = null)
+        NativeReceiverInitializerLookup? nativeReceiverInitializers = null,
+        NativeOwnerClosure? nativeOwnerClosure = null)
     {
         _types = types;
         _emitHosted = emitHosted;
@@ -61,6 +63,7 @@ public partial class RuntimeEmitter
         _nativeConstructorFactories = nativeConstructorFactories;
         _nativeConstructorActivation = nativeConstructorActivation;
         _nativeReceiverInitializers = nativeReceiverInitializers;
+        _nativeOwnerClosure = nativeOwnerClosure;
     }
 
     /// <summary>
@@ -84,6 +87,7 @@ public partial class RuntimeEmitter
         _nativeConstructorFactories?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         _nativeConstructorActivation?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         _nativeReceiverInitializers?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
+        _nativeOwnerClosure?.ValidateForEmitter(moduleBuilder, _emitNativeCallables, features.UsesUserClasses);
         functionPolicy.NativeConstructedBodies?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         if (_nativeStaticFieldLookup is { } fields &&
             (!_emitNativeCallables || !ReferenceEquals(fields.Module, moduleBuilder) || !fields.IsStatic || fields.IsGenericMethod ||

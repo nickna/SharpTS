@@ -690,7 +690,7 @@ public partial class RuntimeEmitter
         // both cctor execution and reflective Invoke; closed/non-generic owners
         // pass through unchanged.
         il.Emit(OpCodes.Ldloc, ownerLocal);
-        il.Emit(OpCodes.Call, symbolAccessors.ClosedOwner);
+        il.Emit(OpCodes.Call, _nativeOwnerClosure?.SymbolOwner ?? symbolAccessors.ClosedOwner);
         il.Emit(OpCodes.Stloc, closedOwnerLocal);
         // Static-side accessors are registered in the owner class's .cctor, which
         // the CLR runs lazily — merely using the class as a Type value (typeof) does

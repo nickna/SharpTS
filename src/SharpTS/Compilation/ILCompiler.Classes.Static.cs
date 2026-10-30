@@ -424,11 +424,11 @@ public partial class ILCompiler
         }
         if (method.ComputedKey != null)
         {
-            il.Emit(OpCodes.Ldtoken, owner); il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            var symbolEmission = NativeOwnerClosure.EmitSymbolOwner(_nativeOwnerClosure, _types, owner, member.Builder!, il);
             il.Emit(OpCodes.Ldloc, key);
             EmitMethodInfoLiteral(il, member.Builder!, owner);
             il.Emit(method.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Call, _runtime.SymbolAccessors.RegisterMethod);
+            NativeOwnerClosure.EmitSymbolRegistration(_nativeOwnerClosure, il, symbolEmission, _runtime.SymbolAccessors.RegisterMethod);
         }
         il.MarkLabel(done);
     }
@@ -527,8 +527,8 @@ public partial class ILCompiler
         var keys = deferred.Select(entry => entry.Key).ToArray();
         _classes.DeferredDefinitions.Declare(source, typeBuilder, initializer, registrar, keys, fieldKeys, capturedKeys);
         if (hasGenericKeys)
-            typeBuilder.SetCustomAttribute(_runtime.ClassInitialization.CanonicalStaticStorageAttributeConstructor,
-                CustomAttributeEncoder.EmptyBlob);
+            NativeOwnerClosure.EmitStoragePolicy(_nativeOwnerClosure, typeBuilder,
+                _runtime.ClassInitialization.CanonicalStaticStorageAttributeConstructor);
     }
 
     private void EmitComputedStaticFieldInitializer(ILEmitter emitter, ILGenerator il,

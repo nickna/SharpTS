@@ -997,7 +997,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsConstructedGenericType").GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, canonicalUserParent);
         il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+        NativeOwnerClosure.EmitNormalization(_nativeOwnerClosure, _types, il, method, NativeOwnerNormalization.ConstructorBase);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(canonicalUserParent);
         il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);

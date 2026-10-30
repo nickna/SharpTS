@@ -1215,7 +1215,7 @@ public partial class RuntimeEmitter
         // non-generic species (incl. the default species = receiver's closed type)
         // pass through unchanged.
         il.Emit(OpCodes.Ldloc, speciesTypeLocal);
-        il.Emit(OpCodes.Call, runtime.SymbolAccessors.ClosedOwner);
+        il.Emit(OpCodes.Call, _nativeOwnerClosure?.SymbolOwner ?? runtime.SymbolAccessors.ClosedOwner);
         il.Emit(OpCodes.Stloc, speciesTypeLocal);
         // if (speciesType == typeof(Task<object?>)) use the intrinsic path;
         il.Emit(OpCodes.Ldloc, speciesTypeLocal);

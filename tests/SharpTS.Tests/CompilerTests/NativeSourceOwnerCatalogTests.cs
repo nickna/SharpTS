@@ -58,7 +58,8 @@ public sealed class NativeSourceOwnerCatalogTests
         foreach (string name in new[] { "GetProperty", "SetProperty", "ObjectGetOwnPropertyDescriptor", "ObjectDefineProperty", "PropertyIsEnumerableHelper", "GetClassPrototype", "GetClassConstructorKeys" })
         {
             MethodInfo method = saved.GetType("$Runtime")!.GetMethod(name)!;
-            Assert.Contains(Instructions(method), instruction => instruction.Member?.Name == "Resolve");
+            Assert.Contains(Instructions(method), instruction => instruction.Member?.DeclaringType?.Name == "<>NativeOwnerClosure" &&
+                instruction.Member.Name is "StaticMemberOwner" or "StaticStorageOwner");
             Assert.DoesNotContain(Instructions(method), instruction => instruction.Member?.Name == "MakeGenericType");
         }
         Assert.Equal(typeof(Dictionary<object, object>), symbols.Invoke(null, [typeof(Dictionary<,>)]));
