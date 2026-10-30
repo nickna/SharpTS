@@ -11,6 +11,36 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class NativePrototypeFieldsTests
 {
+    [Fact]
+    public void UnprovedResultEvidenceIsUnavailableBeforeCompletion()
+    {
+        var assembly = new PersistedAssemblyBuilder(new AssemblyName("unfinished_results"), typeof(object).Assembly);
+        var module = assembly.DefineDynamicModule("main");
+        var lookup = new NativePrototypeFieldsLookup(module, TypeProvider.Runtime);
+        Assert.Throws<InvalidOperationException>(() => lookup.CompletedUnprovedResults);
+    }
+
+    [Fact]
+    public void CompletedUnprovedResultsExposeActualMethodsAndImmutableCompletionEvidence()
+    {
+        var (compiler, _) = Build("class C{} const p=Promise.resolve(1);", true);
+        var lookup = compiler.NativePrototypeFields!;
+        var snapshot = lookup.CompletedUnprovedResults;
+        Assert.Same(lookup.Find.Module, snapshot.Module);
+        Assert.Same(snapshot, lookup.CompletedUnprovedResults);
+        Assert.NotEmpty(snapshot.Producers);
+        var expected = typeof(TaskCompletionSource<object>).GetProperty("Task")!.GetGetMethod();
+        Assert.All(snapshot.Producers, result =>
+        {
+            Assert.Equal(expected, result.Producer);
+            Assert.True(result.CallOffset >= 0);
+            Assert.True(result.CompletedBodyLength > result.CallOffset);
+        });
+        var mutableView = Assert.IsAssignableFrom<IList<NativeUnprovedCarrierResultProducer>>(snapshot.Producers);
+        Assert.Throws<NotSupportedException>(() => mutableView.Clear());
+        Assert.NotEmpty(snapshot.Producers);
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         yield return ["ordinary-class", "class Counter { value=7; } console.log(new Counter().value);", "7\n"];

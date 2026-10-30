@@ -15,6 +15,7 @@ internal sealed class NativePrototypeFieldsLookup
     private readonly List<(ConstructorInfo Constructor, ILGenerator Body, int Offset)> _carriers = [];
     private readonly List<(MethodInfo Method, ILGenerator Body, int Offset)> _unprovedResults = [];
     private readonly List<string> _blockers = [];
+    private NativeUnprovedCarrierResultsSnapshot? _completedUnprovedResults;
     internal sealed class PrototypeEmission(Type owner, ILGenerator body, int offset)
     {
         internal Type Owner { get; } = owner;
@@ -40,6 +41,8 @@ internal sealed class NativePrototypeFieldsLookup
     internal bool UsesLegacy => _blockers.Count != 0;
     internal IReadOnlyList<string> Blockers => _blockers.AsReadOnly();
     internal IReadOnlyList<Type> Owners { get; private set; } = [];
+    internal NativeUnprovedCarrierResultsSnapshot CompletedUnprovedResults => IsComplete
+        ? _completedUnprovedResults! : throw new InvalidOperationException("Unproved carrier result producers have not completed.");
 
     internal void RecordStore(TypeBuilder owner, MethodBuilder method)
     {
@@ -182,7 +185,10 @@ internal sealed class NativePrototypeFieldsLookup
             _blockers.Add("Native callable ingress declarations have not completed");
         Owners = Array.AsReadOnly(owners.OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray());
         EmitQuery(runtime.Errors);
-        _owner.CreateType(); IsComplete = true;
+        _owner.CreateType();
+        _completedUnprovedResults = new(_owner.Module, _unprovedResults.Select(result =>
+            new NativeUnprovedCarrierResultProducer(result.Method, result.Offset, result.Body.ILOffset)));
+        IsComplete = true;
     }
 
     private bool ValidStore(MethodInfo method) => method.Name == "$EnsureFields" && method.IsPrivate && !method.IsStatic &&
@@ -223,4 +229,19 @@ internal sealed class NativePrototypeFieldsLookup
     {
         if (IsComplete) throw new InvalidOperationException("Prototype lookup emission has already completed.");
     }
+}
+
+/// <summary>Actual completed reference-result operations, independent of any consumer's query obligations.</summary>
+internal sealed record NativeUnprovedCarrierResultProducer(MethodInfo Producer, int CallOffset, int CompletedBodyLength);
+
+internal sealed class NativeUnprovedCarrierResultsSnapshot
+{
+    internal NativeUnprovedCarrierResultsSnapshot(Module module, IEnumerable<NativeUnprovedCarrierResultProducer> producers)
+    {
+        Module = module;
+        Producers = Array.AsReadOnly(producers.ToArray());
+    }
+
+    internal Module Module { get; }
+    internal IReadOnlyList<NativeUnprovedCarrierResultProducer> Producers { get; }
 }
