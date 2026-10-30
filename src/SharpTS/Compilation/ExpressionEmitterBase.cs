@@ -1880,7 +1880,20 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (Ctx.GenericTypeParameters.TryGetValue(typeArg, out var owned)) return owned;
         if (Ctx.Classes.TryGetValue(qualified, out var builder))
             return Ctx.TypeMapper.IsDynamicClassInstance(Ctx.TypeMap?.GetClassType(qualified)) ? Types.Object : builder;
-        return SharpTS.Runtime.DotNet.DotNetTypeRegistry.ResolveFriendly(typeArg) ?? Types.Object;
+        // Friendly CLR spellings may use this compilation's references and framework
+        // metadata, but never the interpreter's ambient loaded-assembly/name cache.
+        // In particular, an unsupported source spelling such as T[] must not bind
+        // to a class named T left behind by a different guest compilation.
+        return SharpTS.Runtime.DotNet.DotNetTypeRegistry.ResolveFriendly(typeArg, ResolveExternalTypeArgument) ?? Types.Object;
+    }
+
+    private Type? ResolveExternalTypeArgument(string name)
+    {
+        if (Ctx.TypeMapper.ExternalTypes.TryGetValue(name, out var declared)) return declared;
+        if (Ctx.TypeMapper.ExternalMetadata?.TryResolve(name) is { } referenced)
+            return Ctx.TypeMapper.ForEmission(referenced);
+        try { return Types.Resolve(name); }
+        catch (CompileException) { return null; }
     }
 
     /// <summary>
