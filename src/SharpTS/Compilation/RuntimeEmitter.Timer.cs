@@ -958,6 +958,7 @@ public partial class RuntimeEmitter
         var hasCallbackLabel = il.DefineLabel();
         var hasDelayLabel = il.DefineLabel();
         var callLabel = il.DefineLabel();
+        var extractExtraArgsLabel = il.DefineLabel();
 
         // Extract callback from args[0]
         // if (args == null || args.Length == 0) callback = null; else callback = args[0];
@@ -995,17 +996,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Call, _types.ConvertToDoubleFromObject);
         il.Emit(OpCodes.Stloc, delayLocal);
-        il.Emit(OpCodes.Br_S, extractExtraArgs());
+        il.Emit(OpCodes.Br_S, extractExtraArgsLabel);
 
         il.MarkLabel(callLabel);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Stloc, delayLocal);
 
         // Extract extra args (args[2..])
-        Label extractExtraArgs()
+        void EmitExtraArgs()
         {
-            var label = il.DefineLabel();
-            il.MarkLabel(label);
+            il.MarkLabel(extractExtraArgsLabel);
 
             var hasExtraArgsLabel = il.DefineLabel();
             var noExtraArgsLabel = il.DefineLabel();
@@ -1046,8 +1046,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, extraArgsLocal);
 
             il.MarkLabel(afterExtraArgsLabel);
-            return label;
+
         }
+
+        EmitExtraArgs();
 
         // Call SetTimeout(callback, delay, extraArgs)
         il.Emit(OpCodes.Ldloc, callbackLocal);
