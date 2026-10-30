@@ -24,6 +24,7 @@ public sealed class AssemblyReferenceLoader : IDisposable
     private ExternalMemberEmission? _emission;
     private ExternalMetadataTypes? _metadataTypes;
     private ExternalMetadataTypes MetadataTypes => _metadataTypes ??= new(_mlc);
+    internal ExternalMetadataTypes.CoreSnapshot CaptureCoreAliases() => MetadataTypes.CaptureCoreAliases();
     internal object? DefaultForEmission(ParameterInfo parameter) =>
         parameter.GetType().Assembly == typeof(MetadataLoadContext).Assembly && MetadataTypes.Owns(parameter.Member.Module.Assembly)
             ? parameter.RawDefaultValue : parameter.DefaultValue;

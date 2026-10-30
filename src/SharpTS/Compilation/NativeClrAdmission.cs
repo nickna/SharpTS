@@ -24,6 +24,7 @@ internal sealed partial class NativeClrAdmission
     private readonly Dictionary<Token, BindingSymbol?> _bindingSnapshot = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, TypeInfo?> _declaredSnapshot = new(ReferenceEqualityComparer.Instance);
     private readonly TypeProvider _framework;
+    private readonly ExternalMetadataTypes.CoreSnapshot? _coreAliases;
     private readonly Dictionary<object, object> _source = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<object, object?> _parents = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<object, object?> _owners = new(ReferenceEqualityComparer.Instance);
@@ -41,15 +42,17 @@ internal sealed partial class NativeClrAdmission
     private readonly List<Stmt.TryCatch> _tries = [];
     private readonly List<(Expr? Source, string Reason)> _sourceProofBoundaries = [];
 
-    private NativeClrAdmission(IEnumerable<Stmt> statements, TypeMap types, TypeProvider framework)
+    private NativeClrAdmission(IEnumerable<Stmt> statements, TypeMap types, TypeProvider framework, ExternalMetadataTypes.CoreSnapshot? coreAliases = null)
     {
         _types = types;
         _framework = framework;
+        _coreAliases = coreAliases;
         var inventory = new Inventory(this);
         foreach (var statement in statements) inventory.Visit(statement);
     }
 
-    internal static NativeClrAdmission Capture(IEnumerable<Stmt> statements, TypeMap types, TypeProvider framework) => new(statements, types, framework);
+    internal static NativeClrAdmission Capture(IEnumerable<Stmt> statements, TypeMap types, TypeProvider framework,
+        ExternalMetadataTypes.CoreSnapshot? coreAliases = null) => new(statements, types, framework, coreAliases);
 
     internal void RecordRewrite(object source, object target)
     {
@@ -153,6 +156,7 @@ internal sealed partial class NativeClrAdmission
     {
         if (mode == Marshalling.OriginalAssignment) return true; // Result remains the original RHS; no producer/scalar proof.
         if (mode is Marshalling.Constructed or Marshalling.TypeValue) return false;
+        type = _coreAliases?.Normalize(type) ?? type;
         if (_framework.IsVoid(type) || _framework.IsString(type) || _framework.IsBoolean(type) || _framework.IsDouble(type)) return true;
         if (mode == Marshalling.Literal) return !type.IsEnum;
         if (mode == Marshalling.RawBox) return false;

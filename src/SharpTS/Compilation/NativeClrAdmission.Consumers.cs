@@ -53,8 +53,9 @@ internal sealed partial class NativeClrAdmission
         }
     }
 
-    private static bool IsScalarEnforcingConversion(Type type)
+    private bool IsScalarEnforcingConversion(Type type)
     {
+        type = _coreAliases?.Normalize(type) ?? type;
         if (Nullable.GetUnderlyingType(type) is { } underlying) return IsScalarEnforcingConversion(underlying);
         return type == typeof(string) || type == typeof(bool) || type == typeof(double) || type == typeof(float) ||
             type == typeof(byte) || type == typeof(sbyte) || type == typeof(short) || type == typeof(ushort) ||
@@ -62,7 +63,7 @@ internal sealed partial class NativeClrAdmission
             type == typeof(decimal) || type == typeof(char) || type.IsEnum;
     }
 
-    private static bool IsIndependentScalarArray(Type type) => type.IsArray && type.GetArrayRank() == 1 &&
+    private bool IsIndependentScalarArray(Type type) => type.IsArray && type.GetArrayRank() == 1 &&
         (type.GetElementType()!.IsArray ? IsIndependentScalarArray(type.GetElementType()!) : IsScalarEnforcingConversion(type.GetElementType()!));
 
     private bool HasClrProducer(Expr expression, HashSet<object> seen)

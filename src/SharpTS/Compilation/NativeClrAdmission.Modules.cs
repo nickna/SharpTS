@@ -9,9 +9,10 @@ internal sealed partial class NativeClrAdmission
     private sealed record DeferredModule(ParsedModule Identity, IReadOnlyList<Stmt> OriginalRoots);
     private readonly List<DeferredModule> _deferredModules = [];
 
-    internal static NativeClrAdmission CaptureModules(IReadOnlyList<ParsedModule> modules, TypeMap types, TypeProvider framework)
+    internal static NativeClrAdmission CaptureModules(IReadOnlyList<ParsedModule> modules, TypeMap types, TypeProvider framework,
+        ExternalMetadataTypes.CoreSnapshot? coreAliases = null)
     {
-        var admission = new NativeClrAdmission(modules.SelectMany(module => module.Statements), types, framework);
+        var admission = new NativeClrAdmission(modules.SelectMany(module => module.Statements), types, framework, coreAliases);
         var entry = modules.LastOrDefault();
         foreach (var module in modules)
             if (module.IsDynamicImportOnly || module.IsCommonJs && !ReferenceEquals(module, entry))

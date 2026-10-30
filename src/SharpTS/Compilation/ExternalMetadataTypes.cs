@@ -57,4 +57,15 @@ internal sealed class ExternalMetadataTypes
         if (!Owns(element)) throw new ArgumentException("Array selection requires an actual type owned by this metadata context.", nameof(element));
         return vector ? element.MakeArrayType() : element.MakeArrayType(rank);
     }
+    internal CoreSnapshot CaptureCoreAliases() => CoreSnapshot.Capture(this);
+
+    /// <summary>Immutable exact identities from this loader's already-owned metadata core.</summary>
+    internal sealed class CoreSnapshot
+    {
+        private readonly Dictionary<Type, Type> _atoms;
+        private CoreSnapshot(ExternalMetadataTypes owner) => _atoms = new(owner._runtime, ReferenceEqualityComparer.Instance);
+        internal static CoreSnapshot Capture(ExternalMetadataTypes owner) => new(owner);
+        // No names, virtual equality or UnderlyingSystemType can authorize an alias.
+        internal Type Normalize(Type value) => _atoms.GetValueOrDefault(value) ?? value;
+    }
 }

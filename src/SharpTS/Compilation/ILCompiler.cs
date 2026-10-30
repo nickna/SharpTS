@@ -653,7 +653,7 @@ public partial class ILCompiler
         _deadCodeInfo = deadCodeInfo;
         _isStrictMode = Parsing.DirectivePrologue.HasUseStrict(statements);
         _typeMapper.HeldClassConstructions = HeldClassConstructionInfo.Analyze(statements, typeMap, _typeMapper);
-        _nativeClrAdmission = _nativeAotProjectOutput ? NativeClrAdmission.Capture(statements, typeMap, _types) : null;
+        _nativeClrAdmission = _nativeAotProjectOutput ? NativeClrAdmission.Capture(statements, typeMap, _types, _referenceLoader?.CaptureCoreAliases()) : null;
         _rawCallStorage = RawCallStorageAnalysis.Capture(statements, typeMap);
         statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans, typeMap, RecordSourceRewrite);
         _functionEmissionPolicy = FunctionEmissionPolicy.ForPreparedSource(statements, _nativeAotProjectOutput);
@@ -1409,7 +1409,7 @@ public partial class ILCompiler
         _typeMapper.HeldClassConstructions = HeldClassConstructionInfo.Analyze(
             modules.SelectMany(module => module.Statements), typeMap, _typeMapper);
         _nativeClrAdmission = _nativeAotProjectOutput
-            ? NativeClrAdmission.CaptureModules(modules, typeMap, _types) : null;
+            ? NativeClrAdmission.CaptureModules(modules, typeMap, _types, _referenceLoader?.CaptureCoreAliases()) : null;
         _rawCallStorage = RawCallStorageAnalysis.Capture(
             modules.SelectMany(module => module.Statements), typeMap,
             modules.Where(module => !module.IsCommonJs).Select(module => (IEnumerable<Stmt>)module.Statements));
