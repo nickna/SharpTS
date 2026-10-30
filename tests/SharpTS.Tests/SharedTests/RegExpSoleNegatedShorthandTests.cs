@@ -36,6 +36,11 @@ public sealed class RegExpSoleNegatedShorthandTests
             const patterns=['[\\W]','[^\\W]','[\\D]','[^\\D]','[\\S]','[^\\S]'];
             for(const pattern of patterns){const expression=new RegExp(pattern);console.log(expression.source,expression.test('İ'),expression.test(' '));}
             """, "[\\W] true true\n[^\\W] false false\n[\\D] true true\n[^\\D] false false\n[\\S] true false\n[^\\S] false true\n"];
+        yield return ["incomplete-classes", """
+            for(const pattern of ['[','[^','[\\W','[^\\W']){
+                try{new RegExp(pattern);console.log('accepted');}catch(error){console.log(error instanceof SyntaxError);}
+            }
+            """, "true\ntrue\ntrue\ntrue\n"];
     }
 
     public static IEnumerable<object[]> Modes() => Cases().SelectMany(row => new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }

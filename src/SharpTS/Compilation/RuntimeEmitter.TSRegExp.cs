@@ -36,6 +36,8 @@ public partial class RuntimeEmitter
 
     private readonly record struct TSRegExpValidateModifierFlagsInputs(MethodBuilder CreateException, ConstructorBuilder TSSyntaxErrorCtor);
 
+    private readonly record struct TSRegExpSkipCharClassInputs(MethodBuilder CreateException, ConstructorBuilder TSSyntaxErrorCtor);
+
     private readonly record struct TSRegExpValidateModifiersInputs(MethodBuilder SkipCharClassMethod, MethodBuilder ValidateModifierFlagsMethod);
 
     private readonly record struct TSRegExpValidateFlagsInputs(MethodBuilder CreateException, ConstructorBuilder TSSyntaxErrorCtor);
@@ -394,7 +396,8 @@ public partial class RuntimeEmitter
         // ES2025 modifier-group early-error validators (emitted before the
         // constructors, which call ValidateModifiers). Mirrors
         // SharpTSRegExp.ValidateModifiers (interp).
-        var regExpSkipCharClassMethod = EmitTSRegExpSkipCharClass(typeBuilder);
+        var regExpSkipCharClassMethod = EmitTSRegExpSkipCharClass(typeBuilder,
+            new TSRegExpSkipCharClassInputs(inputs.CreateException, inputs.TSSyntaxErrorCtor));
         var regExpValidateModifierFlagsMethod = EmitTSRegExpValidateModifierFlags(
             typeBuilder,
             new TSRegExpValidateModifierFlagsInputs(inputs.CreateException, inputs.TSSyntaxErrorCtor)
@@ -1192,9 +1195,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits <c>static int SkipCharClass(string p, int i)</c> — returns the index
     /// just past the matching <c>]</c> of a class starting at <paramref name="i"/>
-    /// (<c>p[i]=='['</c>), honoring <c>\]</c>. Unterminated → length.
+    /// (<c>p[i]=='['</c>), honoring <c>\]</c>. Unterminated classes throw a guest
+    /// SyntaxError before entering the framework parser.
     /// </summary>
-    private MethodBuilder EmitTSRegExpSkipCharClass(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTSRegExpSkipCharClass(TypeBuilder typeBuilder, TSRegExpSkipCharClassInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "SkipCharClass", MethodAttributes.Private | MethodAttributes.Static,
@@ -1205,7 +1209,7 @@ public partial class RuntimeEmitter
         var nLocal = il.DeclareLocal(_types.Int32);
         var kLocal = il.DeclareLocal(_types.Int32);
         var loop = il.DefineLabel();
-        var retN = il.DefineLabel();
+        var unterminated = il.DefineLabel();
         var notEsc = il.DefineLabel();
         var notClose = il.DefineLabel();
         // n = p.Length
@@ -1213,7 +1217,7 @@ public partial class RuntimeEmitter
         // k = i + 1
         il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, kLocal);
         il.MarkLabel(loop);
-        il.Emit(OpCodes.Ldloc, kLocal); il.Emit(OpCodes.Ldloc, nLocal); il.Emit(OpCodes.Bge, retN);
+        il.Emit(OpCodes.Ldloc, kLocal); il.Emit(OpCodes.Ldloc, nLocal); il.Emit(OpCodes.Bge, unterminated);
         // ch = p[k]
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, kLocal); il.Emit(OpCodes.Callvirt, getChars);
         il.Emit(OpCodes.Dup);
@@ -1228,8 +1232,9 @@ public partial class RuntimeEmitter
         il.MarkLabel(notClose);
         il.Emit(OpCodes.Ldloc, kLocal); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc, kLocal);
         il.Emit(OpCodes.Br, loop);
-        il.MarkLabel(retN);
-        il.Emit(OpCodes.Ldloc, nLocal); il.Emit(OpCodes.Ret);
+        il.MarkLabel(unterminated);
+        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSSyntaxErrorCtor,
+            "Invalid regular expression: unterminated character class");
         return method;
     }
 

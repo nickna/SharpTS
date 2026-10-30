@@ -572,7 +572,8 @@ public class SharpTSRegExp : ITypeCategorized
 
     /// <summary>Returns the index just past the matching <c>]</c> of a character
     /// class beginning at <paramref name="i"/> (<c>p[i] == '['</c>), honoring
-    /// <c>\]</c>. Unterminated → end of string (.NET surfaces the error).</summary>
+    /// <c>\]</c>. Unterminated classes throw a guest SyntaxError before the
+    /// framework parser, which can throw host bounds errors for <c>[^</c>.</summary>
     private static int SkipCharClass(string p, int i)
     {
         int n = p.Length, k = i + 1;
@@ -582,7 +583,8 @@ public class SharpTSRegExp : ITypeCategorized
             if (p[k] == ']') return k + 1;
             k++;
         }
-        return n;
+        throw new Exceptions.ThrowException(
+            new SharpTSSyntaxError("Invalid regular expression: unterminated character class"));
     }
 
     /// <summary>Validates the flag text between <c>(?</c> and <c>:</c> (e.g.
