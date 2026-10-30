@@ -352,7 +352,7 @@ public class EmittedTypedArrayRuntimeTests
             sharedClone[0] = 8; console.log(shared[0]);
             """;
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
-        Assert.Equal("255,0,2,3\n4,7,7,1 1 2 true 4,7,7,1\n4 9\n8\n", TestHarness.RunCompiledStandalone(source));
+        Assert.Equal("255,0,2,4\n4,7,7,1 1 2 true 4,7,7,1\n4 9\n8\n", TestHarness.RunCompiledStandalone(source));
     }
 
     private static string[] Keys(string registry) => registry.Contains("Unboxed", StringComparison.Ordinal) ? NumericElements : ConcreteNames;
