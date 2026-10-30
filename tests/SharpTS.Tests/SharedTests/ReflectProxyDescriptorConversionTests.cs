@@ -52,13 +52,14 @@ public sealed class ReflectProxyDescriptorConversionTests
             """, "true 1\ntrue 0\ntrue 0\ntrue 0\ntrue 0\ntrue 0\n"];
     }
 
-    [Theory, MemberData(nameof(Cases))]
-    public void CompiledReflectConvertsBeforeProxyDispatch(string name, string source, string expected)
+    public static IEnumerable<object[]> Modes()=>Cases().SelectMany(row=>new[]{ExecutionMode.Interpreted,ExecutionMode.Compiled}
+        .Select(mode=>new object[]{row[0],row[1],row[2],mode}));
+
+    [Theory, MemberData(nameof(Modes))]
+    public void ReflectConvertsBeforeProxyDispatch(string name, string source, string expected,ExecutionMode mode)
     {
-        // The interpreter counterpart is independently tracked by #2592.
         Assert.NotEmpty(name);
-        var (errors, output)=TestHarness.CompileVerifyAndRun(source);
-        Assert.Empty(errors);
-        Assert.Equal(expected,output);
+        if(mode==ExecutionMode.Compiled){var(errors,output)=TestHarness.CompileVerifyAndRun(source);Assert.Empty(errors);Assert.Equal(expected,output);}
+        else Assert.Equal(expected,TestHarness.Run(source,mode));
     }
 }

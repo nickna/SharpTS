@@ -20,10 +20,9 @@ public sealed class GlobalArrayBufferExposureTests
         Assert.Equal("own true true true true\n", TestHarness.Run(source, mode));
     }
 
-    [Fact]
-    public void CompiledIntrinsicDescriptorsRetainDeletionAndExplicitOverlays()
+    [Theory, ModeData]
+    public void IntrinsicDescriptorsRetainDeletionAndExplicitOverlays(ExecutionMode mode)
     {
-        // #2597 covers emitted global exposure; interpreter deletion is tracked separately.
         const string source = """
             const constructor:any=ArrayBuffer;
             const original:any=Object.getOwnPropertyDescriptor(globalThis,'ArrayBuffer');
@@ -36,6 +35,6 @@ public sealed class GlobalArrayBufferExposureTests
             console.log(replacement.value===constructor,replacement.writable,replacement.enumerable,
                 replacement.configurable,Reflect.get(globalThis,'ArrayBuffer')===constructor);
             """;
-        Assert.Equal("true false true\ntrue true\ntrue false true true true\n", TestHarness.Run(source, ExecutionMode.Compiled));
+        Assert.Equal("true false true\ntrue true\ntrue false true true true\n", TestHarness.Run(source, mode));
     }
 }
