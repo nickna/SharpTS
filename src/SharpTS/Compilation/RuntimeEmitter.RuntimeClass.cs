@@ -1878,7 +1878,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
                 runtime.ObjectState.IsBuiltinDeleted,
-                runtime.GuestOwnProperties
+                runtime.GuestOwnProperties,
+                DateConstructor: runtime.Dates.Implementation?.Type
             )
         );
         // Object.assign consumes both halves of [[OwnPropertyKeys]], so make

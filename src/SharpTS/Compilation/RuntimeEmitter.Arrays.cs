@@ -53,7 +53,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype,
         MethodInfo IsBuiltinDeleted,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        Type? DateConstructor = null
     );
 
     /// <summary>
@@ -1485,6 +1486,29 @@ public partial class RuntimeEmitter
         AddOwnName("parseInt");
         il.Emit(OpCodes.Br, appendStoredNames);
         il.MarkLabel(notNumberTypeForNamesLabel);
+
+        if (inputs.DateConstructor is { } dateConstructor)
+        {
+            var notDateConstructor = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, dateConstructor);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, notDateConstructor);
+            foreach (var name in new[] { "length", "name", "prototype", "now", "parse", "UTC" })
+            {
+                // A recreated intrinsic is a new property and is appended by
+                // the existing descriptor-store path, rather than its old slot.
+                var recreated = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldstr, name);
+                il.Emit(OpCodes.Call, inputs.IsBuiltinDeleted);
+                il.Emit(OpCodes.Brtrue, recreated);
+                AddOwnName(name);
+                il.MarkLabel(recreated);
+            }
+            il.Emit(OpCodes.Br, appendStoredNames);
+            il.MarkLabel(notDateConstructor);
+        }
 
         // RegExp instances are created with an own non-enumerable lastIndex
         // property before any user expando. Keep that intrinsic at the front
