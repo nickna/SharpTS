@@ -267,7 +267,7 @@ public class TypeInspector
         // `out` and `in` are both by-ref; distinguish for a faithful signature.
         IsOut: p.IsOut,
         IsIn: p.ParameterType.IsByRef && p.IsIn,
-        IsParams: p.IsDefined(typeof(ParamArrayAttribute), inherit: false)
+        IsParams: DotNetMethodResolver.IsParamArray(p)
     );
 
     private MethodMetadata ExtractMethod(MethodInfo method)

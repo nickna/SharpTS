@@ -54,7 +54,7 @@ internal static class DotNetGenericMethodInference
 
         var parameters = DotNetMethodResolver.GetInputParameters(method.GetParameters());
         bool hasParams = parameters.Length > 0 &&
-                         parameters[^1].IsDefined(typeof(ParamArrayAttribute), false);
+                         DotNetMethodResolver.IsParamArray(parameters[^1]);
         int fixedCount = hasParams ? parameters.Length - 1 : parameters.Length;
         if ((!hasParams && argumentTypes.Count > parameters.Length) ||
             (hasParams && argumentTypes.Count < fixedCount))
