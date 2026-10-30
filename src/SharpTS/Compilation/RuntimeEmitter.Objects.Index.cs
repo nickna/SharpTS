@@ -88,8 +88,6 @@ public partial class RuntimeEmitter
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
-        EmittedJsonRuntime Json,
-        EmittedMathRuntime Math,
         EmittedObjectStateRuntime ObjectState,
         EmittedPromiseRuntime? Promise,
         EmittedStringCoercionRuntime StringCoercion,
@@ -104,8 +102,6 @@ public partial class RuntimeEmitter
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
-        EmittedJsonRuntime Json,
-        EmittedMathRuntime Math,
         EmittedObjectStateRuntime ObjectState,
         EmittedPromiseRuntime? Promise,
         EmittedStringCoercionRuntime StringCoercion,
@@ -120,8 +116,6 @@ public partial class RuntimeEmitter
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
-        EmittedJsonRuntime Json,
-        EmittedMathRuntime Math,
         EmittedObjectStateRuntime ObjectState,
         EmittedPromiseRuntime? Promise,
         EmittedStringCoercionRuntime StringCoercion,
@@ -2356,8 +2350,6 @@ public partial class RuntimeEmitter
                 inputs.ArrayStorage,
                 inputs.DescriptorStorage,
                 inputs.Errors,
-                inputs.Json,
-                inputs.Math,
                 inputs.ObjectState,
                 inputs.Promise,
                 inputs.StringCoercion,
@@ -2373,12 +2365,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits DeleteIndex(object obj, object key) -> bool (non-strict) or
     /// DeleteIndexStrict(object obj, object key, bool strictMode) -> bool.
-    /// Handles both symbol keys and string keys. On a frozen/sealed dictionary
-    /// receiver the non-strict variant returns false; the strict variant throws
-    /// a TypeError when strictMode is set, else returns false. Callable
-    /// deletion likewise applies strictness to the ordinary deletion result.
-    /// Other branches ($Array, symbol keys, System.Type, PDS
-    /// configurability, Math/JSON singletons) are identical in both variants.
+    /// Handles symbol and string keys. Ordinary records share the complete
+    /// named-property deletion path; existing non-configurable properties
+    /// return false or throw TypeError according to strictMode, while absent
+    /// properties succeed regardless of the receiver's integrity level.
     /// </summary>
     private void EmitDeleteIndexCore(
         TypeBuilder typeBuilder,
@@ -2416,8 +2406,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
         var dictLabel = il.DefineLabel();
-        var dictStringKeyLabel = il.DefineLabel();
-        var dictNumericKeyLabel = il.DefineLabel();
         var symbolKeyLabel = il.DefineLabel();
         var trueLabel = il.DefineLabel();
 
@@ -2816,127 +2804,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
+        // The complete named-property path owns effective configurability,
+        // absent sealed keys and removal bookkeeping for ordinary records and
+        // Math/JSON singletons. ToPropertyKey above has already produced a string.
         il.MarkLabel(dictLabel);
-        // Check if frozen
-        var valueLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
-        var notFrozenLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notFrozenLabel);
-        // Frozen - fail (strict throws / sloppy returns false)
-        EmitDeleteIndexFail("Cannot delete property of a frozen object");
-
-        // Check if sealed
-        il.MarkLabel(notFrozenLabel);
-        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.SealedObjects);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
-        var notSealedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notSealedLabel);
-        // Sealed - fail (strict throws / sloppy returns false)
-        EmitDeleteIndexFail("Cannot delete property of a sealed object");
-
-        // Coerce key to string, then PDS-check before dict.Remove. Bracket-
-        // access delete on RegExp.prototype["dotAll"] (or similar PDS-installed
-        // accessor) needs the same configurability check + PDS+dict cleanup
-        // as `delete obj.name` (DeleteProperty); without this the dict-only
-        // Remove returns false and the PDS entry survives. ECMA-262 §10.1.10.
-        il.MarkLabel(notSealedLabel);
-        var didxKeyStrLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brtrue, dictStringKeyLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brtrue, dictNumericKeyLabel);
-        il.Emit(OpCodes.Br, trueLabel);
-
-        il.MarkLabel(dictStringKeyLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Stloc, didxKeyStrLocal);
-        var didxAfterKeyLabel = il.DefineLabel();
-        il.Emit(OpCodes.Br, didxAfterKeyLabel);
-
-        il.MarkLabel(dictNumericKeyLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.Emit(OpCodes.Stloc, didxKeyStrLocal);
-
-        il.MarkLabel(didxAfterKeyLabel);
-        // PDS lookup for configurability + PDS cleanup.
-        var didxDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, didxKeyStrLocal);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, didxDescLocal);
-        var didxNoPdsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, didxDescLocal);
-        il.Emit(OpCodes.Brfalse, didxNoPdsLabel);
-        il.Emit(OpCodes.Ldloc, didxDescLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
-        var didxConfigurableLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, didxConfigurableLabel);
-        // Non-configurable PDS descriptor — return false without removing.
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(didxConfigurableLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, didxKeyStrLocal);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
-        il.Emit(OpCodes.Pop);
-        il.MarkLabel(didxNoPdsLabel);
-
-        // Always also remove from the dict (data entry without PDS).
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Ldloc, didxKeyStrLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
-        il.Emit(OpCodes.Pop);
-        // Math singleton: reject delete on non-configurable spec constants
-        // (E/LN10/.../SQRT2 per ECMA-262 §21.3.1 — C:F).
-        var didxNotMathConstLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, inputs.Math.SingletonField);
-        il.Emit(OpCodes.Bne_Un, didxNotMathConstLabel);
-        var didxFalseRetLabel = il.DefineLabel();
-        void DidxRejectIfMathConst(string n)
+        if (strict)
         {
-            il.Emit(OpCodes.Ldloc, didxKeyStrLocal);
-            il.Emit(OpCodes.Ldstr, n);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            il.Emit(OpCodes.Brtrue, didxFalseRetLabel);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, objectDeletion.PropertyStrict);
         }
-        DidxRejectIfMathConst("E"); DidxRejectIfMathConst("LN10"); DidxRejectIfMathConst("LN2");
-        DidxRejectIfMathConst("LOG10E"); DidxRejectIfMathConst("LOG2E"); DidxRejectIfMathConst("PI");
-        DidxRejectIfMathConst("SQRT1_2"); DidxRejectIfMathConst("SQRT2");
-        il.MarkLabel(didxNotMathConstLabel);
-
-        // Math/JSON singleton: also mark the deletion in the per-receiver
-        // tracker so HasOwnPropertyHelper's synth-name check stops reporting
-        // the property as own (the dicts are empty; the static names are
-        // what makes them "own").
-        var didxMarkDelLabel = il.DefineLabel();
-        var didxAfterMarkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, inputs.Math.SingletonField);
-        il.Emit(OpCodes.Beq, didxMarkDelLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, inputs.Json.SingletonField);
-        il.Emit(OpCodes.Beq, didxMarkDelLabel);
-        il.Emit(OpCodes.Br, didxAfterMarkLabel);
-        il.MarkLabel(didxMarkDelLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, didxKeyStrLocal);
-        il.Emit(OpCodes.Call, inputs.ObjectState.MarkBuiltinDeleted);
-        il.MarkLabel(didxAfterMarkLabel);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(didxFalseRetLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
+        else
+        {
+            il.Emit(OpCodes.Call, objectDeletion.Property);
+        }
         il.Emit(OpCodes.Ret);
 
         // Return true (default)
@@ -2957,8 +2840,6 @@ public partial class RuntimeEmitter
                 inputs.ArrayStorage,
                 inputs.DescriptorStorage,
                 inputs.Errors,
-                inputs.Json,
-                inputs.Math,
                 inputs.ObjectState,
                 inputs.Promise,
                 inputs.StringCoercion,

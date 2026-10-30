@@ -1124,7 +1124,7 @@ public partial class Interpreter
             BoundFunction bound => bound.DeleteProperty(name, strictMode),
             SharpTSInstance tsInst => tsInst.DeleteFieldStrict(name, strictMode),
             SharpTSPromise promise => promise.DeletePropertyStrict(name, strictMode),
-            SharpTSMath math => math.DeleteExtra(name),
+            SharpTSMath math => DeleteMathProperty(math, name, strictMode),
             SharpTSJSON json => json.DeleteExtra(name),
             SharpTSDate date => date.DeleteExtra(name),
             SharpTSRegExp regex => regex.DeleteProperty(name),
@@ -1237,6 +1237,14 @@ public partial class Interpreter
             SharpTSFunctionPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             _ => true
         };
+    }
+
+    private static bool DeleteMathProperty(SharpTSMath math, string name, bool strictMode)
+    {
+        bool deleted = math.DeleteExtra(name);
+        if (!deleted && strictMode)
+            throw StrictModeErrors.TypeError($"Cannot delete non-configurable property '{name}' of Math");
+        return deleted;
     }
 
     private static bool CompleteFunctionPropertyDeletion(bool deleted, string name, bool strictMode)
