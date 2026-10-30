@@ -204,13 +204,15 @@ public class VariableResolver : AstVisitorBase
         {
             Declare(param.Name.Lexeme);
             Define(param.Name.Lexeme);
+            if (initializers?.TryGetValue(param.Name.Lexeme, out var initializer) == true)
+                PredeclareLexicalBindings([initializer]);
+        }
+        foreach (var param in parameters)
+        {
             if (param.DefaultValue != null)
                 Visit(param.DefaultValue);
             if (initializers?.TryGetValue(param.Name.Lexeme, out var initializer) == true)
-            {
-                PredeclareLexicalBindings([initializer]);
                 Visit(initializer);
-            }
         }
     }
 

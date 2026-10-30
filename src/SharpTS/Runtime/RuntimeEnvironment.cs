@@ -120,9 +120,9 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
         => DefineValue(name, value);
 
     /// <summary>Reserves a missing local lexical binding until its declaration executes.</summary>
-    internal void ReserveLexical(string name)
+    internal void ReserveLexical(string name, bool replaceExisting = false)
     {
-        if (HasLocalBinding(name)) return;
+        if (!replaceExisting && HasLocalBinding(name)) return;
         Values[name] = RuntimeValue.Undefined;
         (_uninitializedLexicalNames ??= new(StringComparer.Ordinal)).Add(name);
     }
