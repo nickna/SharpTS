@@ -133,7 +133,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
         // The builder can replace its initial Task while boxing at the first await.
         // Queued thenable jobs share this cell, published after that boxing below.
-        var rootType = Types.MakeGenericType(Types.StrongBoxOpen, Types.TaskOfObject);
+        var rootType = EmitGenerics.MakeGenericType(Types.StrongBoxOpen, Types.TaskOfObject);
         var publicRoot = IL.DeclareLocal(rootType);
         IL.Emit(OpCodes.Newobj, Types.GetConstructor(rootType, Type.EmptyTypes));
         IL.Emit(OpCodes.Stloc, publicRoot);
