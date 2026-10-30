@@ -572,6 +572,8 @@ public static partial class ObjectBuiltIns
     private static RuntimeValue FreezeV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         var arg = args[0].ToObject();
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+            intrinsicProperties.Freeze();
         switch (arg)
         {
             case ISharpTSOwnPropertyObject carrier:
@@ -640,6 +642,8 @@ public static partial class ObjectBuiltIns
     private static RuntimeValue SealV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         var arg = args[0].ToObject();
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+            intrinsicProperties.Seal();
         switch (arg)
         {
             case ISharpTSOwnPropertyObject carrier:
@@ -708,6 +712,8 @@ public static partial class ObjectBuiltIns
     private static RuntimeValue IsFrozenV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         var arg = args[0].ToObject();
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+            return RuntimeValue.FromBoolean(intrinsicProperties.IsFrozen);
         return RuntimeValue.FromBoolean(arg switch
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.IsFrozen,
@@ -727,6 +733,8 @@ public static partial class ObjectBuiltIns
     private static RuntimeValue IsSealedV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         var arg = args[0].ToObject();
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+            return RuntimeValue.FromBoolean(intrinsicProperties.IsSealed);
         return RuntimeValue.FromBoolean(arg switch
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.IsSealed,
@@ -793,6 +801,12 @@ public static partial class ObjectBuiltIns
         // this path against RegExp.prototype[Symbol.split].
         if (args[1] is SharpTSSymbol symKey)
         {
+            if (interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+            {
+                if (!intrinsicProperties.DefineProperty(symKey, descriptor))
+                    throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
+                return target;
+            }
             bool descriptorHasValue = descriptor.HasValue;
             bool isAccessor = descriptor.Get != null || descriptor.Set != null;
             switch (target)
@@ -1432,6 +1446,10 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? GetOwnPropertyDescriptorBySymbol(object target, SharpTSSymbol key, Interpreter? interpreter = null)
     {
+        if (interpreter != null
+            && interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+            return (object?)intrinsicProperties.GetOwnPropertyDescriptor(key)?.ToObject()
+                ?? SharpTSUndefined.Instance;
         if (FunctionObjectProperties.TryGetStorage(target, interpreter, out var properties))
             return properties.GetOwnPropertyDescriptor(key) is { } ownDescriptor
                 ? ownDescriptor.ToObject() : SharpTSUndefined.Instance;
@@ -1758,6 +1776,9 @@ public static partial class ObjectBuiltIns
             Dictionary<string, object?> dict => dict.Keys.Cast<object?>().ToList(),
             _ => []
         };
+
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+            keys.AddRange(intrinsicProperties.GetSymbolPropertyNames());
 
         var result = new SharpTSObject([]);
 
@@ -2141,6 +2162,8 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? PreventExtensions(Interpreter interpreter, List<object?> args)
     {
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(args[0], out var intrinsicProperties))
+            intrinsicProperties.PreventExtensions();
         if (args[0] is SharpTSProxy proxy)
         {
             if (!proxy.TrapPreventExtensions(interpreter))
@@ -2204,6 +2227,8 @@ public static partial class ObjectBuiltIns
 
     internal static bool PreventExtensionsTarget(Interpreter interpreter, object target)
     {
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+            intrinsicProperties.PreventExtensions();
         switch (target)
         {
             case ISharpTSOwnPropertyObject carrier:
@@ -2260,6 +2285,8 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? IsExtensibleMethod(Interpreter interpreter, List<object?> args)
     {
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(args[0], out var intrinsicProperties))
+            return intrinsicProperties.IsExtensible;
         return args[0] switch
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.IsExtensible,
@@ -2289,6 +2316,9 @@ public static partial class ObjectBuiltIns
         if (args[0] is null or SharpTSUndefined)
             throw new ThrowException(new SharpTSTypeError(
                 "Object.getOwnPropertySymbols called on null or undefined"));
+
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(args[0], out var intrinsicProperties))
+            return new SharpTSArray(intrinsicProperties.GetSymbolPropertyNames().Cast<object?>().ToList());
 
         List<object?> symbols = FunctionObjectProperties.TryGetStorage(args[0], interpreter, out var properties)
             ? properties.GetSymbolPropertyNames().Cast<object?>().ToList()
@@ -2683,6 +2713,8 @@ public static partial class ObjectBuiltIns
     private static RuntimeValue IsExtensibleMethodV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
     {
         var arg = args[0].ToObject();
+        if (interp.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+            return RuntimeValue.FromBoolean(intrinsicProperties.IsExtensible);
         if (arg is ISharpTSOwnPropertyObject carrier)
             return RuntimeValue.FromBoolean(carrier.OwnProperties.IsExtensible);
         if (FunctionObjectProperties.TryGetStorage(arg, interp, out var properties))

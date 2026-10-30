@@ -360,6 +360,8 @@ public static class ReflectBuiltIns
             "isExtensible" => BuiltInMethod.CreateV2("isExtensible", 1, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.isExtensible requires a target object.");
+                if (interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+                    return RuntimeValue.FromBoolean(intrinsicProperties.IsExtensible);
                 if (target is ISharpTSOwnPropertyObject carrier)
                     return RuntimeValue.FromBoolean(carrier.OwnProperties.IsExtensible);
                 if (FunctionObjectProperties.TryGetStorage(target, interpreter, out var properties))
@@ -380,6 +382,8 @@ public static class ReflectBuiltIns
             "preventExtensions" => BuiltInMethod.CreateV2("preventExtensions", 1, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.preventExtensions requires a target object.");
+                if (interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+                    intrinsicProperties.PreventExtensions();
                 if (target is ISharpTSOwnPropertyObject carrier)
                 {
                     carrier.OwnProperties.PreventExtensions();
@@ -475,7 +479,7 @@ public static class ReflectBuiltIns
                         : RuntimeValue.FromBoxed(proxyDescriptor);
                 }
                 // Delegate to ObjectBuiltIns which handles all target types
-                var descriptor = ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(target, propertyKey);
+                var descriptor = ObjectBuiltIns.RuntimeGetOwnPropertyDescriptorInRealm(interpreter, target, propertyKey);
                 return descriptor is null
                     ? RuntimeValue.Undefined
                     : RuntimeValue.FromBoxed(descriptor);
@@ -489,6 +493,9 @@ public static class ReflectBuiltIns
                     throw new ThrowException(new SharpTSTypeError("Property description must be an object"));
                 var descriptorArg = args[2].ToObject()!;
                 var descriptor = ObjectBuiltIns.ToPropertyDescriptor(interpreter, descriptorArg);
+                if (key is SharpTSSymbol intrinsicSymbol
+                    && interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+                    return RuntimeValue.FromBoolean(intrinsicProperties.DefineProperty(intrinsicSymbol, descriptor));
                 if (target is ISharpTSOwnPropertyObject carrier)
                 {
                     return RuntimeValue.FromBoolean(key is SharpTSSymbol ownSymbol
@@ -635,6 +642,8 @@ public static class ReflectBuiltIns
                         keys.AddRange(PropertyDescriptorStore.GetSymbolKeys(dict).Select(s => (object?)s));
                         break;
                 }
+                if (interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+                    keys.AddRange(intrinsicProperties.GetSymbolPropertyNames());
                 return RuntimeValue.FromObject(new SharpTSArray(keys));
             }),
 
@@ -761,7 +770,7 @@ public static class ReflectBuiltIns
 
         object? existing = receiver is SharpTSProxy proxy
             ? proxy.TrapGetOwnPropertyDescriptor(key, interpreter)
-            : ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(receiver, key);
+            : ObjectBuiltIns.RuntimeGetOwnPropertyDescriptorInRealm(interpreter, receiver, key);
         bool hasExisting = existing is not (null or SharpTSUndefined);
         if (hasExisting)
         {

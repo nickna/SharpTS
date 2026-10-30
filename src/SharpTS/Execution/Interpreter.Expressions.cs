@@ -1644,6 +1644,16 @@ public partial class Interpreter
             ThrowCannotSetProperty(obj, index?.ToString() ?? "");
         }
 
+        if (TryGetPromiseConstructorSymbolProperties(obj, out _))
+        {
+            index = ToPropertyKey(index);
+            if (index is SharpTSSymbol intrinsicSymbol)
+            {
+                SetOwnPropertyObjectValue(obj!, intrinsicSymbol, value, strictMode);
+                return RuntimeValue.FromBoxed(value);
+            }
+        }
+
         // Proxy: intercept index assignment via set trap
         if (obj is SharpTSProxy proxy)
         {

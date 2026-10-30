@@ -1213,6 +1213,8 @@ public partial class Interpreter
 
     internal bool DeleteSymbolProperty(object? target, SharpTSSymbol symbol, bool strictMode)
     {
+        if (TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+            return intrinsicProperties.DeleteBySymbolStrict(symbol, strictMode);
         if (target is SharpTSProxy proxy)
         {
             bool deleted = proxy.TrapDeleteProperty(symbol, this);

@@ -204,6 +204,9 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         // symbol-keyed dispatch instead of being stringified.
         if (args[0] is SharpTSSymbol sym)
         {
+            if (interpreter != null
+                && interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+                return intrinsicProperties.GetOwnPropertyDescriptor(sym) is not null;
             if (target is ISharpTSOwnPropertyObject ownPropertyObject)
                 return ownPropertyObject.OwnProperties.HasSymbolProperty(sym);
             if (FunctionObjectProperties.TryGetStorage(target, interpreter, out var properties))
@@ -441,6 +444,9 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         if (args.Count == 0) return false;
         if (args[0] is SharpTSSymbol symbol)
         {
+            if (interpreter != null
+                && interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+                return intrinsicProperties.GetOwnPropertyDescriptor(symbol) is { Enumerable: true };
             if (target is ISharpTSOwnPropertyObject ownPropertyObject)
                 return ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(symbol) is { Enumerable: true };
             if (FunctionObjectProperties.TryGetStorage(target, interpreter, out var properties))

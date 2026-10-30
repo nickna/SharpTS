@@ -747,6 +747,13 @@ public partial class Interpreter
         {
             if (current is SharpTSProxy proxy)
                 return proxy.TrapGet(symbol, this, receiver);
+            if (TryGetPromiseConstructorSymbolProperties(current, out var intrinsicProperties))
+            {
+                if (TryReadDescriptor(intrinsicProperties.GetOwnPropertyDescriptor(symbol), receiver, out var value))
+                    return value;
+                current = ObjectBuiltIns.PrototypeOf(this, current);
+                continue;
+            }
             if (current is ISharpTSGeneratorFunctionValue generatorFunction)
             {
                 if (TryReadDescriptor(generatorFunction.FunctionProperties.GetProperties(this)
@@ -896,8 +903,6 @@ public partial class Interpreter
             {
                 if (TryReadDescriptor(klass.GetOwnStaticSymbolPropertyDescriptor(symbol), receiver, out var value))
                     return value;
-                if (ReferenceEquals(klass, SharpTSPromiseClass.PromiseBase) && symbol == SharpTSSymbol.Species)
-                    return receiver;
                 current = ObjectBuiltIns.PrototypeOf(this, klass);
                 continue;
             }
@@ -1071,6 +1076,12 @@ public partial class Interpreter
         {
             if (current is SharpTSProxy prototypeProxy)
                 return prototypeProxy.TrapHas(symbol, this);
+            if (TryGetPromiseConstructorSymbolProperties(current, out var intrinsicProperties))
+            {
+                if (intrinsicProperties.GetOwnPropertyDescriptor(symbol) is not null) return true;
+                current = ObjectBuiltIns.PrototypeOf(this, current);
+                continue;
+            }
             if (current is ISharpTSOwnPropertyObject ownPropertyObject)
             {
                 if (ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(symbol) is not null) return true;
@@ -1092,8 +1103,6 @@ public partial class Interpreter
             if (current is SharpTSClass klass)
             {
                 if (klass.GetOwnStaticSymbolPropertyDescriptor(symbol) is not null) return true;
-                if (ReferenceEquals(klass, SharpTSPromiseClass.PromiseBase) && symbol == SharpTSSymbol.Species)
-                    return true;
                 current = ObjectBuiltIns.PrototypeOf(this, klass);
                 continue;
             }
@@ -2387,7 +2396,7 @@ public partial class Interpreter
             // A Proxy requires its [[Set]] protocol rather than ordinary
             // descriptor probing, which would expose the wrong traps (#2221).
             if (current is SharpTSProxy) return null;
-            object? descriptor = ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(current, symbol);
+            object? descriptor = ObjectBuiltIns.RuntimeGetOwnPropertyDescriptorInRealm(this, current, symbol);
             if (descriptor is not (null or SharpTSUndefined))
                 return SharpTSPropertyDescriptor.FromAnyObject(descriptor);
             current = ObjectBuiltIns.PrototypeOf(this, current);
