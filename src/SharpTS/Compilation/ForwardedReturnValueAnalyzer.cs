@@ -47,6 +47,10 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
             analysis._visiting.Clear(); analysis._nativeVisiting.Clear();
             int expressions = analysis._rawExpressions.Count;
             changed = storage?.Propagate(analysis.PassesRawCall) == true;
+            if (storage?.HasMutableDateStaticProducer == true)
+                foreach (var call in storage.Calls)
+                    foreach (var expression in storage.EquivalentExpressions(call))
+                        _ = analysis.PassesRawCall(expression, RawCallStorageAnalysis.Evidence.Numeric);
             foreach (var expression in (IEnumerable<Expr>?)storage?.Returns ?? inventory.Returns)
                 _ = analysis.PassesRawCall(expression);
             changed |= expressions != analysis._rawExpressions.Count;

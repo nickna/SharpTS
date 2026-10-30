@@ -170,6 +170,8 @@ public sealed class RuntimeFeatureSet
     // calls observable, so the direct DateEmitter fast path is unsafe. The historical
     // property name is retained because it is part of the emitted-runtime feature API.
     public bool UsesDatePrototypeMutation { get; set; } = true;
+    // Static Date calls require live lookup after constructor mutation or escape.
+    public bool UsesDateConstructorMutation { get; set; } = true;
     // Promise method/constructor/species mutation makes direct then lowering
     // observable through ordinary property lookup. Such programs must retain
     // value dispatch for then/catch/finally calls.

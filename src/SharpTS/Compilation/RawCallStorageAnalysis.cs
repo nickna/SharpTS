@@ -16,6 +16,7 @@ internal sealed partial class RawCallStorageAnalysis
     private readonly TypeMap _map;
     private readonly List<Slot> _slots = [];
     private readonly List<Flow> _flows = [];
+    private readonly List<Expr.Call> _dateStaticCalls = [];
     private readonly HashSet<BindingSymbol> _rawBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _rawCallBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<object> _rawSlots = new(ReferenceEqualityComparer.Instance);
@@ -29,6 +30,8 @@ internal sealed partial class RawCallStorageAnalysis
     internal IReadOnlyList<Stmt> Statements { get; }
     internal IReadOnlyList<IReadOnlyList<Stmt>> Modules { get; }
     internal HashSet<Expr> Returns { get; } = new(ReferenceEqualityComparer.Instance);
+    internal HashSet<Expr.Call> Calls { get; } = new(ReferenceEqualityComparer.Instance);
+    internal bool HasMutableDateStaticProducer { get; private set; }
     internal HashSet<Stmt.Function> Functions { get; } = new(ReferenceEqualityComparer.Instance);
 
     private RawCallStorageAnalysis(IEnumerable<Stmt> statements, TypeMap map,
@@ -57,8 +60,21 @@ internal sealed partial class RawCallStorageAnalysis
     internal static RawCallStorageAnalysis Capture(IEnumerable<Stmt> statements, TypeMap map,
         IEnumerable<IEnumerable<Stmt>>? modules = null) => new(statements, map, modules);
 
-    internal void Analyze(List<Stmt> rewritten, RuntimeFeatureSet? features) =>
+    internal void Analyze(List<Stmt> rewritten, RuntimeFeatureSet? features)
+    {
+        // A replaced Date static can return any guest value despite its checked
+        // number result. Keep its actual call and lifted equivalents boxed,
+        // including values forwarded through locals, returns and arguments.
+        if (features?.UsesDateConstructorMutation != false && _dateStaticCalls.Count > 0)
+        {
+            _hasNumericProducer = true;
+            HasMutableDateStaticProducer = true;
+            foreach (var call in _dateStaticCalls)
+                foreach (var expression in EquivalentExpressions(call))
+                    _map.MarkRawNumericResult(expression);
+        }
         ForwardedReturnValueAnalyzer.Analyze(rewritten, _map, features, modules: null, this);
+    }
 
     /// <summary>Only the lifter's equivalent with-clones carry expression proof identity.</summary>
     internal void RecordRewrite(object source, object target)
@@ -231,6 +247,13 @@ internal sealed partial class RawCallStorageAnalysis
         private bool _emittedSourceBody = true;
         protected override void VisitCall(Expr.Call call)
         {
+            if (collect && _emittedSourceBody) Analysis.Calls.Add(call);
+            if (collect && _emittedSourceBody && call.Callee is Expr.Get
+                {
+                    Object: Expr.Variable { Name.Lexeme: "Date" },
+                    Name.Lexeme: "now" or "UTC" or "parse"
+                })
+                Analysis._dateStaticCalls.Add(call);
             if (collect && _emittedSourceBody) Analysis._argumentSites.Add(new(call.Callee, Array.AsReadOnly(call.Arguments.ToArray())));
             base.VisitCall(call);
         }
