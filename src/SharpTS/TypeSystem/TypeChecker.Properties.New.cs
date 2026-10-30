@@ -448,9 +448,11 @@ public partial class TypeChecker
                     tsCode: "TS2583");
             }
 
-            // With lib declarations loaded, use their construct signature and
-            // returned interface so target/lib-specific members stay exact.
-            if (_hasDefaultLibraries && _environment.Get(simpleClassName!) is not null)
+            // A selected value binding can be a local class, parameter or import
+            // even in compatibility mode. Its own construct signature also keeps
+            // loaded library members exact when this is the global constructor.
+            if (_environment.GetValueBinding(simpleClassName!) is not null ||
+                (_hasDefaultLibraries && _environment.Get(simpleClassName!) is not null))
                 goto CheckDeclaredConstructor;
 
             if (newExpr.Arguments.Count != 1)
