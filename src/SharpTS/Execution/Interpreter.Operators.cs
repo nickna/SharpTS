@@ -1155,7 +1155,8 @@ public partial class Interpreter
                 when name == "prototype" =>
                     DeleteNonConfigurableClassPrototype(name, strictMode),
             SharpTSBuiltInConstructor constructor =>
-                DeleteBuiltInConstructorProperty(constructor, name),
+                CompleteFunctionPropertyDeletion(
+                    DeleteBuiltInConstructorProperty(constructor, name), name, strictMode),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(name),
             SharpTSFunction function => function.GetOwnPropertyDescriptor(name) is null
                 || CompleteFunctionPropertyDeletion(function.DeleteProperty(name), name, strictMode),
