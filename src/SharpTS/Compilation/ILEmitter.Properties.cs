@@ -2539,7 +2539,8 @@ public partial class ILEmitter
                 classType, getterBuilder, _ctx.EmittingTypeBuilder, out var castType, out var getterTarget))
             return false;
 
-        if (HasNominalClassCarrier(receiver))
+        bool mayObservePrototype = _ctx.RuntimeFeatures?.UsesClassPrototypeMutation != false;
+        if (!mayObservePrototype && HasNominalClassCarrier(receiver))
         {
             EmitExpression(receiver);
             EnsureBoxed();
@@ -2560,9 +2561,19 @@ public partial class ILEmitter
         var completed = IL.DefineLabel();
         var getterReturnType = getterBuilder.ReturnType;
         var result = IL.DeclareLocal(_ctx.Types.Object);
+        var guestProperty = IL.DefineLabel();
+        if (mayObservePrototype)
+        {
+            // A class prototype shares its CLR instance carrier, but its public
+            // properties belong to guest storage rather than instance fields.
+            IL.Emit(OpCodes.Ldloc, savedReceiver);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ClassPrototypes.IsPrototype);
+            IL.Emit(OpCodes.Brtrue, guestProperty);
+        }
         IL.Emit(OpCodes.Ldloc, savedReceiver);
         IL.Emit(OpCodes.Isinst, castType);
         IL.Emit(OpCodes.Brtrue, nominal);
+        IL.MarkLabel(guestProperty);
         EmitThrowIfReceiverUndefined(savedReceiver, propertyName);
         IL.Emit(OpCodes.Ldloc, savedReceiver);
         IL.Emit(OpCodes.Ldstr, propertyName);
