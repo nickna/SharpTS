@@ -2106,7 +2106,7 @@ public partial class ILCompiler
             image = tempStream.ToArray();
         }
 
-        if (_nativeAotProjectOutput) NativeGuestAssemblyClosure.ValidateImage(image);
+        if (_nativeAotProjectOutput) NativeGuestAssemblyClosure.ValidateImage(image, _nativeManagedReferences);
 
         if (!EmitDebugSymbols)
         {

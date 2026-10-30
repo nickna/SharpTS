@@ -229,16 +229,11 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
         }
         else
         {
-            if (compile.CompileOptions.NativePublish is not null)
-                NativeAotCompatibilityReport.Analyze(SharpTSRuntimeRequirements.None, [],
-                    compile.CompileOptions.References.Count > 0).ThrowIfIncompatible();
             using var nativeWorkspace = compile.CompileOptions.NativePublish is { } nativePublish
                 ? new NativePublishWorkspace(nativePublish) : null;
             if (compile.CompileOptions.NativeProject is { } nativeProject)
             {
                 NativeAotProjectExporter.ValidateDestination(nativeProject);
-                NativeAotCompatibilityReport.Analyze(SharpTSRuntimeRequirements.None, [],
-                    compile.CompileOptions.References.Count > 0).ThrowIfIncompatible();
             }
             var outputOptions = new OutputOptions(
                 compile.CompileOptions.MsBuildErrors,
@@ -575,6 +570,12 @@ static void PrintResolvedConfig(GlobalOptions options, StrictnessOptions cliStri
 /// before any module loading or type checking, so every resolution seam sees the types.
 /// Reference errors are user-facing configuration problems: print and exit.
 /// </summary>
+static Type? ResolveNativeFrameworkType(string name)
+{
+    try { return TypeProvider.Runtime.Resolve(name); }
+    catch (CompileException) { return null; }
+}
+
 static ReferenceSet LoadDotNetReferences(
     string startDirectory,
     IReadOnlyList<string> cliReferences,
@@ -734,15 +735,18 @@ static int CompileFile(string inputPath, string outputPath, bool preserveConstEn
     {
         string absolutePath = Path.GetFullPath(inputPath);
 
-        // Third-party assembly references (sharpts.json + -r) load into this process
-        // before module resolution: dotnet: imports resolve at module-load time, and
-        // the returned set drives the post-Save co-location of referenced DLLs.
-        var externalRefs = MeasurePhase(timings,
+        // Native output captures a complete explicit implementation graph before
+        // module/type resolution. Its metadata scope never loads workspace code.
+        var nativeReferences = outputOptions.NativeProject is null ? null :
+            NativeManagedReferenceClosure.Capture(Path.GetDirectoryName(absolutePath) ?? ".", references,
+                outputOptions.NativeProject.AssemblyName, sdkPath);
+        using var nativeLoader = nativeReferences is { IsEmpty: false } ? nativeReferences.CreateLoader() : null;
+        using var nativeScope = nativeLoader is null ? null : DotNetTypeRegistry.UseMetadataResolver(name =>
+            nativeLoader.TryResolve(name) ?? ResolveNativeFrameworkType(name));
+        var externalRefs = nativeReferences?.References ?? MeasurePhase(timings,
             ExecutionPhaseTiming.LoadReferences,
-            () => LoadDotNetReferences(
-                Path.GetDirectoryName(absolutePath) ?? ".", references, propagateErrors: true));
-        if (outputOptions.NativeProject is not null)
-            NativeAotCompatibilityReport.Analyze(SharpTSRuntimeRequirements.None, [], !externalRefs.IsEmpty).ThrowIfIncompatible();
+            () => LoadDotNetReferences(Path.GetDirectoryName(absolutePath) ?? ".", references, propagateErrors: true));
+        outputOptions = outputOptions with { NativeReferences = nativeReferences, NativeReferenceLoader = nativeLoader };
 
         // Load package.json if packaging is enabled
         PackageJson? packageJson = null;
@@ -1105,18 +1109,18 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         ILCompiler compiler = MeasurePhase(timings,
             ExecutionPhaseTiming.InitializeCompiler,
             () => new ILCompiler(assemblyName, preserveConstEnums, useReferenceAssemblies,
-                sdkPath, metadata, references, target));
+                sdkPath, metadata, outputOptions.NativeReferences is null ? references : null, target));
         compiler.SetTimingCollector(timings);
         compiler.SetDecoratorMode(decoratorMode);
         compiler.EmitDebugSymbols = outputOptions.EmitDebugSymbols;
         if (hosted) compiler.EnableHostedOutput();
-        if (outputOptions.NativeProject is not null) compiler.EnableNativeAotProjectOutput();
+        if (outputOptions.NativeProject is not null) compiler.EnableNativeAotProjectOutput(outputOptions.NativeReferences, outputOptions.NativeReferenceLoader);
         compileBody(compiler);
         PrintCompilerWarnings(compiler);
         if (outputOptions.NativeProject is { } nativeProject)
         {
             var compatibility = NativeAotCompatibilityReport.Analyze(compiler.RequiredSharpTSRuntimeRequirements,
-                compiler.RequiredSharpTSRuntimeReasons, !externalRefs.IsEmpty);
+                compiler.RequiredSharpTSRuntimeReasons, outputOptions.NativeReferences!);
             compatibility.ThrowIfIncompatible();
             // Serialize and validate the actual guest dependency closure before
             // claiming a project directory. Reuse these exact bytes for export.
@@ -1126,8 +1130,8 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
                 File.WriteAllBytes(guest, nativeArtifacts.Assembly);
                 if (nativeArtifacts.Pdb is not null)
                     File.WriteAllBytes(Path.ChangeExtension(guest, ".pdb"), nativeArtifacts.Pdb);
-                if (verifyIL) VerifyCompiledAssembly(guest, sdkPath, externalRefs);
-            });
+                if (verifyIL) VerifyCompiledAssembly(guest, sdkPath, outputOptions.NativeReferences!.ExportedReferences(nativeProject.OutputDirectory));
+            }, outputOptions.NativeReferences);
             if (!outputOptions.QuietMode)
                 Console.WriteLine($"Exported experimental native guest project to {Path.GetFullPath(nativeProject.OutputDirectory)}");
             return;
@@ -1867,5 +1871,6 @@ private sealed class CompilationAbortedException : Exception;
 
 record OutputOptions(bool MsBuildErrors, bool QuietMode, bool Standalone = false, bool EmitDebugSymbols = false,
     NativeAotProjectOptions? NativeProject = null,
-    SharpTS.Cli.AuthenticodeSigningOptions? Signing = null);
+    SharpTS.Cli.AuthenticodeSigningOptions? Signing = null,
+    NativeManagedReferenceClosure? NativeReferences = null, AssemblyReferenceLoader? NativeReferenceLoader = null);
 }

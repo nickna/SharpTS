@@ -32,6 +32,10 @@ public sealed record NativeAotCompatibilityReport(
         return new(requirements, features, hasExternalReferences, diagnostics.ToImmutable());
     }
 
+    internal static NativeAotCompatibilityReport Analyze(SharpTSRuntimeRequirements requirements,
+        IEnumerable<string> reasons, NativeManagedReferenceClosure closure) =>
+        Analyze(requirements, reasons, false) with { HasExternalReferences = !closure.IsEmpty };
+
     /// <summary>Stops emission with the first named profile diagnostic.</summary>
     public void ThrowIfIncompatible()
     {

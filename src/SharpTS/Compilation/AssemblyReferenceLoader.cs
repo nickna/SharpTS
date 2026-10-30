@@ -124,6 +124,10 @@ public sealed class AssemblyReferenceLoader : IDisposable
         private CapturedAssemblySet(Dictionary<string, byte[]> images, Dictionary<string, string> readErrors)
         { _images = images; _readErrors = readErrors; }
 
+        internal static CapturedAssemblySet FromImages(IEnumerable<KeyValuePair<string, byte[]>> images) =>
+            new(images.ToDictionary(pair => Path.GetFullPath(pair.Key), pair => (byte[])pair.Value.Clone(), StringComparer.OrdinalIgnoreCase),
+                new(StringComparer.OrdinalIgnoreCase));
+
         public static CapturedAssemblySet Capture(IEnumerable<string> paths)
         {
             var images = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);

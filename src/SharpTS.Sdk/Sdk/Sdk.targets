@@ -48,6 +48,9 @@
   <UsingTask TaskName="SharpTS.Sdk.Tasks.ReadTsConfigTask"
              AssemblyFile="$(SharpTSTasksAssembly)" />
 
+  <UsingTask TaskName="SharpTS.Sdk.Tasks.NativeReferenceClosureTask"
+             AssemblyFile="$(SharpTSTasksAssembly)" />
+
   <Target Name="_SharpTSValidateTarget" BeforeTargets="PrepareForBuild;CollectPackageReferences">
     <Error Code="SHARPTSSDK001" Condition="'$(SharpTSTarget)' != 'dll' and '$(SharpTSTarget)' != 'native-aot'"
            Text="SharpTSTarget must be dll or native-aot; received '$(SharpTSTarget)'." />
@@ -61,12 +64,13 @@
   <Target Name="_SharpTSValidateNativeReferences" BeforeTargets="CollectPackageReferences"
           Condition="'$(SharpTSTarget)' == 'native-aot'">
     <ItemGroup>
-      <_SharpTSUnsupportedReference Include="@(Reference)" Condition="'%(Reference.IsImplicitlyDefined)' != 'true' and '%(Reference.SharpTSNativeGuest)' != 'true'" />
+      <_SharpTSExplicitReference Include="@(Reference)" Condition="'%(Reference.IsImplicitlyDefined)' != 'true' and '%(Reference.SharpTSNativeGuest)' != 'true'" />
+      <_SharpTSUnsupportedReference Include="@(_SharpTSExplicitReference)" Condition="'%(_SharpTSExplicitReference.HintPath)' == '' or !Exists('%(_SharpTSExplicitReference.HintPath)')" />
       <_SharpTSUnsupportedProjectReference Include="@(ProjectReference)" />
       <_SharpTSUnsupportedPackageReference Include="@(PackageReference)" Condition="'%(PackageReference.IsImplicitlyDefined)' != 'true'" />
     </ItemGroup>
     <Error Code="SHARPTS402" Condition="'@(_SharpTSUnsupportedReference)' != ''"
-           Text="The native guest profile does not support Reference: @(_SharpTSUnsupportedReference, ', '). Use managed DLL output for external references." />
+           Text="The native guest profile requires an explicit executable DLL HintPath for Reference: @(_SharpTSUnsupportedReference, ', '). Supply the complete managed implementation DLL graph or use managed output." />
     <Error Code="SHARPTS402" Condition="'@(_SharpTSUnsupportedProjectReference)' != ''"
            Text="The native guest profile does not support ProjectReference: @(_SharpTSUnsupportedProjectReference, ', '). Use managed DLL output for external references." />
     <Error Code="SHARPTS402" Condition="'@(_SharpTSUnsupportedPackageReference)' != ''"
@@ -202,6 +206,7 @@
       <!-- Each invocation owns a fresh attempt. Previous inspectable projects
            are retained; no directory is emptied or recursively removed. -->
       <_SharpTSNativeProjectDirectory>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'sharpts-native', '$([System.Guid]::NewGuid().ToString(&quot;N&quot;))'))</_SharpTSNativeProjectDirectory>
+      <_SharpTSArgs>$(_SharpTSArgs) @(_SharpTSExplicitReference->'-r &quot;%(HintPath)&quot;', ' ')</_SharpTSArgs>
       <_SharpTSArgs>$(_SharpTSArgs) --emit-native-project &quot;$(_SharpTSNativeProjectDirectory)&quot; --runtime &quot;$(RuntimeIdentifier)&quot;</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(DebugSymbols)' == 'true' and '$(DebugType)' != 'none'">$(_SharpTSArgs) --debug</_SharpTSArgs>
     </PropertyGroup>
@@ -209,7 +214,12 @@
     <Exec Command="dotnet &quot;$(SharpTSCompilerExe)&quot; $(_SharpTSArgs)"
           WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true"
           StandardOutputImportance="normal" StandardErrorImportance="high" />
+    <NativeReferenceClosureTask ProjectDirectory="$(_SharpTSNativeProjectDirectory)">
+      <Output TaskParameter="CapturedReferences" ItemName="_SharpTSCapturedNativeReference" />
+    </NativeReferenceClosureTask>
     <ItemGroup>
+      <Reference Remove="@(_SharpTSExplicitReference)" />
+      <Reference Include="@(_SharpTSCapturedNativeReference)" />
       <Compile Include="$(_SharpTSNativeProjectDirectory)/Program.cs" />
       <Reference Include="Guest">
         <HintPath>$(_SharpTSNativeProjectDirectory)/guest/Guest.dll</HintPath>
@@ -231,6 +241,11 @@
     </ItemGroup>
     <Error Code="SHARPTSSDK001" Condition="'@(_SharpTSNativeConflictingReference)' != ''"
            Text="AssemblyName '$(AssemblyName)' shadows a resolved native guest reference: @(_SharpTSNativeConflictingReference->'%(Filename)', ', '). Choose a different wrapper/output AssemblyName." />
+  </Target>
+
+  <Target Name="_SharpTSValidateNativeResolvedReferences" AfterTargets="ResolveReferences" BeforeTargets="CoreCompile"
+          Condition="'$(SharpTSTarget)' == 'native-aot' and '$(DesignTimeBuild)' != 'true'">
+    <NativeReferenceClosureTask ProjectDirectory="$(_SharpTSNativeProjectDirectory)" ValidateResolution="true" ResolvedReferences="@(ReferencePath)" />
   </Target>
 
   <!-- Clean target integration -->

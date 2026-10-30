@@ -6,6 +6,7 @@ namespace SharpTS.Compilation;
 public partial class ILCompiler
 {
     private bool _nativeAotProjectOutput;
+    private NativeManagedReferenceClosure? _nativeManagedReferences;
     private NativePropertyLookupCatalog? _nativePropertyLookup;
     private NativeMethodLookupCatalog? _nativeMethodLookup;
     private NativeHasInMemberLookup? _nativeHasInMembers;
@@ -53,11 +54,17 @@ public partial class ILCompiler
             _nativeClassInitialization ??= new(_programType, _types, _classes.GenericParameters);
 
     /// <summary>Enables the direct, C#-nameable guest entry used by native publish projects.</summary>
-    internal void EnableNativeAotProjectOutput()
+    internal void EnableNativeAotProjectOutput(NativeManagedReferenceClosure? references = null, AssemblyReferenceLoader? loader = null)
     {
         if (_outputTarget != OutputTarget.Dll || _hosted)
             throw new InvalidOperationException("Native guest projects require ordinary DLL output without the hosted ABI.");
         _nativeAotProjectOutput = true;
+        _nativeManagedReferences = references;
+        if (loader is not null)
+        {
+            _referenceLoader = loader;
+            _typeMapper.ExternalMetadata = loader;
+        }
     }
 
     private void EnsureNativeClrAdmissionComplete()

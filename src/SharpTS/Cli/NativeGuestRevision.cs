@@ -3,13 +3,14 @@ using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text;
+using SharpTS.Compilation;
 
 namespace SharpTS.Cli;
 
 /// <summary>A guest revision ignores only emission-generated PE timestamp and module identity.</summary>
 internal sealed record NativeGuestRevision(string RevisionSha256, string ImageSha256, string? PdbSha256)
 {
-    internal static NativeGuestRevision Compute(byte[] image, byte[]? pdb = null)
+    internal static NativeGuestRevision Compute(byte[] image, byte[]? pdb = null, IReadOnlyList<NativeReferenceManifest.Entry>? references = null)
     {
         using var pe = new PEReader(new MemoryStream(image, writable: false));
         if (!pe.HasMetadata || pe.PEHeaders.CorHeader is null || pe.PEHeaders.PEHeader is null ||
@@ -32,11 +33,15 @@ internal sealed record NativeGuestRevision(string RevisionSha256, string ImageSh
         normalized.AsSpan(timestampOffset, 4).Clear();
         normalized.AsSpan(mvidOffset, 16).Clear();
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        hash.AppendData(Encoding.UTF8.GetBytes("SharpTS.NativeGuestRevision.v1\0"));
+        hash.AppendData(Encoding.UTF8.GetBytes("SharpTS.NativeGuestRevision.v2\0"));
         hash.AppendData(BitConverter.GetBytes(normalized.LongLength));
         hash.AppendData(normalized);
         hash.AppendData([pdb is null ? (byte)0 : (byte)1]);
         if (pdb is not null) hash.AppendData(pdb);
+        foreach (var reference in (references ?? []).OrderBy(reference => reference.Name, StringComparer.Ordinal))
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes(reference.Identity + "\0" + reference.Sha256 + "\0"));
+        }
         return new(Convert.ToHexStringLower(hash.GetHashAndReset()),
             Convert.ToHexStringLower(SHA256.HashData(image)), pdb is null ? null : Convert.ToHexStringLower(SHA256.HashData(pdb)));
     }

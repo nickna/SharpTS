@@ -48,6 +48,10 @@ public static class NativeAotProjectExporter
     /// </summary>
     public static void Export(NativeAotProjectOptions options, NativeAotCompatibilityReport compatibility,
         Action<string> saveGuest)
+        => Export(options, compatibility, saveGuest, null);
+
+    internal static void Export(NativeAotProjectOptions options, NativeAotCompatibilityReport compatibility,
+        Action<string> saveGuest, NativeManagedReferenceClosure? references)
     {
         ArgumentNullException.ThrowIfNull(saveGuest);
         compatibility.ThrowIfIncompatible();
@@ -60,6 +64,7 @@ public static class NativeAotProjectExporter
             byte[] notice = Encoding.UTF8.GetBytes("SharpTS experimental native guest export in progress. Partial output is preserved on failure.\n");
             claim.Write(notice);
         }
+        var managedReferences = references?.Export(directory) ?? [];
         string guest = Path.Combine(directory, "guest", "Guest.dll");
         Directory.CreateDirectory(Path.GetDirectoryName(guest)!);
         saveGuest(guest);
@@ -85,6 +90,9 @@ public static class NativeAotProjectExporter
                 new XElement("TrimmerSingleWarn", "false")),
             new XElement("ItemGroup", new XElement("Reference", new XAttribute("Include", "Guest"),
                 new XElement("HintPath", NativeAotProjectOptions.GuestAssemblyPath), new XElement("Private", "true")))));
+        foreach (var reference in managedReferences)
+            project.Root!.Element("ItemGroup")!.Add(new XElement("Reference", new XAttribute("Include", reference.Name),
+                new XElement("HintPath", reference.Path), new XElement("Private", "true")));
         if (options.AssemblyName is not null)
             project.Root!.Element("PropertyGroup")!.Add(new XElement("AssemblyName", options.AssemblyName));
         WriteNew(Path.Combine(directory, "NativeApp.csproj"), project.ToString() + "\n");
@@ -104,7 +112,26 @@ public static class NativeAotProjectExporter
             writer.WriteStartArray("featureReasons");
             foreach (string feature in compatibility.FeatureReasons) writer.WriteStringValue(feature);
             writer.WriteEndArray();
-            writer.WriteBoolean("thirdPartyReferences", false);
+            writer.WriteBoolean("thirdPartyReferences", managedReferences.Count != 0);
+            writer.WriteStartArray("frameworkReferences");
+            foreach (var framework in references?.FrameworkReferences ?? [])
+            {
+                writer.WriteStartObject(); writer.WriteString("name", framework.Name);
+                writer.WriteString("identity", framework.Identity); writer.WriteString("sha256", framework.Sha256);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.WriteStartArray("managedReferences");
+            foreach (var reference in managedReferences)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("name", reference.Name); writer.WriteString("path", reference.Path);
+                writer.WriteString("sha256", reference.Sha256); writer.WriteString("sourcePath", reference.SourcePath);
+                writer.WriteString("identity", reference.Identity); writer.WriteStartArray("dependencies");
+                foreach (string dependency in reference.Dependencies) writer.WriteStringValue(dependency);
+                writer.WriteEndArray(); writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
             writer.WriteString("publishCommand", "dotnet publish NativeApp.csproj -c Release");
             writer.WriteEndObject();
         }
@@ -115,7 +142,8 @@ public static class NativeAotProjectExporter
             "Trim/AOT warnings are visible errors; no compatibility or warning-free release promise is made by project export.\n" +
             "Program arguments come from the native process command line; the facade follows ordinary DLL top-level entry semantics.\n" +
             "Native symbols use the platform SDK defaults. Guest portable PDBs do not promise TypeScript native stepping.\n" +
-            "Third-party references and SharpTS-runtime-dependent features are excluded from this first profile.\n");
+            "Explicit net10.0 AnyCPU implementation DLLs are captured under references/ with exact dependency identities and SHA256 hashes in native-project.json.\n" +
+            "Package/project references, compile-only reference assemblies, native/resource assets and SharpTS-runtime-dependent features remain excluded.\n");
         File.Delete(pending);
     }
 

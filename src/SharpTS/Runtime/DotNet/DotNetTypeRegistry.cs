@@ -13,6 +13,18 @@ namespace SharpTS.Runtime.DotNet;
 public static class DotNetTypeRegistry
 {
     private static CacheGeneration _current = new();
+    private static readonly AsyncLocal<Func<string, Type?>?> MetadataResolver = new();
+
+    // Native guest compilation owns a byte-backed metadata view. Neither ambient loaded
+    // assemblies nor the interpreter's process-wide name cache may override that view.
+    internal static IDisposable UseMetadataResolver(Func<string, Type?> resolver)
+    {
+        var previous = MetadataResolver.Value;
+        MetadataResolver.Value = resolver;
+        return new MetadataResolutionScope(previous);
+    }
+    private sealed class MetadataResolutionScope(Func<string, Type?>? previous) : IDisposable
+    { public void Dispose() => MetadataResolver.Value = previous; }
 
     // A reset replaces all lookup state together. In-flight calls can finish against
     // their captured generation without repopulating the replacement.
@@ -41,6 +53,7 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static Type? Resolve(string clrTypeName)
     {
+        if (MetadataResolver.Value is { } metadata) return metadata(clrTypeName);
         var generation = Volatile.Read(ref _current);
         bool contextual = AssemblyLoadContext.CurrentContextualReflectionContext != null;
         if (!contextual && generation.Names.TryGetValue(clrTypeName, out var cached)) return cached;

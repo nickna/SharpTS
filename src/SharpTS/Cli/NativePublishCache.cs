@@ -78,6 +78,9 @@ internal static class NativePublishCache
                 string source = Path.Combine(workspace.PublishDirectory, name);
                 if (File.Exists(source) || Directory.Exists(source)) NativePublishOutput.CopyTree(source, Path.Combine(artifacts, name));
             }
+            string references = Path.Combine(workspace.ProjectDirectory, "references");
+            if (Directory.Exists(references)) NativePublishOutput.CopyTree(references, Path.Combine(pending, "references"));
+            NativePublishOutput.CopyTree(Path.Combine(workspace.ProjectDirectory, "native-project.json"), Path.Combine(pending, "native-project.json"));
             string guest = Path.Combine(pending, "guest"); Directory.CreateDirectory(guest);
             NativePublishOutput.CopyTree(workspace.GuestPath, Path.Combine(guest, "Guest.dll"));
             if (revision.PdbSha256 is not null) NativePublishOutput.CopyTree(Path.ChangeExtension(workspace.GuestPath, ".pdb"), Path.Combine(guest, "Guest.pdb"));

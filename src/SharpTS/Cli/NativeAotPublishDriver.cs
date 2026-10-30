@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.ComponentModel;
 using System.Reflection.PortableExecutable;
 using System.Text.Json;
+using SharpTS.Compilation;
 using SharpTS.Diagnostics;
 using SharpTS.Diagnostics.Exceptions;
 
@@ -24,7 +25,8 @@ internal static class NativeAotPublishDriver
                 "restore", "NativeApp.csproj", "--runtime", workspace.Options.RuntimeIdentifier, "--disable-build-servers", "--nologo", "--verbosity", "minimal"), output, error, token).ConfigureAwait(false);
             if (Failed(restore.ExitCode, restore.Diagnostics)) throw new CompileException(DiagnosticCode.NativeGuestPublish, $"Native SDK restore failed (exit {restore.ExitCode}). See the original SDK diagnostics above.");
             string pdb = Path.ChangeExtension(workspace.GuestPath, ".pdb");
-            var revision = NativeGuestRevision.Compute(File.ReadAllBytes(workspace.GuestPath), File.Exists(pdb) ? File.ReadAllBytes(pdb) : null);
+            var revision = NativeGuestRevision.Compute(File.ReadAllBytes(workspace.GuestPath), File.Exists(pdb) ? File.ReadAllBytes(pdb) : null,
+                NativeReferenceManifest.ReadAndVerify(workspace.ProjectDirectory));
             string root = Path.GetFullPath(cacheRoot ?? NativePublishCache.DefaultRoot);
             using var cache = await NativePublishCachePreparation.PrepareAsync(
                 preparationToken => toolchain.FingerprintAsync(workspace, preparationToken),
@@ -67,7 +69,7 @@ internal static class NativeAotPublishDriver
         { throw new CompileException(DiagnosticCode.NativeGuestToolchain, "Could not start the .NET SDK/native publish toolchain. Install dotnet and the matching native compiler/linker prerequisites."); }
         catch (TimeoutException)
         { throw new CompileException(DiagnosticCode.NativeGuestPublish, "The native SDK process did not finish draining its output. Final output was preserved."); }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or BadImageFormatException or JsonException or KeyNotFoundException)
+        catch (Exception exception) when (exception is InvalidDataException or IOException or UnauthorizedAccessException or BadImageFormatException or JsonException or KeyNotFoundException or System.Xml.XmlException)
         { throw new CompileException(DiagnosticCode.NativeGuestPublishOutput, "Native output was not promoted: " + exception.Message); }
     }
 

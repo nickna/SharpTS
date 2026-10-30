@@ -185,7 +185,7 @@ public sealed class SdkNativePublishTests
         Assert.False(File.Exists(consumer.GetPath($"bin/Release/net10.0/{HostRid}/{name}.dll")));
     }
 
-    private static TempTestDirectory CreateConsumer(string source, bool native = true, XElement? item = null)
+    internal static TempTestDirectory CreateConsumer(string source, bool native = true, XElement? item = null)
     {
         var consumer = CliTestHelper.CreateTempDirectory();
         string root = RepositoryRoot();
@@ -216,7 +216,7 @@ public sealed class SdkNativePublishTests
         throw new DirectoryNotFoundException("Could not locate the SDK source for integration tests.");
     }
 
-    private static TestProcessResult Dotnet(string directory, params string[] arguments)
+    internal static TestProcessResult Dotnet(string directory, params string[] arguments)
     {
         var start = new ProcessStartInfo("dotnet")
         {
@@ -232,6 +232,6 @@ public sealed class SdkNativePublishTests
         return TestProcess.Run(start, TimeSpan.FromMinutes(5), "SharpTS.Sdk build/publish integration");
     }
 
-    private static void AssertSuccess(TestProcessResult result) =>
+    internal static void AssertSuccess(TestProcessResult result) =>
         Assert.True(result.ExitCode == 0, result.StandardOutput + result.StandardError);
 }

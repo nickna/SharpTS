@@ -134,9 +134,24 @@ Before writing a guest or project, export rejects emitted requirements for
 as eval, Proxy, Intl, vm, worker bridges and compiled fork. Diagnostics name the
 recorded features and suggest ordinary managed output.
 
-Third-party CLI `-r`, manifest and NuGet references are conservatively refused in
-this first profile. Statically resolved BCL interop can use the ordinary compiler
-path without external references. It must still pass NativeAOT analysis; a known
+Explicit CLI `-r` and `sharpts.json` reference paths can supply a complete net10.0
+AnyCPU implementation-DLL graph. The compiler reads and owns every image before
+module resolution, checks every AssemblyRef row (including private implementation
+dependencies), and admits only exact supplied or framework identities. Metadata-only
+inspection uses those captured bytes; workspace code is not loaded into the compiler.
+The exported project references captured implementation DLLs under `references/`.
+The manifest records their identities, dependency edges, original paths and SHA256 hashes.
+
+NuGet and project references, compile-only reference assemblies, architecture-specific
+DLLs, native/module/resource assets and unknown dependencies remain refused. Duplicate
+simple names and Guest/wrapper/framework/SharpTS name collisions are refused. Native
+cache identity includes every captured implementation identity and content hash, so a
+same-identity implementation replacement cannot reuse the previous native artifact.
+Every admitted library still undergoes strict upstream trim/AOT analysis. A library's
+unannotated entry that calls private RequiresUnreferencedCode/RequiresDynamicCode code
+must fail publication with the original IL2026/IL3050 diagnostics.
+
+Statically resolved BCL interop can use the ordinary compiler path without external references. It must still pass NativeAOT analysis; a known
 member at compile time does not make dynamic assembly loading or code generation
 valid after native publication. The native compiler SKU retains its existing
 closed interop universe.
@@ -146,9 +161,9 @@ is claimed. Framework names, versions, cultures and public-key tokens must match
 the framework index or the emitted runtime's literal CoreLib/Uri implementation
 identities; full public keys are compared through their canonical CLR tokens.
 Implicit runtime-library dependencies are subject to the same boundary as explicit
-references. For example, the current Zlib emission references `ZstdSharp`, so this
-profile refuses it with `SHARPTS402` until its static dependency closure is supplied
-and verified (#3083). The check runs with or without `--verify` and also protects
+references. For example, Zlib's `ZstdSharp` dependency is refused with `SHARPTS402`
+without a complete supported implementation closure (#3083); implicit package discovery
+cannot omit its dependencies or native/resource assets. The check runs with or without `--verify` and also protects
 direct compiler serialization. Ordinary managed output retains its dependencies.
 
 | Code | Meaning |

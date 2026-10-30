@@ -125,10 +125,18 @@ would shadow the generated guest assembly. Names matching a resolved framework r
 `System.Console`, are also refused with `SHARPTSSDK001` before wrapper compilation and native
 linking. These identity checks are case-insensitive.
 
-The first profile requires workstation GC and reference-assembly emission. User `Reference`,
-`ProjectReference`, and `PackageReference` items fail with `SHARPTS402` naming the item; this
-profile cannot yet include their external runtime/native closure. Framework references use the
-compiler's reference-assembly provider. Runtime-dependent source features fail with their native
+The native profile requires workstation GC and reference-assembly emission. Explicit `Reference`
+items with executable net10.0 AnyCPU DLL `HintPath` values can supply a complete managed dependency
+graph. Every non-framework assembly dependency must be supplied explicitly with its exact name,
+version, culture and public-key token. The compiler snapshots those bytes, exports them under
+`references/`, and substitutes the captured DLLs into the SDK reference graph. Before wrapper
+compilation, the SDK checks every selected implementation and framework reference against the
+compiler's captured byte hashes. Original inputs can change after capture without changing an attempt.
+
+`ProjectReference`, `PackageReference`, missing or name-only references, reference-only assemblies,
+architecture-specific DLLs and unproved native/resource/module assets fail with `SHARPTS402`.
+The profile also refuses duplicate simple names and names that shadow Guest, the wrapper,
+framework or SharpTS assemblies. Framework identities use the compiler's reference-assembly provider. Runtime-dependent source features fail with their native
 compatibility diagnostics before linking; see [the native guest contract](native-guest-projects.md).
 `emitDeclarationOnly`, including inherited `tsconfig` settings, cannot produce a native program.
 
