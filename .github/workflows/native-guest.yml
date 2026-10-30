@@ -63,12 +63,9 @@ jobs:
         env:
           DOTNET_PROCESSOR_COUNT: 2
           DOTNET_CLI_UI_LANGUAGE: en
-        # Collections and async remain candidate fixtures under #1351 until
-        # constructor metadata publication is warning-free. This explicit
-        # cohort contains only programs that pass strict publish and execution.
         run: >-
           ./scripts/test-native-guest.ps1 -RuntimeIdentifier '${{ matrix.rid }}'
-          -Cases @('language', 'arguments', 'modules', 'generators', 'exceptions', 'bcl')
+          -Cases @('language', 'arguments', 'modules', 'collections', 'generators', 'async', 'exceptions', 'bcl')
       - name: Upload guest diagnostics and execution evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
