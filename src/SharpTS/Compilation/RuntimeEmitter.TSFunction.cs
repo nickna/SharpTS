@@ -60,7 +60,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCapturesArgumentsAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CapturesArguments",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(System.Attribute));
@@ -87,7 +87,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPadUndefinedAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PadUndefined",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(System.Attribute));
@@ -110,7 +110,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFunctionLengthAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FunctionLength",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(System.Attribute));
@@ -134,7 +134,7 @@ public partial class RuntimeEmitter
 
     private void EmitFunctionNameAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FunctionName",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(System.Attribute));
@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitNonConstructibleAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$NonConstructible",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(System.Attribute));
@@ -193,7 +193,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitExpectsThisAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ExpectsThis",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(System.Attribute));
@@ -212,7 +212,7 @@ public partial class RuntimeEmitter
     /// <summary>Distinguishes source parameter names from runtime helper receiver conventions.</summary>
     private void EmitSourceParametersAttribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$SourceParameters", TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(Attribute));
         var ctor = typeBuilder.DefineConstructor(

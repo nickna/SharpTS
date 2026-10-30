@@ -46,7 +46,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitStreamFinishedCleanupClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$StreamFinishedCleanup",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit
         );

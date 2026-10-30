@@ -7,7 +7,7 @@ public partial class RuntimeEmitter
 {
     private void EmitCanonicalStaticStorageAttribute(ModuleBuilder module, EmittedClassInitializationRuntime initialization)
     {
-        var type = module.DefineType("$CanonicalStaticStorage",
+        var type = EmitTypeDefinitions.DefineType(module, "$CanonicalStaticStorage",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, typeof(Attribute));
         var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         var il = constructor.GetILGenerator();

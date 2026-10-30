@@ -8,7 +8,7 @@ public partial class RuntimeEmitter
 {
     private void EmitClassStaticPropertyAttribute(ModuleBuilder module, EmittedObjectKeysRuntime keys)
     {
-        var type = module.DefineType("$ClassStaticProperty",
+        var type = EmitTypeDefinitions.DefineType(module, "$ClassStaticProperty",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, typeof(Attribute));
         var name = type.DefineField("Name", _types.String, FieldAttributes.Public | FieldAttributes.InitOnly);
         var enumerable = type.DefineField("Enumerable", _types.Boolean, FieldAttributes.Public | FieldAttributes.InitOnly);

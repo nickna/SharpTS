@@ -109,7 +109,7 @@ public partial class RuntimeEmitter
     private void EmitTimerPromiseClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var timerPromises = runtime.RequireTimerPromises();
-        timerPromises.TimerPromiseClosureType = moduleBuilder.DefineType(
+        timerPromises.TimerPromiseClosureType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TimerPromiseClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
@@ -352,7 +352,7 @@ public partial class RuntimeEmitter
     private void EmitAsyncIntervalClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var timerPromises = runtime.RequireTimerPromises();
-        timerPromises.AsyncIntervalClosureType = moduleBuilder.DefineType(
+        timerPromises.AsyncIntervalClosureType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$AsyncIntervalClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 

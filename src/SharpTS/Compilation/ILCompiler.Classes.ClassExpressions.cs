@@ -43,7 +43,7 @@ public partial class ILCompiler
             typeAttrs |= TypeAttributes.Abstract;
         }
 
-        var typeBuilder = _moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(_moduleBuilder,
             className,
             typeAttrs
         );

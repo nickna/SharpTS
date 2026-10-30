@@ -47,7 +47,7 @@ public partial class RuntimeEmitter
         NetSocketFields socketFields,
         NetServerFields serverFields)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TcpAcceptClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(object)
@@ -293,7 +293,7 @@ public partial class RuntimeEmitter
         NetSocketFields socketFields,
         NetServerFields serverFields)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$IpcAcceptClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(object)
@@ -533,7 +533,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private NetClosureMethods EmitSocketReadDataClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$SocketReadDataClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(object)
@@ -602,7 +602,7 @@ public partial class RuntimeEmitter
         NetSocketFields socketFields,
         NetSocketMethods socketMethods)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$SocketReadEndClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(object)
@@ -777,7 +777,7 @@ public partial class RuntimeEmitter
         EmittedRuntime runtime,
         NetSocketFields socketFields)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$SocketConnectOkClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(object)
@@ -899,7 +899,7 @@ public partial class RuntimeEmitter
         EmittedRuntime runtime,
         NetSocketFields socketFields)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$SocketConnectErrClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(object)
@@ -998,7 +998,7 @@ public partial class RuntimeEmitter
     private void EmitHttpAcceptClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var http = runtime.RequireHttp();
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$HttpAcceptClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(object)

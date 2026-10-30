@@ -20,7 +20,7 @@ public partial class RuntimeEmitter
         var awaiterType = typeof(TaskAwaiter<object?>);
 
         // Define state machine struct: $PromiseFinally_SM
-        var smType = moduleBuilder.DefineType(
+        var smType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PromiseFinally_SM",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(ValueType),

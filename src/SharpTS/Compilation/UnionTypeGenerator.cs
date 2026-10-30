@@ -167,7 +167,7 @@ public class UnionTypeGenerator
         string typeName = $"Union_{key}";
 
         // Define the union as a struct implementing the union type marker interface
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             typeName,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(ValueType),

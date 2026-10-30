@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
 
     private void EmitGuestConstructorFactoryAttribute(ModuleBuilder module, EmittedDynamicConstructionRuntime construction)
     {
-        var type = module.DefineType("$GuestConstructorFactory", TypeAttributes.Public | TypeAttributes.Sealed, typeof(Attribute));
+        var type = EmitTypeDefinitions.DefineType(module, "$GuestConstructorFactory", TypeAttributes.Public | TypeAttributes.Sealed, typeof(Attribute));
         var name = type.DefineField("Name", _types.String, FieldAttributes.Public | FieldAttributes.InitOnly);
         var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.String]);
         var il = constructor.GetILGenerator();

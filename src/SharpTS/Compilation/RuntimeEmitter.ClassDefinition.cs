@@ -14,7 +14,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Abstract | MethodAttributes.Virtual,
             _types.Object, Type.EmptyTypes);
         var instanceInterface = contract.CreateType()!;
-        var type = module.DefineType("$ClassDefinition", TypeAttributes.Public | TypeAttributes.Sealed);
+        var type = EmitTypeDefinitions.DefineType(module, "$ClassDefinition", TypeAttributes.Public | TypeAttributes.Sealed);
         var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         var il = constructor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -43,7 +43,7 @@ public partial class RuntimeEmitter
         MethodBuilder? readCapture = null, writeCapture = null, findEnvironment = null;
         if (_features.UsesUserClasses)
         {
-            captureType = module.DefineType("$ClassCapture", TypeAttributes.Public | TypeAttributes.Sealed);
+            captureType = EmitTypeDefinitions.DefineType(module, "$ClassCapture", TypeAttributes.Public | TypeAttributes.Sealed);
             captureOwner = captureType.DefineField("Owner", _types.Object, FieldAttributes.Assembly);
             captureField = captureType.DefineField("Field", _types.FieldInfo, FieldAttributes.Assembly);
             captureConstructor = captureType.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard,

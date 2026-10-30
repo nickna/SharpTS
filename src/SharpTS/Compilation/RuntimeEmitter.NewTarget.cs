@@ -108,7 +108,7 @@ public partial class RuntimeEmitter
 
     private void EmitNewTargetCoreAttribute(ModuleBuilder module, EmittedFunctionAttributesRuntime attributes)
     {
-        var type = module.DefineType("$NewTargetCore", TypeAttributes.Public | TypeAttributes.Sealed, typeof(Attribute));
+        var type = EmitTypeDefinitions.DefineType(module, "$NewTargetCore", TypeAttributes.Public | TypeAttributes.Sealed, typeof(Attribute));
         var name = type.DefineField("Name", _types.String, FieldAttributes.Public | FieldAttributes.InitOnly);
         var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.String]);
         var il = constructor.GetILGenerator();

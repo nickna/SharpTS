@@ -41,7 +41,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFsWatchChangeClosure(ModuleBuilder moduleBuilder, EmittedFileSystemWatcherRuntime watchers, EmittedEventEmitterRuntime events)
     {
-        watchers.ChangeClosureType = moduleBuilder.DefineType(
+        watchers.ChangeClosureType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsWatchChangeClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 

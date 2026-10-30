@@ -7,7 +7,7 @@ public partial class RuntimeEmitter
 {
     private void EmitNumericRest4Attribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
-        var type = moduleBuilder.DefineType("$NumericRest4",
+        var type = EmitTypeDefinitions.DefineType(moduleBuilder, "$NumericRest4",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, typeof(Attribute));
         var name = type.DefineField("Entry", _types.String, FieldAttributes.Public | FieldAttributes.InitOnly);
         var ctor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.String]);

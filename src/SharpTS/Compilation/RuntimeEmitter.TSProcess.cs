@@ -125,7 +125,7 @@ public partial class RuntimeEmitter
         TypeBuilder tb,
         EmittedRuntime runtime)
     {
-        var processInfoType = moduleBuilder.DefineType(
+        var processInfoType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ProcessBasicInformation",
             TypeAttributes.NotPublic | TypeAttributes.Sealed |
                 TypeAttributes.SequentialLayout | TypeAttributes.BeforeFieldInit,

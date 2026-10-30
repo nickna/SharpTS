@@ -331,7 +331,7 @@ public partial class RuntimeEmitter
     private void EmitReflectMetadataDecoratorClass(ModuleBuilder moduleBuilder, EmittedReflectMetadata metadata,
         EmittedNativeCallableRuntime? nativeCallables = null)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ReflectMetadataDecorator",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit
         );

@@ -40,7 +40,7 @@ public partial class RuntimeEmitter
 
     private void EmitStatWatchPollClosure(ModuleBuilder moduleBuilder, EmittedFileSystemWatcherRuntime watchers, EmittedEventEmitterRuntime events)
     {
-        watchers.PollClosureType = moduleBuilder.DefineType(
+        watchers.PollClosureType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$StatWatchPollClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 

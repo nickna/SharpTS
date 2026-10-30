@@ -847,7 +847,7 @@ public partial class ILCompiler
     /// </summary>
     private void Phase3_CreateProgramType()
     {
-        _programType = _moduleBuilder.DefineType(
+        _programType = EmitTypeDefinitions.DefineType(_moduleBuilder,
             "$Program",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed
         );

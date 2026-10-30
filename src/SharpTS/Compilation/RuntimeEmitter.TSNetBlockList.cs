@@ -14,7 +14,7 @@ public partial class RuntimeEmitter
 {
     private void EmitTSNetBlockListTypes(ModuleBuilder moduleBuilder, EmittedNetRuntime net)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BlockList",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             typeof(object));

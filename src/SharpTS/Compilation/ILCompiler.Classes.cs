@@ -143,7 +143,7 @@ public partial class ILCompiler
 
         // Create TypeBuilder initially without parent - we'll set it after defining generic params
         // This is necessary because the base type may reference our generic params (e.g., class Foo<T> extends Box<T>)
-        var typeBuilder = _moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(_moduleBuilder,
             qualifiedClassName,
             typeAttrs
         );

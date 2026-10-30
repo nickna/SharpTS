@@ -168,7 +168,7 @@ public partial class RuntimeEmitter
         closure.CreateType();
 
         // --- $EventLoopSyncContext : SynchronizationContext ---
-        var sc = moduleBuilder.DefineType(
+        var sc = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$EventLoopSyncContext",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(SynchronizationContext));
