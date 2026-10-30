@@ -81,6 +81,7 @@ public partial class Interpreter
     /// <returns>A ValueTask containing the instantiated object.</returns>
     private async ValueTask<object?> EvaluateNewCore(IEvaluationContext ctx, Expr.New newExpr)
     {
+        using var errorOrigin = EnterVmErrorOrigin(newExpr);
         // Built-in types only apply when callee is a simple identifier
         bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
         string? simpleClassName = GetSimpleClassName(newExpr.Callee);
@@ -236,6 +237,7 @@ public partial class Interpreter
 
     private RuntimeValue EvaluateNew(Expr.New newExpr)
     {
+        using var errorOrigin = EnterVmErrorOrigin(newExpr);
         // Built-in types only apply when callee is a simple identifier
         bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
         string? simpleClassName = GetSimpleClassName(newExpr.Callee);

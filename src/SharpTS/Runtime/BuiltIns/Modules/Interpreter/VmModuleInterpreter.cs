@@ -487,7 +487,7 @@ public static partial class VmModuleInterpreter
             trimmedCode += ";";
         var paramsStr = string.Join(", ", paramNames);
         var wrappedCode = $"function __vmfn__({paramsStr}) {{ {trimmedCode} }}";
-        var funcDeclStatements = ParseCode(wrappedCode, origin.Filename);
+        var funcDeclStatements = ParseCode(wrappedCode, origin.Filename, origin);
 
         var importModuleDynamically = GetOption(rawOptions, "importModuleDynamically");
         var creatorHost = VmExecutionHost.Current ?? interpreter?.GetVmExecutionHost();
@@ -774,15 +774,16 @@ public static partial class VmModuleInterpreter
     /// Parses a code string into statements. Throws on parse errors.
     /// Follows the REPL pattern: retries with appended ";" on parse failure.
     /// </summary>
-    internal static List<Stmt> ParseCode(string code, string? filename = null)
+    internal static List<Stmt> ParseCode(string code, string? filename = null, ScriptOrigin? origin = null)
     {
-        var result = TryParse(code);
+        origin ??= ActiveScriptOrigin.Value ?? new ScriptOrigin(filename ?? ScriptOrigin.Default.Filename, 0, 0);
+        var result = TryParse(code, origin.Value);
 
         var errors = result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
         if (errors.Count > 0)
         {
             // Retry with appended semicolon (same as REPL)
-            var retryResult = TryParse(code + ";");
+            var retryResult = TryParse(code + ";", origin.Value);
             var retryErrors = retryResult.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
             if (retryErrors.Count == 0)
                 return retryResult.Statements;
@@ -795,12 +796,16 @@ public static partial class VmModuleInterpreter
         return result.Statements;
     }
 
-    private static ParseDiagnosticResult TryParse(string code)
+    private static ParseDiagnosticResult TryParse(string code, ScriptOrigin origin)
     {
         var lexer = new Lexer(code);
         var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens);
-        return parser.Parse();
+        var document = new SourceDocument(origin.Filename, code, isVirtual: true);
+        var parser = new Parser(tokens).WithSourceDocument(document).WithEditorSyntax();
+        var result = parser.Parse();
+        if (result.IsSuccess)
+            Interp.RecordVmErrorOrigins(result.Statements, document, origin.LineOffset, origin.ColumnOffset);
+        return result;
     }
 }
 
@@ -825,7 +830,7 @@ public sealed class VmScriptConstructor : ISharpTSCallable
         using var creatorScope = creatorHost?.Enter();
 
         // Pre-parse the code (with semicolon retry); syntax errors carry the filename.
-        var statements = VmModuleInterpreter.ParseCode(code, origin.Filename);
+        var statements = VmModuleInterpreter.ParseCode(code, origin.Filename, origin);
 
         // Create Script as a dictionary — works in both interpreter (via SharpTSObject wrapper)
         // and compiled mode (dictionary is native object representation).

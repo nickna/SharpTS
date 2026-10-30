@@ -200,6 +200,7 @@ public partial class Interpreter
     /// <returns>A ValueTask containing the return value of the called function.</returns>
     private async ValueTask<object?> EvaluateCallCore(IEvaluationContext ctx, Expr.Call call)
     {
+        using var errorOrigin = EnterVmErrorOrigin(call);
         // Handle console.* methods
         if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith(BuiltInNames.ConsolePrefix, StringComparison.Ordinal))
         {
@@ -466,6 +467,7 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/functions.html">TypeScript Functions</seealso>
     private RuntimeValue EvaluateCall(Expr.Call call)
     {
+        using var errorOrigin = EnterVmErrorOrigin(call);
         // Handle console.* methods
         if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith(BuiltInNames.ConsolePrefix, StringComparison.Ordinal))
         {
