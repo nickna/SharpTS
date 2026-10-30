@@ -32,9 +32,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, method);
-        il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+        var parameterProducer = _nativeUnionParameters?.ReflectionQuery(il, method);
+        EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, parameterProducer, cached: false);
         il.Emit(OpCodes.Callvirt, inputs.TSFunctionLengthGetter);
-        il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+        EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer);
     }
 
     // A present descriptor owns the read even when its accessor has no getter.
@@ -485,6 +486,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
+        int selectedCallOffset = il.ILOffset;
         if (reflectedMethods.NativeMethodLookup is { } nativeSelect)
             il.Emit(OpCodes.Call, nativeSelect.Select);
         else
@@ -501,6 +503,7 @@ public partial class RuntimeEmitter
         // methods = t.GetMethods(flags)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
+        int enumeratedCallOffset = il.ILOffset;
         if (reflectedMethods.NativeMethodLookup is { } nativeEnumerate)
             il.Emit(OpCodes.Call, nativeEnumerate.Enumerate);
         else
@@ -602,6 +605,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(retLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
+        if (reflectedMethods.NativeMethodLookup is { } lookup)
+            _nativeUnionParameters?.RecordReflectionSelector(method, il, lookup, selectedCallOffset, enumeratedCallOffset);
     }
 
     private void EmitGetFieldsProperty(
@@ -1134,8 +1139,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldloc, pascalNameLocal);
         il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase));
-        il.Emit(OpCodes.Call, inputs.SafeGetMethod);
-        il.Emit(OpCodes.Stloc, methodInfoLocal);
+        EmitReflectedMethodQuery(il, inputs.SafeGetMethod, methodInfoLocal);
 
         // If method found, wrap in $TSFunction and return
         var noMethodLabel = il.DefineLabel();
@@ -1147,7 +1151,7 @@ public partial class RuntimeEmitter
         // two threads first access the same receiver/name concurrently.
         il.Emit(OpCodes.Ldarg_0);  // target object
         il.Emit(OpCodes.Ldloc, methodInfoLocal);
-        il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+        EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, _nativeUnionParameters?.ReflectionQuery(il, methodInfoLocal), cached: false);
         il.Emit(OpCodes.Stloc, reflectedMethodWrapperLocal);
         il.Emit(OpCodes.Ldsfld, inputs.ReflectedMethodCacheField);
         il.Emit(OpCodes.Ldarg_0);
@@ -1273,8 +1277,8 @@ public partial class RuntimeEmitter
                 _types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notThisMethodLabel);
             il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, helper);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+            var parameterMethod1 = EmitReflectedMethodLiteral(il, helper);
+            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, parameterMethod1, cached: false);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notThisMethodLabel);
         }
@@ -1633,10 +1637,10 @@ public partial class RuntimeEmitter
         void EmitBoundRuntimeMethod(MethodBuilder helper, string jsName, int jsLength)
         {
             il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, helper);
+            var parameterMethod2 = EmitReflectedMethodLiteral(il, helper);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCtorWithCache);
+            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtorWithCache, parameterMethod2, cached: true);
             il.Emit(OpCodes.Ret);
         }
 
@@ -2807,8 +2811,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, methodOwnerLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)staticPublic);
-            il.Emit(OpCodes.Call, inputs.SafeGetMethod);
-            il.Emit(OpCodes.Stloc, staticMethodLocal);
+            EmitReflectedMethodQuery(il, inputs.SafeGetMethod, staticMethodLocal);
 
             var noStaticMethodLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, staticMethodLocal);
@@ -2922,8 +2925,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notHasOwnLabel);
             il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, inputs.ObjectOwnProperties.HasOwnProperty);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+            var parameterMethod3 = EmitReflectedMethodLiteral(il, inputs.ObjectOwnProperties.HasOwnProperty);
+            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, parameterMethod3, cached: false);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notHasOwnLabel);
 
@@ -3073,8 +3076,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, baseMethodOwner);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)declaredStaticPublic);
-            il.Emit(OpCodes.Call, inputs.SafeGetMethod);
-            il.Emit(OpCodes.Stloc, baseStaticMethodLocal);
+            EmitReflectedMethodQuery(il, inputs.SafeGetMethod, baseStaticMethodLocal);
             il.Emit(OpCodes.Ldloc, baseStaticMethodLocal);
             var noBaseStaticMethodLabel = il.DefineLabel();
             il.Emit(OpCodes.Brfalse, noBaseStaticMethodLabel);
@@ -3197,10 +3199,10 @@ public partial class RuntimeEmitter
             var notArrayBufferSliceLabel = il.DefineLabel();
             il.Emit(OpCodes.Brfalse, notArrayBufferSliceLabel);
             il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, inputs.ArrayBuffer!.SliceDynamic);
+            var parameterMethod4 = EmitReflectedMethodLiteral(il, inputs.ArrayBuffer!.SliceDynamic);
             il.Emit(OpCodes.Ldstr, "slice");
             il.Emit(OpCodes.Ldc_I4_2);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCtorWithCache);
+            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtorWithCache, parameterMethod4, cached: true);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notArrayBufferSliceLabel);
             il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
@@ -3227,10 +3229,10 @@ public partial class RuntimeEmitter
             var notSharedArrayBufferSliceLabel = il.DefineLabel();
             il.Emit(OpCodes.Brfalse, notSharedArrayBufferSliceLabel);
             il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, inputs.SharedArrayBuffer!.Slice);
+            var parameterMethod5 = EmitReflectedMethodLiteral(il, inputs.SharedArrayBuffer!.Slice);
             il.Emit(OpCodes.Ldstr, "slice");
             il.Emit(OpCodes.Ldc_I4_2);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCtorWithCache);
+            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtorWithCache, parameterMethod5, cached: true);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notSharedArrayBufferSliceLabel);
             il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
@@ -3295,10 +3297,10 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
                 il.Emit(OpCodes.Brfalse, next);
                 il.Emit(OpCodes.Ldarg_0);
-                _types.EmitLoadMethodInfo(il, helper);
+                var parameterMethod6 = EmitReflectedMethodLiteral(il, helper);
                 il.Emit(OpCodes.Ldstr, jsName);
                 il.Emit(OpCodes.Ldc_I4, length);
-                il.Emit(OpCodes.Newobj, inputs.TSFunctionCtorWithCache);
+                EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtorWithCache, parameterMethod6, cached: true);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(next);
             }

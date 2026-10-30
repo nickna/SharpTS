@@ -322,8 +322,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, next);
             emitOwner();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindOwnMethod);
-            il.Emit(OpCodes.Stloc, symMethodLocal);
+            EmitSymbolParameterQuery(il, inputs.SymbolAccessors.FindOwnMethod, symMethodLocal);
             il.Emit(OpCodes.Ldloc, symMethodLocal);
             il.Emit(OpCodes.Brtrue, symbolMethodFound);
             il.MarkLabel(next);
@@ -452,8 +451,7 @@ public partial class RuntimeEmitter
             var noSymMethodLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindMethod);
-            il.Emit(OpCodes.Stloc, symMethodLocal);
+            EmitSymbolParameterQuery(il, inputs.SymbolAccessors.FindMethod, symMethodLocal);
             il.Emit(OpCodes.Ldloc, symMethodLocal);
             il.Emit(OpCodes.Brfalse, noSymMethodLabel);
             il.MarkLabel(symbolMethodFound);
@@ -467,7 +465,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, symMethodLocal);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, inputs.SymbolAccessors.GetOrCreateStaticMethod);
+            if (_nativeUnionParameters is { } symbolConversion)
+                symbolConversion.EmitSymbolParameterFactory(il, symbolConversion.SymbolParameterQuery(il, symMethodLocal));
+            else il.Emit(OpCodes.Call, inputs.SymbolAccessors.GetOrCreateStaticMethod);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(instanceMethod);
@@ -475,7 +475,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, symMethodLocal);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, _nativeUnionParameters?.SymbolParameterQuery(il, symMethodLocal), cached: false);
             il.Emit(OpCodes.Stloc, staticValue);
             il.Emit(OpCodes.Ldarg_0);                          // obj — receiver to bind
             il.Emit(OpCodes.Ldloc, symMethodLocal);            // found MethodInfo (typed object)
@@ -486,7 +486,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, inputs.Symbols.MethodName);
             il.Emit(OpCodes.Ldloc, staticValue);
             il.Emit(OpCodes.Callvirt, inputs.TSFunctionLengthGetter);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCachedCtor);
+            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCachedCtor, _nativeUnionParameters?.SymbolParameterQuery(il, symMethodLocal), cached: true);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noSymMethodLabel);
         }
@@ -671,8 +671,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, inputs.Generators.Type);
         il.Emit(OpCodes.Brfalse, notGeneratorIteratorLabel);
         il.Emit(OpCodes.Ldarg_0);
-        EmitInstanceMethodInfoLiteral(il, inputs.Generators.Iterator, inputs.Generators.Type);
-        il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+        var generatorParameterProducer = EmitReflectedMethodLiteral(il, inputs.Generators.Iterator);
+        EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, generatorParameterProducer, cached: false);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGeneratorIteratorLabel);
 
@@ -3034,8 +3034,8 @@ public partial class RuntimeEmitter
 
         // return new $TSFunction(rx, MethodInfo of helper)
         il.Emit(OpCodes.Ldarg_0);
-        _types.EmitLoadMethodInfo(il, helperMethod);
-        il.Emit(OpCodes.Newobj, tSFunctionCtor);
+        var parameterProducer = EmitReflectedMethodLiteral(il, helperMethod);
+        EmitReflectedFunctionConstructor(il, tSFunctionCtor, parameterProducer, cached: false);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notMatchLabel);

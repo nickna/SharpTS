@@ -783,6 +783,7 @@ public partial class ILCompiler
                 NativeConstructedGenericResolver = _nativeGenericMethodNormalization.ResolveConstructed,
                 NativeConstructedBodies = _nativeConstructedBodies,
                 NativeUnionConverter = _nativeUnionArgumentConversion.Convert,
+                NativeUnionParameters = _nativeUnionArgumentConversion,
                 NativeReceiverBinder = _nativeReceiverBinding.Bind
             };
         }
@@ -1302,7 +1303,6 @@ public partial class ILCompiler
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
         _nativeConstructedBodies?.CompleteEmission(_functions.GenericParameters, _nativeGenericMethodNormalization!, _newTargetBodies,
             _runtime.FunctionAttributes, _runtime.Errors);
-        _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
         _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime, _nativeClosedFamilies?.Completed);
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
         _nativeStaticFieldLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
@@ -1326,6 +1326,7 @@ public partial class ILCompiler
         if (_nativeOwnerClosure is not null)
             _nativeOwnerClosure.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot,
                 _nativeClrAdmission?.CompletedIngress, _runtime);
+        _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors, _runtime, _nativeClrAdmission?.CompletedIngress, _nativeMethodLookup, _nativeOwnerClosure);
         _nativePrototypeFields?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeReceiverBinding!.RuntimeType, _nativeClosedFamilies?.Completed);
         _nativeTypedArrayBuffers?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeOwnedTypeDeclarations);
     }
@@ -1989,7 +1990,6 @@ public partial class ILCompiler
         _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
         _nativeConstructedBodies?.CompleteEmission(_functions.GenericParameters, _nativeGenericMethodNormalization!, _newTargetBodies,
             _runtime.FunctionAttributes, _runtime.Errors);
-        _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors);
         _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime, _nativeClosedFamilies?.Completed);
         _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
         _nativeStaticFieldLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
@@ -2013,6 +2013,7 @@ public partial class ILCompiler
         if (_nativeOwnerClosure is not null)
             _nativeOwnerClosure.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot,
                 _nativeClrAdmission?.CompletedIngress, _runtime);
+        _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors, _runtime, _nativeClrAdmission?.CompletedIngress, _nativeMethodLookup, _nativeOwnerClosure);
         _nativePrototypeFields?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeReceiverBinding!.RuntimeType, _nativeClosedFamilies?.Completed);
         _nativeTypedArrayBuffers?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeOwnedTypeDeclarations);
     }

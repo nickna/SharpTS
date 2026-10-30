@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 internal sealed partial class NativeMethodLookupCatalog
 {
-    private void EmitFixedBridgeQuery(ILGenerator il, EmittedErrorRuntime errors, bool select, Type owner, string message)
+    private void EmitFixedBridgeQuery(MethodBuilder producer, ILGenerator il, EmittedErrorRuntime errors, bool select, Type owner, string message)
     {
         if (select)
         {
@@ -22,7 +22,9 @@ internal sealed partial class NativeMethodLookupCatalog
                 // public method (including unrelated dynamic array factories or constructor helpers).
                 il.Emit(OpCodes.Ldtoken, owner); il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
                 il.Emit(OpCodes.Ldstr, name); il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Instance));
+                int queryOffset = il.ILOffset;
                 il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+                RecordQuery(producer, il, queryOffset, owner, BindingFlags.Public | BindingFlags.Instance, name);
                 il.Emit(OpCodes.Ret); il.MarkLabel(nextName);
             }
             il.MarkLabel(unsupported);

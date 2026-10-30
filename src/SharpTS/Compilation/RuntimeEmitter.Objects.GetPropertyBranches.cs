@@ -820,8 +820,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, skip);
             il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, helper);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+            var parameterProducer1 = EmitReflectedMethodLiteral(il, helper);
+            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, parameterProducer1, cached: false);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skip);
         }
@@ -917,8 +917,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
         il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.GetProperty);
-        _types.EmitLoadMethodInfo(il, inputs.Symbols.ToStringMethod);
-        il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+        var parameterProducer2 = EmitReflectedMethodLiteral(il, inputs.Symbols.ToStringMethod);
+        EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, parameterProducer2, cached: false);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoxedSymbolToString);
 
@@ -1297,10 +1297,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
             il.Emit(OpCodes.Brtrue, skip);
-            _types.EmitLoadMethodInfo(il, helper);
+            var parameterProducer3 = EmitReflectedMethodLiteral(il, helper);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer3);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skip);
         }
@@ -1399,10 +1399,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, inputs.Abort.ControllerGetSignal);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(controllerAbort);
-            _types.EmitLoadMethodInfo(il, inputs.Abort.ControllerAbort);
+            var parameterProducer4 = EmitReflectedMethodLiteral(il, inputs.Abort.ControllerAbort);
             il.Emit(OpCodes.Ldstr, "abort");
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer4);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notControllerProperty);
         }
@@ -1432,10 +1432,10 @@ public partial class RuntimeEmitter
             void EmitSignalMethodWrapper(MethodBuilder helper, string jsName, int jsLength)
             {
                 il.Emit(OpCodes.Ldnull);
-                _types.EmitLoadMethodInfo(il, helper);
+                var parameterProducer5 = EmitReflectedMethodLiteral(il, helper);
                 il.Emit(OpCodes.Ldstr, jsName);
                 il.Emit(OpCodes.Ldc_I4, jsLength);
-                il.Emit(OpCodes.Newobj, inputs.TSFunctionCtorWithCache);
+                EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtorWithCache, parameterProducer5, cached: true);
                 il.Emit(OpCodes.Ret);
             }
 

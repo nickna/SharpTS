@@ -133,10 +133,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.HasIn);
         il.Emit(OpCodes.Brtrue, useGuestNext);
-        _types.EmitLoadMethodInfo(il, nativeNext);
+        var parameterProducer = EmitReflectedMethodLiteral(il, nativeNext);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, inputs.Construction.GetOrCreate);
+        EmitReflectedFunctionFactory(il, inputs.Construction.GetOrCreate, parameterProducer);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(useGuestNext);
         il.Emit(OpCodes.Ldloc, next);

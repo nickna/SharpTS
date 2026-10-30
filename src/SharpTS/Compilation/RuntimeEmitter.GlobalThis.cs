@@ -560,12 +560,10 @@ public partial class RuntimeEmitter
         // function object as the global parseInt.
         void EmitGetOrCreateTSFn(MethodBuilder wrappedMethod, string jsName, int jsLength)
         {
-            il.Emit(OpCodes.Ldtoken, wrappedMethod);
-            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            var parameterProducer = EmitReflectedMethodLiteralViaHandle(il, wrappedMethod);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Call, inputs.GetOrCreateFunction);
+            EmitReflectedFunctionFactory(il, inputs.GetOrCreateFunction, parameterProducer);
         }
         il.MarkLabel(parseIntLabel);
         EmitGetOrCreateTSFn(inputs.Numbers.ParseInt, "parseInt", 2);

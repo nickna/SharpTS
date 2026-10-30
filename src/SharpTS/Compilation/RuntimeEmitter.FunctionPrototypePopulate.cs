@@ -151,10 +151,10 @@ public partial class RuntimeEmitter
         });
 
         var intrinsic = il.DeclareLocal(_types.Object);
-        _types.EmitLoadMethodInfo(il, hasInstanceHelper);
+        var parameterProducer = EmitReflectedMethodLiteral(il, hasInstanceHelper);
         il.Emit(OpCodes.Ldstr, "[Symbol.hasInstance]");
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, inputs.FunctionConstruction.GetOrCreate);
+        EmitReflectedFunctionFactory(il, inputs.FunctionConstruction.GetOrCreate, parameterProducer);
         il.Emit(OpCodes.Stloc, intrinsic);
         il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, fnDescLocal);

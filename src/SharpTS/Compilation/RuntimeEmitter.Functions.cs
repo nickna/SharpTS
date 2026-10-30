@@ -1161,8 +1161,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, skipLabel);
             il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, helper);
-            NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.FunctionConstruction.Constructor);
+            var parameterProducer = EmitReflectedMethodLiteral(il, helper);
+            EmitReflectedFunctionConstructor(il, inputs.FunctionConstruction.Constructor, parameterProducer, cached: false);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skipLabel);
         }

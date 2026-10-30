@@ -67,10 +67,10 @@ public partial class RuntimeEmitter
         // description is a configurable, non-enumerable accessor property.
         description.DefineParameter(1, ParameterAttributes.None, "__this");
         var getterLocal = il.DeclareLocal(_types.Object);
-        _types.EmitLoadMethodInfo(il, description);
+        var parameterProducer = EmitReflectedMethodLiteral(il, description);
         il.Emit(OpCodes.Ldstr, "get description");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+        EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer);
         il.Emit(OpCodes.Stloc, getterLocal);
         il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, descLocal);

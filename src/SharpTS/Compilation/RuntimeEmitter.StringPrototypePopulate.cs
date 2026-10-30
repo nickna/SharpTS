@@ -140,10 +140,10 @@ public partial class RuntimeEmitter
         var iteratorFnLocal = il.DeclareLocal(_types.Object);
         var iteratorDescLocal = il.DeclareLocal(peers.DescriptorType);
         il.Emit(OpCodes.Ldnull);
-        _types.EmitLoadMethodInfo(il, strings.Iterator);
+        var parameterProducer = EmitReflectedMethodLiteral(il, strings.Iterator);
         il.Emit(OpCodes.Ldstr, "[Symbol.iterator]");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, peers.FunctionCtorWithCache);
+        EmitReflectedFunctionConstructor(il, peers.FunctionCtorWithCache, parameterProducer, cached: true);
         il.Emit(OpCodes.Stloc, iteratorFnLocal);
         il.Emit(OpCodes.Newobj, peers.Descriptors.Ctor);
         il.Emit(OpCodes.Stloc, iteratorDescLocal);

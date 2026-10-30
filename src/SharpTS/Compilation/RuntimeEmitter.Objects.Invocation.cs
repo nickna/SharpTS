@@ -159,11 +159,18 @@ public partial class RuntimeEmitter
         // Handle push - wrap List.Add as TSFunction
         il.MarkLabel(pushLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
-        il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+        NativeUnionArgumentConversion.ReflectionMethodEmission? parameterProducer = null;
+        var add = _types.GetMethod(_types.ListOfObject, "Add", _types.Object);
+        if (_nativeUnionParameters is { } conversion)
+            parameterProducer = conversion.EmitListAddParameters(il, add, _types.ListOfObject);
+        else
+        {
+            il.Emit(OpCodes.Ldtoken, add);
+            il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
+            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
+            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        }
+        EmitReflectedFunctionConstructor(il, runtime.FunctionConstruction.Constructor, parameterProducer, cached: false);
         il.Emit(OpCodes.Ret);
 
         // Handle pop - need special handling since pop returns removed element

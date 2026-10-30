@@ -426,7 +426,9 @@ public partial class ILCompiler
         {
             var symbolEmission = NativeOwnerClosure.EmitSymbolOwner(_nativeOwnerClosure, _types, owner, member.Builder!, il);
             il.Emit(OpCodes.Ldloc, key);
+            int symbolMethodTokenOffset = il.ILOffset;
             EmitMethodInfoLiteral(il, member.Builder!, owner);
+            NativeOwnerClosure.RecordSymbolMethod(_nativeOwnerClosure, il, symbolEmission, member.Builder!, symbolMethodTokenOffset);
             il.Emit(method.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
             NativeOwnerClosure.EmitSymbolRegistration(_nativeOwnerClosure, il, symbolEmission, _runtime.SymbolAccessors.RegisterMethod);
         }

@@ -111,10 +111,10 @@ public partial class RuntimeEmitter
             // $TSFunction.GetOrCreate(MethodInfo, name, length) — cached identity
             // so `m.max === Math.max` (same instance the value-form static
             // emitter hands out).
-            _types.EmitLoadMethodInfo(il, backing);
+            var parameterProducer = EmitReflectedMethodLiteral(il, backing);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Call, inputs.FunctionGetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.FunctionGetOrCreate, parameterProducer);
             il.Emit(OpCodes.Stloc, fnLocal);
             // Fast-path dict store (covers `m.max`) + non-enumerable descriptor
             // (so `Object.keys(Math)` / for-in don't surface the methods).

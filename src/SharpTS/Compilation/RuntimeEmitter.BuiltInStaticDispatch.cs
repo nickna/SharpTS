@@ -96,10 +96,10 @@ public partial class RuntimeEmitter
 
             // Match — return TSFunctionGetOrCreate(method, name, length) so the
             // wrapper identity matches the syntactic-dispatch path.
-            _types.EmitLoadMethodInfo(il, backingMethod);
+            var parameterProducer = EmitReflectedMethodLiteral(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Ldc_I4, specLength);
-            il.Emit(OpCodes.Call, inputs.GetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.GetOrCreate, parameterProducer);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(skipLabel);
@@ -181,10 +181,10 @@ public partial class RuntimeEmitter
 
             // TSFunctionGetOrCreate(MethodInfo, name, length) — identity-stable
             // wrapper (same MethodInfo key → same wrapper instance).
-            _types.EmitLoadMethodInfo(il, backingMethod);
+            var parameterProducer = EmitReflectedMethodLiteral(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Ldc_I4, specLength);
-            il.Emit(OpCodes.Call, inputs.GetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.GetOrCreate, parameterProducer);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(skipLabel);

@@ -92,10 +92,10 @@ public partial class RuntimeEmitter
         catch { /* already named — ignore */ }
         var errToStringWrapperLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldnull);
-        _types.EmitLoadMethodInfo(il, errorToStringSpec);
+        var parameterProducer = EmitReflectedMethodLiteral(il, errorToStringSpec);
         il.Emit(OpCodes.Ldstr, "toString");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, inputs.TSFunctionCtorWithCache);
+        EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtorWithCache, parameterProducer, cached: true);
         il.Emit(OpCodes.Stloc, errToStringWrapperLocal);
         il.Emit(OpCodes.Ldsfld, errors.Prototype);
         il.Emit(OpCodes.Ldstr, "toString");

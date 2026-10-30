@@ -259,7 +259,7 @@ public sealed class NativeSourceInvocationPlanTests
     private static void AssertNativeConstructorsDoNotCloseMethods(Type function)
     {
         var supplied = function.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
-            .Where(constructor => constructor.GetParameters().Length is 3 or 5).ToArray();
+            .Where(constructor => (constructor.GetParameters().Length is 3 or 5) && constructor.GetParameters()[^1].ParameterType == typeof(MethodInfo)).ToArray();
         Assert.Equal(2, supplied.Length);
         foreach (var constructor in supplied)
         {

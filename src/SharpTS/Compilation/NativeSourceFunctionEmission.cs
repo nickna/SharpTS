@@ -11,8 +11,12 @@ internal static class NativeSourceFunctionEmission
         MethodInfo method, Type? actualOwner = null, FunctionGenericParameterRegistry? generics = null)
     {
         var source = runtime.NativeCallables?.SourceFunctions;
-        if (source is not null && TryEmitInvocationTarget(il, types, method, actualOwner, generics))
+        if (source is not null && TryEmitInvocationTarget(il, types, method, actualOwner, generics, out var token))
+        {
+            int offset = il.ILOffset;
             il.Emit(OpCodes.Newobj, source.Constructor);
+            source.ParameterConversion?.RecordSourceConsumer(source.Constructor, method, token!, il, offset);
+        }
         else
             il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
     }
@@ -22,8 +26,12 @@ internal static class NativeSourceFunctionEmission
         MethodInfo method, Type? actualOwner = null, FunctionGenericParameterRegistry? generics = null)
     {
         var source = runtime.NativeCallables?.SourceFunctions;
-        if (source is not null && TryEmitInvocationTarget(il, types, method, actualOwner, generics))
+        if (source is not null && TryEmitInvocationTarget(il, types, method, actualOwner, generics, out var token))
+        {
+            int offset = il.ILOffset;
             il.Emit(OpCodes.Call, source.GetOrCreate);
+            source.ParameterConversion?.RecordSourceConsumer(source.GetOrCreate, method, token!, il, offset);
+        }
         else
             il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
     }
@@ -33,15 +41,21 @@ internal static class NativeSourceFunctionEmission
         MethodInfo method, Type? actualOwner = null, FunctionGenericParameterRegistry? generics = null)
     {
         var source = runtime.NativeCallables?.SourceFunctions;
-        if (source is not null && TryEmitInvocationTarget(il, types, method, actualOwner, generics))
+        if (source is not null && TryEmitInvocationTarget(il, types, method, actualOwner, generics, out var token))
+        {
+            int offset = il.ILOffset;
             il.Emit(OpCodes.Newobj, source.CachedConstructor);
+            source.ParameterConversion?.RecordSourceConsumer(source.CachedConstructor, method, token!, il, offset);
+        }
         else
             il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
     }
 
     private static bool TryEmitInvocationTarget(ILGenerator il, TypeProvider types,
-        MethodInfo original, Type? actualOwner, FunctionGenericParameterRegistry? generics)
+        MethodInfo original, Type? actualOwner, FunctionGenericParameterRegistry? generics,
+        out NativeUnionArgumentConversion.SourceParameterToken? token)
     {
+        token = null;
         MethodInfo target = original;
         if (original.IsGenericMethodDefinition &&
             (original is not MethodBuilder builder || generics?.TryGetErasedValueInvocationTarget(builder, out target!) != true))
@@ -57,10 +71,14 @@ internal static class NativeSourceFunctionEmission
                 return false;
             target = EmitterTypeHelpers.ResolveMethod(owner, method);
         }
+        int methodOffset = il.ILOffset;
         il.Emit(OpCodes.Ldtoken, target);
+        int ownerOffset = il.ILOffset;
         il.Emit(OpCodes.Ldtoken, owner);
+        int resolveOffset = il.ILOffset;
         il.Emit(OpCodes.Call, types.MethodBaseGetMethodFromHandleWithType);
         il.Emit(OpCodes.Castclass, types.MethodInfo);
+        token = new(target, owner, methodOffset, ownerOffset, resolveOffset);
         return true;
     }
 }

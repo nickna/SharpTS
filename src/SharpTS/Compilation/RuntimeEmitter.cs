@@ -10,6 +10,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly TypeProvider _types;
+    private NativeUnionArgumentConversion? _nativeUnionParameters;
     private readonly bool _emitHosted;
     private readonly bool _emitNativeCallables;
     private readonly bool _emitNativeOwnProperties;
@@ -87,6 +88,7 @@ public partial class RuntimeEmitter
         EmittedNativeMethodLookupRuntime? nativeMethodLookup = null,
         EmittedNativeConstructorMetadataRuntime? nativeConstructorMetadata = null)
     {
+        _nativeUnionParameters = functionPolicy.NativeUnionParameters;
         _nativeDeletionLookup?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         _nativeConstructorFactories?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         _nativeConstructorActivation?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);

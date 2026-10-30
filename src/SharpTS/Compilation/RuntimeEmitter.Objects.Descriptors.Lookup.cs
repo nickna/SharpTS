@@ -760,10 +760,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notRegExpEscapeDescriptor);
             EmitBuiltinDataDescriptor(il, resultDictLocal, endLabel, () =>
             {
-                _types.EmitLoadMethodInfo(il, inputs.RegExps.RequireImplementation().StaticEscape);
+                var parameterProducer1 = EmitReflectedMethodLiteral(il, inputs.RegExps.RequireImplementation().StaticEscape);
                 il.Emit(OpCodes.Ldstr, "escape");
                 il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+                EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer1);
             }, writable: true, configurable: true);
             il.MarkLabel(notRegExpEscapeDescriptor);
         }
@@ -814,10 +814,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, resultDictLocal);
             il.Emit(OpCodes.Ldloc, resultDictLocal);
             il.Emit(OpCodes.Ldstr, "value");
-            _types.EmitLoadMethodInfo(il, targetMethod);
+            var parameterProducer2 = EmitReflectedMethodLiteral(il, targetMethod);
             il.Emit(OpCodes.Ldstr, n);
             il.Emit(OpCodes.Ldc_I4, specLength);
-            il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer2);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
             EmitDescriptorBoolField(il, resultDictLocal, "writable", true);
             EmitDescriptorBoolField(il, resultDictLocal, "enumerable", false);
@@ -922,10 +922,10 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Brfalse, next);
                 EmitBuiltinDataDescriptor(il, resultDictLocal, endLabel, () =>
                 {
-                    _types.EmitLoadMethodInfo(il, target);
+                    var parameterProducer3 = EmitReflectedMethodLiteral(il, target);
                     il.Emit(OpCodes.Ldstr, name);
                     il.Emit(OpCodes.Ldc_I4, length);
-                    il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+                    EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer3);
                 }, writable: true, configurable: true);
                 il.MarkLabel(next);
             }
@@ -1030,10 +1030,10 @@ public partial class RuntimeEmitter
             {
                 // Emit TSFunction.GetOrCreate(methodInfo, name, length) so the
                 // descriptor's .value === Number.X (same cached wrapper).
-                _types.EmitLoadMethodInfo(il, methodTarget);
+                var parameterProducer4 = EmitReflectedMethodLiteral(il, methodTarget);
                 il.Emit(OpCodes.Ldstr, n);
                 il.Emit(OpCodes.Ldc_I4, methodArity);
-                il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+                EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer4);
             }
             else
             {

@@ -308,6 +308,19 @@ public partial class RuntimeEmitter
         var needsArgConversionField = typeBuilder.DefineField("_argConversionKinds", _types.Int32, FieldAttributes.Private);
         var conversionParametersField = typeBuilder.DefineField("_conversionParameters",
             _types.MakeArrayType(_types.ParameterInfo), FieldAttributes.Private);
+        var unionActionType = _types.MakeGenericType(_types.ActionOpen2, _types.MakeArrayType(_types.ParameterInfo), _types.ObjectArray);
+        var unionDispatchField = inputs.Policy.NativeUnionParameters is null ? null :
+            typeBuilder.DefineField("_unionArgumentConverter", unionActionType, FieldAttributes.Private | FieldAttributes.InitOnly);
+
+        void EmitUnionDispatch(ILGenerator body, MethodInfo? converter)
+        {
+            if (unionDispatchField is null) return;
+            if (converter is null) throw new InvalidOperationException("Source union transport requires its exact converter.");
+            body.Emit(OpCodes.Ldarg_0); body.Emit(OpCodes.Ldnull); body.Emit(OpCodes.Ldftn, converter);
+            body.Emit(OpCodes.Newobj, _types.GetConstructor(unionActionType, _types.Object, _types.IntPtr));
+            body.Emit(OpCodes.Stfld, unionDispatchField);
+        }
+
 
         // Static cache for "this" fields: ConcurrentDictionary<Type, FieldInfo>
         // used to avoid reflection overhead in BindThis
@@ -411,6 +424,8 @@ public partial class RuntimeEmitter
 
         var erasedInvokerTarget = EmitErasedSourceInvokerTarget(typeBuilder, inputs.FunctionAttributes, inputs.Policy.NativeGenericNormalizer);
         var nativeSources = inputs.NativeCallables?.BeginSourceFunctionsEmission();
+        if (nativeSources is not null && inputs.Policy.NativeUnionParameters is { } sourceConversion)
+            nativeSources.BindParameterConversion(sourceConversion);
 
         // Constructor: public $TSFunction(object target, MethodInfo method)
         var ctorBuilder = typeBuilder.DefineConstructor(
@@ -462,6 +477,7 @@ public partial class RuntimeEmitter
         // this._paramCount, _hasListRest, _hasArrayRest: cached by AdjustArgs.
         EmitComputeAdjustArgsCache(ctorIL, paramCountField, hasListRestField, hasArrayRestField, expectsThisField, methodArgIndex: 2);
         EmitComputeNeedsArgConversion(ctorIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
+        EmitUnionDispatch(ctorIL, inputs.Policy.NativeUnionConverter);
         // this._invoker = LookupOrAdd(_invokerCache, method)  [pseudocode]
         EmitLookupOrCreateInvoker(ctorIL, invokerField, invokerCacheField, invokerCacheType, erasedInvokerTarget, methodArgIndex: 2);
         if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(ctorIL, numericRest4Field, inputs.FunctionAttributes, inputs.Policy.NativeNumericRest4Binder);
@@ -507,25 +523,33 @@ public partial class RuntimeEmitter
         EmitComputePadUndefinedMask(ctorCacheIL, padUndefinedMaskField, inputs.FunctionAttributes, methodArgIndex: 2);
         EmitComputeAdjustArgsCache(ctorCacheIL, paramCountField, hasListRestField, hasArrayRestField, expectsThisField, methodArgIndex: 2);
         EmitComputeNeedsArgConversion(ctorCacheIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
+        EmitUnionDispatch(ctorCacheIL, inputs.Policy.NativeUnionConverter);
         // this._invoker = LookupOrAdd(_invokerCache, method)
         EmitLookupOrCreateInvoker(ctorCacheIL, invokerField, invokerCacheField, invokerCacheType, erasedInvokerTarget, methodArgIndex: 2);
         if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(ctorCacheIL, numericRest4Field, inputs.FunctionAttributes, inputs.Policy.NativeNumericRest4Binder);
         ctorCacheIL.MarkLabel(noCachedMethodLabel);
         ctorCacheIL.Emit(OpCodes.Ret);
 
+        inputs.Policy.NativeUnionParameters?.BindOriginalConstructors(ctorBuilder, ctorWithCacheBuilder);
         if (nativeSources is not null)
         {
             nativeSources.Constructor = EmitNativeSourceConstructor(cachedMetadata: false);
             nativeSources.CachedConstructor = EmitNativeSourceConstructor(cachedMetadata: true);
+            if (inputs.Policy.NativeUnionParameters is { } conversion)
+            {
+                conversion.ReflectionConstructor = EmitNativeSourceConstructor(cachedMetadata: false, reflected: true);
+                conversion.ReflectionCachedConstructor = EmitNativeSourceConstructor(cachedMetadata: true, reflected: true);
+            }
         }
 
-        ConstructorBuilder EmitNativeSourceConstructor(bool cachedMetadata)
+        ConstructorBuilder EmitNativeSourceConstructor(bool cachedMetadata, bool reflected = false)
         {
             // The original method remains the JS identity and metadata source.
             // Only invocation consumes the producer's exact, already-closed target.
+            Type proofType = reflected ? _types.Boolean : _types.MethodInfo;
             Type[] signature = cachedMetadata
-                ? [_types.Object, _types.MethodInfo, _types.String, _types.Int32, _types.MethodInfo]
-                : [_types.Object, _types.MethodInfo, _types.MethodInfo];
+                ? [_types.Object, _types.MethodInfo, _types.String, _types.Int32, proofType]
+                : [_types.Object, _types.MethodInfo, proofType];
             var constructor = typeBuilder.DefineConstructor(MethodAttributes.Assembly, CallingConventions.Standard, signature);
             var il = constructor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
@@ -548,9 +572,18 @@ public partial class RuntimeEmitter
             EmitComputeCapturesArguments(il, capturesArgumentsField, inputs.FunctionAttributes, methodArgIndex: 2);
             EmitComputePadUndefinedMask(il, padUndefinedMaskField, inputs.FunctionAttributes, methodArgIndex: 2);
             EmitComputeAdjustArgsCache(il, paramCountField, hasListRestField, hasArrayRestField, expectsThisField, methodArgIndex: 2);
-            EmitComputeNeedsArgConversion(il, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
+            var parameterConversion = nativeSources!.ParameterConversion;
+            var capture = EmitComputeNeedsArgConversion(il, needsArgConversionField, conversionParametersField, hasListRestField,
+                methodArgIndex: 2, emitParameterMethod: parameterConversion is null || reflected ? null : () =>
+                {
+                    il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldarg, cachedMetadata ? 5 : 3);
+                    il.Emit(OpCodes.Call, parameterConversion.SelectParameterSource);
+                });
+            if (reflected) parameterConversion!.RecordReflectionWriter(constructor, il, capture.Getter, capture.Store, conversionParametersField);
+            else parameterConversion?.RecordSourceWriter(constructor, il, capture.Getter, capture.Store, conversionParametersField);
+            EmitUnionDispatch(il, reflected ? parameterConversion!.ConvertCachedReflection : parameterConversion?.ConvertCachedSource);
             EmitLookupOrCreateInvoker(il, invokerField, invokerCacheField, invokerCacheType, erasedInvokerTarget,
-                methodArgIndex: 2, invocationTargetArgIndex: cachedMetadata ? 5 : 3);
+                methodArgIndex: 2, invocationTargetArgIndex: reflected ? null : cachedMetadata ? 5 : 3);
             if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(il, numericRest4Field, inputs.FunctionAttributes, inputs.Policy.NativeNumericRest4Binder);
             il.Emit(OpCodes.Ret);
             return constructor;
@@ -579,6 +612,7 @@ public partial class RuntimeEmitter
             [_types.MethodInfo, _types.String, _types.Int32]
         );
         functionConstruction.GetOrCreate = getOrCreateBuilder;
+        inputs.Policy.NativeUnionParameters?.BindOriginalFactory(getOrCreateBuilder);
         var gocIL = getOrCreateBuilder.GetILGenerator();
 
         var cacheKeyLocal = gocIL.DeclareLocal(instanceCacheKeyType);
@@ -652,9 +686,35 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, value); il.Emit(OpCodes.Ret);
             il.MarkLabel(create);
             il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldarg_3);
+            int sourceConstructionOffset = il.ILOffset;
             NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, nativeSources.CachedConstructor); il.Emit(OpCodes.Stloc, value);
             il.Emit(OpCodes.Ldsfld, instanceCacheField); il.Emit(OpCodes.Ldloc, key); il.Emit(OpCodes.Ldloc, value);
             il.Emit(OpCodes.Callvirt, getOrAddM); il.Emit(OpCodes.Ret);
+            nativeSources.ParameterConversion?.RecordSourceFactory(sourceFactory, nativeSources.CachedConstructor, il, sourceConstructionOffset);
+            if (nativeSources.ParameterConversion is { } conversion)
+            {
+                var reflectedFactory = typeBuilder.DefineMethod("GetOrCreateReflected", MethodAttributes.Assembly | MethodAttributes.Static,
+                    typeBuilder, [_types.MethodInfo, _types.String, _types.Int32, _types.Boolean]);
+                conversion.ReflectionGetOrCreate = reflectedFactory;
+                var body = reflectedFactory.GetILGenerator();
+                var reflectedKey = body.DeclareLocal(instanceCacheKeyType);
+                var reflectedValue = body.DeclareLocal(typeBuilder);
+                body.Emit(OpCodes.Ldarg_0); body.Emit(OpCodes.Ldarg_1); body.Emit(OpCodes.Ldarg_2);
+                body.Emit(OpCodes.Newobj, cacheKeyCtor); body.Emit(OpCodes.Stloc, reflectedKey);
+                body.Emit(OpCodes.Ldsfld, instanceCacheField); body.Emit(OpCodes.Ldloc, reflectedKey); body.Emit(OpCodes.Ldloca, reflectedValue);
+                body.Emit(OpCodes.Callvirt, tryGetValueM);
+                var createReflected = body.DefineLabel();
+                body.Emit(OpCodes.Brfalse, createReflected);
+                body.Emit(OpCodes.Ldloc, reflectedValue); body.Emit(OpCodes.Ret);
+                body.MarkLabel(createReflected);
+                body.Emit(OpCodes.Ldnull); body.Emit(OpCodes.Ldarg_0); body.Emit(OpCodes.Ldarg_1); body.Emit(OpCodes.Ldarg_2); body.Emit(OpCodes.Ldc_I4_1);
+                int constructionOffset = body.ILOffset;
+                NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, body, conversion.ReflectionCachedConstructor!);
+                body.Emit(OpCodes.Stloc, reflectedValue);
+                body.Emit(OpCodes.Ldsfld, instanceCacheField); body.Emit(OpCodes.Ldloc, reflectedKey); body.Emit(OpCodes.Ldloc, reflectedValue);
+                body.Emit(OpCodes.Callvirt, getOrAddM); body.Emit(OpCodes.Ret);
+                conversion.RecordReflectionFactory(reflectedFactory, body, constructionOffset);
+            }
             nativeSources.CompleteEmission();
         }
 
@@ -719,6 +779,10 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldc_I4, kind);
                 il.Emit(OpCodes.And);
                 il.Emit(OpCodes.Brfalse, skip);
+                if (kind == 1 && unionDispatchField is not null)
+                {
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, unionDispatchField);
+                }
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, conversionParametersField);
                 il.Emit(OpCodes.Ldloc, args);
@@ -727,7 +791,9 @@ public partial class RuntimeEmitter
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldfld, expectsThisField);
                 }
-                il.Emit(OpCodes.Call, helper);
+                if (kind == 1 && unionDispatchField is not null)
+                    il.Emit(OpCodes.Callvirt, _types.GetMethod(unionActionType, "Invoke", _types.MakeArrayType(_types.ParameterInfo), _types.ObjectArray));
+                else il.Emit(OpCodes.Call, helper);
                 il.MarkLabel(skip);
             }
         }
@@ -1592,8 +1658,8 @@ public partial class RuntimeEmitter
     /// with all-<c>object</c> params, Invoke skips both helpers. A trailing
     /// rest list is supplied in its final CLR representation by AdjustArgs.
     /// </summary>
-    private void EmitComputeNeedsArgConversion(ILGenerator il, FieldBuilder needsArgConversionField,
-        FieldBuilder conversionParametersField, FieldBuilder hasListRestField, int methodArgIndex)
+    private (int Getter, int Store) EmitComputeNeedsArgConversion(ILGenerator il, FieldBuilder needsArgConversionField,
+        FieldBuilder conversionParametersField, FieldBuilder hasListRestField, int methodArgIndex, Action? emitParameterMethod = null)
     {
         var paramsLocal = il.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
         var iLocal = il.DeclareLocal(_types.Int32);
@@ -1608,7 +1674,8 @@ public partial class RuntimeEmitter
         var notValueType = il.DefineLabel();
 
         // ps = method.GetParameters()
-        il.Emit(OpCodes.Ldarg, methodArgIndex);
+        if (emitParameterMethod is null) il.Emit(OpCodes.Ldarg, methodArgIndex); else emitParameterMethod();
+        int getterOffset = il.ILOffset;
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "GetParameters")!);
         il.Emit(OpCodes.Stloc, paramsLocal);
 
@@ -1688,9 +1755,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, doneLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, paramsLocal);
+        int storeOffset = il.ILOffset;
         il.Emit(OpCodes.Stfld, conversionParametersField);
 
         il.MarkLabel(doneLabel);
+        return (getterOffset, storeOffset);
     }
 
     /// <summary>

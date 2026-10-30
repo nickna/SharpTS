@@ -93,9 +93,11 @@ public partial class RuntimeEmitter
             catch { /* already named — preserve the existing parameter */ }
             il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
             il.Emit(OpCodes.Ldstr, jsName);
-            _types.EmitLoadMethodInfo(il, helper);
+            var parameterProducer = EmitReflectedMethodLiteral(il, helper);
             il.Emit(OpCodes.Ldc_I4, jsLength);
+            int installerOffset = il.ILOffset;
             il.Emit(OpCodes.Call, installMethod);
+            _nativeUnionParameters?.RecordArrayInstallerContributor(installMethod, parameterProducer, method, il, installerOffset);
         }
 
         // Callback/search function values need adapters when property lookup or

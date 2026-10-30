@@ -20,10 +20,14 @@ internal sealed class NativeOwnerClosure
         internal MethodBuilder Registered { get; } = registered;
         internal ILGenerator Body { get; } = body;
         internal int TokenOffset { get; } = offset;
+        internal int MethodTokenOffset { get; set; } = -1;
         internal MethodBuilder? Register { get; set; }
         internal int CallOffset { get; set; }
     }
     private readonly List<SymbolEmission> _symbols = [];
+    private NativeCompletedSymbolRegistrations? _completedSymbols;
+    internal NativeCompletedSymbolRegistrations CompletedSymbols => IsComplete ? _completedSymbols! :
+        throw new InvalidOperationException("Actual symbol method registrations have not completed.");
     private readonly List<(NativeOwnerNormalization Kind, MethodBuilder Method, ILGenerator Body, int Offset)> _normalizers = [];
     private bool _attached;
     private bool _userClasses = true;
@@ -94,6 +98,18 @@ internal sealed class NativeOwnerClosure
             throw new InvalidOperationException("Symbol registration requires its actual source owner and method.");
         var emission = new SymbolEmission(owner, registered, body, offset);
         proof._symbols.Add(emission); return emission;
+    }
+
+    internal static void RecordSymbolMethod(NativeOwnerClosure? proof, ILGenerator body,
+        SymbolEmission? emission, MethodBuilder method, int offset)
+    {
+        if (proof is null) return;
+        proof.EnsureMutable();
+        if (emission is null || !proof._symbols.Contains(emission) || emission.MethodTokenOffset >= 0 ||
+            !ReferenceEquals(emission.Body, body) || !ReferenceEquals(emission.Registered, method) ||
+            offset <= emission.TokenOffset || body.ILOffset <= offset)
+            throw new InvalidOperationException("Symbol parameter metadata requires its actual registered method token.");
+        emission.MethodTokenOffset = offset;
     }
 
     internal static void EmitSymbolRegistration(NativeOwnerClosure? proof, ILGenerator il,
@@ -168,6 +184,9 @@ internal sealed class NativeOwnerClosure
             if (!policy.IsCreated() || !sources.CanonicalMappings.Any(mapping => mapping.Definition == policy))
                 _storageBlockers.Add($"Unproved canonical storage policy owner: {policy.FullName}");
 
+        _completedSymbols = new(_owner.Module, SymbolUsesLegacy, Array.AsReadOnly(_symbols.Select(row =>
+            new NativeCompletedSymbolRegistration(row.Owner, row.Registered, row.Register, row.TokenOffset, row.MethodTokenOffset,
+                row.CallOffset, row.Body.ILOffset, row.Registered.GetILGenerator().ILOffset)).ToArray()));
         EmitAdmission(runtime.Errors);
         EmitOwnerMethod(StaticMemberOwner, sources, runtime, storage: false);
         EmitOwnerMethod(StaticStorageOwner, sources, runtime, storage: true);
@@ -273,3 +292,7 @@ internal sealed class NativeOwnerClosure
         GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor, ForeignOwnerMessage);
     private void EnsureMutable() { if (IsComplete) throw new InvalidOperationException("Native owner closure is complete."); }
 }
+
+internal sealed record NativeCompletedSymbolRegistration(TypeBuilder Owner, MethodBuilder Method, MethodBuilder? Register,
+    int OwnerTokenOffset, int MethodTokenOffset, int CallOffset, int CompletedBodyLength, int RegisteredBodyLength);
+internal sealed record NativeCompletedSymbolRegistrations(Module Module, bool UsesLegacy, IReadOnlyList<NativeCompletedSymbolRegistration> Rows);

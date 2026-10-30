@@ -12,7 +12,10 @@ internal static class UnionArgumentConversionEmission
 
     internal static void EmitNoOwnedUnions(ILGenerator il, TypeProvider types, EmittedErrorRuntime errors) => Emit(il, types, errors);
 
-    private static void Emit(ILGenerator il, TypeProvider types, EmittedErrorRuntime? errors)
+    internal static void EmitOwned(ILGenerator il, TypeProvider types, EmittedErrorRuntime errors, IReadOnlyList<Type> owners) =>
+        Emit(il, types, errors, owners);
+
+    private static void Emit(ILGenerator il, TypeProvider types, EmittedErrorRuntime? errors, IReadOnlyList<Type>? owners = null)
     {
         // Locals: 0=ParameterInfo[], 1=int count, 2=int i, 3=Type paramType, 4=Type argType, 5=MethodInfo implicitOp
         var paramsLocal = il.DeclareLocal(typeof(ParameterInfo[]));
@@ -86,14 +89,34 @@ internal static class UnionArgumentConversionEmission
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brtrue, continueLabel);
 
-        if (errors is not null)
+        if (errors is not null && owners is null)
         {
             GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor, ForeignUnionMessage);
         }
         else
         {
             // implicitOp = paramType.GetMethod("op_Implicit", new Type[] { argType })
-            il.Emit(OpCodes.Ldloc, paramTypeLocal);
+            if (owners is not null)
+            {
+                var refused = il.DefineLabel(); var queried = il.DefineLabel();
+                NativeTypeIdentityEmitter.EmitRuntimeTypeFence(il, types, () => il.Emit(OpCodes.Ldloc, paramTypeLocal), refused);
+                foreach (var owner in owners)
+                {
+                    var next = il.DefineLabel();
+                    il.Emit(OpCodes.Ldloc, paramTypeLocal); il.Emit(OpCodes.Ldtoken, owner);
+                    il.Emit(OpCodes.Call, types.TypeGetTypeFromHandle); il.Emit(OpCodes.Bne_Un, next);
+                    il.Emit(OpCodes.Ldtoken, owner); il.Emit(OpCodes.Call, types.TypeGetTypeFromHandle); EmitQuery();
+                    il.Emit(OpCodes.Br, queried); il.MarkLabel(next);
+                }
+                il.MarkLabel(refused);
+                GuestErrorEmitter.ThrowError(il, errors!.CreateException, errors.TypeErrorConstructor, ForeignUnionMessage);
+                il.MarkLabel(queried);
+            }
+            else { il.Emit(OpCodes.Ldloc, paramTypeLocal); EmitQuery(); }
+            il.Emit(OpCodes.Stloc, implicitOpLocal);
+
+            void EmitQuery()
+            {
             il.Emit(OpCodes.Ldstr, "op_Implicit");
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Newarr, types.Type);
@@ -102,7 +125,7 @@ internal static class UnionArgumentConversionEmission
             il.Emit(OpCodes.Ldloc, argTypeLocal);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Callvirt, types.GetMethod(types.Type, "GetMethod", [typeof(string), typeof(Type[])])!);
-            il.Emit(OpCodes.Stloc, implicitOpLocal);
+            }
 
             // if (implicitOp == null) continue
             il.Emit(OpCodes.Ldloc, implicitOpLocal);

@@ -11,6 +11,14 @@ public sealed class EmittedNativeSourceFunctionRuntime
     private ConstructorBuilder? _cachedConstructor;
     private MethodBuilder? _getOrCreate;
     public bool IsComplete { get; private set; }
+    private NativeUnionArgumentConversion? _parameterConversion;
+    internal NativeUnionArgumentConversion? ParameterConversion => _parameterConversion;
+    internal void BindParameterConversion(NativeUnionArgumentConversion conversion)
+    {
+        if (IsComplete || _parameterConversion is not null)
+            throw new InvalidOperationException("Native source parameter conversion metadata is already bound.");
+        _parameterConversion = conversion;
+    }
     public ConstructorBuilder Constructor { get => Require(_constructor); internal set => Set(ref _constructor, value); }
     public ConstructorBuilder CachedConstructor { get => Require(_cachedConstructor); internal set => Set(ref _cachedConstructor, value); }
     public MethodBuilder GetOrCreate { get => Require(_getOrCreate); internal set => Set(ref _getOrCreate, value); }

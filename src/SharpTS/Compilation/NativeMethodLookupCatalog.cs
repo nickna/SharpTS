@@ -65,6 +65,7 @@ internal sealed partial class NativeMethodLookupCatalog
         UsesLegacy = sources.Blockers.Count != 0;
         EmitQuery(Handles.Select, owners, errors, select: true);
         EmitQuery(Handles.Enumerate, owners, errors, select: false);
+        CompleteQueryReceipts();
         _owner.CreateType();
         _owners = Array.AsReadOnly(owners);
         IsComplete = true;
@@ -93,7 +94,7 @@ internal sealed partial class NativeMethodLookupCatalog
             il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle); il.Emit(OpCodes.Bne_Un, nextOwner);
             if (IsManualBridgeOwner(owner))
             {
-                EmitFixedBridgeQuery(il, errors, select, owner, IsArrayBridgeOwner(owner) ? ArrayBridgeMessage : FunctionBridgeMessage);
+                EmitFixedBridgeQuery(method, il, errors, select, owner, IsArrayBridgeOwner(owner) ? ArrayBridgeMessage : FunctionBridgeMessage);
                 il.MarkLabel(nextOwner); continue;
             }
             foreach (var flags in FlagsFor(owner))
@@ -104,9 +105,11 @@ internal sealed partial class NativeMethodLookupCatalog
                 il.Emit(OpCodes.Ldtoken, owner); il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
                 if (select) il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldc_I4, (int)flags);
+                int queryOffset = il.ILOffset;
                 il.Emit(OpCodes.Callvirt, select
                     ? _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags))
                     : _types.GetMethod(_types.Type, "GetMethods", typeof(BindingFlags)));
+                RecordQuery(method, il, queryOffset, owner, flags, null);
                 il.Emit(OpCodes.Ret); il.MarkLabel(nextFlags);
             }
             GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor, UnsupportedFlagsMessage);
