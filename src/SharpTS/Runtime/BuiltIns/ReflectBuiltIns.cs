@@ -480,36 +480,29 @@ public static class ReflectBuiltIns
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.defineProperty requires a target object.");
                 var key = interpreter.ToPropertyKey(args[1].ToObject());
-                if (target is ISharpTSOwnPropertyObject carrier)
-                {
-                    if (!args[2].IsObject)
-                        throw new ThrowException(new SharpTSTypeError("Property description must be an object"));
-                    var ownDescriptor = ObjectBuiltIns.ToPropertyDescriptor(interpreter, args[2].ToObject()!);
-                    return RuntimeValue.FromBoolean(key is SharpTSSymbol ownSymbol
-                        ? carrier.OwnProperties.DefineProperty(ownSymbol, ownDescriptor)
-                        : carrier.OwnProperties.DefineProperty((string)key, ownDescriptor));
-                }
-                if (FunctionObjectProperties.TryGetStorage(target, interpreter, out var functionProperties))
-                {
-                    if (!args[2].IsObject)
-                        throw new ThrowException(new SharpTSTypeError("Property description must be an object"));
-                    var functionDescriptor = ObjectBuiltIns.ToPropertyDescriptor(interpreter, args[2].ToObject()!);
-                    return RuntimeValue.FromBoolean(key is SharpTSSymbol functionSymbol
-                        ? functionProperties.DefineProperty(functionSymbol, functionDescriptor)
-                        : functionProperties.DefineProperty((string)key, functionDescriptor));
-                }
                 if (!args[2].IsObject)
                     throw new ThrowException(new SharpTSTypeError("Property description must be an object"));
                 var descriptorArg = args[2].ToObject()!;
+                var descriptor = ObjectBuiltIns.ToPropertyDescriptor(interpreter, descriptorArg);
+                if (target is ISharpTSOwnPropertyObject carrier)
+                {
+                    return RuntimeValue.FromBoolean(key is SharpTSSymbol ownSymbol
+                        ? carrier.OwnProperties.DefineProperty(ownSymbol, descriptor)
+                        : carrier.OwnProperties.DefineProperty((string)key, descriptor));
+                }
+                if (FunctionObjectProperties.TryGetStorage(target, interpreter, out var functionProperties))
+                {
+                    return RuntimeValue.FromBoolean(key is SharpTSSymbol functionSymbol
+                        ? functionProperties.DefineProperty(functionSymbol, descriptor)
+                        : functionProperties.DefineProperty((string)key, descriptor));
+                }
                 if (target is SharpTSProxy proxy)
                 {
-                    return RuntimeValue.FromBoolean(key is SharpTSSymbol symbol
-                        ? proxy.TrapDefineProperty(symbol, descriptorArg, interpreter)
-                        : proxy.TrapDefineProperty((string)key, descriptorArg, interpreter));
+                    return RuntimeValue.FromBoolean(
+                        proxy.TrapDefineConvertedProperty(key, descriptor, interpreter));
                 }
 
                 // Abrupt descriptor evaluation is not a refused definition.
-                SharpTSPropertyDescriptor descriptor = ObjectBuiltIns.ToPropertyDescriptor(interpreter, descriptorArg);
                 if (key is SharpTSSymbol symbolKey)
                     return RuntimeValue.FromBoolean(target switch
                     {
