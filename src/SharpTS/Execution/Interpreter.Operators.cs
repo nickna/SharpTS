@@ -546,6 +546,10 @@ public partial class Interpreter
             }
         }
 
+        // CLR operators resolve first. Guest numeric operators retain the
+        // observable number-hint ToPrimitive step and its Number/BigInt kind.
+        if (op.Type is TokenType.MINUS or TokenType.TILDE)
+            rv = ToNumericRV(rv);
         switch (op.Type)
         {
             case TokenType.BANG:
@@ -556,13 +560,11 @@ public partial class Interpreter
                 // Unary `+` on BigInt throws TypeError in JS.
                 throw new InterpreterException("TypeError: Cannot convert a BigInt value to a number");
             case TokenType.PLUS:
-                return RuntimeValue.FromNumber(CoerceToNumber(rv));
+                return RuntimeValue.FromNumber(ToNumberWithPrimitive(rv.ToObject()));
             case TokenType.MINUS when rv.IsNumber:
                 return RuntimeValue.FromNumber(-rv.AsNumber());
             case TokenType.MINUS when rv.IsBigInt:
                 return RuntimeValue.FromBigInt(new SharpTSBigInt(-rv.AsBigInt().Value));
-            case TokenType.MINUS:
-                return RuntimeValue.FromNumber(-CoerceToNumber(rv));
             case TokenType.TYPEOF:
                 return RuntimeValue.FromString(rv.TypeofString());
             case TokenType.VOID:
@@ -571,8 +573,6 @@ public partial class Interpreter
                 return RuntimeValue.FromNumber(~(int)rv.AsNumber());
             case TokenType.TILDE when rv.IsBigInt:
                 return RuntimeValue.FromBigInt(new SharpTSBigInt(~rv.AsBigInt().Value));
-            case TokenType.TILDE:
-                return RuntimeValue.FromNumber(~(int)CoerceToNumber(rv));
             default:
                 return RuntimeValue.Undefined;
         }
