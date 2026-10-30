@@ -263,6 +263,13 @@ public partial class Interpreter
         object? value,
         bool strictMode = false)
     {
+        if (GetPromiseConstructorState(constructor) is not null)
+        {
+            if (!SharpTSProxy.OrdinarySet(this, constructor, name, value, constructor) && strictMode)
+                throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
+                    $"Cannot assign to property '{name}' of Promise"));
+            return;
+        }
         var propertiesByConstructor = GetConstructorPropertyTable(constructor);
         var deletedByConstructor = GetConstructorDeletedTable(constructor);
         bool hadOwnProperty = HasBuiltInConstructorOwnProperty(constructor, name);
@@ -331,7 +338,16 @@ public partial class Interpreter
     {
         var propertiesByConstructor = GetConstructorPropertyTable(constructor);
         var deletedByConstructor = GetConstructorDeletedTable(constructor);
-        if (name == "name")
+        if (GetPromiseConstructorState(constructor) is { } realm)
+        {
+            var storage = new SharpTSObject([]);
+            if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, constructor, name) is { } current)
+                storage.DefineProperty(name, current);
+            if (!realm.SymbolProperties.IsExtensible) storage.PreventExtensions();
+            if (!storage.DefineProperty(name, descriptor)) return false;
+            descriptor = storage.GetOwnPropertyDescriptor(name)!;
+        }
+        else if (name == "name")
         {
             var storage = new SharpTSObject([]);
             if (GetBuiltInConstructorOverlayDescriptor(constructor, name) is { } current)

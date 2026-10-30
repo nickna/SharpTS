@@ -496,6 +496,9 @@ public static class ReflectBuiltIns
                 if (key is SharpTSSymbol intrinsicSymbol
                     && interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
                     return RuntimeValue.FromBoolean(intrinsicProperties.DefineProperty(intrinsicSymbol, descriptor));
+                if (target is SharpTSBuiltInConstructor intrinsicConstructor && key is string intrinsicName
+                    && Interpreter.GetPromiseConstructorState(intrinsicConstructor) is not null)
+                    return RuntimeValue.FromBoolean(interpreter.DefineBuiltInConstructorProperty(intrinsicConstructor, intrinsicName, descriptor));
                 if (target is ISharpTSOwnPropertyObject carrier)
                 {
                     return RuntimeValue.FromBoolean(key is SharpTSSymbol ownSymbol

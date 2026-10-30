@@ -16,6 +16,9 @@ public static class PromiseBuiltIns
         new[] { "all", "race", "resolve", "reject", "allSettled", "any", "withResolvers" }
             .ToDictionary(name => name, name => CreateStaticMethod(name, null)!);
 
+    internal static IEnumerable<string> StaticMemberNames
+        => StaticMethods.Keys.Concat(["allKeyed", "allSettledKeyed"]);
+
     /// <summary>
     /// Gets an instance member of a Promise.
     /// The interpreter is passed at call time through BuiltInAsyncMethod.

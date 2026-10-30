@@ -591,7 +591,10 @@ public static partial class ObjectBuiltIns
     {
         var arg = args[0].ToObject();
         if (interpreter.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+        {
+            interpreter.SetPromiseConstructorStringIntegrity(arg, freeze: true);
             intrinsicProperties.Freeze();
+        }
         switch (arg)
         {
             case ISharpTSOwnPropertyObject carrier:
@@ -661,7 +664,10 @@ public static partial class ObjectBuiltIns
     {
         var arg = args[0].ToObject();
         if (interpreter.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+        {
+            interpreter.SetPromiseConstructorStringIntegrity(arg, freeze: false);
             intrinsicProperties.Seal();
+        }
         switch (arg)
         {
             case ISharpTSOwnPropertyObject carrier:
@@ -1000,6 +1006,10 @@ public static partial class ObjectBuiltIns
             case SharpTSClass klass:
                 success = klass.DefineStaticProperty(propertyKey, descriptor);
                 break;
+            case SharpTSBuiltInConstructor constructor when Interpreter.GetPromiseConstructorState(constructor) is not null:
+                if (!interpreter.DefineBuiltInConstructorProperty(constructor, propertyKey, descriptor))
+                    throw new ThrowException(new SharpTSTypeError($"Cannot redefine property '{propertyKey}'"));
+                return target;
             case SharpTSBuiltInConstructor constructor:
                 success = interpreter.DefineBuiltInConstructorProperty(
                     constructor, propertyKey, descriptor);
@@ -1083,6 +1093,9 @@ public static partial class ObjectBuiltIns
             if (propertyKey is SharpTSSymbol namespaceSymbol)
                 return objectNamespace.DefineProperty(namespaceSymbol, ToPropertyDescriptor(interpreter, descriptor));
         }
+        if (target is SharpTSBuiltInConstructor constructor && propertyKey is string promiseName
+            && Interpreter.GetPromiseConstructorState(constructor) is not null)
+            return interpreter.DefineBuiltInConstructorProperty(constructor, promiseName, ToPropertyDescriptor(interpreter, descriptor));
         if (target is ISharpTSOwnPropertyObject carrier)
         {
             var key = interpreter.ToPropertyKey(propertyKey);
