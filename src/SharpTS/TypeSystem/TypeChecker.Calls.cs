@@ -445,7 +445,9 @@ public partial class TypeChecker
                         }
                         else
                         {
-                            argType = UnwrapTransparentForWidening(arg) is Expr.ObjectLiteral or Expr.ArrayLiteral
+                            // Conditional branches consume the same parameter context as a
+                            // directly written literal; retained values keep their own types.
+                            argType = UnwrapTransparentForWidening(arg) is Expr.ObjectLiteral or Expr.ArrayLiteral or Expr.Ternary
                                 ? CheckExprWithContext(arg, expectedParamType) : CheckExpr(arg);
                             if (tupleCallableOriginals is not null && ContainsGenericTupleCallback(arg))
                             {
