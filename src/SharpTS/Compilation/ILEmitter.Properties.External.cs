@@ -39,7 +39,7 @@ public partial class ILEmitter
             if (getter != null)
             {
                 RecordExternalSelection(getter, getter.ReturnType, NativeClrAdmission.Marshalling.BoxedSlot);
-                IL.Emit(OpCodes.Call, getter);
+                IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(getter));
 
                 BoxResultIfValueType(property.PropertyType);
                 SetStackUnknown();
@@ -74,7 +74,7 @@ public partial class ILEmitter
                 return true;
             }
 
-            IL.Emit(OpCodes.Ldsfld, field);
+            IL.Emit(OpCodes.Ldsfld, _ctx.TypeMapper.ForEmission(field));
 
             if (field.FieldType.IsValueType)
             {
@@ -205,7 +205,7 @@ public partial class ILEmitter
 
     private void EmitStaticGetterCall(System.Reflection.MethodInfo getter)
     {
-        IL.Emit(OpCodes.Call, getter);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(getter));
 
         // The resolved signature determines boxing even when the emission context
         // has no PropertyTypes map, or the getter belongs to an inherited class.
@@ -366,7 +366,7 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(receiver);
                 PrepareReceiverForMemberAccess(externalType, receiver);
                 RecordExternalSelection(field, field.FieldType, NativeClrAdmission.Marshalling.BoxedSlot, receiver);
-                IL.Emit(OpCodes.Ldfld, field);
+                IL.Emit(OpCodes.Ldfld, _ctx.TypeMapper.ForEmission(field));
                 BoxResultIfValueType(field.FieldType);
                 SetStackUnknown();
                 return;
@@ -386,7 +386,7 @@ public partial class ILEmitter
         EmitBoxIfNeeded(receiver);
         bool isValueType = PrepareReceiverForMemberAccess(externalType, receiver);
         RecordExternalSelection(getter, getter.ReturnType, NativeClrAdmission.Marshalling.BoxedSlot, receiver);
-        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, getter);
+        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(getter));
         BoxResultIfValueType(property.PropertyType);
         SetStackUnknown();
     }
@@ -446,7 +446,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Stloc, valueTemp);
 
                 RecordExternalSelection(field, field.FieldType, NativeClrAdmission.Marshalling.RawBox, receiver, [value]);
-                IL.Emit(OpCodes.Stfld, field);
+                IL.Emit(OpCodes.Stfld, _ctx.TypeMapper.ForEmission(field));
 
                 // Put value back on stack as boxed result
                 IL.Emit(OpCodes.Ldloc, valueTemp);
@@ -480,7 +480,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, propValueTemp);
 
         RecordExternalSelection(setter, property.PropertyType, NativeClrAdmission.Marshalling.RawBox, receiver, [value]);
-        IL.Emit(OpCodes.Callvirt, setter);
+        IL.Emit(OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(setter));
 
         // Put value back on stack as boxed result
         IL.Emit(OpCodes.Ldloc, propValueTemp);

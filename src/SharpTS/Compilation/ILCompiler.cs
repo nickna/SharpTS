@@ -513,7 +513,7 @@ public partial class ILCompiler
         }
 
         _moduleBuilder = _assemblyBuilder.DefineDynamicModule(assemblyName);
-        _typeMapper = new TypeMapper(_moduleBuilder, _types);
+        _typeMapper = new TypeMapper(_moduleBuilder, _types) { ExternalMetadata = _referenceLoader };
     }
 
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(

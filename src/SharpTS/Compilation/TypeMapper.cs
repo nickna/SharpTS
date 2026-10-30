@@ -1,4 +1,7 @@
 using System.Reflection.Emit;
+using MethodInfo = System.Reflection.MethodInfo;
+using ConstructorInfo = System.Reflection.ConstructorInfo;
+using FieldInfo = System.Reflection.FieldInfo;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -20,6 +23,12 @@ public class TypeMapper
 {
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeProvider _types;
+    internal AssemblyReferenceLoader? ExternalMetadata { get; set; }
+    internal MethodInfo ForEmission(MethodInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
+    internal ConstructorInfo ForEmission(ConstructorInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
+    internal FieldInfo ForEmission(FieldInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
+    internal Type CoreAtomForEmission(Type value) => ExternalMetadata?.CoreAtomForEmission(value) ?? value;
+    internal Type ForEmission(Type value) => ExternalMetadata?.ForEmission(value) ?? value;
     private readonly Dictionary<int, string> _checkedClassNames = [];
     private readonly HashSet<int> _dynamicClassInstances = [];
     private readonly HashSet<int> _receiverConstructionClasses = [];

@@ -87,7 +87,7 @@ public partial class ILEmitter
         EmitBoxIfNeeded(receiver);
         bool isValueType = PrepareReceiverForMemberAccess(externalType, receiver);
         EmitExternalCallArguments(arguments, getter, candidate);
-        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, getter);
+        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(getter));
         BoxResultIfValueType(getter.ReturnType);
         SetStackUnknown();
         return true;
@@ -132,7 +132,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, result);
         EmitExternalTypeConversion(parameters[1].ParameterType);
 
-        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, setter);
+        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(setter));
         IL.Emit(OpCodes.Ldloc, result);
         SetStackUnknown();
         return true;
@@ -209,7 +209,7 @@ public partial class ILEmitter
         var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
 
         // Emit the call - use Call for value types (with address), Callvirt for reference types
-        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, method);
+        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(method));
 
         EmitExternalCallResult(method, byRefOutputs);
         SetStackUnknown();
@@ -245,7 +245,7 @@ public partial class ILEmitter
         RecordExternalSelection(method, method.ReturnType, receiver: receiver, arguments: allArguments);
         var byRefOutputs = EmitExternalCallArguments(
             allArguments, method, candidate);
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         EmitExternalCallResult(method, byRefOutputs);
         SetStackUnknown();
         return true;
@@ -291,7 +291,7 @@ public partial class ILEmitter
         EmitExternalCallArguments(arguments, ctor, candidate);
 
         // Emit newobj instruction
-        IL.Emit(OpCodes.Newobj, ctor);
+        IL.Emit(OpCodes.Newobj, _ctx.TypeMapper.ForEmission(ctor));
         SetStackUnknown();
     }
 
@@ -339,7 +339,7 @@ public partial class ILEmitter
         var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
 
         // Emit the static call
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
 
         EmitExternalCallResult(method, byRefOutputs);
         SetStackUnknown();
@@ -513,7 +513,7 @@ public partial class ILEmitter
         RecordExternalSelection(method, method.ReturnType);
         if (byRefOutputs.Count == 0)
         {
-            if (method.ReturnType == typeof(void))
+            if (_ctx.TypeMapper.CoreAtomForEmission(method.ReturnType) == typeof(void))
                 IL.Emit(OpCodes.Ldnull);
             else if (method.ReturnType.IsArray)
                 EmitExternalArrayReturn(method.ReturnType);
@@ -523,7 +523,7 @@ public partial class ILEmitter
         }
 
         LocalBuilder? returnLocal = null;
-        if (method.ReturnType != typeof(void))
+        if (_ctx.TypeMapper.CoreAtomForEmission(method.ReturnType) != typeof(void))
         {
             returnLocal = IL.DeclareLocal(method.ReturnType);
             IL.Emit(OpCodes.Stloc, returnLocal);
@@ -1149,7 +1149,7 @@ public partial class ILEmitter
 
         // For instance accessors on reference types, callvirt gives proper dispatch even
         // though event accessors aren't typically virtual. For static accessors, call.
-        IL.Emit(accessor.IsStatic ? OpCodes.Call : OpCodes.Callvirt, accessor);
+        IL.Emit(accessor.IsStatic ? OpCodes.Call : OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(accessor));
     }
 
     /// <summary>

@@ -45,6 +45,7 @@ public partial class ILEmitter
     /// <param name="type">The type of the value on the stack.</param>
     private void BoxResultIfValueType(Type type)
     {
+        type = _ctx.TypeMapper.CoreAtomForEmission(type);
         if (type == _ctx.Types.Object)
             ClrNumericInteropEmitter.EmitNormalizeBoxed(IL, _ctx.Types);
         else if (type == typeof(decimal))

@@ -323,7 +323,7 @@ public partial class ILEmitter
         var candidate = resolver.ResolveMethod(methods, arguments);
         var method = (System.Reflection.MethodInfo)candidate.Method;
         var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         EmitExternalCallResult(method, byRefOutputs);
 
         SetStackUnknown();
@@ -717,7 +717,7 @@ public partial class ILEmitter
         var candidate = resolver.ResolveMethod(methods, arguments);
         var method = (System.Reflection.MethodInfo)candidate.Method;
         var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         EmitExternalCallResult(method, byRefOutputs);
         SetStackUnknown();
         return true;
@@ -911,7 +911,7 @@ public partial class ILEmitter
         var candidate = resolver.ResolveMethod(methods, arguments);
         var method = (System.Reflection.MethodInfo)candidate.Method;
         var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         EmitExternalCallResult(method, byRefOutputs);
 
         var result = IL.DeclareLocal(_ctx.Types.Object);
@@ -2514,7 +2514,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, oldValue);
         EmitExternalTypeConversion(method.GetParameters()[0].ParameterType);
         RecordExternalSelection(method, method.ReturnType);
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         BoxResultIfValueType(method.ReturnType);
         var newValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, newValue);
@@ -2780,10 +2780,10 @@ public partial class ILEmitter
         switch (member)
         {
             case PropertyInfo property:
-                IL.Emit(OpCodes.Callvirt, property.GetGetMethod()!);
+                IL.Emit(OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(property.GetGetMethod()!));
                 break;
             case FieldInfo field:
-                IL.Emit(OpCodes.Ldfld, field);
+                IL.Emit(OpCodes.Ldfld, _ctx.TypeMapper.ForEmission(field));
                 break;
         }
         BoxResultIfValueType(valueType);
@@ -2806,10 +2806,10 @@ public partial class ILEmitter
         switch (member)
         {
             case PropertyInfo property:
-                IL.Emit(OpCodes.Callvirt, property.GetSetMethod()!);
+                IL.Emit(OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(property.GetSetMethod()!));
                 break;
             case FieldInfo field:
-                IL.Emit(OpCodes.Stfld, field);
+                IL.Emit(OpCodes.Stfld, _ctx.TypeMapper.ForEmission(field));
                 break;
         }
     }
@@ -2825,7 +2825,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Castclass, ownerType);
         IL.Emit(OpCodes.Ldloc, index);
         EmitExternalTypeConversion(getter.GetParameters()[0].ParameterType);
-        IL.Emit(OpCodes.Callvirt, getter);
+        IL.Emit(OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(getter));
         BoxResultIfValueType(getter.ReturnType);
         var oldValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, oldValue);
@@ -2847,7 +2847,7 @@ public partial class ILEmitter
         EmitExternalTypeConversion(parameters[0].ParameterType);
         IL.Emit(OpCodes.Ldloc, value);
         EmitExternalTypeConversion(parameters[1].ParameterType);
-        IL.Emit(OpCodes.Callvirt, setter);
+        IL.Emit(OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(setter));
     }
 
     private LocalBuilder EmitExternalOperatorCall(
@@ -2862,7 +2862,7 @@ public partial class ILEmitter
         EmitExpression(rightExpression);
         EmitExternalTypeConversion(parameters[1].ParameterType);
         RecordExternalSelection(method, method.ReturnType);
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         BoxResultIfValueType(method.ReturnType);
         var newValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, newValue);
@@ -2877,7 +2877,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, oldValue);
         EmitExternalTypeConversion(method.GetParameters()[0].ParameterType);
         RecordExternalSelection(method, method.ReturnType);
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         BoxResultIfValueType(method.ReturnType);
         var newValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, newValue);
@@ -3619,7 +3619,7 @@ public partial class ILEmitter
         }
 
         // Call the runtime method
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
 
         // Handle result based on type
         switch (resultType)

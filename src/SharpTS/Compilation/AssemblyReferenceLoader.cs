@@ -21,6 +21,12 @@ public sealed class AssemblyReferenceLoader : IDisposable
     private readonly ConcurrentDictionary<string, Type?> _typeCache = new();
     private readonly ConcurrentDictionary<string, string> _metadataFailures = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
+    private ExternalMemberEmission? _emission;
+    internal MethodInfo ForEmission(MethodInfo member) => (_emission ??= new(_mlc)).Method(member);
+    internal ConstructorInfo ForEmission(ConstructorInfo member) => (_emission ??= new(_mlc)).Constructor(member);
+    internal FieldInfo ForEmission(FieldInfo member) => (_emission ??= new(_mlc)).Field(member);
+    internal Type CoreAtomForEmission(Type type) => (_emission ??= new(_mlc)).CoreAtom(type);
+    internal Type ForEmission(Type type) => (_emission ??= new(_mlc)).Type(type);
 
     /// <summary>
     /// Creates a new loader with the specified assembly paths.
