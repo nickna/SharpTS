@@ -5,6 +5,8 @@ release safety comes from artifact and registration preflight, deterministic ide
 post-publish inventory verification.
 
 Historical failures are recorded separately in [Release incident history](release-incidents.md).
+The [distribution acceptance handoff](release-acceptance.md) records current prepared artifacts,
+measured gates and remaining external inputs for the first binary/catalog release.
 
 ## Package manifest
 

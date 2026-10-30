@@ -1,0 +1,55 @@
+# SharpTS Homebrew tap
+
+Apple Silicon macOS casks for the SharpTS TypeScript interpreter and compiler. Choose one:
+
+```sh
+# Default: full-feature self-contained managed CLI
+brew install --cask nickna/tap/sharpts
+
+# Alternative: Native AOT CLI with the limitations below
+brew install --cask nickna/tap/sharpts-native
+```
+
+Both casks install `sharpts`, include their CLI runtime and conflict with each other. Intel Macs
+are unsupported. A separate .NET installation is not needed to run the CLI; executing generated
+managed DLL output requires a compatible .NET host.
+
+```sh
+sharpts --version
+```
+
+The managed SKU provides the full CLI feature set. The Native AOT SKU uses a closed .NET interop
+catalog: arbitrary DLL/NuGet references, `--verify`, `--gen-decl` and compiled `child_process.fork`
+require the managed SKU. See the upstream [Native AOT contract](https://github.com/nickna/SharpTS/blob/main/docs/native-aot.md).
+
+Upgrade or uninstall the cask you installed:
+
+```sh
+brew upgrade --cask nickna/tap/sharpts
+brew uninstall --cask nickna/tap/sharpts
+
+# Equivalent operations for the alternative SKU
+brew upgrade --cask nickna/tap/sharpts-native
+brew uninstall --cask nickna/tap/sharpts-native
+```
+
+Switch from managed to Native AOT:
+
+```sh
+brew uninstall --cask nickna/tap/sharpts
+brew install --cask nickna/tap/sharpts-native
+```
+
+Switch back:
+
+```sh
+brew uninstall --cask nickna/tap/sharpts-native
+brew install --cask nickna/tap/sharpts
+```
+
+Casks use immutable stable-release URLs and hashes. Both released Apple Silicon executables must
+pass Developer ID signature, notarization and online Gatekeeper checks. No Gatekeeper bypass is
+part of installation; a bare CLI executable does not provide a stapled offline-install ticket.
+Report CLI defects to [SharpTS](https://github.com/nickna/SharpTS/issues) and cask installation
+problems to this tap. Release and update procedures are maintained in the upstream
+[distribution guide](https://github.com/nickna/SharpTS/blob/main/docs/homebrew-distribution.md).

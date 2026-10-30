@@ -68,7 +68,8 @@ and Microsoft's [macOS deployment guidance](https://learn.microsoft.com/en-us/do
    This computes both hashes from the files and produces deterministic UTF-8 casks. Preview
    versions, wrong asset names, and missing archives fail. No checked-in installable cask
    contains a placeholder hash.
-4. Copy the generated `Casks` and adapt the supplied tap README. Review the PR and run the
+4. Copy the generated `Casks` and the supplied [user-facing tap README](../distribution/homebrew/TAP-README.md.in).
+   Review the PR and run the
    Apple Silicon cask jobs. They audit/style both casks, install each, check version, signature,
    Gatekeeper, interpretation, supported compilation and managed-only diagnostics, test the
    reciprocal conflict, and uninstall while checking the binary link is gone.

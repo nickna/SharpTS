@@ -7,7 +7,9 @@ stable release using the upstream `scripts/generate-homebrew-casks.ps1` helper. 
 example checksums. Configure the two Apple Silicon cask jobs as required checks and enable
 repository auto-merge before enabling upstream update automation.
 
-Once the tap and signed release are live, its user-facing README should document:
+Use [TAP-README.md.in](TAP-README.md.in) as the reviewable user-facing README after the signed
+release and casks pass their real acceptance checks. The tap is not live merely because this
+template exists. Its installation commands are:
 
 ```sh
 brew install --cask nickna/tap/sharpts
