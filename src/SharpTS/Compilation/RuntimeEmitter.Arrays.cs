@@ -1349,6 +1349,19 @@ public partial class RuntimeEmitter
             il.MarkLabel(absent);
         }
 
+        void AddInitialOwnName(string name)
+        {
+            // A recreated intrinsic is appended through its descriptor-store
+            // creation position rather than its deleted original slot.
+            var recreated = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, inputs.IsBuiltinDeleted);
+            il.Emit(OpCodes.Brtrue, recreated);
+            AddOwnName(name);
+            il.MarkLabel(recreated);
+        }
+
         // Intrinsic slots are created with the function, before user expandos.
         // Attribute changes preserve that position; deletion and recreation do not.
         var notFunctionForNames = il.DefineLabel();
@@ -1495,19 +1508,25 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
             il.Emit(OpCodes.Bne_Un, notDateConstructor);
             foreach (var name in new[] { "length", "name", "prototype", "now", "parse", "UTC" })
-            {
-                // A recreated intrinsic is a new property and is appended by
-                // the existing descriptor-store path, rather than its old slot.
-                var recreated = il.DefineLabel();
-                il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldstr, name);
-                il.Emit(OpCodes.Call, inputs.IsBuiltinDeleted);
-                il.Emit(OpCodes.Brtrue, recreated);
-                AddOwnName(name);
-                il.MarkLabel(recreated);
-            }
+                AddInitialOwnName(name);
             il.Emit(OpCodes.Br, appendStoredNames);
             il.MarkLabel(notDateConstructor);
+        }
+
+        if (inputs.Promise is not null)
+        {
+            // This is the same canonical constructor value used by Promise
+            // reads, own descriptors and deletion; no CLR method inventory.
+            var notPromiseConstructor = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, notPromiseConstructor);
+            foreach (var name in new[] { "length", "name", "prototype", "all", "allSettled", "any", "race",
+                         "resolve", "reject", "withResolvers", "allKeyed", "allSettledKeyed" })
+                AddInitialOwnName(name);
+            il.Emit(OpCodes.Br, appendStoredNames);
+            il.MarkLabel(notPromiseConstructor);
         }
 
         // RegExp instances are created with an own non-enumerable lastIndex
