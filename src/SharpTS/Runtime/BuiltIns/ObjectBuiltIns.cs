@@ -21,7 +21,7 @@ public static partial class ObjectBuiltIns
             .MethodV2("seal", 1, SealV2)
             .MethodV2("isFrozen", 1, IsFrozenV2)
             .MethodV2("isSealed", 1, IsSealedV2)
-            .MethodV2("defineProperty", 3, DefinePropertyV2)
+            .MethodV2("defineProperty", 0, int.MaxValue, specLength: 3, DefinePropertyV2)
             .MethodV2("getOwnPropertyDescriptor", 0, 2, specLength: 2, GetOwnPropertyDescriptorV2)
             .MethodV2("getOwnPropertyNames", 1, GetOwnPropertyNamesV2)
             .MethodV2("create", 1, 2, 2, CreateV2)
@@ -2644,7 +2644,17 @@ public static partial class ObjectBuiltIns
         => RuntimeValue.FromBoxed(Assign(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue DefinePropertyV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(DefineProperty(interp, CallableInterop.ToBoxedList(args)));
+    {
+        var target = args.Length > 0 ? args[0] : RuntimeValue.Undefined;
+        if (!target.IsObject)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.defineProperty called on non-object"));
+
+        var key = interp.ToPropertyKey(args.Length > 1
+            ? args[1].ToObject() : SharpTSUndefined.Instance);
+        var descriptor = args.Length > 2 ? args[2].ToObject() : SharpTSUndefined.Instance;
+        return RuntimeValue.FromBoxed(DefineProperty(interp, [target.ToObject(), key, descriptor]));
+    }
 
     private static RuntimeValue GetOwnPropertyDescriptorV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromBoxed(GetOwnPropertyDescriptor(interp, CallableInterop.ToBoxedList(args)));

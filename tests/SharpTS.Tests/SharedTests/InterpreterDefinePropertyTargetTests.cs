@@ -1,0 +1,27 @@
+using SharpTS.Tests.Infrastructure;
+using Xunit;
+
+namespace SharpTS.Tests.SharedTests;
+
+public sealed class InterpreterDefinePropertyTargetTests
+{
+    public static IEnumerable<object[]> Cases()
+    {
+        yield return ["original", "const events:string[]=[];const key:any={toString(){events.push('key');return 'x';}};const descriptor:any={get value(){events.push('value');return 7;}};for(const target of [null,undefined,1,true,'x',Symbol('s'),1n]){try{Object.defineProperty(target as any,key,descriptor);}catch(error){console.log(error instanceof TypeError,events.length);}}", "true 0\ntrue 0\ntrue 0\ntrue 0\ntrue 0\ntrue 0\ntrue 0\n"];
+        yield return ["argument-expression-order", "let trace=\"\",coercions=0;const key:any={toString(){coercions++;return\"x\";}},descriptor:any={get value(){coercions++;return 7;}};function target(){trace+=\"t\";return 1;}function keyArg(){trace+=\"k\";return key;}function descriptorArg(){trace+=\"d\";return descriptor;}try{Object.defineProperty(target() as any,keyArg(),descriptorArg());}catch(error){console.log(error instanceof TypeError,trace,coercions);}", "true tkd 0\n"];
+        yield return ["borrowed-and-reflect-apply", "let calls=0;const key:any={toString(){calls++;return\"x\";}},descriptor:any={get value(){calls++;return 7;}};const define=Object.defineProperty;try{(define as any).call(null,1,key,descriptor);}catch(error){console.log(error instanceof TypeError,calls);}try{Reflect.apply(define,null,[undefined,key,descriptor]);}catch(error){console.log(error instanceof TypeError,calls);}", "true 0\ntrue 0\n"];
+        yield return ["abrupt-arguments-remain-unobserved", "const marker={};let calls=0;const key:any={[Symbol.toPrimitive](){calls++;throw marker;}},descriptor:any={get value(){calls++;throw marker;}};for(const target of [null,undefined,1,true,\"x\",Symbol(\"s\"),1n]){try{Object.defineProperty(target as any,key,descriptor);}catch(error){console.log(error instanceof TypeError,error!==marker,calls);}}", "true true 0\ntrue true 0\ntrue true 0\ntrue true 0\ntrue true 0\ntrue true 0\ntrue true 0\n"];
+        yield return ["ordinary-object-carriers", "function named(){}class C{}const targets:any[]=[{},[],named,()=>{},new C(),C,new Proxy({},{}),Object(1)];for(const target of targets){const result=Object.defineProperty(target,\"x\",{value:7,configurable:true});console.log(result===target,Object.getOwnPropertyDescriptor(target,\"x\")!.value);}", "true 7\ntrue 7\ntrue 7\ntrue 7\ntrue 7\ntrue 7\ntrue 7\ntrue 7\n"];
+        yield return ["object-classification-no-callbacks", "let calls=0;const target:any={get valueOf(){calls++;throw new Error(\"valueOf\");},get toString(){calls++;throw new Error(\"toString\");}};console.log(Object.defineProperty(target,\"x\",{value:7})===target,target.x,calls);", "true 7 0\n"];
+        yield return ["async-context", "async function run(){await Promise.resolve();let calls=0;const key:any={toString(){calls++;return\"x\";}},descriptor:any={get value(){calls++;return 7;}};try{Object.defineProperty(1 as any,key,descriptor);}catch(error){console.log(error instanceof TypeError,calls);}}run();", "true 0\n"];
+        yield return ["missing-arguments-call-forms", "let trace=\"\";const key:any={toString(){trace+=\"k\";return\"x\";}},description:any={get value(){trace+=\"d\";return 7;}};const define:any=Object.defineProperty;function attempt(label:string,call:()=>any){trace=\"\";try{call();console.log(label,\"returned\",trace);}catch(error){console.log(label,error instanceof TypeError,trace);}}attempt(\"direct-zero\",()=>(Object.defineProperty as any)());attempt(\"alias-zero\",()=>define());attempt(\"invalid-one\",()=>define(1));attempt(\"valid-one\",()=>define({}));attempt(\"invalid-two\",()=>define(1,key));attempt(\"valid-two\",()=>define({},key));attempt(\"explicit-undefined\",()=>define({},key,undefined));attempt(\"call-zero\",()=>define.call(null));attempt(\"call-two\",()=>define.call(null,{},key));attempt(\"apply-zero\",()=>define.apply(null,[]));attempt(\"apply-two\",()=>define.apply(null,[{},key]));attempt(\"reflect-zero\",()=>Reflect.apply(define,null,[]));attempt(\"reflect-two\",()=>Reflect.apply(define,null,[{},key]));console.log(\"length\",define.length);", "direct-zero true \nalias-zero true \ninvalid-one true \nvalid-one true \ninvalid-two true \nvalid-two true k\nexplicit-undefined true k\ncall-zero true \ncall-two true k\napply-zero true \napply-two true k\nreflect-zero true \nreflect-two true k\nlength 3\n"];
+        yield return ["valid-key-order-and-symbol", "let trace=\"\";const symbol=Symbol(\"key\"),target:any={};const key:any={[Symbol.toPrimitive](hint:string){trace+=\"k\"+hint;return symbol;}};const descriptor:any={get value(){trace+=\"d\";return 7;},configurable:true};try{const result=Object.defineProperty(target,key,descriptor);console.log(result===target,target[symbol],trace);}catch(error){console.log(\"threw\",error instanceof TypeError,trace);}trace=\"\";const define:any=Object.defineProperty;const stringKey:any={toString(){trace+=\"k\";return\"x\";}};try{define({},stringKey,descriptor,(()=>{trace+=\"e\";return 9;})());console.log(trace);}catch(error){console.log(\"extra-threw\",error instanceof TypeError,trace);}", "true 7 kstringd\nekd\n"];
+    }
+
+    [Theory, MemberData(nameof(Cases))]
+    public void ValidatesPublicTargetBeforeConversion(string name, string source, string expected)
+    {
+        Assert.NotEmpty(name);
+        Assert.Equal(expected, TestHarness.RunInterpreted(source));
+    }
+}
