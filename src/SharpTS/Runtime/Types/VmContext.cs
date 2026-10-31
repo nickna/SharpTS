@@ -103,10 +103,13 @@ public static class VmContext
         if (value == null || value is ISharpTSCallable || value is BuiltInMethod) return value;
         // Preserve the existing managed shape/structural compatibility boundary.
         var type = value.GetType();
-        var invokeMethod = ManagedEmittedShapeReflection.IsShape(type, ManagedEmittedShape.Function)
+        bool emittedFunction = ManagedEmittedShapeReflection.IsShape(type, ManagedEmittedShape.Function);
+        var invokeMethod = emittedFunction
             ? ManagedEmittedShapeReflection.GetPublicMethod(type, ManagedEmittedShape.Function, "Invoke", [typeof(object[])])
             : ManagedStructuralClrReflection.TryGetPublicMethodBySignature(type, "Invoke", [typeof(object[])]);
-        return invokeMethod is null ? value : new CompiledCallableAdapter(value, invokeMethod);
+        var invokeWithThis = emittedFunction ? ManagedEmittedShapeReflection.GetPublicMethod(type,
+            ManagedEmittedShape.Function, "InvokeWithThis", [typeof(object), typeof(object[])]) : null;
+        return invokeMethod is null ? value : new CompiledCallableAdapter(value, invokeMethod, invokeWithThis);
     }
 
     internal static object? WrapVmCompiledCallable(object? value)
@@ -115,7 +118,9 @@ public static class VmContext
         var type = value.GetType();
         if (!ManagedEmittedShapeReflection.IsShape(type, ManagedEmittedShape.Function)) return value;
         var invoke = ManagedEmittedShapeReflection.GetPublicMethod(type, ManagedEmittedShape.Function, "Invoke", [typeof(object[])]);
-        return invoke is null ? value : new CompiledCallableAdapter(value, invoke);
+        var invokeWithThis = ManagedEmittedShapeReflection.GetPublicMethod(type, ManagedEmittedShape.Function,
+            "InvokeWithThis", [typeof(object), typeof(object[])]);
+        return invoke is null ? value : new CompiledCallableAdapter(value, invoke, invokeWithThis);
     }
 
     /// <summary>
@@ -215,24 +220,32 @@ public sealed record VmContextOptions(
 /// interpreter can invoke it. Used at the vm module boundary when compiled functions
 /// are passed in context objects.
 /// </summary>
-internal sealed class CompiledCallableAdapter(object target, MethodInfo invokeMethod) : ISharpTSCallable
+internal sealed class CompiledCallableAdapter(object target, MethodInfo invokeMethod, MethodInfo? invokeWithThisMethod = null) : ISharpTSCallable
 {
     internal object Original => target;
     private readonly BuiltIns.Modules.Interpreter.VmExecutionHost? _host = BuiltIns.Modules.Interpreter.VmExecutionHost.Current;
     public int Arity() => 0; // Unknown arity for compiled functions
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
+        => Invoke(arguments, null, explicitReceiver: false);
+
+    internal object? CallWithThis(object? receiver, List<object?> arguments)
+        => Invoke(arguments, receiver, explicitReceiver: true);
+
+    private object? Invoke(List<object?> arguments, object? receiver, bool explicitReceiver)
     {
         using var scope = _host?.Enter();
         var owner = Execution.VmEvaluationLease.CurrentInterpreter;
-        var args = arguments.Select(value =>
+        object? Adapt(object? value)
         {
             if (owner is not null) BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmBoundaryValue(value, owner);
             return _host is null ? value : _host.FromVm(value);
-        }).ToArray();
-        var result = invokeMethod.Invoke(target, [args]);
+        }
+        var args = arguments.Select(Adapt).ToArray();
+        var result = explicitReceiver && invokeWithThisMethod is not null
+            ? invokeWithThisMethod.Invoke(target, [Adapt(receiver), args])
+            : invokeMethod.Invoke(target, [args]);
         return _host is null ? result : _host.ToVm(result);
     }
-
     public override string ToString() => target.ToString() ?? "<compiled function>";
 }
