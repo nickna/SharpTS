@@ -652,6 +652,9 @@ public partial class Interpreter
             RuntimeEnvironment catchEnv = CreateCatchEnvironment(
                 tryCatch, errorValue, fromHostException);
 
+            if (tryCatch.CatchBlock.Any(statement => statement is Stmt.Using))
+                return (true, ExecuteBlock(tryCatch.CatchBlock, catchEnv));
+
             using (PushScope(catchEnv))
             {
                 ReserveLexicalDeclarations(tryCatch.CatchBlock);
@@ -724,6 +727,9 @@ public partial class Interpreter
 
     private ExecutionResult ExecuteHandlerBlock(List<Stmt> statements)
     {
+        if (statements.Any(statement => statement is Stmt.Using))
+            return ExecuteBlock(statements, CreateHandlerEnvironment());
+
         using var scope = PushScope(CreateHandlerEnvironment());
         ReserveLexicalDeclarations(statements);
         var completion = ExecutionResult.Success();
