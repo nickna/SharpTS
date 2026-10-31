@@ -158,7 +158,7 @@ public partial class Interpreter
                     {
                         BuiltInNames.ParseInt => 2,
                         BuiltInNames.ParseFloat or BuiltInNames.BigInt or BuiltInNames.Eval
-                            or BuiltInNames.EncodeURIComponent or BuiltInNames.DecodeURIComponent => 1,
+                            or BuiltInNames.EncodeURIComponent or BuiltInNames.DecodeURIComponent or BuiltInNames.QueueMicrotask => 1,
                         _ => 0
                     });
         }
@@ -786,6 +786,7 @@ public partial class Interpreter
             BuiltInNames.SetTimeout, BuiltInNames.ClearTimeout,
             BuiltInNames.SetInterval, BuiltInNames.ClearInterval,
             BuiltInNames.SetImmediate, BuiltInNames.ClearImmediate,
+            BuiltInNames.QueueMicrotask,
         })
         {
             globalThis.DefineProperty(name, new SharpTSPropertyDescriptor

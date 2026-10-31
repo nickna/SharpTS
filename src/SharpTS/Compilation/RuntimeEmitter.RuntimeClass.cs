@@ -728,7 +728,7 @@ public partial class RuntimeEmitter
             cctorIL.Emit(OpCodes.Call, promiseSpeciesInitializer);
 
         MethodBuilder? globalTimerInitializer = null;
-        if (_features.UsesTimerFunctionValues)
+        if (_features.UsesTimerFunctionValues || _features.UsesMicrotaskFunctionValues)
         {
             globalTimerInitializer = typeBuilder.DefineMethod("_InitializeGlobalTimers",
                 MethodAttributes.Private | MethodAttributes.Static, _types.Void, Type.EmptyTypes);

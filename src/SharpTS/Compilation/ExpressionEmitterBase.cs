@@ -2436,7 +2436,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected bool TryEmitGlobalTimerFunctionValue(string name)
     {
         if (name is not ("setTimeout" or "clearTimeout" or "setInterval" or "clearInterval"
-            or "setImmediate" or "clearImmediate") || Ctx.HasVisibleValueBinding(name)) return false;
+            or "setImmediate" or "clearImmediate" or "queueMicrotask") || Ctx.HasVisibleValueBinding(name)) return false;
         IL.Emit(OpCodes.Ldstr, name);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
         SetStackUnknown();
@@ -2453,15 +2453,17 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             : ctx.Runtime!.GlobalObject.GetBinding);
     }
 
-    protected bool TryEmitGlobalParseIntTypeOf(Expr operand)
+    protected bool TryEmitMutableGlobalFunctionTypeOf(Expr operand)
     {
-        if (ExpressionUnwrapper.Unwrap(operand) is not Expr.Variable { Name.Lexeme: "parseInt" }
-            || Resolver.HasVariable("parseInt") || Ctx.HasVisibleValueBinding("parseInt"))
+        if (ExpressionUnwrapper.Unwrap(operand) is not Expr.Variable variable
+            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask")
+            || Resolver.HasVariable(variable.Name.Lexeme) || Ctx.HasVisibleValueBinding(variable.Name.Lexeme))
             return false;
 
         // Parentheses preserve an identifier reference's typeof exemption.
         // Still perform the property read so present accessors run normally.
-        EmitGlobalParseIntRead(IL, Ctx, allowMissing: true);
+        IL.Emit(OpCodes.Ldstr, variable.Name.Lexeme);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetProperty);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.TypeOf);
         SetStackType(StackType.String);
         return true;
@@ -2992,7 +2994,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 break;
             case TokenType.TYPEOF:
                 // typeof never throws on undeclared variables - returns "undefined"
-                if (TryEmitGlobalParseIntTypeOf(u.Right))
+                if (TryEmitMutableGlobalFunctionTypeOf(u.Right))
                 {
                     break;
                 }

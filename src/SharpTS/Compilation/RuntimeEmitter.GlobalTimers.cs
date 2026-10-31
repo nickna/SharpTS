@@ -9,15 +9,20 @@ public partial class RuntimeEmitter
         var il = initializer.GetILGenerator();
         var storage = runtime.DescriptorStorage;
         var descriptor = il.DeclareLocal(storage.DescriptorType);
-        foreach (var (name, length) in new[]
+        List<(string Name, int Length, MethodBuilder Wrapper)> functions = [];
+        if (_features.UsesTimerFunctionValues)
+            foreach (var (name, length) in new[]
+            {
+                ("setTimeout", 2), ("clearTimeout", 1), ("setInterval", 2),
+                ("clearInterval", 1), ("setImmediate", 1), ("clearImmediate", 1)
+            })
+                functions.Add((name, length, runtime.BuiltInModules.Require("timers", name)));
+        if (_features.UsesMicrotaskFunctionValues)
+            functions.Add(("queueMicrotask", 1, runtime.Microtasks.QueueMicrotask));
+        foreach (var (name, length, wrapper) in functions)
         {
-            ("setTimeout", 2), ("clearTimeout", 1), ("setInterval", 2),
-            ("clearInterval", 1), ("setImmediate", 1), ("clearImmediate", 1)
-        })
-        {
-            // Actual module declarations own these values; the source feature
-            // flag is only a conservative reachability gate.
-            var wrapper = runtime.BuiltInModules.Require("timers", name);
+            // Actual emitted declarations own these values; source flags only
+            // decide whether their ordinary global data slots are reachable.
             il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
             il.Emit(OpCodes.Stloc, descriptor);
             il.Emit(OpCodes.Ldloc, descriptor);

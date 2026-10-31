@@ -175,6 +175,8 @@ public sealed class RuntimeFeatureSet
     public bool UsesDateConstructorMutation { get; set; } = true;
     // Reachability only: global timer values use actual emitted module wrappers.
     public bool UsesTimerFunctionValues { get; set; } = true;
+    // Reachability only: the actual emitted microtask method owns its value.
+    public bool UsesMicrotaskFunctionValues { get; set; } = true;
     // Promise method/constructor/species mutation makes direct then lowering
     // observable through ordinary property lookup. Such programs must retain
     // value dispatch for then/catch/finally calls.

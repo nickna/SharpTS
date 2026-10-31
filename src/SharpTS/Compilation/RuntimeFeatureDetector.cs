@@ -127,6 +127,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesDatePrototypeMutation = false,
             UsesDateConstructorMutation = false,
             UsesTimerFunctionValues = false,
+            UsesMicrotaskFunctionValues = false,
             UsesPromisePrototypeMutation = false,
             UsesArrayPrototypeMutation = false,
             UsesArrayMethodValues = false,
@@ -364,6 +365,9 @@ public sealed partial class RuntimeFeatureDetector
     {
         switch (name)
         {
+            case "queueMicrotask":
+                _set.UsesMicrotaskFunctionValues = true;
+                break;
             case "setTimeout":
             case "clearTimeout":
             case "setInterval":
@@ -384,6 +388,7 @@ public sealed partial class RuntimeFeatureDetector
                 if (name is "eval" or "Function")
                 {
                     _set.UsesTimerFunctionValues = true;
+                    _set.UsesMicrotaskFunctionValues = true;
                     _set.UsesArrayMethodValues = true;
                     // Callable discovery can parse indirect/grouped literal
                     // eval after this walk. Retain receiver scopes for opaque
@@ -615,6 +620,7 @@ public sealed partial class RuntimeFeatureDetector
             case "globalThis":
             case "global":
                 _set.UsesTimerFunctionValues = true;
+                _set.UsesMicrotaskFunctionValues = true;
                 _set.UsesDateConstructorMutation = true;
                 _set.UsesObjectDefinitionRuntime = true;
                 _set.UsesArrayReceiverScopes = true;

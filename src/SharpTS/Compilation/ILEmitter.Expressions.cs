@@ -258,7 +258,7 @@ public partial class ILEmitter
         }
         if (name is "parseFloat" or "isNaN" or "isFinite"
             or "encodeURIComponent" or "decodeURIComponent"
-            or "queueMicrotask" or "structuredClone")
+            or "structuredClone")
         {
             IL.Emit(OpCodes.Ldstr, name);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.GetProperty);

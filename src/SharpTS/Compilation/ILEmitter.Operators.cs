@@ -648,7 +648,7 @@ public partial class ILEmitter
 
             case TokenType.TYPEOF:
                 // typeof never throws on undeclared variables - returns "undefined"
-                if (TryEmitGlobalParseIntTypeOf(u.Right))
+                if (TryEmitMutableGlobalFunctionTypeOf(u.Right))
                 {
                     break;
                 }
