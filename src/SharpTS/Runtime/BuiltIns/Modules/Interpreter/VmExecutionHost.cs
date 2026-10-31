@@ -152,6 +152,7 @@ internal sealed class VmExecutionHost : IDisposable
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (_compiledCallables.TryGetValue(target, out var cached)) return cached;
+            _hasCompiledCallables = true;
             getRole = _getNativeCallbackRole;
         }
         int role = getRole?.Invoke(target) ?? 0;
@@ -161,7 +162,6 @@ internal sealed class VmExecutionHost : IDisposable
             ObjectDisposedException.ThrowIf(_disposed, this);
             var result = _compiledCallables.GetValue(target,
                 value => new Types.CompiledCallableAdapter(value, invoke, invokeWithThis, this, role));
-            _hasCompiledCallables = true;
             return result;
         }
     }
