@@ -19,11 +19,13 @@ public class TimerHandler : ICallHandler
         var il = emitter.IL;
         var ctx = emitter.Context;
 
+        // Lexical bindings own the call before any global intrinsic fast path.
         // Skip when the variable is shadowed by any module import — built-in
         // (dispatch through the primitive emitter) or stdlib TS re-export
         // (dispatch through normal module-field resolution). Either way, the
         // global timer handler must not intercept the call.
-        if (ctx.ImportedNames?.Contains(v.Name.Lexeme) == true)
+        if (emitter.HasVariable(v.Name.Lexeme) || ctx.HasVisibleValueBinding(v.Name.Lexeme)
+            || ctx.ImportedNames?.Contains(v.Name.Lexeme) == true)
             return false;
 
         return v.Name.Lexeme switch
