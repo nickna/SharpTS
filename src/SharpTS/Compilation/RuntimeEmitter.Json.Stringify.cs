@@ -111,7 +111,8 @@ public partial class RuntimeEmitter
 
     private readonly record struct StringifyObjectInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
-        MethodBuilder GetKeys
+        MethodBuilder GetKeys,
+        MethodBuilder GetProperty
     );
 
     private readonly record struct BoxedPrimitiveJsonCoerceInputs(
@@ -1326,37 +1327,16 @@ public partial class RuntimeEmitter
             method,
             valueLocal,
             json,
-            new StringifyObjectInputs(inputs.DescriptorStorage, inputs.GetKeys),
+            new StringifyObjectInputs(inputs.DescriptorStorage, inputs.GetKeys, inputs.GetProperty),
             allowPooledDictionaryKeysLocal
         );
 
-        // Class instance - stringify via $IHasFields fields dictionary.
-        // Use TSObjectMergeEnumerable to also include accessor (getter)
-        // properties for $Object receivers per ECMA-262 EnumerableOwnPropertyNames.
+        // Keep the actual holder so descriptor-backed and legacy accessors
+        // are read only when their selected property is serialized.
         il.MarkLabel(classInstanceLabel);
-        var classFieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var noClassFieldsLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, inputs.TSObjectMergeEnumerable);
-        il.Emit(OpCodes.Stloc, classFieldsLocal);
-
-        il.Emit(OpCodes.Ldloc, classFieldsLocal);
-        il.Emit(OpCodes.Brfalse, noClassFieldsLabel);
-        il.Emit(OpCodes.Ldloc, classFieldsLocal);
-        il.Emit(OpCodes.Stloc, valueLocal);
-        EmitStringifyObject(
-            il,
-            method,
-            valueLocal,
-            json,
-            new StringifyObjectInputs(inputs.DescriptorStorage, inputs.GetKeys),
-            null
-        );
-
-        il.MarkLabel(noClassFieldsLabel);
-        il.Emit(OpCodes.Ldstr, "{}");
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, allowPooledDictionaryKeysLocal);
+        il.Emit(OpCodes.Br, dictLabel);
 
         return method;
     }
@@ -1684,6 +1664,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private static void EmitJsonObjectPropertyRead(
+        ILGenerator il, LocalBuilder dictionary, LocalBuilder holder, LocalBuilder key,
+        EmittedJsonImplementation json, MethodBuilder getProperty)
+    {
+        var actualHolder = il.DefineLabel();
+        var ready = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, dictionary);
+        il.Emit(OpCodes.Brfalse, actualHolder);
+        il.Emit(OpCodes.Ldloc, dictionary);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, json.GetDictionaryProperty!);
+        il.Emit(OpCodes.Br, ready);
+        il.MarkLabel(actualHolder);
+        il.Emit(OpCodes.Ldloc, holder);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, getProperty);
+        il.MarkLabel(ready);
+    }
+
     private void EmitStringifyObject(
         ILGenerator il,
         MethodBuilder stringifyMethod,
@@ -1705,7 +1704,7 @@ public partial class RuntimeEmitter
         var loopEnd = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
         // Descriptor-free ordinary dictionaries with no canonical index keys
@@ -1804,9 +1803,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, valueReady);
 
         il.MarkLabel(generalRead);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, json.GetDictionaryProperty!);
+        EmitJsonObjectPropertyRead(il, dictLocal, valueLocal, keyLocal, json, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, dictValueLocal);
         il.MarkLabel(valueReady);
         il.Emit(OpCodes.Ldloc, dictValueLocal);
