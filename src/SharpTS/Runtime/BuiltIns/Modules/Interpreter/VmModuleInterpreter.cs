@@ -32,6 +32,13 @@ public static partial class VmModuleInterpreter
             throw new ArgumentException("Expected an owned VM execution host.", nameof(host));
         ownedHost.ConfigureValueAdapters(fromVm, toVm);
     }
+    /// <summary>Installs the actual caller's typed thrown-value carrier transport before execution.</summary>
+    public static void ConfigureExecutionHostThrownValueAdapter(object host, Func<Exception, bool> isThrown, Func<Exception, object?> getThrown)
+    {
+        if (host is not VmExecutionHost ownedHost)
+            throw new ArgumentException("Expected an owned VM execution host.", nameof(host));
+        ownedHost.ConfigureThrownValueAdapter(isThrown, getThrown);
+    }
     /// <summary>
     /// Gets all exported values for the vm module.
     /// </summary>

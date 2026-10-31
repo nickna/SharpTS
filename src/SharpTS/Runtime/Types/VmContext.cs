@@ -242,9 +242,19 @@ internal sealed class CompiledCallableAdapter(object target, MethodInfo invokeMe
             return _host is null ? value : _host.FromVm(value);
         }
         var args = arguments.Select(Adapt).ToArray();
-        var result = explicitReceiver && invokeWithThisMethod is not null
-            ? invokeWithThisMethod.Invoke(target, [Adapt(receiver), args])
-            : invokeMethod.Invoke(target, [args]);
+        object? result;
+        try
+        {
+            result = explicitReceiver && invokeWithThisMethod is not null
+                ? invokeWithThisMethod.Invoke(target, [Adapt(receiver), args])
+                : invokeMethod.Invoke(target, [args]);
+        }
+        catch (Exception exception) when (_host is not null)
+        {
+            var carrier = exception is TargetInvocationException { InnerException: { } inner } ? inner : exception;
+            if (!_host.TryGetThrownValue(carrier, out var value)) throw;
+            throw new Exceptions.ThrowException(_host.ToVm(value));
+        }
         return _host is null ? result : _host.ToVm(result);
     }
     public override string ToString() => target.ToString() ?? "<compiled function>";

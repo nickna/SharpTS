@@ -13,6 +13,9 @@ internal sealed class VmExecutionHost : IDisposable
     private Action? _refHandle, _unrefHandle, _checkCancellation;
     private Func<object?, object?>? _fromVm, _toVm;
     private bool _adapterConfigured;
+    private Func<Exception, bool>? _isThrownValue;
+    private Func<Exception, object?>? _getThrownValue;
+    private bool _thrownAdapterConfigured, _executionStarted;
     private bool _disposed;
     private int _acquiredRefs;
 
@@ -38,7 +41,11 @@ internal sealed class VmExecutionHost : IDisposable
 
     internal IDisposable Enter()
     {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _executionStarted = true;
+        }
         var ambient = LazyInitializer.EnsureInitialized(ref _ambient);
         var previous = ambient.Value;
         ambient.Value = this;
@@ -55,6 +62,7 @@ internal sealed class VmExecutionHost : IDisposable
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            _executionStarted = true;
             _leases.RemoveAll(reference => !reference.TryGetTarget(out _));
             _leases.Add(new(lease));
         }
@@ -86,6 +94,29 @@ internal sealed class VmExecutionHost : IDisposable
         }
     }
 
+    internal void ConfigureThrownValueAdapter(Func<Exception, bool> isThrown, Func<Exception, object?> getThrown)
+    {
+        ArgumentNullException.ThrowIfNull(isThrown);
+        ArgumentNullException.ThrowIfNull(getThrown);
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_thrownAdapterConfigured || _executionStarted || _leases.Count != 0)
+                throw new InvalidOperationException("VM thrown-value adapters must be configured once before execution.");
+            _thrownAdapterConfigured = true;
+            _isThrownValue = isThrown;
+            _getThrownValue = getThrown;
+        }
+    }
+
+    internal bool TryGetThrownValue(Exception exception, out object? value)
+    {
+        value = null;
+        if (_isThrownValue is not { } isThrown || _getThrownValue is not { } getThrown || !isThrown(exception))
+            return false;
+        value = getThrown(exception);
+        return true;
+    }
     internal object? FromVm(object? value)
     {
         if (value is Types.CompiledCallableAdapter callback) value = callback.Original;
@@ -155,6 +186,8 @@ internal sealed class VmExecutionHost : IDisposable
                 _queuePromiseJob = _scheduleCallback = _queueAfterCheckpoint = null;
                 _refHandle = _unrefHandle = _checkCancellation = null;
                 _fromVm = _toVm = null;
+                _isThrownValue = null;
+                _getThrownValue = null;
             }
             if (ReferenceEquals(_ambient?.Value, this)) _ambient.Value = null;
         }
