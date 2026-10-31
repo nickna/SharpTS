@@ -29,6 +29,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, descriptor);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Brfalse, writable);
+        // Accessors have no [[Writable]] attribute. Let the actual strict Set
+        // below invoke their setter or reject a getter-only descriptor.
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt,
+            runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, writable);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt,
+            runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, writable);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Callvirt,
             runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!);
