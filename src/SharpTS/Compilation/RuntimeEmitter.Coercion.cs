@@ -55,7 +55,8 @@ public partial class RuntimeEmitter
         MethodInfo HasPrototypeEntry,
         MethodInfo GetPrototype,
         MethodInfo CreateException,
-        ConstructorInfo TypeErrorCtor);
+        ConstructorInfo TypeErrorCtor,
+        EmittedVmRuntime? Vm = null);
 
     private void EmitStringify(TypeBuilder typeBuilder, EmittedStringCoercionRuntime coercion,
         EmittedArrayStorageRuntime arrays,
@@ -755,6 +756,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notSymbolLabel);
         GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert a Symbol value to a string");
         il.MarkLabel(notSymbolLabel);
+
+        if (peers.Vm is { } vm)
+        {
+            var actualVmValue = il.DefineLabel();
+            var nativeValue = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, vm.IsErrorValue);
+            il.Emit(OpCodes.Brtrue, actualVmValue);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, vm.IsRelatedValue);
+            il.Emit(OpCodes.Brtrue, actualVmValue);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, vm.IsMappedValue);
+            il.Emit(OpCodes.Brfalse, nativeValue);
+            il.MarkLabel(actualVmValue);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, vm.ToStringValue);
+            il.Emit(OpCodes.Castclass, _types.String);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(nativeValue);
+        }
 
         // A bigint coerces to its bare decimal form ("42"), not Stringify's "42n".
         EmitBigIntToStringReturn(il);

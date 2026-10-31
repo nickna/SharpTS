@@ -184,6 +184,13 @@ public sealed class EmittedVmRuntime
         set => Set(ref _mappedPrototype, value);
     }
 
+    private MethodBuilder? _toStringValue;
+    internal MethodBuilder ToStringValue
+    {
+        get => Require(_toStringValue);
+        set => Set(ref _toStringValue, value);
+    }
+
     private FieldBuilder? _afterCheckpointQueue;
     internal FieldBuilder AfterCheckpointQueue
     {
@@ -209,6 +216,7 @@ public sealed class EmittedVmRuntime
     internal void CompleteEmission()
     {
         EnsureMutable();
+        _ = ToStringValue;
         _ = RunInNewContext;
         _ = RunInThisContext;
         _ = RunInContext;

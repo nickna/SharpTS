@@ -1393,7 +1393,7 @@ public partial class RuntimeEmitter
                 runtime.Symbols.GetStorage, runtime.Symbols.ToPrimitive, runtime.DescriptorStorage.DescriptorType,
                 runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
                 runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
-                runtime.DescriptorStorage.HasPrototypeEntry, runtime.DescriptorStorage.GetPrototype, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor),
+                runtime.DescriptorStorage.HasPrototypeEntry, runtime.DescriptorStorage.GetPrototype, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor, runtime.Vm),
             runtime.RegExps.Implementation is not null ? runtime.RegExps.RequireImplementation().Type : null);
         // StringFromValue (String(x) call form) wraps ToJsString with the
         // §22.1.1.1 Symbol exemption; emit right after it.

@@ -7,6 +7,8 @@ public partial class RuntimeEmitter
 {
     private void DefineVmValueBridge(TypeBuilder owner, EmittedVmRuntime vm)
     {
+        vm.ToStringValue = owner.DefineMethod("CoerceVmValueToString", MethodAttributes.Assembly | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
         vm.AfterCheckpointQueue = owner.DefineField("_vmAfterCheckpoint",
             _types.MakeGenericType(_types.QueueOpen, typeof(Action)), FieldAttributes.Private | FieldAttributes.Static);
         vm.EnterExecutionScope = owner.DefineMethod("EnterVmExecutionScope", MethodAttributes.Assembly | MethodAttributes.Static,
@@ -49,6 +51,12 @@ public partial class RuntimeEmitter
         var host = EmitVmExecutionHost(owner, runtime, callbackRole);
         var transfer = EmitVmPromiseTransfer(owner, runtime, host);
         var callable = EmitVmCallableTransport(owner, runtime);
+        EmitVmBoundaryBody(vm.ToStringValue.GetILGenerator(), vm, () =>
+            EmitVmCoreInvoke(vm.ToStringValue.GetILGenerator(), "ToStringVmValue", body =>
+            {
+                body.Emit(OpCodes.Ldarg_0);
+                body.Emit(OpCodes.Call, vm.RestoreValue);
+            }));
         EmitVmExceptionBridge(runtime);
         EmitVmErrorBridge(runtime);
         var tryGet = _types.GetMethod(cacheType, "TryGetValue", _types.Object, _types.Object.MakeByRefType());
@@ -85,6 +93,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il = vm.NormalizeValue.GetILGenerator();
+        var unwrappedInput = il.DeclareLocal(_types.Object);
+        var ordinaryInput = il.DefineLabel();
+        EmitVmCoreInvoke(il, "UnwrapVmInputValue", body => body.Emit(OpCodes.Ldarg_0));
+        il.Emit(OpCodes.Stloc, unwrappedInput);
+        il.Emit(OpCodes.Ldloc, unwrappedInput);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Beq, ordinaryInput);
+        il.Emit(OpCodes.Ldloc, unwrappedInput);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinaryInput);
         var same = il.DefineLabel();
         var ordinaryValue = il.DefineLabel();
         var admittedValue = il.DefineLabel();

@@ -65,8 +65,8 @@ public partial class RuntimeEmitter
     private void EmitVmInputPropertyConfiguration(ILGenerator il, EmittedRuntime runtime,
         VmInputPropertyEmission input, LocalBuilder host)
     {
-        Action<ILGenerator> Delegate(MethodInfo method, Type type) => body =>
-            EmitVmStaticDelegate(body, method, type.GetConstructor([_types.Object, _types.IntPtr])!);
+        Action<ILGenerator> Delegate(MethodInfo method, ConstructorInfo constructor) => body =>
+            EmitVmStaticDelegate(body, method, constructor);
         EmitVmCoreInvoke(il, "ConfigureExecutionHostInputPropertyAccess",
             body => body.Emit(OpCodes.Ldloc, host),
             body =>
@@ -74,9 +74,9 @@ public partial class RuntimeEmitter
                 body.Emit(OpCodes.Ldtoken, runtime.ObjectStorage.Type);
                 body.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
             },
-            Delegate(input.Admits, typeof(Func<object, bool>)),
-            Delegate(input.Read, typeof(Func<object, string, object?>)),
-            Delegate(input.Role, typeof(Func<object, int>)));
+            Delegate(input.Admits, typeof(Func<object, bool>).GetConstructor([_types.Object, _types.IntPtr])!),
+            Delegate(input.Read, typeof(Func<object, string, object?>).GetConstructor([_types.Object, _types.IntPtr])!),
+            Delegate(input.Role, typeof(Func<object, int>).GetConstructor([_types.Object, _types.IntPtr])!));
         il.Emit(OpCodes.Pop);
     }
 }

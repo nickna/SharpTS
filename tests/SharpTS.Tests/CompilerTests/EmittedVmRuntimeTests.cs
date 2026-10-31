@@ -22,7 +22,7 @@ public class EmittedVmRuntimeTests
         ["QueueAfterCheckpoint"] = "QueueVmAfterCheckpoint", ["EnterExecutionScope"] = "EnterVmExecutionScope",
         ["ConvertException"] = "ConvertVmException", ["IsRelatedValue"] = "IsRelatedVmValue",
         ["IsMappedValue"] = "IsMappedVmValue", ["ReadMappedProperty"] = "ReadMappedVmProperty",
-        ["MappedPrototype"] = "GetMappedVmPrototype"
+        ["MappedPrototype"] = "GetMappedVmPrototype", ["ToStringValue"] = "CoerceVmValueToString"
     };
     private static PropertyInfo Declaration(string name) => Declarations.Single(property => property.Name == name);
 
@@ -139,8 +139,8 @@ public class EmittedVmRuntimeTests
         {
             var vm = runtime.RequireVm();
             AssertFrozen(vm);
-            Assert.Equal(25, Handles.Count());
-            Assert.Equal(26, Declarations.Count());
+            Assert.Equal(26, Handles.Count());
+            Assert.Equal(27, Declarations.Count());
             Assert.True(runtime.RequirePromise().IsComplete);
             foreach (var (export, handle) in RegisteredExports)
                 Assert.Same(typeof(EmittedVmRuntime).GetProperty(handle)!.GetValue(vm), runtime.BuiltInModules.GetOptional("vm", export));
