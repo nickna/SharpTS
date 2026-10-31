@@ -925,7 +925,10 @@ public abstract partial class ExpressionEmitterBase
 
     private void EmitRestParameterCall(List<Expr> arguments, int regularCount, ParameterInfo[] targetParams, bool allowNumericStorage = false)
     {
-        allowNumericStorage &= !arguments.Any(argument => Ctx.TypeMap?.IsUndefinedReachableReturn(argument) == true);
+        // Spread elements enter the adaptive builder individually. A raw spread
+        // wrapper does not require boxed storage when its actual elements are numeric.
+        allowNumericStorage &= !arguments.Any(argument => argument is not Expr.Spread
+            && Ctx.TypeMap?.IsUndefinedReachableReturn(argument) == true);
         bool hasSpreads = arguments.Any(a => a is Expr.Spread);
         if (hasSpreads)
         {
