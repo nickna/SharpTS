@@ -170,7 +170,7 @@ public partial class Interpreter
             // coercion may select a different property after the RHS runs.
             if (arrayObjectKey || globalTarget is not null || inputView is not null || obj is SharpTSObjectPrototype)
                 PerformIndexSet(obj, index, newValue.ToObject());
-            else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
+            else SetOwnPropertyObjectValue(obj, ToPropertyKey(index), newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
 
@@ -368,7 +368,7 @@ public partial class Interpreter
             RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
             if (arrayObjectKey || globalTarget is not null || inputView is not null || obj is SharpTSObjectPrototype)
                 PerformIndexSet(obj, index, newValue.ToObject());
-            else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
+            else SetOwnPropertyObjectValue(obj, ToPropertyKey(index), newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
 
