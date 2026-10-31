@@ -1739,50 +1739,6 @@ public partial class RuntimeEmitter
         il.MarkLabel(notDefinitionValue);
         il.Emit(OpCodes.Pop);
 
-        // __proto__ accessor (ECMA-262 Annex B.2.2.1): obj.__proto__ delegates
-        // to Object.getPrototypeOf(obj). All object types support this — the
-        // accessor lives on Object.prototype, but intercepting here avoids
-        // replicating the dispatch in every object-specific branch. Without
-        // this, `{}.__proto__` returns undefined and breaks spec idioms.
-        //
-        // Dictionary entries retain their ordinary live-value/accessor dispatch.
-        // Other actual own descriptors shadow the inherited accessor, including
-        // undefined data values and accessors without getters.
-        var notProtoNameTopLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "__proto__");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, notProtoNameTopLabel);
-        // Dict + ContainsKey("__proto__") → skip intercept.
-        var protoDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Stloc, protoDictLocal);
-        var noOwnProtoLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, protoDictLocal);
-        il.Emit(OpCodes.Brfalse, noOwnProtoLabel);
-        il.Emit(OpCodes.Ldloc, protoDictLocal);
-        il.Emit(OpCodes.Ldstr, "__proto__");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
-        il.Emit(OpCodes.Brtrue, notProtoNameTopLabel);
-        il.MarkLabel(noOwnProtoLabel);
-        var ownProtoDescriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
-        var noOwnProtoDescriptor = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, ownProtoDescriptor);
-        il.Emit(OpCodes.Ldloc, ownProtoDescriptor);
-        il.Emit(OpCodes.Brfalse, noOwnProtoDescriptor);
-        EmitDescriptorReadAndReturn(il, inputs.DescriptorStorage, ownProtoDescriptor,
-            () => il.Emit(OpCodes.Ldarg_0), inputs.InvokeMethodValue, inputs.UndefinedInstance, inputs.UndefinedType);
-        il.MarkLabel(noOwnProtoDescriptor);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notProtoNameTopLabel);
-
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         var notProxyLabel = il.DefineLabel();
         EmitProxyGetPropertyCheck(

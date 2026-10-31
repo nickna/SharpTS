@@ -1744,11 +1744,17 @@ public sealed partial class RuntimeFeatureDetector
                 foreach (var e in al.Elements) VisitExpr(e);
                 break;
             case Expr.ObjectLiteral ol:
+                if (ol.Properties.Any(property => property.IsPrototypeSetter
+                        || property.IsSpread || property.Key is Expr.ComputedKey
+                        || property.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter))
+                    _set.UsesObjectDefinitionRuntime = true;
+                if (ol.Properties.Any(property => property.IsPrototypeSetter))
+                    _set.UsesClassPrototypeMutation = true;
                 // Small plain records can use the emitted slot-backed ordinary-object
                 // carrier. This is deliberately only an emission gate; the literal
                 // emitter repeats the full key/duplicate validation before selecting it.
                 if (ol.Properties.Count is >= 1 and <= 4 && ol.Properties.All(prop =>
-                        !prop.IsSpread &&
+                        !prop.IsSpread && !prop.IsPrototypeSetter &&
                         prop.Key is not Expr.ComputedKey &&
                         prop.Kind == Expr.ObjectPropertyKind.Value))
                 {
@@ -1781,7 +1787,7 @@ public sealed partial class RuntimeFeatureDetector
                 }
                 foreach (var prop in ol.Properties)
                 {
-                    if (prop.IsSpread)
+                    if (prop.IsSpread || prop.IsPrototypeSetter)
                         MarkPotentiallyMaterialized(prop.Value);
                     if (prop.Key is Expr.ComputedKey computed)
                         VisitExpr(computed.Expression);

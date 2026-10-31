@@ -1903,6 +1903,7 @@ public static partial class ObjectBuiltIns
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.OwnVisibleStringKeys().Cast<object?>().ToList(),
             SharpTSObjectNamespace objectNamespace => objectNamespace.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSObjectPrototype objectPrototype => objectPrototype.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSObject obj => GetOwnPropertyNamesFromObject(obj),
             SharpTSGlobalThis globalObject => globalObject.OwnStringKeys().Cast<object?>().ToList(),
@@ -2089,11 +2090,8 @@ public static partial class ObjectBuiltIns
         // OrdinaryObjectCreate creates a FRESH object whose [[Prototype]] is
         // O — it does NOT copy O's own properties. Inherited properties are
         // reached via prototype-chain walk at property-access time.
-        // SharpTSObject.GetProperty/HasProperty map the virtual `__proto__`
-        // slot to the Prototype property so Interpreter.Properties.cs's
-        // chain walker (which queries `__proto__`) reaches the prototype
-        // without needing a real _fields entry that would leak via
-        // Object.keys.
+        // The internal Prototype slot is independent of any own __proto__
+        // data property; the inherited accessor reads that slot.
         var result = new SharpTSObject([]);
         result.Prototype = proto;
         // Object.create(null) → a null-prototype object that inherits nothing
@@ -2595,6 +2593,18 @@ public static partial class ObjectBuiltIns
             throw new ThrowException(new SharpTSTypeError(
                 "Cannot set prototype of a non-extensible object"));
         return target;
+    }
+
+    internal static object? SetLegacyPrototype(Interpreter interpreter, object? target, List<object?> args)
+    {
+        if (target is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError("Cannot set prototype of null or undefined"));
+        var prototype = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
+        if (!IsPrototypeValue(prototype) || !IsPrototypeValue(target))
+            return SharpTSUndefined.Instance;
+        if (!SetPrototypeOfTarget(interpreter, target, prototype))
+            throw new ThrowException(new SharpTSTypeError("Cannot set object prototype"));
+        return SharpTSUndefined.Instance;
     }
 
     internal static bool SetPrototypeOfTarget(

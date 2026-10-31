@@ -1198,7 +1198,8 @@ public partial class Parser
 
                         Consume(TokenType.COLON, "Expect ':' after string property key.");
                         Expr stringValue = Expression();
-                        properties.Add(new Expr.Property(key, stringValue));
+                        properties.Add(new Expr.Property(key, stringValue,
+                            IsPrototypeSetter: stringKey.Literal is "__proto__"));
                         continue;
                     }
 
@@ -1225,6 +1226,7 @@ public partial class Parser
                     Token name = ConsumePropertyName("Expect property name.");
                     Expr value;
                     bool isShorthandDefault = false;
+                    bool isPrototypeSetter = false;
 
                     if (Check(TokenType.LEFT_PAREN))
                     {
@@ -1234,6 +1236,7 @@ public partial class Parser
                     else if (Match(TokenType.COLON))
                     {
                         // Explicit property: { x: value }
+                        isPrototypeSetter = name.Lexeme == "__proto__";
                         value = Expression();
                     }
                     else if (Match(TokenType.EQUAL))
@@ -1253,7 +1256,8 @@ public partial class Parser
                     }
 
                     properties.Add(new Expr.Property(new Expr.IdentifierKey(name), value,
-                        IsShorthandDefault: isShorthandDefault));
+                        IsShorthandDefault: isShorthandDefault,
+                        IsPrototypeSetter: isPrototypeSetter));
                 } while (Match(TokenType.COMMA));
             }
             if (Check(TokenType.SEMICOLON))

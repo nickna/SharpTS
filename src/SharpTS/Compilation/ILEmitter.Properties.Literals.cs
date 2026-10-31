@@ -207,6 +207,7 @@ public partial class ILEmitter
         // Check if any property is a spread, computed key, or accessor (getter/setter)
         bool hasSpreads = o.Properties.Any(p => p.IsSpread);
         bool hasComputedKeys = o.Properties.Any(p => p.Key is Expr.ComputedKey);
+        bool hasPrototypeSetter = o.Properties.Any(p => p.IsPrototypeSetter);
         bool hasAccessors = o.Properties.Any(p => p.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter);
 
         if (hasAccessors)
@@ -214,7 +215,7 @@ public partial class ILEmitter
             // Object has getters/setters - use $Object type which supports accessors
             EmitObjectLiteralWithAccessors(o);
         }
-        else if (!hasSpreads && !hasComputedKeys)
+        else if (!hasSpreads && !hasComputedKeys && !hasPrototypeSetter)
         {
             if (TryEmitJsonScalarRecordLiteral(o))
             {
@@ -260,6 +261,10 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(prop.Value);
                 IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
             }
+        }
+        else if (hasComputedKeys || hasPrototypeSetter)
+        {
+            EmitDictionaryObjectLiteral(o);
         }
         else
         {
@@ -495,111 +500,7 @@ public partial class ILEmitter
     /// </summary>
     protected override void EmitObjectLiteralWithAccessors(Expr.ObjectLiteral o)
     {
-        // Create $Object: new $Object(new Dictionary<string, object?>())
-        IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.DictionaryStringObject));
-        NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, _ctx.Runtime!.ObjectStorage.Constructor);
-
-        // Store in local for repeated use
-        var objLocal = IL.DeclareLocal(_ctx.Runtime!.ObjectStorage.Type);
-        IL.Emit(OpCodes.Stloc, objLocal);
-
-        foreach (var prop in o.Properties)
-        {
-            if (prop.IsSpread)
-            {
-                // Spread: merge the source object's properties into target $Object
-                IL.Emit(OpCodes.Ldloc, objLocal);
-                EmitExpression(prop.Value);
-                EmitBoxIfNeeded(prop.Value);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.MergeIntoObject);
-                continue;
-            }
-
-            // Computed-key accessors handle their own key emission below;
-            // static-key path needs the resolved string up front.
-            string propKey = prop.Key is Expr.ComputedKey
-                ? "" // unused — accessor branches below dispatch on prop.Key
-                : GetPropertyKeyString(prop.Key!);
-
-            switch (prop.Kind)
-            {
-                case Expr.ObjectPropertyKind.Getter:
-                    if (prop.Key is Expr.ComputedKey gck)
-                    {
-                        // Computed-key getter (Symbol or runtime string).
-                        // $Runtime.DefineSymbolAccessor(obj, key, getter, null).
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        EmitExpression(gck.Expression);
-                        EmitBoxIfNeeded(gck.Expression);
-                        EmitExpression(prop.Value);
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Ldnull);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.DefineSymbolAccessor);
-                    }
-                    else
-                    {
-                        // obj.DefineGetter(name, getterFunction)
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        IL.Emit(OpCodes.Ldstr, propKey);
-                        EmitExpression(prop.Value); // Emits the getter function (arrow function)
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ObjectStorage.DefineGetter);
-                    }
-                    break;
-
-                case Expr.ObjectPropertyKind.Setter:
-                    if (prop.Key is Expr.ComputedKey sck)
-                    {
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        EmitExpression(sck.Expression);
-                        EmitBoxIfNeeded(sck.Expression);
-                        IL.Emit(OpCodes.Ldnull);
-                        EmitExpression(prop.Value);
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.DefineSymbolAccessor);
-                    }
-                    else
-                    {
-                        // obj.DefineSetter(name, setterFunction)
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        IL.Emit(OpCodes.Ldstr, propKey);
-                        EmitExpression(prop.Value); // Emits the setter function (arrow function)
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ObjectStorage.DefineSetter);
-                    }
-                    break;
-
-                case Expr.ObjectPropertyKind.Method:
-                case Expr.ObjectPropertyKind.Value:
-                default:
-                    if (prop.Key is Expr.ComputedKey vck)
-                    {
-                        // Computed-key data property: route through $Runtime.SetIndex
-                        // so symbol keys hit the symbol-dict.
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        EmitExpression(vck.Expression);
-                        EmitBoxIfNeeded(vck.Expression);
-                        EmitExpression(prop.Value);
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
-                    }
-                    else
-                    {
-                        // Regular property: obj.SetProperty(name, value)
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        IL.Emit(OpCodes.Ldstr, propKey);
-                        EmitExpression(prop.Value);
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ObjectStorage.SetProperty);
-                    }
-                    break;
-            }
-        }
-
-        // Leave the $Object on the stack. Reset the stack-type tracker —
-        // see EmitObjectLiteral for the rationale.
-        IL.Emit(OpCodes.Ldloc, objLocal);
-        SetStackUnknown();
+        base.EmitObjectLiteralWithAccessors(o);
     }
 
     /// <summary>

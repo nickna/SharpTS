@@ -1281,8 +1281,8 @@ public partial class Interpreter
     /// </summary>
     private object? GetRecordPrototype(SharpTSObject obj)
     {
-        if (obj.HasProperty("__proto__"))
-            return obj.GetProperty("__proto__");
+        if (obj.Prototype is not null)
+            return obj.Prototype;
         if (obj.IsNullPrototype)
             return null;
         if (obj.Fields.TryGetValue("__primitiveType", out var type))
@@ -2116,8 +2116,8 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(simpleObj.GetProperty(memberName));
         }
 
-        // Prototype-chain fallback. Walks via __proto__ (which SharpTSObject
-        // maps from its Prototype property for Object.create-linked objects).
+        // Follow the internal prototype slot independently of any own
+        // __proto__ property on the objects in this chain.
         // Handles both SharpTSObject and SharpTSInstance prototypes — the
         // latter is the case for `Object.create(new Point(...))`.
         object? current = GetRecordPrototype(simpleObj);
@@ -2139,7 +2139,7 @@ public partial class Interpreter
                 {
                     return RuntimeValue.FromBoxed(proto.GetProperty(memberName));
                 }
-                object? next = proto.HasProperty("__proto__") ? proto.GetProperty("__proto__") : null;
+                object? next = GetRecordPrototype(proto);
                 if (ReferenceEquals(next, proto)) break;
                 current = next;
                 continue;
@@ -2285,6 +2285,8 @@ public partial class Interpreter
         {
             return arrow.Bind(obj);
         }
+        if (accessor is SharpTSObjectUnboundMethod method && !method.HasBoundThis)
+            return method.BindTo(obj);
         // Built-in accessor getters (e.g. the generic RegExp.prototype `flags`
         // getter) carry their receiver through Bind so direct access like
         // `RegExp.prototype.flags` invokes them with the right `this`.
@@ -3412,12 +3414,18 @@ public partial class Interpreter
         SharpTSObject receiver, string name, object? value, bool strictMode)
     {
         if (receiver.GetOwnPropertyDescriptor(name) is not null) return false;
-        object? current = receiver.Prototype;
-        while (current is SharpTSObject prototype)
+        object? current = GetRecordPrototype(receiver);
+        for (int depth = 0; depth < 64 && current is not null; depth++)
         {
-            if (prototype.GetOwnPropertyDescriptor(name) is { } descriptor)
+            if (current is SharpTSProxy proxy)
+            {
+                if (!proxy.TrapSetProperty(name, value, this, receiver) && strictMode)
+                    throw StrictModeErrors.TypeError($"Proxy set trap rejected property '{name}'");
+                return true;
+            }
+            if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, current, name) is { } descriptor)
                 return TryAssignThroughDescriptor(descriptor, receiver, name, value, strictMode);
-            current = prototype.Prototype;
+            current = ObjectBuiltIns.PrototypeOf(this, current);
         }
         return false;
     }

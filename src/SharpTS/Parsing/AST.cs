@@ -188,13 +188,15 @@ public abstract record Expr
     /// CoverInitializedName). The value is stored as <c>Expr.Assign(a, 5)</c> so it round-trips to the
     /// #754 assignment-destructuring lowering; this flag distinguishes it from the legal expression
     /// <c>{ a: a = 5 }</c> so a pure-expression object literal can be rejected as tsc does (#780).</param>
+    /// <param name="IsPrototypeSetter">True only for a noncomputed explicit-colon __proto__ literal initializer.</param>
     public record Property(
         PropertyKey? Key,
         Expr Value,
         bool IsSpread = false,
         ObjectPropertyKind Kind = ObjectPropertyKind.Value,
         Stmt.Parameter? SetterParam = null,
-        bool IsShorthandDefault = false);
+        bool IsShorthandDefault = false,
+        bool IsPrototypeSetter = false);
     public record GetIndex(Expr Object, Expr Index, bool Optional = false) : Expr;
     public record SetIndex(Expr Object, Expr Index, Expr Value) : Expr;
     // Method is null for super() and for the lexical-home marker in GetIndex(super, key).

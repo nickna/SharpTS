@@ -1552,15 +1552,6 @@ public partial class RuntimeEmitter
                 DateConstructor: runtime.Dates.Implementation?.Type
             )
         );
-        EmitMergeIntoTSObject(
-            typeBuilder,
-            runtime.ObjectConstruction,
-            new MergeIntoTSObjectInputs(
-                runtime.ObjectFields.FieldsGetter,
-                runtime.ObjectFields.Interface,
-                runtime.ObjectStorage
-            )
-        );
         // (Symbol helpers EmitGetSymbolDict + EmitIsSymbol now emitted earlier
         // — before EmitToJsString — so the @@toPrimitive lookup can use them.)
         // HasIn operator depends on IsSymbol and GetSymbolDict
@@ -1969,35 +1960,6 @@ public partial class RuntimeEmitter
         EmitForInKeys(typeBuilder, new ForInInputs(runtime.ObjectKeys, runtime.ObjectPrototypes,
             runtime.ObjectDescriptors, runtime.ObjectOwnProperties, runtime.ObjectRead.Property,
             runtime.Booleans.IsTruthy, runtime.Operators.TypeOf, runtime.Sentinels.UndefinedType));
-        // MergeIntoObject implements CopyDataProperties through GetKeys and
-        // GetProperty, so its body must be emitted after GetKeys is available.
-        EmitMergeIntoObject(
-            typeBuilder,
-            runtime.ObjectConstruction,
-            new MergeIntoObjectInputs(
-                runtime.Booleans,
-                runtime.DescriptorStorage,
-                runtime.ObjectRead.Index,
-                runtime.ObjectRead.Property,
-                runtime.ObjectDescriptors,
-                runtime.ObjectKeys,
-                runtime.ObjectOwnProperties,
-                new ProxyOwnKeysCallInputs(
-                    runtime.ObjectKeys.Ordinary,
-                    runtime.ObjectKeys.CreateProxyList,
-                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
-                    runtime.ObjectState.IsExtensible,
-                    runtime.Symbols.IsSymbol,
-                    runtime.ObjectRead.Property,
-                    runtime.ReflectedMethods.InvokeUnwrapped,
-                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
-                ),
-                _features.UsesProxy,
-                runtime.ObjectWrite.Index,
-                runtime.Symbols,
-                runtime.Sentinels.UndefinedType
-            )
-        );
         EmitGetValues(
             typeBuilder,
             runtime.ObjectOperations,
@@ -2158,6 +2120,50 @@ public partial class RuntimeEmitter
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
                 GuestOwnProperties: runtime.GuestOwnProperties,
                 SourceOwners: runtime.ClassInitialization.SourceOwners
+            )
+        );
+        // MergeIntoObject implements CopyDataProperties through GetKeys and
+        // GetProperty, so its body follows both keys and own-property definition bodies.
+        EmitMergeIntoObject(
+            typeBuilder,
+            runtime.ObjectConstruction,
+            new MergeIntoObjectInputs(
+                runtime.Booleans,
+                runtime.DescriptorStorage,
+                runtime.ObjectRead.Index,
+                runtime.ObjectRead.Property,
+                runtime.ObjectDescriptors,
+                runtime.ObjectKeys,
+                runtime.ObjectOwnProperties,
+                new ProxyOwnKeysCallInputs(
+                    runtime.ObjectKeys.Ordinary,
+                    runtime.ObjectKeys.CreateProxyList,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
+                    runtime.ObjectState.IsExtensible,
+                    runtime.Symbols.IsSymbol,
+                    runtime.ObjectRead.Property,
+                    runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
+                ),
+                _features.UsesProxy,
+                runtime.ObjectWrite.Index,
+                runtime.Symbols,
+                runtime.Sentinels.UndefinedType
+            )
+        );
+        // The spread target uses own-data definitions; its peers are declared now.
+        EmitMergeIntoTSObject(
+            typeBuilder,
+            runtime.ObjectConstruction,
+            new MergeIntoTSObjectInputs(
+                runtime.ObjectFields.FieldsGetter,
+                runtime.ObjectFields.Interface,
+                runtime.ObjectStorage,
+                runtime.DescriptorStorage,
+                runtime.ObjectDescriptors,
+                runtime.ObjectConstruction.MergeIntoDictionary,
+                runtime.ObjectKeys.Ordinary,
+                runtime.ObjectRead.Index
             )
         );
         // Declare the Math adapters before the later singleton population installs
@@ -2735,7 +2741,11 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
                     runtime.DescriptorStorage.DefineProperty
                 ),
-                runtime.FunctionConstruction.GetOrCreate
+                runtime.FunctionConstruction.GetOrCreate,
+                runtime.Operators.TypeOf,
+                runtime.Errors,
+                runtime.Sentinels.UndefinedType,
+                runtime.Sentinels.UndefinedInstance
             )
         );
         // Boxed primitive helpers — must come AFTER prototype populates so

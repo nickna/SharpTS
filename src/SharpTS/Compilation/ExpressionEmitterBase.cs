@@ -1606,122 +1606,147 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitObjectLiteral(Expr.ObjectLiteral o)
     {
-        bool hasSpreads = o.Properties.Any(p => p.IsSpread);
-        bool hasComputedKeys = o.Properties.Any(p => p.Key is Expr.ComputedKey);
-        bool hasAccessors = o.Properties.Any(p => p.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter);
-
-        if (hasAccessors)
-        {
+        if (o.Properties.Any(p => p.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter))
             EmitObjectLiteralWithAccessors(o);
-        }
-        else if (!hasSpreads && !hasComputedKeys)
-        {
-            // Spill values first so an await inside any value suspends with an empty stack.
-            var valueLocals = o.Properties.Select(p => SpillBoxed(p.Value)).ToList();
-
-            IL.Emit(OpCodes.Newobj, Types.DictionaryStringObjectCtor);
-
-            for (int i = 0; i < o.Properties.Count; i++)
-            {
-                IL.Emit(OpCodes.Dup);
-                EmitStaticPropertyKey(o.Properties[i].Key!);
-                IL.Emit(OpCodes.Ldloc, valueLocals[i]);
-                IL.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
-            }
-
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.Create);
-        }
         else
-        {
-            // Spill computed keys and values first (evaluation order: key before value, per property).
-            var keyLocals = new LocalBuilder?[o.Properties.Count];
-            var valueLocals = new LocalBuilder[o.Properties.Count];
-            for (int i = 0; i < o.Properties.Count; i++)
-            {
-                if (o.Properties[i].Key is Expr.ComputedKey ck)
-                    keyLocals[i] = SpillBoxed(ck.Expression);
-                valueLocals[i] = SpillBoxed(o.Properties[i].Value);
-            }
-
-            IL.Emit(OpCodes.Newobj, Types.DictionaryStringObjectNullableCtor);
-
-            for (int i = 0; i < o.Properties.Count; i++)
-            {
-                var prop = o.Properties[i];
-                IL.Emit(OpCodes.Dup);
-
-                if (prop.IsSpread)
-                {
-                    IL.Emit(OpCodes.Ldloc, valueLocals[i]);
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.MergeIntoDictionary);
-                }
-                else if (prop.Key is Expr.ComputedKey)
-                {
-                    IL.Emit(OpCodes.Ldloc, keyLocals[i]!);
-                    IL.Emit(OpCodes.Ldloc, valueLocals[i]);
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
-                }
-                else
-                {
-                    EmitStaticPropertyKey(prop.Key!);
-                    IL.Emit(OpCodes.Ldloc, valueLocals[i]);
-                    IL.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectNullableSetItem);
-                }
-            }
-
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.Create);
-        }
+            EmitDictionaryObjectLiteral(o);
         RecordVmSourceObjectLiteral();
         SetStackUnknown();
     }
 
-    /// <summary>
-    /// Emits an object literal with getter/setter accessors using the $Object type.
-    /// </summary>
-    protected virtual void EmitObjectLiteralWithAccessors(Expr.ObjectLiteral o)
+    // Keep the actual fresh target in the existing persistent-spill transport.
+    // Each property is completed before evaluating the next property, including
+    // spread getters and computed-key conversion across await/yield.
+    protected void EmitDictionaryObjectLiteral(Expr.ObjectLiteral literal)
     {
-        IL.Emit(OpCodes.Newobj, Types.DictionaryStringObjectNullableCtor);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.ObjectStorage.Constructor);
-
-        var objLocal = IL.DeclareLocal(Ctx.Runtime!.ObjectStorage.Type);
-        IL.Emit(OpCodes.Stloc, objLocal);
-
-        foreach (var prop in o.Properties)
+        IL.Emit(OpCodes.Newobj, Types.DictionaryStringObjectCtor);
+        var target = _helpers.SpillStoreObject();
+        foreach (var property in literal.Properties)
         {
-            // Spill the value first so an await inside it suspends with an empty stack.
-            var valueLocal = SpillBoxed(prop.Value);
-
-            if (prop.IsSpread)
+            if (property.IsSpread)
             {
-                IL.Emit(OpCodes.Ldloc, objLocal);
-                IL.Emit(OpCodes.Ldloc, valueLocal);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.MergeIntoObject);
-                continue;
+                var source = SpillBoxed(property.Value);
+                EmitPropertyWriteOperation(() =>
+                {
+                    IL.Emit(OpCodes.Ldloc, target);
+                    IL.Emit(OpCodes.Castclass, Types.DictionaryStringObject);
+                    IL.Emit(OpCodes.Ldloc, source);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.MergeIntoDictionary);
+                });
             }
-
-            string propKey = GetPropertyKeyString(prop.Key!);
-
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Ldstr, propKey);
-            IL.Emit(OpCodes.Ldloc, valueLocal);
-
-            switch (prop.Kind)
+            else if (property.IsPrototypeSetter)
             {
-                case Expr.ObjectPropertyKind.Getter:
-                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.ObjectStorage.DefineGetter);
-                    break;
-
-                case Expr.ObjectPropertyKind.Setter:
-                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.ObjectStorage.DefineSetter);
-                    break;
-
-                default:
-                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.ObjectStorage.SetProperty);
-                    break;
+                var prototype = SpillBoxed(property.Value);
+                EmitLiteralPrototypeSet(target, prototype);
+            }
+            else
+            {
+                var key = SpillObjectLiteralKey(property.Key!);
+                var value = SpillBoxed(property.Value);
+                EmitLiteralDataDefinition(target, key, value);
             }
         }
+        IL.Emit(OpCodes.Ldloc, target);
+        SetStackUnknown();
+    }
 
-        IL.Emit(OpCodes.Ldloc, objLocal);
+    protected LocalBuilder SpillObjectLiteralKey(Expr.PropertyKey key)
+    {
+        if (key is Expr.ComputedKey computed)
+        {
+            var result = SpillBoxed(computed.Expression);
+            EmitPropertyWriteOperation(() =>
+            {
+                IL.Emit(OpCodes.Ldloc, result);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Reflect.ToPropertyKey);
+                IL.Emit(OpCodes.Stloc, result);
+            });
+            return result;
+        }
+        EmitStaticPropertyKey(key);
+        return _helpers.SpillStoreObject();
+    }
+
+    protected void EmitLiteralPrototypeSet(LocalBuilder target, LocalBuilder prototype)
+    {
+        EmitPropertyWriteOperation(() =>
+        {
+            var kind = IL.DeclareLocal(Types.String);
+            var set = IL.DefineLabel();
+            var done = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, prototype);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.TypeOf);
+            IL.Emit(OpCodes.Stloc, kind);
+            foreach (var objectKind in new[] { "object", "function" })
+            {
+                IL.Emit(OpCodes.Ldloc, kind);
+                IL.Emit(OpCodes.Ldstr, objectKind);
+                IL.Emit(OpCodes.Call, Types.StringOpEquality);
+                IL.Emit(OpCodes.Brtrue, set);
+            }
+            IL.Emit(OpCodes.Br, done);
+            IL.MarkLabel(set);
+            IL.Emit(OpCodes.Ldloc, target);
+            IL.Emit(OpCodes.Ldloc, prototype);
+            IL.Emit(OpCodes.Call, Ctx.Runtime.DescriptorStorage.SetPrototype);
+            IL.MarkLabel(done);
+        });
+    }
+
+    protected void EmitLiteralDataDefinition(LocalBuilder target, LocalBuilder key, LocalBuilder value)
+    {
+        EmitPropertyWriteOperation(() => LiteralPropertyEmitter.Emit(
+            Types, IL, Ctx.Runtime!.DescriptorStorage, Ctx.Runtime.ObjectDescriptors.DefineProperty,
+            () => IL.Emit(OpCodes.Ldloc, target),
+            () => IL.Emit(OpCodes.Ldloc, key),
+            () => IL.Emit(OpCodes.Ldloc, value)));
+    }
+
+    protected virtual void EmitObjectLiteralWithAccessors(Expr.ObjectLiteral literal)
+    {
+        IL.Emit(OpCodes.Newobj, Types.DictionaryStringObjectNullableCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(Ctx.Runtime!.NativePrototypeFields, IL, Ctx.Runtime.ObjectStorage.Constructor);
+        var target = _helpers.SpillStoreObject();
+        foreach (var property in literal.Properties)
+        {
+            if (property.IsSpread)
+            {
+                var source = SpillBoxed(property.Value);
+                EmitPropertyWriteOperation(() =>
+                {
+                    IL.Emit(OpCodes.Ldloc, target);
+                    IL.Emit(OpCodes.Castclass, Ctx.Runtime.ObjectStorage.Type);
+                    IL.Emit(OpCodes.Ldloc, source);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime.ObjectConstruction.MergeIntoObject);
+                });
+            }
+            else if (property.IsPrototypeSetter)
+            {
+                var prototype = SpillBoxed(property.Value);
+                EmitLiteralPrototypeSet(target, prototype);
+            }
+            else
+            {
+                var key = SpillObjectLiteralKey(property.Key!);
+                var value = SpillBoxed(property.Value);
+                if (property.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter)
+                {
+                    EmitPropertyWriteOperation(() =>
+                    {
+                        IL.Emit(OpCodes.Ldloc, target);
+                        IL.Emit(OpCodes.Ldloc, key);
+                        if (property.Kind == Expr.ObjectPropertyKind.Getter) IL.Emit(OpCodes.Ldloc, value);
+                        else IL.Emit(OpCodes.Ldnull);
+                        if (property.Kind == Expr.ObjectPropertyKind.Setter) IL.Emit(OpCodes.Ldloc, value);
+                        else IL.Emit(OpCodes.Ldnull);
+                        IL.Emit(OpCodes.Call, Ctx.Runtime.ObjectConstruction.DefineSymbolAccessor);
+                    });
+                }
+                else
+                    EmitLiteralDataDefinition(target, key, value);
+            }
+        }
+        IL.Emit(OpCodes.Ldloc, target);
         SetStackUnknown();
     }
 

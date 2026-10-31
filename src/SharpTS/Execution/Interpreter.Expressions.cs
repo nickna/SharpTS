@@ -557,11 +557,7 @@ public partial class Interpreter
             Expr.IdentifierKey ik => ik.Name.Lexeme,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
-            Expr.ComputedKey ck => Evaluate(ck.Expression) switch
-            {
-                SharpTSSymbol symbol => symbol,
-                var value => ToPropertyKeyString(value),
-            },
+            Expr.ComputedKey ck => ToPropertyKey(Evaluate(ck.Expression)),
             _ => throw new InterpreterException("Invalid property key for accessor.")
         };
     }
@@ -575,7 +571,7 @@ public partial class Interpreter
         if (key is Expr.ComputedKey computed)
         {
             object? value = (await ctx.EvaluateExprAsync(computed.Expression)).ToObject();
-            return value is SharpTSSymbol symbol ? symbol : ToPropertyKeyString(value);
+            return ToPropertyKey(value);
         }
 
         return key switch
@@ -665,6 +661,8 @@ public partial class Interpreter
     private async ValueTask<object?> EvaluateObjectCore(IEvaluationContext ctx, Expr.ObjectLiteral obj)
     {
         Dictionary<string, object?> stringFields = [];
+        object? literalPrototype = null;
+        bool hasLiteralPrototype = false;
         Dictionary<SharpTSSymbol, object?>? symbolFields = null;
         List<(object key, ISharpTSCallable getter)>? getters = null;
         List<(object key, ISharpTSCallable setter)>? setters = null;
@@ -675,6 +673,15 @@ public partial class Interpreter
             {
                 object? spreadValue = (await ctx.EvaluateExprAsync(prop.Value)).ToObject();
                 symbolFields = ApplySpreadToFields(spreadValue, stringFields, symbolFields);
+            }
+            else if (prop.IsPrototypeSetter)
+            {
+                var prototype = await ctx.EvaluateExprAsync(prop.Value);
+                if (prototype.Kind is ValueKind.Null or ValueKind.Object)
+                {
+                    literalPrototype = prototype.ToObject();
+                    hasLiteralPrototype = true;
+                }
             }
             else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
             {
@@ -690,6 +697,15 @@ public partial class Interpreter
                 setters ??= [];
                 setters.Add((name, setter));
             }
+            else if (prop.Key is Expr.ComputedKey computed)
+            {
+                object key = await GetPropertyKeyNameCore(ctx, computed);
+                object? value = (await ctx.EvaluateExprAsync(prop.Value)).ToObject();
+                if (key is SharpTSSymbol symbol)
+                    (symbolFields ??= [])[symbol] = value;
+                else
+                    stringFields[(string)key] = value;
+            }
             else
             {
                 object? value = (await ctx.EvaluateExprAsync(prop.Value)).ToObject();
@@ -699,6 +715,13 @@ public partial class Interpreter
         }
 
         var result = BuildObjectFromFields(stringFields, symbolFields);
+        if (hasLiteralPrototype)
+        {
+            // The actual literal result is still fresh: install the internal slot,
+            // without looking up the public accessor or traversing the prototype.
+            result.Prototype = literalPrototype;
+            result.IsNullPrototype = literalPrototype is null;
+        }
 
         // Apply getters and setters
         if (getters != null)
@@ -744,6 +767,8 @@ public partial class Interpreter
     private RuntimeValue EvaluateObject(Expr.ObjectLiteral obj)
     {
         Dictionary<string, object?> stringFields = [];
+        object? literalPrototype = null;
+        bool hasLiteralPrototype = false;
         Dictionary<SharpTSSymbol, object?>? symbolFields = null;
         List<(object key, ISharpTSCallable getter)>? getters = null;
         List<(object key, ISharpTSCallable setter)>? setters = null;
@@ -754,6 +779,15 @@ public partial class Interpreter
             {
                 object? spreadValue = Evaluate(prop.Value);
                 symbolFields = ApplySpreadToFields(spreadValue, stringFields, symbolFields);
+            }
+            else if (prop.IsPrototypeSetter)
+            {
+                var prototype = EvaluateRV(prop.Value);
+                if (prototype.Kind is ValueKind.Null or ValueKind.Object)
+                {
+                    literalPrototype = prototype.ToObject();
+                    hasLiteralPrototype = true;
+                }
             }
             else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
             {
@@ -769,6 +803,15 @@ public partial class Interpreter
                 setters ??= [];
                 setters.Add((name, setter));
             }
+            else if (prop.Key is Expr.ComputedKey computed)
+            {
+                object key = GetPropertyKeyName(computed);
+                object? value = Evaluate(prop.Value);
+                if (key is SharpTSSymbol symbol)
+                    (symbolFields ??= [])[symbol] = value;
+                else
+                    stringFields[(string)key] = value;
+            }
             else
             {
                 object? value = Evaluate(prop.Value);
@@ -778,6 +821,13 @@ public partial class Interpreter
         }
 
         var result = BuildObjectFromFields(stringFields, symbolFields);
+        if (hasLiteralPrototype)
+        {
+            // The actual literal result is still fresh: install the internal slot,
+            // without looking up the public accessor or traversing the prototype.
+            result.Prototype = literalPrototype;
+            result.IsNullPrototype = literalPrototype is null;
+        }
 
         // Apply getters and setters
         if (getters != null)

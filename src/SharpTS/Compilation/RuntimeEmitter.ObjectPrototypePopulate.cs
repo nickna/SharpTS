@@ -14,7 +14,11 @@ public partial class RuntimeEmitter
         MethodBuilder LookupSetterHelperMethod,
         MethodBuilder PropertyIsEnumerableHelperMethod,
         PrototypeDescriptorInputs PrototypeDescriptors,
-        MethodBuilder TSFunctionGetOrCreate
+        MethodBuilder TSFunctionGetOrCreate,
+        MethodInfo TypeOf,
+        EmittedErrorRuntime Errors,
+        Type UndefinedType,
+        FieldInfo UndefinedInstance
     );
 
     private void DefineObjectPrototypePopulateShell(TypeBuilder typeBuilder, EmittedObjectPrototypeRuntime objectPrototypes)
@@ -81,6 +85,8 @@ public partial class RuntimeEmitter
         Wire("__lookupSetter__", inputs.LookupSetterHelperMethod, 1);
         Wire("__defineGetter__", inputs.DefineGetterHelperMethod, 2);
         Wire("__defineSetter__", inputs.DefineSetterHelperMethod, 2);
+
+        EmitLegacyPrototypeAccessor(il, objectPrototypes, inputs, protoDescLocal);
 
         il.Emit(OpCodes.Ret);
         objectPrototypes.MarkPopulateBodyEmitted();

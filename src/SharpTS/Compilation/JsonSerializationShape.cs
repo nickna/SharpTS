@@ -92,7 +92,7 @@ internal static class JsonSerializationShapeAnalyzer
         foreach (var property in literal.Properties)
         {
             if (typeMap?.IsUndefinedReachableReturn(property.Value) == true ||
-                property.IsSpread || property.Kind is not Expr.ObjectPropertyKind.Value ||
+                property.IsSpread || property.IsPrototypeSetter || property.Kind is not Expr.ObjectPropertyKind.Value ||
                 property.Key is Expr.ComputedKey)
             {
                 shape = null!;
@@ -240,7 +240,7 @@ internal static class JsonSerializationShapeAnalyzer
         for (int index = 0; index < literal.Properties.Count; index++)
         {
             var property = literal.Properties[index];
-            if (property.IsSpread || property.Kind is not Expr.ObjectPropertyKind.Value ||
+            if (property.IsSpread || property.IsPrototypeSetter || property.Kind is not Expr.ObjectPropertyKind.Value ||
                 property.Key is Expr.ComputedKey)
                 return false;
             string key = property.Key switch

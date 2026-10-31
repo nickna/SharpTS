@@ -14,9 +14,17 @@ namespace SharpTS.Runtime.Types;
 public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
 {
     public static readonly SharpTSObjectPrototype Instance = new();
-    internal SharpTSObjectPrototype() { }
+    internal SharpTSObjectPrototype()
+    {
+        _overlay.DefineProperty("__proto__", new SharpTSPropertyDescriptor(
+            getter: SharpTSObjectUnboundMethod.GetPrototype.CloneUnbound(),
+            setter: SharpTSObjectUnboundMethod.SetPrototype.CloneUnbound(),
+            enumerable: false, configurable: true));
+    }
 
-    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn);
+    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn, initialStringKeys:
+        ["constructor", "__defineGetter__", "__defineSetter__", "hasOwnProperty", "__lookupGetter__",
+         "__lookupSetter__", "isPrototypeOf", "propertyIsEnumerable", "toString", "valueOf", "__proto__", "toLocaleString"]);
     internal SharpTSObjectNamespace? RealmConstructor { get; set; }
 
     public bool HasExtra(string name) => _overlay.HasExtra(name);
@@ -48,6 +56,7 @@ public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
 
     /// <summary>Own enumerable string keys — the for-in / Object.keys surface.</summary>
     public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
+    public IEnumerable<string> OwnStringKeys() => _overlay.OwnVisibleStringKeys();
 
     public object? GetMember(string name)
     {
@@ -108,6 +117,11 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         new("__lookupGetter__", (i, t, a) => LookupAccessorImpl(i, t, a, isGetter: true), 1);
     public static readonly SharpTSObjectUnboundMethod LookupSetter =
         new("__lookupSetter__", (i, t, a) => LookupAccessorImpl(i, t, a, isGetter: false), 1);
+    internal static readonly SharpTSObjectUnboundMethod GetPrototype =
+        new("get __proto__", GetPrototypeImpl, 0);
+    internal static readonly SharpTSObjectUnboundMethod SetPrototype =
+        new("set __proto__", (i, t, a) => ObjectBuiltIns.SetLegacyPrototype(
+            i ?? throw new InvalidOperationException("Prototype assignment requires an interpreter"), t, a), 1);
 
     private readonly string _name;
     private readonly Func<Interp?, object?, List<object?>, object?> _impl;
@@ -384,6 +398,20 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
     {
         RequireObjectCoercible(target, "valueOf");
         return target;
+    }
+
+    private static object? GetPrototypeImpl(Interp? interpreter, object? target, List<object?> args)
+    {
+        RequireObjectCoercible(target, "get __proto__");
+        return target switch
+        {
+            string => interpreter?.GetStringPrototype(),
+            bool => interpreter?.GetBooleanPrototype(),
+            double or int or long or float or decimal => interpreter?.GetNumberPrototype(),
+            SharpTSBigInt or System.Numerics.BigInteger => interpreter?.GetBigIntPrototype(),
+            SharpTSSymbol => interpreter?.GetSymbolPrototype(),
+            _ => ObjectBuiltIns.PrototypeOf(interpreter, target),
+        };
     }
 
     private static void RequireObjectCoercible(object? target, string methodName)
