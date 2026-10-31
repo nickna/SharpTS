@@ -201,6 +201,7 @@ public sealed class EmittedObjectWriteRuntimeTests
             if (parameter.Name == "ReflectAssignment") return runtime.Reflect.Assignment;
             if (parameter.Name == "GlobalThisSingletonField") return runtime.GlobalObject.SingletonField;
             if (parameter.Name == "GlobalThisSetProperty") return runtime.GlobalObject.SetProperty;
+            if (parameter.Name == "GlobalThisSetPropertyStrict") return runtime.GlobalObject.SetPropertyStrict;
             if (parameter.Name == "LookupBuiltInStaticMember") return runtime.BuiltInStatics.Lookup;
             if (parameter.Name == "ToPropertyKey") return runtime.Reflect.ToPropertyKey;
             if (parameter.Name == "GuestOwnSetProperty") return runtime.GuestOwnProperties == null ? null : runtime.ObjectWrite.Property;
