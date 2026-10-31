@@ -3035,6 +3035,7 @@ public partial class ILEmitter
             && _ctx.Runtime!.TypedArrays.Implementation?.GetNumericType(cta.ElementType) is { } ctaType
             && _ctx.Runtime!.TypedArrays.RequireImplementation().GetUnboxedByElement.TryGetValue(cta.ElementType, out var ctaGet)
             && _ctx.Runtime!.TypedArrays.RequireImplementation().SetUnboxedByElement.TryGetValue(cta.ElementType, out var ctaSet)
+            && IsPrimitiveNumericCompoundIndex(csi.Index)
             && _ctx.TypeMap?.Get(csi.Value) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral
             && IsArithmeticOrBitwiseCompound(csi.Operator.Type))
         {
@@ -3141,6 +3142,49 @@ public partial class ILEmitter
         // Leave result on stack
         IL.Emit(OpCodes.Ldloc, resultLocal);
         SetStackUnknown();
+    }
+
+    private bool IsPrimitiveNumericCompoundIndex(Expr expression)
+    {
+        // The unboxed path reuses one integer index. Only a primitive numeric
+        // expression can do so without discarding observable Get/Put key coercion.
+        // Erased assertions do not establish the representation of their operand.
+        return expression switch
+        {
+            Expr.Literal { Value: double } => true,
+            Expr.Grouping grouping => IsPrimitiveNumericCompoundIndex(grouping.Expression),
+            Expr.TypeAssertion assertion => IsPrimitiveNumericCompoundIndex(assertion.Expression),
+            Expr.NonNullAssertion assertion => IsPrimitiveNumericCompoundIndex(assertion.Expression),
+            Expr.Satisfies satisfies => IsPrimitiveNumericCompoundIndex(satisfies.Expression),
+            Expr.Variable variable => IsPrimitiveNumericStorage(variable.Name.Lexeme),
+            Expr.Unary { Operator.Type: TokenType.PLUS or TokenType.MINUS or TokenType.TILDE } unary
+                => IsPrimitiveNumericCompoundIndex(unary.Right),
+            Expr.Binary binary when binary.Operator.Type is
+                TokenType.PLUS or TokenType.MINUS or TokenType.STAR or TokenType.SLASH or
+                TokenType.PERCENT or TokenType.AMPERSAND or TokenType.PIPE or TokenType.CARET or
+                TokenType.LESS_LESS or TokenType.GREATER_GREATER
+                => IsPrimitiveNumericCompoundIndex(binary.Left) && IsPrimitiveNumericCompoundIndex(binary.Right),
+            _ => false
+        };
+    }
+
+    private bool IsPrimitiveNumericStorage(string name)
+    {
+        // Shared binding storage takes precedence over the original numeric
+        // local/argument slot and may contain a value written through any.
+        if (_ctx.HasLoopBodyBindingAccess(name)
+            || _ctx.CellBindingLocals.ContainsKey(name) || _ctx.ParameterCaptureCells.ContainsKey(name)
+            || _ctx.CapturedFunctionLocals?.Contains(name) == true
+            || _ctx.CapturedArrowLocals?.Contains(name) == true
+            || _ctx.ParentArrowCapturedLocals?.Contains(name) == true
+            || _ctx.CapturedTopLevelVars?.Contains(name) == true
+            || _ctx.ExtraArrowScopeBindings?.ContainsKey(name) == true
+            || _ctx.CurrentArrowFunctionDCFieldRenames?.ContainsKey(name) == true)
+            return false;
+        var storage = _ctx.Locals.GetLocal(name)?.LocalType;
+        if (storage == null && _ctx.TryGetParameterType(name, out var parameter))
+            storage = parameter;
+        return storage == _ctx.Types.Double || storage == _ctx.Types.Int64;
     }
 
     private void EmitCompoundOperation(TokenType opType, Expr value)
