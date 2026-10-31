@@ -2434,7 +2434,9 @@ public partial class RuntimeEmitter
                 runtime.Symbols.IsSymbol,
                 runtime.SymbolAccessors.FindOwnMethod,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
-                Errors: runtime.Errors
+                Errors: runtime.Errors,
+                TypedArrays: runtime.TypedArrays,
+                HasPrototypeEntry: runtime.DescriptorStorage.HasPrototypeEntry
             )
         );
         if (runtime.Reflect.Assignment is not null)
