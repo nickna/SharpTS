@@ -286,7 +286,10 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
             : _properties.OwnEnumerableKeys();
 
     internal IEnumerable<string> OwnStringKeys()
-        => _properties.OwnVisibleStringKeys();
+        => _vmContext is { } context
+            ? context.Properties.OwnVisibleStringKeys().Concat(_properties.OwnVisibleStringKeys())
+                .Distinct(StringComparer.Ordinal)
+            : _properties.OwnVisibleStringKeys();
 
     internal IEnumerable<KeyValuePair<string, object?>> UserOwnDataProperties()
     {
