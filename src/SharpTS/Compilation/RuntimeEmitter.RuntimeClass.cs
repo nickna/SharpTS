@@ -1164,7 +1164,7 @@ public partial class RuntimeEmitter
                 _features.UsesArrayPrototypeMutation,
                 runtime.DescriptorStorage,
                 _features.UsesDynamicPropertyDescriptors,
-                _features.UsesArrayMethodValues || _features.UsesReflect,
+                _features.UsesVm || _features.UsesArrayMethodValues || _features.UsesReflect,
                 runtime.Invocation.Method,
                 runtime.ObjectPrototypes,
                 runtime.Templates,

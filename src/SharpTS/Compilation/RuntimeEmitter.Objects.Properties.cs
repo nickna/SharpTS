@@ -1408,6 +1408,7 @@ public partial class RuntimeEmitter
         // When source code can replace array methods or install descriptors,
         // resolve the live own/prototype slot below. The compact bound-method
         // shortcut also cannot represent a method value with a later receiver.
+        // VM member reads likewise require these canonical prototype functions.
         foreach (var methodName in methodNames.Where(_ =>
                      !inputs.ArrayPrototypeMutation
                      && !inputs.DynamicPropertyDescriptors

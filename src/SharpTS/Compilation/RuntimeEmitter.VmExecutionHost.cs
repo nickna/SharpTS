@@ -11,6 +11,7 @@ public partial class RuntimeEmitter
     private VmHostEmission EmitVmExecutionHost(TypeBuilder owner, EmittedRuntime runtime, MethodInfo nativeCallbackRole)
     {
         var vm = runtime.RequireVm();
+        var inputProperties = EmitVmInputProperties(owner, runtime);
         var module = (ModuleBuilder)owner.Module;
         var callbacks = EmitTypeDefinitions.DefineType(module, "$VmHostCallbacks",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, _types.Object);
@@ -183,6 +184,7 @@ public partial class RuntimeEmitter
             body => EmitVmStaticDelegate(body, nativeCallbackRole,
                 typeof(Func<object, int>).GetConstructor([_types.Object, _types.IntPtr])!));
         il.Emit(OpCodes.Pop);
+        EmitVmInputPropertyConfiguration(il, runtime, inputProperties, created);
         il.Emit(OpCodes.Ldloc, created);
         il.Emit(OpCodes.Stsfld, hostField);
         il.MarkLabel(ready);

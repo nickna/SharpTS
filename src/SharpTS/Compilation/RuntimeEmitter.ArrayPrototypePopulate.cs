@@ -104,6 +104,7 @@ public partial class RuntimeEmitter
         // reflection can expose them. Simple programs retain the compact raw
         // wiring; opaque Object/Reflect/eval routes conservatively keep adapters.
         bool usesPrototypeAdapters = _emitHosted
+            || _features.UsesVm
             || _features.UsesArrayReceiverScopes
             || _features.UsesArrayPrototypeMutation
             || _features.UsesDynamicPropertyDescriptors
