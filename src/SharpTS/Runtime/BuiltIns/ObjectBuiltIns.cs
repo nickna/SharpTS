@@ -1011,7 +1011,7 @@ public static partial class ObjectBuiltIns
                 success = functionPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
             case SharpTSObjectPrototype objectPrototype:
-                success = objectPrototype.DefineExtraProperty(propertyKey, descriptor);
+                success = DefineObjectPrototypeProperty(interpreter, objectPrototype, propertyKey, descriptor);
                 break;
             case SharpTSClassPrototype classPrototype:
                 success = classPrototype.DefineExtraProperty(propertyKey, descriptor);
@@ -1100,22 +1100,26 @@ public static partial class ObjectBuiltIns
         return descriptor;
     }
 
+    private static bool DefineObjectPrototypeProperty(
+        Interpreter interpreter, SharpTSObjectPrototype target, string name,
+        SharpTSPropertyDescriptor change)
+    {
+        var current = OwnPropertyDescriptorOf(interpreter, target, name);
+        if (current is null && !PropertyDescriptorStore.IsExtensible(target))
+            return false;
+        return target.GetOwnPropertyDescriptor(name) is null && current is { HasValue: true }
+            ? target.DefineExistingDataProperty(name, current, change)
+            : target.DefineExtraProperty(name, change);
+    }
+
     internal static bool DefinePropertyOnProxyTarget(
         Interpreter interpreter, object target, object propertyKey, object descriptor)
     {
         // OrdinarySet consumes a boolean refusal. The public Object entry point
         // below translates the same refusal into TypeError for its own callers.
         if (target is SharpTSObjectPrototype objectPrototype && propertyKey is string prototypeName)
-        {
-            var change = ToPropertyDescriptor(interpreter, descriptor);
-            var current = OwnPropertyDescriptorOf(interpreter, objectPrototype, prototypeName);
-            if (current is null && !PropertyDescriptorStore.IsExtensible(objectPrototype))
-                return false;
-            return objectPrototype.GetOwnPropertyDescriptor(prototypeName) is null
-                && current is { HasValue: true }
-                ? objectPrototype.DefineExistingDataProperty(prototypeName, current, change)
-                : objectPrototype.DefineExtraProperty(prototypeName, change);
-        }
+            return DefineObjectPrototypeProperty(
+                interpreter, objectPrototype, prototypeName, ToPropertyDescriptor(interpreter, descriptor));
         if (target is SharpTSObjectNamespace objectNamespace)
         {
             if (propertyKey is string name)
