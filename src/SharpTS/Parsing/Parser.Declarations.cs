@@ -1219,9 +1219,9 @@ public partial class Parser
         if (isConst)
         {
             // For ambient const, we use Var with no initializer (special case)
-            return new Stmt.Var(name, typeAnnotation, null, IsVar: isVar, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true);
+            return new Stmt.Var(name, typeAnnotation, null, IsVar: isVar, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true) { IsAmbientVar = isVarKeyword };
         }
-        return new Stmt.Var(name, typeAnnotation, null, IsVar: isVar, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true);
+        return new Stmt.Var(name, typeAnnotation, null, IsVar: isVar, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true) { IsAmbientVar = isVarKeyword };
     }
 
     /// <summary>

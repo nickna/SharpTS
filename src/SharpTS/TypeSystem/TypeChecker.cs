@@ -1871,23 +1871,7 @@ public partial class TypeChecker
         _globalObjectVarNames.Clear();
         _globalObjectMembers = null;
         foreach (ParsedModule script in modules.Where(module => !module.IsDefaultLibrary && module.IsScript))
-        {
-            foreach (Stmt statement in script.Statements)
-            {
-                switch (statement)
-                {
-                    case Stmt.Var { IsVar: false } lexical:
-                        _globalObjectLexicalNames.Add(lexical.Name.Lexeme);
-                        break;
-                    case Stmt.Var { IsVar: true } variable:
-                        _globalObjectVarNames.Add(variable.Name.Lexeme);
-                        break;
-                    case Stmt.Const constant:
-                        _globalObjectLexicalNames.Add(constant.Name.Lexeme);
-                        break;
-                }
-            }
-        }
+            CollectGlobalObjectDeclarationNames(script.Statements);
 
         // Base declared-type frame for the whole run, mirroring Check()/CheckWithRecovery (#743) —
         // shared by all script files, which share global scope. With no frame on the stack,
@@ -2259,6 +2243,28 @@ public partial class TypeChecker
                     break;
                 case Stmt.Sequence sequence:
                     ReportRootDeclarationImplicitAnyDiagnostics(sequence.Statements);
+                    break;
+            }
+        }
+    }
+
+    private void CollectGlobalObjectDeclarationNames(IEnumerable<Stmt> statements)
+    {
+        foreach (Stmt statement in statements)
+        {
+            switch (statement)
+            {
+                case Stmt.Sequence sequence:
+                    CollectGlobalObjectDeclarationNames(sequence.Statements);
+                    break;
+                case Stmt.Var variable when variable.IsVar || variable.IsAmbientVar:
+                    _globalObjectVarNames.Add(variable.Name.Lexeme);
+                    break;
+                case Stmt.Var lexical:
+                    _globalObjectLexicalNames.Add(lexical.Name.Lexeme);
+                    break;
+                case Stmt.Const constant:
+                    _globalObjectLexicalNames.Add(constant.Name.Lexeme);
                     break;
             }
         }

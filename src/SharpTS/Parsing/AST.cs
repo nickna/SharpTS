@@ -378,6 +378,9 @@ public abstract record Stmt
         /// <summary>Source const binding preserved by destructuring lowering; implementation temporaries remain unmarked.</summary>
         public bool IsSourceConst { get; init; }
 
+        /// <summary>Actual ambient var keyword, retained separately from legacy ambient merge behavior.</summary>
+        public bool IsAmbientVar { get; init; }
+
         /// <summary>
         /// A synthetic matched-value spill awaiting an undefined-only destructuring default. Keep its
         /// guest value in object storage even when the initializer is statically numeric (#2752).
