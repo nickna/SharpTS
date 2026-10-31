@@ -428,11 +428,11 @@ internal static class GlobalFunctionHandlers
         Interpreter interpreter)
     {
         if (arguments.Count < 1)
-            throw new InterpreterException($"{BuiltInNames.QueueMicrotask}() requires exactly one argument (callback).");
+            throw new ThrowException(new SharpTSTypeError($"{BuiltInNames.QueueMicrotask}() requires a callback."));
 
         var callbackValue = (await evaluateArg(arguments[0])).ToObject();
-        if (callbackValue is not ISharpTSCallable callback)
-            throw new InterpreterException($"{BuiltInNames.QueueMicrotask}() callback must be a function.");
+        if (callbackValue is not ISharpTSCallable callback || callbackValue is SharpTSProxy { IsCallable: false })
+            throw new ThrowException(new SharpTSTypeError($"{BuiltInNames.QueueMicrotask}() callback must be a function."));
 
         interpreter.QueueMicrotask(callback);
         return RuntimeValue.Undefined;
