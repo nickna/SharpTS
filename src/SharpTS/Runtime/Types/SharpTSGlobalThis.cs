@@ -313,15 +313,27 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
                 : _deletedProperties;
 
     internal IEnumerable<string> OwnEnumerableKeys()
-        => _vmContext is { } context
-            ? context.Properties.OwnEnumerableKeys().Concat(_properties.OwnEnumerableKeys()).Distinct(StringComparer.Ordinal)
+        => _vmContext is not null
+            ? OwnStringKeys().Where(name => GetOwnPropertyDescriptor(name) is { Enumerable: true })
             : _properties.OwnEnumerableKeys();
 
     internal IEnumerable<string> OwnStringKeys()
-        => _vmContext is { } context
-            ? context.Properties.OwnVisibleStringKeys().Concat(_properties.OwnVisibleStringKeys())
-                .Distinct(StringComparer.Ordinal)
-            : _properties.OwnVisibleStringKeys();
+    {
+        if (_vmContext is not { } context) return _properties.OwnVisibleStringKeys();
+
+        // A contextified global preserves the two stores' ordering separately:
+        // internal indices, sandbox-only indices, internal names, sandbox-only names.
+        // Each actual store already orders its own indices and creation-ordered names.
+        var internalKeys = _properties.OwnVisibleStringKeys().ToArray();
+        var contextKeys = context.Properties.OwnVisibleStringKeys().ToArray();
+        return internalKeys.Where(IsIndex)
+            .Concat(contextKeys.Where(IsIndex))
+            .Concat(internalKeys.Where(name => !IsIndex(name)))
+            .Concat(contextKeys.Where(name => !IsIndex(name)))
+            .Distinct(StringComparer.Ordinal);
+
+        static bool IsIndex(string name) => PropertySemantics.TryGetArrayIndex(name, out _);
+    }
 
     internal IEnumerable<KeyValuePair<string, object?>> UserOwnDataProperties()
     {
