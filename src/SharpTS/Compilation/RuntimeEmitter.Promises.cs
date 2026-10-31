@@ -713,10 +713,9 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits a lifetime-only tracker for SharpTS's standalone entry point. A
-    /// discarded top-level then/catch/finally result must not be synchronously
-    /// pumped between script statements, but a pending native source (for
-    /// example timers/promises) must still keep the process alive until its
-    /// reaction job can run.
+    /// A discarded top-level then/catch/finally result stays asynchronous.
+    /// Native I/O and timers own their handles; a pending reaction has no
+    /// independent process-lifetime handle. Settled jobs queue their drain.
     /// </summary>
     private void EmitTrackTopLevelPromiseReaction(
         TypeBuilder typeBuilder,
@@ -730,32 +729,6 @@ public partial class RuntimeEmitter
         runtime.RequirePromise().TrackTopLevelPromiseReaction = method;
 
         var il = method.GetILGenerator();
-        var done = il.DefineLabel();
-        var eventLoopLocal = il.DeclareLocal(runtime.EventLoop.Type);
-        var awaiterLocal = il.DeclareLocal(typeof(TaskAwaiter<object?>));
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt,
-            typeof(Task).GetProperty("IsCompleted")!.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, done);
-
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Stloc, eventLoopLocal);
-        il.Emit(OpCodes.Ldloc, eventLoopLocal);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
-        il.Emit(OpCodes.Stloc, awaiterLocal);
-        il.Emit(OpCodes.Ldloca, awaiterLocal);
-        il.Emit(OpCodes.Ldloc, eventLoopLocal);
-        il.Emit(OpCodes.Ldftn, runtime.EventLoop.Unref);
-        il.Emit(OpCodes.Newobj,
-            typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call,
-            typeof(TaskAwaiter<object?>).GetMethod("UnsafeOnCompleted")!);
-
-        il.MarkLabel(done);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
     }

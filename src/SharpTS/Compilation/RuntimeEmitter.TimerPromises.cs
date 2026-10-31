@@ -13,6 +13,7 @@ public partial class RuntimeEmitter
     {
         var timerPromises = runtime.RequireTimerPromises();
         var moduleBuilder = runtimeType.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder");
+        EmitTimerPromiseCompletion(runtimeType, moduleBuilder, runtime);
         EmitTimerPromiseClosure(moduleBuilder, runtime);
         EmitExtractTimerOptionsToken(runtimeType, timerPromises);
         EmitSetTimeoutPromise(runtimeType, runtime);
@@ -204,13 +205,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, delayMsLocal);
         il.Emit(OpCodes.Call, typeof(Task).GetMethod("Delay", [typeof(int)])!);
 
-        // .ContinueWith<object?>(closure.OnComplete)
+        // Complete on the caller loop while the timer's own ref is held.
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldftn, timerPromises.TimerPromiseClosureOnComplete);
         il.Emit(OpCodes.Newobj, typeof(Func<Task, object?>).GetConstructors()[0]);
-        il.Emit(OpCodes.Call,
-            EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("ContinueWith", 1,
-                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
+        il.Emit(OpCodes.Call, timerPromises.CompleteOnEventLoop);
 
         // WrapTaskAsPromise(task)
         il.Emit(OpCodes.Call, runtime.RequirePromise().WrapTaskAsPromise);
@@ -287,13 +286,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tokenLocal);
         il.Emit(OpCodes.Call, typeof(Task).GetMethod("Delay", [typeof(int), typeof(CancellationToken)])!);
 
-        // .ContinueWith<object?>(closure.OnComplete)
+        // Complete on the caller loop while the timer's own ref is held.
         il.Emit(OpCodes.Ldloc, closureLocal);
         il.Emit(OpCodes.Ldftn, timerPromises.TimerPromiseClosureOnComplete);
         il.Emit(OpCodes.Newobj, typeof(Func<Task, object?>).GetConstructors()[0]);
-        il.Emit(OpCodes.Call,
-            EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("ContinueWith", 1,
-                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
+        il.Emit(OpCodes.Call, timerPromises.CompleteOnEventLoop);
 
         // WrapTaskAsPromise
         il.Emit(OpCodes.Call, runtime.RequirePromise().WrapTaskAsPromise);
@@ -461,13 +458,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, timerPromises.AsyncIntervalClosureToken);
         il.Emit(OpCodes.Call, typeof(Task).GetMethod("Delay", [typeof(int), typeof(CancellationToken)])!);
 
-        // .ContinueWith<object>(this.OnNextComplete)
+        // Complete on the caller loop while this interval read owns a ref.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, EmitOnNextComplete(runtime));
         il.Emit(OpCodes.Newobj, typeof(Func<Task, object?>).GetConstructors()[0]);
-        il.Emit(OpCodes.Call,
-            EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("ContinueWith", 1,
-                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
+        il.Emit(OpCodes.Call, timerPromises.CompleteOnEventLoop);
 
         // WrapTaskAsPromise → $TSPromise
         il.Emit(OpCodes.Call, runtime.RequirePromise().WrapTaskAsPromise);

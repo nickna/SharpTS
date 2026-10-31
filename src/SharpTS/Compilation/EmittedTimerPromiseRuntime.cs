@@ -13,6 +13,13 @@ public sealed class EmittedTimerPromiseRuntime
 
     public bool IsComplete { get; private set; }
 
+    private MethodBuilder? _completeOnEventLoop;
+    public MethodBuilder CompleteOnEventLoop
+    {
+        get => Require(_completeOnEventLoop);
+        internal set => Set(ref _completeOnEventLoop, value);
+    }
+
     private MethodBuilder? _setTimeoutPromise;
     public MethodBuilder SetTimeoutPromise
     {
@@ -186,6 +193,7 @@ public sealed class EmittedTimerPromiseRuntime
     internal void CompleteEmission()
     {
         EnsureMutable();
+        _ = CompleteOnEventLoop;
         _ = SetTimeoutPromise;
         _ = SetTimeoutPromiseWithSignal;
         _ = SetImmediatePromise;
