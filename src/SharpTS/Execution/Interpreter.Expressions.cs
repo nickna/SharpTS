@@ -1683,7 +1683,8 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(value);
         }
 
-        if (obj is ISharpTSOwnPropertyObject or SharpTSPromise { HasExplicitPrototype: true })
+        if (obj is ISharpTSOwnPropertyObject or SharpTSObjectPrototype
+            or SharpTSPromise { HasExplicitPrototype: true })
         {
             SetOwnPropertyObjectValue(obj, ToPropertyKey(index), value, strictMode);
             return RuntimeValue.FromBoxed(value);

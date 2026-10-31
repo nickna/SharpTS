@@ -72,6 +72,25 @@ internal sealed class PrototypePropertyOverlay(
         return defined;
     }
 
+    internal bool DefineExistingBuiltInDataProperty(
+        string name, SharpTSPropertyDescriptor current, SharpTSPropertyDescriptor change)
+    {
+        if (!current.HasValue || current.HasGet || current.HasSet || HasExtra(name)
+            || _deletedBuiltIns.Contains(name) || !isBuiltIn(name))
+            return false;
+
+        // Validate against the actual existing descriptor before materializing
+        // its virtual slot. Nonextensibility forbids new own properties, not
+        // changes to an already present built-in data property.
+        var validation = new SharpTSObject(new Dictionary<string, object?>());
+        if (!validation.DefineProperty(name, current)
+            || !validation.DefineProperty(name, change))
+            return false;
+        _extras.MirrorCompletedPropertyDefinition(name, validation.GetOwnPropertyDescriptor(name)!);
+        TrackOwnStringKey(name);
+        return true;
+    }
+
     public bool DeleteProperty(string name)
     {
         if (HasExtra(name) && !_extras.DeleteProperty(name)) return false;

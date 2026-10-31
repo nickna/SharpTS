@@ -34,6 +34,9 @@ public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
     public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
         => _overlay.DefineProperty(name, descriptor);
+    internal bool DefineExistingDataProperty(
+        string name, SharpTSPropertyDescriptor current, SharpTSPropertyDescriptor change)
+        => _overlay.DefineExistingBuiltInDataProperty(name, current, change);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _overlay.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);

@@ -2929,7 +2929,8 @@ public partial class Interpreter
             return value;
         }
 
-        if (obj is ISharpTSOwnPropertyObject or SharpTSPromise { HasExplicitPrototype: true })
+        if (obj is ISharpTSOwnPropertyObject or SharpTSObjectPrototype
+            or SharpTSPromise { HasExplicitPrototype: true })
         {
             SetOwnPropertyObjectValue(obj, set.Name.Lexeme, value, strictMode);
             return value;

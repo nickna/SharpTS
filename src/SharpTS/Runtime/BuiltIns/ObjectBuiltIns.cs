@@ -1097,6 +1097,14 @@ public static partial class ObjectBuiltIns
     {
         // OrdinarySet consumes a boolean refusal. The public Object entry point
         // below translates the same refusal into TypeError for its own callers.
+        if (target is SharpTSObjectPrototype objectPrototype && propertyKey is string prototypeName)
+        {
+            var change = ToPropertyDescriptor(interpreter, descriptor);
+            return objectPrototype.GetOwnPropertyDescriptor(prototypeName) is null
+                && OwnPropertyDescriptorOf(interpreter, objectPrototype, prototypeName) is { HasValue: true } current
+                ? objectPrototype.DefineExistingDataProperty(prototypeName, current, change)
+                : objectPrototype.DefineExtraProperty(prototypeName, change);
+        }
         if (target is SharpTSObjectNamespace objectNamespace)
         {
             if (propertyKey is string name)

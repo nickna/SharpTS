@@ -128,6 +128,9 @@ public partial class Interpreter
             case SharpTSObjectNamespace objectNamespace:
                 SetOwnPropertyObjectValue(objectNamespace, name.Lexeme, value, _environment.IsStrictMode);
                 return true;
+            case SharpTSObjectPrototype objectPrototype:
+                SetOwnPropertyObjectValue(objectPrototype, name.Lexeme, value, _environment.IsStrictMode);
+                return true;
             case SharpTSProxy proxy:
                 proxy.TrapSet(name.Lexeme, value, this);
                 return true;
@@ -187,7 +190,7 @@ public partial class Interpreter
             value = GetPropertyValue(global.Target, global.Key);
             return true;
         }
-        if (obj is SharpTSObjectPrototype || HasCanonicalIndexProperties(obj))
+        if (HasCanonicalIndexProperties(obj))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
             return true;
@@ -254,7 +257,7 @@ public partial class Interpreter
         => target is SharpTSArray && RuntimeValue.FromBoxed(key).IsObject;
 
     private bool HasCanonicalIndexProperties(object? target)
-        => target is ISharpTSOwnPropertyObject or SharpTSObject or SharpTSObjectNamespace
+        => target is ISharpTSOwnPropertyObject or SharpTSObject or SharpTSObjectNamespace or SharpTSObjectPrototype
             || FunctionObjectProperties.TryGetStorage(target, this, out _);
 
     // Callers supply an already normalized string or Symbol property key.
