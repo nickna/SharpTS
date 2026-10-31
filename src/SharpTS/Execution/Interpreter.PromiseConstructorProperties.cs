@@ -21,22 +21,6 @@ public partial class Interpreter
         return true;
     }
 
-    private SharpTSPromisePrototype GetPromiseMethodPrototype(SharpTSPromise promise)
-    {
-        if (GetPromiseConstructorState(promise.IntrinsicConstructor) is { } realm)
-            return realm.Prototype;
-        if (promise is SharpTSPromiseSubclassInstance subclass)
-        {
-            for (SharpTSClass? owner = subclass.Klass; owner is not null; owner = owner.Superclass)
-            {
-                if (owner is SharpTSPromiseClass { IntrinsicParentConstructor: { } parent }
-                    && GetPromiseConstructorState(parent) is { } parentRealm)
-                    return parentRealm.Prototype;
-            }
-        }
-        return GetPromisePrototype();
-    }
-
     internal static SharpTSObject CreatePromiseConstructorSymbolProperties(SharpTSFunctionPrototype functionPrototype)
     {
         var properties = new SharpTSObject([]);

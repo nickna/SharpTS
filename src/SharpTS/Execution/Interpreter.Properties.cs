@@ -585,6 +585,24 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is SharpTSPromise promise)
+            {
+                if (TryReadDescriptor(promise.GetOwnPropertyDescriptor(name), receiver, out var promiseValue))
+                    return promiseValue;
+                current = ObjectBuiltIns.PrototypeOf(this, promise);
+                continue;
+            }
+
+            if (current is SharpTSPromisePrototype promisePrototype)
+            {
+                if (TryReadDescriptor(promisePrototype.GetOwnPropertyDescriptor(name), receiver, out var prototypeValue))
+                    return prototypeValue;
+                if (promisePrototype.HasOwnProperty(name))
+                    return promisePrototype.GetMember(name);
+                current = ObjectBuiltIns.PrototypeOf(this, promisePrototype);
+                continue;
+            }
+
             if (current is SharpTSClassPrototype classPrototype)
             {
                 if (TryReadDescriptor(classPrototype.GetOwnPropertyDescriptor(name),
@@ -1655,41 +1673,10 @@ public partial class Interpreter
                 return RuntimeValue.FromBoxed(RegExpConstructorObject);
         }
 
-        // Promise instances: own accessor/data properties installed via
-        // Object.defineProperty resolve first, so a poisoned `constructor`
-        // getter fires and propagates (test262 then/ctor-poisoned, #350). For
-        // subclass instances (#242), declared fields/class getters/methods then
-        // resolve before the built-in Promise members so user overrides win;
-        // then/catch/finally fall through to the category dispatch
-        // (PromiseBuiltIns wraps their results per SpeciesConstructor).
-        if (obj is SharpTSPromise promise)
-        {
-            if (promise.TryGetAccessor(memberName, out var ownGetter, out _))
-                return RuntimeValue.FromBoxed(ownGetter != null
-                    ? FunctionBuiltIns.CallWithThis(this, ownGetter, promise, [])
-                    : SharpTSUndefined.Instance);
-            if (promise.TryGetOwnProperty(memberName, out var ownProp))
-                return RuntimeValue.FromBoxed(ownProp);
-            if (promise is SharpTSPromiseSubclassInstance promiseSub)
-            {
-                if (memberName == "constructor")
-                    return RuntimeValue.FromObject(promiseSub.Klass);
-                var promiseGetter = promiseSub.Klass.FindGetter(memberName);
-                if (promiseGetter != null)
-                    return RuntimeValue.FromBoxed(promiseGetter.BindThis(promiseSub).CallBoxed(this, []));
-                var promiseMethod = promiseSub.Klass.FindMethod(memberName);
-                if (promiseMethod != null)
-                    return RuntimeValue.FromObject(SharpTSClass.BindMethodToReceiver(promiseMethod, promiseSub));
-            }
-            if (memberName == "constructor")
-                return RuntimeValue.FromObject(promise.IntrinsicConstructor ?? PromiseGlobalValue);
-            if (memberName is "then" or "catch" or "finally")
-            {
-                return RuntimeValue.FromBoxed(
-                    GetPromiseMethodPrototype(promise).GetMember(memberName)
-                    ?? SharpTSUndefined.Instance);
-            }
-        }
+        // Promise data methods and getters come from the live descriptor chain.
+        // Member invocation supplies this; reading a method preserves its identity.
+        if (obj is SharpTSPromise)
+            return RuntimeValue.FromBoxed(GetPropertyValue(obj, memberName));
 
         // Number primitives inherit from this realm's mutable Number.prototype.
         // Consult it before the process-wide category registry so borrowed methods
@@ -2759,34 +2746,8 @@ public partial class Interpreter
             }
         }
 
-        // Promise instances: mirror the RV-path arm — own accessor/data
-        // properties (poisoned `constructor` getter, #350) before subclass
-        // fields/getters/methods, all before the built-in Promise members.
-        if (obj is SharpTSPromise promise)
-        {
-            if (promise.TryGetAccessor(memberName, out var ownGetter, out _))
-                return ownGetter != null
-                    ? FunctionBuiltIns.CallWithThis(this, ownGetter, promise, [])
-                    : SharpTSUndefined.Instance;
-            if (promise.TryGetOwnProperty(memberName, out var promiseOwnProp))
-                return promiseOwnProp;
-            if (promise is SharpTSPromiseSubclassInstance promiseSub)
-            {
-                if (memberName == "constructor")
-                    return promiseSub.Klass;
-                var promiseGetter = promiseSub.Klass.FindGetter(memberName);
-                if (promiseGetter != null)
-                    return promiseGetter.BindThis(promiseSub).CallBoxed(this, []);
-                var promiseMethod = promiseSub.Klass.FindMethod(memberName);
-                if (promiseMethod != null)
-                    return SharpTSClass.BindMethodToReceiver(promiseMethod, promiseSub);
-            }
-            if (memberName == "constructor")
-                return promise.IntrinsicConstructor ?? PromiseGlobalValue;
-            if (memberName is "then" or "catch" or "finally")
-                return GetPromiseMethodPrototype(promise).GetMember(memberName)
-                    ?? SharpTSUndefined.Instance;
-        }
+        if (obj is SharpTSPromise)
+            return GetPropertyValue(obj, memberName);
 
         // Callable objects inherit guest-defined fields from this realm's
         // Function.prototype. Resolve that layer before the registry: registered
