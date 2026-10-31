@@ -832,7 +832,7 @@ public partial class ILCompiler
                 CollectArrowsFromExpr(da.ResultValue);
                 break;
             case Expr.ArrowFunction af:
-                var captures = new HashSet<string>(_closures.Analyzer.GetCaptures(af));
+                var captures = _closures.Analyzer.GetCaptures(af);
                 if (!af.HasOwnThis && captures.Contains("this") && ClassNeedsConstructorReceiver(_currentCollectClassName)
                     && (_collectingInstanceFieldInitializer || IsConstructorThisArrowParent(_currentEnclosingCallable)))
                 {
@@ -849,6 +849,9 @@ public partial class ILCompiler
                     && ((_currentCollectStaticClassContext && captures.Contains("this"))
                         || ArrowUsesClassDefinition(af)))
                     captures.Add(CompilationContext.SuperOwnerCaptureName);
+                // Async builders also consume the analyzer's synthetic owner
+                // captures. Only the module storage rewrite needs a private copy.
+                captures = new HashSet<string>(captures);
                 RemoveLiveModuleCaptures(af, captures, _modules.CurrentPath);
                 _collectedArrows.Add((af, captures));
                 if (_currentCollectClassName != null || _currentCollectStrict)
