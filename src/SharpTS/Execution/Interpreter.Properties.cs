@@ -2862,6 +2862,11 @@ public partial class Interpreter
         throw new InterpreterException("Only instances and objects have properties.");
     }
 
+    private static void WriteVmInputProperty(VmInputPropertyView input, string name, object? value, bool strictMode)
+    {
+        if (!input.Write(name, value) && strictMode)
+            throw new ThrowException(new SharpTSTypeError($"Cannot assign to read only property '{name}'"));
+    }
     /// <summary>
     /// Evaluates a property assignment expression (dot notation with assignment).
     /// </summary>
@@ -2928,6 +2933,15 @@ public partial class Interpreter
         }
 
         bool strictMode = forceStrict || _environment.IsStrictMode;
+        if (obj is VmInputPropertyView inputView)
+        {
+            if (inputView.CanWrite)
+            {
+                WriteVmInputProperty(inputView, set.Name.Lexeme, value, strictMode);
+                return value;
+            }
+            obj = inputView.Original;
+        }
         bool mutableFunctionPrototype = UsesMutableFunctionPrototype(obj);
 
         // Proxy interception - must be before any other dispatch

@@ -23,6 +23,10 @@ public partial class Interpreter
     {
         switch (obj)
         {
+            case VmInputPropertyView inputView:
+                if (!inputView.CanWrite) return TryGetProperty(inputView.Original, name, out value);
+                value = inputView.Read(name.Lexeme);
+                return true;
             case SharpTSObjectNamespace objectNamespace:
                 value = GetPropertyValue(objectNamespace, name.Lexeme);
                 return true;
@@ -64,6 +68,10 @@ public partial class Interpreter
     {
         switch (obj)
         {
+            case VmInputPropertyView inputView:
+                if (!inputView.CanWrite) return TryGetPropertyRV(inputView.Original, name, out value);
+                value = RuntimeValue.FromBoxed(inputView.Read(name.Lexeme));
+                return true;
             case SharpTSObjectNamespace objectNamespace:
                 value = RuntimeValue.FromBoxed(GetPropertyValue(objectNamespace, name.Lexeme));
                 return true;
@@ -107,6 +115,10 @@ public partial class Interpreter
     {
         switch (obj)
         {
+            case VmInputPropertyView inputView:
+                if (!inputView.CanWrite) return TrySetProperty(inputView.Original, name, value);
+                WriteVmInputProperty(inputView, name.Lexeme, value, _environment.IsStrictMode);
+                return true;
             case SharpTSObjectNamespace objectNamespace:
                 SetOwnPropertyObjectValue(objectNamespace, name.Lexeme, value, _environment.IsStrictMode);
                 return true;
@@ -151,6 +163,14 @@ public partial class Interpreter
     /// <returns><c>true</c> if the element was found; otherwise <c>false</c>.</returns>
     private bool TryGetIndex(object? obj, object? index, out object? value)
     {
+        if (obj is VmInputPropertyView inputView)
+        {
+            if (!inputView.CanWrite) return TryGetIndex(inputView.Original, index, out value);
+            object key = ToPropertyKey(index);
+            if (key is not string name) return TryGetIndex(inputView.Original, key, out value);
+            value = inputView.Read(name);
+            return true;
+        }
         if (ResolveGlobalIndexTarget(obj, index) is { } global)
         {
             value = GetPropertyValue(global.Target, global.Key);
@@ -185,6 +205,12 @@ public partial class Interpreter
     /// <returns><c>true</c> if the element was set; otherwise <c>false</c>.</returns>
     private bool TrySetIndex(object? obj, object? index, object? value)
     {
+        if (obj is VmInputPropertyView inputView)
+        {
+            if (!inputView.CanWrite) return TrySetIndex(inputView.Original, index, value);
+            PerformIndexSet(inputView, index, value);
+            return true;
+        }
         if (ResolveGlobalIndexTarget(obj, index) is { } global)
         {
             SetGlobalIndexValue(global, value, _environment.IsStrictMode);

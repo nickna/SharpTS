@@ -1661,6 +1661,20 @@ public partial class Interpreter
     private RuntimeValue PerformIndexSet(object? obj, object? index, object? value)
     {
         bool strictMode = _environment.IsStrictMode;
+        if (obj is VmInputPropertyView inputView)
+        {
+            if (inputView.CanWrite)
+            {
+                object key = ToPropertyKey(index);
+                if (key is string name)
+                {
+                    WriteVmInputProperty(inputView, name, value, strictMode);
+                    return RuntimeValue.FromBoxed(value);
+                }
+                index = key;
+            }
+            obj = inputView.Original;
+        }
 
         // ECMA-262 PutValue: RequireObjectCoercible throws a guest TypeError on a
         // null/undefined base before any setter dispatch (#733). Operands (obj,

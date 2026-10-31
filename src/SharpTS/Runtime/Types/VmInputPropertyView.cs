@@ -47,11 +47,33 @@ internal sealed class VmInputPropertyView
         });
     }
 
-    private object? ReadWithHost(Func<VmExecutionHost, object?> operation)
+    internal bool CanWrite => _access.Write is not null;
+
+    internal bool Write(string name, object? value)
+    {
+        var write = _access.Write ?? throw new InvalidOperationException("VM input writes are not configured.");
+        var host = ActiveHost();
+        if (SharpTS.Execution.VmEvaluationLease.CurrentInterpreter is { } owner)
+            VmModuleInterpreter.RecordVmBoundaryValue(value, owner);
+        try { return write(Original, name, host.FromVm(value)); }
+        catch (Exception exception)
+        {
+            if (host.TryGetThrownValue(exception, out var thrown))
+                throw new Exceptions.ThrowException(host.ToVm(thrown));
+            throw;
+        }
+    }
+
+    private VmExecutionHost ActiveHost()
     {
         var host = VmExecutionHost.Current;
         if (host?.InputPropertyAccess is not { } active || !_access.Matches(active))
             throw new InvalidOperationException("VM input property access requires its active output host.");
+        return host;
+    }
+    private object? ReadWithHost(Func<VmExecutionHost, object?> operation)
+    {
+        var host = ActiveHost();
         object? value;
         try { value = operation(host); }
         catch (Exception exception)

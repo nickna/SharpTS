@@ -150,16 +150,24 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, index?.ToString() ?? "");
         }
 
+        var inputView = obj as VmInputPropertyView;
+        if (inputView is { CanWrite: false })
+        {
+            obj = inputView.Original;
+            inputView = null;
+        }
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
-        if (globalTarget is not null || HasCanonicalIndexProperties(obj) || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
+        if (inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj) || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
-            RuntimeValue current = RuntimeValue.FromBoxed(GetOwnPropertyObjectValue(obj, key));
+            RuntimeValue current = RuntimeValue.FromBoxed(inputView is not null
+                ? key is string name ? inputView.Read(name) : throw new InterpreterException("Compound index assignment not supported on this type.")
+                : GetOwnPropertyObjectValue(obj, key));
             RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
             // GetValue and PutValue each convert the retained raw key. Guest
             // coercion may select a different property after the RHS runs.
-            if (globalTarget is not null) PerformIndexSet(obj, index, newValue.ToObject());
+            if (globalTarget is not null || inputView is not null) PerformIndexSet(obj, index, newValue.ToObject());
             else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
@@ -327,11 +335,19 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, index?.ToString() ?? "");
         }
 
+        var inputView = obj as VmInputPropertyView;
+        if (inputView is { CanWrite: false })
+        {
+            obj = inputView.Original;
+            inputView = null;
+        }
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
-        if (globalTarget is not null || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace)
+        if (inputView is not null || globalTarget is not null || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
-            RuntimeValue currentRV = RuntimeValue.FromBoxed(GetOwnPropertyObjectValue(obj, key));
+            RuntimeValue currentRV = RuntimeValue.FromBoxed(inputView is not null
+                ? key is string name ? inputView.Read(name) : throw new InterpreterException("Logical index assignment not supported on this type.")
+                : GetOwnPropertyObjectValue(obj, key));
             switch (logical.Operator.Type)
             {
                 case TokenType.AND_AND_EQUAL:
@@ -346,7 +362,7 @@ public partial class Interpreter
             }
 
             RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
-            if (globalTarget is not null) PerformIndexSet(obj, index, newValue.ToObject());
+            if (globalTarget is not null || inputView is not null) PerformIndexSet(obj, index, newValue.ToObject());
             else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
