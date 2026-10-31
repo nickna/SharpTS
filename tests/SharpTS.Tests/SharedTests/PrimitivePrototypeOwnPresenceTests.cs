@@ -32,5 +32,3 @@ public sealed class PrimitivePrototypeOwnPresenceTests
             Assert.Equal(expected, TestHarness.Run(source, mode));
     }
 }
-
-

@@ -33,4 +33,3 @@ public sealed class ArrayPrototypeReflectDeleteTests
             Assert.Equal(expected, TestHarness.Run(source, mode));
     }
 }
-
