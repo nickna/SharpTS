@@ -1,4 +1,6 @@
 using System.Threading;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace SharpTS.Runtime.BuiltIns.Modules.Interpreter;
 
@@ -8,6 +10,7 @@ internal sealed class VmExecutionHost : IDisposable
 {
     private static AsyncLocal<VmExecutionHost?>? _ambient;
     private readonly object _gate = new();
+    private readonly ConditionalWeakTable<object, Types.CompiledCallableAdapter> _compiledCallables = new();
     private readonly List<WeakReference<Execution.VmEvaluationLease>> _leases = [];
     private Action<Action>? _queuePromiseJob, _scheduleCallback, _queueAfterCheckpoint;
     private Action? _refHandle, _unrefHandle, _checkCancellation;
@@ -122,7 +125,20 @@ internal sealed class VmExecutionHost : IDisposable
         if (value is Types.CompiledCallableAdapter callback) value = callback.Original;
         return _fromVm is { } adapt ? adapt(value) : value;
     }
-    internal object? ToVm(object? value) => _toVm is { } adapt ? adapt(value) : value;
+    internal object? ToVm(object? value)
+        => Types.VmContext.WrapVmCompiledCallableForHost(_toVm is { } adapt ? adapt(value) : value, this);
+
+    // Called only after the existing managed-function boundary has admitted the actual value.
+    // Weak keys preserve identity without rooting otherwise unreachable caller functions.
+    internal Types.CompiledCallableAdapter GetCompiledCallable(object target, MethodInfo invoke, MethodInfo? invokeWithThis)
+    {
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _compiledCallables.GetValue(target,
+                value => new Types.CompiledCallableAdapter(value, invoke, invokeWithThis, this));
+        }
+    }
 
     internal void QueuePromiseJob(Action job) { if (!IsDisposed) _queuePromiseJob?.Invoke(job); }
     internal void ScheduleCallback(Action job) { if (!IsDisposed) _scheduleCallback?.Invoke(job); }
@@ -186,6 +202,7 @@ internal sealed class VmExecutionHost : IDisposable
                 _queuePromiseJob = _scheduleCallback = _queueAfterCheckpoint = null;
                 _refHandle = _unrefHandle = _checkCancellation = null;
                 _fromVm = _toVm = null;
+                _compiledCallables.Clear();
                 _isThrownValue = null;
                 _getThrownValue = null;
             }

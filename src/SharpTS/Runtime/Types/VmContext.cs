@@ -96,8 +96,9 @@ public static partial class VmContext
     /// </summary>
     private static void WrapCompiledCallables(Dictionary<string, object?> props)
     {
+        var host = BuiltIns.Modules.Interpreter.VmExecutionHost.Current;
         foreach (var key in props.Keys.ToList())
-            props[key] = WrapCompiledCallable(props[key]);
+            props[key] = WrapCompiledCallable(host is null ? props[key] : host.ToVm(props[key]));
     }
 
     internal static object? WrapCompiledCallable(object? value)
@@ -111,10 +112,16 @@ public static partial class VmContext
             : ManagedStructuralClrReflection.TryGetPublicMethodBySignature(type, "Invoke", [typeof(object[])]);
         var invokeWithThis = emittedFunction ? ManagedEmittedShapeReflection.GetPublicMethod(type,
             ManagedEmittedShape.Function, "InvokeWithThis", [typeof(object), typeof(object[])]) : null;
-        return invokeMethod is null ? value : new CompiledCallableAdapter(value, invokeMethod, invokeWithThis);
+        if (invokeMethod is null) return value;
+        return emittedFunction && BuiltIns.Modules.Interpreter.VmExecutionHost.Current is { } host
+            ? host.GetCompiledCallable(value, invokeMethod, invokeWithThis)
+            : new CompiledCallableAdapter(value, invokeMethod, invokeWithThis);
     }
 
     internal static object? WrapVmCompiledCallable(object? value)
+        => WrapVmCompiledCallableForHost(value, BuiltIns.Modules.Interpreter.VmExecutionHost.Current);
+
+    internal static object? WrapVmCompiledCallableForHost(object? value, BuiltIns.Modules.Interpreter.VmExecutionHost? host)
     {
         if (value is null or ISharpTSCallable) return value;
         var type = value.GetType();
@@ -122,7 +129,9 @@ public static partial class VmContext
         var invoke = ManagedEmittedShapeReflection.GetPublicMethod(type, ManagedEmittedShape.Function, "Invoke", [typeof(object[])]);
         var invokeWithThis = ManagedEmittedShapeReflection.GetPublicMethod(type, ManagedEmittedShape.Function,
             "InvokeWithThis", [typeof(object), typeof(object[])]);
-        return invoke is null ? value : new CompiledCallableAdapter(value, invoke, invokeWithThis);
+        if (invoke is null) return value;
+        return host is null ? new CompiledCallableAdapter(value, invoke, invokeWithThis)
+            : host.GetCompiledCallable(value, invoke, invokeWithThis);
     }
 
     /// <summary>
@@ -241,10 +250,27 @@ public sealed record VmContextOptions(
 /// interpreter can invoke it. Used at the vm module boundary when compiled functions
 /// are passed in context objects.
 /// </summary>
-internal sealed class CompiledCallableAdapter(object target, MethodInfo invokeMethod, MethodInfo? invokeWithThisMethod = null) : ISharpTSCallable
+internal sealed class CompiledCallableAdapter : ISharpTSCallable
 {
-    internal object Original => target;
-    private readonly BuiltIns.Modules.Interpreter.VmExecutionHost? _host = BuiltIns.Modules.Interpreter.VmExecutionHost.Current;
+    private readonly object _target;
+    private readonly MethodInfo _invokeMethod;
+    private readonly MethodInfo? _invokeWithThisMethod;
+    private readonly BuiltIns.Modules.Interpreter.VmExecutionHost? _host;
+    internal object Original => _target;
+
+    public CompiledCallableAdapter(object target, MethodInfo invokeMethod, MethodInfo? invokeWithThisMethod = null)
+        : this(target, invokeMethod, invokeWithThisMethod, BuiltIns.Modules.Interpreter.VmExecutionHost.Current) { }
+
+    // An explicit owner does not consult the ambient host while its cache gate is held.
+    internal CompiledCallableAdapter(object target, MethodInfo invokeMethod, MethodInfo? invokeWithThisMethod,
+        BuiltIns.Modules.Interpreter.VmExecutionHost? host)
+    {
+        _target = target;
+        _invokeMethod = invokeMethod;
+        _invokeWithThisMethod = invokeWithThisMethod;
+        _host = host;
+    }
+
     public int Arity() => 0; // Unknown arity for compiled functions
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
@@ -266,9 +292,9 @@ internal sealed class CompiledCallableAdapter(object target, MethodInfo invokeMe
         object? result;
         try
         {
-            result = explicitReceiver && invokeWithThisMethod is not null
-                ? invokeWithThisMethod.Invoke(target, [Adapt(receiver), args])
-                : invokeMethod.Invoke(target, [args]);
+            result = explicitReceiver && _invokeWithThisMethod is not null
+                ? _invokeWithThisMethod.Invoke(_target, [Adapt(receiver), args])
+                : _invokeMethod.Invoke(_target, [args]);
         }
         catch (Exception exception) when (_host is not null)
         {
@@ -278,5 +304,5 @@ internal sealed class CompiledCallableAdapter(object target, MethodInfo invokeMe
         }
         return _host is null ? result : _host.ToVm(result);
     }
-    public override string ToString() => target.ToString() ?? "<compiled function>";
+    public override string ToString() => _target.ToString() ?? "<compiled function>";
 }
