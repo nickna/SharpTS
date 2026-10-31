@@ -348,7 +348,13 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// <returns>True if the property exists (either user-assigned or built-in).</returns>
     public bool HasProperty(string name)
     {
-        if (HasUserProperty(name)) return true;
+        if (ContextDescriptor(name) is not null) return true;
+        return HasInternalProperty(name);
+    }
+
+    private bool HasInternalProperty(string name)
+    {
+        if (_properties.HasProperty(name) || _properties.HasSetter(name)) return true;
         if (_deletedProperties.Contains(name)) return false;
         if (name == "globalThis") return true;
 

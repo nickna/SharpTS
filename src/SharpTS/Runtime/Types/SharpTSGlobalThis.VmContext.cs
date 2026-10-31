@@ -38,5 +38,5 @@ public sealed partial class SharpTSGlobalThis
     internal bool IsInternalOnlyVmProperty(string name) => _vmContext is not null
         && ContextDescriptor(name) is null && _properties.HasProperty(name);
 
-    internal bool NeedsVmGlobalVariable(string name) => _vmContext is not null && !_properties.HasProperty(name);
+    internal bool NeedsVmGlobalVariable(string name) => _vmContext is not null && !HasInternalProperty(name);
 }

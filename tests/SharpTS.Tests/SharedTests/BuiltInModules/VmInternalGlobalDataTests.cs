@@ -81,6 +81,8 @@ public sealed class VmInternalGlobalDataTests
         yield return ["seeded-var-initialized", "import * as vm from 'node:vm';const ctx:any=vm.createContext({foo:7});console.log(vm.runInContext('var foo=1;String(delete globalThis.foo)+\":\"+String(foo)',ctx),Object.prototype.hasOwnProperty.call(ctx,'foo'));", "false:1 false\n"];
         yield return ["seeded-var-outside-delete", "import * as vm from 'node:vm';const ctx:any=vm.createContext({foo:7});vm.runInContext('var foo;',ctx);delete ctx.foo;console.log(vm.runInContext('String(foo)',ctx));", "undefined\n"];
         yield return ["escaped-reader-delete", "import * as vm from 'node:vm';const ctx:any=vm.createContext({foo:0});const read:any=vm.runInContext('()=>foo',ctx);vm.runInContext('foo=1',ctx);delete ctx.foo;console.log(read(),Object.prototype.hasOwnProperty.call(ctx,'foo'));", "1 false\n"];
+        yield return ["intrinsic-var", "import * as vm from \"node:vm\";console.log(vm.runInNewContext(\"var Math;typeof Math\"),vm.runInNewContext(\"var Object;typeof Object\"),vm.runInNewContext(\"var Promise;typeof Promise\"));", "object function function\n"];
+        yield return ["shadowed-intrinsic-var", "import * as vm from \"node:vm\";const ctx:any=vm.createContext({Math:7,Object:7});vm.runInContext(\"var Math;var Object;\",ctx);delete ctx.Math;delete ctx.Object;console.log(vm.runInContext(\"typeof Math\",ctx),vm.runInContext(\"typeof Object\",ctx));", "object function\n"];
     }
 
     public static IEnumerable<object[]> Modes() => Cases().SelectMany(row =>
