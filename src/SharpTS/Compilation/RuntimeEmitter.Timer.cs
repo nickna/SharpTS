@@ -822,6 +822,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, microtasks.QueuePromiseJob);
         il.Emit(OpCodes.Ret);
 
+        if (_features.UsesMicrotaskFunctionValues)
+            EmitQueueMicrotaskValueAdapter(runtimeType, runtime);
+
         // Emit ProcessMicrotasks method
         EmitProcessMicrotasksMethod(
             runtimeType,

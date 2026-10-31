@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
             })
                 functions.Add((name, length, runtime.BuiltInModules.Require("timers", name)));
         if (_features.UsesMicrotaskFunctionValues)
-            functions.Add(("queueMicrotask", 1, runtime.Microtasks.QueueMicrotask));
+            functions.Add(("queueMicrotask", 1, runtime.Microtasks.QueueMicrotaskValue));
         foreach (var (name, length, wrapper) in functions)
         {
             // Actual emitted declarations own these values; source flags only
