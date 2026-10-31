@@ -521,6 +521,26 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is SharpTSNumberPrototype numberPrototype)
+            {
+                if (TryReadDescriptor(numberPrototype.GetOwnPropertyDescriptor(name), receiver, out var prototypeValue))
+                    return prototypeValue;
+                if (numberPrototype.HasOwnProperty(name))
+                    return numberPrototype.GetMember(name);
+                current = ObjectBuiltIns.PrototypeOf(this, numberPrototype);
+                continue;
+            }
+
+            if (current is SharpTSBooleanPrototype booleanPrototype)
+            {
+                if (TryReadDescriptor(booleanPrototype.GetOwnPropertyDescriptor(name), receiver, out var prototypeValue))
+                    return prototypeValue;
+                if (booleanPrototype.HasOwnProperty(name))
+                    return booleanPrototype.GetMember(name);
+                current = ObjectBuiltIns.PrototypeOf(this, booleanPrototype);
+                continue;
+            }
+
             if (current is SharpTSSymbolPrototype symbolPrototype)
             {
                 if (TryReadDescriptor(symbolPrototype.GetOwnPropertyDescriptor(name), receiver, out var prototypeValue))
@@ -1385,7 +1405,7 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(GetPropertyValue(objectNamespace, get.Name.Lexeme));
         }
 
-        if (obj is SharpTSObjectPrototype)
+        if (obj is SharpTSObjectPrototype || UsesPrimitivePrototypePropertyReads(obj))
             return RuntimeValue.FromBoxed(GetPropertyValue(obj, get.Name.Lexeme));
 
         if (obj is ISharpTSPrimitiveConstructor primitiveConstructor)
@@ -2530,7 +2550,7 @@ public partial class Interpreter
     /// </summary>
     private object? EvaluateGetOnFallback(object? obj, string memberName)
     {
-        if (obj is SharpTSObjectNamespace or SharpTSObjectPrototype)
+        if (obj is SharpTSObjectNamespace or SharpTSObjectPrototype || UsesPrimitivePrototypePropertyReads(obj))
             return GetPropertyValue(obj, memberName);
         if (obj is ArrayBufferConstructorImpl)
             return GetPropertyValue(obj, memberName);

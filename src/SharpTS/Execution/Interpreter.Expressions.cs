@@ -1264,7 +1264,7 @@ public partial class Interpreter
         }
 
         if (obj is ISharpTSOwnPropertyObject or SharpTSObjectNamespace or SharpTSObjectPrototype
-            or SharpTSPromise { HasExplicitPrototype: true })
+            or SharpTSPromise { HasExplicitPrototype: true } || UsesPrimitivePrototypePropertyReads(obj))
         {
             object key = ToPropertyKey(index);
             return RuntimeValue.FromBoxed(key is SharpTSSymbol symbol

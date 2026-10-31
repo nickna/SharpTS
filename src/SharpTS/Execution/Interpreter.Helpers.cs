@@ -21,6 +21,11 @@ public partial class Interpreter
     /// <returns><c>true</c> if the property was found; otherwise <c>false</c>.</returns>
     private bool TryGetProperty(object? obj, Token name, out object? value)
     {
+        if (UsesPrimitivePrototypePropertyReads(obj))
+        {
+            value = GetPropertyValue(obj, name.Lexeme);
+            return true;
+        }
         switch (obj)
         {
             case VmInputPropertyView inputView:
@@ -69,6 +74,11 @@ public partial class Interpreter
     /// </summary>
     private bool TryGetPropertyRV(object? obj, Token name, out RuntimeValue value)
     {
+        if (UsesPrimitivePrototypePropertyReads(obj))
+        {
+            value = RuntimeValue.FromBoxed(GetPropertyValue(obj, name.Lexeme));
+            return true;
+        }
         switch (obj)
         {
             case VmInputPropertyView inputView:
@@ -190,7 +200,7 @@ public partial class Interpreter
             value = GetPropertyValue(global.Target, global.Key);
             return true;
         }
-        if (HasCanonicalIndexProperties(obj))
+        if (HasCanonicalIndexProperties(obj) || UsesPrimitivePrototypePropertyReads(obj))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
             return true;
@@ -255,6 +265,9 @@ public partial class Interpreter
 
     private static bool HasArrayObjectKey(object? target, object? key)
         => target is SharpTSArray && RuntimeValue.FromBoxed(key).IsObject;
+
+    private static bool UsesPrimitivePrototypePropertyReads(object? target)
+        => target is SharpTSStringPrototype or SharpTSNumberPrototype or SharpTSBooleanPrototype;
 
     private bool HasCanonicalIndexProperties(object? target)
         => target is ISharpTSOwnPropertyObject or SharpTSObject or SharpTSObjectNamespace or SharpTSObjectPrototype
