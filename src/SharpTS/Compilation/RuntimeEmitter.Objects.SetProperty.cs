@@ -99,7 +99,7 @@ public partial class RuntimeEmitter
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
         EmittedFunctionPrototypeRuntime FunctionPrototypes,
-        MethodBuilder GlobalThisSetProperty,
+        MethodBuilder GlobalThisSetPropertyStrict,
         FieldBuilder GlobalThisSingletonField,
         Type IHasFieldsInterface,
         MethodBuilder InvokeMethodUnwrapped,
@@ -2879,7 +2879,7 @@ public partial class RuntimeEmitter
         // `this.value` / `this.get` and reuse `this` as a descriptor.
         EmitGlobalThisSetRedirect(
             il,
-            new GlobalThisSetRedirectInputs(inputs.GlobalThisSetProperty, inputs.GlobalThisSingletonField)
+            new GlobalThisSetRedirectInputs(inputs.GlobalThisSetPropertyStrict, inputs.GlobalThisSingletonField, ForwardStrict: true)
         );
 
         // Proxy [[Set]] must run before receiver-shape dispatch. Preserve the

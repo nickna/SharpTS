@@ -1472,7 +1472,7 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.FunctionPrototypes,
-                runtime.GlobalObject.SetProperty,
+                runtime.GlobalObject.SetPropertyStrict,
                 runtime.GlobalObject.SingletonField,
                 runtime.ObjectFields.Interface,
                 runtime.ReflectedMethods.InvokeUnwrapped,

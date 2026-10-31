@@ -969,7 +969,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stloc, gtResultTemp);
             IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
             IL.Emit(OpCodes.Ldloc, gtResultTemp);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.SetProperty);
+            EmitGlobalPropertyStore();
             IL.Emit(OpCodes.Ldloc, gtResultTemp); // expression result
             SetStackUnknown();
             return;
@@ -1849,7 +1849,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Call, _ctx.Runtime!.Reflect.ToPropertyKey);
             IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.Object, "ToString")!);
             IL.Emit(OpCodes.Ldloc, valueTemp);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.SetProperty);
+            EmitGlobalPropertyStore();
             IL.Emit(OpCodes.Ldloc, valueTemp); // expression result
             SetStackUnknown();
             return;

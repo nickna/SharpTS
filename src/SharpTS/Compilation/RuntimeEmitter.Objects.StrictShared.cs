@@ -4,7 +4,7 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private readonly record struct GlobalThisSetRedirectInputs(MethodBuilder GlobalThisSetProperty, FieldBuilder GlobalThisSingletonField);
+    private readonly record struct GlobalThisSetRedirectInputs(MethodBuilder GlobalThisSetProperty, FieldBuilder GlobalThisSingletonField, bool ForwardStrict = false);
 
     /// <summary>
     /// Shared emit idioms for the property/index set/delete runtime methods
@@ -51,6 +51,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, notGlobalThisLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
+        if (inputs.ForwardStrict) il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Call, inputs.GlobalThisSetProperty);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGlobalThisLabel);

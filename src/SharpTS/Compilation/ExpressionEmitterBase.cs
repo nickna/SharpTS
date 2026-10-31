@@ -735,6 +735,16 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
     }
 
+    protected void EmitGlobalPropertyStore()
+    {
+        if (Ctx.IsStrictMode)
+        {
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetPropertyStrict);
+        }
+        else IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
+    }
+
     /// <summary>
     /// Emits a completed property write with an empty evaluation stack at entry and exit.
     /// Generator suspension can leave this step outside the surrounding synchronous try segment.
@@ -761,7 +771,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.Reflect.ToPropertyKey);
                 IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
                 IL.Emit(OpCodes.Ldloc, valueTemp);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
+                EmitGlobalPropertyStore();
             });
             IL.Emit(OpCodes.Ldloc, valueTemp);
             SetStackUnknown();
@@ -1006,7 +1016,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             {
                 IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
                 IL.Emit(OpCodes.Ldloc, gtResultTemp);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
+                EmitGlobalPropertyStore();
             });
             IL.Emit(OpCodes.Ldloc, gtResultTemp);
             SetStackUnknown();

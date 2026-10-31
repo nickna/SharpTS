@@ -100,7 +100,7 @@ public sealed class EmittedGlobalObjectRuntimeTests
     [Fact]
     public void HelpersReceiveScopedInputsAndOwnerBelongsToOneCompilation()
     {
-        Assert.Equal(new[] { "GetBinding", "GetProperty", "IntrinsicDescriptorKind", "Properties", "SetProperty", "SingletonField" },
+        Assert.Equal(new[] { "GetBinding", "GetProperty", "IntrinsicDescriptorKind", "Properties", "SetProperty", "SetPropertyStrict", "SingletonField" },
             Declarations.Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.NotSame(new EmittedRuntime().GlobalObject, new EmittedRuntime().GlobalObject);
         Assert.Null(typeof(EmittedRuntime).GetProperty("GlobalObject")!.SetMethod);

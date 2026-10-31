@@ -152,6 +152,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.String, _types.Object]);
+        runtime.GlobalObject.SetPropertyStrict = typeBuilder.DefineMethod(
+            "GlobalThisSetPropertyStrict",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.String, _types.Object, _types.Boolean]);
 
         // Reserve the native-error Type-token adapter before Reflect.construct
         // is emitted. EmitErrorMethods fills its body later, after CreateError

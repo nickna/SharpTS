@@ -63,7 +63,7 @@ public partial class RuntimeEmitter
         EmitGlobalThisIntrinsicDescriptorKind(runtime.GlobalObject);
         EmitGlobalThisSetProperty(runtime.GlobalObject,
             new GlobalPropertyWriteInputs(runtime.DescriptorStorage, runtime.ObjectState,
-                runtime.GlobalObject.IntrinsicDescriptorKind, runtime.Invocation.Method));
+                runtime.GlobalObject.IntrinsicDescriptorKind, runtime.Invocation.Method, runtime.Errors));
         EmitGlobalThisGetBinding(runtime.GlobalObject,
             runtime.ObjectOwnProperties.HasOwnProperty, runtime.Errors.ThrowUndefinedVariable);
         runtime.GlobalObject.CompleteEmission();
@@ -86,7 +86,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct GlobalPropertyWriteInputs(
         EmittedDescriptorStorageRuntime Storage, EmittedObjectStateRuntime State,
-        MethodBuilder IntrinsicDescriptorKind, MethodBuilder InvokeMethod);
+        MethodBuilder IntrinsicDescriptorKind, MethodBuilder InvokeMethod, EmittedErrorRuntime Errors);
 
     private readonly record struct UriComponentInputs(ConstructorBuilder? PadUndefinedCtor, MethodBuilder ToJsString);
 
@@ -700,10 +700,16 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitGlobalThisSetProperty(EmittedGlobalObjectRuntime globalObject, GlobalPropertyWriteInputs inputs)
     {
-        // Signature forward-declared by DefineRuntimeClassPhase1 (#271).
-        var method = (MethodBuilder)globalObject.SetProperty;
+        // Declaration initialization keeps the original non-strict two-argument ABI.
+        var wrapper = globalObject.SetProperty.GetILGenerator();
+        wrapper.Emit(OpCodes.Ldarg_0);
+        wrapper.Emit(OpCodes.Ldarg_1);
+        wrapper.Emit(OpCodes.Ldc_I4_0);
+        wrapper.Emit(OpCodes.Call, globalObject.SetPropertyStrict);
+        wrapper.Emit(OpCodes.Ret);
 
-        var il = method.GetILGenerator();
+        var il = globalObject.SetPropertyStrict.GetILGenerator();
+        var refused = il.DefineLabel();
 
         // Accessor setters have no [[Writable]] flag. Invoke one before the
         // data-property check, preserving the actual global receiver and value.
@@ -740,12 +746,16 @@ public partial class RuntimeEmitter
         var createGlobalDescriptorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
         il.Emit(OpCodes.Brfalse, createGlobalDescriptorLabel);
+        // A getter-only accessor cannot become a data property through assignment.
+        il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, inputs.Storage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, refused);
+        il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, inputs.Storage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, refused);
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
         il.Emit(OpCodes.Callvirt, inputs.Storage.DescriptorWritable.GetGetMethod()!);
-        var globalDescriptorWritableLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, globalDescriptorWritableLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(globalDescriptorWritableLabel);
+        il.Emit(OpCodes.Brfalse, refused);
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, inputs.Storage.DescriptorValue.GetSetMethod()!);
@@ -769,7 +779,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Beq, writableIntrinsic);
         il.Emit(OpCodes.Brfalse, ordinaryGlobal);
-        il.Emit(OpCodes.Ret); // Existing non-writable intrinsic.
+        il.Emit(OpCodes.Br, refused); // Existing non-writable intrinsic.
         il.MarkLabel(writableIntrinsic);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, createDescriptor);
@@ -790,7 +800,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
         il.Emit(OpCodes.Call, inputs.Storage.DefineProperty);
         il.Emit(OpCodes.Brtrue, noGlobalDescriptorLabel);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Br, refused);
         il.MarkLabel(noGlobalDescriptorLabel);
 
         // Lazily initialize the dictionary: if (_globalThisProperties == null) _globalThisProperties = new();
@@ -807,7 +817,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1); // value
         var dictSetItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
         il.Emit(OpCodes.Callvirt, dictSetItem);
+        il.Emit(OpCodes.Ret);
 
+        il.MarkLabel(refused);
+        var ignore = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, ignore);
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException,
+            inputs.Errors.TypeErrorConstructor, "Cannot assign to global property");
+        il.MarkLabel(ignore);
         il.Emit(OpCodes.Ret);
     }
 }

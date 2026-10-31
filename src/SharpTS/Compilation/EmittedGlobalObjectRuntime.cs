@@ -49,6 +49,13 @@ public sealed class EmittedGlobalObjectRuntime
         internal set => SetDeclaration(ref _setProperty, value);
     }
 
+    private MethodBuilder? _setPropertyStrict;
+    public MethodBuilder SetPropertyStrict
+    {
+        get => Require(_setPropertyStrict);
+        internal set => SetDeclaration(ref _setPropertyStrict, value);
+    }
+
     private FieldBuilder? _properties;
     public FieldBuilder Properties
     {
@@ -110,6 +117,7 @@ public sealed class EmittedGlobalObjectRuntime
         _ = GetProperty;
         _ = GetBinding;
         _ = SetProperty;
+        _ = SetPropertyStrict;
         _ = IntrinsicDescriptorKind;
         _ = Properties;
         IsDeclared = true;
