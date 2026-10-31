@@ -745,16 +745,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // globalThis[key] = value → GlobalThisSetProperty(key, value)
         if (si.Object is Expr.Variable gtSetIdx && gtSetIdx.Name.Lexeme == "globalThis")
         {
-            // Evaluate the reference (base + key expression) before the RHS;
-            // ToPropertyKey remains deferred to the runtime store.
-            EmitExpression(si.Index);
-            EnsureBoxed();
-            var indexTemp = IL.DeclareLocal(typeof(object));
-            IL.Emit(OpCodes.Stloc, indexTemp);
-            EmitExpression(si.Value);
-            EnsureBoxed();
-            var valueTemp = IL.DeclareLocal(typeof(object));
-            IL.Emit(OpCodes.Stloc, valueTemp);
+            // Evaluate the raw key before the RHS and retain it across any
+            // suspension. Property-key coercion stays after RHS evaluation.
+            var indexTemp = SpillBoxed(si.Index);
+            var valueTemp = SpillBoxed(si.Value);
             IL.Emit(OpCodes.Ldloc, indexTemp);
             IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
             IL.Emit(OpCodes.Ldloc, valueTemp);
