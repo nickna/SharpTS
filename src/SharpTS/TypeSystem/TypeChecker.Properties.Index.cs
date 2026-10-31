@@ -30,6 +30,26 @@ public partial class TypeChecker
     private TypeInfo WithOptionalPropertyUndefined(TypeInfo type, bool optional) =>
         optional && _strictNullChecks ? CreateUnion(type, TypeInfo.Undefined.Shared) : type;
 
+    private TypeInfo? ReadArrayStringKeys(TypeInfo.Array array, TypeInfo indexType)
+    {
+        if (!TryGetStringLiteralKeys(indexType, out var keys)) return null;
+        List<TypeInfo> members = [];
+        foreach (string key in keys)
+        {
+            if (Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _))
+                members.Add(WithUncheckedUndefined(array.ElementType));
+            else
+            {
+                if (array.IsReadonly && key is "push" or "pop" or "shift" or "unshift"
+                    or "splice" or "reverse" or "sort" or "fill" or "copyWithin") return null;
+                if (GetMemberType(array, key) is not { } member) return null;
+                members.Add(member);
+            }
+        }
+        var unique = members.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+        return unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique);
+    }
+
     private TypeInfo CheckGetIndex(Expr.GetIndex getIndex)
     {
         // Validate the ordinary indexed read before applying a stable path refinement.
@@ -421,11 +441,9 @@ public partial class TypeChecker
                     key is TypeInfo.StringLiteral && IsNumericConstructorIndex(key))))
             return WithUncheckedUndefined(TypeInfo.String.Shared);
 
-        // Canonical numeric string literals address Array elements with the same read type.
         if (objType is TypeInfo.Array stringIndexedArray &&
-            TryGetStringLiteralKeys(indexType, out var arrayStringKeys) &&
-            arrayStringKeys.All(key => Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _)))
-            return WithUncheckedUndefined(stringIndexedArray.ElementType);
+            ReadArrayStringKeys(stringIndexedArray, indexType) is { } arrayStringMember)
+            return arrayStringMember;
 
         // Handle string index on objects/interfaces
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
@@ -1654,11 +1672,9 @@ public partial class TypeChecker
                     key is TypeInfo.StringLiteral && IsNumericConstructorIndex(key))))
             return WithUncheckedUndefined(TypeInfo.String.Shared);
 
-        // Canonical numeric string literals address Array elements with the same read type.
         if (objType is TypeInfo.Array stringIndexedArray &&
-            TryGetStringLiteralKeys(indexType, out var arrayStringKeys) &&
-            arrayStringKeys.All(key => Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _)))
-            return WithUncheckedUndefined(stringIndexedArray.ElementType);
+            ReadArrayStringKeys(stringIndexedArray, indexType) is { } arrayStringMember)
+            return arrayStringMember;
 
         // Handle string index
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
