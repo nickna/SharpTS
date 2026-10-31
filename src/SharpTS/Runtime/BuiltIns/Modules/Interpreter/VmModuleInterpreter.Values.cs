@@ -127,6 +127,25 @@ public static partial class VmModuleInterpreter
         });
     }
 
+    /// <summary>Checks the actual recorded value's constructor eligibility without invoking it.</summary>
+    public static bool IsVmConstructorValue(object value)
+    {
+        _ = GetVmValueReceipt(value);
+        return !ReflectBuiltIns.IsNotConstructor(value);
+    }
+    /// <summary>Constructs only a value produced by a recorded VM operation, preserving explicit newTarget.</summary>
+    public static object? ConstructVmCallable(object constructor, object?[] arguments, object? newTarget)
+    {
+        var receipt = GetVmValueReceipt(constructor);
+        if (newTarget is not null && !ReferenceEquals(newTarget, constructor))
+            _ = GetVmValueReceipt(newTarget);
+        return RunVmValueOperation(receipt, () =>
+        {
+            var host = VmExecutionHost.Current;
+            var args = arguments.Select(value => VmContext.WrapVmCompiledCallable(host is null ? value : host.ToVm(value))).ToList();
+            return receipt.Owner.Construct(constructor, args, newTarget ?? constructor);
+        });
+    }
     private static void RecordVmPromise(SharpTSPromise promise, Execution.Interpreter? owner)
     {
         var table = LazyInitializer.EnsureInitialized(ref _vmPromises);
